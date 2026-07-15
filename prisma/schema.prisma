@@ -1,0 +1,613 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id             String          @id @default(uuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  properties     Property[]
+  taxProfiles    TaxProfile[]
+  chargeCodes    ChargeCode[]
+  paymentMethods PaymentMethod[]
+  profiles       Profile[]
+  cashierShifts  CashierShift[]
+  settings       TenantSettings?
+  users          User[]
+  nightAuditLogs NightAuditLog[]
+  systemCodes    SystemCode[]
+  roomAttendants RoomAttendant[]
+}
+
+model SystemCode {
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category  String  // e.g., "GENDER", "TITLE", "DIETARY_REQ"
+  code      String  // e.g., "M", "F", "VEGAN"
+  value     String  // The display label
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  @@unique([tenantId, category, code])
+}
+
+model NightAuditLog {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  auditDate   DateTime // The system date that was audited
+  runByUserId String
+
+  foliosUpdated    Int     @default(0)
+  noShowsProcessed Int     @default(0)
+  status           String  @default("SUCCESS") // SUCCESS, FAILED
+  notes            String?
+
+  createdAt DateTime @default(now())
+}
+
+// Role: SUPERADMIN, ADMIN, FRONT_DESK, HOUSEKEEPING, MANAGER, CASHIER
+model User {
+  id           String  @id @default(uuid())
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String  @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         String  @default("FRONT_DESK")
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roomAttendant RoomAttendant?
+  assignedRooms Room[] @relation("RoomAssignedAttendant")
+  assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
+}
+
+// PropertyStatus: ACTIVE, INACTIVE
+model Property {
+  id              String  @id @default(uuid())
+  tenantId        String
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  code            String  @unique
+  legalName       String
+  defaultCurrency String
+  timeZone        String
+  checkInTime     String
+  checkOutTime    String
+  status          String  @default("ACTIVE")
+  logoUrl         String?
+  taxId           String?
+  contactPhone    String?
+  contactEmail    String?
+  latitude        Float?
+  longitude       Float?
+  starRating      Int?
+
+  buildings    Building[]
+  facilities   Facility[]
+  roomTypes    RoomType[]
+  rooms        Room[]
+  ratePlans    RatePlan[]
+  reservations Reservation[]
+  groupBlocks  GroupBlock[]
+  nightAudits  PropertyNightAuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Building {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+
+  floors Floor[]
+}
+
+model Floor {
+  id         String   @id @default(uuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name       String
+
+  rooms Room[]
+}
+
+model Facility {
+  id          String   @id @default(uuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+}
+
+model RoomType {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String
+  code         String
+  maxOccupancy Int
+  basePrice    Float    @default(0.0)
+  description  String?
+
+  rooms          Room[]
+  calendars      PriceCalendar[]
+  RoomAssignment RoomAssignment[]
+}
+
+// RoomStatus: CLEAN, DIRTY, INSPECTED, OUT_OF_ORDER, OUT_OF_SERVICE
+model Room {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id])
+  floorId    String
+  floor      Floor    @relation(fields: [floorId], references: [id])
+
+  roomNumber     String
+  status         String            @default("CLEAN")
+  
+  assignedAttendantId String?
+  assignedAttendant   User?        @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])
+
+  maintenance    RoomMaintenance[]
+  RoomAssignment RoomAssignment[]
+  housekeepingTasks HousekeepingTask[]
+
+  @@unique([propertyId, roomNumber])
+}
+
+model TaxProfile {
+  id          String  @id @default(uuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+
+  rates       TaxRate[]
+  chargeCodes ChargeCode[]
+}
+
+model TaxRate {
+  id            String     @id @default(uuid())
+  taxProfileId  String
+  taxProfile    TaxProfile @relation(fields: [taxProfileId], references: [id], onDelete: Cascade)
+  ratePercent   Float
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+}
+
+model ChargeCode {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code         String
+  description  String
+  taxProfileId String
+  taxProfile   TaxProfile @relation(fields: [taxProfileId], references: [id])
+
+  folioLineItems FolioLineItem[]
+
+  @@unique([tenantId, code])
+}
+
+// PaymentType: CASH, CARD, TRANSFER
+model PaymentMethod {
+  id       String  @id @default(uuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  type     String // Replaces PaymentType
+  isActive Boolean @default(true)
+
+  payments Payment[]
+}
+
+// ProfileType: GUEST, COMPANY, TRAVEL_AGENT
+// ProfileClassification: VIP, REGULAR, BLACKLISTED
+model Profile {
+  upid              String    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profileType       String    @default("GUEST")
+  title             String?
+  firstName         String
+  lastName          String?
+  companyName       String?
+  classification    String    @default("REGULAR")
+  photoUrl          String?
+  dateOfBirth       DateTime?
+  anniversaryDate   DateTime?
+  loyaltyTier       String?
+  preferredLanguage String    @default("en")
+  iataNumber        String?
+  commissionRate    Float?
+  greenTaxExempt    Boolean   @default(false)
+  gender            String?
+  membershipNumber  String?
+  marketingOptIn    Boolean   @default(false)
+  isIncognito       Boolean   @default(false)
+  arNumber          String?   @unique
+  creditLimit       Float?
+  totalStays        Int       @default(0)
+  totalNights       Int       @default(0)
+  totalRevenue      Float     @default(0.0)
+  lastStayDate      DateTime?
+
+  contacts                 ProfileContact[]
+  preferences              ProfilePreference[]
+  notes                    ProfileNote[]
+  documents                ProfileDocument[]
+  reservations             Reservation[]
+  travelAgentReservations  Reservation[]       @relation("TravelAgent")
+  accompanyingReservations AccompanyingGuest[]
+  foliosAsPayee            Folio[]             @relation("PayeeProfile")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProfileContact {
+  id            String  @id @default(uuid())
+  upid          String
+  profile       Profile @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  contactType   String  @default("PRIMARY") // PRIMARY, ACCOUNTS_PAYABLE, BOOKING
+  firstName     String?
+  lastName      String?
+  mobile        String?
+  workPhone     String?
+  email         String?
+  address       String?
+  city          String?
+  stateProvince String?
+  postalCode    String?
+  country       String?
+  isPrimary     Boolean @default(false)
+}
+
+model ProfilePreference {
+  id       String  @id @default(uuid())
+  upid     String
+  profile  Profile @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  category String // ROOM, BEDDING, DIETARY, AMENITY
+  value    String
+  notes    String?
+}
+
+model ProfileDocument {
+  id               String    @id @default(uuid())
+  upid             String
+  profile          Profile   @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  documentType     String // PASSPORT, NATIONAL_ID
+  documentNumber   String
+  issuingCountry   String?
+  issueDate        DateTime?
+  expiryDate       DateTime?
+  documentImageUrl String?
+  isPrimary        Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([upid, documentType, documentNumber])
+}
+
+model ProfileNote {
+  id           String   @id @default(uuid())
+  upid         String
+  profile      Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  authorUserId String
+  noteText     String
+  isPinned     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model RatePlan {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  description  String?
+  priority     Int      @default(0)
+  isNegotiated Boolean  @default(false)
+  mealPlan     String   @default("NONE")
+
+  calendars      PriceCalendar[]
+  RoomAssignment RoomAssignment[]
+
+  @@unique([propertyId, code])
+}
+
+model PriceCalendar {
+  id         String   @id @default(uuid())
+  ratePlanId String
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  price      Float
+
+  @@unique([ratePlanId, roomTypeId, date])
+}
+
+// ReservationStatus: RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
+model Reservation {
+  id             String   @id @default(uuid())
+  confirmationNo String   @unique
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+  primaryGuestId String
+  primaryGuest   Profile  @relation(fields: [primaryGuestId], references: [upid])
+
+  travelAgentId String?
+  travelAgent   Profile? @relation("TravelAgent", fields: [travelAgentId], references: [upid])
+
+  groupBlockId String?
+  groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
+
+  checkInDate  DateTime
+  checkOutDate DateTime
+  adults       Int      @default(1)
+  children     Int      @default(0)
+  mealPlan     String   @default("NONE")
+  status       String   @default("RESERVED")
+
+  assignments        RoomAssignment[]
+  folios             Folio[]
+  traces             ReservationTrace[]
+  accompanyingGuests AccompanyingGuest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Folio {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  folioNumber   Int         @default(1)
+  isClosed      Boolean     @default(false)
+  isMaster      Boolean     @default(false)
+
+  payeeProfileId String?
+  payeeProfile   Profile?   @relation("PayeeProfile", fields: [payeeProfileId], references: [upid])
+
+  groupBlockId String?
+  groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
+
+  lineItems FolioLineItem[]
+  payments  Payment[]
+}
+
+model FolioLineItem {
+  id           String     @id @default(uuid())
+  folioId      String
+  folio        Folio      @relation(fields: [folioId], references: [id], onDelete: Cascade)
+  chargeCodeId String
+  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  date         DateTime
+  description  String
+  amount       Float
+  taxAmount    Float      @default(0.0)
+  serviceChargeAmount Float @default(0.0)
+  isVoid       Boolean    @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model CashierShift {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  userId       String
+  openedAt     DateTime  @default(now())
+  closedAt     DateTime?
+  openingFloat Float     @default(0.0)
+  closingDrop  Float?
+
+  payments Payment[]
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  folioId         String
+  folio           Folio         @relation(fields: [folioId], references: [id])
+  paymentMethodId String
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  shiftId         String
+  shift           CashierShift  @relation(fields: [shiftId], references: [id])
+
+  amount          Float
+  referenceNumber String?
+  isRefund        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model TenantSettings {
+  id       String @id @default(uuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  resConfirmPrefix String @default("")
+  resConfirmLength Int    @default(6)
+
+  systemDate DateTime @default(now())
+
+  // Custom Invoice Settings
+  invoiceBrandName    String?
+  invoiceLogoUrl      String?
+  invoiceBrandColor   String?  @default("#4f46e5")
+  invoiceFontFamily   String?  @default("Geist")
+  invoiceTaxId        String?
+  invoicePhone        String?
+  invoiceEmail        String?
+  invoiceAddress      String?
+  invoiceHeaderText   String?
+  invoiceFooterText   String?
+  invoicePaymentTerms String?
+
+  // Maldives Green Tax Settings
+  greenTaxEnabled   Boolean  @default(true)
+  greenTaxAmount    Float    @default(6.00)
+  greenTaxExemptAge Int      @default(2)
+
+  // Maldives TGST and Service Charge Settings
+  tgstEnabled          Boolean  @default(true)
+  tgstRate             Float    @default(16.00)
+  serviceChargeEnabled Boolean  @default(true)
+  serviceChargeRate    Float    @default(10.00)
+  pricesIncludeTaxes   Boolean  @default(true)
+
+  updatedAt DateTime @updatedAt
+}
+
+// TraceType: GUEST_MESSAGE, WAKE_UP_CALL, MAINTENANCE, FRONT_DESK
+model ReservationTrace {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  traceType   String
+  description String
+  actionDate  DateTime?
+  isResolved  Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// IssueType: PLUMBING, ELECTRICAL, HVAC, GENERAL
+// Priority: LOW, MEDIUM, HIGH
+// Status: OPEN, IN_PROGRESS, RESOLVED
+model RoomMaintenance {
+  id     String @id @default(uuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  issueType   String @default("GENERAL")
+  description String
+  priority    String @default("MEDIUM")
+  status      String @default("OPEN")
+
+  reportedBy String?
+  assignedToId String?
+  assignedTo   User? @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccompanyingGuest {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  profileId     String
+  profile       Profile     @relation(fields: [profileId], references: [upid], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([reservationId, profileId])
+}
+
+model RoomAssignment {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  roomId     String?
+  room       Room?    @relation(fields: [roomId], references: [id])
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id])
+  ratePlanId String
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id])
+
+  overrideRate Float?
+
+  startDate DateTime
+  endDate   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// HousekeepingTaskStatus: PENDING, IN_PROGRESS, COMPLETED
+model HousekeepingTask {
+  id             String   @id @default(uuid())
+  roomId         String
+  room           Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  taskType       String   @default("FULL_SERVICE") // FULL_SERVICE, LIGHT_TOUCH, CHECKOUT
+  status         String   @default("PENDING")
+  assignedToId   String?
+  assignedTo     RoomAttendant? @relation(fields: [assignedToId], references: [id])
+  priority       String   @default("NORMAL") // LOW, NORMAL, HIGH
+  notes          String?
+  completedAt    DateTime?
+  scheduledDate  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RoomAttendant {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone     String? // e.g. "Floor 1"
+  
+  tasks HousekeepingTask[]
+}
+
+// GroupStatus: TENTATIVE, DEFINITE, CANCELLED
+model GroupBlock {
+  id             String   @id @default(uuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+  code           String   @unique
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  cutoffDate     DateTime?
+  totalRoomsHeld Int      @default(0)
+  status         String   @default("TENTATIVE")
+
+  reservations   Reservation[]
+  masterFolios   Folio[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PropertyNightAuditLog {
+  id             String   @id @default(uuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+  
+  auditDate      DateTime 
+  executedAt     DateTime @default(now())
+  executedBy     String?  
+
+  roomsOccupied  Int
+  roomRevenue    Float
+  taxPosted      Float
+  totalPostings  Int
+
+  status         String   @default("COMPLETED")
+}

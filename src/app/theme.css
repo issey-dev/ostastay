@@ -1,0 +1,61 @@
+@layer base {
+  :root {
+    /* =========================================
+       ✨ GUEST HOUSE PMS - GLOBAL THEME ✨
+       =========================================
+       Change these hex codes to instantly change 
+       the entire application's color palette!
+    ========================================= */
+    
+    /* 1. PRIMARY ACCENT COLOR (Buttons, Highlights, Links) */
+    --primary: #4F46E5; /* Indigo */
+    --primary-foreground: #ffffff;
+    
+    /* 2. BACKGROUND & TEXT */
+    --background: #F8FAFC; /* Soft Blue-Gray */
+    --foreground: #0F172A; /* Slate 900 */
+    
+    /* 3. CARDS & PANELS */
+    --card: #ffffff;
+    --card-foreground: #0F172A;
+    --popover: #ffffff;
+    --popover-foreground: #0F172A;
+    
+    /* 4. SECONDARY & MUTED ELEMENTS */
+    --secondary: #F1F5F9;
+    --secondary-foreground: #0F172A;
+    --muted: #F1F5F9;
+    --muted-foreground: #64748B;
+    --accent: #F1F5F9;
+    --accent-foreground: #0F172A;
+    
+    /* 5. ALERTS & DESTRUCTIVE ACTIONS */
+    --destructive: #EF4444; /* Red */
+    --destructive-foreground: #ffffff;
+    
+    /* 6. BORDERS & INPUTS */
+    --border: #E2E8F0;
+    --input: #E2E8F0;
+    --ring: var(--primary); /* Focus rings match primary */
+    
+    /* 7. CORNER ROUNDNESS */
+    --radius: 0.75rem; /* 12px - Soft modern corners */
+    
+    /* 8. SIDEBAR SPECIFIC THEME */
+    --sidebar-background: #ffffff;
+    --sidebar-foreground: #334155;
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #F1F5F9;
+    --sidebar-accent-foreground: #0F172A;
+    --sidebar-border: #E2E8F0;
+    --sidebar-ring: var(--primary);
+    
+    /* Charts */
+    --chart-1: #F97316;
+    --chart-2: #14B8A6;
+    --chart-3: #0F766E;
+    --chart-4: #EAB308;
+    --chart-5: #F97316;
+  }
+}

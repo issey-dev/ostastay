@@ -1,0 +1,363 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
+import { FlashReport } from "@/components/revenue/flash-report"
+
+type RatePlan = {
+  id: string
+  code: string
+  name: string
+  description?: string
+  priority: number
+  isNegotiated: boolean
+  mealPlan: string
+}
+
+export default function RevenueDashboard() {
+  const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Modals state
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<RatePlan | null>(null)
+  
+  // Custom Notification State
+  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
+
+  // Form State
+  const [form, setForm] = useState({
+    code: "",
+    name: "",
+    description: "",
+    priority: 10,
+    isNegotiated: false,
+    mealPlan: "NONE"
+  })
+
+  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+
+  const fetchRatePlans = () => {
+    setLoading(true)
+    fetch(`/api/rate-plans?propertyId=${propertyId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setRatePlans(data)
+      })
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchRatePlans()
+  }, [])
+
+  const resetForm = () => {
+    setForm({
+      code: "",
+      name: "",
+      description: "",
+      priority: 10,
+      isNegotiated: false,
+      mealPlan: "NONE"
+    })
+    setSelectedPlan(null)
+  }
+
+  const handleEdit = (plan: RatePlan) => {
+    setSelectedPlan(plan)
+    setForm({
+      code: plan.code,
+      name: plan.name,
+      description: plan.description || "",
+      priority: plan.priority,
+      isNegotiated: plan.isNegotiated,
+      mealPlan: plan.mealPlan || "NONE"
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleDeletePrompt = (plan: RatePlan) => {
+    setSelectedPlan(plan)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const payload = {
+        ...form,
+        propertyId
+      }
+      
+      const url = selectedPlan ? `/api/rate-plans/${selectedPlan.id}` : `/api/rate-plans`
+      const method = selectedPlan ? "PUT" : "POST"
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        setIsDialogOpen(false)
+        resetForm()
+        fetchRatePlans()
+        setNotification({ title: "Success", message: "Rate plan saved successfully." })
+      } else {
+        const err = await res.json()
+        setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
+      }
+    } catch (err) {
+      setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!selectedPlan) return
+    try {
+      await fetch(`/api/rate-plans/${selectedPlan.id}`, { method: "DELETE" })
+      setIsDeleteModalOpen(false)
+      fetchRatePlans()
+      setNotification({ title: "Success", message: "Rate plan deleted successfully." })
+    } catch (e) {
+      setNotification({ title: "Error", message: "Failed to delete rate plan.", isError: true })
+    }
+  }
+
+  const isEditMode = !!selectedPlan
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Revenue Management</h2>
+          <p className="text-muted-foreground">
+            Configure dynamic rate plans, priorities, and price calendars.
+          </p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="rate-plans" className="w-full">
+        <TabsList className="bg-slate-100/50 mb-6">
+          <TabsTrigger value="flash-report">Manager's Flash Report</TabsTrigger>
+          <TabsTrigger value="rate-plans">Rate Plans Configuration</TabsTrigger>
+          <TabsTrigger value="seasonal-pricing">Seasonal Bulk Pricing</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="flash-report" className="m-0">
+          <FlashReport />
+        </TabsContent>
+
+        <TabsContent value="rate-plans" className="m-0">
+          <div className="flex justify-end mb-4">
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open)
+              if (!open) resetForm()
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setIsDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                  <Plus className="mr-2 h-4 w-4" /> New Rate Plan
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+            <form onSubmit={handleCreateOrUpdate}>
+              <DialogHeader>
+                <DialogTitle>{isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}</DialogTitle>
+                <DialogDescription>
+                  {isEditMode ? "Modify details for this rate plan." : "Enter the configuration for a new rate plan."}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Rate Code <span className="text-red-500">*</span></Label>
+                    <Input required placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Priority</Label>
+                    <Input type="number" min="0" value={form.priority} onChange={e => setForm(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
+                    <p className="text-xs text-muted-foreground">Lower number = higher priority</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Plan Name <span className="text-red-500">*</span></Label>
+                  <Input required placeholder="Best Available Rate" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Description</Label>
+                  <textarea 
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" 
+                    placeholder="Enter details about this rate plan..."
+                    value={form.description}
+                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Meal Plan Included</Label>
+                  <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "" }))}>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(() => {
+                          const labels: Record<string, string> = {
+                            NONE: "Room Only",
+                            BB: "Bed & Breakfast",
+                            HB: "Half Board",
+                            FB: "Full Board",
+                            AI: "All Inclusive"
+                          }
+                          return labels[form.mealPlan] || form.mealPlan
+                        })()}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Room Only</SelectItem>
+                      <SelectItem value="BB">Bed & Breakfast</SelectItem>
+                      <SelectItem value="HB">Half Board</SelectItem>
+                      <SelectItem value="FB">Full Board</SelectItem>
+                      <SelectItem value="AI">All Inclusive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox 
+                    id="negotiated" 
+                    checked={form.isNegotiated} 
+                    onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
+                  />
+                  <Label htmlFor="negotiated" className="font-normal cursor-pointer">
+                    This is a negotiated rate (Corporate/Wholesale)
+                  </Label>
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Rate Plan"}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Rate Plan Hierarchy</CardTitle>
+          <CardDescription>
+            Defines the pricing waterfall. Lower priority numbers always win in a conflict.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Priority</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Plan Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-10">Loading rate plans...</TableCell></TableRow>
+              ) : ratePlans.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-10">No rate plans defined.</TableCell></TableRow>
+              ) : (
+                ratePlans.map((plan) => (
+                  <TableRow key={plan.id}>
+                    <TableCell>
+                      <span className="font-bold text-lg bg-slate-100 rounded-md px-2 py-1">{plan.priority}</span>
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-blue-600">{plan.code}</TableCell>
+                    <TableCell className="font-medium">{plan.name}</TableCell>
+                    <TableCell>
+                      {plan.isNegotiated ? (
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Negotiated</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Public Rate</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Link href={`/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>
+                        <Button variant="outline" size="sm">
+                          <CalendarDays className="mr-2 h-3 w-3" /> Calendar
+                        </Button>
+                      </Link>
+                      <Button variant="outline" size="icon" onClick={() => handleEdit(plan)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="text-red-500 hover:text-red-600" onClick={() => handleDeletePrompt(plan)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Rate Plan</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the rate plan &quot;{selectedPlan?.name}&quot;? This action cannot be undone and will permanently remove all associated price calendars.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete Rate Plan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </TabsContent>
+
+      <TabsContent value="seasonal-pricing" className="m-0">
+        <BulkPricingTool propertyId={propertyId} />
+      </TabsContent>
+    </Tabs>
+
+      {/* Notification Modal */}
+      <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className={notification?.isError ? "text-red-600" : "text-emerald-600"}>
+              {notification?.title}
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-700 mt-2">
+              {notification?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button onClick={() => setNotification(null)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

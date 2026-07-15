@@ -1,0 +1,104 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { z } from "zod";
+import { addDays, differenceInDays, startOfDay } from "date-fns";
+
+const bulkUpsertSchema = z.object({
+  ratePlanId: z.string().uuid(),
+  roomTypeId: z.string().uuid(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  price: z.number().min(0),
+});
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const ratePlanId = searchParams.get("ratePlanId");
+  const roomTypeId = searchParams.get("roomTypeId");
+  const startDateStr = searchParams.get("startDate");
+  const endDateStr = searchParams.get("endDate");
+
+  if (!ratePlanId || !roomTypeId || !startDateStr || !endDateStr) {
+    return NextResponse.json({ error: "Missing required query parameters" }, { status: 400 });
+  }
+
+  try {
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    const prices = await prisma.priceCalendar.findMany({
+      where: {
+        ratePlanId,
+        roomTypeId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+    return NextResponse.json(prices);
+  } catch (error) {
+    console.error("Failed to fetch price calendar:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const data = bulkUpsertSchema.parse({
+      ...body,
+      price: parseFloat(body.price),
+    });
+
+    const startDate = startOfDay(new Date(data.startDate));
+    const endDate = startOfDay(new Date(data.endDate));
+    
+    const totalDays = differenceInDays(endDate, startDate) + 1;
+    
+    if (totalDays <= 0 || totalDays > 365 * 2) {
+      return NextResponse.json({ error: "Invalid date range or range too large (max 2 years)" }, { status: 400 });
+    }
+
+    const upserts = [];
+    for (let i = 0; i < totalDays; i++) {
+      const currentDate = addDays(startDate, i);
+      
+      upserts.push(
+        prisma.priceCalendar.upsert({
+          where: {
+            ratePlanId_roomTypeId_date: {
+              ratePlanId: data.ratePlanId,
+              roomTypeId: data.roomTypeId,
+              date: currentDate,
+            }
+          },
+          update: {
+            price: data.price,
+          },
+          create: {
+            ratePlanId: data.ratePlanId,
+            roomTypeId: data.roomTypeId,
+            date: currentDate,
+            price: data.price,
+          }
+        })
+      );
+    }
+
+    // Execute all upserts in a transaction
+    await prisma.$transaction(upserts);
+
+    return NextResponse.json({ success: true, updatedDays: totalDays });
+  } catch (error) {
+    console.error("Error bulk updating prices:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
