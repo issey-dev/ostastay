@@ -46,11 +46,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Fetch TenantSettings to determine confirmation number format
-    const DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000000";
-    const settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId: DEMO_TENANT_ID }
-    });
+    // Fetch EnterpriseSettings to determine confirmation number format.
+    // TODO(Phase 3): resolve enterpriseId via the property's own enterprise (or the
+    // session), not "whichever enterprise's settings happen to be found first" — see
+    // the approved plan's note that every enterprise currently shares one enterprise's
+    // numbering config.
+    const property = await prisma.property.findUnique({ where: { id: body.propertyId } });
+    const settings = property
+      ? await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: property.enterpriseId } })
+      : null;
 
     const prefix = settings?.resConfirmPrefix || "";
     const length = settings?.resConfirmLength || 6;

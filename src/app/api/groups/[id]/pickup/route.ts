@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/db"
 import { randomBytes } from "crypto"
-
-const prisma = new PrismaClient()
 
 // Generates an alphanumeric reservation number
 const generateReservationNumber = () => {
@@ -50,14 +48,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // 1. Create or Find Profile
       let profile = email
         ? await tx.profile.findFirst({
-            where: { tenantId: group.property.tenantId, contacts: { some: { email } } }
+            where: { enterpriseId: group.property.enterpriseId, contacts: { some: { email } } }
           })
         : null
 
       if (!profile) {
         profile = await tx.profile.create({
           data: {
-            tenantId: group.property.tenantId,
+            enterpriseId: group.property.enterpriseId,
             profileType: "GUEST",
             firstName,
             lastName,

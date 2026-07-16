@@ -50,7 +50,7 @@ export function FinancialsManager() {
   const [taxForm, setTaxForm] = useState({ name: "", description: "", ratePercent: "", effectiveFrom: new Date().toISOString().split('T')[0] })
   const [chargeForm, setChargeForm] = useState({ code: "", description: "", taxProfileId: "" })
 
-  const tenantId = "00000000-0000-0000-0000-000000000000" // Demo
+  const enterpriseId = "00000000-0000-0000-0000-000000000000" // Demo
 
   useEffect(() => {
     fetchData()
@@ -60,8 +60,8 @@ export function FinancialsManager() {
     setLoading(true)
     try {
       const [taxRes, ccRes, settingsRes] = await Promise.all([
-        fetch(`/api/taxes?tenantId=${tenantId}`),
-        fetch(`/api/charge-codes?tenantId=${tenantId}`),
+        fetch(`/api/taxes?enterpriseId=${enterpriseId}`),
+        fetch(`/api/charge-codes?enterpriseId=${enterpriseId}`),
         fetch(`/api/tenant-settings`)
       ])
       if (taxRes.ok) setTaxProfiles(await taxRes.json())
@@ -138,7 +138,7 @@ export function FinancialsManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...taxForm, tenantId })
+        body: JSON.stringify({ ...taxForm, enterpriseId })
       })
       if (res.ok) {
         setIsTaxModalOpen(false)
@@ -201,7 +201,7 @@ export function FinancialsManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...chargeForm, tenantId })
+        body: JSON.stringify({ ...chargeForm, enterpriseId })
       })
       if (res.ok) {
         setIsChargeModalOpen(false)

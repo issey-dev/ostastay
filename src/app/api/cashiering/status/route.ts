@@ -1,24 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "view");
 
-    const tenantId = String(session.tenantId);
-    const userId = String(session.id);
+    const enterpriseId = ctx.enterpriseId;
+    const userId = ctx.userId;
 
     // Find active shift for THIS user (where closedAt is null)
     const activeShift = await prisma.cashierShift.findFirst({
       where: {
-        tenantId: tenantId,
-        userId: userId,
+        enterpriseId,
+        userId,
         closedAt: null
       },
       include: {
@@ -39,7 +37,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error("Cashiering Status Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

@@ -3,11 +3,11 @@ import { prisma } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get("tenantId");
+  const enterpriseId = searchParams.get("enterpriseId");
 
   try {
     const taxProfiles = await prisma.taxProfile.findMany({
-      where: tenantId ? { tenantId } : undefined,
+      where: enterpriseId ? { enterpriseId } : undefined,
       include: {
         rates: {
           orderBy: { effectiveFrom: 'desc' }
@@ -24,14 +24,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    if (!body.name || !body.tenantId || body.ratePercent === undefined || !body.effectiveFrom) {
+    if (!body.name || !body.enterpriseId || body.ratePercent === undefined || !body.effectiveFrom) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     // Create the profile and its initial rate in a single transaction
     const newTaxProfile = await prisma.taxProfile.create({
       data: {
-        tenantId: body.tenantId,
+        enterpriseId: body.enterpriseId,
         name: body.name,
         description: body.description,
         rates: {

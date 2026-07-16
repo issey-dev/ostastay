@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-const DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000000";
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -31,6 +29,7 @@ export async function GET(
         },
         reservation: {
           include: {
+            property: true,
             primaryGuest: {
               include: {
                 contacts: true
@@ -54,16 +53,18 @@ export async function GET(
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
 
-    // 2. Fetch Tenant settings for invoice branding
-    let settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId: DEMO_TENANT_ID }
+    // 2. Fetch Enterprise settings for invoice branding, derived from the folio's own
+    // reservation → property → enterprise (not a hardcoded constant).
+    const enterpriseId = folio.reservation.property.enterpriseId;
+    let settings = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId }
     });
 
     // Default settings fallback
     if (!settings) {
       settings = {
         id: "default",
-        tenantId: DEMO_TENANT_ID,
+        enterpriseId,
         resConfirmPrefix: "",
         resConfirmLength: 6,
         systemDate: new Date(),

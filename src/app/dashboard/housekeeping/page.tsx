@@ -58,10 +58,10 @@ export default function HousekeepingDashboard() {
   const fetchHousekeepers = async () => {
     if (!currentProperty) return
     try {
-      const res = await fetch(`/api/settings/users?tenantId=${currentProperty.tenantId}`)
+      const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       if (res.ok) {
         const data = await res.json()
-        setHousekeepers(data.filter((u: any) => u.role === "HOUSEKEEPING" && u.isActive))
+        setHousekeepers(data.filter((u: any) => u.role?.name === "Housekeeping" && u.isActive))
       }
     } catch (e) {
       console.error(e)

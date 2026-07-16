@@ -84,7 +84,7 @@ export type ProfileFormValues = z.infer<typeof profileFormSchema>
 export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }: { initialData?: any, upid?: string, defaultType?: string }) {
   const router = useRouter()
   const isEditMode = !!upid
-  const tenantId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const enterpriseId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
 
   const [submitting, setSubmitting] = useState(false)
 
@@ -138,10 +138,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
 
     const combinedAddress = `${data.addressStreet} ${data.addressCity} ${data.addressState} ${data.addressZip}`.trim()
     
-    const payload = { 
-      ...data, 
-      address: combinedAddress, 
-      tenantId,
+    const payload = {
+      ...data,
+      address: combinedAddress,
+      enterpriseId,
       preferences: data.dietaryRequirement ? [{ category: "DIETARY", value: data.dietaryRequirement }] : []
     }
 

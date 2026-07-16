@@ -2,14 +2,19 @@ import { PrismaClient } from "@prisma/client"
 const prisma = new PrismaClient()
 
 async function main() {
-  const tenantId = "00000000-0000-0000-0000-000000000000"
+  // Resolve the demo enterprise dynamically rather than a hardcoded id (see
+  // src/app/api/auth/seed/route.ts, which creates it by slug "demo").
+  const enterprise = await prisma.enterprise.findUnique({ where: { slug: "demo" } })
+  if (!enterprise) throw new Error('No "demo" enterprise found — run the seed route first (POST /api/auth/seed)')
+  const enterpriseId = enterprise.id
 
-  // 1. Get Property
-  const property = await prisma.property.findUnique({
-    where: { id: "00000000-0000-0000-0000-000000000000" },
+  // 1. Get a Property under this enterprise (created via the Controls > Facilities tab,
+  // or the legacy seed-property.js script pointed at this enterprise's id).
+  const property = await prisma.property.findFirst({
+    where: { enterpriseId },
     include: { rooms: true, roomTypes: true }
   })
-  if (!property) throw new Error("No property with rooms found!")
+  if (!property) throw new Error("No property with rooms found under the demo enterprise!")
 
   // 2. Setup Rate Plan
   let ratePlan = await prisma.ratePlan.findFirst({ where: { propertyId: property.id } })
@@ -26,11 +31,11 @@ async function main() {
   }
 
   // 3. Setup Charge Codes and Tax Profiles
-  let taxProfile = await prisma.taxProfile.findFirst({ where: { tenantId } })
+  let taxProfile = await prisma.taxProfile.findFirst({ where: { enterpriseId } })
   if (!taxProfile) {
     taxProfile = await prisma.taxProfile.create({
       data: {
-        tenantId,
+        enterpriseId,
         name: "Standard Taxes",
         rates: {
           create: [{ ratePercent: 16, effectiveFrom: new Date("2020-01-01") }]
@@ -39,27 +44,27 @@ async function main() {
     })
   }
 
-  let rmCode = await prisma.chargeCode.findUnique({ where: { tenantId_code: { tenantId, code: "RM" } } })
+  let rmCode = await prisma.chargeCode.findUnique({ where: { enterpriseId_code: { enterpriseId, code: "RM" } } })
   if (!rmCode) {
     rmCode = await prisma.chargeCode.create({
-      data: { tenantId, code: "RM", description: "Room Charge", taxProfileId: taxProfile.id }
+      data: { enterpriseId, code: "RM", description: "Room Charge", taxProfileId: taxProfile.id }
     })
   }
-  
-  let fbCode = await prisma.chargeCode.findUnique({ where: { tenantId_code: { tenantId, code: "FB" } } })
+
+  let fbCode = await prisma.chargeCode.findUnique({ where: { enterpriseId_code: { enterpriseId, code: "FB" } } })
   if (!fbCode) {
     fbCode = await prisma.chargeCode.create({
-      data: { tenantId, code: "FB", description: "Food & Beverage", taxProfileId: taxProfile.id }
+      data: { enterpriseId, code: "FB", description: "Food & Beverage", taxProfileId: taxProfile.id }
     })
   }
 
   // Ensure Cash/Card Payment Methods exist
-  let pmCard = await prisma.paymentMethod.findFirst({ where: { tenantId, type: "CARD" } })
-  if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { tenantId, name: "Credit Card", type: "CARD" } })
+  let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId, type: "CARD" } })
+  if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Credit Card", type: "CARD" } })
 
   // 4. Get 5 Profiles
-  const profiles = await prisma.profile.findMany({ where: { profileType: "GUEST" }, take: 5 })
-  if (profiles.length < 5) throw new Error("Not enough guest profiles!")
+  const profiles = await prisma.profile.findMany({ where: { enterpriseId, profileType: "GUEST" }, take: 5 })
+  if (profiles.length < 5) throw new Error("Not enough guest profiles! Run seed-profiles.ts first.")
 
   // Helper to gen Conf No
   const genConf = () => "RES" + Math.floor(100000 + Math.random() * 900000).toString()
@@ -77,10 +82,10 @@ async function main() {
   })
 
   // Open a dummy Cashier Shift for payments
-  let user = await prisma.user.findFirst({ where: { tenantId } })
-  if (!user) user = await prisma.user.create({ data: { tenantId, email: "admin2@test.com", passwordHash: "x", firstName: "Admin", lastName: "User" } })
-  
-  const shift = await prisma.cashierShift.create({ data: { tenantId, userId: user.id } })
+  let user = await prisma.user.findFirst({ where: { enterpriseId } })
+  if (!user) throw new Error("No user found under the demo enterprise — run the seed route first (POST /api/auth/seed)")
+
+  const shift = await prisma.cashierShift.create({ data: { enterpriseId, userId: user.id } })
 
   console.log("Seeding Scenario B (In-House)...")
   for (let i = 1; i <= 2; i++) {
@@ -116,7 +121,7 @@ async function main() {
       }
     })
     // Update Room Status
-    await prisma.room.update({ where: { id: property.rooms[i].id }, data: { status: "DIRTY" } }) 
+    await prisma.room.update({ where: { id: property.rooms[i].id }, data: { status: "DIRTY" } })
   }
 
   console.log("Seeding Scenario C (Checked-Out)...")
@@ -155,7 +160,7 @@ async function main() {
         }
       }
     })
-    
+
     // Update Guest Stats
     await prisma.profile.update({
       where: { upid: profiles[i].upid },

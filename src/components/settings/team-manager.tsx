@@ -9,14 +9,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
+// Values must match the system Role names seeded in prisma/rbac-seed-data.ts — the
+// Users API resolves a role by name (falling back from a real role id) for
+// compatibility with this dropdown. Phase 1 replaces this with a real Role picker
+// (including any custom roles an enterprise has created), not a fixed list.
 const ROLES = [
-  { value: "ADMIN", label: "Admin" },
-  { value: "MANAGER", label: "Manager" },
-  { value: "FRONT_DESK", label: "Front Desk" },
-  { value: "RESERVATIONS", label: "Reservations" },
-  { value: "HOUSEKEEPING", label: "Housekeeping" },
-  { value: "MAINTENANCE", label: "Maintenance" },
-  { value: "CASHIER", label: "Cashier" },
+  { value: "Admin", label: "Admin" },
+  { value: "Manager", label: "Manager" },
+  { value: "Front Desk", label: "Front Desk" },
+  { value: "Reservations", label: "Reservations" },
+  { value: "Housekeeping", label: "Housekeeping" },
+  { value: "Maintenance", label: "Maintenance" },
+  { value: "Cashier", label: "Cashier" },
 ]
 
 export function TeamManager() {
@@ -42,7 +46,7 @@ export function TeamManager() {
     if (!currentProperty) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/settings/users?tenantId=${currentProperty.tenantId}`)
+      const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       if (res.ok) {
         const data = await res.json()
         setUsers(data)
@@ -83,7 +87,7 @@ export function TeamManager() {
       lastName: user.lastName,
       email: user.email,
       password: "", // blank password so we don't overwrite unless they type one
-      role: user.role,
+      role: user.role.name,
       isActive: user.isActive,
     })
     setErrorMsg(null)
@@ -97,9 +101,9 @@ export function TeamManager() {
 
     const url = "/api/settings/users"
     const method = editingUser ? "PATCH" : "POST"
-    const body = editingUser 
-      ? { ...formData, id: editingUser.id } 
-      : { ...formData, tenantId: currentProperty.tenantId }
+    const body = editingUser
+      ? { ...formData, id: editingUser.id }
+      : { ...formData, enterpriseId: currentProperty.enterpriseId }
 
     try {
       const res = await fetch(url, {
@@ -144,10 +148,10 @@ export function TeamManager() {
   }
 
   const getRoleBadgeColor = (role: string) => {
-    if (role === "ADMIN" || role === "MANAGER") return "bg-indigo-100 text-indigo-700"
-    if (role === "HOUSEKEEPING") return "bg-emerald-100 text-emerald-700"
-    if (role === "MAINTENANCE") return "bg-amber-100 text-amber-700"
-    if (role === "RESERVATIONS") return "bg-blue-100 text-blue-700"
+    if (role === "Admin" || role === "Manager") return "bg-indigo-100 text-indigo-700"
+    if (role === "Housekeeping") return "bg-emerald-100 text-emerald-700"
+    if (role === "Maintenance") return "bg-amber-100 text-amber-700"
+    if (role === "Reservations") return "bg-blue-100 text-blue-700"
     return "bg-slate-100 text-slate-700"
   }
 
@@ -226,8 +230,8 @@ export function TeamManager() {
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className={getRoleBadgeColor(user.role)}>
-                    {user.role.replace("_", " ")}
+                  <Badge variant="secondary" className={getRoleBadgeColor(user.role.name)}>
+                    {user.role.name}
                   </Badge>
                 </TableCell>
                 <TableCell>

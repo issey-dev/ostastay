@@ -1,19 +1,31 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-const DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000000";
+// TODO(Phase 2): this whole route is still the pre-existing single-tenant shortcut —
+// it always resolves the first STANDARD enterprise rather than deriving enterpriseId
+// from the session. Real per-enterprise settings + session scoping is Phase 2's job
+// (see the approved plan: "tenant-settings → enterprise-settings").
+async function getDemoEnterpriseId(): Promise<string> {
+  const enterprise = await prisma.enterprise.findFirst({
+    where: { type: "STANDARD" },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!enterprise) throw new Error("No STANDARD enterprise found — run the seed route first");
+  return enterprise.id;
+}
 
 export async function GET(request: Request) {
   try {
-    let settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId: DEMO_TENANT_ID }
+    const enterpriseId = await getDemoEnterpriseId();
+    let settings = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId }
     });
 
     if (!settings) {
       // Auto-create default settings if none exist
-      settings = await prisma.tenantSettings.create({
+      settings = await prisma.enterpriseSettings.create({
         data: {
-          tenantId: DEMO_TENANT_ID,
+          enterpriseId,
           resConfirmPrefix: "",
           resConfirmLength: 6
         }
@@ -30,9 +42,10 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
+    const enterpriseId = await getDemoEnterpriseId();
 
-    const settings = await prisma.tenantSettings.upsert({
-      where: { tenantId: DEMO_TENANT_ID },
+    const settings = await prisma.enterpriseSettings.upsert({
+      where: { enterpriseId },
       update: {
         resConfirmPrefix: body.resConfirmPrefix !== undefined ? body.resConfirmPrefix : undefined,
         resConfirmLength: body.resConfirmLength !== undefined ? parseInt(body.resConfirmLength) : undefined,
@@ -58,7 +71,7 @@ export async function PATCH(request: Request) {
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? body.pricesIncludeTaxes : undefined,
       },
       create: {
-        tenantId: DEMO_TENANT_ID,
+        enterpriseId,
         resConfirmPrefix: body.resConfirmPrefix || "",
         resConfirmLength: body.resConfirmLength ? parseInt(body.resConfirmLength) : 6,
 

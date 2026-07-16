@@ -2,9 +2,7 @@ import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
-const tenantId = "00000000-0000-0000-0000-000000000000"
-
-const generateProfiles = () => {
+const generateProfiles = (enterpriseId: string) => {
   const adultMales = [
     { firstName: "John", lastName: "Smith", title: "MR", gender: "M", dob: new Date("1980-05-15"), country: "US" },
     { firstName: "Michael", lastName: "Johnson", title: "MR", gender: "M", dob: new Date("1975-08-22"), country: "GB" },
@@ -37,7 +35,7 @@ const generateProfiles = () => {
   return profiles.map((p, idx) => {
     const isAdult = p.dob < new Date("2008-01-01")
     return {
-      tenantId,
+      enterpriseId,
       profileType: "GUEST",
       title: p.title,
       firstName: p.firstName,
@@ -79,6 +77,10 @@ const generateProfiles = () => {
 }
 
 async function main() {
+  const enterprise = await prisma.enterprise.findUnique({ where: { slug: "demo" } })
+  if (!enterprise) throw new Error('No "demo" enterprise found — run the seed route first (POST /api/auth/seed)')
+  const enterpriseId = enterprise.id
+
   console.log("Deleting all reservations and dependencies to prevent foreign key errors...")
   await prisma.payment.deleteMany()
   await prisma.folioLineItem.deleteMany()
@@ -90,12 +92,12 @@ async function main() {
 
   console.log("Deleting existing GUEST profiles...")
   await prisma.profile.deleteMany({
-    where: { profileType: "GUEST" }
+    where: { enterpriseId, profileType: "GUEST" }
   })
-  
+
   console.log("Deleted existing guests.")
-  
-  const profilesData = generateProfiles()
+
+  const profilesData = generateProfiles(enterpriseId)
   
   console.log(`Seeding ${profilesData.length} new GUEST profiles...`)
   

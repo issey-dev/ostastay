@@ -2,9 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 
+// TODO(Phase 1): still the pre-existing hardcoded stub (setCurrentProperty is never
+// called anywhere) — Phase 1 replaces this with a real provider that fetches the
+// session's actual properties (or the single work-location property for a
+// PROPERTY-scoped user), backed by a cookie so server components can read it too.
 type Property = {
   id: string
-  tenantId: string
+  enterpriseId: string
   name: string
 }
 
@@ -19,7 +23,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   // Hardcoded demo property
   const [currentProperty, setCurrentProperty] = useState<Property | null>({
     id: "00000000-0000-0000-0000-000000000000",
-    tenantId: "00000000-0000-0000-0000-000000000000",
+    enterpriseId: "00000000-0000-0000-0000-000000000000",
     name: "Demo Property"
   })
 
@@ -33,7 +37,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
 const FALLBACK_CONTEXT = {
   currentProperty: {
     id: "00000000-0000-0000-0000-000000000000",
-    tenantId: "00000000-0000-0000-0000-000000000000",
+    enterpriseId: "00000000-0000-0000-0000-000000000000",
     name: "Demo Property"
   },
   setCurrentProperty: () => {}

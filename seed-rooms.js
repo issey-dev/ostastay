@@ -2,11 +2,10 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function main() {
-  const propertyId = "00000000-0000-0000-0000-000000000000"
-  
-  // Get required related data
-  const property = await prisma.property.findUnique({ where: { id: propertyId } })
-  const buildings = await prisma.building.findMany({ where: { propertyId } })
+  // Resolve the property by its code (set in seed-property.js) rather than a hardcoded id.
+  const property = await prisma.property.findUnique({ where: { code: "MAIN" } })
+  const propertyId = property?.id
+  const buildings = property ? await prisma.building.findMany({ where: { propertyId } }) : []
   
   if (!property || !buildings.length) {
     console.error("Missing required Property or Buildings. Please run seed-property.js first.")

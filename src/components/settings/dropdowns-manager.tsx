@@ -48,18 +48,18 @@ export function DropdownsManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [form, setForm] = useState({ code: "", value: "" })
-  const tenantId = "00000000-0000-0000-0000-000000000000"
+  const enterpriseId = "00000000-0000-0000-0000-000000000000"
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const fetchCodes = useCallback(() => {
     setLoading(true)
-    fetch(`/api/settings/system-codes?tenantId=${tenantId}&category=${category}`)
+    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=${category}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCodes(data)
       })
       .finally(() => setLoading(false))
-  }, [category, tenantId])
+  }, [category, enterpriseId])
 
   useEffect(() => {
     fetchCodes()
@@ -74,12 +74,12 @@ export function DropdownsManager() {
       const res = await fetch("/api/settings/system-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, category, tenantId, sortOrder: codes.length + 1 })
+        body: JSON.stringify({ ...form, category, enterpriseId, sortOrder: codes.length + 1 })
       })
 
       if (res.ok) {
         setForm({ code: "", value: "" })
-        invalidateSystemCodeCache(category, tenantId)
+        invalidateSystemCodeCache(category, enterpriseId)
         fetchCodes()
         setFeedback({ message: "Code added successfully", type: "success" })
         setTimeout(() => setFeedback(null), 4000)
@@ -105,7 +105,7 @@ export function DropdownsManager() {
         body: JSON.stringify({ id, isActive: false })
       })
       if (res.ok) {
-        invalidateSystemCodeCache(category, tenantId)
+        invalidateSystemCodeCache(category, enterpriseId)
         fetchCodes()
       }
     } catch (e) {
@@ -123,7 +123,7 @@ export function DropdownsManager() {
       })
       if (res.ok) {
         setEditingId(null)
-        invalidateSystemCodeCache(category, tenantId)
+        invalidateSystemCodeCache(category, enterpriseId)
         fetchCodes()
       }
     } catch (e) {
@@ -147,7 +147,7 @@ export function DropdownsManager() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newCodes.map(c => ({ id: c.id, sortOrder: c.sortOrder, isActive: c.isActive, value: c.value })))
     })
-    invalidateSystemCodeCache(category, tenantId)
+    invalidateSystemCodeCache(category, enterpriseId)
   }
 
   const currentCategoryLabel = CATEGORIES.find(c => c.code === category)?.label || category

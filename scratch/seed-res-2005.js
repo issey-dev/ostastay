@@ -2,6 +2,10 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
+  const enterprise = await prisma.enterprise.findUnique({ where: { slug: "demo" } });
+  if (!enterprise) throw new Error('No "demo" enterprise found — run the seed route first (POST /api/auth/seed)');
+  const enterpriseId = enterprise.id;
+
   const confirmationNo = "RES-2005";
 
   // Find the reservation
@@ -41,14 +45,14 @@ async function main() {
     // Create a default charge code if none exists
     const taxProfile = await prisma.taxProfile.findFirst() || await prisma.taxProfile.create({
       data: {
-        tenantId: "00000000-0000-0000-0000-000000000000",
+        enterpriseId,
         name: "Standard Tax"
       }
     });
 
     chargeCode = await prisma.chargeCode.create({
       data: {
-        tenantId: "00000000-0000-0000-0000-000000000000",
+        enterpriseId,
         code: "RM",
         description: "Room Charge",
         taxProfileId: taxProfile.id
@@ -61,7 +65,7 @@ async function main() {
   if (!paymentMethod) {
     paymentMethod = await prisma.paymentMethod.create({
       data: {
-        tenantId: "00000000-0000-0000-0000-000000000000",
+        enterpriseId,
         name: "Credit Card",
         type: "CARD"
       }
@@ -73,7 +77,7 @@ async function main() {
   if (!shift) {
     shift = await prisma.cashierShift.create({
       data: {
-        tenantId: "00000000-0000-0000-0000-000000000000",
+        enterpriseId,
         userId: "system",
         openingFloat: 100.00
       }

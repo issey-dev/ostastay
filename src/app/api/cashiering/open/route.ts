@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "create");
 
     const body = await request.json();
     const openingFloat = parseFloat(body.openingFloat);
@@ -16,14 +14,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid opening float amount" }, { status: 400 });
     }
 
-    const tenantId = String(session.tenantId);
-    const userId = String(session.id);
+    const enterpriseId = ctx.enterpriseId;
+    const userId = ctx.userId;
 
     // 1. Double check they don't already have an active shift
     const existingShift = await prisma.cashierShift.findFirst({
       where: {
-        tenantId: tenantId,
-        userId: userId,
+        enterpriseId,
+        userId,
         closedAt: null
       }
     });
@@ -35,8 +33,8 @@ export async function POST(request: Request) {
     // 2. Open new shift
     const newShift = await prisma.cashierShift.create({
       data: {
-        tenantId: tenantId,
-        userId: userId,
+        enterpriseId,
+        userId,
         openingFloat: openingFloat
       }
     });
@@ -47,7 +45,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error("Open Shift Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

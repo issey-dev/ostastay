@@ -4,14 +4,14 @@ import { ProfileType, ProfileClassification } from "@/lib/enums";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get("tenantId");
+  const enterpriseId = searchParams.get("enterpriseId");
   const search = searchParams.get("search"); // Used for global search
   const profileType = searchParams.get("profileType");
 
   try {
     const profiles = await prisma.profile.findMany({
       where: {
-        tenantId: tenantId ? tenantId : undefined,
+        enterpriseId: enterpriseId ? enterpriseId : undefined,
         profileType: profileType ? profileType : undefined,
         OR: search ? [
           { firstName: { contains: search } },
@@ -35,13 +35,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    if (!body.tenantId || (!body.firstName && !body.companyName)) {
+    if (!body.enterpriseId || (!body.firstName && !body.companyName)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const newProfile = await prisma.profile.create({
       data: {
-        tenantId: body.tenantId,
+        enterpriseId: body.enterpriseId,
         profileType: body.profileType as ProfileType || ProfileType.GUEST,
         title: body.title,
         firstName: body.firstName || "",

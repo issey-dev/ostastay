@@ -1,32 +1,29 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const tenantId = String(session.tenantId);
+    const ctx = await requireSession();
+    requirePermission(ctx, "NIGHT_AUDIT", "view");
+    const enterpriseId = ctx.enterpriseId;
 
     // 1. Get current System Date
-    let settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId }
+    let settings = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId }
     });
 
     if (!settings) {
-      settings = await prisma.tenantSettings.create({
-        data: { tenantId }
+      settings = await prisma.enterpriseSettings.create({
+        data: { enterpriseId }
       });
     }
 
     // 2. Get past logs
     const logs = await prisma.nightAuditLog.findMany({
-      where: { tenantId },
+      where: { enterpriseId },
       orderBy: { createdAt: "desc" },
       take: 10
     });
@@ -35,7 +32,7 @@ export async function GET() {
     // This is a common warning metric for Night Audit
     const pendingDepartures = await prisma.reservation.count({
       where: {
-        property: { tenantId },
+        property: { enterpriseId },
         status: "IN_HOUSE",
         checkOutDate: { lte: settings.systemDate }
       }
@@ -44,7 +41,7 @@ export async function GET() {
     // 4. Look for pending arrivals (guests who should have arrived today but haven't)
     const pendingArrivals = await prisma.reservation.count({
       where: {
-        property: { tenantId },
+        property: { enterpriseId },
         status: "RESERVED",
         checkInDate: { lte: settings.systemDate }
       }
@@ -60,7 +57,7 @@ export async function GET() {
       }
     });
   } catch (error) {
-    console.error("Failed to fetch Night Audit status:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

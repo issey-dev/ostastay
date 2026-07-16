@@ -3,11 +3,11 @@ import { prisma } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get("tenantId");
+  const enterpriseId = searchParams.get("enterpriseId");
 
   try {
     const paymentMethods = await prisma.paymentMethod.findMany({
-      where: tenantId ? { tenantId } : undefined,
+      where: enterpriseId ? { enterpriseId } : undefined,
       orderBy: { name: 'asc' }
     });
     return NextResponse.json(paymentMethods);
@@ -20,13 +20,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    if (!body.name || !body.type || !body.tenantId) {
+    if (!body.name || !body.type || !body.enterpriseId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const newPaymentMethod = await prisma.paymentMethod.create({
       data: {
-        tenantId: body.tenantId,
+        enterpriseId: body.enterpriseId,
         name: body.name,
         type: body.type,
         isActive: body.isActive ?? true,

@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "update");
 
     const body = await request.json();
     const closingDrop = parseFloat(body.closingDrop);
@@ -16,14 +14,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid closing drop amount" }, { status: 400 });
     }
 
-    const tenantId = String(session.tenantId);
-    const userId = String(session.id);
+    const enterpriseId = ctx.enterpriseId;
+    const userId = ctx.userId;
 
     // 1. Fetch their active shift
     const activeShift = await prisma.cashierShift.findFirst({
       where: {
-        tenantId: tenantId,
-        userId: userId,
+        enterpriseId,
+        userId,
         closedAt: null
       },
       include: {
@@ -79,7 +77,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error("Close Shift Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

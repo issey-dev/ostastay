@@ -63,7 +63,7 @@ const statusColors: Record<string, string> = {
 export default function ReservationsDashboard() {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id || "00000000-0000-0000-0000-000000000000"
-  const tenantId = currentProperty?.tenantId || "00000000-0000-0000-0000-000000000000"
+  const enterpriseId = currentProperty?.enterpriseId || "00000000-0000-0000-0000-000000000000"
   
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,11 +121,11 @@ export default function ReservationsDashboard() {
     try {
       const [resReq, profReq, rtReq, rpReq, rmReq, hkReq] = await Promise.all([
         fetch(`/api/reservations?propertyId=${propertyId}`),
-        fetch(`/api/profiles?tenantId=${tenantId}`),
+        fetch(`/api/profiles?enterpriseId=${enterpriseId}`),
         fetch(`/api/room-types?propertyId=${propertyId}`),
         fetch(`/api/rate-plans?propertyId=${propertyId}`),
         fetch(`/api/rooms?propertyId=${propertyId}`),
-        fetch(`/api/settings/system-codes?tenantId=${tenantId}&category=HOUSEKEEPING_REQUEST`)
+        fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`)
       ])
       
       const resData = await resReq.json()

@@ -1,8 +1,6 @@
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
-const TENANT_ID = '00000000-0000-0000-0000-000000000000'
-
 const systemCodes = [
   // ── Gender ────────────────────────────────────────────
   { category: 'GENDER', code: 'M',  value: 'Male',              sortOrder: 1 },
@@ -38,6 +36,10 @@ const systemCodes = [
 async function main() {
   console.log('🌱 Seeding system codes...\n')
 
+  const enterprise = await prisma.enterprise.findUnique({ where: { slug: "demo" } })
+  if (!enterprise) throw new Error('No "demo" enterprise found — run the seed route first (POST /api/auth/seed)')
+  const enterpriseId = enterprise.id
+
   let created = 0
   let skipped = 0
 
@@ -45,8 +47,8 @@ async function main() {
     try {
       await prisma.systemCode.upsert({
         where: {
-          tenantId_category_code: {
-            tenantId: TENANT_ID,
+          enterpriseId_category_code: {
+            enterpriseId,
             category: sc.category,
             code: sc.code,
           },
@@ -57,7 +59,7 @@ async function main() {
           isActive: true,
         },
         create: {
-          tenantId: TENANT_ID,
+          enterpriseId,
           ...sc,
         },
       })

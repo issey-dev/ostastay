@@ -28,10 +28,10 @@ export default function MaintenanceDashboard() {
   const fetchMaintenanceTeam = async () => {
     if (!currentProperty) return
     try {
-      const res = await fetch(`/api/settings/users?tenantId=${currentProperty.tenantId}`)
+      const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       if (res.ok) {
         const data = await res.json()
-        setMaintenanceTeam(data.filter((u: any) => u.role === "MAINTENANCE" && u.isActive))
+        setMaintenanceTeam(data.filter((u: any) => u.role?.name === "Maintenance" && u.isActive))
       }
     } catch (e) {
       console.error(e)

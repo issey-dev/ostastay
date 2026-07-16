@@ -30,7 +30,7 @@ export default function POSDashboard() {
   // Fetch charge codes (filtered to F&B or POS related) on mount
   useEffect(() => {
     if (currentProperty) {
-      fetch(`/api/charge-codes?tenantId=${currentProperty.tenantId}`)
+      fetch(`/api/charge-codes?enterpriseId=${currentProperty.enterpriseId}`)
         .then(res => res.json())
         .then(data => {
           // We show all charge codes in this demo.

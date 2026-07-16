@@ -5,8 +5,11 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "default_super_secret_jwt_key_that_should_be_changed_in_prod"
 );
 
-export async function signToken(payload: any) {
-  return await new SignJWT(payload)
+// The JWT carries identity only (id + exp) — never role/enterpriseId/name. Every
+// authorization decision re-fetches the live User row (see src/lib/scope.ts) instead of
+// trusting claims that could be up to 24h stale (e.g. after a role change or disable).
+export async function signToken(userId: string) {
+  return await new SignJWT({ id: userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("24h")
@@ -29,17 +32,10 @@ export async function getSession() {
   return await verifyToken(token);
 }
 
-export async function createSession(user: any) {
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    tenantId: user.tenantId,
-    name: `${user.firstName} ${user.lastName}`
-  };
-  const token = await signToken(payload);
+export async function createSession(userId: string) {
+  const token = await signToken(userId);
   const cookieStore = await cookies();
-  
+
   cookieStore.set("auth_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

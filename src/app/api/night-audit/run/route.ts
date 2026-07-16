@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/db"
 
 export async function POST(request: Request) {
   try {
@@ -16,13 +14,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId: property.tenantId }
+    const settings = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId: property.enterpriseId }
     })
 
     // Ensure we have a ROOM charge code to post nightly room revenue against
     const roomCode = await prisma.chargeCode.findFirst({
-      where: { tenantId: property.tenantId, code: "ROOM" }
+      where: { enterpriseId: property.enterpriseId, code: "ROOM" }
     })
 
     if (!roomCode) {

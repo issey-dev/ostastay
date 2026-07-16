@@ -1,17 +1,15 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/scope";
 
 export default async function DashboardRoot() {
-  const session = await getSession();
-  
-  if (!session) {
+  const ctx = await requireSession().catch(() => null);
+  if (!ctx) {
     redirect("/login");
   }
 
-  // Redirect users to their specific primary workspace based on role
-  if (session.role === "HOUSEKEEPING") {
-    redirect("/dashboard/inventory");
-  } else {
-    redirect("/dashboard/front-office");
-  }
+  // Redirect users to their specific primary workspace based on permissions — a role
+  // with no Front Desk access (e.g. Housekeeping) lands on their own module instead of
+  // the general front-office view.
+  const canViewFrontDesk = ctx.permissions.get("FRONT_DESK")?.canView ?? false;
+  redirect(canViewFrontDesk ? "/dashboard/front-office" : "/dashboard/inventory");
 }

@@ -23,11 +23,11 @@ export default function DropdownsSettings() {
   const [category, setCategory] = useState("GENDER")
   
   const [form, setForm] = useState({ code: "", value: "" })
-  const tenantId = "00000000-0000-0000-0000-000000000000" // Demo
+  const enterpriseId = "00000000-0000-0000-0000-000000000000" // Demo
 
   const fetchCodes = () => {
     setLoading(true)
-    fetch(`/api/settings/system-codes?tenantId=${tenantId}&category=${category}`)
+    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=${category}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCodes(data)
@@ -47,7 +47,7 @@ export default function DropdownsSettings() {
       const res = await fetch("/api/settings/system-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, category, tenantId, sortOrder: codes.length })
+        body: JSON.stringify({ ...form, category, enterpriseId, sortOrder: codes.length })
       })
 
       if (res.ok) {

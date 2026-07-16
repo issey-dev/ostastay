@@ -2,8 +2,14 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function main() {
-  const propertyId = "00000000-0000-0000-0000-000000000000"
-  
+  // Resolve the property by its code (set in seed-property.js) rather than a hardcoded id.
+  const property = await prisma.property.findUnique({ where: { code: "MAIN" } })
+  if (!property) {
+    console.error("No property with code MAIN found. Please run seed-property.js first.")
+    return
+  }
+  const propertyId = property.id
+
   // Get required related data
   const profiles = await prisma.profile.findMany()
   const roomTypes = await prisma.roomType.findMany({ where: { propertyId } })

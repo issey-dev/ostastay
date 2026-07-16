@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 
-const DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+const DEMO_ENTERPRISE_ID = "00000000-0000-0000-0000-000000000000"
 
 type PaymentMethod = {
   id: string
@@ -35,7 +35,7 @@ export function PaymentMethodsManager() {
   const fetchMethods = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/payment-methods?tenantId=${DEMO_TENANT_ID}`)
+      const res = await fetch(`/api/payment-methods?enterpriseId=${DEMO_ENTERPRISE_ID}`)
       if (res.ok) setMethods(await res.json())
     } catch (e) {
       console.error(e)
@@ -68,7 +68,7 @@ export function PaymentMethodsManager() {
         await fetch(`/api/payment-methods`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, tenantId: DEMO_TENANT_ID })
+          body: JSON.stringify({ ...formData, enterpriseId: DEMO_ENTERPRISE_ID })
         })
       }
       setIsDialogOpen(false)

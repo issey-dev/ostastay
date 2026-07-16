@@ -86,11 +86,11 @@ export default function ProfilesDashboard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingUpid, setDeletingUpid] = useState<string | null>(null)
 
-  const tenantId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const enterpriseId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
 
   const fetchProfiles = (searchQuery = "", type = activeTab) => {
     setLoading(true)
-    fetch(`/api/profiles?tenantId=${tenantId}&search=${searchQuery}&profileType=${type}`)
+    fetch(`/api/profiles?enterpriseId=${enterpriseId}&search=${searchQuery}&profileType=${type}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) setProfiles(data)

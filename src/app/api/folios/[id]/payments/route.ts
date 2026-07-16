@@ -14,7 +14,10 @@ export async function POST(
     }
 
     // Check if folio exists and is open
-    const folio = await prisma.folio.findUnique({ where: { id: folioId } });
+    const folio = await prisma.folio.findUnique({
+      where: { id: folioId },
+      include: { reservation: { include: { property: true } } }
+    });
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
@@ -22,16 +25,18 @@ export async function POST(
       return NextResponse.json({ error: "Cannot post payments to a closed folio" }, { status: 400 });
     }
 
-    // Temporary: Handle mock shift for demo purposes
+    // Temporary: Handle mock shift for demo purposes — derives the enterprise from the
+    // folio's own reservation → property rather than a hardcoded constant.
     let actualShiftId = body.shiftId;
     if (actualShiftId === "mock-shift-id") {
+      const enterpriseId = folio.reservation.property.enterpriseId;
       let shift = await prisma.cashierShift.findFirst({
-        where: { tenantId: "00000000-0000-0000-0000-000000000000" }
+        where: { enterpriseId }
       });
       if (!shift) {
         shift = await prisma.cashierShift.create({
           data: {
-            tenantId: "00000000-0000-0000-0000-000000000000",
+            enterpriseId,
             userId: "mock-user-id",
             openingFloat: 0
           }

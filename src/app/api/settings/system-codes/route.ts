@@ -1,21 +1,19 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/db'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const tenantId = searchParams.get('tenantId')
+  const enterpriseId = searchParams.get('enterpriseId')
   const category = searchParams.get('category')
 
-  if (!tenantId) {
-    return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 })
+  if (!enterpriseId) {
+    return NextResponse.json({ error: 'Enterprise ID is required' }, { status: 400 })
   }
 
   try {
     const codes = await prisma.systemCode.findMany({
       where: {
-        tenantId,
+        enterpriseId,
         ...(category && { category }),
         isActive: true
       },
@@ -32,15 +30,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { tenantId, category, code, value, sortOrder } = body
+    const { enterpriseId, category, code, value, sortOrder } = body
 
-    if (!tenantId || !category || !code || !value) {
+    if (!enterpriseId || !category || !code || !value) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const newCode = await prisma.systemCode.create({
       data: {
-        tenantId,
+        enterpriseId,
         category,
         code,
         value,

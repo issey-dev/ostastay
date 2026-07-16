@@ -1,5 +1,6 @@
 import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench } from "lucide-react"
-import { getSession } from "@/lib/auth"
+import { requireSession, type Module } from "@/lib/scope"
+import { prisma } from "@/lib/db"
 import { LogoutButton } from "./logout-button"
 import {
   Sidebar,
@@ -12,90 +13,101 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-// Menu items logically grouped by module.
-const items = [
+// Menu items logically grouped by module. `module` drives visibility via the session's
+// RolePermission.canView for that module — see the filter below.
+const items: { title: string; url: string; icon: typeof MonitorPlay; module: Module }[] = [
   {
     title: "Front Desk",
     url: "/dashboard/front-office",
     icon: MonitorPlay,
+    module: "FRONT_DESK",
   },
   {
     title: "Housekeeping",
     url: "/dashboard/housekeeping",
     icon: ClipboardList,
+    module: "HOUSEKEEPING",
   },
   {
     title: "Maintenance",
     url: "/dashboard/maintenance",
     icon: Wrench,
+    module: "MAINTENANCE",
   },
   {
     title: "Night Audit",
     url: "/dashboard/financials/night-audit",
     icon: Calculator,
+    module: "NIGHT_AUDIT",
   },
   {
     title: "Profiles & CRM",
     url: "/dashboard/profiles",
     icon: Users,
+    module: "PROFILES",
   },
   {
     title: "Revenue",
     url: "/dashboard/revenue",
     icon: BarChart3,
+    module: "REVENUE",
   },
   {
     title: "Reservations",
     url: "/dashboard/reservations",
     icon: CalendarDays,
+    module: "RESERVATIONS",
   },
   {
     title: "Group Blocks",
     url: "/dashboard/groups",
     icon: Users,
+    module: "GROUP_BLOCKS",
   },
   {
     title: "Tape Chart",
     url: "/dashboard/reservations/tape-chart",
     icon: CalendarDays,
+    module: "TAPE_CHART",
   },
   {
     title: "Cashiering",
     url: "/dashboard/cashiering",
     icon: Wallet,
+    module: "CASHIERING",
   },
   {
     title: "Point of Sale",
     url: "/dashboard/pos",
     icon: Store,
+    module: "POS",
   },
   {
     title: "Daily Reports",
     url: "/dashboard/reports",
     icon: CalendarDays,
+    module: "REPORTS",
   },
   {
     title: "Settings",
     url: "/dashboard/settings",
     icon: Settings,
+    module: "CONTROLS",
   },
 ]
 
 export async function AppSidebar() {
-  const session = await getSession();
-  const role = (session?.role as string) || "FRONT_DESK";
-  const name = (session?.name as string) || "Guest";
+  const ctx = await requireSession().catch(() => null);
+  if (!ctx) return null;
 
-  const filteredItems = items.filter(item => {
-    if (role === 'HOUSEKEEPING') {
-      return ['Housekeeping', 'Maintenance'].includes(item.title);
-    }
-    if (role === 'FRONT_DESK') {
-      return ['Front Desk', 'Reservations', 'Group Blocks', 'Tape Chart', 'Profiles & CRM', 'Housekeeping', 'Maintenance', 'Cashiering', 'Point of Sale', 'Night Audit'].includes(item.title);
-    }
-    // ADMIN and MANAGER see everything
-    return true;
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { firstName: true, lastName: true, role: { select: { name: true } } },
   });
+  const name = user ? `${user.firstName} ${user.lastName}` : "Guest";
+  const roleName = user?.role.name ?? "";
+
+  const filteredItems = items.filter((item) => ctx.permissions.get(item.module)?.canView ?? false);
 
   return (
     <Sidebar collapsible="icon">
@@ -122,7 +134,7 @@ export async function AppSidebar() {
               <SidebarMenuButton>
                 <div className="flex flex-col items-start px-2 py-1">
                   <span className="text-sm font-semibold truncate w-full">{name}</span>
-                  <span className="text-xs text-slate-500 truncate w-full">{role.replace('_', ' ')}</span>
+                  <span className="text-xs text-slate-500 truncate w-full">{roleName}</span>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>

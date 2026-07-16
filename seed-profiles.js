@@ -2,22 +2,16 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function main() {
-  const tenantId = "00000000-0000-0000-0000-000000000000"
-
-  // Ensure tenant exists
-  await prisma.tenant.upsert({
-    where: { id: tenantId },
-    update: {},
-    create: {
-      id: tenantId,
-      name: "Demo Guest House"
-    }
-  })
+  // Resolve the demo enterprise dynamically rather than a hardcoded id (see
+  // src/app/api/auth/seed/route.ts, which creates it by slug "demo").
+  const enterprise = await prisma.enterprise.findUnique({ where: { slug: "demo" } })
+  if (!enterprise) throw new Error('No "demo" enterprise found — run the seed route first (POST /api/auth/seed)')
+  const enterpriseId = enterprise.id
 
   // Seed profiles
   const profiles = [
     {
-      tenantId,
+      enterpriseId,
       profileType: "GUEST",
       firstName: "John",
       lastName: "Doe",
@@ -25,7 +19,7 @@ async function main() {
       preferredLanguage: "en",
     },
     {
-      tenantId,
+      enterpriseId,
       profileType: "GUEST",
       firstName: "Jane",
       lastName: "Smith",
@@ -33,7 +27,7 @@ async function main() {
       preferredLanguage: "en",
     },
     {
-      tenantId,
+      enterpriseId,
       profileType: "COMPANY",
       firstName: "Acme", // required by schema even for companies
       companyName: "Acme Corp",
@@ -41,7 +35,7 @@ async function main() {
       preferredLanguage: "en",
     },
     {
-      tenantId,
+      enterpriseId,
       profileType: "TRAVEL_AGENT",
       firstName: "Expedia",
       companyName: "Expedia Booking",

@@ -7,40 +7,131 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Tenant {
-  id             String          @id @default(uuid())
-  name           String
-  createdAt      DateTime        @default(now())
+// EnterpriseType: STANDARD (a real customer), INTERNAL (exactly one row — Osta's own
+// support enterprise; its users get no implicit access to any other enterprise's data,
+// only time-boxed access via an approved SupportAccessGrant)
+model Enterprise {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // url-safe, used by /e/{slug}/login
+  type      String   @default("STANDARD")
+  createdAt DateTime @default(now())
+
   properties     Property[]
   taxProfiles    TaxProfile[]
   chargeCodes    ChargeCode[]
   paymentMethods PaymentMethod[]
   profiles       Profile[]
   cashierShifts  CashierShift[]
-  settings       TenantSettings?
+  settings       EnterpriseSettings?
   users          User[]
+  roles          Role[]
   nightAuditLogs NightAuditLog[]
   systemCodes    SystemCode[]
   roomAttendants RoomAttendant[]
+  license        EnterpriseLicense?
+
+  supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
+}
+
+// Tier: STANDARD, PRO, MAX — governs maxProperties today; TierModuleAccess is a
+// scaffold for future module gating by tier (not enforced yet).
+model EnterpriseLicense {
+  id            String     @id @default(uuid())
+  enterpriseId  String     @unique
+  enterprise    Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  tier          String     @default("STANDARD")
+  maxProperties Int        @default(1)
+  notes         String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// Scaffold only: seeded so STANDARD has every module enabled; PRO/MAX left empty until
+// the real feature split is decided. requireModuleLicensed() fails OPEN (allows) when no
+// row matches (tier, module) — this is NOT real enforcement yet, see src/lib/scope.ts.
+model TierModuleAccess {
+  id      String  @id @default(uuid())
+  tier    String
+  module  String
+  enabled Boolean @default(true)
+
+  @@unique([tier, module])
+}
+
+// A Role always belongs to a real Enterprise — system/default roles belong to the one
+// INTERNAL "Osta" enterprise (isSystem = true) rather than a nullable enterpriseId, so
+// the (enterpriseId, name) unique index behaves correctly (SQLite treats every NULL as
+// distinct, which would silently allow duplicate "shared" role names otherwise).
+// "Roles visible to enterprise X" = X's own roles UNION Osta's isSystem roles.
+model Role {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name         String
+  isSystem     Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([enterpriseId, name])
+}
+
+// Module: FRONT_DESK, RESERVATIONS, GROUP_BLOCKS, TAPE_CHART, PROFILES, HOUSEKEEPING,
+// MAINTENANCE, CASHIERING, POS, NIGHT_AUDIT, REVENUE, REPORTS, CONTROLS
+model RolePermission {
+  id        String  @id @default(uuid())
+  roleId    String
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module    String
+  canView   Boolean @default(false)
+  canCreate Boolean @default(false)
+  canUpdate Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([roleId, module])
+}
+
+// Status: PENDING, APPROVED, DENIED, REVOKED, EXPIRED
+// requestedBy is always an Osta (INTERNAL enterprise) user; approvedBy is always a user
+// of the target enterprise. See src/lib/scope.ts for how an APPROVED grant is exchanged
+// for a short-lived "acting as" session.
+model SupportAccessGrant {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation("GrantTarget", fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  requestedByUserId String
+  requestedBy       User   @relation("GrantRequestedBy", fields: [requestedByUserId], references: [id])
+  approvedByUserId  String?
+  approvedBy        User?  @relation("GrantApprovedBy", fields: [approvedByUserId], references: [id])
+
+  status      String    @default("PENDING")
+  reason      String?
+  requestedAt DateTime  @default(now())
+  respondedAt DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
 }
 
 model SystemCode {
-  id        String  @id @default(uuid())
-  tenantId  String
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  category  String  // e.g., "GENDER", "TITLE", "DIETARY_REQ"
-  code      String  // e.g., "M", "F", "VEGAN"
-  value     String  // The display label
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  category     String     // e.g., "GENDER", "TITLE", "DIETARY_REQ"
+  code         String     // e.g., "M", "F", "VEGAN"
+  value        String     // The display label
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
 
-  @@unique([tenantId, category, code])
+  @@unique([enterpriseId, category, code])
 }
 
 model NightAuditLog {
-  id       String @id @default(uuid())
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
 
   auditDate   DateTime // The system date that was audited
   runByUserId String
@@ -53,39 +144,47 @@ model NightAuditLog {
   createdAt DateTime @default(now())
 }
 
-// Role: SUPERADMIN, ADMIN, FRONT_DESK, HOUSEKEEPING, MANAGER, CASHIER
+// Scope: ENTERPRISE (sees every Property under the Enterprise) | PROPERTY (a single
+// work-location Property, set via propertyId). roleId replaces the old free-text role.
 model User {
-  id           String  @id @default(uuid())
-  tenantId     String
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email        String  @unique
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  email        String     @unique
   passwordHash String
   firstName    String
   lastName     String
-  role         String  @default("FRONT_DESK")
-  isActive     Boolean @default(true)
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id])
+  scope        String     @default("ENTERPRISE")
+  propertyId   String?
+  property     Property?  @relation("UserWorkLocation", fields: [propertyId], references: [id])
+  isActive     Boolean    @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roomAttendant RoomAttendant?
-  assignedRooms Room[] @relation("RoomAssignedAttendant")
-  assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
+  roomAttendant       RoomAttendant?
+  assignedRooms       Room[]              @relation("RoomAssignedAttendant")
+  assignedMaintenance RoomMaintenance[]   @relation("MaintenanceAssignedTo")
+
+  supportGrantsRequested SupportAccessGrant[] @relation("GrantRequestedBy")
+  supportGrantsApproved  SupportAccessGrant[] @relation("GrantApprovedBy")
 }
 
 // PropertyStatus: ACTIVE, INACTIVE
 model Property {
-  id              String  @id @default(uuid())
-  tenantId        String
-  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String     @id @default(uuid())
+  enterpriseId    String
+  enterprise      Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   name            String
-  code            String  @unique
+  code            String     @unique
   legalName       String
   defaultCurrency String
   timeZone        String
   checkInTime     String
   checkOutTime    String
-  status          String  @default("ACTIVE")
+  status          String     @default("ACTIVE")
   logoUrl         String?
   taxId           String?
   contactPhone    String?
@@ -102,6 +201,7 @@ model Property {
   reservations Reservation[]
   groupBlocks  GroupBlock[]
   nightAudits  PropertyNightAuditLog[]
+  workLocationUsers User[] @relation("UserWorkLocation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -160,7 +260,7 @@ model Room {
 
   roomNumber     String
   status         String            @default("CLEAN")
-  
+
   assignedAttendantId String?
   assignedAttendant   User?        @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])
 
@@ -172,11 +272,11 @@ model Room {
 }
 
 model TaxProfile {
-  id          String  @id @default(uuid())
-  tenantId    String
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
 
   rates       TaxRate[]
   chargeCodes ChargeCode[]
@@ -193,8 +293,8 @@ model TaxRate {
 
 model ChargeCode {
   id           String     @id @default(uuid())
-  tenantId     String
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code         String
   description  String
   taxProfileId String
@@ -202,17 +302,17 @@ model ChargeCode {
 
   folioLineItems FolioLineItem[]
 
-  @@unique([tenantId, code])
+  @@unique([enterpriseId, code])
 }
 
 // PaymentType: CASH, CARD, TRANSFER
 model PaymentMethod {
-  id       String  @id @default(uuid())
-  tenantId String
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name     String
-  type     String // Replaces PaymentType
-  isActive Boolean @default(true)
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name         String
+  type         String // Replaces PaymentType
+  isActive     Boolean @default(true)
 
   payments Payment[]
 }
@@ -220,9 +320,9 @@ model PaymentMethod {
 // ProfileType: GUEST, COMPANY, TRAVEL_AGENT
 // ProfileClassification: VIP, REGULAR, BLACKLISTED
 model Profile {
-  upid              String    @id @default(uuid())
-  tenantId          String
-  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  upid              String     @id @default(uuid())
+  enterpriseId      String
+  enterprise        Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   profileType       String    @default("GUEST")
   title             String?
   firstName         String
@@ -411,9 +511,9 @@ model FolioLineItem {
 }
 
 model CashierShift {
-  id           String    @id @default(uuid())
-  tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id])
   userId       String
   openedAt     DateTime  @default(now())
   closedAt     DateTime?
@@ -439,10 +539,10 @@ model Payment {
   createdAt DateTime @default(now())
 }
 
-model TenantSettings {
-  id       String @id @default(uuid())
-  tenantId String @unique
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+model EnterpriseSettings {
+  id           String     @id @default(uuid())
+  enterpriseId String     @unique
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
 
   resConfirmPrefix String @default("")
   resConfirmLength Int    @default(6)
@@ -565,13 +665,13 @@ model HousekeepingTask {
 }
 
 model RoomAttendant {
-  id       String @id @default(uuid())
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  zone     String? // e.g. "Floor 1"
-  
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  userId       String @unique
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone         String? // e.g. "Floor 1"
+
   tasks HousekeepingTask[]
 }
 
@@ -599,10 +699,10 @@ model PropertyNightAuditLog {
   id             String   @id @default(uuid())
   propertyId     String
   property       Property @relation(fields: [propertyId], references: [id])
-  
-  auditDate      DateTime 
+
+  auditDate      DateTime
   executedAt     DateTime @default(now())
-  executedBy     String?  
+  executedBy     String?
 
   roomsOccupied  Int
   roomRevenue    Float

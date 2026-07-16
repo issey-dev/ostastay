@@ -3,11 +3,11 @@ import { prisma } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get("tenantId");
+  const enterpriseId = searchParams.get("enterpriseId");
 
   try {
     const properties = await prisma.property.findMany({
-      where: tenantId ? { tenantId } : undefined,
+      where: enterpriseId ? { enterpriseId } : undefined,
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(properties);
@@ -19,26 +19,25 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    // Basic RBAC check stub: In a real app, verify the user's session has "Super Admin" role
-    const isSuperAdmin = true; 
+
+    // TODO(Phase 1): replace with a real requireSession()/requirePermission(CONTROLS,'create')
+    // check plus an EnterpriseLicense.maxProperties enforcement — see the approved plan.
+    const isSuperAdmin = true;
     if (!isSuperAdmin) {
       return NextResponse.json({ error: "Unauthorized. Only Super Admins can create properties." }, { status: 403 });
     }
 
-    // PoC: Automatically ensure the dummy tenant exists to prevent foreign key errors
-    await prisma.tenant.upsert({
-      where: { id: body.tenantId },
-      update: {},
-      create: {
-        id: body.tenantId,
-        name: "Demo Tenant",
-      },
-    });
+    // An Enterprise must already exist — no more auto-creating one from a client-supplied
+    // id (that required a hardcoded id/name and can't work now that Enterprise.slug is a
+    // required, unique field with no sensible default to invent here).
+    const enterprise = await prisma.enterprise.findUnique({ where: { id: body.enterpriseId } });
+    if (!enterprise) {
+      return NextResponse.json({ error: "Enterprise not found" }, { status: 404 });
+    }
 
     const newProperty = await prisma.property.create({
       data: {
-        tenantId: body.tenantId,
+        enterpriseId: body.enterpriseId,
         name: body.name,
         code: body.code,
         legalName: body.legalName,

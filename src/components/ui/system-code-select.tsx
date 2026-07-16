@@ -33,8 +33,8 @@ interface SystemCodeSelectProps {
   required?: boolean
   /** Whether the field is disabled */
   disabled?: boolean
-  /** Tenant ID — defaults to the demo tenant */
-  tenantId?: string
+  /** Enterprise ID — defaults to the demo enterprise */
+  enterpriseId?: string
 }
 
 export function SystemCodeSelect({
@@ -44,7 +44,7 @@ export function SystemCodeSelect({
   placeholder = "Select...",
   required = false,
   disabled = false,
-  tenantId = "00000000-0000-0000-0000-000000000000",
+  enterpriseId = "00000000-0000-0000-0000-000000000000",
 }: SystemCodeSelectProps) {
   const [options, setOptions] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,7 +55,7 @@ export function SystemCodeSelect({
     if (fetchedRef.current) return
     fetchedRef.current = true
 
-    const cacheKey = `${tenantId}:${category}`
+    const cacheKey = `${enterpriseId}:${category}`
     const cached = cache[cacheKey]
 
     // Return cached data if still fresh
@@ -65,7 +65,7 @@ export function SystemCodeSelect({
       return
     }
 
-    fetch(`/api/settings/system-codes?tenantId=${tenantId}&category=${category}`)
+    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=${category}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -77,7 +77,7 @@ export function SystemCodeSelect({
         console.error(`Failed to fetch system codes for ${category}:`, err)
       })
       .finally(() => setLoading(false))
-  }, [category, tenantId])
+  }, [category, enterpriseId])
 
   if (loading) {
     return (
@@ -126,9 +126,9 @@ export function SystemCodeSelect({
  * Utility: Invalidate the cache for a specific category so the next
  * render re-fetches. Call this after adding/editing/deleting system codes.
  */
-export function invalidateSystemCodeCache(category?: string, tenantId?: string) {
-  if (category && tenantId) {
-    delete cache[`${tenantId}:${category}`]
+export function invalidateSystemCodeCache(category?: string, enterpriseId?: string) {
+  if (category && enterpriseId) {
+    delete cache[`${enterpriseId}:${category}`]
   } else {
     // Clear everything
     for (const key of Object.keys(cache)) {

@@ -10,22 +10,18 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value
   const { pathname } = request.nextUrl
 
-  // Protect /dashboard routes
+  // Protect /dashboard routes. This only confirms a session exists — the JWT carries
+  // identity only (no role/enterpriseId), so per-module/per-page authorization always
+  // happens server-side via src/lib/scope.ts (requireSession/requirePermission), which
+  // re-fetches the live User+Role row on every request. Module-specific redirects belong
+  // there (or in the page itself), not here — middleware can't affordably hit the DB.
   if (pathname.startsWith('/dashboard')) {
     if (!token) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
     try {
-      const { payload } = await jwtVerify(token, JWT_SECRET)
-      
-      // Simple RBAC Example (can be expanded later):
-      // If a HOUSEKEEPING user tries to access /dashboard/financials, kick them out
-      const role = payload.role as string;
-      if (role === 'HOUSEKEEPING' && (pathname.startsWith('/dashboard/financials') || pathname.startsWith('/dashboard/cashiering') || pathname.startsWith('/dashboard/revenue'))) {
-        return NextResponse.redirect(new URL('/dashboard/inventory', request.url))
-      }
-
+      await jwtVerify(token, JWT_SECRET)
     } catch (error) {
       // Invalid token
       return NextResponse.redirect(new URL('/login', request.url))

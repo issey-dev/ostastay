@@ -3,11 +3,11 @@ import { prisma } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get("tenantId");
+  const enterpriseId = searchParams.get("enterpriseId");
 
   try {
     const chargeCodes = await prisma.chargeCode.findMany({
-      where: tenantId ? { tenantId } : undefined,
+      where: enterpriseId ? { enterpriseId } : undefined,
       include: {
         taxProfile: {
           include: {
@@ -30,13 +30,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    if (!body.code || !body.description || !body.tenantId || !body.taxProfileId) {
+    if (!body.code || !body.description || !body.enterpriseId || !body.taxProfileId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const newChargeCode = await prisma.chargeCode.create({
       data: {
-        tenantId: body.tenantId,
+        enterpriseId: body.enterpriseId,
         code: body.code.toUpperCase(),
         description: body.description,
         taxProfileId: body.taxProfileId,

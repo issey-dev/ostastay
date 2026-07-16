@@ -14,7 +14,10 @@ export async function POST(
     }
 
     // Check if folio exists and is open
-    const folio = await prisma.folio.findUnique({ where: { id: folioId } });
+    const folio = await prisma.folio.findUnique({
+      where: { id: folioId },
+      include: { reservation: { include: { property: true } } }
+    });
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
@@ -22,10 +25,10 @@ export async function POST(
       return NextResponse.json({ error: "Cannot post charges to a closed folio" }, { status: 400 });
     }
 
-    // Fetch Tenant Settings for Tax calculation
-    const DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000000";
-    const settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId: DEMO_TENANT_ID }
+    // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
+    // reservation → property → enterprise (not a hardcoded constant).
+    const settings = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId: folio.reservation.property.enterpriseId }
     });
 
     const inputAmount = parseFloat(body.amount);
