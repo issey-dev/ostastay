@@ -1,43 +1,44 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const enterpriseId = searchParams.get("enterpriseId");
-
+export async function GET() {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "view");
+
     const properties = await prisma.property.findMany({
-      where: enterpriseId ? { enterpriseId } : undefined,
+      where: { enterpriseId: ctx.enterpriseId },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(properties);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch properties" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "create");
+
     const body = await request.json();
+    const enterpriseId = ctx.enterpriseId;
 
-    // TODO(Phase 1): replace with a real requireSession()/requirePermission(CONTROLS,'create')
-    // check plus an EnterpriseLicense.maxProperties enforcement — see the approved plan.
-    const isSuperAdmin = true;
-    if (!isSuperAdmin) {
-      return NextResponse.json({ error: "Unauthorized. Only Super Admins can create properties." }, { status: 403 });
-    }
-
-    // An Enterprise must already exist — no more auto-creating one from a client-supplied
-    // id (that required a hardcoded id/name and can't work now that Enterprise.slug is a
-    // required, unique field with no sensible default to invent here).
-    const enterprise = await prisma.enterprise.findUnique({ where: { id: body.enterpriseId } });
-    if (!enterprise) {
-      return NextResponse.json({ error: "Enterprise not found" }, { status: 404 });
+    const license = await prisma.enterpriseLicense.findUnique({ where: { enterpriseId } });
+    const maxProperties = license?.maxProperties ?? 1;
+    const existingCount = await prisma.property.count({ where: { enterpriseId } });
+    if (existingCount >= maxProperties) {
+      return NextResponse.json(
+        { error: `This enterprise's plan allows up to ${maxProperties} propert${maxProperties === 1 ? "y" : "ies"}. Contact Osta to increase this limit.` },
+        { status: 403 }
+      );
     }
 
     const newProperty = await prisma.property.create({
       data: {
-        enterpriseId: body.enterpriseId,
+        enterpriseId,
         name: body.name,
         code: body.code,
         legalName: body.legalName,
@@ -51,10 +52,10 @@ export async function POST(request: Request) {
         contactEmail: body.contactEmail,
       },
     });
-    
+
     return NextResponse.json(newProperty, { status: 201 });
   } catch (error) {
-    console.error("Failed to create property:", error);
-    return NextResponse.json({ error: "Failed to create property" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

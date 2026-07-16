@@ -1,30 +1,36 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { getOstaEnterpriseId } from "@/lib/scope";
-
-// TODO(Phase 1): this route still has no session/permission check at all — any caller
-// can list/create/update/delete users for any enterpriseId they supply. Retrofitting
-// this (requireSession + requirePermission(CONTROLS, action) + forcing enterpriseId from
-// the session, never the client) is the highest-severity item in the approved plan.
+import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId } from "@/lib/scope";
 
 // Accepts either a real Role id, or (for compatibility with the existing role-name
 // dropdown in team-manager.tsx) a role name — resolved against the enterprise's own
-// roles first, then Osta's shared system roles.
+// roles first, then Osta's shared system roles. Never resolves a role belonging to a
+// *different* enterprise, so a role id can't be used to smuggle in escalated access.
 async function resolveRoleId(enterpriseId: string, roleNameOrId: string): Promise<string | null> {
+  const ostaEnterpriseId = await getOstaEnterpriseId();
+
   const byId = await prisma.role.findUnique({ where: { id: roleNameOrId } });
-  if (byId) return byId.id;
+  if (byId && (byId.enterpriseId === enterpriseId || (byId.isSystem && byId.enterpriseId === ostaEnterpriseId))) {
+    return byId.id;
+  }
 
   const ownRole = await prisma.role.findUnique({
     where: { enterpriseId_name: { enterpriseId, name: roleNameOrId } },
   });
   if (ownRole) return ownRole.id;
 
-  const ostaEnterpriseId = await getOstaEnterpriseId();
   const systemRole = await prisma.role.findFirst({
     where: { enterpriseId: ostaEnterpriseId, name: roleNameOrId, isSystem: true },
   });
   return systemRole?.id ?? null;
+}
+
+async function assertPropertyInEnterprise(propertyId: string, enterpriseId: string) {
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  if (!property || property.enterpriseId !== enterpriseId) {
+    throw new ForbiddenError("Property not found");
+  }
 }
 
 const USER_SELECT = {
@@ -40,34 +46,34 @@ const USER_SELECT = {
   createdAt: true,
 } as const;
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const enterpriseId = searchParams.get("enterpriseId");
-
-    if (!enterpriseId) {
-      return NextResponse.json({ error: "enterpriseId is required" }, { status: 400 });
-    }
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "view");
 
     const users = await prisma.user.findMany({
-      where: { enterpriseId },
+      where: { enterpriseId: ctx.enterpriseId },
       orderBy: { firstName: "asc" },
       select: USER_SELECT,
     });
 
     return NextResponse.json(users);
   } catch (error) {
-    console.error("Failed to fetch users:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { enterpriseId, email, password, firstName, lastName, role } = body;
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "create");
 
-    if (!enterpriseId || !email || !password || !firstName || !lastName || !role) {
+    const body = await request.json();
+    const { email, password, firstName, lastName, role, scope, propertyId } = body;
+    const enterpriseId = ctx.enterpriseId; // never client-supplied
+
+    if (!email || !password || !firstName || !lastName || !role) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -81,6 +87,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unknown role" }, { status: 400 });
     }
 
+    const userScope = scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
+    if (userScope === "PROPERTY") {
+      if (!propertyId) {
+        return NextResponse.json({ error: "A work-location property is required for a property-scoped user" }, { status: 400 });
+      }
+      await assertPropertyInEnterprise(propertyId, enterpriseId);
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -91,24 +105,34 @@ export async function POST(request: Request) {
         firstName,
         lastName,
         roleId,
+        scope: userScope,
+        propertyId: userScope === "PROPERTY" ? propertyId : null,
       },
       select: USER_SELECT,
     });
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
-    console.error("Failed to create user:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "update");
+
     const body = await request.json();
-    const { id, email, password, firstName, lastName, role, isActive } = body;
+    const { id, email, password, firstName, lastName, role, isActive, scope, propertyId } = body;
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const updateData: any = {};
@@ -118,15 +142,33 @@ export async function PATCH(request: Request) {
     if (isActive !== undefined) updateData.isActive = isActive;
 
     if (role) {
-      const existing = await prisma.user.findUnique({ where: { id }, select: { enterpriseId: true } });
-      if (!existing) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-      const roleId = await resolveRoleId(existing.enterpriseId, role);
+      const roleId = await resolveRoleId(ctx.enterpriseId, role);
       if (!roleId) {
         return NextResponse.json({ error: "Unknown role" }, { status: 400 });
       }
       updateData.roleId = roleId;
+    }
+
+    if (scope) {
+      const nextScope = scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
+      updateData.scope = nextScope;
+      if (nextScope === "PROPERTY") {
+        const nextPropertyId = propertyId ?? existing.propertyId;
+        if (!nextPropertyId) {
+          return NextResponse.json({ error: "A work-location property is required for a property-scoped user" }, { status: 400 });
+        }
+        await assertPropertyInEnterprise(nextPropertyId, ctx.enterpriseId);
+        updateData.propertyId = nextPropertyId;
+      } else {
+        updateData.propertyId = null;
+      }
+    } else if (propertyId !== undefined) {
+      if (propertyId === null) {
+        updateData.propertyId = null;
+      } else {
+        await assertPropertyInEnterprise(propertyId, ctx.enterpriseId);
+        updateData.propertyId = propertyId;
+      }
     }
 
     if (password) {
@@ -141,18 +183,26 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error("Failed to update user:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "delete");
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Since users might be tied to shifts or audit logs, a physical delete might fail due to foreign keys.
@@ -163,6 +213,10 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof ForbiddenError) {
+      const { status, body } = toErrorResponse(error);
+      return NextResponse.json(body, { status });
+    }
     console.error("Failed to delete user:", error);
     // If foreign key constraint fails, fallback to deactivation or just return error
     return NextResponse.json({

@@ -1,27 +1,40 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-type Facility = {
-  id: string
-  name: string
-  description: string | null
-}
+type Facility = { id: string; name: string; description: string | null }
+type PropertyOption = { id: string; name: string }
 
-export default function FacilitiesSettings() {
+// Folded in from the previously-orphaned /dashboard/settings/facilities page — this is
+// the amenities list (Pool, Gym, Spa) shown on a property's public/guest-facing profile,
+// distinct from "Facilities & Rooms" tab's Buildings/Floors/RoomTypes management above.
+// NOTE: /api/facilities itself is not yet session-scoped (see Phase 2 of the rollout).
+export function FacilityAmenitiesManager() {
+  const [properties, setProperties] = useState<PropertyOption[]>([])
+  const [propertyId, setPropertyId] = useState("")
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
 
-  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for this UI demo
+  useEffect(() => {
+    fetch("/api/properties")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setProperties(data)
+          if (data.length > 0) setPropertyId(data[0].id)
+        }
+      })
+  }, [])
 
-  const fetchFacilities = () => {
+  const fetchFacilities = useCallback(() => {
+    if (!propertyId) return
     setLoading(true)
     fetch(`/api/facilities?propertyId=${propertyId}`)
       .then((res) => res.json())
@@ -29,14 +42,12 @@ export default function FacilitiesSettings() {
         if (Array.isArray(data)) setFacilities(data)
       })
       .finally(() => setLoading(false))
-  }
+  }, [propertyId])
 
-  useEffect(() => {
-    fetchFacilities()
-  }, [])
+  useEffect(() => { fetchFacilities() }, [fetchFacilities])
 
   const handleAdd = async () => {
-    if (!newName) return
+    if (!newName || !propertyId) return
     await fetch("/api/facilities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -48,20 +59,20 @@ export default function FacilitiesSettings() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Master Data: Facilities</h2>
-        <p className="text-muted-foreground">
-          Manage dynamic dropdowns for property facilities (e.g., Pool, Gym, Spa).
-        </p>
+    <div className="space-y-4">
+      <div className="space-y-2 max-w-xs">
+        <label className="text-sm font-medium">Property</label>
+        <Select value={propertyId} onValueChange={(v) => setPropertyId(v ?? "")}>
+          <SelectTrigger><SelectValue placeholder="Select property">{properties.find((p) => p.id === propertyId)?.name}</SelectValue></SelectTrigger>
+          <SelectContent>
+            {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {properties.length === 0 && <p className="text-xs text-slate-500">Create a property above first.</p>}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Add New Facility</CardTitle>
-          <CardDescription>This will appear in the amenities dropdown for the property.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      {propertyId && (
+        <>
           <div className="flex gap-4 items-end">
             <div className="space-y-2 flex-1">
               <label className="text-sm font-medium">Facility Name</label>
@@ -75,14 +86,7 @@ export default function FacilitiesSettings() {
               <Plus className="h-4 w-4 mr-2" /> Add
             </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Facilities</CardTitle>
-        </CardHeader>
-        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -111,8 +115,8 @@ export default function FacilitiesSettings() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   )
 }

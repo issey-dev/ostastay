@@ -1,11 +1,7 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 
-// TODO(Phase 1): still the pre-existing hardcoded stub (setCurrentProperty is never
-// called anywhere) — Phase 1 replaces this with a real provider that fetches the
-// session's actual properties (or the single work-location property for a
-// PROPERTY-scoped user), backed by a cookie so server components can read it too.
 type Property = {
   id: string
   enterpriseId: string
@@ -14,33 +10,64 @@ type Property = {
 
 type PropertyContextType = {
   currentProperty: Property | null
+  properties: Property[]
+  isLocked: boolean
+  loading: boolean
   setCurrentProperty: (property: Property) => void
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
 
 export function PropertyProvider({ children }: { children: React.ReactNode }) {
-  // Hardcoded demo property
-  const [currentProperty, setCurrentProperty] = useState<Property | null>({
-    id: "00000000-0000-0000-0000-000000000000",
-    enterpriseId: "00000000-0000-0000-0000-000000000000",
-    name: "Demo Property"
-  })
+  const [properties, setProperties] = useState<Property[]>([])
+  const [currentProperty, setCurrentPropertyState] = useState<Property | null>(null)
+  const [isLocked, setIsLocked] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/session/current-property")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setProperties(data.properties ?? [])
+        setIsLocked(!!data.isLocked)
+        const current = (data.properties ?? []).find((p: Property) => p.id === data.currentPropertyId) ?? data.properties?.[0] ?? null
+        setCurrentPropertyState(current)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const setCurrentProperty = useCallback((property: Property) => {
+    setCurrentPropertyState(property)
+    if (!isLocked) {
+      fetch("/api/session/current-property", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId: property.id }),
+      }).catch(() => {})
+    }
+  }, [isLocked])
 
   return (
-    <PropertyContext.Provider value={{ currentProperty, setCurrentProperty }}>
+    <PropertyContext.Provider value={{ currentProperty, properties, isLocked, loading, setCurrentProperty }}>
       {children}
     </PropertyContext.Provider>
   )
 }
 
-const FALLBACK_CONTEXT = {
-  currentProperty: {
-    id: "00000000-0000-0000-0000-000000000000",
-    enterpriseId: "00000000-0000-0000-0000-000000000000",
-    name: "Demo Property"
-  },
-  setCurrentProperty: () => {}
+const FALLBACK_CONTEXT: PropertyContextType = {
+  currentProperty: null,
+  properties: [],
+  isLocked: false,
+  loading: true,
+  setCurrentProperty: () => {},
 }
 
 export function useProperty() {

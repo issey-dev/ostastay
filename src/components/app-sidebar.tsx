@@ -89,8 +89,8 @@ const items: { title: string; url: string; icon: typeof MonitorPlay; module: Mod
     module: "REPORTS",
   },
   {
-    title: "Settings",
-    url: "/dashboard/settings",
+    title: "Controls",
+    url: "/dashboard/controls",
     icon: Settings,
     module: "CONTROLS",
   },

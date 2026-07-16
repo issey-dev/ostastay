@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { MODULES, type Module, type Action } from "@/lib/modules";
+
+export { MODULES, type Module, type Action };
 
 const SUPPORT_JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "default_super_secret_jwt_key_that_should_be_changed_in_prod"
@@ -13,26 +16,6 @@ export class UnauthorizedError extends Error {
 export class ForbiddenError extends Error {
   status = 403;
 }
-
-// Mirrors the sidebar's module list 1:1 — see src/components/app-sidebar.tsx.
-export const MODULES = [
-  "FRONT_DESK",
-  "RESERVATIONS",
-  "GROUP_BLOCKS",
-  "TAPE_CHART",
-  "PROFILES",
-  "HOUSEKEEPING",
-  "MAINTENANCE",
-  "CASHIERING",
-  "POS",
-  "NIGHT_AUDIT",
-  "REVENUE",
-  "REPORTS",
-  "CONTROLS",
-] as const;
-
-export type Module = (typeof MODULES)[number];
-export type Action = "view" | "create" | "update" | "delete";
 
 type PermissionRow = {
   canView: boolean;
@@ -211,6 +194,47 @@ export function requirePropertyScope(ctx: AuthContext, propertyId: string) {
   if (ctx.scope === "PROPERTY" && ctx.propertyId !== propertyId) {
     throw new ForbiddenError("Not authorized for this property");
   }
+}
+
+const CURRENT_PROPERTY_COOKIE = "current_property_id";
+
+// For an ENTERPRISE-scoped user, the "currently working" property is a plain UX
+// preference persisted in a cookie (not a security boundary — requirePropertyScope()
+// is what actually gates access). For a PROPERTY-scoped user it's always their single
+// fixed work location, never the cookie.
+export async function resolveCurrentPropertyId(ctx: AuthContext): Promise<string | null> {
+  if (ctx.scope === "PROPERTY") return ctx.propertyId;
+
+  const cookieStore = await cookies();
+  const cookiePropertyId = cookieStore.get(CURRENT_PROPERTY_COOKIE)?.value;
+  if (cookiePropertyId) {
+    const property = await prisma.property.findUnique({ where: { id: cookiePropertyId } });
+    if (property && property.enterpriseId === ctx.enterpriseId) return property.id;
+  }
+
+  const firstProperty = await prisma.property.findFirst({
+    where: { enterpriseId: ctx.enterpriseId },
+    orderBy: { createdAt: "asc" },
+  });
+  return firstProperty?.id ?? null;
+}
+
+export async function setCurrentPropertyId(ctx: AuthContext, propertyId: string): Promise<void> {
+  if (ctx.scope === "PROPERTY") {
+    throw new ForbiddenError("Property-scoped users cannot switch properties");
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  if (!property || property.enterpriseId !== ctx.enterpriseId) {
+    throw new ForbiddenError("Property not found");
+  }
+  const cookieStore = await cookies();
+  cookieStore.set(CURRENT_PROPERTY_COOKIE, propertyId, {
+    httpOnly: false, // read client-side by property-provider.tsx for instant UI feedback
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
 }
 
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {

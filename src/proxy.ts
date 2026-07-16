@@ -28,8 +28,9 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // If logged in, redirect away from /login
-  if (pathname === '/login' && token) {
+  // If logged in, redirect away from /login or any enterprise's dedicated login page
+  const isLoginPage = pathname === '/login' || /^\/e\/[^/]+\/login$/.test(pathname)
+  if (isLoginPage && token) {
     try {
       await jwtVerify(token, JWT_SECRET)
       return NextResponse.redirect(new URL('/dashboard', request.url))
