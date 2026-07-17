@@ -1,26 +1,43 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Settings2, Building, Percent, Users, CreditCard, Receipt, List, KeyRound, ShieldCheck } from "lucide-react"
-import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
+import {
+  MonitorPlay,
+  Boxes,
+  Wallet,
+  Contact,
+  FileBarChart,
+  Settings2,
+  CalendarDays,
+  Users,
+  KeyRound,
+  ShieldCheck,
+} from "lucide-react"
+import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
-import { FinancialsManager } from "@/components/settings/financials-manager"
-import { FacilitiesManager } from "@/components/settings/facilities-manager"
-import { PropertiesManager } from "@/components/settings/properties-manager"
 import { InvoiceSettingsManager } from "@/components/settings/invoice-settings-manager"
-import { DropdownsManager } from "@/components/settings/dropdowns-manager"
+import { PropertiesManager } from "@/components/settings/properties-manager"
+import { FacilitiesManager } from "@/components/settings/facilities-manager"
 import { FacilityAmenitiesManager } from "@/components/settings/facility-amenities-manager"
+import { FinancialsManager } from "@/components/settings/financials-manager"
+import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
+import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { LicensingManager } from "@/components/controls/licensing-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
+import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
+import { ThemeColorManager } from "@/components/controls/theme-color-manager"
+import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 
 const TAB_TRIGGER_CLASS =
-  "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500"
+  "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500 dark:text-slate-400"
 
 // Config-array-driven sections, mirroring app-sidebar.tsx's `items` pattern — add a new
 // Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
-// `ostaOnly` sections (Licensing) are only rendered for Osta/INTERNAL sessions.
+// Tabs are grouped to match the app's own operational modules (Front Desk, Inventory,
+// Finance, Client Relations, Reports, General, Reservations) plus the identity/admin
+// sections from Phase 1. `ostaOnly` sections (Licensing) only render for Osta/INTERNAL
+// sessions.
 type ControlsSection = {
   key: string
   label: string
@@ -32,93 +49,101 @@ type ControlsSection = {
 function buildSections(isInternal: boolean): ControlsSection[] {
   return [
     {
-      key: "general",
-      label: "General",
-      icon: Settings2,
+      key: "front-desk",
+      label: "Front Desk",
+      icon: MonitorPlay,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Enterprise Configuration</CardTitle>
-            <CardDescription>Update your core system defaults and locale settings.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><GeneralSettingsManager /></CardContent>
-        </Card>
+        <ControlsCard title="Front Desk" description="No Front Desk-specific configuration exists yet.">
+          <p className="text-sm text-slate-500">
+            Nothing to configure here today — this tab is reserved for future front-desk-specific settings.
+          </p>
+        </ControlsCard>
       ),
     },
     {
-      key: "invoice",
-      label: "Invoice Design",
-      icon: Receipt,
-      render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Invoice Branding & Terms</CardTitle>
-            <CardDescription>Customize the look, colors, headers, footers, and payment terms of guest invoices.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><InvoiceSettingsManager /></CardContent>
-        </Card>
-      ),
-    },
-    {
-      key: "facilities",
-      label: "Facilities & Rooms",
-      icon: Building,
+      key: "inventory",
+      label: "Inventory",
+      icon: Boxes,
       render: () => (
         <div className="space-y-6">
-          <Card className="premium-card">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4 flex flex-row items-center justify-between">
-              <div className="w-full"><PropertiesManager /></div>
-            </CardHeader>
-          </Card>
-          <Card className="premium-card">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-              <CardTitle className="text-lg">Property Architecture</CardTitle>
-              <CardDescription>Manage your global buildings, floors, and room types.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6"><FacilitiesManager /></CardContent>
-          </Card>
-          <Card className="premium-card">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-              <CardTitle className="text-lg">Amenities</CardTitle>
-              <CardDescription>Facility amenities shown on a property&apos;s guest-facing profile (Pool, Gym, Spa, etc).</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6"><FacilityAmenitiesManager /></CardContent>
-          </Card>
+          <ControlsCard title="Properties" description="Manage all properties, buildings, and facilities across your enterprise.">
+            <PropertiesManager />
+          </ControlsCard>
+          <ControlsCard title="Property Architecture" description="Manage your global buildings, floors, and room types.">
+            <FacilitiesManager />
+          </ControlsCard>
+          <ControlsCard title="Amenities" description="Facility amenities shown on a property's guest-facing profile (Pool, Gym, Spa, etc).">
+            <FacilityAmenitiesManager />
+          </ControlsCard>
+          <ControlsCard title="Housekeeping Dropdowns" description="Lists used by Housekeeping and Maintenance operations.">
+            <DropdownsManager categories={OPERATIONS_LOV_CATEGORIES} />
+          </ControlsCard>
         </div>
       ),
     },
     {
-      key: "taxes",
-      label: "Financial & Taxes",
-      icon: Percent,
+      key: "finance",
+      label: "Finance",
+      icon: Wallet,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Tax Profiles & Charge Codes</CardTitle>
-            <CardDescription>Configure VAT, City Tax, and system-wide charge codes.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><FinancialsManager /></CardContent>
-        </Card>
+        <div className="space-y-6">
+          <ControlsCard title="Tax Profiles & Charge Codes" description="Configure VAT, City Tax, and system-wide transaction codes — used by Night Audit and Cashiering.">
+            <FinancialsManager />
+          </ControlsCard>
+          <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, or Bank Transfers.">
+            <PaymentMethodsManager />
+          </ControlsCard>
+        </div>
       ),
     },
     {
-      key: "payments",
-      label: "Payment Methods",
-      icon: CreditCard,
-      render: () => <PaymentMethodsManager />,
+      key: "client-relations",
+      label: "Client Relations",
+      icon: Contact,
+      render: () => (
+        <ControlsCard title="Profile Dropdown Lists" description="Manage dynamic dropdown options used on guest/company/travel-agent profiles — genders, titles, nationalities, dietary requirements, and more.">
+          <DropdownsManager categories={PROFILE_LOV_CATEGORIES} />
+        </ControlsCard>
+      ),
     },
     {
-      key: "dropdowns",
-      label: "Dropdowns",
-      icon: List,
+      key: "reports",
+      label: "Reports",
+      icon: FileBarChart,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Dropdown Lists</CardTitle>
-            <CardDescription>Manage dynamic dropdown options used across the PMS — genders, titles, nationalities, and more.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><DropdownsManager /></CardContent>
-        </Card>
+        <div className="space-y-6">
+          <ControlsCard title="Invoice Design" description="Customize the look, colors, headers, footers, and payment terms of guest invoices.">
+            <InvoiceSettingsManager />
+          </ControlsCard>
+          <ControlsCard title="SMTP / SFTP" description="Outgoing email and file-transfer connection settings.">
+            <SmtpSftpManager />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    {
+      key: "general",
+      label: "General",
+      icon: Settings2,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Property Information" description="This property's own profile. Which enterprise it belongs to cannot be changed here.">
+            <PropertyProfileManager />
+          </ControlsCard>
+          <ControlsCard title="Appearance" description="Choose the app's primary accent color for everyone in this enterprise.">
+            <ThemeColorManager />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    {
+      key: "reservations",
+      label: "Reservations",
+      icon: CalendarDays,
+      render: () => (
+        <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
+          <GeneralSettingsManager />
+        </ControlsCard>
       ),
     },
     {
@@ -126,13 +151,9 @@ function buildSections(isInternal: boolean): ControlsSection[] {
       label: "Users & Roles",
       icon: Users,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Users & Roles</CardTitle>
-            <CardDescription>Manage staff accounts, work-location assignment, and per-module role permissions.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><UsersRolesManager /></CardContent>
-        </Card>
+        <ControlsCard title="Users & Roles" description="Manage staff accounts, work-location assignment, and per-module role permissions.">
+          <UsersRolesManager />
+        </ControlsCard>
       ),
     },
     {
@@ -141,13 +162,9 @@ function buildSections(isInternal: boolean): ControlsSection[] {
       icon: KeyRound,
       ostaOnly: true,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Licensing</CardTitle>
-            <CardDescription>Control how many properties each enterprise may create and (eventually) which modules their plan tier includes.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><LicensingManager /></CardContent>
-        </Card>
+        <ControlsCard title="Licensing" description="Control how many properties each enterprise may create and (eventually) which modules their plan tier includes.">
+          <LicensingManager />
+        </ControlsCard>
       ),
     },
     {
@@ -155,15 +172,12 @@ function buildSections(isInternal: boolean): ControlsSection[] {
       label: "Support Access",
       icon: ShieldCheck,
       render: () => (
-        <Card className="premium-card">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
-            <CardTitle className="text-lg">Support Access</CardTitle>
-            <CardDescription>
-              Osta support staff have no implicit access to your data — they must request it here, and you decide whether to approve it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6"><SupportAccessManager isInternal={isInternal} /></CardContent>
-        </Card>
+        <ControlsCard
+          title="Support Access"
+          description="Osta support staff have no implicit access to your data — they must request it here, and you decide whether to approve it."
+        >
+          <SupportAccessManager isInternal={isInternal} />
+        </ControlsCard>
       ),
     },
   ]

@@ -1,31 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
-// TODO(Phase 2): this whole route is still the pre-existing single-tenant shortcut —
-// it always resolves the first STANDARD enterprise rather than deriving enterpriseId
-// from the session. Real per-enterprise settings + session scoping is Phase 2's job
-// (see the approved plan: "tenant-settings → enterprise-settings").
-async function getDemoEnterpriseId(): Promise<string> {
-  const enterprise = await prisma.enterprise.findFirst({
-    where: { type: "STANDARD" },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!enterprise) throw new Error("No STANDARD enterprise found — run the seed route first");
-  return enterprise.id;
-}
-
-export async function GET(request: Request) {
+// Enterprise-wide settings (booking codes, invoice branding, Maldives tax defaults,
+// app theme, SMTP/SFTP scaffold) — scoped to the session's own enterprise, never a
+// client-supplied or "first enterprise found" shortcut.
+export async function GET() {
   try {
-    const enterpriseId = await getDemoEnterpriseId();
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "view");
+
     let settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId }
+      where: { enterpriseId: ctx.enterpriseId }
     });
 
     if (!settings) {
       // Auto-create default settings if none exist
       settings = await prisma.enterpriseSettings.create({
         data: {
-          enterpriseId,
+          enterpriseId: ctx.enterpriseId,
           resConfirmPrefix: "",
           resConfirmLength: 6
         }
@@ -34,22 +27,25 @@ export async function GET(request: Request) {
 
     return NextResponse.json(settings);
   } catch (error) {
-    console.error("Failed to fetch settings", error);
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "update");
+
     const body = await request.json();
-    const enterpriseId = await getDemoEnterpriseId();
+    const enterpriseId = ctx.enterpriseId;
 
     const settings = await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },
       update: {
         resConfirmPrefix: body.resConfirmPrefix !== undefined ? body.resConfirmPrefix : undefined,
         resConfirmLength: body.resConfirmLength !== undefined ? parseInt(body.resConfirmLength) : undefined,
-        
+
         invoiceBrandName: body.invoiceBrandName !== undefined ? body.invoiceBrandName : undefined,
         invoiceLogoUrl: body.invoiceLogoUrl !== undefined ? body.invoiceLogoUrl : undefined,
         invoiceBrandColor: body.invoiceBrandColor !== undefined ? body.invoiceBrandColor : undefined,
@@ -69,6 +65,20 @@ export async function PATCH(request: Request) {
         serviceChargeEnabled: body.serviceChargeEnabled !== undefined ? body.serviceChargeEnabled : undefined,
         serviceChargeRate: body.serviceChargeRate !== undefined ? parseFloat(body.serviceChargeRate) : undefined,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? body.pricesIncludeTaxes : undefined,
+
+        themeColor: body.themeColor !== undefined ? body.themeColor : undefined,
+
+        smtpHost: body.smtpHost !== undefined ? body.smtpHost : undefined,
+        smtpPort: body.smtpPort !== undefined ? body.smtpPort : undefined,
+        smtpUsername: body.smtpUsername !== undefined ? body.smtpUsername : undefined,
+        smtpPassword: body.smtpPassword !== undefined ? body.smtpPassword : undefined,
+        smtpFromAddress: body.smtpFromAddress !== undefined ? body.smtpFromAddress : undefined,
+        smtpUseTls: body.smtpUseTls !== undefined ? body.smtpUseTls : undefined,
+        sftpHost: body.sftpHost !== undefined ? body.sftpHost : undefined,
+        sftpPort: body.sftpPort !== undefined ? body.sftpPort : undefined,
+        sftpUsername: body.sftpUsername !== undefined ? body.sftpUsername : undefined,
+        sftpPassword: body.sftpPassword !== undefined ? body.sftpPassword : undefined,
+        sftpRemotePath: body.sftpRemotePath !== undefined ? body.sftpRemotePath : undefined,
       },
       create: {
         enterpriseId,
@@ -94,13 +104,26 @@ export async function PATCH(request: Request) {
         serviceChargeEnabled: body.serviceChargeEnabled !== undefined ? body.serviceChargeEnabled : true,
         serviceChargeRate: body.serviceChargeRate !== undefined ? parseFloat(body.serviceChargeRate) : 10.00,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? body.pricesIncludeTaxes : true,
+
+        themeColor: body.themeColor || "indigo",
+
+        smtpHost: body.smtpHost || null,
+        smtpPort: body.smtpPort ?? null,
+        smtpUsername: body.smtpUsername || null,
+        smtpPassword: body.smtpPassword || null,
+        smtpFromAddress: body.smtpFromAddress || null,
+        smtpUseTls: body.smtpUseTls !== undefined ? body.smtpUseTls : true,
+        sftpHost: body.sftpHost || null,
+        sftpPort: body.sftpPort ?? null,
+        sftpUsername: body.sftpUsername || null,
+        sftpPassword: body.sftpPassword || null,
+        sftpRemotePath: body.sftpRemotePath || null,
       }
     });
 
     return NextResponse.json(settings);
   } catch (error) {
-    console.error("Failed to update settings", error);
-    return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
-

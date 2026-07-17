@@ -22,6 +22,8 @@ export async function PUT(
 
     const body = await request.json()
 
+    // enterpriseId is deliberately never accepted here — a property can never be
+    // reassigned to a different enterprise via this route.
     const property = await prisma.property.update({
       where: { id },
       data: {
@@ -32,6 +34,11 @@ export async function PUT(
         timeZone: body.timeZone,
         checkInTime: body.checkInTime,
         checkOutTime: body.checkOutTime,
+        logoUrl: body.logoUrl,
+        taxId: body.taxId,
+        contactPhone: body.contactPhone,
+        contactEmail: body.contactEmail,
+        starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
       },
     })
 

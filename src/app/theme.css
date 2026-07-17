@@ -58,4 +58,45 @@
     --chart-4: #EAB308;
     --chart-5: #F97316;
   }
+
+  /* Dark mode — toggled by adding/removing `.dark` on <html> (see
+     src/components/providers/dark-mode-provider.tsx). Primary stays close to the light
+     palette (slightly brighter, for contrast against dark surfaces); a per-enterprise
+     Primary Color override still applies on top of whichever mode is active — see
+     src/app/dashboard/layout.tsx. */
+  .dark {
+    --primary: #6366F1;
+    --primary-foreground: #ffffff;
+
+    --background: #0F172A;
+    --foreground: #F1F5F9;
+
+    --card: #1E293B;
+    --card-foreground: #F1F5F9;
+    --popover: #1E293B;
+    --popover-foreground: #F1F5F9;
+
+    --secondary: #1E293B;
+    --secondary-foreground: #F1F5F9;
+    --muted: #1E293B;
+    --muted-foreground: #94A3B8;
+    --accent: #1E293B;
+    --accent-foreground: #F1F5F9;
+
+    --destructive: #EF4444;
+    --destructive-foreground: #ffffff;
+
+    --border: #334155;
+    --input: #334155;
+    --ring: var(--primary);
+
+    --sidebar-background: #1E293B;
+    --sidebar-foreground: #CBD5E1;
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #334155;
+    --sidebar-accent-foreground: #F1F5F9;
+    --sidebar-border: #334155;
+    --sidebar-ring: var(--primary);
+  }
 }

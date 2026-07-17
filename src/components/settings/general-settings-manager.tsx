@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Settings2, Save, ShieldAlert } from "lucide-react"
+import { Save, ShieldAlert } from "lucide-react"
 
 export function GeneralSettingsManager() {
   const [loading, setLoading] = useState(true)
@@ -82,10 +82,7 @@ export function GeneralSettingsManager() {
     <form onSubmit={handleSave} className="space-y-8">
       {/* Reservation Code Rules */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-          <Settings2 className="w-4 h-4 text-slate-500" /> Booking Codes & Defaults
-        </h3>
-        <div className="grid gap-6 sm:grid-cols-2 bg-slate-50 p-6 rounded-xl border border-slate-100">
+        <div className="grid gap-6 sm:grid-cols-2 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
           <div className="space-y-2">
             <Label>Reservation Prefix</Label>
             <Input 

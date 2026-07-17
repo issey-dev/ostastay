@@ -69,13 +69,7 @@ export function PropertiesManager() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Properties</h2>
-          <p className="text-muted-foreground text-sm">
-            Manage all properties, buildings, and facilities across your tenant.
-          </p>
-        </div>
+      <div className="flex justify-end items-center">
         <div>
           <Button onClick={() => setIsDialogOpen(true)} className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 hover:from-indigo-500 hover:to-indigo-400 active:scale-95">
             <Plus className="mr-2 h-4 w-4" /> Add Property

@@ -105,11 +105,7 @@ export function PaymentMethodsManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-medium">Payment Methods</h3>
-          <p className="text-sm text-slate-500">Configure accepted payment methods like Cash, Credit Cards, or Bank Transfers.</p>
-        </div>
+      <div className="flex justify-end items-center">
         <Button onClick={() => handleOpenDialog()} className="bg-indigo-600 hover:bg-indigo-700">
           <Plus className="w-4 h-4 mr-2" /> Add Method
         </Button>

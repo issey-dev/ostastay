@@ -574,6 +574,27 @@ model EnterpriseSettings {
   serviceChargeRate    Float    @default(10.00)
   pricesIncludeTaxes   Boolean  @default(true)
 
+  // Application theme (distinct from the invoice's own branding above) — one of
+  // src/lib/themePresets.ts's ThemeColorName values, applied as a CSS override for every
+  // user of this enterprise. See General tab in Controls.
+  themeColor String @default("indigo")
+
+  // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
+  // NOTE: stored as plain text; do not build real email/file-transfer sending on top of
+  // this without first adding proper secret encryption at rest.
+  smtpHost     String?
+  smtpPort     Int?
+  smtpUsername String?
+  smtpPassword String?
+  smtpFromAddress String?
+  smtpUseTls   Boolean @default(true)
+
+  sftpHost       String?
+  sftpPort       Int?
+  sftpUsername   String?
+  sftpPassword   String?
+  sftpRemotePath String?
+
   updatedAt DateTime @updatedAt
 }
 

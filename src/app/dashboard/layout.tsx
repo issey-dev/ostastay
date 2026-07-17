@@ -1,25 +1,48 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { PropertyProvider } from "@/components/providers/property-provider"
+import { requireSession } from "@/lib/scope"
+import { prisma } from "@/lib/db"
+import { resolveThemeColorPreset } from "@/lib/themePresets"
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Applies this enterprise's chosen Primary Color (Controls > General) on top of
+  // whichever light/dark mode is active — scoped to the dashboard only, never the
+  // public login pages. Failing open to the default preset if the session can't be
+  // resolved here keeps this a pure UX layer, not a security boundary.
+  const ctx = await requireSession().catch(() => null)
+  const settings = ctx ? await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } }) : null
+  const preset = resolveThemeColorPreset(settings?.themeColor)
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main className="w-full bg-[#F8FAFC] min-h-screen flex flex-col overflow-x-hidden">
-        
-        {/* Glassmorphism Header */}
-        <header className="h-16 bg-white/70 backdrop-blur-md sticky top-0 z-10 flex items-center px-4 w-full shadow-[0_1px_3px_0_rgba(0,0,0,0.02)]">
-          <SidebarTrigger className="text-slate-500 hover:text-indigo-600 transition-colors" />
-          <h1 className="ml-4 font-bold text-lg text-slate-800 font-outfit tracking-tight">Guest House PMS</h1>
-        </header>
-        
-        {/* Floating Main Content Area */}
-        <div className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto w-full">
-            {children}
+    <PropertyProvider>
+      <SidebarProvider>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `:root, .dark { --primary: ${preset.primary}; --primary-foreground: ${preset.primaryForeground}; --ring: ${preset.primary}; --sidebar-primary: ${preset.primary}; --sidebar-ring: ${preset.primary}; }`,
+          }}
+        />
+        <AppSidebar />
+        <main className="w-full bg-[#F8FAFC] dark:bg-slate-950 min-h-screen flex flex-col overflow-x-hidden">
+
+          {/* Glassmorphism Header */}
+          <header className="h-16 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-10 flex items-center px-4 w-full shadow-[0_1px_3px_0_rgba(0,0,0,0.02)]">
+            <SidebarTrigger className="text-slate-500 hover:text-indigo-600 transition-colors" />
+            <h1 className="ml-4 font-bold text-lg text-slate-800 dark:text-slate-100 font-outfit tracking-tight">Guest House PMS</h1>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
+          </header>
+
+          {/* Floating Main Content Area */}
+          <div className="flex-1 p-4 md:p-8">
+            <div className="max-w-7xl mx-auto w-full">
+              {children}
+            </div>
           </div>
-        </div>
-      </main>
-    </SidebarProvider>
+        </main>
+      </SidebarProvider>
+    </PropertyProvider>
   )
 }

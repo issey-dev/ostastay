@@ -29,7 +29,13 @@ type SystemCode = {
   isActive: boolean
 }
 
-const CATEGORIES = [
+export type DropdownCategory = { code: string; label: string }
+
+// Split by which Controls tab manages them — Client Relations gets the profile-related
+// lists, Inventory gets the operational ones. Both instantiate the same reusable
+// DropdownsManager below with a different `categories` prop rather than forking the
+// component.
+export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "GENDER",      label: "Gender" },
   { code: "TITLE",       label: "Title (Mr, Mrs)" },
   { code: "NATIONALITY", label: "Nationality" },
@@ -37,14 +43,17 @@ const CATEGORIES = [
   { code: "CLASSIFICATION", label: "Profile Classification" },
   { code: "DIETARY_REQ", label: "Dietary Requirements" },
   { code: "ROOM_PREF",   label: "Room Preferences" },
+]
+
+export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
 ]
 
-export function DropdownsManager() {
+export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { categories?: DropdownCategory[] }) {
   const [codes, setCodes] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [category, setCategory] = useState("GENDER")
+  const [category, setCategory] = useState(categories[0]?.code ?? "")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [form, setForm] = useState({ code: "", value: "" })
@@ -150,7 +159,7 @@ export function DropdownsManager() {
     invalidateSystemCodeCache(category, enterpriseId)
   }
 
-  const currentCategoryLabel = CATEGORIES.find(c => c.code === category)?.label || category
+  const currentCategoryLabel = categories.find(c => c.code === category)?.label || category
 
   return (
     <div className="flex flex-col gap-6">
@@ -163,7 +172,7 @@ export function DropdownsManager() {
               <SelectValue placeholder="Select Category" />
             </SelectTrigger>
             <SelectContent className="min-w-[24rem]">
-              {CATEGORIES.map(cat => (
+              {categories.map(cat => (
                 <SelectItem key={cat.code} value={cat.code}>{cat.label}</SelectItem>
               ))}
             </SelectContent>

@@ -87,6 +87,18 @@ export async function GET(
         serviceChargeEnabled: true,
         serviceChargeRate: 10.00,
         pricesIncludeTaxes: true,
+        themeColor: "indigo",
+        smtpHost: null,
+        smtpPort: null,
+        smtpUsername: null,
+        smtpPassword: null,
+        smtpFromAddress: null,
+        smtpUseTls: true,
+        sftpHost: null,
+        sftpPort: null,
+        sftpUsername: null,
+        sftpPassword: null,
+        sftpRemotePath: null,
         updatedAt: new Date()
       };
     }
