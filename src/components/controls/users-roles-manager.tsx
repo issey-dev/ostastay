@@ -49,7 +49,18 @@ function matrixFromRole(role: Role): PermissionMatrix {
   return matrix
 }
 
-export function UsersRolesManager() {
+export function UsersRolesManager({
+  actorScope,
+  actorPropertyId,
+}: {
+  actorScope: "ENTERPRISE" | "PROPERTY"
+  actorPropertyId: string | null
+}) {
+  // A property-scoped actor can only ever manage users at their own property — the
+  // server enforces this regardless (src/app/api/settings/users/route.ts), but locking
+  // it here too means they never fill out a form only to hit a 403 at the end.
+  const isPropertyLockedActor = actorScope === "PROPERTY"
+
   const [users, setUsers] = useState<UserRow[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [properties, setProperties] = useState<PropertyOption[]>([])
@@ -91,7 +102,11 @@ export function UsersRolesManager() {
 
   const openNewUserDialog = () => {
     setEditingUser(null)
-    setUserForm({ firstName: "", lastName: "", email: "", password: "", roleId: roles[0]?.id ?? "", scope: "ENTERPRISE", propertyId: "" })
+    setUserForm({
+      firstName: "", lastName: "", email: "", password: "", roleId: roles[0]?.id ?? "",
+      scope: isPropertyLockedActor ? "PROPERTY" : "ENTERPRISE",
+      propertyId: isPropertyLockedActor ? (actorPropertyId ?? "") : "",
+    })
     setUserErrorMsg(null)
     setIsUserDialogOpen(true)
   }
@@ -415,18 +430,29 @@ export function UsersRolesManager() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Access</label>
-                <Select value={userForm.scope} onValueChange={(v) => setUserForm({ ...userForm, scope: (v as "ENTERPRISE" | "PROPERTY") ?? "ENTERPRISE" })}>
+                <Select
+                  value={userForm.scope}
+                  onValueChange={(v) => setUserForm({ ...userForm, scope: (v as "ENTERPRISE" | "PROPERTY") ?? "ENTERPRISE" })}
+                  disabled={isPropertyLockedActor}
+                >
                   <SelectTrigger><SelectValue>{userForm.scope === "ENTERPRISE" ? "All Properties" : "Single Property"}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ENTERPRISE">All Properties (Enterprise-wide)</SelectItem>
                     <SelectItem value="PROPERTY">Single Property (Work Location)</SelectItem>
                   </SelectContent>
                 </Select>
+                {isPropertyLockedActor && (
+                  <p className="text-xs text-slate-500">You can only manage users at your own property.</p>
+                )}
               </div>
               {userForm.scope === "PROPERTY" && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Work Location</label>
-                  <Select value={userForm.propertyId} onValueChange={(v) => setUserForm({ ...userForm, propertyId: v ?? "" })}>
+                  <Select
+                    value={userForm.propertyId}
+                    onValueChange={(v) => setUserForm({ ...userForm, propertyId: v ?? "" })}
+                    disabled={isPropertyLockedActor}
+                  >
                     <SelectTrigger><SelectValue placeholder="Select property">{properties.find((p) => p.id === userForm.propertyId)?.name}</SelectValue></SelectTrigger>
                     <SelectContent>
                       {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId } from "@/lib/scope";
+import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId, type AuthContext } from "@/lib/scope";
 
 // Accepts either a real Role id, or (for compatibility with the existing role-name
 // dropdown in team-manager.tsx) a role name — resolved against the enterprise's own
@@ -33,6 +33,18 @@ async function assertPropertyInEnterprise(propertyId: string, enterpriseId: stri
   }
 }
 
+// A PROPERTY-scoped user (e.g. a property manager) can only ever create/edit/delete
+// other PROPERTY-scoped users at their own work location — never an enterprise-wide
+// user, and never a user at a different property. An ENTERPRISE-scoped user is
+// unrestricted (any property in the enterprise, or enterprise-wide) — this is the
+// concrete rule behind "property users can't create users for a different property."
+function assertWithinActorPropertyScope(ctx: AuthContext, targetScope: "ENTERPRISE" | "PROPERTY", targetPropertyId: string | null) {
+  if (ctx.scope !== "PROPERTY") return;
+  if (targetScope !== "PROPERTY" || targetPropertyId !== ctx.propertyId) {
+    throw new ForbiddenError("You can only manage users at your own property");
+  }
+}
+
 const USER_SELECT = {
   id: true,
   enterpriseId: true,
@@ -51,8 +63,13 @@ export async function GET() {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "view");
 
+    // A property-scoped user only sees their own property's roster — an enterprise-wide
+    // staff list isn't theirs to browse.
     const users = await prisma.user.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where:
+        ctx.scope === "PROPERTY"
+          ? { enterpriseId: ctx.enterpriseId, scope: "PROPERTY", propertyId: ctx.propertyId }
+          : { enterpriseId: ctx.enterpriseId },
       orderBy: { firstName: "asc" },
       select: USER_SELECT,
     });
@@ -87,13 +104,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unknown role" }, { status: 400 });
     }
 
-    const userScope = scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
+    // A property-scoped actor can only ever create a user at their own property —
+    // whatever scope/propertyId they submitted is overridden, not just validated.
+    const userScope = ctx.scope === "PROPERTY" ? "PROPERTY" : scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
+    const targetPropertyId = ctx.scope === "PROPERTY" ? ctx.propertyId : userScope === "PROPERTY" ? propertyId : null;
+
     if (userScope === "PROPERTY") {
-      if (!propertyId) {
+      if (!targetPropertyId) {
         return NextResponse.json({ error: "A work-location property is required for a property-scoped user" }, { status: 400 });
       }
-      await assertPropertyInEnterprise(propertyId, enterpriseId);
+      await assertPropertyInEnterprise(targetPropertyId, enterpriseId);
     }
+    assertWithinActorPropertyScope(ctx, userScope, targetPropertyId);
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -106,7 +128,7 @@ export async function POST(request: Request) {
         lastName,
         roleId,
         scope: userScope,
-        propertyId: userScope === "PROPERTY" ? propertyId : null,
+        propertyId: targetPropertyId,
       },
       select: USER_SELECT,
     });
@@ -134,6 +156,9 @@ export async function PATCH(request: Request) {
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    // A property-scoped actor can't touch a user outside their own property, even to
+    // just rename them — checked against the user's *current* scope/property first.
+    assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);
 
     const updateData: any = {};
     if (email) updateData.email = email;
@@ -150,23 +175,26 @@ export async function PATCH(request: Request) {
     }
 
     if (scope) {
-      const nextScope = scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
-      updateData.scope = nextScope;
+      const nextScope = ctx.scope === "PROPERTY" ? "PROPERTY" : scope === "PROPERTY" ? "PROPERTY" : "ENTERPRISE";
+      const nextPropertyId = ctx.scope === "PROPERTY" ? ctx.propertyId : nextScope === "PROPERTY" ? (propertyId ?? existing.propertyId) : null;
+
       if (nextScope === "PROPERTY") {
-        const nextPropertyId = propertyId ?? existing.propertyId;
         if (!nextPropertyId) {
           return NextResponse.json({ error: "A work-location property is required for a property-scoped user" }, { status: 400 });
         }
         await assertPropertyInEnterprise(nextPropertyId, ctx.enterpriseId);
-        updateData.propertyId = nextPropertyId;
-      } else {
-        updateData.propertyId = null;
       }
+      assertWithinActorPropertyScope(ctx, nextScope, nextPropertyId);
+
+      updateData.scope = nextScope;
+      updateData.propertyId = nextPropertyId;
     } else if (propertyId !== undefined) {
       if (propertyId === null) {
+        assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", null);
         updateData.propertyId = null;
       } else {
         await assertPropertyInEnterprise(propertyId, ctx.enterpriseId);
+        assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", propertyId);
         updateData.propertyId = propertyId;
       }
     }
@@ -204,6 +232,7 @@ export async function DELETE(request: Request) {
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);
 
     // Since users might be tied to shifts or audit logs, a physical delete might fail due to foreign keys.
     // However, if they aren't, it will succeed.

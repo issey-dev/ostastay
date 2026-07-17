@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Users, Save, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import Link from "next/link"
 export default function NewGroupBlock() {
   const { currentProperty } = useProperty()
   const router = useRouter()
+  const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(false)
   
   const [formData, setFormData] = useState({
@@ -43,7 +44,7 @@ export default function NewGroupBlock() {
       })
 
       if (res.ok) {
-        router.push("/dashboard/groups")
+        router.push(`/e/${slug}/dashboard/groups`)
       } else {
         const err = await res.json()
         alert(err.error || "Failed to create group")
@@ -59,7 +60,7 @@ export default function NewGroupBlock() {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/dashboard/groups">
+        <Link href={`/e/${slug}/dashboard/groups`}>
           <Button variant="outline" size="icon">
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -153,7 +154,7 @@ export default function NewGroupBlock() {
           </div>
 
           <div className="pt-6 border-t flex justify-end gap-3">
-            <Link href="/dashboard/groups">
+            <Link href={`/e/${slug}/dashboard/groups`}>
               <Button variant="outline" type="button">Cancel</Button>
             </Link>
             <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700" disabled={loading}>

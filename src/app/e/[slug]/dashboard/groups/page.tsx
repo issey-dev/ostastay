@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
 import { Users, Plus, Calendar as CalendarIcon, UserCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,7 @@ import Link from "next/link"
 import { format, parseISO } from "date-fns"
 
 export default function GroupsDashboard() {
+  const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const [groups, setGroups] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +46,7 @@ export default function GroupsDashboard() {
           </h1>
           <p className="text-slate-500 mt-2">Manage blocks of rooms for weddings, corporate events, and tours.</p>
         </div>
-        <Link href="/dashboard/groups/new">
+        <Link href={`/e/${slug}/dashboard/groups/new`}>
           <Button className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
             New Group Block
@@ -110,7 +112,7 @@ export default function GroupsDashboard() {
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      <Link href={`/dashboard/groups/${group.id}`}>
+                      <Link href={`/e/${slug}/dashboard/groups/${group.id}`}>
                         <Button variant="outline" size="sm">Manage</Button>
                       </Link>
                     </td>

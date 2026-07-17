@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -61,6 +62,7 @@ const statusColors: Record<string, string> = {
 }
 
 export default function ReservationsDashboard() {
+  const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id || "00000000-0000-0000-0000-000000000000"
   const enterpriseId = currentProperty?.enterpriseId || "00000000-0000-0000-0000-000000000000"
@@ -419,7 +421,7 @@ export default function ReservationsDashboard() {
           <Button variant="outline" className="shadow-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={handleAutoAssign} disabled={autoAssigning}>
             <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
           </Button>
-          <Link href="/dashboard/reservations/calendar">
+          <Link href={`/e/${slug}/dashboard/reservations/calendar`}>
             <Button variant="outline" className="shadow-sm">
               <CalendarDays className="mr-2 h-4 w-4" /> Calendar View
             </Button>

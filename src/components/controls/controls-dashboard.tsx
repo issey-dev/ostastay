@@ -46,7 +46,7 @@ type ControlsSection = {
   render: () => React.ReactNode
 }
 
-function buildSections(isInternal: boolean): ControlsSection[] {
+function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: string | null): ControlsSection[] {
   return [
     {
       key: "front-desk",
@@ -152,7 +152,7 @@ function buildSections(isInternal: boolean): ControlsSection[] {
       icon: Users,
       render: () => (
         <ControlsCard title="Users & Roles" description="Manage staff accounts, work-location assignment, and per-module role permissions.">
-          <UsersRolesManager />
+          <UsersRolesManager actorScope={actorScope} actorPropertyId={actorPropertyId} />
         </ControlsCard>
       ),
     },
@@ -183,8 +183,16 @@ function buildSections(isInternal: boolean): ControlsSection[] {
   ]
 }
 
-export function ControlsDashboard({ isInternal }: { isInternal: boolean }) {
-  const sections = buildSections(isInternal).filter((s) => !s.ostaOnly || isInternal)
+export function ControlsDashboard({
+  isInternal,
+  actorScope,
+  actorPropertyId,
+}: {
+  isInternal: boolean
+  actorScope: "ENTERPRISE" | "PROPERTY"
+  actorPropertyId: string | null
+}) {
+  const sections = buildSections(isInternal, actorScope, actorPropertyId).filter((s) => !s.ostaOnly || isInternal)
 
   return (
     <div className="flex flex-col gap-6">

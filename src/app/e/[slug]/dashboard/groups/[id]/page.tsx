@@ -9,8 +9,9 @@ import Link from "next/link"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
 
-export default function GroupManagement({ params }: { params: Promise<{ id: string }> }) {
+export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
+  const { slug } = unwrappedParams
   const { currentProperty } = useProperty()
   const [group, setGroup] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -51,7 +52,7 @@ export default function GroupManagement({ params }: { params: Promise<{ id: stri
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/groups">
+          <Link href={`/e/${slug}/dashboard/groups`}>
             <Button variant="outline" size="icon">
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -150,7 +151,7 @@ export default function GroupManagement({ params }: { params: Promise<{ id: stri
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    <Link href={`/dashboard/reservations/${res.id}`}>
+                    <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
                       <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-800">
                         View
                       </Button>

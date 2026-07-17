@@ -14,7 +14,8 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      include: { enterprise: { select: { slug: true } } }
     });
 
     // A wrong enterprise code, a wrong email, and a wrong password all produce the
@@ -43,7 +44,8 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         name: `${user.firstName} ${user.lastName}`
-      }
+      },
+      enterpriseSlug: user.enterprise.slug
     });
 
   } catch (error) {

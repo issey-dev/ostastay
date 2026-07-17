@@ -10,12 +10,16 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value
   const { pathname } = request.nextUrl
 
-  // Protect /dashboard routes. This only confirms a session exists — the JWT carries
-  // identity only (no role/enterpriseId), so per-module/per-page authorization always
-  // happens server-side via src/lib/scope.ts (requireSession/requirePermission), which
-  // re-fetches the live User+Role row on every request. Module-specific redirects belong
-  // there (or in the page itself), not here — middleware can't affordably hit the DB.
-  if (pathname.startsWith('/dashboard')) {
+  // Protect /dashboard routes (both the legacy bare path — see
+  // src/app/dashboard/[[...rest]]/page.tsx for its redirect-to-slug handling — and the
+  // real /e/{slug}/dashboard/... ones). This only confirms a session exists — the JWT
+  // carries identity only (no role/enterpriseId), so per-module/per-page authorization
+  // always happens server-side via src/lib/scope.ts (requireSession/requirePermission),
+  // which re-fetches the live User+Role row on every request, and the enterprise slug
+  // itself is re-validated against the live session in src/app/e/[slug]/layout.tsx.
+  // Middleware can't affordably hit the DB, so none of that happens here.
+  const isDashboardPath = pathname.startsWith('/dashboard') || /^\/e\/[^/]+\/dashboard(\/|$)/.test(pathname)
+  if (isDashboardPath) {
     if (!token) {
       return NextResponse.redirect(new URL('/login', request.url))
     }

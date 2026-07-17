@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { format, addDays, subDays, differenceInDays, startOfDay, isWithinInterval } from "date-fns"
@@ -30,6 +31,7 @@ const statusColors: Record<string, string> = {
 }
 
 export default function ReservationsCalendarPage() {
+  const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(true)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
@@ -146,7 +148,7 @@ export default function ReservationsCalendarPage() {
     <div className="flex flex-col gap-6 h-full">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/reservations">
+          <Link href={`/e/${slug}/dashboard/reservations`}>
             <Button variant="outline" size="icon" className="shadow-sm">
               <ArrowLeft className="h-4 w-4" />
             </Button>

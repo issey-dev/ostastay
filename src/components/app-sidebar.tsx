@@ -100,12 +100,18 @@ export async function AppSidebar() {
   const ctx = await requireSession().catch(() => null);
   if (!ctx) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: ctx.userId },
-    select: { firstName: true, lastName: true, role: { select: { name: true } } },
-  });
+  const [user, enterprise] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { firstName: true, lastName: true, role: { select: { name: true } } },
+    }),
+    // ctx.enterpriseId is the EFFECTIVE enterprise (the support-acting-as target when
+    // relevant) — links must point there, not the user's own home enterprise.
+    prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } }),
+  ]);
   const name = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const roleName = user?.role.name ?? "";
+  const enterprisePrefix = enterprise ? `/e/${enterprise.slug}` : "";
 
   const filteredItems = items.filter((item) => ctx.permissions.get(item.module)?.canView ?? false);
 
@@ -118,7 +124,7 @@ export async function AppSidebar() {
             <SidebarMenu>
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton render={<a href={item.url} />}>
+                  <SidebarMenuButton render={<a href={`${enterprisePrefix}${item.url}`} />}>
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
                   </SidebarMenuButton>

@@ -39,7 +39,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
       const data = await res.json()
 
       if (res.ok) {
-        router.push("/dashboard")
+        router.push(`/e/${data.enterpriseSlug}/dashboard`)
         router.refresh()
       } else {
         setError(data.error || "Login failed")

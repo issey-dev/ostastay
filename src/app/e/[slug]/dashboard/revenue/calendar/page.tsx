@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Save, Loader2 } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay } from "date-fns"
@@ -28,6 +28,7 @@ export default function PriceCalendarPage() {
 
 function PriceCalendarPageContent() {
   const searchParams = useSearchParams()
+  const { slug } = useParams<{ slug: string }>()
   const initialRatePlanId = searchParams.get("ratePlanId")
 
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
@@ -136,7 +137,7 @@ function PriceCalendarPageContent() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/revenue">
+        <Link href={`/e/${slug}/dashboard/revenue`}>
           <Button variant="outline" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, Resolver } from "react-hook-form"
 import * as z from "zod"
@@ -83,6 +83,7 @@ export type ProfileFormValues = z.infer<typeof profileFormSchema>
 
 export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }: { initialData?: any, upid?: string, defaultType?: string }) {
   const router = useRouter()
+  const { slug } = useParams<{ slug: string }>()
   const isEditMode = !!upid
   const enterpriseId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
 
@@ -156,7 +157,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
       })
 
       if (res.ok) {
-        router.push("/dashboard/profiles")
+        router.push(`/e/${slug}/dashboard/profiles`)
         router.refresh()
       } else {
         const error = await res.json()
