@@ -5,7 +5,7 @@ import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsMobile, useDeviceTier } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,6 +67,7 @@ function SidebarProvider({
   onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
+  const deviceTier = useDeviceTier()
   const [openMobile, setOpenMobile] = React.useState(false)
 
   // This is the internal state of the sidebar.
@@ -87,6 +88,26 @@ function SidebarProvider({
     },
     [setOpenProp, open]
   )
+
+  // Applies the device-tier default exactly once per mount, after the first real
+  // viewport measurement: an explicit saved preference (the cookie above) always wins;
+  // otherwise tablet defaults to collapsed (icon rail) rather than inheriting desktop's
+  // expanded default, since tablet portrait has meaningfully less width to spare. Never
+  // re-fires on later resizes, so it won't fight a user's manual toggle.
+  const appliedTierDefault = React.useRef(false)
+  React.useEffect(() => {
+    if (openProp !== undefined) return
+    if (appliedTierDefault.current) return
+    if (deviceTier === undefined) return
+    appliedTierDefault.current = true
+
+    const match = document.cookie.match(new RegExp(`${SIDEBAR_COOKIE_NAME}=(true|false)`))
+    if (match) {
+      _setOpen(match[1] === "true")
+    } else if (deviceTier === "tablet") {
+      _setOpen(false)
+    }
+  }, [deviceTier, openProp])
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {

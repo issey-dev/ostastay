@@ -111,8 +111,8 @@ export function SearchableSelect({
                 <div
                   key={option.value}
                   className={cn(
-                    "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 hover:text-slate-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                    value === option.value ? "bg-slate-100 text-slate-900 font-medium" : ""
+                    "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-muted hover:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                    value === option.value ? "bg-muted text-foreground font-medium" : ""
                   )}
                   onClick={() => {
                     onChange(option.value)

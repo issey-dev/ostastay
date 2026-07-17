@@ -68,7 +68,7 @@ export function FacilityAmenitiesManager() {
             {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        {properties.length === 0 && <p className="text-xs text-slate-500">Create a property above first.</p>}
+        {properties.length === 0 && <p className="text-xs text-muted-foreground">Create a property above first.</p>}
       </div>
 
       {propertyId && (
@@ -106,7 +106,7 @@ export function FacilityAmenitiesManager() {
                     <TableCell className="font-medium">{f.name}</TableCell>
                     <TableCell>{f.description || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="text-red-500">
+                      <Button variant="ghost" size="icon" className="text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>

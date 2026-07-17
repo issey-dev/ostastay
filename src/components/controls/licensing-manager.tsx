@@ -104,7 +104,7 @@ export function LicensingManager() {
 
   const selected = enterprises.find((e) => e.id === selectedId)
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading enterprises...</div>
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading enterprises...</div>
 
   return (
     <div className="space-y-6">
@@ -118,12 +118,12 @@ export function LicensingManager() {
             ))}
           </SelectContent>
         </Select>
-        {enterprises.length === 0 && <p className="text-sm text-slate-500">No customer enterprises exist yet.</p>}
+        {enterprises.length === 0 && <p className="text-sm text-muted-foreground">No customer enterprises exist yet.</p>}
       </div>
 
       {selected && license && (
         <>
-          <Card className="premium-card">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2"><KeyRound className="w-4 h-4" /> License</CardTitle>
               <CardDescription>
@@ -131,7 +131,7 @@ export function LicensingManager() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {errorMsg && <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md">{errorMsg}</div>}
+              {errorMsg && <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md">{errorMsg}</div>}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tier</label>
@@ -151,13 +151,13 @@ export function LicensingManager() {
                 <label className="text-sm font-medium">Notes</label>
                 <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Internal note about this license (optional)" />
               </div>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveLicense} disabled={saving}>
+              <Button className="" onClick={handleSaveLicense} disabled={saving}>
                 {saving ? "Saving..." : "Save License"}
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="premium-card">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg">Module Access — {form.tier} tier</CardTitle>
               <CardDescription>
@@ -174,9 +174,9 @@ export function LicensingManager() {
                       <span className="text-sm">{MODULE_LABELS[module]}</span>
                       <div className="flex items-center gap-2">
                         {row?.enabled ? (
-                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">Enabled</Badge>
+                          <Badge variant="secondary" className="bg-success-muted text-success">Enabled</Badge>
                         ) : (
-                          <Badge variant="secondary" className="bg-slate-100 text-slate-500">Disabled</Badge>
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground">Disabled</Badge>
                         )}
                         <Switch checked={row?.enabled ?? true} onCheckedChange={(checked) => toggleTierModule(module, !!checked)} />
                       </div>

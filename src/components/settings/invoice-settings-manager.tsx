@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, RefreshCw, Palette, Type, Receipt } from "lucide-react"
+import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
 
 export function InvoiceSettingsManager() {
   const [loading, setLoading] = useState(true)
@@ -14,7 +15,7 @@ export function InvoiceSettingsManager() {
   const [formData, setFormData] = useState({
     invoiceBrandName: "",
     invoiceLogoUrl: "",
-    invoiceBrandColor: "#4f46e5",
+    invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
     invoiceFontFamily: "Geist",
     invoiceTaxId: "",
     invoicePhone: "",
@@ -38,7 +39,7 @@ export function InvoiceSettingsManager() {
         setFormData({
           invoiceBrandName: data.invoiceBrandName || "",
           invoiceLogoUrl: data.invoiceLogoUrl || "",
-          invoiceBrandColor: data.invoiceBrandColor || "#4f46e5",
+          invoiceBrandColor: data.invoiceBrandColor || DEFAULT_INVOICE_BRAND_COLOR,
           invoiceFontFamily: data.invoiceFontFamily || "Geist",
           invoiceTaxId: data.invoiceTaxId || "",
           invoicePhone: data.invoicePhone || "",
@@ -79,7 +80,7 @@ export function InvoiceSettingsManager() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-500">Loading invoice configuration...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading invoice configuration...</div>
   }
 
   const fontStyles: Record<string, string> = {
@@ -223,7 +224,7 @@ export function InvoiceSettingsManager() {
           <Button type="button" variant="outline" onClick={fetchSettings} disabled={saving}>
             <RefreshCw className="w-4 h-4 mr-2" /> Reset
           </Button>
-          <Button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button type="submit" disabled={saving} className="">
             <Save className="w-4 h-4 mr-2" /> 
             {saving ? "Saving..." : "Save Invoice Settings"}
           </Button>
@@ -232,9 +233,9 @@ export function InvoiceSettingsManager() {
 
       {/* Live Preview Column */}
       <div className="lg:col-span-2 space-y-2 sticky top-6">
-        <Label className="text-slate-500 font-semibold uppercase text-xs tracking-wider">Live Invoice Preview</Label>
+        <Label className="text-muted-foreground font-semibold uppercase text-xs tracking-wider">Live Invoice Preview</Label>
         <div 
-          className={`bg-white border rounded-xl shadow-md p-6 overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex flex-col justify-between ${fontStyles[formData.invoiceFontFamily] || "font-sans"}`}
+          className={`bg-card border rounded-xl shadow-md p-6 overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex flex-col justify-between ${fontStyles[formData.invoiceFontFamily] || "font-sans"}`}
         >
           <div>
             {/* Logo & Header */}
@@ -248,14 +249,14 @@ export function InvoiceSettingsManager() {
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 mb-2 font-bold text-xs border border-dashed">
+                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-muted-foreground mb-2 font-bold text-xs border border-dashed">
                     H
                   </div>
                 )}
-                <h4 className="font-bold text-sm text-slate-800 uppercase tracking-tight">
+                <h4 className="font-bold text-sm text-foreground uppercase tracking-tight">
                   {formData.invoiceBrandName || "YOUR HOTEL NAME"}
                 </h4>
-                <p className="text-[8px] text-slate-500 whitespace-pre-line mt-1">
+                <p className="text-[8px] text-muted-foreground whitespace-pre-line mt-1">
                   {formData.invoiceAddress || "123 Street Name, City, Country"}<br/>
                   Phone: {formData.invoicePhone || "+1 (555) 0123"}<br/>
                   Email: {formData.invoiceEmail || "billing@hotel.com"}
@@ -268,32 +269,32 @@ export function InvoiceSettingsManager() {
                 >
                   INVOICE
                 </span>
-                <p className="font-semibold text-slate-700">CONF-98218</p>
-                <p className="text-[8px] text-slate-400">Date: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
+                <p className="font-semibold text-foreground">CONF-98218</p>
+                <p className="text-[8px] text-muted-foreground">Date: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
                 {formData.invoiceTaxId && (
-                  <p className="text-[8px] text-slate-500 mt-1">Tax ID: <span className="font-medium">{formData.invoiceTaxId}</span></p>
+                  <p className="text-[8px] text-muted-foreground mt-1">Tax ID: <span className="font-medium">{formData.invoiceTaxId}</span></p>
                 )}
               </div>
             </div>
 
             {/* Header Text details */}
             {formData.invoiceHeaderText && (
-              <div className="bg-slate-50 p-2 rounded border border-slate-100 text-[8px] text-slate-500 mb-4 whitespace-pre-line">
+              <div className="bg-muted p-2 rounded border border-border text-[8px] text-muted-foreground mb-4 whitespace-pre-line">
                 {formData.invoiceHeaderText}
               </div>
             )}
 
             {/* Dummy Guest Info */}
             <div className="mb-4">
-              <span className="font-bold text-slate-500 uppercase tracking-wider text-[8px]">Bill To:</span>
-              <p className="font-semibold text-slate-800 text-xs">Jane Doe</p>
-              <p className="text-[8px] text-slate-500">Stay: Jul 9, 2026 - Jul 11, 2026 (2 Nights)</p>
+              <span className="font-bold text-muted-foreground uppercase tracking-wider text-[8px]">Bill To:</span>
+              <p className="font-semibold text-foreground text-xs">Jane Doe</p>
+              <p className="text-[8px] text-muted-foreground">Stay: Jul 9, 2026 - Jul 11, 2026 (2 Nights)</p>
             </div>
 
             {/* Dummy Ledger Table */}
             <table className="w-full mb-4 text-[8px]">
               <thead>
-                <tr className="border-b-2 text-slate-500 font-semibold" style={{ borderBottomColor: formData.invoiceBrandColor }}>
+                <tr className="border-b-2 text-muted-foreground font-semibold" style={{ borderBottomColor: formData.invoiceBrandColor }}>
                   <th className="text-left pb-1">Description</th>
                   <th className="text-right pb-1">Amount</th>
                   <th className="text-right pb-1">Tax</th>
@@ -301,21 +302,21 @@ export function InvoiceSettingsManager() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b text-slate-700">
+                <tr className="border-b text-foreground">
                   <td className="py-1">Room Charge (Deluxe Room) - 2 Nights</td>
                   <td className="text-right py-1">$300.00</td>
                   <td className="text-right py-1">$30.00</td>
                   <td className="text-right py-1 font-semibold">$330.00</td>
                 </tr>
-                <tr className="border-b text-slate-700">
+                <tr className="border-b text-foreground">
                   <td className="py-1">Room Service</td>
                   <td className="text-right py-1">$45.00</td>
                   <td className="text-right py-1">$4.50</td>
                   <td className="text-right py-1 font-semibold">$49.50</td>
                 </tr>
-                <tr className="text-slate-700 font-semibold">
+                <tr className="text-foreground font-semibold">
                   <td className="py-2" colSpan={3}>Total Due:</td>
-                  <td className="text-right py-2 text-rose-600 text-xs">$379.50</td>
+                  <td className="text-right py-2 text-destructive text-xs">$379.50</td>
                 </tr>
               </tbody>
             </table>
@@ -325,14 +326,14 @@ export function InvoiceSettingsManager() {
           <div className="border-t pt-3 mt-4 space-y-2">
             {formData.invoicePaymentTerms && (
               <div>
-                <span className="font-bold text-slate-500 uppercase tracking-wider text-[7px]">Payment Terms:</span>
-                <p className="text-[7.5px] text-slate-500 leading-tight whitespace-pre-line">
+                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Payment Terms:</span>
+                <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">
                   {formData.invoicePaymentTerms}
                 </p>
               </div>
             )}
             {formData.invoiceFooterText && (
-              <p className="text-[8px] text-slate-400 text-center italic pt-1 whitespace-pre-line border-t border-slate-100">
+              <p className="text-[8px] text-muted-foreground text-center italic pt-1 whitespace-pre-line border-t border-border">
                 {formData.invoiceFooterText}
               </p>
             )}

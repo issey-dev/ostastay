@@ -62,10 +62,9 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-[90vw] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-white p-6 text-slate-900 ring-1 ring-slate-200 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 shadow-xl",
+          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-[90vw] max-w-[500px] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 shadow-elevation-4",
           className
         )}
-        style={{ maxWidth: '500px', backgroundColor: '#ffffff' }}
         {...props}
       />
     </AlertDialogPortal>

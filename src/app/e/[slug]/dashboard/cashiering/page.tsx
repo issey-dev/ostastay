@@ -99,7 +99,7 @@ export default function CashieringPage() {
   if (isLoading && !status) {
     return (
       <div className="flex justify-center items-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -107,8 +107,8 @@ export default function CashieringPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Cashiering & Shift Reconciliation</h2>
-        <p className="text-slate-500 mt-2">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">Cashiering & Shift Reconciliation</h2>
+        <p className="text-muted-foreground mt-2">
           Manage your physical cash drawer and track all financial postings during your shift.
         </p>
       </div>
@@ -123,31 +123,31 @@ export default function CashieringPage() {
 
       {/* RECONCILIATION RESULT VIEW */}
       {reconciliation && (
-        <Card className="border-indigo-200 shadow-xl overflow-hidden">
-          <div className="bg-indigo-600 p-6 text-white text-center">
+        <Card className="border-border shadow-xl overflow-hidden">
+          <div className="bg-primary p-6 text-primary-foreground text-center">
             <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-80" />
             <h3 className="text-2xl font-bold">Shift Closed Successfully</h3>
-            <p className="text-indigo-100 mt-1">Blind Drop Reconciliation Report</p>
+            <p className="text-primary-foreground/80 mt-1">Blind Drop Reconciliation Report</p>
           </div>
           <CardContent className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-sm font-medium text-slate-500 mb-1">Expected System Cash</p>
-                <p className="text-2xl font-bold text-slate-800">${reconciliation.expectedCash.toFixed(2)}</p>
+              <div className="p-4 bg-muted rounded-xl border border-border">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Expected System Cash</p>
+                <p className="text-2xl font-bold text-foreground">${reconciliation.expectedCash.toFixed(2)}</p>
               </div>
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-sm font-medium text-slate-500 mb-1">Actual Physical Drop</p>
-                <p className="text-2xl font-bold text-slate-800">${reconciliation.actualDrop.toFixed(2)}</p>
+              <div className="p-4 bg-muted rounded-xl border border-border">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Actual Physical Drop</p>
+                <p className="text-2xl font-bold text-foreground">${reconciliation.actualDrop.toFixed(2)}</p>
               </div>
-              <div className={`p-4 rounded-xl border ${reconciliation.discrepancy === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+              <div className={`p-4 rounded-xl border ${reconciliation.discrepancy === 0 ? 'bg-success-muted border-success/30' : 'bg-destructive-muted border-destructive/30'}`}>
                 <p className="text-sm font-medium mb-1">Discrepancy (Short/Over)</p>
-                <p className={`text-2xl font-bold ${reconciliation.discrepancy === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                <p className={`text-2xl font-bold ${reconciliation.discrepancy === 0 ? 'text-success' : 'text-destructive'}`}>
                   {reconciliation.discrepancy === 0 ? "Balanced" : `$${Math.abs(reconciliation.discrepancy).toFixed(2)} ${reconciliation.discrepancy < 0 ? 'Short' : 'Over'}`}
                 </p>
               </div>
             </div>
           </CardContent>
-          <CardFooter className="bg-slate-50 p-4 border-t justify-center">
+          <CardFooter className="bg-muted p-4 border-t justify-center">
             <Button variant="outline" onClick={() => setReconciliation(null)}>Dismiss Report</Button>
           </CardFooter>
         </Card>
@@ -155,10 +155,10 @@ export default function CashieringPage() {
 
       {/* SHIFT CLOSED (Needs to Open) */}
       {!status?.hasActiveShift && !reconciliation && (
-        <Card className="max-w-md mx-auto border-0 shadow-lg ring-1 ring-slate-200 mt-12 overflow-hidden">
-          <div className="bg-slate-50 border-b border-slate-100 p-8 flex justify-center">
-            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200">
-              <Lock className="w-8 h-8 text-slate-400" />
+        <Card className="max-w-md mx-auto border-0 shadow-lg ring-1 ring-border mt-12 overflow-hidden">
+          <div className="bg-muted border-b border-border p-8 flex justify-center">
+            <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center shadow-sm border border-border">
+              <Lock className="w-8 h-8 text-muted-foreground" />
             </div>
           </div>
           <CardHeader className="text-center pt-8">
@@ -169,9 +169,9 @@ export default function CashieringPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Opening Float (Cash in Drawer)</label>
+              <label className="text-sm font-medium text-foreground">Opening Float (Cash in Drawer)</label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input 
                   type="number" 
                   step="0.01" 
@@ -184,7 +184,7 @@ export default function CashieringPage() {
           </CardContent>
           <CardFooter>
             <Button 
-              className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700" 
+              className="w-full h-12 text-lg " 
               onClick={handleOpenShift}
               disabled={isOpening}
             >
@@ -198,25 +198,25 @@ export default function CashieringPage() {
       {/* SHIFT OPEN (Dashboard) */}
       {status?.hasActiveShift && !reconciliation && (
         <div className="space-y-6">
-          <Card className="border-indigo-200 shadow-md">
-            <CardHeader className="bg-indigo-50/50 border-b border-indigo-100 flex flex-row items-center justify-between pb-4">
+          <Card className="border-border shadow-md">
+            <CardHeader className="bg-muted/50 border-b border-border flex flex-row items-center justify-between pb-4">
               <div>
-                <CardTitle className="flex items-center text-indigo-900">
-                  <Unlock className="w-5 h-5 mr-2 text-indigo-600" /> Active Shift
+                <CardTitle className="flex items-center text-success">
+                  <Unlock className="w-5 h-5 mr-2 text-success" /> Active Shift
                 </CardTitle>
-                <CardDescription className="text-indigo-700/80 mt-1">
+                <CardDescription className="text-success/80 mt-1">
                   Opened at {format(parseISO(status.shift.openedAt), "h:mm a 'on' MMM d, yyyy")}
                 </CardDescription>
               </div>
-              <Badge className="bg-indigo-600 text-white font-mono text-xs px-3 py-1">
+              <Badge className="font-mono text-xs px-3 py-1">
                 ID: {status.shift.id.slice(0, 8)}
               </Badge>
             </CardHeader>
             <CardContent className="p-6">
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">Starting Float</p>
-                  <p className="text-3xl font-bold font-mono text-slate-800">${status.shift.openingFloat.toFixed(2)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Starting Float</p>
+                  <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
                 </div>
                 <Button 
                   variant="destructive" 
@@ -229,30 +229,30 @@ export default function CashieringPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="bg-slate-50 border-b border-slate-100">
+          <Card className="border-0 shadow-sm ring-1 ring-border">
+            <CardHeader className="bg-muted border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-slate-400" />
+                <Wallet className="w-5 h-5 text-muted-foreground" />
                 Payments Posted This Shift
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {status.shift.payments.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">No payments posted yet.</div>
+                <div className="p-8 text-center text-muted-foreground">No payments posted yet.</div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-border">
                   {status.shift.payments.map((payment: any) => (
-                    <div key={payment.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                    <div key={payment.id} className="p-4 flex items-center justify-between hover:bg-muted">
                       <div>
-                        <p className="font-semibold text-slate-800 flex items-center gap-2">
+                        <p className="font-semibold text-foreground flex items-center gap-2">
                           {payment.paymentMethod.name}
                           {payment.isRefund && <Badge variant="destructive" className="text-[10px]">Refund</Badge>}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           Folio: {payment.folioId.slice(0,8)} • {format(parseISO(payment.createdAt), "h:mm a")}
                         </p>
                       </div>
-                      <div className={`font-bold font-mono ${payment.isRefund ? 'text-rose-600' : 'text-slate-700'}`}>
+                      <div className={`font-bold font-mono ${payment.isRefund ? 'text-destructive' : 'text-foreground'}`}>
                         {payment.isRefund ? '-' : '+'}${payment.amount.toFixed(2)}
                       </div>
                     </div>
@@ -274,27 +274,26 @@ export default function CashieringPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-6">
-            <label className="text-sm font-semibold text-slate-700 mb-2 block">Actual Physical Cash Count</label>
+            <label className="text-sm font-semibold text-foreground mb-2 block">Actual Physical Cash Count</label>
             <div className="relative">
-              <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6" />
+              <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6" />
               <Input 
                 type="number" 
                 step="0.01" 
                 autoFocus
-                className="pl-12 text-3xl font-bold h-16 bg-slate-50 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+                className="pl-12 text-3xl font-bold h-16 bg-muted border-border focus:border-ring focus:ring-ring"
                 placeholder="0.00"
                 value={closingDrop}
                 onChange={(e) => setClosingDrop(e.target.value)}
               />
             </div>
-            <p className="text-xs text-slate-500 mt-3 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" /> Once submitted, this cannot be undone and any discrepancies will be permanently logged.
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCloseModalOpen(false)}>Cancel</Button>
             <Button 
-              className="bg-slate-900 hover:bg-slate-800 text-white" 
               onClick={handleCloseShift}
               disabled={isClosing || !closingDrop}
             >

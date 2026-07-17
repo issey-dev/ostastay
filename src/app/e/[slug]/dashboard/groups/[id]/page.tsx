@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
+import { statusMutedClasses } from "@/lib/status-tone"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
@@ -37,11 +38,11 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   }, [currentProperty, unwrappedParams.id])
 
   if (loading) {
-    return <div className="p-8 flex justify-center text-slate-400">Loading group details...</div>
+    return <div className="p-8 flex justify-center text-muted-foreground">Loading group details...</div>
   }
 
   if (!group) {
-    return <div className="p-8 text-center text-slate-500">Group not found.</div>
+    return <div className="p-8 text-center text-muted-foreground">Group not found.</div>
   }
 
   const pickedUp = group.reservations?.length || 0;
@@ -59,16 +60,12 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-slate-900">{group.name}</h1>
-              <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                group.status === 'DEFINITE' ? 'bg-emerald-100 text-emerald-700' :
-                group.status === 'CANCELLED' ? 'bg-rose-100 text-rose-700' :
-                'bg-amber-100 text-amber-700'
-              }`}>
+              <h1 className="text-3xl font-bold text-foreground">{group.name}</h1>
+              <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${statusMutedClasses(group.status)}`}>
                 {group.status}
               </span>
             </div>
-            <p className="text-slate-500 mt-1 font-mono text-sm">Code: {group.code}</p>
+            <p className="text-muted-foreground mt-1 font-mono text-sm">Code: {group.code}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -82,48 +79,48 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center gap-3 text-slate-500 mb-2">
-            <CalendarDays className="w-5 h-5 text-indigo-500" />
+        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
+          <div className="flex items-center gap-3 text-muted-foreground mb-2">
+            <CalendarDays className="w-5 h-5" />
             <h3 className="font-semibold">Event Dates</h3>
           </div>
-          <p className="text-lg font-bold text-slate-900">
+          <p className="text-lg font-bold text-foreground">
             {format(parseISO(group.startDate), "dd-MMM")} - {format(parseISO(group.endDate), "dd-MMM-yy")}
           </p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center gap-3 text-slate-500 mb-2">
-            <Users className="w-5 h-5 text-indigo-500" />
+        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
+          <div className="flex items-center gap-3 text-muted-foreground mb-2">
+            <Users className="w-5 h-5" />
             <h3 className="font-semibold">Total Held</h3>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{group.totalRoomsHeld}</p>
+          <p className="text-2xl font-bold text-foreground">{group.totalRoomsHeld}</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center gap-3 text-slate-500 mb-2">
-            <UserPlus className="w-5 h-5 text-emerald-500" />
+        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
+          <div className="flex items-center gap-3 text-muted-foreground mb-2">
+            <UserPlus className="w-5 h-5" />
             <h3 className="font-semibold">Picked Up</h3>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{pickedUp}</p>
+          <p className="text-2xl font-bold text-foreground">{pickedUp}</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex items-center gap-3 text-slate-500 mb-2">
-            <Users className="w-5 h-5 text-amber-500" />
+        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
+          <div className="flex items-center gap-3 text-muted-foreground mb-2">
+            <Users className="w-5 h-5" />
             <h3 className="font-semibold">Remaining</h3>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{remaining}</p>
+          <p className="text-2xl font-bold text-foreground">{remaining}</p>
         </div>
       </div>
 
       {/* Reservations List */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
-          <h2 className="text-lg font-bold text-slate-800">Group Reservations (Pickups)</h2>
+      <div className="bg-card rounded-xl shadow-elevation-1 border border-border overflow-hidden">
+        <div className="px-6 py-4 border-b flex justify-between items-center bg-muted">
+          <h2 className="text-lg font-bold text-foreground">Group Reservations (Pickups)</h2>
         </div>
-        
+
         {group.reservations && group.reservations.length > 0 ? (
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-white text-slate-500 text-xs uppercase tracking-wider border-b">
+              <tr className="bg-card text-muted-foreground text-xs uppercase tracking-wider border-b">
                 <th className="p-4 font-semibold">Res #</th>
                 <th className="p-4 font-semibold">Guest</th>
                 <th className="p-4 font-semibold">Dates</th>
@@ -132,27 +129,27 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 <th className="p-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {group.reservations.map((res: any) => (
-                <tr key={res.id} className="hover:bg-slate-50">
-                  <td className="p-4 font-mono text-sm text-slate-700">{res.reservationNumber}</td>
-                  <td className="p-4 font-semibold text-slate-900">
+                <tr key={res.id} className="hover:bg-muted/50">
+                  <td className="p-4 font-mono text-sm text-foreground">{res.reservationNumber}</td>
+                  <td className="p-4 font-semibold text-foreground">
                     {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
                   </td>
-                  <td className="p-4 text-sm text-slate-600">
+                  <td className="p-4 text-sm text-muted-foreground">
                     {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
                   </td>
-                  <td className="p-4 text-sm font-semibold text-slate-700">
+                  <td className="p-4 text-sm font-semibold text-foreground">
                     {res.assignments?.[0]?.room?.number || "Unassigned"}
                   </td>
                   <td className="p-4">
-                    <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-semibold">
+                    <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${statusMutedClasses(res.status)}`}>
                       {res.status}
                     </span>
                   </td>
                   <td className="p-4 text-right">
                     <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
-                      <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-800">
+                      <Button variant="ghost" size="sm">
                         View
                       </Button>
                     </Link>
@@ -163,9 +160,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </table>
         ) : (
           <div className="text-center py-16">
-            <Users className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No reservations picked up yet.</p>
-            <p className="text-sm text-slate-400 mt-1">Click "Pickup Room" to add a guest to this group.</p>
+            <Users className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-muted-foreground font-medium">No reservations picked up yet.</p>
+            <p className="text-sm text-muted-foreground mt-1">Click "Pickup Room" to add a guest to this group.</p>
           </div>
         )}
       </div>

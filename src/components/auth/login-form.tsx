@@ -59,17 +59,17 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-600 text-white mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary text-primary-foreground mb-4 shadow-lg">
             <Hotel size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900">{enterpriseName ?? "Guest House PMS"}</h1>
-          <p className="text-slate-500 mt-2">Sign in to your property management system</p>
+          <h1 className="text-3xl font-bold text-foreground">{enterpriseName ?? "Guest House PMS"}</h1>
+          <p className="text-muted-foreground mt-2">Sign in to your property management system</p>
         </div>
 
-        <Card className="border-0 shadow-xl ring-1 ring-slate-200">
+        <Card className="border-0 shadow-xl ring-1 ring-border">
           <CardHeader className="pb-4">
             <CardTitle>Welcome back</CardTitle>
             <CardDescription>
@@ -81,7 +81,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="p-3 bg-rose-50 text-rose-600 text-sm rounded-md border border-rose-100 font-medium">
+                <div className="p-3 bg-destructive-muted text-destructive text-sm rounded-md border border-destructive/30 font-medium">
                   {error}
                 </div>
               )}
@@ -112,7 +112,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <a href="#" className="text-xs text-indigo-600 font-medium hover:underline">Forgot password?</a>
+                  <a href="#" className="text-xs text-primary font-medium hover:underline">Forgot password?</a>
                 </div>
                 <Input
                   id="password"
@@ -124,7 +124,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-4">
-              <Button type="submit" className="w-full h-11 bg-indigo-600 hover:bg-indigo-700" disabled={isLoading}>
+              <Button type="submit" className="w-full h-11 " disabled={isLoading}>
                 {isLoading ? "Signing in..." : (
                   <>
                     <KeyRound className="mr-2 w-4 h-4" /> Sign In
@@ -132,7 +132,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                 )}
               </Button>
               {showDevSeed && (
-                <Button type="button" variant="ghost" className="text-xs text-slate-500 w-full" onClick={handleSeed}>
+                <Button type="button" variant="ghost" className="text-xs text-muted-foreground w-full" onClick={handleSeed}>
                   [Dev Tool] Seed Initial Users
                 </Button>
               )}

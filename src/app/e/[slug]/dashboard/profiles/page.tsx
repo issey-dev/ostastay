@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { Users, Building2, Briefcase } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 
 type Profile = {
   upid: string
@@ -48,33 +50,15 @@ type Profile = {
 }
 
 const classColors: Record<string, string> = {
-  VIP: "bg-purple-100 text-purple-800 border-purple-200",
-  REGULAR: "bg-slate-100 text-slate-800 border-slate-200",
-  BLACKLISTED: "bg-red-100 text-red-800 border-red-200",
+  VIP: "bg-foreground text-background border-transparent",
+  REGULAR: "bg-muted text-foreground border-border",
+  BLACKLISTED: "bg-destructive-muted text-destructive border-destructive/30",
 }
 
-const getAvatarColor = (name: string) => {
-  const colors = [
-    "bg-red-100 text-red-700",
-    "bg-orange-100 text-orange-700",
-    "bg-amber-100 text-amber-700",
-    "bg-green-100 text-green-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-teal-100 text-teal-700",
-    "bg-cyan-100 text-cyan-700",
-    "bg-blue-100 text-blue-700",
-    "bg-indigo-100 text-indigo-700",
-    "bg-violet-100 text-violet-700",
-    "bg-fuchsia-100 text-fuchsia-700",
-    "bg-rose-100 text-rose-700",
-  ]
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
-}
+// One consistent monochrome treatment for every avatar — the initials themselves are
+// the distinguishing feature, not a per-person hue (the app's palette is monochromatic
+// with color reserved for status/tone, not decorative identity).
+const AVATAR_COLOR = "bg-muted text-foreground"
 
 export default function ProfilesDashboard() {
   const router = useRouter()
@@ -171,39 +155,39 @@ export default function ProfilesDashboard() {
         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6">
           <TabsTrigger 
             value="GUEST" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500"
+            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Users className="w-4 h-4 mr-2" /> Guests
           </TabsTrigger>
           <TabsTrigger 
             value="COMPANY" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500"
+            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Building2 className="w-4 h-4 mr-2" /> Corporate Accounts
           </TabsTrigger>
           <TabsTrigger 
             value="TRAVEL_AGENT" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500"
+            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Briefcase className="w-4 h-4 mr-2" /> Travel Agents
           </TabsTrigger>
         </TabsList>
 
-      <Card className="premium-card">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+      <Card>
+        <CardHeader className="bg-muted/50 border-b border-border">
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle className="font-outfit text-lg">
+              <CardTitle className="text-lg">
                 {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : "Travel Agents"}
               </CardTitle>
               <CardDescription>Search by name, email, or phone.</CardDescription>
             </div>
             <div className="relative w-72">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Search profiles..."
-                className="pl-9 bg-white"
+                className="pl-9 bg-card"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -211,14 +195,63 @@ export default function ProfilesDashboard() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="border-slate-100">
-                <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Guest</TableHead>
-                <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Contact</TableHead>
-                <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Status</TableHead>
-                <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">History</TableHead>
-                <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
+          {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
+          <div className="md:hidden divide-y divide-border">
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
+              </div>
+            ) : profiles.length === 0 ? (
+              <EmptyState icon={Users} title="No profiles found" />
+            ) : (
+              profiles.map((p) => (
+                <div key={p.upid} className="p-4 flex items-start gap-3">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+                    {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-foreground truncate">
+                        {p.profileType === 'GUEST'
+                          ? `${p.firstName} ${p.lastName || ''}`.trim()
+                          : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                        {p.classification}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {p.contacts?.[0]?.email || "No email"} {p.contacts?.[0]?.mobile ? `· ${p.contacts[0].mobile}` : ""}
+                    </div>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                      <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon-sm" className="text-primary" onClick={() => router.push(`/dashboard/profiles/${p.upid}/edit`)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => {
+                          setDeletingUpid(p.upid)
+                          setIsDeleteDialogOpen(true)
+                        }}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop: full table */}
+          <Table className="hidden md:table">
+            <TableHeader className="bg-muted/50">
+              <TableRow className="border-border">
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Guest</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Contact</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Status</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">History</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -228,37 +261,37 @@ export default function ProfilesDashboard() {
                 <TableRow><TableCell colSpan={5} className="text-center py-10">No profiles found.</TableCell></TableRow>
               ) : (
                 profiles.map((p) => (
-                  <TableRow key={p.upid} className="hover:bg-indigo-50/40">
+                  <TableRow key={p.upid} className="hover:bg-muted/40">
                     <TableCell className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${getAvatarColor(p.firstName || p.companyName || 'A')}`}>
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
                           {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-medium text-slate-900">
+                          <span className="font-medium text-foreground">
                             {p.profileType === 'GUEST' 
                               ? `${p.firstName} ${p.lastName || ''}`.trim() 
                               : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
                           </span>
                           {p.contacts?.[0]?.country && (
-                            <span className="text-xs text-slate-500 font-medium">{p.contacts[0].country}</span>
+                            <span className="text-xs text-muted-foreground font-medium">{p.contacts[0].country}</span>
                           )}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="text-sm">
-                        {p.contacts?.[0]?.email ? <div className="text-slate-900">{p.contacts[0].email}</div> : <div className="text-slate-400 italic text-xs">No email</div>}
-                        {p.contacts?.[0]?.mobile ? <div className="text-slate-500">{p.contacts[0].mobile}</div> : <div className="text-slate-400 italic text-xs">No phone</div>}
+                        {p.contacts?.[0]?.email ? <div className="text-foreground">{p.contacts[0].email}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
+                        {p.contacts?.[0]?.mobile ? <div className="text-muted-foreground">{p.contacts[0].mobile}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="flex flex-col gap-1 items-start">
-                        <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-slate-100 text-slate-800'}`}>
+                        <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
                           {p.classification}
                         </span>
                         {p.loyaltyTier && (
-                          <span className="px-2 py-1 rounded-full text-[10px] uppercase font-bold border bg-amber-100 text-amber-800 border-amber-200">
+                          <span className="px-2 py-1 rounded-full text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
                             {p.loyaltyTier}
                           </span>
                         )}
@@ -266,16 +299,16 @@ export default function ProfilesDashboard() {
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="flex flex-col text-sm">
-                        <span className="text-slate-900 font-medium">{p.totalStays || 0} Stays</span>
-                        <span className="text-slate-500">${(p.totalRevenue || 0).toFixed(2)}</span>
+                        <span className="text-foreground font-medium">{p.totalStays || 0} Stays</span>
+                        <span className="text-muted-foreground">${(p.totalRevenue || 0).toFixed(2)}</span>
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-4 text-right">
-                      <div className="flex gap-2 transition-opacity" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        <Button variant="ghost" size="sm" style={{ color: '#4f46e5' }} onClick={() => router.push(`/dashboard/profiles/${p.upid}/edit`)}>
+                      <div className="flex justify-end gap-2 transition-opacity">
+                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => router.push(`/dashboard/profiles/${p.upid}/edit`)}>
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </Button>
-                        <Button variant="ghost" size="sm" style={{ color: '#dc2626' }} onClick={() => {
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
                           setDeletingUpid(p.upid)
                           setIsDeleteDialogOpen(true)
                         }}>

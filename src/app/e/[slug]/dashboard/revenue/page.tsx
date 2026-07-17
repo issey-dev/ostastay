@@ -155,7 +155,7 @@ export default function RevenueDashboard() {
       </div>
 
       <Tabs defaultValue="rate-plans" className="w-full">
-        <TabsList className="bg-slate-100/50 mb-6">
+        <TabsList className="bg-muted/50 mb-6">
           <TabsTrigger value="flash-report">Manager's Flash Report</TabsTrigger>
           <TabsTrigger value="rate-plans">Rate Plans Configuration</TabsTrigger>
           <TabsTrigger value="seasonal-pricing">Seasonal Bulk Pricing</TabsTrigger>
@@ -172,7 +172,7 @@ export default function RevenueDashboard() {
               if (!open) resetForm()
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => setIsDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
                   <Plus className="mr-2 h-4 w-4" /> New Rate Plan
                 </Button>
               </DialogTrigger>
@@ -188,7 +188,7 @@ export default function RevenueDashboard() {
               <div className="grid gap-6 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label>Rate Code <span className="text-red-500">*</span></Label>
+                    <Label>Rate Code <span className="text-destructive">*</span></Label>
                     <Input required placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                   </div>
                   <div className="grid gap-2">
@@ -199,7 +199,7 @@ export default function RevenueDashboard() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Plan Name <span className="text-red-500">*</span></Label>
+                  <Label>Plan Name <span className="text-destructive">*</span></Label>
                   <Input required placeholder="Best Available Rate" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                 </div>
 
@@ -288,15 +288,15 @@ export default function RevenueDashboard() {
                 ratePlans.map((plan) => (
                   <TableRow key={plan.id}>
                     <TableCell>
-                      <span className="font-bold text-lg bg-slate-100 rounded-md px-2 py-1">{plan.priority}</span>
+                      <span className="font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
                     </TableCell>
-                    <TableCell className="font-mono font-bold text-blue-600">{plan.code}</TableCell>
+                    <TableCell className="font-mono font-bold text-info">{plan.code}</TableCell>
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell>
                       {plan.isNegotiated ? (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Negotiated</Badge>
+                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Public Rate</Badge>
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
@@ -308,7 +308,7 @@ export default function RevenueDashboard() {
                       <Button variant="outline" size="icon" onClick={() => handleEdit(plan)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" className="text-red-500 hover:text-red-600" onClick={() => handleDeletePrompt(plan)}>
+                      <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(plan)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -346,10 +346,10 @@ export default function RevenueDashboard() {
       <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-red-600" : "text-emerald-600"}>
+            <DialogTitle className={notification?.isError ? "text-destructive" : "text-success"}>
               {notification?.title}
             </DialogTitle>
-            <DialogDescription className="text-base text-slate-700 mt-2">
+            <DialogDescription className="text-base text-foreground mt-2">
               {notification?.message}
             </DialogDescription>
           </DialogHeader>

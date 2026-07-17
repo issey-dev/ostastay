@@ -17,6 +17,9 @@ import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
+import { statusMutedClasses } from "@/lib/status-tone"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 
 type Reservation = {
   id: string
@@ -51,14 +54,6 @@ type Reservation = {
 
 const getActiveTasks = (res: Reservation) => {
   return res.assignments?.flatMap(a => a.room?.housekeepingTasks || []).filter(t => t.status !== 'COMPLETED') || []
-}
-
-const statusColors: Record<string, string> = {
-  RESERVED: "bg-blue-100 text-blue-800",
-  IN_HOUSE: "bg-green-100 text-green-800",
-  CHECKED_OUT: "bg-slate-100 text-slate-800",
-  NO_SHOW: "bg-red-100 text-red-800",
-  CANCELLED: "bg-red-100 text-red-800 line-through opacity-70",
 }
 
 export default function ReservationsDashboard() {
@@ -407,6 +402,55 @@ export default function ReservationsDashboard() {
 
   const isEditMode = !!selectedRes
 
+  // Shared between the desktop table row and the mobile stacked card — same actions,
+  // same conditional logic, just laid out differently by the caller.
+  const renderActions = (res: Reservation) => (
+    <>
+      {res.status === 'RESERVED' && (
+        <Button variant="outline" size="icon" className="bg-success-muted text-success hover:bg-success-muted/70 border-success/30" onClick={() => handleCheckIn(res)} title="Check In">
+          <Key className="h-4 w-4" />
+        </Button>
+      )}
+      {res.status === 'IN_HOUSE' && (
+        <Button variant="outline" size="icon" onClick={() => handleCheckOut(res)} title="Check Out">
+          <LogOut className="h-4 w-4" />
+        </Button>
+      )}
+      {(res.status === 'IN_HOUSE' || res.status === 'CHECKED_OUT') && (
+        <Button variant="outline" size="icon" onClick={() => openFolio(res)} title="Folio">
+          <ReceiptText className="h-4 w-4" />
+        </Button>
+      )}
+      {(res.status === 'RESERVED' || res.status === 'IN_HOUSE') && (
+        <Button
+          variant="outline"
+          size="icon"
+          className={`relative ${
+            getActiveTasks(res).length > 0
+              ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 border-transparent"
+              : "bg-destructive-muted text-destructive hover:bg-destructive-muted/70 border-destructive/30"
+          }`}
+          onClick={() => handleRequestPrompt(res)}
+          title="Special Request"
+        >
+          <Bell className="h-4 w-4" />
+          {getActiveTasks(res).length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
+            </span>
+          )}
+        </Button>
+      )}
+      <Button variant="outline" size="icon" onClick={() => handleEdit(res)} title="Edit">
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(res)} title="Delete">
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
@@ -418,7 +462,7 @@ export default function ReservationsDashboard() {
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" className="shadow-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={handleAutoAssign} disabled={autoAssigning}>
+          <Button variant="outline" className="shadow-sm" onClick={handleAutoAssign} disabled={autoAssigning}>
             <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
           </Button>
           <Link href={`/e/${slug}/dashboard/reservations/calendar`}>
@@ -444,7 +488,7 @@ export default function ReservationsDashboard() {
               
               <div className="grid gap-6 py-4">
                 <div className="grid gap-2">
-                  <Label>Primary Guest <span className="text-red-500">*</span></Label>
+                  <Label>Primary Guest <span className="text-destructive">*</span></Label>
                   <SearchableSelect
                     required
                     value={form.primaryGuestId}
@@ -460,7 +504,7 @@ export default function ReservationsDashboard() {
                   />
                 </div>
 
-                <div className="grid gap-2 p-4 bg-slate-50 border rounded-md">
+                <div className="grid gap-2 p-4 bg-muted border rounded-md">
                   <Label>Accompanying Guests</Label>
                   <div className="flex gap-2">
                     <SearchableSelect
@@ -489,13 +533,13 @@ export default function ReservationsDashboard() {
                           ? prof.companyName 
                           : `${prof.firstName} ${prof.lastName || ''}`.trim();
                         return (
-                          <div key={gid} className="flex justify-between items-center bg-white px-3 py-2 rounded border text-sm shadow-sm">
+                          <div key={gid} className="flex justify-between items-center bg-card px-3 py-2 rounded border text-sm shadow-sm">
                             <span>{name}</span>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-6 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-destructive hover:text-destructive hover:bg-destructive-muted"
                               onClick={() => setForm(p => ({ ...p, accompanyingGuestIds: p.accompanyingGuestIds.filter(id => id !== gid) }))}
                             >
                               <Trash2 className="h-3 w-3 mr-1" /> Remove
@@ -507,8 +551,8 @@ export default function ReservationsDashboard() {
                   )}
                 </div>
 
-                <div className="grid gap-2 p-4 bg-indigo-50/50 border border-indigo-100 rounded-md">
-                  <Label className="text-indigo-900">Booking Source / Travel Agent (Optional)</Label>
+                <div className="grid gap-2 p-4 bg-muted border rounded-md">
+                  <Label>Booking Source / Travel Agent (Optional)</Label>
                   <SearchableSelect
                     value={form.travelAgentId}
                     onChange={(v) => setForm(p => ({ ...p, travelAgentId: v }))}
@@ -592,11 +636,11 @@ export default function ReservationsDashboard() {
                 <div className="flex flex-col gap-4 mt-2">
                   <h3 className="font-semibold text-lg border-b pb-2">Room Segments</h3>
                   {form.assignments.map((assignment, index) => (
-                    <div key={index} className="flex flex-col gap-4 p-4 border rounded-md relative bg-slate-50 shadow-sm">
-                      <div className="font-semibold text-sm text-indigo-700 flex justify-between items-center">
+                    <div key={index} className="flex flex-col gap-4 p-4 border rounded-md relative bg-muted shadow-sm">
+                      <div className="font-semibold text-sm text-foreground flex justify-between items-center">
                         <span>Segment {index + 1}</span>
                         {form.assignments.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-red-500 hover:bg-red-100 hover:text-red-700" onClick={() => {
+                          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive-muted hover:text-destructive" onClick={() => {
                             const newAssignments = [...form.assignments];
                             newAssignments.splice(index, 1);
                             setForm(p => ({ ...p, assignments: newAssignments }));
@@ -607,7 +651,7 @@ export default function ReservationsDashboard() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <Label>Check-In Date <span className="text-red-500">*</span></Label>
+                          <Label>Check-In Date <span className="text-destructive">*</span></Label>
                           <DatePicker 
                             value={assignment.startDate} 
                             onChange={v => {
@@ -620,9 +664,9 @@ export default function ReservationsDashboard() {
                         </div>
                         <div className="grid gap-2">
                           <Label className="flex items-center gap-2">
-                            Check-Out Date <span className="text-red-500">*</span>
+                            Check-Out Date <span className="text-destructive">*</span>
                             {assignment.startDate && assignment.endDate && (
-                              <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                              <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-full">
                                 {Math.max(0, Math.round((new Date(assignment.endDate).getTime() - new Date(assignment.startDate).getTime()) / (1000 * 3600 * 24)))} Nights
                               </span>
                             )}
@@ -640,7 +684,7 @@ export default function ReservationsDashboard() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <Label>Room Type <span className="text-red-500">*</span></Label>
+                          <Label>Room Type <span className="text-destructive">*</span></Label>
                           <Select required value={assignment.roomTypeId} onValueChange={(v) => {
                             const newAssignments = [...form.assignments];
                             newAssignments[index].roomTypeId = v ?? "";
@@ -665,7 +709,7 @@ export default function ReservationsDashboard() {
                           </Select>
                         </div>
                         <div className="grid gap-2">
-                          <Label>Rate Plan <span className="text-red-500">*</span></Label>
+                          <Label>Rate Plan <span className="text-destructive">*</span></Label>
                           <Select required value={assignment.ratePlanId} onValueChange={(v) => {
                             const selectedPlan = ratePlans.find(rp => rp.id === v);
                             const newAssignments = [...form.assignments];
@@ -729,7 +773,7 @@ export default function ReservationsDashboard() {
                       </div>
                     </div>
                   ))}
-                  <Button type="button" variant="outline" className="w-full border-dashed bg-slate-50 text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50" onClick={() => {
+                  <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => {
                     const lastAssignment = form.assignments[form.assignments.length - 1];
                     setForm(p => ({
                       ...p,
@@ -767,7 +811,51 @@ export default function ReservationsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          {/* Mobile: stacked cards instead of an 8-column horizontally-scrolled table */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
+            ) : reservations.length === 0 ? (
+              <EmptyState icon={CalendarDays} title="No active reservations found" />
+            ) : (
+              reservations.map((res) => {
+                const guestName = res.primaryGuest?.profileType === 'COMPANY' || res.primaryGuest?.profileType === 'TRAVEL_AGENT'
+                  ? res.primaryGuest?.companyName
+                  : `${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName || ''}`.trim()
+                const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
+                const primaryRoom = res.assignments?.[0]
+
+                return (
+                  <div key={res.id} className="bg-card border border-border rounded-lg p-4 shadow-elevation-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-foreground">{guestName}</div>
+                        <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold border shrink-0 ${statusMutedClasses(res.status)} ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
+                        {res.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border">
+                      <span className="text-muted-foreground">
+                        {primaryRoom ? `Room ${primaryRoom.room?.roomNumber || 'TBA'} (${primaryRoom.roomType?.code})` : 'No Segments'}
+                      </span>
+                      <span className="text-muted-foreground">{nights} {nights === 1 ? 'night' : 'nights'}</span>
+                    </div>
+                    <div className="text-sm text-foreground mt-1">
+                      {format(new Date(res.checkInDate), "dd-MMM-yy")} – {format(new Date(res.checkOutDate), "dd-MMM-yy")}
+                    </div>
+                    <div className="flex justify-end gap-2 mt-3">
+                      {renderActions(res)}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Tablet/desktop: full table */}
+          <Table className="hidden md:table">
             <TableHeader>
               <TableRow>
                 <TableHead>Conf. #</TableHead>
@@ -786,7 +874,7 @@ export default function ReservationsDashboard() {
               ) : reservations.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-10">
                   <div className="flex flex-col items-center justify-center">
-                    <CalendarDays className="h-10 w-10 text-slate-300 mb-4" />
+                    <CalendarDays className="h-10 w-10 text-muted-foreground/50 mb-4" />
                     No active reservations found.
                   </div>
                 </TableCell></TableRow>
@@ -804,12 +892,12 @@ export default function ReservationsDashboard() {
                       <TableCell>
                         <div className="font-medium">{guestName}</div>
                         {res.accompanyingGuests && res.accompanyingGuests.length > 0 && (
-                          <div className="text-xs text-slate-500 mt-1">
+                          <div className="text-xs text-muted-foreground mt-1">
                             + {res.accompanyingGuests.length} Accompanying
                           </div>
                         )}
                         {res.travelAgent && (
-                          <div className="text-xs font-semibold text-indigo-600 mt-1 flex items-center">
+                          <div className="text-xs font-semibold text-foreground mt-1 flex items-center">
                             <Building2 className="w-3 h-3 mr-1" />
                             {res.travelAgent.companyName || res.travelAgent.firstName}
                           </div>
@@ -819,21 +907,21 @@ export default function ReservationsDashboard() {
                         <div className="flex flex-col gap-1">
                           {res.assignments && res.assignments.length > 0 ? (
                             res.assignments.map((assignment, index) => (
-                              <div key={index} className="flex flex-col border-b border-slate-100 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
+                              <div key={index} className="flex flex-col border-b border-border pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-semibold">{assignment.room?.roomNumber || 'TBA'}</span>
-                                  <span className="text-xs text-slate-500">({assignment.roomType?.code})</span>
+                                  <span className="text-xs text-muted-foreground">({assignment.roomType?.code})</span>
                                 </div>
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[10px] text-muted-foreground">
                                   {format(new Date(assignment.startDate), "dd-MMM")} - {format(new Date(assignment.endDate), "dd-MMM")}
                                 </span>
                               </div>
                             ))
                           ) : (
-                            <div className="text-sm text-slate-400">No Segments</div>
+                            <div className="text-sm text-muted-foreground">No Segments</div>
                           )}
                           {res.mealPlan && res.mealPlan !== 'NONE' && (
-                            <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 w-max mt-1">
+                            <span className="inline-flex items-center rounded-md bg-warning-muted px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/20 w-max mt-1">
                               {res.mealPlan}
                             </span>
                           )}
@@ -843,53 +931,12 @@ export default function ReservationsDashboard() {
                       <TableCell>{format(new Date(res.checkOutDate), "dd-MMM-yy")}</TableCell>
                       <TableCell>{nights}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[res.status] || "bg-slate-100 text-slate-800"}`}>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${statusMutedClasses(res.status)} ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
                           {res.status.replace('_', ' ')}
                         </span>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        {res.status === 'RESERVED' && (
-                          <Button variant="outline" size="icon" className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200" onClick={() => handleCheckIn(res)} title="Check In">
-                            <Key className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {res.status === 'IN_HOUSE' && (
-                          <Button variant="outline" size="icon" className="bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200" onClick={() => handleCheckOut(res)} title="Check Out">
-                            <LogOut className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {(res.status === 'IN_HOUSE' || res.status === 'CHECKED_OUT') && (
-                          <Button variant="outline" size="icon" className="bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200" onClick={() => openFolio(res)} title="Folio">
-                            <ReceiptText className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {(res.status === 'RESERVED' || res.status === 'IN_HOUSE') && (
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className={`relative ${
-                              getActiveTasks(res).length > 0
-                                ? "bg-purple-600 text-white hover:bg-purple-700 border-purple-700"
-                                : "bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-200"
-                            }`}
-                            onClick={() => handleRequestPrompt(res)} 
-                            title="Special Request"
-                          >
-                            <Bell className="h-4 w-4" />
-                            {getActiveTasks(res).length > 0 && (
-                              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-300 border border-purple-600"></span>
-                              </span>
-                            )}
-                          </Button>
-                        )}
-                        <Button variant="outline" size="icon" onClick={() => handleEdit(res)} title="Edit">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="text-red-500 hover:text-red-600" onClick={() => handleDeletePrompt(res)} title="Delete">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {renderActions(res)}
                       </TableCell>
                     </TableRow>
                   )
@@ -928,16 +975,12 @@ export default function ReservationsDashboard() {
           <div className="py-4 flex flex-col gap-4">
             
             {selectedRes && getActiveTasks(selectedRes).length > 0 && (
-              <div className="flex flex-col gap-2 p-3 bg-purple-50 rounded border border-purple-100">
-                <Label className="text-purple-800 font-semibold text-xs uppercase tracking-wider">Active Requests</Label>
+              <div className="flex flex-col gap-2 p-3 bg-warning-muted rounded border border-warning/20">
+                <Label className="text-warning font-semibold text-xs uppercase tracking-wider">Active Requests</Label>
                 {getActiveTasks(selectedRes).map(task => (
-                  <div key={task.id} className="flex justify-between items-center text-sm bg-white p-2 rounded shadow-sm border border-slate-100">
-                    <span className="font-medium text-slate-700">{task.notes}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${
-                      task.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                      task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
+                  <div key={task.id} className="flex justify-between items-center text-sm bg-card p-2 rounded shadow-sm border border-border">
+                    <span className="font-medium text-foreground">{task.notes}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${statusMutedClasses(task.status)}`}>
                       {task.status.replace('_', ' ')}
                     </span>
                   </div>
@@ -986,10 +1029,10 @@ export default function ReservationsDashboard() {
       <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-red-600" : "text-emerald-600"}>
+            <DialogTitle className={notification?.isError ? "text-destructive" : "text-success"}>
               {notification?.title}
             </DialogTitle>
-            <DialogDescription className="text-base text-slate-700 mt-2">
+            <DialogDescription className="text-base text-foreground mt-2">
               {notification?.message}
             </DialogDescription>
           </DialogHeader>

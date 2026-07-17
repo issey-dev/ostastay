@@ -236,14 +236,14 @@ export function FinancialsManager() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-500">Loading Financial Configurations...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading Financial Configurations...</div>
   }
 
   return (
     <div className="w-full">
       <Tabs defaultValue="maldives-taxes" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <TabsList className="bg-slate-100/50">
+          <TabsList className="bg-muted/50">
             <TabsTrigger value="maldives-taxes"><ShieldAlert className="w-4 h-4 mr-2"/> Maldives Tax Engine</TabsTrigger>
             <TabsTrigger value="tax-profiles"><Percent className="w-4 h-4 mr-2"/> Custom Tax Profiles</TabsTrigger>
             <TabsTrigger value="charge-codes"><ReceiptText className="w-4 h-4 mr-2"/> Charge Codes</TabsTrigger>
@@ -255,7 +255,7 @@ export function FinancialsManager() {
               if (!open) resetTaxForm()
             }}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                <Button size="sm" variant="outline" className="text-primary border-border hover:bg-muted">
                   <Plus className="w-4 h-4 mr-2" /> Add Tax Profile
                 </Button>
               </DialogTrigger>
@@ -300,7 +300,7 @@ export function FinancialsManager() {
               if (!open) resetChargeForm()
             }}>
               <DialogTrigger asChild>
-                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                <Button size="sm" className="shadow-sm">
                   <Plus className="w-4 h-4 mr-2" /> Add Charge Code
                 </Button>
               </DialogTrigger>
@@ -377,24 +377,24 @@ export function FinancialsManager() {
           </DialogContent>
         </Dialog>
 
-        <TabsContent value="maldives-taxes" className="m-0 border rounded-lg bg-white overflow-hidden shadow-sm p-6">
+        <TabsContent value="maldives-taxes" className="m-0 border rounded-lg bg-card overflow-hidden shadow-sm p-6">
           <form onSubmit={handleSaveSettings} className="space-y-8">
             {/* Maldives Green Tax Settings */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-emerald-600" /> Maldives Green Tax (MIRA Compliance)
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-success" /> Maldives Green Tax (MIRA Compliance)
               </h3>
               
-              <div className="grid gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
+              <div className="grid gap-6 bg-muted p-6 rounded-xl border border-border">
                 <div className="flex items-center gap-3">
                   <input 
                     type="checkbox" 
                     id="greenTaxEnabled" 
-                    className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
                     checked={settingsForm.greenTaxEnabled}
                     onChange={e => setSettingsForm(p => ({ ...p, greenTaxEnabled: e.target.checked }))}
                   />
-                  <Label htmlFor="greenTaxEnabled" className="font-semibold text-slate-800 text-sm cursor-pointer select-none">
+                  <Label htmlFor="greenTaxEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
                     Enable Automatic Nightly Green Tax Calculation & Posting
                   </Label>
                 </div>
@@ -404,7 +404,7 @@ export function FinancialsManager() {
                     <div className="space-y-2">
                       <Label>Green Tax Amount (per guest/day) in USD</Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-slate-400">$</span>
+                        <span className="absolute left-3 top-2 text-muted-foreground">$</span>
                         <Input 
                           type="number" 
                           step="0.01" 
@@ -415,7 +415,7 @@ export function FinancialsManager() {
                           onChange={e => setSettingsForm(p => ({ ...p, greenTaxAmount: parseFloat(e.target.value) || 0 }))} 
                         />
                       </div>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         Standard rules: <strong>$6.00</strong> for inhabited island guesthouses ($\le 50$ rooms), or <strong>$12.00</strong> for resorts.
                       </p>
                     </div>
@@ -429,7 +429,7 @@ export function FinancialsManager() {
                         value={settingsForm.greenTaxExemptAge} 
                         onChange={e => setSettingsForm(p => ({ ...p, greenTaxExemptAge: parseInt(e.target.value) || 0 }))} 
                       />
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         Guests below this age are completely exempt. (MIRA regulations exempt infants under <strong>2</strong> years of age).
                       </p>
                     </div>
@@ -439,21 +439,21 @@ export function FinancialsManager() {
             </div>
 
             {/* Maldives Taxes & Service Charge Settings */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-emerald-600" /> Maldives TGST & Service Charge (MIRA Compliance)
+            <div className="space-y-4 pt-4 border-t border-border">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-success" /> Maldives TGST & Service Charge (MIRA Compliance)
               </h3>
               
-              <div className="grid gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
+              <div className="grid gap-6 bg-muted p-6 rounded-xl border border-border">
                 <div className="flex items-center gap-3">
                   <input 
                     type="checkbox" 
                     id="tgstEnabled" 
-                    className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
                     checked={settingsForm.tgstEnabled}
                     onChange={e => setSettingsForm(p => ({ ...p, tgstEnabled: e.target.checked }))}
                   />
-                  <Label htmlFor="tgstEnabled" className="font-semibold text-slate-800 text-sm cursor-pointer select-none">
+                  <Label htmlFor="tgstEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
                     Enable Automatic Nightly TGST Calculation
                   </Label>
                 </div>
@@ -462,11 +462,11 @@ export function FinancialsManager() {
                   <input 
                     type="checkbox" 
                     id="serviceChargeEnabled" 
-                    className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
                     checked={settingsForm.serviceChargeEnabled}
                     onChange={e => setSettingsForm(p => ({ ...p, serviceChargeEnabled: e.target.checked }))}
                   />
-                  <Label htmlFor="serviceChargeEnabled" className="font-semibold text-slate-800 text-sm cursor-pointer select-none">
+                  <Label htmlFor="serviceChargeEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
                     Enable Automatic Nightly Service Charge (SC) Calculation
                   </Label>
                 </div>
@@ -484,9 +484,9 @@ export function FinancialsManager() {
                           value={settingsForm.tgstRate} 
                           onChange={e => setSettingsForm(p => ({ ...p, tgstRate: parseFloat(e.target.value) || 0 }))} 
                         />
-                        <span className="absolute right-3 top-2 text-slate-400">%</span>
+                        <span className="absolute right-3 top-2 text-muted-foreground">%</span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         Standard TGST rate for Tourism Sector is <strong>16%</strong> (increasing to 17% in 2025).
                       </p>
                     </div>
@@ -504,9 +504,9 @@ export function FinancialsManager() {
                           value={settingsForm.serviceChargeRate} 
                           onChange={e => setSettingsForm(p => ({ ...p, serviceChargeRate: parseFloat(e.target.value) || 0 }))} 
                         />
-                        <span className="absolute right-3 top-2 text-slate-400">%</span>
+                        <span className="absolute right-3 top-2 text-muted-foreground">%</span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         Maldives Law requires a minimum of <strong>10%</strong> Service Charge.
                       </p>
                     </div>
@@ -517,22 +517,22 @@ export function FinancialsManager() {
                   <input 
                     type="checkbox" 
                     id="pricesIncludeTaxes" 
-                    className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
                     checked={settingsForm.pricesIncludeTaxes}
                     onChange={e => setSettingsForm(p => ({ ...p, pricesIncludeTaxes: e.target.checked }))}
                   />
-                  <Label htmlFor="pricesIncludeTaxes" className="font-semibold text-slate-800 text-sm cursor-pointer select-none">
+                  <Label htmlFor="pricesIncludeTaxes" className="font-semibold text-foreground text-sm cursor-pointer select-none">
                     Prices Include Taxes (Inclusive vs Exclusive &quot;++&quot; Pricing)
                   </Label>
                 </div>
-                <p className="text-[11px] text-slate-500 -mt-4 ml-7">
+                <p className="text-[11px] text-muted-foreground -mt-4 ml-7">
                   If enabled, the Night Audit will reverse-calculate the SC and TGST out of your standard room rates, so the total matches the rate plan exactly. If disabled, taxes are added ON TOP of the room rate.
                 </p>
               </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t">
-              <Button type="submit" disabled={savingSettings} className="bg-indigo-600 hover:bg-indigo-700">
+              <Button type="submit" disabled={savingSettings} className="">
                 <Save className="w-4 h-4 mr-2" /> 
                 {savingSettings ? "Saving..." : "Save Configuration"}
               </Button>
@@ -540,9 +540,9 @@ export function FinancialsManager() {
           </form>
         </TabsContent>
 
-        <TabsContent value="tax-profiles" className="m-0 border rounded-lg bg-white overflow-hidden shadow-sm">
+        <TabsContent value="tax-profiles" className="m-0 border rounded-lg bg-card overflow-hidden shadow-sm">
           <Table>
-            <TableHeader className="bg-slate-50/80">
+            <TableHeader className="bg-muted/80">
               <TableRow>
                 <TableHead>Profile Name</TableHead>
                 <TableHead>Description</TableHead>
@@ -555,27 +555,27 @@ export function FinancialsManager() {
               {taxProfiles.map(tp => {
                 const activeRate = tp.rates?.[0]
                 return (
-                  <TableRow key={tp.id} className="hover:bg-slate-50/50">
+                  <TableRow key={tp.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium">{tp.name}</TableCell>
-                    <TableCell className="text-slate-500">{tp.description || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">{tp.description || "-"}</TableCell>
                     <TableCell>
                       {activeRate ? (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">
                           {activeRate.ratePercent.toFixed(2)}%
                         </Badge>
                       ) : (
-                        <span className="text-slate-400 text-xs">No Rates</span>
+                        <span className="text-muted-foreground text-xs">No Rates</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-slate-500 text-sm">
+                    <TableCell className="text-muted-foreground text-sm">
                       {activeRate ? new Date(activeRate.effectiveFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-') : "-"}
                     </TableCell>
                     <TableCell className="text-right px-6">
                       <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="sm" className="text-indigo-600 hover:bg-indigo-50" onClick={() => openTaxEdit(tp)}>
+                        <Button variant="ghost" size="sm" className="text-primary hover:bg-muted" onClick={() => openTaxEdit(tp)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" onClick={() => {
+                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => {
                           setDeletingTaxId(tp.id)
                           setIsTaxDeleteDialogOpen(true)
                         }}>
@@ -588,16 +588,16 @@ export function FinancialsManager() {
               })}
               {taxProfiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-slate-500">No custom tax profiles configured.</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No custom tax profiles configured.</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </TabsContent>
 
-        <TabsContent value="charge-codes" className="m-0 border rounded-lg bg-white overflow-hidden shadow-sm">
+        <TabsContent value="charge-codes" className="m-0 border rounded-lg bg-card overflow-hidden shadow-sm">
           <Table>
-            <TableHeader className="bg-slate-50/80">
+            <TableHeader className="bg-muted/80">
               <TableRow>
                 <TableHead>Code</TableHead>
                 <TableHead>Description</TableHead>
@@ -607,18 +607,18 @@ export function FinancialsManager() {
             </TableHeader>
             <TableBody>
               {chargeCodes.map(cc => (
-                <TableRow key={cc.id} className="hover:bg-slate-50/50">
-                  <TableCell className="font-mono font-medium text-slate-700">{cc.code}</TableCell>
+                <TableRow key={cc.id} className="hover:bg-muted/50">
+                  <TableCell className="font-mono font-medium text-foreground">{cc.code}</TableCell>
                   <TableCell>{cc.description}</TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="font-normal">{cc.taxProfile?.name || "Unknown"}</Badge>
                   </TableCell>
                   <TableCell className="text-right px-6">
                     <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" className="text-indigo-600 hover:bg-indigo-50" onClick={() => openChargeEdit(cc)}>
+                      <Button variant="ghost" size="sm" className="text-primary hover:bg-muted" onClick={() => openChargeEdit(cc)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" onClick={() => {
+                      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => {
                         setDeletingChargeId(cc.id)
                         setIsChargeDeleteDialogOpen(true)
                       }}>
@@ -630,7 +630,7 @@ export function FinancialsManager() {
               ))}
               {chargeCodes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-slate-500">No charge codes configured.</TableCell>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No charge codes configured.</TableCell>
                 </TableRow>
               )}
             </TableBody>

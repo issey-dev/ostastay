@@ -99,14 +99,14 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-500">Loading Configuration Tools...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading Configuration Tools...</div>
   }
 
   return (
-    <Card className="premium-card max-w-3xl">
-      <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+    <Card className="max-w-3xl">
+      <CardHeader className="bg-muted/50 border-b border-border pb-4">
         <div className="flex items-center space-x-2">
-          <CalendarDays className="h-5 w-5 text-indigo-600" />
+          <CalendarDays className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">Bulk Seasonal Pricing Tool</CardTitle>
         </div>
         <CardDescription>
@@ -117,7 +117,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         <form onSubmit={handleSubmit} className="space-y-8">
           
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-900 border-b pb-2">1. Select Target Rate Plan</h3>
+            <h3 className="text-sm font-medium text-foreground border-b pb-2">1. Select Target Rate Plan</h3>
             <div className="max-w-md">
               <Select required value={ratePlanId} onValueChange={(val) => setRatePlanId(val ?? "")}>
                 <SelectTrigger>
@@ -135,7 +135,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-900 border-b pb-2">2. Define Season (Date Range) & Price</h3>
+            <h3 className="text-sm font-medium text-foreground border-b pb-2">2. Define Season (Date Range) & Price</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <Label>Start Date *</Label>
@@ -153,9 +153,9 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-900 border-b pb-2">3. Apply to Room Types</h3>
-            <div className="bg-slate-50 p-4 rounded-md border space-y-3">
-              <div className="flex items-center space-x-2 pb-2 border-b border-slate-200">
+            <h3 className="text-sm font-medium text-foreground border-b pb-2">3. Apply to Room Types</h3>
+            <div className="bg-muted p-4 rounded-md border space-y-3">
+              <div className="flex items-center space-x-2 pb-2 border-b border-border">
                 <Checkbox 
                   id="selectAll" 
                   checked={selectedRoomTypes.length === roomTypes.length && roomTypes.length > 0} 
@@ -172,7 +172,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                       onCheckedChange={(checked) => handleRoomTypeToggle(rt.id, !!checked)}
                     />
                     <Label htmlFor={`rt-${rt.id}`} className="cursor-pointer font-normal">
-                      {rt.name} <span className="text-slate-400 text-xs ml-1">({rt.code})</span>
+                      {rt.name} <span className="text-muted-foreground text-xs ml-1">({rt.code})</span>
                     </Label>
                   </div>
                 ))}
@@ -183,7 +183,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
           <div className="flex justify-end pt-4 border-t">
             <Button 
               type="submit" 
-              className="bg-indigo-600 hover:bg-indigo-700 shadow-md transition-all active:scale-95" 
+              className="shadow-md transition-all active:scale-95" 
               disabled={submitting || !ratePlanId || selectedRoomTypes.length === 0}
             >
               <Save className="w-4 h-4 mr-2" />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 
 // Enterprise-wide settings (booking codes, invoice branding, Maldives tax defaults,
 // app theme, SMTP/SFTP scaffold) — scoped to the session's own enterprise, never a
@@ -87,7 +88,7 @@ export async function PATCH(request: Request) {
 
         invoiceBrandName: body.invoiceBrandName || "",
         invoiceLogoUrl: body.invoiceLogoUrl || "",
-        invoiceBrandColor: body.invoiceBrandColor || "#4f46e5",
+        invoiceBrandColor: body.invoiceBrandColor || DEFAULT_INVOICE_BRAND_COLOR,
         invoiceFontFamily: body.invoiceFontFamily || "Geist",
         invoiceTaxId: body.invoiceTaxId || "",
         invoicePhone: body.invoicePhone || "",

@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react"
 import { format, parseISO } from "date-fns"
 import { Printer, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { resolveInvoiceBrandColor, resolveBalanceColor } from "@/lib/invoice-branding"
 
 export default function PrintInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -38,17 +39,17 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col justify-center items-center gap-4 bg-slate-50">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
-        <p className="text-slate-500 font-medium">Preparing printable invoice...</p>
+      <div className="min-h-screen flex flex-col justify-center items-center gap-4 bg-background">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Preparing printable invoice...</p>
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex flex-col justify-center items-center gap-4 bg-slate-50">
-        <div className="text-red-500 font-bold text-lg">{error || "Folio not found"}</div>
+      <div className="min-h-screen flex flex-col justify-center items-center gap-4 bg-background">
+        <div className="text-destructive font-bold text-lg">{error || "Folio not found"}</div>
         <Button onClick={() => window.close()} variant="outline">Close Tab</Button>
       </div>
     )
@@ -88,19 +89,19 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   }
 
   const selectedFont = fontFamilies[settings.invoiceFontFamily] || "font-sans"
-  const brandColor = settings.invoiceBrandColor || "#4f46e5"
+  const brandColor = resolveInvoiceBrandColor(settings.invoiceBrandColor)
 
   return (
     <div className={`bg-white min-h-screen text-slate-800 ${selectedFont}`}>
       {/* Control bar - hidden during print */}
-      <div className="print:hidden bg-slate-100 border-b p-4 flex justify-between items-center sticky top-0 z-50">
+      <div className="print:hidden bg-muted border-b border-border p-4 flex justify-between items-center sticky top-0 z-[var(--z-sticky)]">
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => window.close()}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <span className="text-xs text-slate-500 font-medium">Invoice Preview for #{reservation.confirmationNo}</span>
+          <span className="text-xs text-muted-foreground font-medium">Invoice Preview for #{reservation.confirmationNo}</span>
         </div>
-        <Button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => window.print()}>
           <Printer className="w-4 h-4 mr-2" /> Print / Save as PDF
         </Button>
       </div>
@@ -302,9 +303,9 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
             </div>
             <div className="flex justify-between items-center text-sm font-bold pt-1">
               <span>Net Balance Due:</span>
-              <span 
-                className="text-lg font-extrabold" 
-                style={{ color: balance > 0 ? brandColor : balance < 0 ? "#10b981" : "#1e293b" }}
+              <span
+                className="text-lg font-extrabold"
+                style={{ color: resolveBalanceColor(balance, brandColor) }}
               >
                 ${balance.toFixed(2)}
               </span>

@@ -16,9 +16,9 @@ const ISSUE_TYPES = [
 ]
 
 const PRIORITIES = {
-  LOW: { label: "Low", color: "bg-slate-100 text-slate-700" },
-  MEDIUM: { label: "Medium", color: "bg-blue-100 text-blue-700" },
-  HIGH: { label: "High", color: "bg-rose-100 text-rose-700" },
+  LOW: { label: "Low", color: "bg-muted text-foreground" },
+  MEDIUM: { label: "Medium", color: "bg-info-muted text-info" },
+  HIGH: { label: "High", color: "bg-destructive-muted text-destructive" },
 }
 
 export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propertyId: string | null, rooms: any[], refreshMatrix: () => void }) {
@@ -89,27 +89,27 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
   }
 
   if (loading) {
-    return <div className="text-center py-12 text-slate-500">Loading work orders...</div>
+    return <div className="text-center py-12 text-muted-foreground">Loading work orders...</div>
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-slate-800">Maintenance Tickets</h3>
-          <p className="text-sm text-slate-500">Log and track room-specific issues like plumbing, electrical, or general repairs.</p>
+          <h3 className="text-lg font-semibold text-foreground">Maintenance Tickets</h3>
+          <p className="text-sm text-muted-foreground">Log and track room-specific issues like plumbing, electrical, or general repairs.</p>
         </div>
         {!isAdding && (
-          <Button onClick={() => setIsAdding(true)} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button onClick={() => setIsAdding(true)} className="">
             <Plus className="w-4 h-4 mr-2" /> Raise Ticket
           </Button>
         )}
       </div>
 
       {isAdding && (
-        <div className="bg-white border rounded-xl p-6 shadow-sm mb-6">
+        <div className="bg-card border rounded-xl p-6 shadow-sm mb-6">
           <div className="flex justify-between items-center mb-4 pb-4 border-b">
-            <h4 className="font-semibold text-slate-800 flex items-center"><Wrench className="w-4 h-4 mr-2 text-indigo-500" /> New Work Order</h4>
+            <h4 className="font-semibold text-foreground flex items-center"><Wrench className="w-4 h-4 mr-2 text-primary" /> New Work Order</h4>
             <Button variant="ghost" size="sm" onClick={() => setIsAdding(false)}><X className="h-4 w-4" /></Button>
           </div>
           <form onSubmit={handleAddOrder} className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -167,7 +167,7 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
             </div>
 
             <div className="flex items-end justify-end">
-              <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 w-full sm:w-auto">Submit Ticket</Button>
+              <Button type="submit" className="w-full sm:w-auto">Submit Ticket</Button>
             </div>
           </form>
         </div>
@@ -175,7 +175,7 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {orders.length === 0 ? (
-          <div className="col-span-full text-center py-12 border-2 border-dashed rounded-xl bg-white text-slate-500">
+          <div className="col-span-full text-center py-12 border-2 border-dashed rounded-xl bg-card text-muted-foreground">
             No active maintenance tickets! Your property is in perfect shape.
           </div>
         ) : (
@@ -184,29 +184,29 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
             const priorityConfig = PRIORITIES[order.priority as keyof typeof PRIORITIES] || PRIORITIES.MEDIUM
             
             return (
-              <div key={order.id} className={`p-5 rounded-xl border bg-white shadow-sm transition-all ${isResolved ? 'opacity-60 bg-slate-50' : 'hover:shadow-md'}`}>
+              <div key={order.id} className={`p-5 rounded-xl border bg-card shadow-sm transition-all ${isResolved ? 'opacity-60 bg-muted' : 'hover:shadow-md'}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => toggleStatus(order.id, order.status)} className={`transition-colors ${isResolved ? 'text-emerald-500' : 'text-slate-300 hover:text-indigo-400'}`}>
+                    <button onClick={() => toggleStatus(order.id, order.status)} className={`transition-colors ${isResolved ? 'text-success' : 'text-muted-foreground hover:text-muted-foreground'}`}>
                       {isResolved ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
                     </button>
                     <div>
-                      <h4 className={`font-bold text-lg ${isResolved ? 'text-slate-500 line-through' : 'text-slate-800'}`}>Room {order.room.roomNumber}</h4>
+                      <h4 className={`font-bold text-lg ${isResolved ? 'text-muted-foreground line-through' : 'text-foreground'}`}>Room {order.room.roomNumber}</h4>
                       <Badge variant="outline" className={`${isResolved ? '' : priorityConfig.color} border-none font-medium text-[10px] mt-0.5 uppercase`}>
                         {order.priority} PRIORITY
                       </Badge>
                     </div>
                   </div>
                   {order.priority === 'HIGH' && !isResolved && (
-                    <AlertTriangle className="w-5 h-5 text-rose-500 animate-pulse" />
+                    <AlertTriangle className="w-5 h-5 text-destructive animate-pulse" />
                   )}
                 </div>
                 
                 <div className="mt-4 pl-8">
                   <Badge variant="secondary" className="mb-2">{ISSUE_TYPES.find(t => t.value === order.issueType)?.label || order.issueType}</Badge>
-                  <p className={`text-sm ${isResolved ? 'text-slate-500' : 'text-slate-700'}`}>{order.description}</p>
+                  <p className={`text-sm ${isResolved ? 'text-muted-foreground' : 'text-foreground'}`}>{order.description}</p>
                   
-                  <p className="text-xs text-slate-400 mt-4 font-mono">
+                  <p className="text-xs text-muted-foreground mt-4 font-mono">
                     Logged: {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
                   </p>
                 </div>

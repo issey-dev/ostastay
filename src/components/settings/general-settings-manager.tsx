@@ -75,14 +75,14 @@ export function GeneralSettingsManager() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-500">Loading settings...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading settings...</div>
   }
 
   return (
     <form onSubmit={handleSave} className="space-y-8">
       {/* Reservation Code Rules */}
       <div className="space-y-4">
-        <div className="grid gap-6 sm:grid-cols-2 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
+        <div className="grid gap-6 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
           <div className="space-y-2">
             <Label>Reservation Prefix</Label>
             <Input 
@@ -90,7 +90,7 @@ export function GeneralSettingsManager() {
               value={formData.resConfirmPrefix} 
               onChange={e => setFormData(p => ({ ...p, resConfirmPrefix: e.target.value.toUpperCase() }))} 
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               A custom string attached to the front of every confirmation number.
             </p>
           </div>
@@ -105,7 +105,7 @@ export function GeneralSettingsManager() {
               value={formData.resConfirmLength} 
               onChange={e => setFormData(p => ({ ...p, resConfirmLength: parseInt(e.target.value) || 6 }))} 
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               The number of random alphanumeric characters to generate (4 to 12).
             </p>
           </div>
@@ -115,7 +115,7 @@ export function GeneralSettingsManager() {
 
 
       <div className="flex justify-end pt-4 border-t">
-        <Button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button type="submit" disabled={saving} className="">
           <Save className="w-4 h-4 mr-2" /> 
           {saving ? "Saving..." : "Save Configuration"}
         </Button>

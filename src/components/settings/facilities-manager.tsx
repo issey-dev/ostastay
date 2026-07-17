@@ -23,17 +23,17 @@ export function FacilitiesManager() {
   }, [])
 
   if (loading) {
-    return <div className="py-12 text-center text-slate-500">Loading configurations...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading configurations...</div>
   }
 
   if (!propertyId) {
-    return <div className="py-12 text-center text-rose-500">Please create a property first.</div>
+    return <div className="py-12 text-center text-destructive">Please create a property first.</div>
   }
 
   return (
     <div className="w-full">
       <Tabs defaultValue="room-types" className="w-full">
-        <TabsList className="bg-slate-100/50 mb-6">
+        <TabsList className="bg-muted/50 mb-6">
           <TabsTrigger value="room-types"><BedDouble className="w-4 h-4 mr-2"/> Room Types</TabsTrigger>
           <TabsTrigger value="buildings-floors-rooms"><Building2 className="w-4 h-4 mr-2"/> Buildings, Floors, & Rooms</TabsTrigger>
         </TabsList>

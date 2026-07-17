@@ -78,14 +78,14 @@ export function SmtpSftpManager() {
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-slate-500">Loading...</div>
+  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>
 
   return (
     <form onSubmit={handleSave} className="space-y-8">
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">SMTP (Outgoing Email)</h3>
-        <p className="text-xs text-slate-500">Not yet wired to any actual sending — saved for when email sending is built.</p>
-        <div className="grid gap-4 sm:grid-cols-2 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SMTP (Outgoing Email)</h3>
+        <p className="text-xs text-muted-foreground">Not yet wired to any actual sending — saved for when email sending is built.</p>
+        <div className="grid gap-4 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
           <div className="space-y-2">
             <Label>Host</Label>
             <Input placeholder="smtp.example.com" value={form.smtpHost} onChange={(e) => setForm({ ...form, smtpHost: e.target.value })} />
@@ -114,9 +114,9 @@ export function SmtpSftpManager() {
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">SFTP (File Transfer)</h3>
-        <p className="text-xs text-slate-500">Not yet wired to any actual transfer — saved for when a file-export feature is built.</p>
-        <div className="grid gap-4 sm:grid-cols-2 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SFTP (File Transfer)</h3>
+        <p className="text-xs text-muted-foreground">Not yet wired to any actual transfer — saved for when a file-export feature is built.</p>
+        <div className="grid gap-4 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
           <div className="space-y-2">
             <Label>Host</Label>
             <Input placeholder="sftp.example.com" value={form.sftpHost} onChange={(e) => setForm({ ...form, sftpHost: e.target.value })} />
@@ -141,7 +141,7 @@ export function SmtpSftpManager() {
       </div>
 
       <div className="flex items-center gap-3 justify-end pt-4 border-t">
-        {savedMsg && <span className="text-sm text-emerald-600">Saved</span>}
+        {savedMsg && <span className="text-sm text-success">Saved</span>}
         <Button type="submit" disabled={saving}>
           <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Configuration"}
         </Button>

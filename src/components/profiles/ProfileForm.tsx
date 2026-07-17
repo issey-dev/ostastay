@@ -174,7 +174,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-7xl w-full mx-auto pb-12 p-4">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-md pb-4 pt-2 border-b border-slate-200 flex justify-between items-center">
+        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Button type="button" variant="ghost" size="icon" onClick={() => router.back()}>
               <ArrowLeft className="h-5 w-5" />
@@ -214,7 +214,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                     name="companyName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Company / Agency Name <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel>Company / Agency Name <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input placeholder="Acme Corp" {...field} value={field.value || ""} />
                         </FormControl>
@@ -273,7 +273,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                       name="firstName"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>First Name <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>First Name <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} />
                           </FormControl>
@@ -286,7 +286,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                       name="lastName"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>Last Name <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Last Name <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} />
                           </FormControl>
@@ -505,7 +505,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
           <div className="flex flex-col gap-6">
 
             {/* Section: Profile Status */}
-            <Card id="profile-status" className="bg-slate-50/50">
+            <Card id="profile-status" className="bg-muted/50">
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Profile Settings</CardTitle>
               </CardHeader>
@@ -518,7 +518,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                       <FormLabel>Profile Type</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <SelectTrigger className="bg-white">
+                          <SelectTrigger className="bg-card">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                         </FormControl>
@@ -584,7 +584,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
 
                 {isB2B && (
                   <>
-                    <div className="pt-2 border-t border-slate-100">
+                    <div className="pt-2 border-t border-border">
                       <FormField
                         control={form.control}
                         name="iataNumber"
@@ -634,7 +634,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                             <div className="flex justify-between items-center mb-1">
                               <FormLabel className="text-xs mb-0">Date of Birth</FormLabel>
                               {age !== null && (
-                                <span className="text-xs text-slate-500 font-medium">
+                                <span className="text-xs text-muted-foreground font-medium">
                                   {age} yrs
                                 </span>
                               )}
@@ -715,7 +715,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                   )}
                 />
 
-                <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-slate-100">
+                <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-border">
                   <FormField
                     control={form.control}
                     name="marketingOptIn"

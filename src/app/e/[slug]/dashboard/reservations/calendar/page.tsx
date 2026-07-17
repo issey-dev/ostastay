@@ -3,11 +3,13 @@
 import { useEffect, useState, useMemo } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import { format, addDays, subDays, differenceInDays, startOfDay, isWithinInterval } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { statusMutedClasses } from "@/lib/status-tone"
 
 type Reservation = {
   id: string
@@ -22,13 +24,8 @@ type Reservation = {
 type Room = { id: string, roomNumber: string, roomTypeId: string }
 type RoomType = { id: string, name: string, code: string }
 
-const statusColors: Record<string, string> = {
-  RESERVED: "bg-blue-200 border-blue-400 text-blue-900",
-  IN_HOUSE: "bg-green-200 border-green-400 text-green-900",
-  CHECKED_OUT: "bg-slate-200 border-slate-400 text-slate-900",
-  NO_SHOW: "bg-red-200 border-red-400 text-red-900",
-  CANCELLED: "bg-red-100 border-red-300 text-red-800 opacity-50",
-}
+const calendarStatusClasses = (status: string) =>
+  `${statusMutedClasses(status)} border ${status === "CANCELLED" ? "opacity-50" : ""}`
 
 export default function ReservationsCalendarPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -114,7 +111,7 @@ export default function ReservationsCalendarPage() {
     
     if (startIndex >= endIndex) return null // Should not happen given overlap filter, but safe guard
 
-    const colorClass = statusColors[res.status] || "bg-slate-200 border-slate-400 text-slate-800"
+    const colorClass = calendarStatusClasses(res.status)
     const name = res.primaryGuest.profileType === 'COMPANY' || res.primaryGuest.profileType === 'TRAVEL_AGENT'
       ? res.primaryGuest.companyName
       : `${res.primaryGuest.firstName} ${res.primaryGuest.lastName || ''}`.trim()
@@ -160,7 +157,7 @@ export default function ReservationsCalendarPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-white border p-1 rounded-md shadow-sm">
+        <div className="flex items-center gap-2 bg-card border p-1 rounded-md shadow-sm">
           <Button variant="ghost" size="sm" onClick={() => setWindowStart(subDays(windowStart, 7))}>
             <ChevronLeft className="h-4 w-4 mr-1" /> -7d
           </Button>
@@ -174,26 +171,31 @@ export default function ReservationsCalendarPage() {
       </div>
 
       <Card className="flex-1 overflow-hidden flex flex-col shadow-md">
-        <CardHeader className="bg-slate-50 border-b py-4">
+        <CardHeader className="bg-muted border-b py-4">
           <CardTitle className="text-lg flex items-center justify-between">
             <span>Room Allocation</span>
             <span className="text-sm font-normal text-muted-foreground flex gap-4">
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-200 border border-blue-400 rounded-sm"></div> Reserved</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-200 border border-green-400 rounded-sm"></div> In House</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-200 border border-slate-400 rounded-sm"></div> Checked Out</span>
+              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-info-muted border border-info/30 rounded-sm"></div> Reserved</span>
+              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-success-muted border border-success/30 rounded-sm"></div> In House</span>
+              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-muted border border-border rounded-sm"></div> Checked Out</span>
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-auto flex-1">
           {loading ? (
-            <div className="h-64 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+            <div className="p-2 space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex gap-2">
+                  <Skeleton className="w-48 h-10 shrink-0" />
+                  <Skeleton className="flex-1 h-10" />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="min-w-[1000px]">
               {/* Header Row (Dates) */}
-              <div className="flex border-b sticky top-0 bg-white z-20 shadow-sm">
-                <div className="w-48 flex-shrink-0 border-r bg-slate-100 p-3 font-semibold text-sm flex items-center">
+              <div className="flex border-b sticky top-0 bg-card z-20 shadow-sm">
+                <div className="w-48 flex-shrink-0 border-r bg-muted p-3 font-semibold text-sm flex items-center">
                   Room
                 </div>
                 <div className="flex-1 flex">
@@ -204,10 +206,10 @@ export default function ReservationsCalendarPage() {
                       <div 
                         key={i} 
                         className={`flex-1 border-r min-w-[60px] flex flex-col items-center justify-center py-2 text-sm
-                          ${isToday ? 'bg-indigo-50 text-indigo-700 font-bold' : isWeekend ? 'bg-slate-50' : 'bg-white'}
+                          ${isToday ? 'bg-muted text-primary font-bold' : isWeekend ? 'bg-muted' : 'bg-card'}
                         `}
                       >
-                        <span className="text-xs uppercase text-slate-500">{format(date, "EEE")}</span>
+                        <span className="text-xs uppercase text-muted-foreground">{format(date, "EEE")}</span>
                         <span>{format(date, "d")}</span>
                       </div>
                     )
@@ -220,8 +222,8 @@ export default function ReservationsCalendarPage() {
                 {groupedRooms.map(group => (
                   <div key={group.roomType.id} className="flex flex-col">
                     {/* Room Type Header */}
-                    <div className="flex border-b bg-slate-100/50">
-                      <div className="w-48 flex-shrink-0 border-r p-2 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100">
+                    <div className="flex border-b bg-muted/50">
+                      <div className="w-48 flex-shrink-0 border-r p-2 pl-4 text-xs font-bold text-foreground uppercase tracking-wider bg-muted">
                         {group.roomType.name}
                       </div>
                       <div className="flex-1"></div>
@@ -232,10 +234,10 @@ export default function ReservationsCalendarPage() {
                       const roomReservations = visibleReservations.filter(r => r.roomId === room.id)
                       
                       return (
-                        <div key={room.id} className="flex border-b hover:bg-slate-50 transition-colors group">
+                        <div key={room.id} className="flex border-b hover:bg-muted transition-colors group">
                           {/* Room Label */}
-                          <div className="w-48 flex-shrink-0 border-r p-3 font-medium text-slate-800 bg-white flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          <div className="w-48 flex-shrink-0 border-r p-3 font-medium text-foreground bg-card flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-muted-foreground"></span>
                             Room {room.roomNumber}
                           </div>
                           
@@ -248,7 +250,7 @@ export default function ReservationsCalendarPage() {
                                 <div 
                                   key={i} 
                                   className={`flex-1 border-r min-w-[60px] h-12 
-                                    ${isWeekend ? 'bg-slate-50/50' : ''}
+                                    ${isWeekend ? 'bg-muted/50' : ''}
                                   `}
                                 />
                               )
@@ -270,16 +272,16 @@ export default function ReservationsCalendarPage() {
                   
                   return (
                     <div className="flex flex-col mt-4">
-                      <div className="flex border-b border-t bg-amber-50">
-                        <div className="w-48 flex-shrink-0 border-r p-2 pl-4 text-xs font-bold text-amber-800 uppercase tracking-wider">
+                      <div className="flex border-b border-t bg-warning-muted">
+                        <div className="w-48 flex-shrink-0 border-r p-2 pl-4 text-xs font-bold text-warning uppercase tracking-wider">
                           Unassigned ({unassigned.length})
                         </div>
                         <div className="flex-1"></div>
                       </div>
                       
                       {unassigned.map(res => (
-                        <div key={res.id} className="flex border-b hover:bg-amber-50/50 transition-colors">
-                          <div className="w-48 flex-shrink-0 border-r p-3 text-sm text-amber-700 bg-white flex items-center">
+                        <div key={res.id} className="flex border-b hover:bg-warning-muted/50 transition-colors">
+                          <div className="w-48 flex-shrink-0 border-r p-3 text-sm text-warning bg-card flex items-center">
                             Pending Assignment
                           </div>
                           <div className="flex-1 flex relative">

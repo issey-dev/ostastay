@@ -69,8 +69,8 @@ export function PropertyProfileManager() {
     }
   }
 
-  if (!currentProperty || loading) return <div className="py-8 text-center text-slate-500">Loading property...</div>
-  if (!detail) return <div className="py-8 text-center text-slate-500">No property found. Create one under Inventory first.</div>
+  if (!currentProperty || loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
+  if (!detail) return <div className="py-8 text-center text-muted-foreground">No property found. Create one under Inventory first.</div>
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
@@ -116,9 +116,9 @@ export function PropertyProfileManager() {
           <Input type="email" value={detail.contactEmail ?? ""} onChange={(e) => setDetail({ ...detail, contactEmail: e.target.value })} />
         </div>
       </div>
-      <p className="text-xs text-slate-500">The enterprise this property belongs to cannot be changed here.</p>
+      <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>
       <div className="flex items-center gap-3 justify-end pt-4 border-t">
-        {savedMsg && <span className="text-sm text-emerald-600">Saved</span>}
+        {savedMsg && <span className="text-sm text-success">Saved</span>}
         <Button type="submit" disabled={saving}>
           <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Property"}
         </Button>

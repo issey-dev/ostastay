@@ -30,7 +30,7 @@ import { ThemeColorManager } from "@/components/controls/theme-color-manager"
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 
 const TAB_TRIGGER_CLASS =
-  "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 rounded-none px-6 py-3 font-medium text-slate-500 dark:text-slate-400"
+  "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
 
 // Config-array-driven sections, mirroring app-sidebar.tsx's `items` pattern — add a new
 // Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
@@ -54,7 +54,7 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       icon: MonitorPlay,
       render: () => (
         <ControlsCard title="Front Desk" description="No Front Desk-specific configuration exists yet.">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Nothing to configure here today — this tab is reserved for future front-desk-specific settings.
           </p>
         </ControlsCard>

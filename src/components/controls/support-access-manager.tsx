@@ -26,11 +26,11 @@ function statusBadge(grant: Grant) {
   const expired = grant.status === "APPROVED" && grant.expiresAt && new Date(grant.expiresAt) <= new Date()
   const label = expired ? "EXPIRED" : grant.status
   const cls: Record<string, string> = {
-    PENDING: "bg-amber-100 text-amber-700",
-    APPROVED: "bg-emerald-100 text-emerald-700",
-    DENIED: "bg-rose-100 text-rose-700",
-    REVOKED: "bg-slate-100 text-slate-500",
-    EXPIRED: "bg-slate-100 text-slate-500",
+    PENDING: "bg-warning-muted text-warning",
+    APPROVED: "bg-success-muted text-success",
+    DENIED: "bg-destructive-muted text-destructive",
+    REVOKED: "bg-muted text-muted-foreground",
+    EXPIRED: "bg-muted text-muted-foreground",
   }
   return <Badge variant="secondary" className={cls[label]}>{label}</Badge>
 }
@@ -109,13 +109,13 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
     window.location.reload()
   }
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading support access requests...</div>
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading support access requests...</div>
 
   return (
     <div className="space-y-6">
       {isInternal && (
         <>
-          <Card className="premium-card">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg">Request Support Access</CardTitle>
               <CardDescription>
@@ -124,7 +124,7 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {errorMsg && <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md">{errorMsg}</div>}
+              {errorMsg && <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md">{errorMsg}</div>}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Enterprise</label>
@@ -140,7 +140,7 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
                 <label className="text-sm font-medium">Reason</label>
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why do you need access? (shown to the enterprise's admin)" />
               </div>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleRequest} disabled={submitting || !requestEnterpriseId}>
+              <Button className="" onClick={handleRequest} disabled={submitting || !requestEnterpriseId}>
                 {submitting ? "Submitting..." : "Request Access"}
               </Button>
             </CardContent>
@@ -151,13 +151,13 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
             {grants.map((g) => {
               const isLive = g.status === "APPROVED" && (!g.expiresAt || new Date(g.expiresAt) > new Date())
               return (
-                <Card key={g.id} className="premium-card">
+                <Card key={g.id}>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
                       <div className="font-medium flex items-center gap-2">{g.enterprise.name} {statusBadge(g)}</div>
-                      {g.reason && <p className="text-sm text-slate-500 mt-1">{g.reason}</p>}
+                      {g.reason && <p className="text-sm text-muted-foreground mt-1">{g.reason}</p>}
                       {g.expiresAt && g.status === "APPROVED" && (
-                        <p className="text-xs text-slate-400 mt-1">Expires {new Date(g.expiresAt).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Expires {new Date(g.expiresAt).toLocaleString()}</p>
                       )}
                     </div>
                     {isLive && (
@@ -169,7 +169,7 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
                 </Card>
               )
             })}
-            {grants.length === 0 && <p className="text-sm text-slate-500">No requests yet.</p>}
+            {grants.length === 0 && <p className="text-sm text-muted-foreground">No requests yet.</p>}
           </div>
         </>
       )}
@@ -177,16 +177,16 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
       {!isInternal && (
         <div className="space-y-3">
           <h3 className="text-lg font-medium">Support Access Requests</h3>
-          <p className="text-sm text-slate-500">Osta support staff need your explicit, time-boxed approval before viewing this enterprise&apos;s configuration.</p>
+          <p className="text-sm text-muted-foreground">Osta support staff need your explicit, time-boxed approval before viewing this enterprise&apos;s configuration.</p>
           {grants.map((g) => (
-            <Card key={g.id} className="premium-card">
+            <Card key={g.id}>
               <CardContent className="flex items-center justify-between py-4">
                 <div>
                   <div className="font-medium flex items-center gap-2">
                     {g.requestedBy.firstName} {g.requestedBy.lastName} {statusBadge(g)}
                   </div>
-                  {g.reason && <p className="text-sm text-slate-500 mt-1">{g.reason}</p>}
-                  <p className="text-xs text-slate-400 mt-1">Requested {new Date(g.requestedAt).toLocaleString()}</p>
+                  {g.reason && <p className="text-sm text-muted-foreground mt-1">{g.reason}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">Requested {new Date(g.requestedAt).toLocaleString()}</p>
                 </div>
                 <div className="flex gap-2">
                   {g.status === "PENDING" && (
@@ -195,20 +195,20 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
                         <ShieldCheck className="w-4 h-4 mr-1" /> Approve
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => respond(g.id, "deny")}>
-                        <ShieldOff className="w-4 h-4 mr-1 text-rose-500" /> Deny
+                        <ShieldOff className="w-4 h-4 mr-1 text-destructive" /> Deny
                       </Button>
                     </>
                   )}
                   {g.status === "APPROVED" && (!g.expiresAt || new Date(g.expiresAt) > new Date()) && (
                     <Button size="sm" variant="ghost" onClick={() => revoke(g.id)}>
-                      <ShieldOff className="w-4 h-4 mr-1 text-rose-500" /> Revoke
+                      <ShieldOff className="w-4 h-4 mr-1 text-destructive" /> Revoke
                     </Button>
                   )}
                 </div>
               </CardContent>
             </Card>
           ))}
-          {grants.length === 0 && <p className="text-sm text-slate-500">No support access requests for your enterprise.</p>}
+          {grants.length === 0 && <p className="text-sm text-muted-foreground">No support access requests for your enterprise.</p>}
         </div>
       )}
 

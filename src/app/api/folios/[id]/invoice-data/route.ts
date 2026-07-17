@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 
 export async function GET(
   request: Request,
@@ -70,7 +71,7 @@ export async function GET(
         systemDate: new Date(),
         invoiceBrandName: "Cozy Guest House",
         invoiceLogoUrl: "",
-        invoiceBrandColor: "#4f46e5",
+        invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
         invoiceFontFamily: "Geist",
         invoiceTaxId: "",
         invoicePhone: "",

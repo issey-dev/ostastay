@@ -145,17 +145,17 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <Card className="premium-card overflow-hidden mt-6">
-      <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4 flex flex-row items-start justify-between">
+    <Card className="overflow-hidden mt-6">
+      <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
         <div>
-          <CardTitle className="font-outfit text-lg">Room Types</CardTitle>
+          <CardTitle className="text-lg">Room Types</CardTitle>
           <CardDescription>Manage your property's room categories, pricing, and occupancy limits.</CardDescription>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open)
           if (!open) resetForm()
         }}>
-          <Button onClick={() => setIsDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+          <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
             <Plus className="mr-2 h-4 w-4" /> Add Room Type
           </Button>
           <DialogContent className="sm:max-w-[425px]">
@@ -252,39 +252,39 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
       </CardHeader>
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="bg-slate-50/50">
-            <TableRow className="border-slate-100">
-              <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Code</TableHead>
-              <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
-              <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
-              <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4">Base Price</TableHead>
-              <TableHead className="font-outfit text-slate-500 uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
+          <TableHeader className="bg-muted/50">
+            <TableRow className="border-border">
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Code</TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Base Price</TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-slate-500">Loading...</TableCell>
+                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">Loading...</TableCell>
               </TableRow>
             ) : roomTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-slate-500">
+                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                   No room types found. Create one to get started.
                 </TableCell>
               </TableRow>
             ) : (
               roomTypes.map((rt) => (
-                <TableRow key={rt.id} className="hover:bg-indigo-50/40">
-                  <TableCell className="px-6 py-4 font-semibold text-slate-700">{rt.code}</TableCell>
-                  <TableCell className="px-6 py-4 font-medium text-slate-900">{rt.name}</TableCell>
-                  <TableCell className="px-6 py-4 text-slate-600">{rt.maxOccupancy} Persons</TableCell>
-                  <TableCell className="px-6 py-4 text-slate-600">${rt.basePrice.toFixed(2)}</TableCell>
+                <TableRow key={rt.id} className="hover:bg-muted/40">
+                  <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
+                  <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
+                  <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons</TableCell>
+                  <TableCell className="px-6 py-4 text-muted-foreground">${rt.basePrice.toFixed(2)}</TableCell>
                   <TableCell className="px-6 py-4 text-right">
                     <div className="flex gap-2 transition-opacity" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        style={{ color: '#4f46e5' }}
+                        className="text-primary"
                         onClick={() => openEdit(rt)}
                       >
                         <Pencil className="mr-2 h-4 w-4" />
@@ -293,7 +293,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        style={{ color: '#dc2626' }}
+                        className="text-destructive"
                         onClick={() => openDelete(rt.id)}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />

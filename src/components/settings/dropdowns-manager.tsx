@@ -185,7 +185,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
 
       {/* Add New Item */}
       {feedback && (
-        <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+        <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === 'success' ? 'bg-success-muted text-success' : 'bg-destructive-muted text-destructive'}`}>
           {feedback.message}
         </div>
       )}
@@ -230,11 +230,11 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
             {loading ? (
               <div className="flex flex-col gap-2">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="h-14 bg-slate-100 rounded-md animate-pulse" />
+                  <div key={i} className="h-14 bg-muted rounded-md animate-pulse" />
                 ))}
               </div>
             ) : codes.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
+              <div className="text-center py-8 text-muted-foreground">
                 <p className="text-sm">No items found for <strong>{currentCategoryLabel}</strong>.</p>
                 <p className="text-xs mt-1">Add your first option using the form above.</p>
               </div>
@@ -242,7 +242,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
               codes.map((c, i) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 border rounded-lg hover:bg-slate-100 transition-colors"
+                  className="flex items-center justify-between p-3 bg-muted border rounded-lg hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {/* Reorder arrows */}
@@ -251,7 +251,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                         type="button"
                         onClick={() => reorder(i, "up")}
                         disabled={i === 0}
-                        className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronUp className="w-3.5 h-3.5" />
                       </button>
@@ -259,7 +259,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                         type="button"
                         onClick={() => reorder(i, "down")}
                         disabled={i === codes.length - 1}
-                        className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronDown className="w-3.5 h-3.5" />
                       </button>
@@ -278,10 +278,10 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                             if (e.key === "Escape") setEditingId(null)
                           }}
                         />
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" onClick={() => handleInlineEdit(c.id)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success" onClick={() => handleInlineEdit(c.id)}>
                           <Check className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400" onClick={() => setEditingId(null)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
                           <X className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -289,12 +289,12 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                       <div className="flex items-center gap-3">
                         <div>
                           <p className="font-medium text-sm">{c.value}</p>
-                          <p className="text-xs text-slate-500">Code: {c.code}</p>
+                          <p className="text-xs text-muted-foreground">Code: {c.code}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
-                          className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground transition-colors"
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
@@ -305,7 +305,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                   {/* Delete */}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive-muted">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </AlertDialogTrigger>
@@ -319,7 +319,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-red-600 hover:bg-red-700">
+                        <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
                           Delete
                         </AlertDialogAction>
                       </AlertDialogFooter>

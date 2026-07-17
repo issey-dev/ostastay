@@ -13,7 +13,7 @@ export function PropertySwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <Building2 className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
+      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
       <Select
         value={currentProperty?.id ?? ""}
         onValueChange={(id) => {

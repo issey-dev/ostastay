@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { BedDouble, CheckCircle2, AlertTriangle, Users, Brush, Wrench, Bell } from "lucide-react"
+import { statusMutedClasses } from "@/lib/status-tone"
 
 type RoomStatusCardProps = {
   room: any
@@ -24,16 +25,6 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
   
   // Keep the other tasks for the yellow badge
   const regularTasks = room.housekeepingTasks?.filter((t: any) => t.taskType !== 'SPECIAL_REQUEST' && t.status !== 'COMPLETED') || []
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "CLEAN": return "bg-emerald-50 border-emerald-200 text-emerald-700"
-      case "DIRTY": return "bg-rose-50 border-rose-200 text-rose-700"
-      case "INSPECTED": return "bg-indigo-50 border-indigo-200 text-indigo-700"
-      case "OUT_OF_ORDER": return "bg-slate-100 border-slate-300 text-slate-700"
-      default: return "bg-slate-50 border-slate-200 text-slate-700"
-    }
-  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -73,14 +64,14 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
   return (
     <div 
       className={`border rounded-xl p-4 shadow-sm transition-all cursor-pointer hover:shadow-md relative
-      ${getStatusColor(room.status)} 
+      ${statusMutedClasses(room.status)}
       ${loading ? 'opacity-50' : ''}
-      ${isSelected ? 'ring-2 ring-indigo-600 ring-offset-2' : ''}
+      ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
       `}
       onClick={handleCardClick}
     >
       {isSelected && (
-        <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full p-0.5 shadow-md z-10">
+        <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-0.5 shadow-md z-10">
           <CheckCircle2 className="w-4 h-4" />
         </div>
       )}
@@ -96,9 +87,9 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
                 }}
                 title={`${activeTicket?.status}: ${activeTicket?.description}${activeTicket?.assignedTo ? `\nAssigned to: ${activeTicket.assignedTo.firstName} ${activeTicket.assignedTo.lastName}` : ''}`} 
                 className={`transition-colors p-1 rounded-full flex items-center justify-center cursor-pointer
-                  ${activeTicket?.status === 'IN_PROGRESS' 
-                    ? 'text-amber-600 bg-amber-100 hover:bg-amber-200' 
-                    : 'text-rose-500 bg-rose-100 hover:bg-rose-200'}
+                  ${activeTicket?.status === 'IN_PROGRESS'
+                    ? 'text-warning bg-warning-muted hover:bg-warning/20'
+                    : 'text-destructive bg-destructive-muted hover:bg-destructive/20'}
                 `}
               >
                 <Wrench className="w-3 h-3" />
@@ -107,7 +98,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
           </h3>
           <p className="text-xs font-medium opacity-80 mt-0.5">{room.roomType.name}</p>
         </div>
-        <div className="bg-white/50 p-2 rounded-full shadow-sm">
+        <div className="bg-background/60 p-2 rounded-full shadow-sm">
           {getStatusIcon(room.status)}
         </div>
       </div>
@@ -117,43 +108,43 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
           <span>Status:</span>
           <span className="capitalize">{room.status.replace(/_/g, ' ').toLowerCase()}</span>
         </div>
-        
+
         {isOccupied ? (
-          <div className="bg-white/60 rounded-md p-2 mt-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+          <div className="bg-background/60 rounded-md p-2 mt-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
               <Users className="w-3 h-3" />
               Occupied
-              {hasSharer && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full text-[10px]">Sharer</span>}
+              {hasSharer && <span className="bg-info-muted text-info px-1.5 py-0.5 rounded-full text-[10px]">Sharer</span>}
             </div>
-            <p className="text-xs text-slate-500 mt-1 truncate">
+            <p className="text-xs text-muted-foreground mt-1 truncate">
               {activeAssignment.reservation.primaryGuest?.firstName} {activeAssignment.reservation.primaryGuest?.lastName}
             </p>
           </div>
         ) : (
-          <div className="bg-white/40 rounded-md p-2 mt-2 border border-dashed border-slate-300">
-            <p className="text-xs text-center font-medium text-slate-500">Vacant</p>
+          <div className="bg-background/40 rounded-md p-2 mt-2 border border-dashed border-border">
+            <p className="text-xs text-center font-medium text-muted-foreground">Vacant</p>
           </div>
         )}
 
         {regularTasks?.length > 0 && (
-          <div className="mt-2 text-xs font-medium bg-amber-100 text-amber-800 p-1.5 rounded text-center">
+          <div className="mt-2 text-xs font-medium bg-warning-muted text-warning p-1.5 rounded text-center">
             Task: {regularTasks[0].taskType.replace(/_/g, ' ')}
           </div>
         )}
 
         {specialRequests.map((req: any) => (
-          <div key={req.id} className="mt-2 text-[11px] font-semibold bg-purple-100 text-purple-800 px-2 py-1.5 rounded border border-purple-200 flex flex-col gap-1">
+          <div key={req.id} className="mt-2 text-[11px] font-semibold bg-foreground text-background px-2 py-1.5 rounded border border-foreground/20 flex flex-col gap-1">
             <div className="flex justify-between items-start gap-2">
               <div className="flex items-start gap-1.5">
                 <Bell className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span className="leading-snug">{req.notes}</span>
               </div>
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation()
                   if (onCompleteTask) onCompleteTask(req.id)
                 }}
-                className="bg-white/60 hover:bg-white text-purple-900 rounded p-0.5 shrink-0 transition-colors"
+                className="bg-background/20 hover:bg-background/30 text-background rounded p-0.5 shrink-0 transition-colors"
                 title="Mark as completed"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -163,8 +154,8 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
         ))}
 
         {room.assignedAttendant && (
-          <div className="mt-2 text-[11px] font-semibold bg-white/70 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded-full bg-indigo-200 flex items-center justify-center text-[9px]">
+          <div className="mt-2 text-[11px] font-semibold bg-background/70 text-foreground/80 px-2 py-1 rounded border border-border flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[9px]">
               {room.assignedAttendant.firstName[0]}
             </div>
             {room.assignedAttendant.firstName} {room.assignedAttendant.lastName}
@@ -172,7 +163,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
         )}
 
         {activeTicket?.assignedTo && (
-          <div className="mt-2 text-[11px] font-semibold bg-white/70 text-amber-700 px-2 py-1 rounded border border-amber-100 flex items-center gap-1.5">
+          <div className="mt-2 text-[11px] font-semibold bg-background/70 text-warning px-2 py-1 rounded border border-warning/20 flex items-center gap-1.5">
             <Wrench className="w-3 h-3" />
             {activeTicket.assignedTo.firstName} {activeTicket.assignedTo.lastName}
           </div>

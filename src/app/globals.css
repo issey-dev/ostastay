@@ -26,6 +26,19 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-muted: var(--warning-muted);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-muted: var(--info-muted);
+  --color-accent-enterprise: var(--accent-enterprise);
+  --color-accent-enterprise-foreground: var(--accent-enterprise-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -45,6 +58,11 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-elevation-1: var(--elevation-1);
+  --shadow-elevation-2: var(--elevation-2);
+  --shadow-elevation-3: var(--elevation-3);
+  --shadow-elevation-4: var(--elevation-4);
+  --shadow-elevation-header: var(--elevation-header);
 }
 
 @tailwind base;
@@ -64,12 +82,17 @@
   }
 }
 
-/* Custom utility for premium card hover effects */
-@layer utilities {
-  .premium-card {
-    @apply bg-white border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] transition-all duration-300 rounded-2xl;
-  }
-  .premium-card:hover {
-    @apply shadow-[0_8px_30px_-4px_rgba(6,81,237,0.1)] -translate-y-[2px];
+/* Respect the OS-level reduced-motion preference globally — collapses every
+   token-driven duration to near-zero so no component needs its own reduced-motion
+   branch as long as it consumes duration/transition utilities rather than hardcoding
+   timings via inline styles or JS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

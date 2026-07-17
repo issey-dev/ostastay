@@ -27,7 +27,7 @@ export default function ReportsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-8">
-      <h1 className="text-3xl font-bold text-slate-900">Daily Arrival & Departure Reports</h1>
+      <h1 className="text-3xl font-bold text-foreground">Daily Arrival & Departure Reports</h1>
       <div className="flex items-center space-x-4">
         <Calendar
           mode="single"
@@ -36,18 +36,18 @@ export default function ReportsPage() {
           onSelect={setDate}
           defaultMonth={date}
         />
-        <p className="text-sm text-slate-600">Selected date: {format(date, "PPP")}</p>
+        <p className="text-sm text-muted-foreground">Selected date: {format(date, "PPP")}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Arrival Card */}
-        <Card className="border-indigo-200 shadow-md">
-          <CardHeader className="bg-indigo-50 border-b border-indigo-100">
+        <Card className="border-border shadow-md">
+          <CardHeader className="bg-muted border-b border-border">
             <CardTitle>Arrival List</CardTitle>
             <CardDescription>Guests scheduled to check‑in today.</CardDescription>
           </CardHeader>
           <CardContent className="py-6 flex flex-col gap-4">
-            <Button onClick={() => openPdf('arrival')} disabled={isArrivalLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button onClick={() => openPdf('arrival')} disabled={isArrivalLoading} className="">
               Generate PDF
             </Button>
             <Button variant="outline" onClick={() => openPrint('arrival')}>
@@ -57,13 +57,13 @@ export default function ReportsPage() {
         </Card>
 
         {/* Departure Card */}
-        <Card className="border-indigo-200 shadow-md">
-          <CardHeader className="bg-indigo-50 border-b border-indigo-100">
+        <Card className="border-border shadow-md">
+          <CardHeader className="bg-muted border-b border-border">
             <CardTitle>Departure List</CardTitle>
             <CardDescription>Guests checking out today with balance due.</CardDescription>
           </CardHeader>
           <CardContent className="py-6 flex flex-col gap-4">
-            <Button onClick={() => openPdf('departure')} disabled={isDepartureLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button onClick={() => openPdf('departure')} disabled={isDepartureLoading} className="">
               Generate PDF
             </Button>
             <Button variant="outline" onClick={() => openPrint('departure')}>
@@ -124,14 +124,14 @@ function PrintableReport({ type, date }: { type: 'arrival' | 'departure'; date: 
         <p>Loading...</p>
       ) : (
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="bg-muted">
             <tr>
               {headers.map(h => (<th key={h} className="border p-2 text-left font-medium">{h}</th>))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+              <tr key={i} className={i % 2 === 0 ? 'bg-card' : 'bg-muted'}>
                 {row.map((cell, j) => (<td key={j} className="border p-2">{cell}</td>))}
               </tr>
             ))}

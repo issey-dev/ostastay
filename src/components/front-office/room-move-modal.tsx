@@ -109,7 +109,7 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
           </DialogHeader>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm my-4">
+            <div className="bg-destructive-muted text-destructive p-3 rounded-md text-sm my-4">
               {error}
             </div>
           )}
@@ -118,16 +118,16 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Current Room Type</Label>
-                <Input disabled value={currentRoomType || ""} className="bg-slate-50" />
+                <Input disabled value={currentRoomType || ""} className="bg-muted" />
               </div>
               <div className="grid gap-2">
                 <Label>Current Room</Label>
-                <Input disabled value={currentRoomNumber || ""} className="bg-slate-50 font-semibold" />
+                <Input disabled value={currentRoomNumber || ""} className="bg-muted font-semibold" />
               </div>
             </div>
 
             <div className="grid gap-2 mt-2">
-              <Label>New Room Type <span className="text-red-500">*</span></Label>
+              <Label>New Room Type <span className="text-destructive">*</span></Label>
               <Select required value={selectedRoomTypeId} onValueChange={(v) => { setSelectedRoomTypeId(v ?? ""); setSelectedRoomId(""); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select New Room Type">
@@ -154,7 +154,7 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
             </div>
 
             <div className="grid gap-2">
-              <Label>New Room <span className="text-red-500">*</span></Label>
+              <Label>New Room <span className="text-destructive">*</span></Label>
               <SearchableSelect
                 required
                 value={selectedRoomId}
@@ -168,7 +168,7 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
             </div>
 
             <div className="grid gap-2">
-              <Label>Reason for Move <span className="text-red-500">*</span></Label>
+              <Label>Reason for Move <span className="text-destructive">*</span></Label>
               <Input 
                 required 
                 placeholder="e.g. A/C Broken, Guest Request, Maintenance" 

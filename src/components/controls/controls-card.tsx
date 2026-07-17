@@ -16,8 +16,8 @@ export function ControlsCard({
   className?: string
 }) {
   return (
-    <Card className={cn("premium-card", className)}>
-      <CardHeader className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 pb-4">
+    <Card className={cn(className)}>
+      <CardHeader className="bg-muted/50 border-b border-border pb-4">
         <CardTitle className="text-lg">{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>

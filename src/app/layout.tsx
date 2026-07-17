@@ -32,7 +32,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={`${inter.className} antialiased bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100`} suppressHydrationWarning>
+      <body className={`${inter.className} antialiased bg-background text-foreground`} suppressHydrationWarning>
         <DarkModeProvider>{children}</DarkModeProvider>
       </body>
     </html>

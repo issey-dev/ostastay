@@ -174,11 +174,11 @@ export function UsersRolesManager({
   }
 
   const getRoleBadgeColor = (roleName: string) => {
-    if (roleName === "Admin" || roleName === "Manager") return "bg-indigo-100 text-indigo-700"
-    if (roleName === "Housekeeping") return "bg-emerald-100 text-emerald-700"
-    if (roleName === "Maintenance") return "bg-amber-100 text-amber-700"
-    if (roleName === "Reservations") return "bg-blue-100 text-blue-700"
-    return "bg-slate-100 text-slate-700"
+    if (roleName === "Admin" || roleName === "Manager") return "bg-muted text-primary"
+    if (roleName === "Housekeeping") return "bg-success-muted text-success"
+    if (roleName === "Maintenance") return "bg-warning-muted text-warning"
+    if (roleName === "Reservations") return "bg-info-muted text-info"
+    return "bg-muted text-foreground"
   }
 
   // ---- Roles ----
@@ -257,7 +257,7 @@ export function UsersRolesManager({
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading team members...</div>
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading team members...</div>
 
   return (
     <div className="space-y-8">
@@ -266,9 +266,9 @@ export function UsersRolesManager({
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-lg font-medium flex items-center gap-2"><Users className="w-4 h-4" /> Staff Accounts</h3>
-            <p className="text-sm text-slate-500">Manage user accounts, roles, and work-location assignment</p>
+            <p className="text-sm text-muted-foreground">Manage user accounts, roles, and work-location assignment</p>
           </div>
-          <Button onClick={openNewUserDialog} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button onClick={openNewUserDialog} className="">
             <Plus className="w-4 h-4 mr-2" /> Add Team Member
           </Button>
         </div>
@@ -293,31 +293,31 @@ export function UsersRolesManager({
                   <TableCell>
                     <Badge variant="secondary" className={getRoleBadgeColor(user.role.name)}>{user.role.name}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-slate-600">
+                  <TableCell className="text-sm text-muted-foreground">
                     {user.scope === "ENTERPRISE"
                       ? "All properties"
                       : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
                   </TableCell>
                   <TableCell>
                     {user.isActive ? (
-                      <span className="flex items-center text-emerald-600 text-sm font-medium"><CheckCircle2 className="w-4 h-4 mr-1" /> Active</span>
+                      <span className="flex items-center text-success text-sm font-medium"><CheckCircle2 className="w-4 h-4 mr-1" /> Active</span>
                     ) : (
-                      <span className="flex items-center text-slate-400 text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
+                      <span className="flex items-center text-muted-foreground text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
-                      <Edit className="w-4 h-4 text-slate-500" />
+                      <Edit className="w-4 h-4 text-muted-foreground" />
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setUserToDelete(user)}>
-                      <Trash2 className="w-4 h-4 text-rose-500" />
+                      <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">No users found. Create your first team member!</TableCell>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No users found. Create your first team member!</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -330,7 +330,7 @@ export function UsersRolesManager({
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-lg font-medium flex items-center gap-2"><KeyRound className="w-4 h-4" /> Roles &amp; Permissions</h3>
-            <p className="text-sm text-slate-500">Per-module view / create / update / delete access. System roles are shared and read-only.</p>
+            <p className="text-sm text-muted-foreground">Per-module view / create / update / delete access. System roles are shared and read-only.</p>
           </div>
           <Button onClick={openNewRoleDialog} variant="outline">
             <Plus className="w-4 h-4 mr-2" /> New Role
@@ -339,12 +339,12 @@ export function UsersRolesManager({
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
-            <Card key={role.id} className="premium-card">
+            <Card key={role.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     {role.name}
-                    {role.isSystem && <Badge variant="secondary" className="bg-slate-100 text-slate-600">System</Badge>}
+                    {role.isSystem && <Badge variant="secondary" className="bg-muted text-muted-foreground">System</Badge>}
                   </CardTitle>
                 </div>
                 <CardDescription>{role._count?.users ?? 0} user{role._count?.users === 1 ? "" : "s"} assigned</CardDescription>
@@ -355,7 +355,7 @@ export function UsersRolesManager({
                 </Button>
                 {!role.isSystem && (
                   <Button variant="ghost" size="sm" onClick={() => setRoleToDelete(role)}>
-                    <Trash2 className="w-4 h-4 text-rose-500" />
+                    <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 )}
               </CardContent>
@@ -374,7 +374,7 @@ export function UsersRolesManager({
             </DialogDescription>
           </DialogHeader>
           {deleteErrorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md flex items-start">
+            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-start">
               <Shield className="w-4 h-4 mr-2 mt-0.5 shrink-0" /><span>{deleteErrorMsg}</span>
             </div>
           )}
@@ -393,7 +393,7 @@ export function UsersRolesManager({
             <DialogDescription>{editingUser ? "Update staff details and access levels." : "Create a new user account for your staff."}</DialogDescription>
           </DialogHeader>
           {userErrorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md flex items-center">
+            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-center">
               <Shield className="w-4 h-4 mr-2" />{userErrorMsg}
             </div>
           )}
@@ -414,12 +414,12 @@ export function UsersRolesManager({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Password {editingUser && <span className="text-slate-400 font-normal">(Leave blank to keep unchanged)</span>}
+                Password {editingUser && <span className="text-muted-foreground font-normal">(Leave blank to keep unchanged)</span>}
               </label>
               <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder={editingUser ? "••••••••" : "Create a secure password"} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-1"><Shield className="w-4 h-4 text-indigo-500" /> Role</label>
+              <label className="text-sm font-medium flex items-center gap-1"><Shield className="w-4 h-4 text-primary" /> Role</label>
               <Select value={userForm.roleId} onValueChange={(v) => setUserForm({ ...userForm, roleId: v ?? "" })}>
                 <SelectTrigger><SelectValue placeholder="Select role">{roles.find((r) => r.id === userForm.roleId)?.name}</SelectValue></SelectTrigger>
                 <SelectContent>
@@ -442,7 +442,7 @@ export function UsersRolesManager({
                   </SelectContent>
                 </Select>
                 {isPropertyLockedActor && (
-                  <p className="text-xs text-slate-500">You can only manage users at your own property.</p>
+                  <p className="text-xs text-muted-foreground">You can only manage users at your own property.</p>
                 )}
               </div>
               {userForm.scope === "PROPERTY" && (
@@ -465,7 +465,7 @@ export function UsersRolesManager({
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>Cancel</Button>
             <Button
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className=""
               onClick={handleSaveUser}
               disabled={savingUser || !userForm.email || !userForm.roleId || (!editingUser && !userForm.password) || !userForm.firstName}
             >
@@ -483,7 +483,7 @@ export function UsersRolesManager({
             <DialogDescription>This cannot be undone. A role with users still assigned cannot be deleted.</DialogDescription>
           </DialogHeader>
           {roleDeleteErrorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md flex items-start">
+            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-start">
               <Shield className="w-4 h-4 mr-2 mt-0.5 shrink-0" /><span>{roleDeleteErrorMsg}</span>
             </div>
           )}
@@ -504,7 +504,7 @@ export function UsersRolesManager({
             </DialogDescription>
           </DialogHeader>
           {roleErrorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md flex items-center">
+            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-center">
               <Shield className="w-4 h-4 mr-2" />{roleErrorMsg}
             </div>
           )}
@@ -518,7 +518,7 @@ export function UsersRolesManager({
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>{editingRole?.isSystem ? "Close" : "Cancel"}</Button>
             {!editingRole?.isSystem && (
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveRole} disabled={savingRole}>
+              <Button className="" onClick={handleSaveRole} disabled={savingRole}>
                 {savingRole ? "Saving..." : "Save Role"}
               </Button>
             )}

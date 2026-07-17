@@ -34,11 +34,11 @@ export function ThemeColorManager() {
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-slate-500">Loading theme...</div>
+  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading theme...</div>
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-muted-foreground">
         Sets the app&apos;s primary accent color for every user in this enterprise. Changes apply on next page load.
       </p>
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -53,7 +53,7 @@ export function ThemeColorManager() {
               disabled={saving}
               className={cn(
                 "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors",
-                isSelected ? "border-slate-900 dark:border-slate-100" : "border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                isSelected ? "border-foreground" : "border-transparent hover:border-border"
               )}
             >
               <span
@@ -62,7 +62,7 @@ export function ThemeColorManager() {
               >
                 {isSelected && <Check className="w-5 h-5" style={{ color: preset.primaryForeground }} />}
               </span>
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{preset.label}</span>
+              <span className="text-xs font-medium text-muted-foreground">{preset.label}</span>
             </button>
           )
         })}

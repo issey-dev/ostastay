@@ -11,12 +11,12 @@ export default async function EnterpriseLoginPage({
 
   if (!enterprise) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center">
-          <h1 className="text-2xl font-bold text-slate-900">Enterprise not found</h1>
-          <p className="text-slate-500 mt-2">
+          <h1 className="text-2xl font-bold text-foreground">Enterprise not found</h1>
+          <p className="text-muted-foreground mt-2">
             The link &quot;{slug}&quot; doesn&apos;t match any enterprise. Double-check the URL your
-            organization gave you, or sign in at <a href="/login" className="text-indigo-600 hover:underline">/login</a>.
+            organization gave you, or sign in at <a href="/login" className="text-primary hover:underline">/login</a>.
           </p>
         </div>
       </div>

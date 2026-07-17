@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { DateRange } from "react-day-picker"
 
 type RatePlan = { id: string; name: string; code: string }
@@ -192,9 +193,9 @@ function PriceCalendarPageContent() {
             </CardContent>
           </Card>
 
-          <Card className="border-blue-200 shadow-sm bg-blue-50/50">
+          <Card className="border-info/30 shadow-sm bg-info-muted/50">
             <CardHeader>
-              <CardTitle className="text-blue-800">Bulk Update</CardTitle>
+              <CardTitle className="text-info">Bulk Update</CardTitle>
               <CardDescription>Apply a price to a date range.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -232,25 +233,27 @@ function PriceCalendarPageContent() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="h-96 flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <Skeleton key={i} className="h-24 rounded-none" />
+                  ))}
                 </div>
               ) : !selectedRatePlanId || !selectedRoomTypeId ? (
                 <div className="h-96 flex items-center justify-center text-muted-foreground">
                   Select a Rate Plan and Room Type to view calendar.
                 </div>
               ) : (
-                <div className="grid grid-cols-7 gap-px bg-slate-200 rounded-lg overflow-hidden border">
+                <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
                   {/* Days of week header */}
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                    <div key={day} className="bg-slate-50 py-2 text-center text-sm font-medium text-slate-500">
+                    <div key={day} className="bg-muted py-2 text-center text-sm font-medium text-muted-foreground">
                       {day}
                     </div>
                   ))}
                   
                   {/* Empty padding cells for start of month */}
                   {Array.from({ length: startingDayIndex }).map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-white min-h-[100px] p-2" />
+                    <div key={`empty-${i}`} className="bg-card min-h-[100px] p-2" />
                   ))}
 
                   {/* Calendar Days */}
@@ -258,17 +261,17 @@ function PriceCalendarPageContent() {
                     const price = getPriceForDate(day)
                     const isToday = isSameDay(day, new Date())
                     return (
-                      <div key={day.toISOString()} className={`bg-white min-h-[100px] p-2 flex flex-col group hover:bg-slate-50 transition-colors ${isToday ? 'bg-blue-50/30' : ''}`}>
+                      <div key={day.toISOString()} className={`bg-card min-h-[100px] p-2 flex flex-col group hover:bg-muted transition-colors ${isToday ? 'bg-info-muted/30' : ''}`}>
                         <div className="flex justify-between items-start">
-                          <span className={`text-sm font-medium ${isToday ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-500'}`}>
+                          <span className={`text-sm font-medium ${isToday ? 'bg-info text-info-foreground rounded-full w-6 h-6 flex items-center justify-center' : 'text-muted-foreground'}`}>
                             {format(day, "d")}
                           </span>
                         </div>
                         <div className="mt-auto pt-2 flex flex-col gap-1">
                           {price !== null ? (
-                            <span className="text-lg font-bold text-green-700">${price.toFixed(2)}</span>
+                            <span className="text-lg font-bold text-success">${price.toFixed(2)}</span>
                           ) : (
-                            <span className="text-sm text-slate-400 italic">No Rate</span>
+                            <span className="text-sm text-muted-foreground italic">No Rate</span>
                           )}
                         </div>
                       </div>

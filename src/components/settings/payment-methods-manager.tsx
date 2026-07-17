@@ -106,14 +106,14 @@ export function PaymentMethodsManager() {
   return (
     <div className="space-y-6">
       <div className="flex justify-end items-center">
-        <Button onClick={() => handleOpenDialog()} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => handleOpenDialog()} className="">
           <Plus className="w-4 h-4 mr-2" /> Add Method
         </Button>
       </div>
 
-      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50">
+          <TableHeader className="bg-muted">
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
@@ -123,20 +123,20 @@ export function PaymentMethodsManager() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
             ) : methods.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">No payment methods configured.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No payment methods configured.</TableCell></TableRow>
             ) : (
               methods.map(method => (
                 <TableRow key={method.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center">
-                      <CreditCard className="w-4 h-4 text-slate-400 mr-2" />
+                      <CreditCard className="w-4 h-4 text-muted-foreground mr-2" />
                       {method.name}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="bg-slate-50">{method.type}</Badge>
+                    <Badge variant="outline" className="bg-muted">{method.type}</Badge>
                   </TableCell>
                   <TableCell>
                     <Switch 
@@ -146,10 +146,10 @@ export function PaymentMethodsManager() {
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(method)}>
-                      <Edit2 className="w-4 h-4 text-slate-500" />
+                      <Edit2 className="w-4 h-4 text-muted-foreground" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(method.id)}>
-                      <Trash2 className="w-4 h-4 text-rose-500" />
+                      <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -167,11 +167,11 @@ export function PaymentMethodsManager() {
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Method Name <span className="text-rose-500">*</span></Label>
+              <Label>Method Name <span className="text-destructive">*</span></Label>
               <Input required placeholder="e.g. Visa, Master Card, Cash" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label>Payment Type <span className="text-rose-500">*</span></Label>
+              <Label>Payment Type <span className="text-destructive">*</span></Label>
               <Select required value={formData.type} onValueChange={v => setFormData(p => ({ ...p, type: v ?? "" }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Type">
@@ -193,7 +193,7 @@ export function PaymentMethodsManager() {
             </div>
             <DialogFooter className="mt-6">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
+              <Button type="submit" className="">Save</Button>
             </DialogFooter>
           </form>
         </DialogContent>

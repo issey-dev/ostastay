@@ -66,7 +66,7 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 flex items-center gap-2">
+        <Button className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Pickup Room
         </Button>
@@ -118,7 +118,7 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
 
           <DialogFooter className="pt-4">
             <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
+            <Button type="submit" className="" disabled={loading}>
               {loading ? "Saving..." : "Create Pickup"}
             </Button>
           </DialogFooter>

@@ -98,7 +98,7 @@ export default function FrontOfficeDashboard() {
   }
 
   if (loading && !data) {
-    return <div className="p-8 text-center text-slate-500">Loading Front Desk Operations...</div>
+    return <div className="p-8 text-center text-muted-foreground">Loading Front Desk Operations...</div>
   }
 
   return (
@@ -106,43 +106,43 @@ export default function FrontOfficeDashboard() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Front Desk Operations</h2>
-          <p className="text-slate-500">Manage today's arrivals, departures, and in-house guests.</p>
+          <p className="text-muted-foreground">Manage today's arrivals, departures, and in-house guests.</p>
         </div>
       </div>
 
       {/* KPI Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-blue-100 bg-blue-50/50">
+        <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-800">Arrivals Today</CardTitle>
-            <LogIn className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals Today</CardTitle>
+            <LogIn className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-900">{data?.arrivals?.length || 0}</div>
+            <div className="text-3xl font-bold">{data?.arrivals?.length || 0}</div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-rose-100 bg-rose-50/50">
+        <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-rose-800">Departures Today</CardTitle>
-            <LogOut className="h-4 w-4 text-rose-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Departures Today</CardTitle>
+            <LogOut className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-rose-900">{data?.departures?.length || 0}</div>
+            <div className="text-3xl font-bold">{data?.departures?.length || 0}</div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-emerald-100 bg-emerald-50/50">
+        <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-emerald-800">In-House Guests</CardTitle>
-            <CheckCircle className="h-4 w-4 text-emerald-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">In-House Guests</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-emerald-900">{data?.inHouse?.length || 0}</div>
+            <div className="text-3xl font-bold">{data?.inHouse?.length || 0}</div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm">
+        <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Vacant Rooms</CardTitle>
-            <BedDouble className="h-4 w-4 text-slate-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Vacant Rooms</CardTitle>
+            <BedDouble className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{data?.vacantRoomsCount || 0}</div>
@@ -151,9 +151,9 @@ export default function FrontOfficeDashboard() {
       </div>
 
       {/* Operations Tabs */}
-      <Card className="shadow-sm">
+      <Card className="shadow-elevation-1">
         <Tabs defaultValue="arrivals" className="w-full">
-          <CardHeader className="border-b px-6 py-4 bg-slate-50/50 rounded-t-xl">
+          <CardHeader className="border-b px-6 py-4 bg-muted/50 rounded-t-xl">
             <TabsList className="grid w-full max-w-md grid-cols-3">
               <TabsTrigger value="arrivals">Arrivals ({data?.arrivals?.length})</TabsTrigger>
               <TabsTrigger value="departures">Departures ({data?.departures?.length})</TabsTrigger>
@@ -166,7 +166,7 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>
                     <TableHead>Conf. #</TableHead>
                     <TableHead>Room Type</TableHead>
@@ -182,28 +182,28 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500 font-mono text-xs">{res.confirmationNo}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{res.confirmationNo}</TableCell>
                       <TableCell>{res.assignments?.[0]?.roomType?.name}</TableCell>
                       <TableCell>
                         {res.assignments?.[0]?.room ? (
-                          <Badge variant="outline" className="bg-slate-100">{res.assignments[0].room.roomNumber}</Badge>
+                          <Badge variant="outline" className="bg-muted">{res.assignments[0].room.roomNumber}</Badge>
                         ) : (
-                          <span className="text-rose-500 text-xs font-medium">Unassigned</span>
+                          <span className="text-destructive text-xs font-medium">Unassigned</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right pr-6 flex justify-end gap-2">
                         <Button size="sm" variant="outline" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
                           <MessageSquare className="w-4 h-4 mr-2" /> Traces
                         </Button>
-                        <Button 
-                          size="sm" 
-                          className="bg-blue-600 hover:bg-blue-700 w-24"
+                        <Button
+                          size="sm"
+                          className="w-24"
                           disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
                           onClick={() => updateStatus(res.id, "IN_HOUSE")}
                         >
@@ -214,7 +214,7 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.arrivals?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12 text-slate-500">No arrivals scheduled for today.</TableCell>
+                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No arrivals scheduled for today.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -225,7 +225,7 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="departures" className="m-0 border-none outline-none">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>
                     <TableHead>Conf. #</TableHead>
                     <TableHead>Room</TableHead>
@@ -240,13 +240,13 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-500 font-mono text-xs">{res.confirmationNo}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{res.confirmationNo}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
                       </TableCell>
@@ -259,7 +259,7 @@ export default function FrontOfficeDashboard() {
                         </Button>
                         <Button 
                           size="sm" 
-                          className="bg-rose-600 hover:bg-rose-700 w-28"
+                          className="w-28"
                           disabled={actionLoading === res.id}
                           onClick={() => updateStatus(res.id, "CHECKED_OUT")}
                         >
@@ -270,7 +270,7 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.departures?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12 text-slate-500">No departures scheduled for today.</TableCell>
+                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No departures scheduled for today.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -281,7 +281,7 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>
                     <TableHead>Room</TableHead>
                     <TableHead>Departure Date</TableHead>
@@ -296,8 +296,8 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
@@ -305,7 +305,7 @@ export default function FrontOfficeDashboard() {
                       <TableCell>
                         <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
                       </TableCell>
-                      <TableCell className="text-slate-500 text-sm">{new Date(res.checkOutDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{new Date(res.checkOutDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
                       <TableCell className="text-right pr-6 flex justify-end gap-2">
                         <Button size="sm" variant="outline" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
                           <MessageSquare className="w-4 h-4 mr-2" /> Traces
@@ -313,7 +313,7 @@ export default function FrontOfficeDashboard() {
                         <Button size="sm" variant="outline" onClick={() => openFolio(res.id)}>
                           <ReceiptText className="w-4 h-4 mr-2" /> Folio
                         </Button>
-                        <Button size="sm" variant="outline" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => openRoomMove(res)}>
+                        <Button size="sm" variant="outline" className="text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
                           Move Room
                         </Button>
                       </TableCell>
@@ -321,7 +321,7 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.inHouse?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12 text-slate-500">No guests currently in-house.</TableCell>
+                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No guests currently in-house.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

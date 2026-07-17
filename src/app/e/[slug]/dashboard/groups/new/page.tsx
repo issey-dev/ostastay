@@ -66,14 +66,14 @@ export default function NewGroupBlock() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
             New Group Block
           </h1>
-          <p className="text-slate-500 mt-1">Reserve inventory for an upcoming event or corporate group.</p>
+          <p className="text-muted-foreground mt-1">Reserve inventory for an upcoming event or corporate group.</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+      <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -138,7 +138,7 @@ export default function NewGroupBlock() {
                 value={formData.totalRoomsHeld}
                 onChange={handleChange}
               />
-              <p className="text-xs text-slate-400">Inventory will be subtracted from availability.</p>
+              <p className="text-xs text-muted-foreground">Inventory will be subtracted from availability.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
@@ -149,7 +149,7 @@ export default function NewGroupBlock() {
                 value={formData.cutoffDate}
                 onChange={handleChange}
               />
-              <p className="text-xs text-slate-400">Unreserved rooms will be released after this date.</p>
+              <p className="text-xs text-muted-foreground">Unreserved rooms will be released after this date.</p>
             </div>
           </div>
 
@@ -157,7 +157,7 @@ export default function NewGroupBlock() {
             <Link href={`/e/${slug}/dashboard/groups`}>
               <Button variant="outline" type="button">Cancel</Button>
             </Link>
-            <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
+            <Button type="submit" disabled={loading}>
               <Save className="w-4 h-4 mr-2" />
               {loading ? "Creating..." : "Create Group Block"}
             </Button>

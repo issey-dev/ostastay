@@ -11,8 +11,8 @@ export function LogoutButton() {
         window.location.href = "/login";
       }}
     >
-      <LogOut className="h-4 w-4 text-rose-500" />
-      <span className="text-rose-500">Log Out</span>
+      <LogOut className="h-4 w-4 text-destructive" />
+      <span className="text-destructive">Log Out</span>
     </SidebarMenuButton>
   )
 }

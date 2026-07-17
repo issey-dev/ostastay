@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Utensils, Search, Send, Clock, Store, Coffee, Wine } from "lucide-react"
+import { Utensils, Search, Send, Clock, Store, Coffee, ReceiptText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
 export default function POSDashboard() {
   const { currentProperty } = useProperty()
@@ -108,25 +109,51 @@ export default function POSDashboard() {
     }
   }
 
+  const recentPostingsBody = (
+    <>
+      {recentPostings.length === 0 ? (
+        <div className="text-center py-10">
+          <Coffee className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No charges posted from this terminal yet today.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {recentPostings.map((item, i) => (
+            <div key={i} className="bg-card p-3 rounded-lg shadow-sm border border-border flex justify-between items-center">
+              <div>
+                <p className="font-bold text-sm text-foreground">Room {item.roomNumber}</p>
+                <p className="text-xs text-muted-foreground truncate w-32">{item.chargeCode?.description || "Charge"}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-success">${parseFloat(item.amount).toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground">{new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)]">
-      
+    <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)] pb-24 md:pb-0">
+
       {/* Left Column: Search & Post */}
       <div className="flex-1 space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="p-2 bg-rose-100 rounded-lg">
-              <Utensils className="w-6 h-6 text-rose-600" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-destructive-muted rounded-lg">
+              <Utensils className="w-6 h-6 text-destructive" />
             </div>
             Point of Sale Routing
           </h1>
-          <p className="text-slate-500 mt-2">Search for in-house guests and route outlet charges to their room.</p>
+          <p className="text-muted-foreground mt-2">Search for in-house guests and route outlet charges to their room.</p>
         </div>
 
         {/* 1. Search Guest */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Search className="w-5 h-5 text-indigo-500" />
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+            <Search className="w-5 h-5 text-primary" />
             Find Guest
           </h2>
           <form onSubmit={handleSearch} className="flex gap-3">
@@ -146,15 +173,15 @@ export default function POSDashboard() {
               {guests.map((g, idx) => (
                 <div 
                   key={idx} 
-                  className={`p-4 flex justify-between items-center cursor-pointer transition-colors ${selectedGuest?.reservationId === g.reservationId ? 'bg-indigo-50 border-l-4 border-indigo-500' : 'hover:bg-slate-50'}`}
+                  className={`p-4 flex justify-between items-center cursor-pointer transition-colors ${selectedGuest?.reservationId === g.reservationId ? 'bg-muted border-l-4 border-primary' : 'hover:bg-muted'}`}
                   onClick={() => setSelectedGuest(g)}
                 >
                   <div>
-                    <p className="font-bold text-slate-900">{g.guestName}</p>
-                    <p className="text-sm text-slate-500">Room {g.roomNumber}</p>
+                    <p className="font-bold text-foreground">{g.guestName}</p>
+                    <p className="text-sm text-muted-foreground">Room {g.roomNumber}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-semibold">
+                    <span className="text-xs px-2 py-1 bg-success-muted text-success rounded-full font-semibold">
                       {g.status}
                     </span>
                   </div>
@@ -163,14 +190,14 @@ export default function POSDashboard() {
             </div>
           )}
           {searchQuery && guests.length === 0 && !loadingSearch && (
-            <p className="text-sm text-slate-500 mt-4 text-center">No active guests found matching "{searchQuery}"</p>
+            <p className="text-sm text-muted-foreground mt-4 text-center">No active guests found matching "{searchQuery}"</p>
           )}
         </div>
 
         {/* 2. Post Charge */}
-        <div className={`bg-white rounded-xl shadow-sm border p-6 transition-all ${!selectedGuest ? 'opacity-50 pointer-events-none border-slate-200' : 'border-indigo-200 shadow-md ring-1 ring-indigo-50'}`}>
-          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Store className="w-5 h-5 text-indigo-500" />
+        <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!selectedGuest ? 'opacity-50 pointer-events-none border-border' : 'border-border shadow-md ring-1 ring-border'}`}>
+          <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+            <Store className="w-5 h-5 text-primary" />
             Route Charge to Room {selectedGuest ? selectedGuest.roomNumber : ""}
           </h2>
           
@@ -232,12 +259,12 @@ export default function POSDashboard() {
             </div>
 
             {feedback && (
-              <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+              <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === 'success' ? 'bg-success-muted text-success' : 'bg-destructive-muted text-destructive'}`}>
                 {feedback.message}
               </div>
             )}
 
-            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 text-lg" disabled={posting || !form.amount || !form.chargeCodeId}>
+            <Button type="submit" className="w-full h-12 text-lg" disabled={posting || !form.amount || !form.chargeCodeId}>
               <Send className="w-5 h-5 mr-2" />
               {posting ? "Posting..." : "Post to Folio"}
             </Button>
@@ -245,37 +272,38 @@ export default function POSDashboard() {
         </div>
       </div>
 
-      {/* Right Column: Recent Activity */}
-      <div className="w-full md:w-96 space-y-6">
-        <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 h-full min-h-[500px]">
-          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-slate-400" />
+      {/* Right Column: Recent Activity — desktop/tablet only, side-by-side */}
+      <div className="hidden md:block w-full md:w-96 space-y-6">
+        <div className="bg-muted rounded-xl border border-border p-6 h-full min-h-[500px]">
+          <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-muted-foreground" />
             Recent Postings
           </h3>
-          
-          {recentPostings.length === 0 ? (
-            <div className="text-center py-10">
-              <Coffee className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm text-slate-500">No charges posted from this terminal yet today.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentPostings.map((item, i) => (
-                <div key={i} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-sm text-slate-900">Room {item.roomNumber}</p>
-                    <p className="text-xs text-slate-500 truncate w-32">{item.chargeCode?.description || "Charge"}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-600">${parseFloat(item.amount).toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-400">{new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {recentPostingsBody}
         </div>
       </div>
+
+      {/* Mobile: Recent Postings collapses into a bottom sheet instead of stacking
+          below the primary search/post workflow — keeps the main task above the fold. */}
+      <Sheet>
+        <SheetTrigger
+          render={
+            <Button className="md:hidden fixed bottom-4 left-4 right-4 z-[var(--z-sticky)] h-12 shadow-elevation-3" variant="outline">
+              <ReceiptText className="w-4 h-4 mr-2" />
+              Recent Postings {recentPostings.length > 0 && `(${recentPostings.length})`}
+            </Button>
+          }
+        />
+        <SheetContent side="bottom" className="max-h-[75vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              Recent Postings
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-4">{recentPostingsBody}</div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

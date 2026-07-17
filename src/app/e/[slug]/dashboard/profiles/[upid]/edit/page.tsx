@@ -36,7 +36,7 @@ export default function EditProfilePage({ params }: { params: Promise<{ upid: st
   }
 
   if (!profile) {
-    return <div className="p-8 text-center text-red-500">Profile not found.</div>
+    return <div className="p-8 text-center text-destructive">Profile not found.</div>
   }
 
   return (
