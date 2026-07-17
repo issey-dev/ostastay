@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "REVENUE", "update");
+
     const body = await request.json();
     const { ratePlanId, roomTypeIds, startDate, endDate, price } = body;
 
@@ -12,6 +16,17 @@ export async function POST(request: Request) {
 
     if (!Array.isArray(roomTypeIds) || roomTypeIds.length === 0) {
       return NextResponse.json({ error: "roomTypeIds must be a non-empty array" }, { status: 400 });
+    }
+
+    const ratePlan = await prisma.ratePlan.findUnique({ where: { id: ratePlanId } });
+    if (!ratePlan) {
+      return NextResponse.json({ error: "Rate plan not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, ratePlan.propertyId);
+
+    const roomTypes = await prisma.roomType.findMany({ where: { id: { in: roomTypeIds } } });
+    if (roomTypes.length !== roomTypeIds.length || roomTypes.some((rt) => rt.propertyId !== ratePlan.propertyId)) {
+      return NextResponse.json({ error: "One or more room types do not belong to this property" }, { status: 400 });
     }
 
     const start = new Date(startDate);
@@ -66,13 +81,13 @@ export async function POST(request: Request) {
     // Execute all upserts in a transaction for atomicity and speed
     await prisma.$transaction(operations);
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `Successfully updated ${operations.length} price records.` 
+    return NextResponse.json({
+      success: true,
+      message: `Successfully updated ${operations.length} price records.`
     }, { status: 201 });
-    
+
   } catch (error) {
-    console.error("Failed to bulk update price calendar:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

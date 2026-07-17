@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
 
 const updateSchema = z.object({
   name: z.string().min(2),
@@ -15,9 +16,18 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, 'CONTROLS', 'update')
+
     const { id } = await params;
     const json = await request.json()
     const data = updateSchema.parse(json)
+
+    const existing = await prisma.roomType.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: "Room type not found" }, { status: 404 })
+    }
+    await assertPropertyAccess(ctx, existing.propertyId)
 
     const roomType = await prisma.roomType.update({
       where: { id },
@@ -29,8 +39,8 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 })
     }
-    console.error('Failed to update room type:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }
 
@@ -39,7 +49,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, 'CONTROLS', 'delete')
+
     const { id } = await params;
+    const existing = await prisma.roomType.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: "Room type not found" }, { status: 404 })
+    }
+    await assertPropertyAccess(ctx, existing.propertyId)
+
     // Manually cascade delete rooms of this type
     await prisma.room.deleteMany({
       where: { roomTypeId: id }
@@ -51,7 +70,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Failed to delete room type:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

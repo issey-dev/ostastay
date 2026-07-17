@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { RoomStatus } from "@/lib/enums";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const propertyId = searchParams.get("propertyId");
-
   try {
+    const ctx = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, propertyId);
+
     const rooms = await prisma.room.findMany({
-      where: propertyId ? { propertyId } : undefined,
+      where: { propertyId },
       include: {
         roomType: true,
         floor: true,
@@ -21,16 +28,32 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(rooms);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch rooms" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "create");
+
     const body = await request.json();
-    
+
     if (!body.roomNumber || !body.propertyId || !body.roomTypeId || !body.floorId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, body.propertyId);
+
+    const [roomType, floor] = await Promise.all([
+      prisma.roomType.findUnique({ where: { id: body.roomTypeId } }),
+      prisma.floor.findUnique({ where: { id: body.floorId }, include: { building: true } }),
+    ]);
+    if (!roomType || roomType.propertyId !== body.propertyId) {
+      return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
+    }
+    if (!floor || floor.building.propertyId !== body.propertyId) {
+      return NextResponse.json({ error: "Floor does not belong to this property" }, { status: 400 });
     }
 
     const newRoom = await prisma.room.create({
@@ -46,25 +69,37 @@ export async function POST(request: Request) {
         floor: true,
       }
     });
-    
+
     return NextResponse.json(newRoom, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to create room" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "HOUSEKEEPING", "update");
+
     const body = await request.json();
-    
+
     if (!body.status) {
       return NextResponse.json({ error: "New status is required" }, { status: 400 });
     }
 
     if (body.ids && Array.isArray(body.ids)) {
-      // Bulk update
+      // Bulk update — confirm every targeted room belongs to a property this actor can
+      // reach before touching any of them (a guessed id from another enterprise/property
+      // must not be silently included).
+      const rooms = await prisma.room.findMany({ where: { id: { in: body.ids } } });
+      const distinctPropertyIds = [...new Set(rooms.map((r) => r.propertyId))];
+      for (const propertyId of distinctPropertyIds) {
+        await assertPropertyAccess(ctx, propertyId);
+      }
+
       const result = await prisma.room.updateMany({
-        where: { id: { in: body.ids } },
+        where: { id: { in: rooms.map((r) => r.id) } },
         data: { status: body.status as RoomStatus },
       });
       return NextResponse.json({ success: true, count: result.count });
@@ -74,16 +109,22 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Room ID or IDs array is required" }, { status: 400 });
     }
 
+    const existing = await prisma.room.findUnique({ where: { id: body.id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, existing.propertyId);
+
     const updatedRoom = await prisma.room.update({
       where: { id: body.id },
       data: { status: body.status as RoomStatus },
     });
-    
+
     // In a real system, you would create an Audit Log entry here for the status change
 
-    
     return NextResponse.json(updatedRoom);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to update room status" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

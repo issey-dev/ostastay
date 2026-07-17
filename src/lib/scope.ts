@@ -237,6 +237,19 @@ export async function setCurrentPropertyId(ctx: AuthContext, propertyId: string)
   });
 }
 
+// Shared guard for every Property-scoped reference/config resource (buildings, floors,
+// room types, rooms, rate plans, facilities, ...): confirms the property exists, belongs
+// to the caller's enterprise, and — for a PROPERTY-scoped user — is their own work
+// location. One generic "Property not found" message either way, so a probing request
+// can't distinguish "wrong enterprise" from "doesn't exist".
+export async function assertPropertyAccess(ctx: AuthContext, propertyId: string): Promise<void> {
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  if (!property || property.enterpriseId !== ctx.enterpriseId) {
+    throw new ForbiddenError("Property not found");
+  }
+  requirePropertyScope(ctx, propertyId);
+}
+
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {
   const perm = ctx.permissions.get(module);
   const allowed =

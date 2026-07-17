@@ -1,40 +1,45 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const enterpriseId = searchParams.get("enterpriseId");
-
+export async function GET() {
   try {
+    const ctx = await requireSession();
+
     const paymentMethods = await prisma.paymentMethod.findMany({
-      where: enterpriseId ? { enterpriseId } : undefined,
+      where: { enterpriseId: ctx.enterpriseId },
       orderBy: { name: 'asc' }
     });
     return NextResponse.json(paymentMethods);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch payment methods" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "create");
+
     const body = await request.json();
-    
-    if (!body.name || !body.type || !body.enterpriseId) {
+
+    if (!body.name || !body.type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const newPaymentMethod = await prisma.paymentMethod.create({
       data: {
-        enterpriseId: body.enterpriseId,
+        enterpriseId: ctx.enterpriseId,
         name: body.name,
         type: body.type,
         isActive: body.isActive ?? true,
       }
     });
-    
+
     return NextResponse.json(newPaymentMethod, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to create payment method" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

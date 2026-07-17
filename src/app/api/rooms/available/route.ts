@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isValid, parseISO } from "date-fns";
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
+    const ctx = await requireSession();
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const roomTypeId = searchParams.get("roomTypeId");
@@ -13,6 +15,7 @@ export async function GET(request: Request) {
     if (!propertyId || !roomTypeId || !checkInStr || !checkOutStr) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
+    await assertPropertyAccess(ctx, propertyId);
 
     const checkInDate = parseISO(checkInStr);
     const checkOutDate = parseISO(checkOutStr);
@@ -54,7 +57,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(availableRooms);
   } catch (error) {
-    console.error("Failed to fetch available rooms:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

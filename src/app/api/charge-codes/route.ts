@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const enterpriseId = searchParams.get("enterpriseId");
-
+export async function GET() {
   try {
+    const ctx = await requireSession();
+
     const chargeCodes = await prisma.chargeCode.findMany({
-      where: enterpriseId ? { enterpriseId } : undefined,
+      where: { enterpriseId: ctx.enterpriseId },
       include: {
         taxProfile: {
           include: {
@@ -22,21 +22,30 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(chargeCodes);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch charge codes" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "create");
+
     const body = await request.json();
-    
-    if (!body.code || !body.description || !body.enterpriseId || !body.taxProfileId) {
+
+    if (!body.code || !body.description || !body.taxProfileId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
+    if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
     }
 
     const newChargeCode = await prisma.chargeCode.create({
       data: {
-        enterpriseId: body.enterpriseId,
+        enterpriseId: ctx.enterpriseId,
         code: body.code.toUpperCase(),
         description: body.description,
         taxProfileId: body.taxProfileId,
@@ -45,9 +54,10 @@ export async function POST(request: Request) {
         taxProfile: true
       }
     });
-    
+
     return NextResponse.json(newChargeCode, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to create charge code" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

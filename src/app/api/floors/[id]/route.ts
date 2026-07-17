@@ -1,16 +1,34 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, 'CONTROLS', 'update')
+
     const { id } = await params;
     const body = await request.json()
 
     if (!body.name || !body.buildingId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    const existing = await prisma.floor.findUnique({ where: { id }, include: { building: true } })
+    if (!existing) {
+      return NextResponse.json({ error: "Floor not found" }, { status: 404 })
+    }
+    await assertPropertyAccess(ctx, existing.building.propertyId)
+
+    const targetBuilding = await prisma.building.findUnique({ where: { id: body.buildingId } })
+    if (!targetBuilding) {
+      return NextResponse.json({ error: "Building not found" }, { status: 404 })
+    }
+    if (targetBuilding.propertyId !== existing.building.propertyId) {
+      return NextResponse.json({ error: "Cannot move a floor to a building in a different property" }, { status: 400 })
     }
 
     const floor = await prisma.floor.update({
@@ -23,8 +41,8 @@ export async function PUT(
 
     return NextResponse.json(floor)
   } catch (error) {
-    console.error('Failed to update floor:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }
 
@@ -33,7 +51,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, 'CONTROLS', 'delete')
+
     const { id } = await params;
+    const existing = await prisma.floor.findUnique({ where: { id }, include: { building: true } })
+    if (!existing) {
+      return NextResponse.json({ error: "Floor not found" }, { status: 404 })
+    }
+    await assertPropertyAccess(ctx, existing.building.propertyId)
+
     // Manually cascade delete rooms associated with this floor to avoid FK constraint errors
     await prisma.room.deleteMany({
       where: { floorId: id }
@@ -45,7 +72,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Failed to delete floor:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }
