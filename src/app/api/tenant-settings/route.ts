@@ -67,8 +67,6 @@ export async function PATCH(request: Request) {
         serviceChargeRate: body.serviceChargeRate !== undefined ? parseFloat(body.serviceChargeRate) : undefined,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? body.pricesIncludeTaxes : undefined,
 
-        themeColor: body.themeColor !== undefined ? body.themeColor : undefined,
-
         smtpHost: body.smtpHost !== undefined ? body.smtpHost : undefined,
         smtpPort: body.smtpPort !== undefined ? body.smtpPort : undefined,
         smtpUsername: body.smtpUsername !== undefined ? body.smtpUsername : undefined,
@@ -105,8 +103,6 @@ export async function PATCH(request: Request) {
         serviceChargeEnabled: body.serviceChargeEnabled !== undefined ? body.serviceChargeEnabled : true,
         serviceChargeRate: body.serviceChargeRate !== undefined ? parseFloat(body.serviceChargeRate) : 10.00,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? body.pricesIncludeTaxes : true,
-
-        themeColor: body.themeColor || "indigo",
 
         smtpHost: body.smtpHost || null,
         smtpPort: body.smtpPort ?? null,

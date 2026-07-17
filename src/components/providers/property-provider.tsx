@@ -6,6 +6,7 @@ type Property = {
   id: string
   enterpriseId: string
   name: string
+  bannerColor: string | null
 }
 
 type PropertyContextType = {

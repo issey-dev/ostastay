@@ -88,7 +88,6 @@ export async function GET(
         serviceChargeEnabled: true,
         serviceChargeRate: 10.00,
         pricesIncludeTaxes: true,
-        themeColor: "indigo",
         smtpHost: null,
         smtpPort: null,
         smtpUsername: null,

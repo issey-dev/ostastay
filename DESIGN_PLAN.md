@@ -153,14 +153,9 @@ This is a **relabeling of the existing `theme.css` values**, not a redesign — 
 
 (`--destructive` stays as an alias of `--danger` for backward compatibility with existing shadcn component variants — do not rename the shadcn-generated prop name, just point it at the new token.)
 
-**Reserved accent slot** (new — the escape hatch, see §3.3):
+**Reserved accent slot** (the escape hatch, see §3.3 — **superseded**: this is *not* a shared CSS token. `Property.bannerColor` is a raw hex stored per property in Prisma and read client-side by `PropertyBannerBar`, not injected as a `--accent-*` custom property):
 
-```
---accent-enterprise            /* set at runtime from tenant config, default = --neutral-600 (i.e. monochromatic no-op) */
---accent-enterprise-foreground /* runtime-computed contrast pair, default = --neutral-0 */
-```
-
-Note: `--accent` (shadcn's own hover/muted-surface token, currently mapped to `--muted`) is **unrelated** to `--accent-enterprise` and must not be conflated — keep shadcn's `--accent`/`--accent-foreground` as-is (they're structural, not brand color).
+Note: `--accent` (shadcn's own hover/muted-surface token, mapped to `--muted`) is unrelated to the property banner accent and must not be conflated — keep shadcn's `--accent`/`--accent-foreground` as-is (they're structural, not brand color).
 
 ### 2.2 Typography scale
 
@@ -279,7 +274,7 @@ See full rationale in §6. Token definitions:
 ### 3.1 Where tokens live
 
 - **`src/app/theme.css`** — sole source of truth for all color, elevation, and (new) status/accent-slot values, light + dark pairs, under `@layer base`. This is the only file where a hex/rgb literal is allowed to appear.
-- **`src/app/globals.css`** — the `@theme inline` block maps `theme.css` variables into Tailwind utility namespaces (already the pattern; extend it with `--color-success`, `--color-warning`, `--color-danger`, `--color-info`, `--color-accent-enterprise`, plus `--shadow-elevation-*` and `--z-*` mappings so they're usable as `shadow-elevation-2`, `z-modal`, etc. via arbitrary-property-free utilities).
+- **`src/app/globals.css`** — the `@theme inline` block maps `theme.css` variables into Tailwind utility namespaces (already the pattern; extend it with `--color-success`, `--color-warning`, `--color-danger`, `--color-info`, plus `--shadow-elevation-*` and `--z-*` mappings so they're usable as `shadow-elevation-2`, `z-modal`, etc. via arbitrary-property-free utilities). Per-property banner color is *not* a shared CSS token — see §3.3.
 - **Non-color scales** (spacing, breakpoints, motion durations/easings) are documented in this plan and in `theme.css` as CSS custom properties, but largely **ride Tailwind's existing default scale** rather than inventing a parallel one — the goal is discipline (§2.3, §2.6) not a new system to learn.
 - **No theme provider / JS config object.** Given the app is CSS-variable-driven already and works server-side (the accent injection happens in a Server Component via an inline `<style>` tag), introducing a React context/theme-provider layer would be a regression, not an improvement — it would fight the SSR-first architecture. Keep theming as pure CSS custom properties.
 
@@ -289,22 +284,22 @@ Unchanged from today's (correct) mechanism: `theme.css` → `@theme inline` → 
 
 **What changes**: components stop reaching around this pipe (finding A) and start consuming it. See §7 migration plan for how that rollout is sequenced.
 
-### 3.3 Enterprise accent injection (the sanctioned escape hatch)
+### 3.3 Property banner accent (the sanctioned escape hatch)
 
-This is the one deliberate exception to "monochromatic everywhere," and it must be narrow by construction, not by convention.
+This is the one deliberate exception to "monochromatic everywhere," and it must be narrow by construction, not by convention. **Superseded from the original plan below**: the accent is scoped per-*property*, not per-enterprise, and it renders as a thin 4px line at the top of the page — not a content banner with text — per direct correction from the app owner (an enterprise can have multiple properties; each property gets its own banner color, independent of its siblings).
 
-**Today**: `resolveThemeColorPreset()` overrides the *global* `--primary` token, which — combined with finding B — means the accent leaks into every hardcoded-indigo surface in the app (buttons, links, focus rings, hover states) instead of being contained.
-
-**Target design**:
-1. Enterprise config (`EnterpriseSettings.themeColor`, already exists in Prisma) resolves via `resolveThemeColorPreset()` (unchanged) to a `{ primary, primaryForeground }` pair.
-2. `DashboardLayout` injects this pair into **`--accent-enterprise` / `--accent-enterprise-foreground` only** — not `--primary`, not `--ring`, not `--sidebar-primary`. Drop those three overrides from the injected `<style>` block ([dashboard/layout.tsx:29](src/app/e/[slug]/dashboard/layout.tsx:29)).
-3. `--primary` (used by `Button`'s default variant, links, focus rings, form field focus states, the "brand color" throughout the interactive UI) becomes a **fixed neutral** — the darkest step of the monochromatic ramp (`--neutral-600`/`--neutral-700`) — same for every enterprise, every tenant, light and dark mode. This is the actual "monochromatic base" requirement: the app's everyday interactive chrome (buttons, links, focus) stops being brand-colored at all.
-4. `--accent-enterprise` is consumed by **exactly one component category**: the new `EnterpriseBanner` component (§5, closes the "support acting as" gap from finding C in the inventory). No button, link, badge, chart, or table ever reads `--accent-enterprise`.
-5. Enforce this at the component boundary, not just by convention: `EnterpriseBanner` is the *only* file in the components tree allowed to reference `bg-accent-enterprise` / `text-accent-enterprise-foreground` — enforced by the lint guardrail in §8.
+**Mechanism**:
+1. `Property.bannerColor` (nullable `String` on the Prisma `Property` model) stores a raw hex value directly — not a preset name — so a future free-form color picker or additional per-property customization (per the app owner: "just currently a start... more options later on") doesn't need a schema change.
+2. `PropertyBannerBar` (`src/components/ui/property-banner-bar.tsx`) is a client component reading `useProperty().currentProperty.bannerColor` and rendering a `h-1` full-width line with that color via inline `style`, or nothing if unset. It lives inside `DashboardLayout`, above the header.
+3. Because it reads from the client-side `PropertyProvider` context (not a server-injected CSS variable), it updates live when the user switches properties via `PropertySwitcher` — no page reload, no per-property CSS variable needed at all.
+4. `--primary` (used by `Button`'s default variant, links, focus rings, form field focus states, the "brand color" throughout the interactive UI) stays a **fixed neutral**, same for every property, every enterprise, light and dark mode — this is the actual "monochromatic base" requirement: the app's everyday interactive chrome never picks up a property's or enterprise's brand color.
+5. `Property.bannerColor` is consumed by **exactly one component**: `PropertyBannerBar`. No button, link, badge, chart, or table ever reads it. The picker that sets it — `PropertyBannerColorManager` (Controls > General > Appearance) — operates on `useProperty().currentProperty`, never an enterprise-wide setting.
 
 **Sanctioned accent surfaces** (exhaustive list — nothing else may use it):
-- `EnterpriseBanner` — the persistent top-of-shell banner used for (a) "you are viewing as support — acting as {enterprise}" and (b) any future tenant-configurable announcement banner.
-- Nothing else. Explicitly **not** sanctioned: buttons, active nav item highlight, focus rings, links, chart series colors, status/badge colors, the login page. If a future request wants the accent somewhere else, that's a scope change to this document, not a silent expansion.
+- `PropertyBannerBar` — the thin top-of-page line, sourced from `Property.bannerColor`.
+- Nothing else. Explicitly **not** sanctioned: buttons, active nav item highlight, focus rings, links, chart series colors, status/badge colors, the login page (property isn't known pre-login). If a future request wants the accent somewhere else, that's a scope change to this document, not a silent expansion.
+
+**Separately**: the "support session acting-as" indicator (`SupportSessionNotice`, `src/components/ui/support-session-notice.tsx`) is *not* part of this accent system — it's a security notice, styled with the fixed `warning` status tone so it's never recolored to something low-contrast or easy to miss, regardless of which property's banner color happens to be active.
 
 ### 3.4 How a page/component is expected to consume tokens
 
@@ -368,7 +363,7 @@ Print routes (`/print/folios/[id]`, `/e/[slug]/dashboard/folios/[id]/print`) are
 
 - **`StatusBadge`** (`src/components/ui/status-badge.tsx`) — props `{ tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral', label }`, renders `bg-{tone}-muted text-{tone}` pill using §2.1 status tokens. Replaces both hand-rolled `getStatusColor` functions and any inline status color logic in `front-office`, `housekeeping`, `reservations`.
 - **`EmptyState`** (`src/components/ui/empty-state.tsx`) — props `{ icon, title, description, action? }`, standard centered layout, used wherever a list/table currently renders ad hoc "no results" text.
-- **`EnterpriseBanner`** (`src/components/ui/enterprise-banner.tsx`) — the sanctioned accent consumer (§3.3), variant for support-session indicator (fixed copy/icon) and variant for tenant-configurable announcement text (future-ready, config-driven, not built until a config field exists).
+- **`PropertyBannerBar`** (`src/components/ui/property-banner-bar.tsx`) — the sanctioned accent consumer (§3.3), a thin top-of-page line sourced from `Property.bannerColor`. **`SupportSessionNotice`** (`src/components/ui/support-session-notice.tsx`) — the separate, fixed-`warning`-tone support-acting-as indicator; not part of the accent system.
 - **Loading**: standardize on `Skeleton` for content that has a known shape (tables, cards, forms) and reserve spinners (`Loader2` + `animate-spin`) only for button-internal loading state and full-page transitions where no shape can be skeleton'd. The 10 existing raw-spinner call sites get triaged individually during Phase 4 (§7) — most list/table loading states convert to `Skeleton`.
 
 ### 5.3 Standard state matrix

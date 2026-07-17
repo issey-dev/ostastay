@@ -37,8 +37,6 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-info-muted: var(--info-muted);
-  --color-accent-enterprise: var(--accent-enterprise);
-  --color-accent-enterprise-foreground: var(--accent-enterprise-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);

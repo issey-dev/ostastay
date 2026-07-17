@@ -80,7 +80,7 @@ const designSystemPlugin = {
             context.report({
               node,
               message:
-                "Raw Tailwind color class '{{match}}' — use a semantic token instead (bg-muted, text-foreground, bg-success, text-destructive, etc). The app's palette is monochromatic; color is reserved for status tones and the enterprise accent slot (accent-enterprise, EnterpriseBanner only). See DESIGN_PLAN.md.",
+                "Raw Tailwind color class '{{match}}' — use a semantic token instead (bg-muted, text-foreground, bg-success, text-destructive, etc). The app's palette is monochromatic; per-property color is stored on Property.bannerColor and rendered by PropertyBannerBar only, never a shared class. See DESIGN_PLAN.md.",
               data: { match: RAW_PALETTE_REGEX.exec(text)[0] },
             });
           }
@@ -121,50 +121,9 @@ const designSystemPlugin = {
             context.report({
               node,
               message:
-                "Hardcoded hex color '{{value}}' — add it to src/app/theme.css (design tokens), src/lib/themePresets.ts (enterprise accent presets), or src/lib/invoice-branding.ts (invoice branding default) instead of inlining it here.",
+                "Hardcoded hex color '{{value}}' — add it to src/app/theme.css (design tokens), src/lib/themePresets.ts (property banner presets), or src/lib/invoice-branding.ts (invoice branding default) instead of inlining it here.",
               data: { value: node.value },
             });
-          },
-        };
-      },
-    },
-    "no-enterprise-accent-outside-banner": {
-      meta: {
-        type: "problem",
-        docs: {
-          description:
-            "Restrict the accent-enterprise token to EnterpriseBanner — every other component must stay monochromatic.",
-        },
-        schema: [],
-      },
-      create(context) {
-        const filename = (context.filename ?? context.getFilename()).replaceAll("\\", "/");
-        // SupportSessionExitButton renders only inside EnterpriseBanner's `actions` slot
-        // (see src/app/e/[slug]/dashboard/layout.tsx) and needs accent-enterprise-foreground
-        // to read against the banner's own accent-colored background — a banner-child
-        // extension of the sanctioned surface, not an independent misuse.
-        const exceptions = [
-          "src/components/ui/enterprise-banner.tsx",
-          "src/components/controls/support-session-exit-button.tsx",
-        ];
-        if (exceptions.some((f) => filename.endsWith(f))) {
-          return {};
-        }
-        const report = (node, text) => {
-          if (text.includes("accent-enterprise")) {
-            context.report({
-              node,
-              message:
-                "accent-enterprise is a reserved token consumed only by EnterpriseBanner (src/components/ui/enterprise-banner.tsx) — every other component must stay monochromatic. See DESIGN_PLAN.md §3.3.",
-            });
-          }
-        };
-        return {
-          Literal(node) {
-            if (typeof node.value === "string") report(node, node.value);
-          },
-          TemplateElement(node) {
-            report(node, node.value.raw);
           },
         };
       },
@@ -181,19 +140,10 @@ const designSystemGuardrails = {
   },
 };
 
-const enterpriseAccentGuardrail = {
-  files: ["src/components/**/*.{ts,tsx}"],
-  plugins: { design: designSystemPlugin },
-  rules: {
-    "design/no-enterprise-accent-outside-banner": "error",
-  },
-};
-
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   designSystemGuardrails,
-  enterpriseAccentGuardrail,
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

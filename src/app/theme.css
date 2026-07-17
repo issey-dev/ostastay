@@ -8,9 +8,9 @@
     ========================================= */
     
     /* 1. PRIMARY — the app's everyday interactive color (buttons, links, focus rings,
-       active nav state). Fixed monochromatic neutral, same for every enterprise, both
-       modes — NOT the per-tenant accent (that lives in --accent-enterprise below and is
-       reserved for EnterpriseBanner only). */
+       active nav state). Fixed monochromatic neutral, same for every property, both
+       modes — NOT a property's own banner accent (see PropertyBannerBar), which is a
+       raw per-property color stored on Property.bannerColor, not a shared CSS token. */
     --primary: #0F172A; /* Neutral 900 */
     --primary-foreground: #ffffff;
     
@@ -69,14 +69,6 @@
     --elevation-4: 0 16px 40px -8px rgb(0 0 0 / 0.16); /* dialog / sheet */
     --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.06); /* sticky header */
 
-    /* 7c. ENTERPRISE ACCENT — reserved injection slot (see src/lib/themePresets.ts and
-       src/app/e/[slug]/dashboard/layout.tsx). Consumed ONLY by the EnterpriseBanner
-       component (src/components/ui/enterprise-banner.tsx) — never by buttons, links,
-       nav highlights, charts, or any other component. Defaults to a monochromatic
-       no-op (same as --foreground) so the app reads as neutral until a tenant sets one. */
-    --accent-enterprise: #0F172A;
-    --accent-enterprise-foreground: #ffffff;
-
     /* 8. SIDEBAR SPECIFIC THEME */
     --sidebar-background: #ffffff;
     --sidebar-foreground: #334155;
@@ -111,9 +103,7 @@
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see
      src/components/providers/dark-mode-provider.tsx). Primary inverts to a light
      neutral (the classic monochrome "high-contrast" button — dark-on-light in light
-     mode, light-on-dark in dark mode) rather than chasing the light palette's hue. The
-     per-enterprise accent (--accent-enterprise) is set separately, per mode, in
-     src/app/e/[slug]/dashboard/layout.tsx — it never touches --primary. */
+     mode, light-on-dark in dark mode) rather than chasing the light palette's hue. */
   .dark {
     --primary: #F1F5F9;
     --primary-foreground: #0F172A;
@@ -159,9 +149,6 @@
     --elevation-3: 0 8px 24px -4px rgb(0 0 0 / 0.40);
     --elevation-4: 0 16px 40px -8px rgb(0 0 0 / 0.48);
     --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.24);
-
-    --accent-enterprise: #F1F5F9;
-    --accent-enterprise-foreground: #0F172A;
 
     --sidebar-background: #1E293B;
     --sidebar-foreground: #CBD5E1;

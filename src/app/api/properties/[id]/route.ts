@@ -39,6 +39,7 @@ export async function PUT(
         contactPhone: body.contactPhone,
         contactEmail: body.contactEmail,
         starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
+        bannerColor: body.bannerColor,
       },
     })
 

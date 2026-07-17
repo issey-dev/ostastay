@@ -26,7 +26,7 @@ import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { LicensingManager } from "@/components/controls/licensing-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
 import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
-import { ThemeColorManager } from "@/components/controls/theme-color-manager"
+import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 
 const TAB_TRIGGER_CLASS =
@@ -130,8 +130,8 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           <ControlsCard title="Property Information" description="This property's own profile. Which enterprise it belongs to cannot be changed here.">
             <PropertyProfileManager />
           </ControlsCard>
-          <ControlsCard title="Appearance" description="Choose the app's primary accent color for everyone in this enterprise.">
-            <ThemeColorManager />
+          <ControlsCard title="Appearance" description="Choose this property's own banner accent, shown at the top of every page.">
+            <PropertyBannerColorManager />
           </ControlsCard>
         </div>
       ),

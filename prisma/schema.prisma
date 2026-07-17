@@ -193,6 +193,13 @@ model Property {
   longitude       Float?
   starRating      Int?
 
+  // The property's own accent — a thin line shown at the top of every page while this
+  // property is the active one (see src/components/ui/property-banner-bar.tsx). Null
+  // means no custom accent (monochromatic default). A raw hex, not a preset name, so a
+  // future free-form color picker doesn't need a schema change. Distinct per property,
+  // never shared across an enterprise's other properties.
+  bannerColor     String?
+
   buildings    Building[]
   facilities   Facility[]
   roomTypes    RoomType[]
@@ -573,11 +580,6 @@ model EnterpriseSettings {
   serviceChargeEnabled Boolean  @default(true)
   serviceChargeRate    Float    @default(10.00)
   pricesIncludeTaxes   Boolean  @default(true)
-
-  // Application theme (distinct from the invoice's own branding above) — one of
-  // src/lib/themePresets.ts's ThemeColorName values, applied as a CSS override for every
-  // user of this enterprise. See General tab in Controls.
-  themeColor String @default("indigo")
 
   // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
   // NOTE: stored as plain text; do not build real email/file-transfer sending on top of

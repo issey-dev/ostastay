@@ -1,8 +1,9 @@
-// The enterprise-selectable "Primary Color" presets shown in Controls > General — names
-// match shadcn/ui's own well-known base-color palette (plus this app's original
-// "indigo" default), so admins pick from familiar, tested combinations rather than a
-// free-form color input. Applied as a CSS variable override scoped to the dashboard
-// layout (see src/app/dashboard/layout.tsx) — it never touches the public login pages.
+// The property-selectable "Banner Color" presets shown in Controls > General >
+// Appearance (see property-banner-color-manager.tsx) — names match shadcn/ui's own
+// well-known base-color palette (plus this app's original "indigo" default), so admins
+// pick from familiar, tested combinations rather than a free-form color input.
+// Property.bannerColor stores the resolved hex directly, not one of these names, so a
+// future free-form picker can replace this curated list without a schema change.
 export type ThemeColorName =
   | "indigo"
   | "zinc"
@@ -33,12 +34,3 @@ export const THEME_COLOR_PRESETS: Record<ThemeColorName, ThemeColorPreset> = {
 };
 
 export const THEME_COLOR_NAMES = Object.keys(THEME_COLOR_PRESETS) as ThemeColorName[];
-
-export function isThemeColorName(value: string): value is ThemeColorName {
-  return value in THEME_COLOR_PRESETS;
-}
-
-export function resolveThemeColorPreset(value: string | null | undefined): ThemeColorPreset {
-  if (value && isThemeColorName(value)) return THEME_COLOR_PRESETS[value];
-  return THEME_COLOR_PRESETS.indigo;
-}
