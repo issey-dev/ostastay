@@ -120,3 +120,51 @@
   Cashiering, Controls (Properties/Room Manager/Dropdowns), Profiles, and Reservations
   in both light and dark mode — no console errors, all new components render and
   color-resolve correctly.
+
+- **Responsive/mobile pass** on the operational pages touched by the consistency sweep
+  above. Scoped deliberately: full mobile card-stacking (matching the existing
+  Reservations/Profiles/Groups pattern) for the high-traffic operational pages;
+  Controls/admin manager tables were left on the shared `Table` component's built-in
+  horizontal-scroll wrapper rather than card-stacked too — an acceptable minimum for
+  screens mostly used on desktop, and a much smaller job than card-stacking all dozen
+  of them.
+
+  - **Front Office**: all three tabs (Arrivals/Departures/In-House) only ever rendered
+    a `<Table>` with no mobile alternative — on a phone this meant a horizontally
+    scrolled 4-5 column table with per-row action buttons. Added a `md:hidden` stacked
+    card view per tab (guest name + trace indicator, key details, full-width action
+    buttons) alongside `<Table className="hidden md:table">`, mirroring the established
+    pattern.
+  - **Housekeeping bulk-action floating bar**: a real overflow bug — `fixed` +
+    centered via `left-1/2 -translate-x-1/2` with five unwrapped action buttons
+    (Mark Clean/Inspected/Dirty, Assign, Report Issue) plus a selection badge and close
+    button, no width constraint. At 375px this is far wider than the viewport, and
+    because it's centered, both edges would render off-screen with no way to reach
+    them. Icon-only wasn't an option (Mark Clean and Mark Inspected share the same
+    icon, differentiated only by label text + tone color). Fixed by constraining the
+    bar to `inset-x-4` on mobile (full width minus margins, reverting to the original
+    centered fixed-width bar at `md:`) and making its content `overflow-x-auto` with
+    `shrink-0` sections, so all actions stay reachable via horizontal swipe instead of
+    being clipped.
+  - **Groups detail page** (`groups/[id]/page.tsx`): two `grid-cols-4` stat-card grids
+    (one real, one in the loading skeleton) had **no responsive breakpoint at all** —
+    on mobile this squeezed four stat cards into ~90px-wide columns. Fixed to
+    `grid-cols-2 lg:grid-cols-4`. Also made the page header (back button + group name +
+    status badge + two action buttons, all in one unwrapped `flex justify-between` row)
+    stack vertically below `sm`, and added the same `md:hidden` card view to the
+    "Group Reservations (Pickups)" table.
+  - **Cashiering**: the "Starting Float" row paired a `text-3xl` dollar figure with a
+    `size="lg"` destructive button carrying a long label ("Close Shift (Blind Drop)")
+    in one unwrapped `flex justify-between` row — a realistic crowding risk on narrow
+    screens. Made it stack (`flex-col sm:flex-row`) with the button going full-width
+    below `sm`.
+  - **Maintenance**'s kanban board and the rest of Cashiering were already using a
+    `grid-cols-1` mobile base and needed no changes.
+
+  Verified via `tsc --noEmit`, `eslint` (design-rule count still 0), `npm run build`,
+  and a live browser pass at 375×812 across Front Office, Housekeeping (including
+  triggering bulk-select to inspect the floating bar), Maintenance, Cashiering, and
+  Reservations — confirmed zero horizontal page overflow on every page (`document.body.
+  scrollWidth === window.innerWidth`), confirmed the desktop `<Table>` is `display:
+  none` and the mobile card view renders in its place below the `md` breakpoint, and
+  confirmed the Housekeeping action bar is horizontally scrollable rather than clipped.

@@ -182,7 +182,52 @@ export default function FrontOfficeDashboard() {
           <CardContent className="p-0">
             {/* Arrivals Tab */}
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
-              <Table>
+              {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
+              <div className="md:hidden divide-y divide-border">
+                {data?.arrivals?.length === 0 ? (
+                  <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
+                ) : (
+                  data?.arrivals?.map((res: any) => (
+                    <div key={res.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
+                          {res.traces?.length > 0 && (
+                            <div className="relative flex h-3 w-3 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-muted-foreground font-mono text-xs shrink-0">{res.confirmationNo}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{res.assignments?.[0]?.roomType?.name}</span>
+                        {res.assignments?.[0]?.room ? (
+                          <Badge variant="outline" className="bg-muted">{res.assignments[0].room.roomNumber}</Badge>
+                        ) : (
+                          <span className="text-destructive text-xs font-medium">Unassigned</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
+                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
+                          onClick={() => updateStatus(res.id, "IN_HOUSE")}
+                        >
+                          {actionLoading === res.id ? "Processing..." : "Check-In"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>
@@ -243,7 +288,49 @@ export default function FrontOfficeDashboard() {
 
             {/* Departures Tab */}
             <TabsContent value="departures" className="m-0 border-none outline-none">
-              <Table>
+              <div className="md:hidden divide-y divide-border">
+                {data?.departures?.length === 0 ? (
+                  <EmptyState icon={LogOut} title="No departures scheduled for today" />
+                ) : (
+                  data?.departures?.map((res: any) => (
+                    <div key={res.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
+                          {res.traces?.length > 0 && (
+                            <div className="relative flex h-3 w-3 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-muted-foreground font-mono text-xs shrink-0">{res.confirmationNo}</span>
+                      </div>
+                      <div>
+                        <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
+                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openFolio(res.id)}>
+                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={actionLoading === res.id}
+                          onClick={() => updateStatus(res.id, "CHECKED_OUT")}
+                        >
+                          {actionLoading === res.id ? "Processing..." : "Check-Out"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>
@@ -277,8 +364,8 @@ export default function FrontOfficeDashboard() {
                         <Button size="sm" variant="outline" onClick={() => openFolio(res.id)}>
                           <ReceiptText className="w-4 h-4 mr-2" /> Folio
                         </Button>
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           className="w-28"
                           disabled={actionLoading === res.id}
                           onClick={() => updateStatus(res.id, "CHECKED_OUT")}
@@ -301,7 +388,44 @@ export default function FrontOfficeDashboard() {
 
             {/* In-House Tab */}
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
-              <Table>
+              <div className="md:hidden divide-y divide-border">
+                {data?.inHouse?.length === 0 ? (
+                  <EmptyState icon={CheckCircle} title="No guests currently in-house" />
+                ) : (
+                  data?.inHouse?.map((res: any) => (
+                    <div key={res.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
+                          {res.traces?.length > 0 && (
+                            <div className="relative flex h-3 w-3 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant="outline" className="shrink-0">{res.assignments?.[0]?.room?.roomNumber}</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Departs {new Date(res.checkOutDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
+                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openFolio(res.id)}>
+                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
+                          Move Room
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="pl-6">Guest</TableHead>

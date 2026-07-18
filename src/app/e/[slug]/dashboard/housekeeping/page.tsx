@@ -323,19 +323,19 @@ export default function HousekeepingDashboard() {
 
       {/* Floating Action Bar */}
       {isBulkMode && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-4 flex items-center gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
-          <div className="flex items-center gap-3 border-r pr-6 border-border">
+        <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <div className="flex items-center gap-3 border-r pr-3 md:pr-6 border-border shrink-0">
             <div className="bg-primary text-primary-foreground w-8 h-8 rounded-none flex items-center justify-center font-bold text-sm">
               {selectedRooms.length}
             </div>
             <span className="font-semibold text-foreground">Selected</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               disabled={isUpdatingBulk}
               onClick={() => handleBulkUpdate("CLEAN")}
-              className={`shadow-sm border ${toneMutedClasses("success")}`}
+              className={`shadow-sm border shrink-0 ${toneMutedClasses("success")}`}
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
               Mark Clean
@@ -343,7 +343,7 @@ export default function HousekeepingDashboard() {
             <Button
               disabled={isUpdatingBulk}
               onClick={() => handleBulkUpdate("INSPECTED")}
-              className={`shadow-sm border ${toneMutedClasses("info")}`}
+              className={`shadow-sm border shrink-0 ${toneMutedClasses("info")}`}
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
               Mark Inspected
@@ -351,7 +351,7 @@ export default function HousekeepingDashboard() {
             <Button
               disabled={isUpdatingBulk}
               onClick={() => handleBulkUpdate("DIRTY")}
-              className={`shadow-sm border ${toneMutedClasses("danger")}`}
+              className={`shadow-sm border shrink-0 ${toneMutedClasses("danger")}`}
             >
               <Brush className="w-4 h-4 mr-2" />
               Mark Dirty
@@ -360,16 +360,16 @@ export default function HousekeepingDashboard() {
               disabled={isUpdatingBulk}
               onClick={() => setShowAssignDialog(true)}
               variant="outline"
-              className="shadow-sm"
+              className="shadow-sm shrink-0"
             >
               <Users className="w-4 h-4 mr-2" />
               Assign
             </Button>
-            <div className="w-px h-6 bg-border mx-2" />
+            <div className="w-px h-6 bg-border mx-2 shrink-0" />
             <Button
               disabled={isUpdatingBulk}
               onClick={() => setShowMaintenanceDialog(true)}
-              className={`shadow-sm border font-semibold ${toneMutedClasses("warning")}`}
+              className={`shadow-sm border font-semibold shrink-0 ${toneMutedClasses("warning")}`}
             >
               <Wrench className="w-4 h-4 mr-2" />
               Report Issue
@@ -380,7 +380,7 @@ export default function HousekeepingDashboard() {
             variant="ghost"
             size="icon"
             onClick={() => setSelectedRooms([])}
-            className="ml-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-none"
+            className="ml-2 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-none"
           >
             <X className="w-5 h-5" />
           </Button>

@@ -219,14 +219,15 @@ export default function CashieringPage() {
               </Badge>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="flex justify-between items-end">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Starting Float</p>
                   <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
                 </div>
-                <Button 
-                  variant="destructive" 
-                  size="lg" 
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  className="w-full sm:w-auto"
                   onClick={() => setIsCloseModalOpen(true)}
                 >
                   <Lock className="w-4 h-4 mr-2" /> Close Shift (Blind Drop)

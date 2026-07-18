@@ -50,7 +50,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             <Skeleton className="h-4 w-32" />
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
@@ -70,15 +70,15 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link href={`/e/${slug}/dashboard/groups`}>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" className="shrink-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-bold tracking-tight">{group.name}</h1>
               <StatusBadge label={group.status} status={group.status} />
             </div>
@@ -86,7 +86,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button variant="outline" className="flex items-center gap-2 flex-1 sm:flex-none">
             <Wallet className="w-4 h-4" />
             Master Folio
           </Button>
@@ -95,7 +95,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
           <div className="flex items-center gap-3 text-muted-foreground mb-2">
             <CalendarDays className="w-5 h-5" />
@@ -135,44 +135,67 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         </div>
 
         {group.reservations && group.reservations.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Res #</TableHead>
-                <TableHead>Guest</TableHead>
-                <TableHead>Dates</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
+            <div className="md:hidden divide-y divide-border">
               {group.reservations.map((res: any) => (
-                <TableRow key={res.id}>
-                  <TableCell className="font-mono text-sm text-foreground">{res.reservationNumber}</TableCell>
-                  <TableCell className="font-semibold text-foreground">
-                    {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
-                  </TableCell>
-                  <TableCell className="text-sm font-semibold text-foreground">
-                    {res.assignments?.[0]?.room?.number || "Unassigned"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge label={res.status} status={res.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
+                <Link key={res.id} href={`/e/${slug}/dashboard/reservations/${res.id}`} className="block p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-foreground">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
+                      <div className="font-mono text-xs text-muted-foreground mt-0.5">{res.reservationNumber}</div>
+                    </div>
+                    <StatusBadge label={res.status} status={res.status} className="shrink-0" />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
+                    </span>
+                    <span className="font-semibold text-foreground">{res.assignments?.[0]?.room?.number || "Unassigned"}</span>
+                  </div>
+                </Link>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+
+            <Table className="hidden md:table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Res #</TableHead>
+                  <TableHead>Guest</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {group.reservations.map((res: any) => (
+                  <TableRow key={res.id}>
+                    <TableCell className="font-mono text-sm text-foreground">{res.reservationNumber}</TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
+                    </TableCell>
+                    <TableCell className="text-sm font-semibold text-foreground">
+                      {res.assignments?.[0]?.room?.number || "Unassigned"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge label={res.status} status={res.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         ) : (
           <EmptyState
             icon={Users}
