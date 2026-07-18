@@ -1,18 +1,27 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function POST(request: Request) {
   try {
-    const { propertyId, executedBy } = await request.json()
+    const ctx = await requireSession()
+    requirePermission(ctx, "NIGHT_AUDIT", "create")
+
+    const { propertyId } = await request.json()
 
     if (!propertyId) {
       return NextResponse.json({ error: "Property ID required" }, { status: 400 })
     }
+    await assertPropertyAccess(ctx, propertyId)
 
     const property = await prisma.property.findUnique({ where: { id: propertyId } })
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
+
+    // Who ran the audit is derived from the session, never a client-supplied string.
+    const runByUser = await prisma.user.findUnique({ where: { id: ctx.userId } })
+    const executedBy = runByUser ? `${runByUser.firstName} ${runByUser.lastName}` : ctx.userId
 
     const settings = await prisma.enterpriseSettings.findUnique({
       where: { enterpriseId: property.enterpriseId }
@@ -50,7 +59,7 @@ export async function POST(request: Request) {
         data: {
           propertyId,
           auditDate: new Date(),
-          executedBy: executedBy || "System",
+          executedBy,
           roomsOccupied: 0,
           roomRevenue: 0,
           taxPosted: 0,
@@ -133,7 +142,7 @@ export async function POST(request: Request) {
       data: {
         propertyId,
         auditDate: today,
-        executedBy: executedBy || "System",
+        executedBy,
         roomsOccupied: activeReservations.length,
         roomRevenue: totalRoomRevenue,
         taxPosted: totalTaxPosted,
@@ -144,7 +153,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, log })
   } catch (error) {
-    console.error("Night Audit Error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

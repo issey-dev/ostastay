@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireSession, requirePermission, toErrorResponse } from '@/lib/scope';
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope';
 import { generateTablePdf } from '@/lib/pdfGenerator';
 import { format } from 'date-fns';
 
@@ -16,10 +16,21 @@ export async function GET(request: Request) {
     const ctx = await requireSession();
     requirePermission(ctx, 'REPORTS', 'view');
 
+    // A property-scoped user only ever sees their own property's departures — an
+    // explicit propertyId is checked against that; omitting it defaults to their own
+    // property, or (for an enterprise-scoped user) every property in the enterprise.
+    const propertyId = url.searchParams.get('propertyId');
+    if (propertyId) {
+      await assertPropertyAccess(ctx, propertyId);
+    } else if (ctx.scope === 'PROPERTY') {
+      await assertPropertyAccess(ctx, ctx.propertyId!);
+    }
+    const scopedPropertyId = propertyId || (ctx.scope === 'PROPERTY' ? ctx.propertyId! : undefined);
+
     // Fetch reservations that are checking out today (status IN_HOUSE)
     const reservations = await prisma.reservation.findMany({
       where: {
-        property: { enterpriseId: ctx.enterpriseId },
+        ...(scopedPropertyId ? { propertyId: scopedPropertyId } : { property: { enterpriseId: ctx.enterpriseId } }),
         status: 'IN_HOUSE',
         checkOutDate: {
           gte: new Date(isoDate + 'T00:00:00.000Z'),

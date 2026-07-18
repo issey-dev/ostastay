@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/db"
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function GET(request: Request) {
   try {
+    const ctx = await requireSession()
     const { searchParams } = new URL(request.url)
     const propertyId = searchParams.get("propertyId")
     const query = searchParams.get("query")?.toLowerCase()
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     if (!propertyId || !query) {
       return NextResponse.json({ error: "Property ID and search query are required" }, { status: 400 })
     }
+    await assertPropertyAccess(ctx, propertyId)
 
     // We search for CONFIRMED or CHECKED_IN reservations
     // where either the room number or guest name matches the query.
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(results)
   } catch (error) {
-    console.error("Error searching POS guests:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

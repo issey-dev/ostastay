@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
     const { id } = await params;
 
     // 1. Fetch Folio details with relations
@@ -53,6 +55,7 @@ export async function GET(
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
+    await assertPropertyAccess(ctx, folio.reservation.propertyId);
 
     // 2. Fetch Enterprise settings for invoice branding, derived from the folio's own
     // reservation → property → enterprise (not a hardcoded constant).
@@ -109,7 +112,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error("Failed to fetch invoice data:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

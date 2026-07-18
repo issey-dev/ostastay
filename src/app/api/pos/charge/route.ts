@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, "POS", "create")
+
     const body = await request.json()
     const { folioId, amount, chargeCodeId, description, reference } = body
 
@@ -17,7 +21,13 @@ export async function POST(request: Request) {
     })
 
     if (!folio) return NextResponse.json({ error: "Folio not found" }, { status: 404 })
+    await assertPropertyAccess(ctx, folio.reservation.propertyId)
     if (folio.isClosed) return NextResponse.json({ error: "Cannot post charges to a closed folio" }, { status: 400 })
+
+    const chargeCode = await prisma.chargeCode.findUnique({ where: { id: chargeCodeId } })
+    if (!chargeCode || chargeCode.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "Charge code not found" }, { status: 404 })
+    }
 
     // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
     // reservation → property → enterprise (not a hardcoded constant).
@@ -68,7 +78,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(lineItem)
   } catch (error) {
-    console.error("Error posting POS charge:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }
