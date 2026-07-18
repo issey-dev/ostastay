@@ -17,8 +17,9 @@ export async function GET(request: Request) {
     const rooms = await prisma.room.findMany({
       where: { propertyId },
       include: {
-        roomType: true,
+        roomType: { include: { features: true } },
         floor: true,
+        features: true,
         maintenance: { where: { status: { not: 'RESOLVED' } } }
       },
       orderBy: [
@@ -40,33 +41,48 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    if (!body.roomNumber || !body.propertyId || !body.roomTypeId || !body.floorId) {
+    if (!body.roomNumber || !body.propertyId || !body.roomTypeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, body.propertyId);
 
-    const [roomType, floor] = await Promise.all([
-      prisma.roomType.findUnique({ where: { id: body.roomTypeId } }),
-      prisma.floor.findUnique({ where: { id: body.floorId }, include: { building: true } }),
-    ]);
+    const roomType = await prisma.roomType.findUnique({ where: { id: body.roomTypeId } });
     if (!roomType || roomType.propertyId !== body.propertyId) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
     }
-    if (!floor || floor.building.propertyId !== body.propertyId) {
-      return NextResponse.json({ error: "Floor does not belong to this property" }, { status: 400 });
+    if (!roomType.isActive) {
+      return NextResponse.json({ error: "Cannot add a room to an inactive room type" }, { status: 400 });
     }
+
+    // A Pseudo room type has no physical location — Building/Floor are skipped
+    // entirely, never just left blank by mistake.
+    let floorId: string | null = null;
+    if (!roomType.isPseudo) {
+      if (!body.floorId) {
+        return NextResponse.json({ error: "Floor is required for a physical room" }, { status: 400 });
+      }
+      const floor = await prisma.floor.findUnique({ where: { id: body.floorId }, include: { building: true } });
+      if (!floor || floor.building.propertyId !== body.propertyId) {
+        return NextResponse.json({ error: "Floor does not belong to this property" }, { status: 400 });
+      }
+      floorId = body.floorId;
+    }
+
+    const features = Array.isArray(body.features) ? body.features : [];
 
     const newRoom = await prisma.room.create({
       data: {
         propertyId: body.propertyId,
         roomTypeId: body.roomTypeId,
-        floorId: body.floorId,
+        floorId,
         roomNumber: body.roomNumber,
         status: (body.status as RoomStatus) || RoomStatus.CLEAN,
+        features: features.length > 0 && !roomType.isPseudo ? { create: features } : undefined,
       },
       include: {
-        roomType: true,
+        roomType: { include: { features: true } },
         floor: true,
+        features: true,
       }
     });
 

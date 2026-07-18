@@ -18,9 +18,10 @@ export async function GET(request: Request) {
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
 
-    // 1. Fetch all rooms for the property, grouped by room type
+    // 1. Fetch all rooms for the property, grouped by room type. Pseudo/virtual rooms
+    // have no floor at all, so they never belong on a physical tape chart.
     const rooms = await prisma.room.findMany({
-      where: { propertyId },
+      where: { propertyId, floorId: { not: null } },
       include: {
         roomType: true,
       },

@@ -200,6 +200,13 @@ model Property {
   // never shared across an enterprise's other properties.
   bannerColor     String?
 
+  // "Top level" inclusive/exclusive tax setting — applies to anything charged at this
+  // property unless a future transaction-level override says otherwise (not built yet).
+  // True: rates are tax-inclusive, so Green Tax/GST/Service Charge are reverse-calculated
+  // out of the posted amount. False: taxes are added on top. Deliberately per-property,
+  // not enterprise-wide — see src/components/controls/tax-manager.tsx.
+  pricesIncludeTaxes Boolean @default(true)
+
   buildings    Building[]
   facilities   Facility[]
   roomTypes    RoomType[]
@@ -209,6 +216,7 @@ model Property {
   groupBlocks  GroupBlock[]
   nightAudits  PropertyNightAuditLog[]
   workLocationUsers User[] @relation("UserWorkLocation")
+  sequences    PropertySequence[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -250,9 +258,42 @@ model RoomType {
   basePrice    Float    @default(0.0)
   description  String?
 
+  // Deactivating a room type blocks any *new* reservation from being assigned to it and
+  // cascades every one of its Room rows to status OUT_OF_SERVICE — but never deletes
+  // anything, so existing reservation and folio history stays intact. Re-activating does
+  // NOT auto-restore room status, since some rooms may have been OUT_OF_SERVICE for an
+  // unrelated reason beforehand.
+  isActive Boolean @default(true)
+
+  // Pseudo room types represent a dummy/virtual category (e.g. day-use, overbooking
+  // buffer). Rooms created under one skip Building/Floor assignment entirely (see
+  // Room.floorId) since they have no physical location — distinct from a real,
+  // sellable, physically-cleaned room type.
+  isPseudo Boolean @default(false)
+  // Controls whether Housekeeping/Maintenance features (task assignment, status
+  // workflows) are offered at all for rooms of this type. Off by default makes no
+  // sense for real rooms, so this defaults to true; a pseudo room type is the main
+  // case where an admin would turn it off.
+  housekeepingEnabled Boolean @default(true)
+
   rooms          Room[]
   calendars      PriceCalendar[]
   RoomAssignment RoomAssignment[]
+  // Room-specific features — Bed Type, View, and Amenities are all multi-select, drawn
+  // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
+  // ROOM_AMENITY). A single generalized join table instead of one column per category,
+  // since all three are "pick any number of codes from a category" in the same shape.
+  features RoomTypeFeature[]
+}
+
+model RoomTypeFeature {
+  id         String   @id @default(uuid())
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  category   String // BED_TYPE | ROOM_VIEW | ROOM_AMENITY — matches SystemCode.category
+  code       String
+
+  @@unique([roomTypeId, category, code])
 }
 
 // RoomStatus: CLEAN, DIRTY, INSPECTED, OUT_OF_ORDER, OUT_OF_SERVICE
@@ -262,8 +303,11 @@ model Room {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   roomTypeId String
   roomType   RoomType @relation(fields: [roomTypeId], references: [id])
-  floorId    String
-  floor      Floor    @relation(fields: [floorId], references: [id])
+  // Nullable — a room created under a Pseudo room type has no physical location, so it
+  // skips Building/Floor assignment entirely (enforced in src/app/api/rooms/route.ts,
+  // not here, since "which room types are pseudo" is a runtime lookup).
+  floorId    String?
+  floor      Floor?   @relation(fields: [floorId], references: [id])
 
   roomNumber     String
   status         String            @default("CLEAN")
@@ -274,8 +318,22 @@ model Room {
   maintenance    RoomMaintenance[]
   RoomAssignment RoomAssignment[]
   housekeepingTasks HousekeepingTask[]
+  // Additive on top of whatever the assigned RoomType.features already grants — e.g. a
+  // specific room within a Deluxe Ocean View type that also happens to have a Balcony
+  // not shared by every Deluxe Ocean View room.
+  features RoomFeature[]
 
   @@unique([propertyId, roomNumber])
+}
+
+model RoomFeature {
+  id     String @id @default(uuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  category String // BED_TYPE | ROOM_VIEW | ROOM_AMENITY — matches SystemCode.category
+  code     String
+
+  @@unique([roomId, category, code])
 }
 
 model TaxProfile {
@@ -304,8 +362,15 @@ model ChargeCode {
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code         String
   description  String
-  taxProfileId String
-  taxProfile   TaxProfile @relation(fields: [taxProfileId], references: [id])
+  // Grouping for reporting only — ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX |
+  // PAYMENT | SYSTEM.
+  category     String     @default("OTHERS")
+  // Whether this charge code applies the enterprise's own Maldives Tax config (Green
+  // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
+  // taxProfileId is only ever set when useDefaultTax is false.
+  useDefaultTax Boolean   @default(true)
+  taxProfileId String?
+  taxProfile   TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
   folioLineItems FolioLineItem[]
 
@@ -569,17 +634,21 @@ model EnterpriseSettings {
   invoiceFooterText   String?
   invoicePaymentTerms String?
 
-  // Maldives Green Tax Settings
-  greenTaxEnabled   Boolean  @default(true)
-  greenTaxAmount    Float    @default(6.00)
-  greenTaxExemptAge Int      @default(2)
+  // Maldives Green Tax Settings — charged per person per night, split by age band;
+  // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
+  greenTaxEnabled     Boolean  @default(true)
+  greenTaxAdultAmount Float    @default(12.00)
+  greenTaxChildAmount Float    @default(6.00)
+  greenTaxExemptAge   Int      @default(2)
 
-  // Maldives TGST and Service Charge Settings
+  // Maldives GST (formerly "TGST") and Service Charge Settings. Calculation order is
+  // fixed: Service Charge is a percentage of the base amount, then GST is a percentage
+  // of (base + Service Charge) — e.g. on a $100 base: SVC 10% = $10, GST 17% of $110 =
+  // $18.70. Not yet wired into any actual charge-posting logic (Night Audit/Folios).
   tgstEnabled          Boolean  @default(true)
-  tgstRate             Float    @default(16.00)
+  tgstRate             Float    @default(17.00)
   serviceChargeEnabled Boolean  @default(true)
   serviceChargeRate    Float    @default(10.00)
-  pricesIncludeTaxes   Boolean  @default(true)
 
   // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
   // NOTE: stored as plain text; do not build real email/file-transfer sending on top of
@@ -733,4 +802,21 @@ model PropertyNightAuditLog {
   totalPostings  Int
 
   status         String   @default("COMPLETED")
+}
+
+// Tracks the current sequential counter for a numbered document type — Registration No,
+// Proforma Folio, Tax Invoice, Receipt No. Deliberately doesn't manage prefixes/format
+// (see EnterpriseSettings.resConfirmPrefix for that pattern elsewhere); this is just the
+// plain integer count itself, per property. "Start from new sequence" in Controls sets
+// currentValue directly — actually incrementing it on each new document issued is not
+// wired up yet (belongs to whichever Phase 4/5 route actually creates these documents).
+model PropertySequence {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sequenceType String   // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO
+  currentValue Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([propertyId, sequenceType])
 }

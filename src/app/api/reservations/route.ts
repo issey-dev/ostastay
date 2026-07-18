@@ -96,11 +96,14 @@ export async function POST(request: Request) {
       if (!roomType || roomType.propertyId !== body.propertyId) {
         return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
       }
+      if (!roomType.isActive) {
+        return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
+      }
       if (!ratePlan || ratePlan.propertyId !== body.propertyId) {
         return NextResponse.json({ error: "Rate plan does not belong to this property" }, { status: 400 });
       }
-      if (a.roomId && (!room || room.propertyId !== body.propertyId)) {
-        return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 });
+      if (a.roomId && (!room || room.propertyId !== body.propertyId || room.status === "OUT_OF_SERVICE")) {
+        return NextResponse.json({ error: "Room does not belong to this property or is out of service" }, { status: 400 });
       }
     }
 

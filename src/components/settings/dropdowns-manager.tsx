@@ -1,12 +1,20 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, GripVertical, Trash2, ChevronUp, ChevronDown, Pencil, Check, X } from "lucide-react"
+import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +55,14 @@ export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
 
 export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
+]
+
+// Room-specific feature lists, assigned per Room Type (all multi-select) via the Room
+// Types form's Room Features picker.
+export const ROOM_FEATURE_LOV_CATEGORIES: DropdownCategory[] = [
+  { code: "BED_TYPE",     label: "Bed Type" },
+  { code: "ROOM_VIEW",    label: "View" },
+  { code: "ROOM_AMENITY", label: "Amenities" },
 ]
 
 export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { categories?: DropdownCategory[] }) {
@@ -163,25 +179,19 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Category Selector */}
-      <div className="flex items-end gap-4">
-        <div className="grid gap-2 w-96">
-          <Label className="text-sm font-medium">Category</Label>
-          <Select value={category} onValueChange={(val) => setCategory(val ?? "")}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select Category" />
-            </SelectTrigger>
-            <SelectContent className="min-w-[24rem]">
-              {categories.map(cat => (
-                <SelectItem key={cat.code} value={cat.code}>{cat.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <p className="text-sm text-muted-foreground pb-2">
-          {codes.length} item{codes.length !== 1 ? "s" : ""} in this list
-        </p>
-      </div>
+      {/* Category Switcher — a Select when there's only one category would just be a
+          single dead-end option, so tabs only render once there's more than one. */}
+      {categories.length > 1 ? (
+        <Tabs value={category} onValueChange={(val) => setCategory(val ?? category)}>
+          <TabsList className="flex-wrap h-auto">
+            {categories.map(cat => (
+              <TabsTrigger key={cat.code} value={cat.code}>{cat.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      ) : (
+        <Label className="text-sm font-medium">{currentCategoryLabel}</Label>
+      )}
 
       {/* Add New Item */}
       {feedback && (
@@ -219,116 +229,118 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
         </CardContent>
       </Card>
 
-      {/* Item List */}
-      <Card>
+      {/* Item List — a simple table, not a reorderable card stack */}
+      <Card className="overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Current {currentCategoryLabel} Options</CardTitle>
-          <CardDescription>Reorder items using arrows. The order here determines dropdown order throughout the system.</CardDescription>
+          <CardDescription>Use the arrows to reorder — that order is the dropdown order throughout the system.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {loading ? (
-              <div className="flex flex-col gap-2">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-14 bg-muted rounded-md animate-pulse" />
-                ))}
-              </div>
-            ) : codes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">No items found for <strong>{currentCategoryLabel}</strong>.</p>
-                <p className="text-xs mt-1">Add your first option using the form above.</p>
-              </div>
-            ) : (
-              codes.map((c, i) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between p-3 bg-muted border rounded-lg hover:bg-muted transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Reorder arrows */}
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => reorder(i, "up")}
-                        disabled={i === 0}
-                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reorder(i, "down")}
-                        disabled={i === codes.length - 1}
-                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Item content */}
-                    {editingId === c.id ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editValue}
-                          onChange={e => setEditValue(e.target.value)}
-                          className="h-8 w-48"
-                          autoFocus
-                          onKeyDown={e => {
-                            if (e.key === "Enter") handleInlineEdit(c.id)
-                            if (e.key === "Escape") setEditingId(null)
-                          }}
-                        />
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success" onClick={() => handleInlineEdit(c.id)}>
-                          <Check className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <p className="font-medium text-sm">{c.value}</p>
-                          <p className="text-xs text-muted-foreground">Code: {c.code}</p>
-                        </div>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                <TableHead className="w-16"></TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Display Value</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+              ) : codes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">No items found for <strong>{currentCategoryLabel}</strong>.</p>
+                    <p className="text-xs mt-1">Add your first option using the form above.</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                codes.map((c, i) => (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
                         <button
                           type="button"
-                          onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-muted-foreground transition-colors"
+                          onClick={() => reorder(i, "up")}
+                          disabled={i === 0}
+                          className="p-0.5 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         >
-                          <Pencil className="w-3 h-3" />
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => reorder(i, "down")}
+                          disabled={i === codes.length - 1}
+                          className="p-0.5 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Delete */}
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive-muted">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete &quot;{c.value}&quot;?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will remove &quot;{c.value}&quot; ({c.code}) from the {currentCategoryLabel} dropdown.
-                          Existing records using this code will not be affected.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              ))
-            )}
-          </div>
+                    </TableCell>
+                    <TableCell className="font-medium text-muted-foreground">{c.code}</TableCell>
+                    <TableCell>
+                      {editingId === c.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            className="h-8 w-48"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === "Enter") handleInlineEdit(c.id)
+                              if (e.key === "Escape") setEditingId(null)
+                            }}
+                          />
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success" onClick={() => handleInlineEdit(c.id)}>
+                            <Check className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{c.value}</span>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive-muted">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete &quot;{c.value}&quot;?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will remove &quot;{c.value}&quot; ({c.code}) from the {currentCategoryLabel} dropdown.
+                              Existing records using this code will not be affected.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

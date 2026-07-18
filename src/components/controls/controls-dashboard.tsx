@@ -12,6 +12,7 @@ import {
   Users,
   KeyRound,
   ShieldCheck,
+  Hash,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -19,18 +20,27 @@ import { InvoiceSettingsManager } from "@/components/settings/invoice-settings-m
 import { PropertiesManager } from "@/components/settings/properties-manager"
 import { FacilitiesManager } from "@/components/settings/facilities-manager"
 import { FacilityAmenitiesManager } from "@/components/settings/facility-amenities-manager"
-import { FinancialsManager } from "@/components/settings/financials-manager"
+import { TaxManager } from "@/components/controls/tax-manager"
+import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
-import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
+import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { LicensingManager } from "@/components/controls/licensing-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
 import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
 import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
+import { SequenceManager } from "@/components/controls/sequence-manager"
 
+// Two bugs, now both fixed at the root: (1) Base UI's Tabs primitive marks the active
+// tab with a bare `data-active` attribute, not shadcn's Radix-era `data-state="active"`
+// — targeting the wrong one used to be a silent no-op. (2) <TabsList> below now passes
+// variant="line", the component's own built-in underline style (transparent background,
+// no shadow, bottom indicator via an `after:` pseudo-element) — omitting that prop left
+// it on the default boxed-pill variant, which is what drew the full border/shadow box
+// around the active tab instead of just an underline.
 const TAB_TRIGGER_CLASS =
-  "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+  "data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
 
 // Config-array-driven sections, mirroring app-sidebar.tsx's `items` pattern — add a new
 // Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
@@ -78,6 +88,9 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           <ControlsCard title="Housekeeping Dropdowns" description="Lists used by Housekeeping and Maintenance operations.">
             <DropdownsManager categories={OPERATIONS_LOV_CATEGORIES} />
           </ControlsCard>
+          <ControlsCard title="Room Features" description="Bed Type, View, and Amenity options offered when configuring a Room Type.">
+            <DropdownsManager categories={ROOM_FEATURE_LOV_CATEGORIES} />
+          </ControlsCard>
         </div>
       ),
     },
@@ -87,8 +100,11 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       icon: Wallet,
       render: () => (
         <div className="space-y-6">
-          <ControlsCard title="Tax Profiles & Charge Codes" description="Configure VAT, City Tax, and system-wide transaction codes — used by Night Audit and Cashiering.">
-            <FinancialsManager />
+          <ControlsCard title="Tax" description="Configure Maldives Tax (Green Tax, GST, Service Charge) and any Custom Tax profiles.">
+            <TaxManager />
+          </ControlsCard>
+          <ControlsCard title="Charge Codes" description="System-wide transaction codes, grouped by category for reporting — used by Night Audit and Cashiering.">
+            <ChargeCodesManager />
           </ControlsCard>
           <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, or Bank Transfers.">
             <PaymentMethodsManager />
@@ -143,6 +159,19 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       render: () => (
         <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
           <GeneralSettingsManager />
+        </ControlsCard>
+      ),
+    },
+    {
+      key: "sequences",
+      label: "Sequences",
+      icon: Hash,
+      render: () => (
+        <ControlsCard
+          title="Sequence Manager"
+          description="Track and reset the current sequence number for Registration No, Proforma Folio, Tax Invoice, and Receipt No. This manages the plain number only — not prefixes or formatting."
+        >
+          <SequenceManager />
         </ControlsCard>
       ),
     },
@@ -204,7 +233,7 @@ export function ControlsDashboard({
       </div>
 
       <Tabs defaultValue={sections[0]?.key} className="w-full flex-col">
-        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6 flex-wrap">
+        <TabsList variant="line" className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-10 flex-wrap">
           {sections.map((s) => (
             <TabsTrigger key={s.key} value={s.key} className={TAB_TRIGGER_CLASS}>
               <s.icon className="w-4 h-4 mr-2" /> {s.label}

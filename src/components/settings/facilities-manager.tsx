@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { RoomTypeManager } from "@/components/inventory/room-type-manager"
 import { RoomManager } from "@/components/inventory/room-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BedDouble, Building2 } from "lucide-react"
+import { BedDouble, Building2, Map } from "lucide-react"
 
 export function FacilitiesManager() {
   const [propertyId, setPropertyId] = useState<string | null>(null)
@@ -35,15 +35,25 @@ export function FacilitiesManager() {
       <Tabs defaultValue="room-types" className="w-full">
         <TabsList className="bg-muted/50 mb-6">
           <TabsTrigger value="room-types"><BedDouble className="w-4 h-4 mr-2"/> Room Types</TabsTrigger>
-          <TabsTrigger value="buildings-floors-rooms"><Building2 className="w-4 h-4 mr-2"/> Buildings, Floors, & Rooms</TabsTrigger>
+          <TabsTrigger value="buildings"><Building2 className="w-4 h-4 mr-2"/> Buildings</TabsTrigger>
+          <TabsTrigger value="floors"><Map className="w-4 h-4 mr-2"/> Floors</TabsTrigger>
+          <TabsTrigger value="rooms"><BedDouble className="w-4 h-4 mr-2"/> Rooms</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="room-types" className="m-0">
           <RoomTypeManager propertyId={propertyId} />
         </TabsContent>
-        
-        <TabsContent value="buildings-floors-rooms" className="m-0">
-          <RoomManager propertyId={propertyId} />
+
+        <TabsContent value="buildings" className="m-0">
+          <RoomManager propertyId={propertyId} view="buildings" />
+        </TabsContent>
+
+        <TabsContent value="floors" className="m-0">
+          <RoomManager propertyId={propertyId} view="floors" />
+        </TabsContent>
+
+        <TabsContent value="rooms" className="m-0">
+          <RoomManager propertyId={propertyId} view="rooms" />
         </TabsContent>
       </Tabs>
     </div>

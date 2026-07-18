@@ -37,6 +37,12 @@ export async function PATCH(
       if (!newRoom || newRoom.propertyId !== assignment.reservation.propertyId) {
         return NextResponse.json({ error: "New room not found" }, { status: 404 });
       }
+      if (newRoom.status === "OUT_OF_SERVICE") {
+        return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+      }
+      if (!newRoom.roomType.isActive) {
+        return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
+      }
 
       // Check if new room is available for these dates
       // Overlap condition: existing.startDate < assignment.endDate AND existing.endDate > assignment.startDate

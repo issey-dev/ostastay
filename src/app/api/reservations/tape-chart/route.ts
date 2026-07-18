@@ -21,11 +21,13 @@ export async function GET(request: Request) {
     const days = parseInt(daysParam, 10);
     const endDate = endOfDay(addDays(startDate, days));
 
-    // Fetch all active rooms grouped by floor for this property
+    // Fetch all active rooms grouped by floor for this property. Pseudo/virtual rooms
+    // have no floor at all, so they never belong on a physical tape chart.
     const rooms = await prisma.room.findMany({
       where: {
         propertyId,
-        status: { not: "OUT_OF_SERVICE" }
+        status: { not: "OUT_OF_SERVICE" },
+        floorId: { not: null }
       },
       include: {
         floor: true,

@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const today = new Date()
     const serviceRate = settings?.serviceChargeEnabled ? (settings.serviceChargeRate / 100) : 0.0
     const tgstRateFraction = settings?.tgstEnabled ? (settings.tgstRate / 100) : 0.0
-    const pricesIncludeTaxes = settings?.pricesIncludeTaxes ?? false
+    const pricesIncludeTaxes = property.pricesIncludeTaxes
 
     let totalRoomRevenue = 0
     let totalTaxPosted = 0

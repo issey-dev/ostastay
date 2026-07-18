@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       where: {
         propertyId,
         roomTypeId,
+        status: { not: "OUT_OF_SERVICE" },
         // Exclude rooms that have any room assignment overlapping the requested dates
         NOT: {
           RoomAssignment: {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Save } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 import { useProperty } from "@/components/providers/property-provider"
 
 type PropertyDetail = {
@@ -21,6 +22,7 @@ type PropertyDetail = {
   contactPhone: string | null
   contactEmail: string | null
   starRating: number | null
+  pricesIncludeTaxes: boolean
 }
 
 // Edits the CURRENT property's own profile directly (name, code, times, logo, contact
@@ -117,6 +119,23 @@ export function PropertyProfileManager() {
         </div>
       </div>
       <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>
+
+      <div className="flex items-center justify-between rounded-md border border-border p-3">
+        <div>
+          <Label htmlFor="pricesIncludeTaxes">Prices Include Taxes</Label>
+          <p className="text-xs text-muted-foreground">
+            Top-level default for this property, applied to anything charged. On: Green Tax/GST/Service Charge are
+            reverse-calculated out of the posted amount. Off: taxes are added on top. (A future transaction-level
+            override is not available yet.)
+          </p>
+        </div>
+        <Switch
+          id="pricesIncludeTaxes"
+          checked={detail.pricesIncludeTaxes}
+          onCheckedChange={(checked) => setDetail({ ...detail, pricesIncludeTaxes: !!checked })}
+        />
+      </div>
+
       <div className="flex items-center gap-3 justify-end pt-4 border-t">
         {savedMsg && <span className="text-sm text-success">Saved</span>}
         <Button type="submit" disabled={saving}>

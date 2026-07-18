@@ -27,11 +27,15 @@ export async function PUT(
     requirePermission(ctx, "RESERVATIONS", "update");
 
     const { id } = await params;
-    const existing = await prisma.reservation.findUnique({ where: { id } });
+    const existing = await prisma.reservation.findUnique({
+      where: { id },
+      include: { assignments: { orderBy: { startDate: 'desc' }, take: 1 } },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, existing.propertyId);
+    const currentAssignment = existing.assignments[0];
 
     const body = await request.json();
 
@@ -63,11 +67,22 @@ export async function PUT(
     if (!roomType || roomType.propertyId !== existing.propertyId) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
     }
+    // Only enforced when the room type/room is actually changing — an existing
+    // reservation already sitting in a room whose type has since been deactivated can
+    // still be edited (name, dates, etc.) without being blocked by that.
+    const isChangingRoomType = data.roomTypeId !== currentAssignment?.roomTypeId;
+    const isChangingRoom = (data.roomId || null) !== (currentAssignment?.roomId || null);
+    if (isChangingRoomType && !roomType.isActive) {
+      return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
+    }
     if (!ratePlan || ratePlan.propertyId !== existing.propertyId) {
       return NextResponse.json({ error: "Rate plan does not belong to this property" }, { status: 400 });
     }
     if (data.roomId && (!room || room.propertyId !== existing.propertyId)) {
       return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 });
+    }
+    if (data.roomId && isChangingRoom && room?.status === "OUT_OF_SERVICE") {
+      return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
     }
 
     const updatedReservation = await prisma.reservation.update({

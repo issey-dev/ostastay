@@ -1,16 +1,25 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "update");
+
     const { id } = await params;
     const body = await request.json();
 
     if (!body.name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.taxProfile.findUnique({ where: { id } });
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
     }
 
     // Prepare update data
@@ -42,8 +51,8 @@ export async function PUT(
 
     return NextResponse.json(updatedTaxProfile);
   } catch (error) {
-    console.error("Failed to update tax profile:", error);
-    return NextResponse.json({ error: "Failed to update tax profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
@@ -52,7 +61,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "CONTROLS", "delete");
+
     const { id } = await params;
+    const existing = await prisma.taxProfile.findUnique({ where: { id } });
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
+    }
 
     await prisma.taxProfile.delete({
       where: { id },
@@ -60,7 +76,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("Failed to delete tax profile:", error);
-    return NextResponse.json({ error: "Failed to delete tax profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

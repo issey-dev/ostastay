@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { RoomFeaturePicker, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import {
   Table,
   TableBody,
@@ -31,6 +33,10 @@ type RoomType = {
   maxOccupancy: number
   basePrice: number
   description?: string
+  isActive: boolean
+  isPseudo: boolean
+  housekeepingEnabled: boolean
+  features: RoomFeature[]
 }
 
 export function RoomTypeManager({ propertyId }: { propertyId: string }) {
@@ -50,6 +56,10 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
     maxOccupancy: "2",
     basePrice: "100.00",
     description: "",
+    isInactive: false,
+    isPseudo: false,
+    housekeepingEnabled: true,
+    features: [] as RoomFeature[],
   })
 
   const fetchRoomTypes = () => {
@@ -84,6 +94,10 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           maxOccupancy: parseInt(formData.maxOccupancy),
           basePrice: parseFloat(formData.basePrice),
           description: formData.description || undefined,
+          isActive: !formData.isInactive,
+          isPseudo: formData.isPseudo,
+          housekeepingEnabled: formData.housekeepingEnabled,
+          features: formData.features,
         }),
       })
 
@@ -121,7 +135,10 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
   }
 
   const resetForm = () => {
-    setFormData({ name: "", code: "", maxOccupancy: "2", basePrice: "100.00", description: "" })
+    setFormData({
+      name: "", code: "", maxOccupancy: "2", basePrice: "100.00", description: "",
+      isInactive: false, isPseudo: false, housekeepingEnabled: true, features: [],
+    })
     setIsEditMode(false)
     setEditingId(null)
   }
@@ -133,6 +150,10 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
       maxOccupancy: rt.maxOccupancy.toString(),
       basePrice: rt.basePrice.toString(),
       description: rt.description || "",
+      isInactive: !rt.isActive,
+      isPseudo: rt.isPseudo,
+      housekeepingEnabled: rt.housekeepingEnabled,
+      features: (rt.features || []).map((f) => ({ category: f.category, code: f.code })),
     })
     setIsEditMode(true)
     setEditingId(rt.id)
@@ -158,7 +179,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
             <Plus className="mr-2 h-4 w-4" /> Add Room Type
           </Button>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Edit Room Type" : "Create Room Type"}</DialogTitle>
@@ -169,56 +190,89 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="name">Type Name</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="e.g. Deluxe Ocean View" 
+                  <Input
+                    id="name"
+                    placeholder="e.g. Deluxe Ocean View"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required 
+                    required
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="code">Code</Label>
-                    <Input 
-                      id="code" 
-                      placeholder="e.g. DLX" 
+                    <Input
+                      id="code"
+                      placeholder="e.g. DLX"
                       value={formData.code}
                       onChange={(e) => setFormData({...formData, code: e.target.value})}
-                      required 
+                      required
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="maxOccupancy">Max Occupancy</Label>
-                    <Input 
-                      id="maxOccupancy" 
-                      type="number" 
-                      min="1" 
+                    <Input
+                      id="maxOccupancy"
+                      type="number"
+                      min="1"
                       value={formData.maxOccupancy}
                       onChange={(e) => setFormData({...formData, maxOccupancy: e.target.value})}
-                      required 
+                      required
                     />
                   </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="basePrice">Default Base Price</Label>
-                  <Input 
-                    id="basePrice" 
-                    type="number" 
-                    step="0.01" 
+                  <Input
+                    id="basePrice"
+                    type="number"
+                    step="0.01"
                     min="0"
                     value={formData.basePrice}
                     onChange={(e) => setFormData({...formData, basePrice: e.target.value})}
-                    required 
+                    required
                   />
+                  <p className="text-xs text-muted-foreground">Charged per night whenever a reservation has no rate plan/calendar price selected — flat, regardless of adult/child count.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description (Optional)</Label>
-                  <Input 
-                    id="description" 
-                    placeholder="Brief description of the room amenities" 
+                  <Input
+                    id="description"
+                    placeholder="Brief description of the room amenities"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border border-border p-3">
+                  <div>
+                    <Label htmlFor="isInactive">Inactive</Label>
+                    <p className="text-xs text-muted-foreground">No new reservations can be made for this room type. All of its rooms are taken out of service (history is preserved).</p>
+                  </div>
+                  <Switch id="isInactive" checked={formData.isInactive} onCheckedChange={(checked) => setFormData({ ...formData, isInactive: !!checked })} />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border border-border p-3">
+                  <div>
+                    <Label htmlFor="isPseudo">Pseudo Room Type</Label>
+                    <p className="text-xs text-muted-foreground">Dummy category with no physical room attached (e.g. day-use, overbooking buffer).</p>
+                  </div>
+                  <Switch id="isPseudo" checked={formData.isPseudo} onCheckedChange={(checked) => setFormData({ ...formData, isPseudo: !!checked })} />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border border-border p-3">
+                  <div>
+                    <Label htmlFor="housekeepingEnabled">Housekeeping Enabled</Label>
+                    <p className="text-xs text-muted-foreground">Off hides Housekeeping/Maintenance options for rooms of this type.</p>
+                  </div>
+                  <Switch id="housekeepingEnabled" checked={formData.housekeepingEnabled} onCheckedChange={(checked) => setFormData({ ...formData, housekeepingEnabled: !!checked })} />
+                </div>
+
+                <div className="border-t border-border pt-4 mt-2">
+                  <h4 className="text-sm font-semibold text-foreground mb-3">Room Features</h4>
+                  <RoomFeaturePicker
+                    selected={formData.features}
+                    onChange={(next) => setFormData({ ...formData, features: next })}
                   />
                 </div>
               </div>
@@ -258,17 +312,18 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Base Price</TableHead>
+              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">Loading...</TableCell>
+                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Loading...</TableCell>
               </TableRow>
             ) : roomTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                   No room types found. Create one to get started.
                 </TableCell>
               </TableRow>
@@ -279,20 +334,34 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                   <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">${rt.basePrice.toFixed(2)}</TableCell>
+                  <TableCell className="px-6 py-4 text-muted-foreground">
+                    <div className="flex gap-1.5">
+                      {!rt.isActive && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
+                      )}
+                      {rt.isPseudo && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                      )}
+                      {!rt.housekeepingEnabled && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
+                      )}
+                      {rt.isActive && !rt.isPseudo && rt.housekeepingEnabled && "—"}
+                    </div>
+                  </TableCell>
                   <TableCell className="px-6 py-4 text-right">
                     <div className="flex gap-2 transition-opacity" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="text-primary"
                         onClick={() => openEdit(rt)}
                       >
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="text-destructive"
                         onClick={() => openDelete(rt.id)}
                       >

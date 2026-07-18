@@ -13,7 +13,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 })
     }
 
-    const whereClause: any = { propertyId }
+    // Pseudo/virtual rooms have no floor at all, so they never belong on the
+    // housekeeping board.
+    const whereClause: any = { propertyId, floorId: { not: null } }
     if (floorId) {
       whereClause.floorId = floorId
     }

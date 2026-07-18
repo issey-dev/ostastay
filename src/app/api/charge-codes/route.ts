@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
+const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "PAYMENT", "SYSTEM"];
+
 export async function GET() {
   try {
     const ctx = await requireSession();
@@ -34,13 +36,24 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    if (!body.code || !body.description || !body.taxProfileId) {
+    if (!body.code || !body.description || !body.category) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    if (!CATEGORIES.includes(body.category)) {
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+    }
 
-    const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
-    if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
-      return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
+    const useDefaultTax = body.useDefaultTax !== undefined ? !!body.useDefaultTax : true;
+    let taxProfileId: string | null = null;
+    if (!useDefaultTax) {
+      if (!body.taxProfileId) {
+        return NextResponse.json({ error: "A Custom Tax profile is required when not using the default tax" }, { status: 400 });
+      }
+      const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
+      if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
+      }
+      taxProfileId = body.taxProfileId;
     }
 
     const newChargeCode = await prisma.chargeCode.create({
@@ -48,7 +61,9 @@ export async function POST(request: Request) {
         enterpriseId: ctx.enterpriseId,
         code: body.code.toUpperCase(),
         description: body.description,
-        taxProfileId: body.taxProfileId,
+        category: body.category,
+        useDefaultTax,
+        taxProfileId,
       },
       include: {
         taxProfile: true

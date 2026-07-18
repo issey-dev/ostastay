@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       const serviceRate = settings.serviceChargeEnabled ? (settings.serviceChargeRate / 100) : 0.0;
       const tgstRateFraction = settings.tgstEnabled ? (settings.tgstRate / 100) : 0.0;
 
-      if (settings.pricesIncludeTaxes) {
+      if (folio.reservation.property.pricesIncludeTaxes) {
         // Extract taxes (tax-inclusive rate)
         baseAmount = inputAmount / ((1 + serviceRate) * (1 + tgstRateFraction));
         serviceChargeAmount = baseAmount * serviceRate;

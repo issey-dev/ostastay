@@ -43,10 +43,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!roomType || roomType.propertyId !== group.propertyId) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 })
     }
+    if (!roomType.isActive) {
+      return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 })
+    }
     if (roomId) {
       const room = await prisma.room.findUnique({ where: { id: roomId } })
-      if (!room || room.propertyId !== group.propertyId) {
-        return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 })
+      if (!room || room.propertyId !== group.propertyId || room.status === "OUT_OF_SERVICE") {
+        return NextResponse.json({ error: "Room does not belong to this property or is out of service" }, { status: 400 })
       }
     }
 

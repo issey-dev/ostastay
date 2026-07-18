@@ -13,7 +13,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json()
 
-    if (!body.roomNumber || !body.roomTypeId || !body.floorId) {
+    if (!body.roomNumber || !body.roomTypeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -23,27 +23,44 @@ export async function PUT(
     }
     await assertPropertyAccess(ctx, existing.propertyId)
 
-    const [roomType, floor] = await Promise.all([
-      prisma.roomType.findUnique({ where: { id: body.roomTypeId } }),
-      prisma.floor.findUnique({ where: { id: body.floorId }, include: { building: true } }),
-    ])
+    const roomType = await prisma.roomType.findUnique({ where: { id: body.roomTypeId } })
     if (!roomType || roomType.propertyId !== existing.propertyId) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 })
     }
-    if (!floor || floor.building.propertyId !== existing.propertyId) {
-      return NextResponse.json({ error: "Floor does not belong to this property" }, { status: 400 })
+
+    // A Pseudo room type has no physical location — Building/Floor are skipped
+    // entirely, never just left blank by mistake.
+    let floorId: string | null = null
+    if (!roomType.isPseudo) {
+      if (!body.floorId) {
+        return NextResponse.json({ error: "Floor is required for a physical room" }, { status: 400 })
+      }
+      const floor = await prisma.floor.findUnique({ where: { id: body.floorId }, include: { building: true } })
+      if (!floor || floor.building.propertyId !== existing.propertyId) {
+        return NextResponse.json({ error: "Floor does not belong to this property" }, { status: 400 })
+      }
+      floorId = body.floorId
     }
+
+    const features = Array.isArray(body.features) ? body.features : undefined
 
     const room = await prisma.room.update({
       where: { id: id },
       data: {
         roomNumber: body.roomNumber,
         roomTypeId: body.roomTypeId,
-        floorId: body.floorId,
+        floorId,
+        ...(features !== undefined && {
+          features: {
+            deleteMany: {},
+            create: roomType.isPseudo ? [] : features,
+          },
+        }),
       },
       include: {
-        roomType: true,
+        roomType: { include: { features: true } },
         floor: true,
+        features: true,
       }
     })
 

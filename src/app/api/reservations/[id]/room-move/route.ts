@@ -49,10 +49,16 @@ export async function POST(
     if (!newRoom || newRoom.propertyId !== currentRes.propertyId) {
       return NextResponse.json({ error: "New room not found" }, { status: 404 });
     }
+    if (newRoom.status === "OUT_OF_SERVICE") {
+      return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+    }
 
     const newRoomType = await prisma.roomType.findUnique({ where: { id: newRoomTypeId } });
     if (!newRoomType || newRoomType.propertyId !== currentRes.propertyId) {
       return NextResponse.json({ error: "New room type not found" }, { status: 404 });
+    }
+    if (!newRoomType.isActive) {
+      return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
     }
 
     // 3. Perform the room move transaction

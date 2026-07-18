@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { statusMutedClasses } from "@/lib/status-tone"
+import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, groupFeaturesByCategory, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import {
   Select,
   SelectContent,
@@ -32,7 +33,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 
-export function RoomManager({ propertyId }: { propertyId: string }) {
+export function RoomManager({ propertyId, view }: { propertyId: string; view: "buildings" | "floors" | "rooms" }) {
   const [buildings, setBuildings] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
@@ -58,7 +59,7 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
   // Form states
   const [buildingName, setBuildingName] = useState("")
   const [floorData, setFloorData] = useState({ name: "", buildingId: "" })
-  const [roomData, setRoomData] = useState({ roomNumber: "", floorId: "", roomTypeId: "" })
+  const [roomData, setRoomData] = useState({ roomNumber: "", buildingId: "", floorId: "", roomTypeId: "", features: [] as RoomFeature[] })
 
   const [isRoomEditMode, setIsRoomEditMode] = useState(false)
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
@@ -185,16 +186,26 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
     setIsFloorDeleteDialogOpen(true)
   }
 
+  const selectedRoomRoomType = roomTypes.find(rt => rt.id === roomData.roomTypeId)
+  const isPseudoRoom = !!selectedRoomRoomType?.isPseudo
+  const inheritedFeatures: RoomFeature[] = selectedRoomRoomType?.features || []
+
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const url = isRoomEditMode ? `/api/rooms/${editingRoomId}` : "/api/rooms"
     const method = isRoomEditMode ? "PUT" : "POST"
 
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...roomData, propertyId })
+      body: JSON.stringify({
+        propertyId,
+        roomNumber: roomData.roomNumber,
+        roomTypeId: roomData.roomTypeId,
+        floorId: isPseudoRoom ? null : roomData.floorId,
+        features: isPseudoRoom ? [] : roomData.features,
+      })
     })
     if (res.ok) {
       resetRoomForm()
@@ -214,16 +225,19 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
   }
 
   const resetRoomForm = () => {
-    setRoomData({ roomNumber: "", floorId: "", roomTypeId: "" })
+    setRoomData({ roomNumber: "", buildingId: "", floorId: "", roomTypeId: "", features: [] })
     setIsRoomEditMode(false)
     setEditingRoomId(null)
   }
 
   const openRoomEdit = (room: any) => {
+    const floor = allFloors.find(f => f.id === room.floorId)
     setRoomData({
       roomNumber: room.roomNumber,
+      buildingId: floor?.buildingId || "",
       floorId: room.floorId || "",
       roomTypeId: room.roomTypeId || "",
+      features: (room.features || []).map((f: any) => ({ category: f.category, code: f.code })),
     })
     setIsRoomEditMode(true)
     setEditingRoomId(room.id)
@@ -235,12 +249,18 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
     setIsRoomDeleteDialogOpen(true)
   }
 
-  // Get all floors across all buildings for the room creation dropdown
+  // Get all floors across all buildings for the room edit form (looking up a room's
+  // existing floor by id, regardless of which building it belongs to)
   const allFloors = buildings.flatMap(b => b.floors || [])
+  // The Floor select is dependent on which Building is selected — only that building's own floors
+  const floorsForSelectedBuilding: any[] = buildings.find(b => b.id === roomData.buildingId)?.floors || []
+  const { options: featureOptions } = useRoomFeatureOptions()
+  const featureLabel = (f: RoomFeature) => featureOptions.find(o => o.category === f.category && o.code === f.code)?.value || f.code
 
   return (
-    <div className="flex flex-col gap-6 mt-6">
-      
+    <div className="mt-6">
+    {view === "buildings" && (
+      <>
       {/* Buildings Table */}
       <Card className="overflow-hidden">
         <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
@@ -320,7 +340,11 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
           </Table>
         </CardContent>
       </Card>
+      </>
+    )}
 
+    {view === "floors" && (
+      <>
       {/* Floors Table */}
       <Card className="overflow-hidden">
         <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
@@ -419,11 +443,15 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
           </Table>
         </CardContent>
       </Card>
+      </>
+    )}
 
+    {view === "rooms" && (
+      <>
       <Card className="overflow-hidden">
         <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
           <div>
-            <CardTitle className="text-lg">Physical Rooms</CardTitle>
+            <CardTitle className="text-lg">Rooms</CardTitle>
             <CardDescription>Manage individual rooms and assign them to floors.</CardDescription>
           </div>
           <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
@@ -433,7 +461,7 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
             <Button onClick={() => setIsRoomDialogOpen(true)} className="shadow-sm">
               <Plus className="mr-2 h-4 w-4" /> Add Room
             </Button>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
               <form onSubmit={handleCreateRoom}>
                 <DialogHeader><DialogTitle>{isRoomEditMode ? "Edit Room" : "Create Room"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
@@ -441,34 +469,88 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
                     <Label>Room Number / Name</Label>
                     <Input value={roomData.roomNumber} onChange={e => setRoomData({...roomData, roomNumber: e.target.value})} placeholder="e.g. 101" required />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Floor</Label>
-                      <Select value={roomData.floorId} onValueChange={(v) => setRoomData({...roomData, floorId: v ?? ""})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Floor">
-                            {roomData.floorId ? allFloors.find(f => f.id === roomData.floorId)?.name : "Select Floor"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allFloors.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Room Type</Label>
-                      <Select value={roomData.roomTypeId} onValueChange={(v) => setRoomData({...roomData, roomTypeId: v ?? ""})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Type">
-                            {roomData.roomTypeId ? roomTypes.find(rt => rt.id === roomData.roomTypeId)?.name : "Select Type"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roomTypes.map(rt => <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Room Type</Label>
+                    <Select
+                      value={roomData.roomTypeId}
+                      onValueChange={(v) => setRoomData({...roomData, roomTypeId: v ?? "", buildingId: "", floorId: "", features: []})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Type">
+                          {roomData.roomTypeId ? roomTypes.find(rt => rt.id === roomData.roomTypeId)?.name : "Select Type"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roomTypes.map(rt => <SelectItem key={rt.id} value={rt.id}>{rt.name}{rt.isPseudo ? " (Pseudo)" : ""}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {isPseudoRoom ? (
+                    <p className="text-xs text-muted-foreground rounded-md border border-border p-3">
+                      This is a Pseudo room type — it has no physical location, so Building, Floor, and Room Features aren't applicable.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Building</Label>
+                          <Select
+                            value={roomData.buildingId}
+                            onValueChange={(v) => setRoomData({...roomData, buildingId: v ?? "", floorId: ""})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Building">
+                                {roomData.buildingId ? buildings.find(b => b.id === roomData.buildingId)?.name : "Select Building"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Floor</Label>
+                          <Select
+                            value={roomData.floorId}
+                            onValueChange={(v) => setRoomData({...roomData, floorId: v ?? ""})}
+                            disabled={!roomData.buildingId}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={roomData.buildingId ? "Select Floor" : "Select a building first"}>
+                                {roomData.floorId ? floorsForSelectedBuilding.find(f => f.id === roomData.floorId)?.name : undefined}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {floorsForSelectedBuilding.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-border pt-4">
+                        <h4 className="text-sm font-semibold text-foreground mb-2">Room Features</h4>
+                        {inheritedFeatures.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-muted-foreground mb-1">Inherited from Room Type (fixed here):</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {inheritedFeatures.map((f) => (
+                                <span key={`${f.category}:${f.code}`} className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">
+                                  {ROOM_FEATURE_CATEGORY_LABELS[f.category]}: {featureLabel(f)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground mb-2">Additional features specific to this room:</p>
+                        <RoomFeaturePicker
+                          selected={roomData.features}
+                          onChange={(next) => setRoomData({ ...roomData, features: next })}
+                          excluded={inheritedFeatures}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsRoomDialogOpen(false)}>Cancel</Button>
@@ -520,8 +602,13 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
                 rooms.map((room) => (
                   <TableRow key={room.id} className="hover:bg-muted/40">
                     <TableCell className="px-6 py-4 font-bold text-foreground">{room.roomNumber}</TableCell>
-                    <TableCell className="px-6 py-4 text-muted-foreground">{room.floor?.name}</TableCell>
-                    <TableCell className="px-6 py-4 text-muted-foreground">{room.roomType?.name}</TableCell>
+                    <TableCell className="px-6 py-4 text-muted-foreground">{room.floor?.name || "—"}</TableCell>
+                    <TableCell className="px-6 py-4 text-muted-foreground">
+                      {room.roomType?.name}
+                      {room.roomType?.isPseudo && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                      )}
+                    </TableCell>
                     <TableCell className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${statusMutedClasses(room.status)}`}>
                         {room.status.replace(/_/g, ' ')}
@@ -556,6 +643,8 @@ export function RoomManager({ propertyId }: { propertyId: string }) {
           </Table>
         </CardContent>
       </Card>
+      </>
+    )}
     </div>
   )
 }

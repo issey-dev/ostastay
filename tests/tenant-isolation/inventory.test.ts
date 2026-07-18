@@ -209,7 +209,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat", description: "VAT", taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ code: "vat", description: "VAT", category: "TAX", useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );
@@ -225,6 +225,8 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
           body: JSON.stringify({
             code: "vat-a",
             description: "VAT A",
+            category: "TAX",
+            useDefaultTax: false,
             taxProfileId: taxProfileAId,
             enterpriseId: "some-other-enterprise-id",
           }),
@@ -243,7 +245,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat-b", description: "VAT B", taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ code: "vat-b", description: "VAT B", category: "TAX", useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );

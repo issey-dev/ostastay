@@ -12,14 +12,6 @@ export function GeneralSettingsManager() {
   const [formData, setFormData] = useState({
     resConfirmPrefix: "",
     resConfirmLength: 6,
-    greenTaxEnabled: true,
-    greenTaxAmount: 6.00,
-    greenTaxExemptAge: 2,
-    tgstEnabled: true,
-    tgstRate: 16.00,
-    serviceChargeEnabled: true,
-    serviceChargeRate: 10.00,
-    pricesIncludeTaxes: true
   })
 
   useEffect(() => {
@@ -35,14 +27,6 @@ export function GeneralSettingsManager() {
         setFormData({
           resConfirmPrefix: data.resConfirmPrefix || "",
           resConfirmLength: data.resConfirmLength || 6,
-          greenTaxEnabled: data.greenTaxEnabled !== undefined ? data.greenTaxEnabled : true,
-          greenTaxAmount: data.greenTaxAmount !== undefined ? data.greenTaxAmount : 6.00,
-          greenTaxExemptAge: data.greenTaxExemptAge !== undefined ? data.greenTaxExemptAge : 2,
-          tgstEnabled: data.tgstEnabled !== undefined ? data.tgstEnabled : true,
-          tgstRate: data.tgstRate !== undefined ? data.tgstRate : 16.00,
-          serviceChargeEnabled: data.serviceChargeEnabled !== undefined ? data.serviceChargeEnabled : true,
-          serviceChargeRate: data.serviceChargeRate !== undefined ? data.serviceChargeRate : 10.00,
-          pricesIncludeTaxes: data.pricesIncludeTaxes !== undefined ? data.pricesIncludeTaxes : true
         })
       }
     } catch (e) {

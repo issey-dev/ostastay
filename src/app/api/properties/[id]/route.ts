@@ -40,6 +40,7 @@ export async function PUT(
         contactEmail: body.contactEmail,
         starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
         bannerColor: body.bannerColor,
+        pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
       },
     })
 

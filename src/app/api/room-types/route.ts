@@ -3,6 +3,11 @@ import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
 
+const featureSchema = z.object({
+  category: z.enum(["BED_TYPE", "ROOM_VIEW", "ROOM_AMENITY"]),
+  code: z.string().min(1),
+})
+
 const createSchema = z.object({
   propertyId: z.string().uuid(),
   name: z.string().min(2),
@@ -10,6 +15,10 @@ const createSchema = z.object({
   maxOccupancy: z.number().int().positive(),
   basePrice: z.number().nonnegative(),
   description: z.string().optional(),
+  isActive: z.boolean().optional(),
+  isPseudo: z.boolean().optional(),
+  housekeepingEnabled: z.boolean().optional(),
+  features: z.array(featureSchema).optional(),
 })
 
 export async function GET(request: Request) {
@@ -25,6 +34,7 @@ export async function GET(request: Request) {
 
     const roomTypes = await prisma.roomType.findMany({
       where: { propertyId },
+      include: { features: true },
       orderBy: { name: 'asc' },
     })
 
@@ -41,11 +51,15 @@ export async function POST(request: Request) {
     requirePermission(ctx, 'CONTROLS', 'create')
 
     const json = await request.json()
-    const data = createSchema.parse(json)
+    const { features, ...data } = createSchema.parse(json)
     await assertPropertyAccess(ctx, data.propertyId)
 
     const roomType = await prisma.roomType.create({
-      data,
+      data: {
+        ...data,
+        features: features && features.length > 0 ? { create: features } : undefined,
+      },
+      include: { features: true },
     })
 
     return NextResponse.json(roomType, { status: 201 })
