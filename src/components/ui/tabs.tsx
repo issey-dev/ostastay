@@ -1,25 +1,60 @@
 "use client"
 
+import * as React from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Base UI 1.6.0's Panel only hides itself once its CSS exit "animation" completes
+// (useOpenChangeComplete -> useAnimationsFinished) — but with no transition/animation
+// ever defined on TabsContent, that completion callback never fires, so a panel that
+// has been shown once never gets hidden again: every previously-visited tab's content
+// stays mounted and visible underneath the current one forever. Reproducible with any
+// <Tabs> in this app where a user switches between 2+ tabs in the same instance.
+// Fixed once here rather than per call site: Tabs tracks the active value itself
+// (mirroring whichever mode the consumer uses — controlled `value` or uncontrolled
+// `defaultValue`) and hands it to TabsContent via context, which unmounts inactive
+// panels directly via React instead of waiting on Panel's broken exit lifecycle.
+// TabsTrigger/TabsList are unaffected by this bug — their active-state styling is a
+// plain `data-active` CSS selector, no mount/animation lifecycle involved.
+const TabsActiveValueContext = React.createContext<unknown>(undefined)
+
 function Tabs({
   className,
   orientation = "horizontal",
+  value,
+  defaultValue,
+  onValueChange,
   ...props
 }: TabsPrimitive.Root.Props) {
+  const [activeValue, setActiveValue] = React.useState<unknown>(value ?? defaultValue ?? null)
+
+  // Controlled mode: stay in sync whenever the consumer's own value changes.
+  React.useEffect(() => {
+    if (value !== undefined) setActiveValue(value)
+  }, [value])
+
   return (
-    <TabsPrimitive.Root
-      data-slot="tabs"
-      data-orientation={orientation}
-      className={cn(
-        "group/tabs flex gap-2 data-horizontal:flex-col",
-        className
-      )}
-      {...props}
-    />
+    <TabsActiveValueContext.Provider value={activeValue}>
+      <TabsPrimitive.Root
+        data-slot="tabs"
+        data-orientation={orientation}
+        orientation={orientation}
+        value={value}
+        defaultValue={defaultValue}
+        onValueChange={(newValue, eventDetails) => {
+          // Uncontrolled mode: this is the only place the new value is observed.
+          setActiveValue(newValue)
+          onValueChange?.(newValue, eventDetails)
+        }}
+        className={cn(
+          "group/tabs flex gap-2 data-horizontal:flex-col",
+          className
+        )}
+        {...props}
+      />
+    </TabsActiveValueContext.Provider>
   )
 }
 
@@ -69,10 +104,16 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   )
 }
 
-function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
+function TabsContent({ className, value, ...props }: TabsPrimitive.Panel.Props) {
+  const activeValue = React.useContext(TabsActiveValueContext)
+  // Unmount inactive panels directly via React (see the note above Tabs) instead of
+  // trusting Panel's own hidden-once-animation-completes lifecycle, which never
+  // completes when no CSS transition is defined.
+  if (value !== activeValue) return null
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
+      value={value}
       className={cn("flex-1 text-sm outline-none", className)}
       {...props}
     />

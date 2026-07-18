@@ -1,6 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useDeviceTier } from "@/hooks/use-mobile"
 import {
   MonitorPlay,
   Boxes,
@@ -13,6 +17,9 @@ import {
   KeyRound,
   ShieldCheck,
   Hash,
+  ArrowLeft,
+  ChevronRight,
+  Store,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -20,6 +27,7 @@ import { InvoiceSettingsManager } from "@/components/settings/invoice-settings-m
 import { PropertiesManager } from "@/components/settings/properties-manager"
 import { FacilitiesManager } from "@/components/settings/facilities-manager"
 import { FacilityAmenitiesManager } from "@/components/settings/facility-amenities-manager"
+import { OutletsManager } from "@/components/controls/outlets-manager"
 import { TaxManager } from "@/components/controls/tax-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
@@ -32,15 +40,15 @@ import { PropertyBannerColorManager } from "@/components/controls/property-banne
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 import { SequenceManager } from "@/components/controls/sequence-manager"
 
-// Two bugs, now both fixed at the root: (1) Base UI's Tabs primitive marks the active
-// tab with a bare `data-active` attribute, not shadcn's Radix-era `data-state="active"`
-// — targeting the wrong one used to be a silent no-op. (2) <TabsList> below now passes
-// variant="line", the component's own built-in underline style (transparent background,
-// no shadow, bottom indicator via an `after:` pseudo-element) — omitting that prop left
-// it on the default boxed-pill variant, which is what drew the full border/shadow box
-// around the active tab instead of just an underline.
-const TAB_TRIGGER_CLASS =
-  "data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+// Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
+// Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
+// not shadcn's Radix-era `data-state="active"`. variant="line" on the parent
+// <TabsList> gives a thin right-edge indicator instead of a boxed pill (see
+// tabs.tsx's group-data-vertical rules) — kept deliberately understated so this
+// primary nav reads differently from the "segmented control" pill tabs used inside
+// individual sections (Tax, Property Architecture, dropdown categories).
+const SIDEBAR_TRIGGER_CLASS =
+  "data-active:text-primary dark:data-active:text-primary rounded-md px-3 py-2 font-medium text-muted-foreground"
 
 // Config-array-driven sections, mirroring app-sidebar.tsx's `items` pattern — add a new
 // Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
@@ -82,14 +90,26 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           <ControlsCard title="Property Architecture" description="Manage your global buildings, floors, and room types.">
             <FacilitiesManager />
           </ControlsCard>
-          <ControlsCard title="Amenities" description="Facility amenities shown on a property's guest-facing profile (Pool, Gym, Spa, etc).">
-            <FacilityAmenitiesManager />
-          </ControlsCard>
           <ControlsCard title="Housekeeping Dropdowns" description="Lists used by Housekeeping and Maintenance operations.">
             <DropdownsManager categories={OPERATIONS_LOV_CATEGORIES} />
           </ControlsCard>
           <ControlsCard title="Room Features" description="Bed Type, View, and Amenity options offered when configuring a Room Type.">
             <DropdownsManager categories={ROOM_FEATURE_LOV_CATEGORIES} />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    {
+      key: "outlets",
+      label: "Outlets",
+      icon: Store,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Outlets" description="Spa, restaurant, and other revenue-generating points of sale — each curates its own set of charge codes and can override tax handling.">
+            <OutletsManager />
+          </ControlsCard>
+          <ControlsCard title="Amenities" description="Facility amenities shown on a property's guest-facing profile (Pool, Gym, Spa, etc).">
+            <FacilityAmenitiesManager />
           </ControlsCard>
         </div>
       ),
@@ -212,6 +232,28 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
   ]
 }
 
+// Shared row for the mobile drill-down list screen — full-width tappable row with
+// a chevron affordance, used for both the primary and Osta-internal section lists.
+function MobileSectionRow({
+  section,
+  onSelect,
+}: {
+  section: ControlsSection
+  onSelect: (key: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(section.key)}
+      className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium hover:bg-muted/50 active:bg-muted"
+    >
+      <section.icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1">{section.label}</span>
+      <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+}
+
 export function ControlsDashboard({
   isInternal,
   actorScope,
@@ -222,27 +264,129 @@ export function ControlsDashboard({
   actorPropertyId: string | null
 }) {
   const sections = buildSections(isInternal, actorScope, actorPropertyId).filter((s) => !s.ostaOnly || isInternal)
+  const primarySections = sections.filter((s) => !s.ostaOnly)
+  const internalSections = sections.filter((s) => s.ostaOnly)
 
+  const tier = useDeviceTier()
+  const [activeKey, setActiveKey] = useState<string | undefined>(sections[0]?.key)
+  const [mobileDrilledIn, setMobileDrilledIn] = useState(false)
+
+  const header = (
+    <div>
+      <h2 className="text-3xl font-bold tracking-tight">Controls</h2>
+      <p className="text-muted-foreground">
+        Manage your enterprise, properties, taxes, users, and integrations here.
+      </p>
+    </div>
+  )
+
+  const selectMobileSection = (key: string) => {
+    setActiveKey(key)
+    setMobileDrilledIn(true)
+  }
+
+  // Pre-hydration: render the correct layout silhouette with pure CSS (Tailwind's
+  // own md: breakpoint) instead of guessing a tier in JS, so there's no flash once
+  // useDeviceTier() resolves on the client.
+  if (tier === undefined) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <div className="flex gap-8">
+          <div className="hidden md:flex md:w-56 md:shrink-0 md:flex-col md:gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+          <div className="flex-1 space-y-4">
+            <Skeleton className="h-9 w-48 md:hidden" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tier === "mobile") {
+    if (!mobileDrilledIn) {
+      return (
+        <div className="flex flex-col gap-6">
+          {header}
+          <nav className="flex flex-col divide-y divide-border rounded-lg border border-border">
+            {primarySections.map((s) => (
+              <MobileSectionRow key={s.key} section={s} onSelect={selectMobileSection} />
+            ))}
+          </nav>
+          {internalSections.length > 0 && (
+            <div>
+              <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Osta Internal
+              </p>
+              <nav className="flex flex-col divide-y divide-border rounded-lg border border-border">
+                {internalSections.map((s) => (
+                  <MobileSectionRow key={s.key} section={s} onSelect={selectMobileSection} />
+                ))}
+              </nav>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    const active = sections.find((s) => s.key === activeKey)
+    return (
+      <div className="flex flex-col gap-6">
+        <Button variant="ghost" size="sm" onClick={() => setMobileDrilledIn(false)} className="-ml-2 w-fit">
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> Controls
+        </Button>
+        {active && (
+          <div className="flex items-center gap-2">
+            <active.icon className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-xl font-semibold">{active.label}</h2>
+          </div>
+        )}
+        {active?.render()}
+      </div>
+    )
+  }
+
+  // Tablet / desktop: vertical sidebar nav using Tabs' native vertical orientation
+  // — src/components/ui/tabs.tsx is already fully wired for this (flex-column list,
+  // full-width left-aligned triggers, right-edge active indicator), so this is just
+  // the prop plus a width on the list.
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Controls</h2>
-        <p className="text-muted-foreground">
-          Manage your enterprise, properties, taxes, users, and integrations here.
-        </p>
-      </div>
-
-      <Tabs defaultValue={sections[0]?.key} className="w-full flex-col">
-        <TabsList variant="line" className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-10 flex-wrap">
-          {sections.map((s) => (
-            <TabsTrigger key={s.key} value={s.key} className={TAB_TRIGGER_CLASS}>
+      {header}
+      <Tabs
+        orientation="vertical"
+        value={activeKey}
+        onValueChange={(v) => setActiveKey(v)}
+        className="w-full items-start gap-8"
+      >
+        <TabsList variant="line" className="w-56 shrink-0 items-stretch justify-start rounded-none h-auto p-0">
+          {primarySections.map((s) => (
+            <TabsTrigger key={s.key} value={s.key} className={SIDEBAR_TRIGGER_CLASS}>
               <s.icon className="w-4 h-4 mr-2" /> {s.label}
             </TabsTrigger>
           ))}
+          {internalSections.length > 0 && (
+            <>
+              <div role="separator" className="mt-2 mb-1 border-t border-border px-3 pt-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Osta Internal
+                </span>
+              </div>
+              {internalSections.map((s) => (
+                <TabsTrigger key={s.key} value={s.key} className={SIDEBAR_TRIGGER_CLASS}>
+                  <s.icon className="w-4 h-4 mr-2" /> {s.label}
+                </TabsTrigger>
+              ))}
+            </>
+          )}
         </TabsList>
 
         {sections.map((s) => (
-          <TabsContent key={s.key} value={s.key} className="m-0 space-y-6">
+          <TabsContent key={s.key} value={s.key} className="m-0 min-w-0 flex-1 space-y-6">
             {s.render()}
           </TabsContent>
         ))}

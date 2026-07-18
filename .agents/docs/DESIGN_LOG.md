@@ -168,3 +168,96 @@
   scrollWidth === window.innerWidth`), confirmed the desktop `<Table>` is `display:
   none` and the mobile card view renders in its place below the `md` breakpoint, and
   confirmed the Housekeeping action bar is horizontally scrollable rather than clipped.
+
+- **Controls page navigation redesign.** User-reported "doesn't work properly in
+  tablet/mobile" — measured live: the 10-11 flat top-level tabs wrapped to 4 rows at
+  768px and 6 rows at 375px before any content was visible, and three inner components
+  (Tax Manager, Facilities Manager, Dropdowns Manager) each nested a second tab bar
+  inside a card. Redesigned via a design Q&A with the user (see conversation) into:
+  - **Tablet/desktop**: a vertical sidebar nav using `Tabs orientation="vertical"` —
+    `src/components/ui/tabs.tsx` was already fully wired for vertical orientation with
+    zero CSS changes needed (flex-column list, full-width left-aligned triggers,
+    right-edge active indicator all already existed under `group-data-vertical/tabs:`
+    selectors), so this was close to a one-line orientation flip plus a `w-56` width on
+    the list. `variant="line"` (thin edge-indicator) kept deliberately, not the boxed
+    "default" pill variant, so this primary nav stays visually distinct from the
+    segmented-control-style tabs used inside individual sections.
+  - **Mobile**: a genuinely new pattern (nothing like it existed elsewhere in the app)
+    — a full-width tappable list of all sections, tapping one shows only that section's
+    content with a back button, driven by the existing `useDeviceTier()` hook
+    (`src/hooks/use-mobile.ts`, already used by the global sidebar's tablet-collapse
+    behavior). Deliberately *not* built on the `Tabs` primitive — drill-down is
+    navigation to a subview, not switching between simultaneously-mounted panels.
+  - Licensing (Osta-internal-only) visually separated from the other sections via a
+    divider + "Osta Internal" label, in both the sidebar and the mobile list.
+  - A `tier === undefined` (pre-hydration) skeleton fork uses Tailwind's own `md:`
+    breakpoint directly (not a JS guess) so the correct layout silhouette is present on
+    first paint with zero flash.
+
+  **Bug found and fixed along the way, not anticipated by the original plan**: Base UI
+  1.6.0's `TabsPanel` exit lifecycle (`useOpenChangeComplete` → `useAnimationsFinished`)
+  never completes when no CSS transition/animation is defined on the panel — so once a
+  panel has been shown, its `hidden` attribute never gets reapplied when it becomes
+  inactive, and every previously-visited tab's content stays rendered underneath the
+  current one forever. **Reproduced with the pre-existing, unmodified horizontal
+  Facilities Manager tabs too** (Buildings/Floors/Room Types/Rooms) — this is a
+  wrapper-level bug in `src/components/ui/tabs.tsx`'s `TabsContent`, not something the
+  vertical-nav change introduced, and it affects **any** Tabs usage in the app where a
+  user switches between 2+ tabs in the same `Tabs` instance (confirmed also present in
+  Tax Manager's Maldives/Custom Tax switch — not yet fixed there, see TODO.md/flagged to
+  user). Fixed for the new Controls sidebar by not using `<TabsContent>`/`Panel` at all
+  for content — `TabsTrigger`/`TabsList` are unaffected (their active-state is a plain
+  `data-active` CSS selector, no mount/animation lifecycle), so nav/keyboard/ARIA is
+  unchanged; content is rendered directly via `sections.find(s => s.key ===
+  activeKey)?.render()` instead of trusting Panel's own visibility.
+
+  Verified via `tsc --noEmit`, `eslint` (0 design-rule violations), `npm run build`
+  (bundling succeeds; a pre-existing, unrelated type error in the standalone script
+  `prisma/add-sharers.ts` blocks the full typecheck stage but predates this session),
+  and a live browser pass: desktop (1440px) sidebar renders correctly with working
+  tab-switch and correct dark-mode active-indicator colors; tablet (768px) same
+  sidebar layout, confirmed no double-sidebar crowding against the global
+  AppSidebar's collapsed icon-rail state; mobile (375px) list screen shows all
+  sections, tapping one shows only that section plus a working back button, zero
+  horizontal overflow at every step. The file was being concurrently edited by
+  another agent session (adding a new "Outlets" section) during this work — merged
+  cleanly with no conflict since the nav-shell changes and the new section both read
+  from the same generic `sections` array. (Initially shipped with a local
+  TabsContent-bypass workaround in this file specifically — superseded the same day
+  by the app-wide fix below, which made the workaround unnecessary; reverted back to
+  plain `TabsContent`.)
+
+- **App-wide fix for the stale-panel Tabs bug**, following up on the Controls redesign
+  above. Rather than working around it per call site, fixed it once at the source:
+  `src/components/ui/tabs.tsx`'s `Tabs` now tracks the active tab value itself in a
+  `TabsActiveValueContext` (mirroring whichever mode the consumer uses — controlled
+  `value`/`onValueChange` or uncontrolled `defaultValue`), and `TabsContent` reads
+  that context and returns `null` immediately when it isn't the active panel —
+  unmounting it directly via React instead of trusting Base UI Panel's own
+  hidden-once-animation-completes lifecycle (which, per the earlier entry, never
+  actually completes with no CSS transition defined). `TabsTrigger`/`TabsList` are
+  untouched and still render through Base UI's own Panel type internally when
+  active, so full ARIA `tabpanel` semantics (`role`, `aria-labelledby`, `id`,
+  `tabIndex`, `inert`) are preserved — this is a strictly better fix than the
+  Controls-only workaround it replaced, which had dropped `TabsContent`/`Panel`
+  entirely and lost those attributes.
+
+  **Zero call-site changes needed** — every existing `<Tabs>`/`<TabsContent>` usage
+  in the app (9 files: `controls-dashboard.tsx`, `tax-manager.tsx`,
+  `facilities-manager.tsx`, `dropdowns-manager.tsx`, `folio-panel.tsx`,
+  `revenue/page.tsx`, `inventory/page.tsx`, `profiles/page.tsx`,
+  `front-office/page.tsx`) picked up the fix automatically. `profiles/page.tsx` was
+  never affected in the first place — it uses `Tabs` purely as a trigger/state
+  mechanism with a single shared table filtered by the active value, not
+  `TabsContent` panels.
+
+  Verified via `tsc --noEmit`, `eslint` (0 design-rule violations), `npm run build`,
+  and a live browser pass switching between tabs (including switching *back* to a
+  previously-active tab, and nested Tabs-inside-Tabs — Property Architecture's
+  Buildings/Room Types switcher inside the Inventory section) on every one of the 9
+  files, confirming exactly one panel's content is ever present after a switch, with
+  zero console errors on a cold page load. (One false alarm during this pass: Base
+  UI's own controlled/uncontrolled-mismatch dev warning appeared during live-edit
+  iteration via Fast Refresh — confirmed via a genuinely fresh browser tab that this
+  was stale/buffered console output from mid-edit HMR swaps, not a real issue; a cold
+  load has no console errors.)

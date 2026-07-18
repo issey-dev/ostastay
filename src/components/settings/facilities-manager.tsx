@@ -33,7 +33,7 @@ export function FacilitiesManager() {
   return (
     <div className="w-full">
       <Tabs defaultValue="room-types" className="w-full">
-        <TabsList className="bg-muted/50 mb-6">
+        <TabsList className="bg-muted mb-6 flex-wrap h-auto">
           <TabsTrigger value="room-types"><BedDouble className="w-4 h-4 mr-2"/> Room Types</TabsTrigger>
           <TabsTrigger value="buildings"><Building2 className="w-4 h-4 mr-2"/> Buildings</TabsTrigger>
           <TabsTrigger value="floors"><Map className="w-4 h-4 mr-2"/> Floors</TabsTrigger>
