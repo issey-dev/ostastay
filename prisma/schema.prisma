@@ -170,6 +170,7 @@ model User {
 
   supportGrantsRequested SupportAccessGrant[] @relation("GrantRequestedBy")
   supportGrantsApproved  SupportAccessGrant[] @relation("GrantApprovedBy")
+  currencyExchangesCreated CurrencyExchange[] @relation("CurrencyExchangeCreatedBy")
 }
 
 // PropertyStatus: ACTIVE, INACTIVE
@@ -217,6 +218,9 @@ model Property {
   nightAudits  PropertyNightAuditLog[]
   workLocationUsers User[] @relation("UserWorkLocation")
   sequences    PropertySequence[]
+  outlets      Outlet[]
+  folios       Folio[]
+  currencyExchanges CurrencyExchange[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -345,13 +349,24 @@ model TaxProfile {
 
   rates       TaxRate[]
   chargeCodes ChargeCode[]
+  outlets     Outlet[]
 }
 
 model TaxRate {
   id            String     @id @default(uuid())
   taxProfileId  String
   taxProfile    TaxProfile @relation(fields: [taxProfileId], references: [id], onDelete: Cascade)
+  // A TaxProfile can hold several lines (e.g. "State Tax" + "Local Fee") applied
+  // together on one charge — see src/lib/tax-calc.ts for the calculation engine this
+  // feeds.
+  name          String     @default("Tax")
   ratePercent   Float
+  // BASE: a flat percentage of the charge's original subtotal, independent of every
+  // other line (how Service Charge works today). COMPOUND: a percentage of the running
+  // total so far — subtotal plus every line before it in `order` (how GST is
+  // calculated on Base + Service Charge today). Lines are applied in ascending `order`.
+  calculateOn   String     @default("BASE")
+  order         Int        @default(0)
   effectiveFrom DateTime
   effectiveTo   DateTime?
 }
@@ -372,7 +387,11 @@ model ChargeCode {
   taxProfileId String?
   taxProfile   TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
-  folioLineItems FolioLineItem[]
+  folioLineItems     FolioLineItem[]
+  // The "shared pool" an Outlet curates from — a charge code is never owned by one
+  // outlet, it can be exposed by any number of them (or none). See OutletChargeCode.
+  outletCharges      OutletChargeCode[]
+  outletAppointments OutletAppointment[]
 
   @@unique([enterpriseId, code])
 }
@@ -536,25 +555,46 @@ model Reservation {
   checkOutDate DateTime
   adults       Int      @default(1)
   children     Int      @default(0)
+  // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)
+  // — tracked as its own occupancy bucket rather than inferred from `children`, since
+  // Reservation carries only headcounts, not individual guest birthdates. Infants are
+  // exempt from Green Tax and are not counted toward room occupancy.
+  infants      Int      @default(0)
   mealPlan     String   @default("NONE")
   status       String   @default("RESERVED")
+  // Free-text front-desk note surfaced on the guest Confirmation Letter (e.g. "Honeymoon
+  // — high floor requested") — deliberately a single field on the reservation itself,
+  // not sourced from ReservationTrace (that's an operational task/message log, not
+  // curated guest-facing text).
+  remarks      String?
 
   assignments        RoomAssignment[]
   folios             Folio[]
   traces             ReservationTrace[]
   accompanyingGuests AccompanyingGuest[]
+  outletAppointments OutletAppointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Folio {
-  id            String      @id @default(uuid())
-  reservationId String
-  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  folioNumber   Int         @default(1)
-  isClosed      Boolean     @default(false)
-  isMaster      Boolean     @default(false)
+  id            String       @id @default(uuid())
+  // Nullable — a walk-in/passerby folio (an outlet sale with no room booking) has no
+  // Reservation to attach to. Reservation-backed folios keep working exactly as before;
+  // routes must derive scoping from `propertyId` directly, not `reservation.propertyId`,
+  // since that path is now only ever present for the reservation-backed case.
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  propertyId    String
+  property      Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  folioNumber   Int          @default(1)
+  isClosed      Boolean      @default(false)
+  isMaster      Boolean      @default(false)
+
+  // Populated only when reservationId is null — who a walk-in folio's bill is for.
+  walkInGuestName    String?
+  walkInGuestContact String?
 
   payeeProfileId String?
   payeeProfile   Profile?   @relation("PayeeProfile", fields: [payeeProfileId], references: [upid])
@@ -562,8 +602,17 @@ model Folio {
   groupBlockId String?
   groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
 
+  // Assigned once, the first time each document type is printed for this folio (via
+  // the property's TAX_INVOICE / PROFORMA_FOLIO PropertySequence) — never
+  // reallocated on reprint. Independent fields since a folio may be printed as
+  // either or both over its lifetime.
+  taxInvoiceNumber      String?
+  proformaInvoiceNumber String?
+
   lineItems FolioLineItem[]
   payments  Payment[]
+
+  @@index([propertyId])
 }
 
 model FolioLineItem {
@@ -572,6 +621,11 @@ model FolioLineItem {
   folio        Folio      @relation(fields: [folioId], references: [id], onDelete: Cascade)
   chargeCodeId String
   chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  // Which Outlet this charge was posted through, if any — null for ordinary front-desk/
+  // room charges. Lets revenue be attributed per outlet without changing how tax or the
+  // charge code itself works.
+  outletId     String?
+  outlet       Outlet?    @relation(fields: [outletId], references: [id])
   date         DateTime
   description  String
   amount       Float
@@ -593,6 +647,7 @@ model CashierShift {
   closingDrop  Float?
 
   payments Payment[]
+  currencyExchanges CurrencyExchange[]
 }
 
 model Payment {
@@ -608,7 +663,127 @@ model Payment {
   referenceNumber String?
   isRefund        Boolean @default(false)
 
+  // Assigned once, the first time a receipt is printed for this payment (via the
+  // property's RECEIPT_NO PropertySequence) — never reallocated on reprint. Null
+  // means no receipt has been printed yet.
+  receiptNumber String?
+
   createdAt DateTime @default(now())
+}
+
+// A cashier-recorded currency exchange (guest-facing FX, common at resort front
+// desks) — a real bookkeeping transaction, not just a printable form. Scoped to a
+// Property (for branding/reporting) and tied to the cashier's CashierShift, mirroring
+// how Payment is tied to a shift.
+model CurrencyExchange {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  shiftId    String
+  shift      CashierShift @relation(fields: [shiftId], references: [id])
+
+  guestName    String?
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  amountFrom   Float
+  amountTo     Float
+
+  // Assigned once, the first time a receipt is printed (via the property's
+  // RECEIPT_NO PropertySequence) — never reallocated on reprint.
+  receiptNumber String?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdBy       User     @relation("CurrencyExchangeCreatedBy", fields: [createdByUserId], references: [id])
+}
+
+// A revenue-generating point of sale scoped to one Property (Spa, Restaurant, Bar,
+// Gift Shop...). Deliberately does NOT own ChargeCodes — charge codes stay
+// enterprise-wide and independent; an Outlet just curates which ones it exposes in its
+// own POS view (see OutletChargeCode).
+model Outlet {
+  id          String   @id @default(uuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  // Grouping only, same plain-string convention as ChargeCode.category (no Prisma enum
+  // in this schema) — SPA | RESTAURANT | BAR | RETAIL | TRANSPORT | RECREATION | OTHER.
+  outletType  String   @default("OTHER")
+  isActive    Boolean  @default(true)
+
+  // Top-level tax override, optional: NONE = no override, every charge code posted
+  // through this outlet uses its own useDefaultTax/taxProfile exactly as everywhere
+  // else. DEFAULT_ENGINE = force the enterprise default engine (Service Charge + GST)
+  // regardless of the charge code's own setting. CUSTOM = force taxProfileId's rates
+  // regardless of the charge code's own setting. taxProfileId is only ever set when
+  // taxOverrideMode is CUSTOM. See src/lib/tax-calc.ts's resolveOutletChargeTax.
+  taxOverrideMode String      @default("NONE")
+  taxProfileId    String?
+  taxProfile      TaxProfile? @relation(fields: [taxProfileId], references: [id])
+
+  // Simple appointment-log capacity control (see OutletAppointment) — a settable cap
+  // used only to *warn*, never block, when a new appointment would push an overlapping
+  // time slot's count over this. Null = never warn.
+  appointmentCapPerSlot Int?
+
+  chargeCodes    OutletChargeCode[]
+  appointments   OutletAppointment[]
+  folioLineItems FolioLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, name])
+}
+
+// The curated many-to-many "shared pool" — an explicit join model (not Prisma's
+// implicit m:n) matching this schema's existing convention for join tables with their
+// own identity (see AccompanyingGuest, RoomTypeFeature), and leaving room for a future
+// per-outlet ordering/"featured" flag without a schema rewrite.
+model OutletChargeCode {
+  id           String     @id @default(uuid())
+  outletId     String
+  outlet       Outlet     @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  chargeCodeId String
+  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([outletId, chargeCodeId])
+}
+
+// AppointmentStatus: SCHEDULED, COMPLETED, CANCELLED, NO_SHOW
+// A simple appointment log only — no resource/room-capacity model (see
+// Outlet.appointmentCapPerSlot for the lightweight, warning-only cap instead). The
+// guest is either an existing reservation or a walk-in name/contact — validated as an
+// XOR in the route, not enforceable in SQLite via the schema itself.
+model OutletAppointment {
+  id       String @id @default(uuid())
+  outletId String
+  outlet   Outlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
+
+  startTime DateTime
+  endTime   DateTime?
+
+  reservationId      String?
+  reservation        Reservation? @relation(fields: [reservationId], references: [id])
+  walkInGuestName    String?
+  walkInGuestContact String?
+
+  notes  String?
+  status String @default("SCHEDULED")
+
+  createdByUserId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([outletId, startTime])
 }
 
 model EnterpriseSettings {
@@ -633,6 +808,21 @@ model EnterpriseSettings {
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
+
+  // Payment Information footer block shown on printed invoices/receipts (a raw hex
+  // account/bank block, not a payment-gateway integration — the app never moves money
+  // itself). All optional; the block is simply omitted where none are set.
+  invoicePaymentAccountName   String?
+  invoicePaymentAccountNumber String?
+  invoicePaymentIban          String?
+  invoicePaymentBankInfo      String?
+
+  // Generic hotel-info/policy paragraph shown near the bottom of the guest
+  // Confirmation Letter (see src/app/e/[slug]/dashboard/reservations/[id]/
+  // confirmation-letter/page.tsx) — editable so each enterprise can state its own
+  // check-in/out times and policies; falls back to sensible generic wording in code
+  // when null.
+  confirmationLetterMessage String?
 
   // Maldives Green Tax Settings — charged per person per night, split by age band;
   // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).

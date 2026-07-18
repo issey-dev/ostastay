@@ -29,7 +29,8 @@ export async function POST(request: Request) {
           include: {
             paymentMethod: true
           }
-        }
+        },
+        currencyExchanges: true
       }
     });
 

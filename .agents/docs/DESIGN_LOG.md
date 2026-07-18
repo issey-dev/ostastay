@@ -261,3 +261,52 @@
   iteration via Fast Refresh — confirmed via a genuinely fresh browser tab that this
   was stale/buffered console output from mid-edit HMR swaps, not a real issue; a cold
   load has no console errors.)
+
+## 2026-07-19
+
+- **Invoice redesigned to match a reference template + new Payment Receipt / Currency
+  Exchange Receipt stationery**, all sharing one visual family. New
+  `src/components/print/` (`print-document-shell.tsx`, `print-blocks.tsx`) extracts the
+  shell (control bar + white A4-ish document container + print CSS) and presentational
+  pieces (`PrintDocumentHeader`, `PrintInfoColumns`, `PrintTransactionTable`,
+  `PrintTotals`, `PrintFooter`) used by all three print pages, so a glance at any one of
+  them reads as the same app. Heavy display heading approximated via
+  `font-black tracking-tight` on the existing font stack — no new font dependency.
+  These files (plus the print pages themselves) are deliberately exempt from the
+  `design/no-raw-palette-class` rule — see the existing "printed documents render as
+  fixed paper" rationale already in `eslint.config.mjs`, now extended to cover them.
+
+- **Print-chrome leak fixed.** The dashboard's `AppSidebar` and sticky header
+  (`src/app/e/[slug]/dashboard/layout.tsx`) had no `print:hidden`, so printing any
+  in-app document leaked the app sidebar/header into the printed output — only the
+  print page's own control bar was ever hidden. Added `print:hidden` to both wrapper
+  elements plus `print:p-0`/`print:max-w-none` on the content padding wrapper, so all
+  three print documents (invoice, payment receipt, exchange receipt) render as clean,
+  full-bleed pages. Verified via the compiled Tailwind stylesheet
+  (`@media print { .print\:hidden { display: none !important } }`) and confirming the
+  three chrome elements (sidebar wrapper, header block, control bar) all carry the
+  class in a live DOM check.
+
+- **Invoice charges/payments table simplified** from the old 5-6 column
+  tax-breakdown layout to a plain Date / Description / Reference / Amount shape,
+  per explicit user request — the Maldives tax math (Service Charge/TGST/Green Tax)
+  is still computed and shown, just rolled into the `PrintTotals` block instead of
+  per-line columns.
+
+- **Invoice Settings (Controls > Reports > Invoice Design)**: added a "Payment
+  Information" field group (Account Name, Account Number, IBAN, Bank Info — 4 new
+  optional `EnterpriseSettings` columns) and relabeled the existing "Payment Terms"
+  textarea to "Terms & Conditions" (UI copy only, same underlying
+  `invoicePaymentTerms` field). Live preview updated to match. See
+  [DECISIONS.md](DECISIONS.md) for the Tax/Proforma invoice and document-numbering
+  rules this connects to.
+
+- **Pre-existing hook-ordering bugs fixed in passing** in three files touched by this
+  work (`folios/[id]/print/page.tsx`, `invoice-settings-manager.tsx`, and the two new
+  receipt pages inherit the corrected pattern from the start): a `useEffect` called a
+  `fetch*` helper function declared *below* it in the same component body. Harmless in
+  practice (the `const` is bound before the effect fires post-mount) but flagged by
+  `react-hooks/immutability`; reordered so the helper is declared before the effect
+  that calls it. This same pattern exists elsewhere in the app (e.g. the other agent's
+  confirmation-letter page) and was left alone — out of scope for this pass, not fixed
+  system-wide.

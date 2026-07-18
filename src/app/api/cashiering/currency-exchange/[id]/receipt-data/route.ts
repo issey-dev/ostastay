@@ -4,41 +4,8 @@ import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 
-const INVOICE_INCLUDE = {
-  lineItems: {
-    include: {
-      chargeCode: true
-    }
-  },
-  payments: {
-    include: {
-      paymentMethod: true
-    }
-  },
-  payeeProfile: {
-    include: {
-      contacts: true
-    }
-  },
+const EXCHANGE_INCLUDE = {
   property: true,
-  reservation: {
-    include: {
-      primaryGuest: {
-        include: {
-          contacts: true
-        }
-      },
-      assignments: {
-        include: {
-          room: true,
-          roomType: true
-        },
-        orderBy: {
-          startDate: 'asc' as const
-        }
-      }
-    }
-  }
 };
 
 export async function GET(
@@ -49,45 +16,34 @@ export async function GET(
     const ctx = await requireSession();
     const { id } = await params;
 
-    const url = new URL(request.url);
-    const documentType: "tax" | "proforma" = url.searchParams.get("type") === "proforma" ? "proforma" : "tax";
-
-    // 1. Fetch Folio details with relations
-    let folio = await prisma.folio.findUnique({
+    let exchange = await prisma.currencyExchange.findUnique({
       where: { id },
-      include: INVOICE_INCLUDE
+      include: EXCHANGE_INCLUDE
     });
 
-    if (!folio) {
-      return NextResponse.json({ error: "Folio not found" }, { status: 404 });
+    if (!exchange) {
+      return NextResponse.json({ error: "Currency exchange not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, folio.propertyId);
+    await assertPropertyAccess(ctx, exchange.propertyId);
 
-    // Assign a document number the first time this document type is generated for this
-    // folio, via the property's Sequence Manager counter — reprints reuse the stored
-    // number instead of allocating a new one.
-    const existingNumber = documentType === "tax" ? folio.taxInvoiceNumber : folio.proformaInvoiceNumber;
-    if (!existingNumber) {
-      const sequenceType = documentType === "tax" ? "TAX_INVOICE" : "PROFORMA_FOLIO";
-      const nextValue = await allocateSequenceNumber(folio.propertyId, sequenceType);
-      const prefix = documentType === "tax" ? "INV" : "PRO";
-      const documentNumber = `${prefix}-${String(nextValue).padStart(5, "0")}`;
-      folio = await prisma.folio.update({
-        where: { id: folio.id },
-        data: documentType === "tax" ? { taxInvoiceNumber: documentNumber } : { proformaInvoiceNumber: documentNumber },
-        include: INVOICE_INCLUDE
+    // Assign a receipt number the first time this exchange's receipt is printed, via the
+    // property's Sequence Manager counter (shared RECEIPT_NO series with Payment
+    // receipts) — reprints reuse the stored number.
+    if (!exchange.receiptNumber) {
+      const nextValue = await allocateSequenceNumber(exchange.propertyId, "RECEIPT_NO");
+      const receiptNumber = `RCT-${String(nextValue).padStart(5, "0")}`;
+      exchange = await prisma.currencyExchange.update({
+        where: { id: exchange.id },
+        data: { receiptNumber },
+        include: EXCHANGE_INCLUDE
       });
     }
 
-    // 2. Fetch Enterprise settings for invoice branding, derived from the folio's own
-    // property → enterprise (not a hardcoded constant) — works the same for a
-    // reservation-backed folio or a walk-in one, since propertyId is always present.
-    const enterpriseId = folio.property.enterpriseId;
+    const enterpriseId = exchange.property.enterpriseId;
     let settings = await prisma.enterpriseSettings.findUnique({
       where: { enterpriseId }
     });
 
-    // Default settings fallback
     if (!settings) {
       settings = {
         id: "default",
@@ -135,9 +91,8 @@ export async function GET(
     }
 
     return NextResponse.json({
-      folio,
-      settings,
-      documentType
+      exchange,
+      settings
     });
 
   } catch (error) {

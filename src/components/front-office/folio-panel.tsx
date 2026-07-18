@@ -326,13 +326,21 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <p className={`text-4xl font-bold ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print`, '_blank')}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=tax`, '_blank')}
                           className="h-9 shadow-sm border-border ml-2"
                         >
-                          <Printer className="w-4 h-4 mr-2" /> Print
+                          <Printer className="w-4 h-4 mr-2" /> Tax Invoice
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=proforma`, '_blank')}
+                          className="h-9 shadow-sm border-border ml-2"
+                        >
+                          <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
                         </Button>
                         {activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
                           <Button 
@@ -391,13 +399,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             <TableHead className="text-right">Tax</TableHead>
                             <TableHead className="text-right">Total Charge</TableHead>
                             <TableHead className="text-right">Payment</TableHead>
+                            <TableHead className="w-10"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {activeFolio.lineItems.map((item: any) => (
                             <TableRow key={item.id} className={selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}>
                               <TableCell className="text-center">
-                                <Checkbox 
+                                <Checkbox
                                   checked={selectedLineItemIds.includes(item.id)}
                                   onCheckedChange={() => toggleLineItemSelection(item.id)}
                                 />
@@ -409,6 +418,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                               <TableCell className="text-right text-muted-foreground">${item.taxAmount.toFixed(2)}</TableCell>
                               <TableCell className="text-right font-medium text-destructive">${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}</TableCell>
                               <TableCell className="text-right text-muted-foreground">-</TableCell>
+                              <TableCell></TableCell>
                             </TableRow>
                           ))}
                           {activeFolio.payments.map((payment: any) => (
@@ -421,11 +431,22 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                               <TableCell className="text-right text-muted-foreground">-</TableCell>
                               <TableCell className="text-right text-muted-foreground">-</TableCell>
                               <TableCell className="text-right font-medium text-success">${payment.amount.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  title="Print Payment Receipt"
+                                  onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           ))}
                           {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={8} className="py-0">
+                              <TableCell colSpan={9} className="py-0">
                                 <EmptyState icon={Receipt} title="No transactions posted yet" />
                               </TableCell>
                             </TableRow>

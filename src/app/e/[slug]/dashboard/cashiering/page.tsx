@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign } from "lucide-react";
+import { useParams } from "next/navigation";
+import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default function CashieringPage() {
+  const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  
+
   // Open Shift State
   const [openingFloat, setOpeningFloat] = useState("300.00");
   const [isOpening, setIsOpening] = useState(false);
@@ -25,9 +28,21 @@ export default function CashieringPage() {
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [closingDrop, setClosingDrop] = useState("");
   const [isClosing, setIsClosing] = useState(false);
-  
+
   // Reconciliation Result State
   const [reconciliation, setReconciliation] = useState<any>(null);
+
+  // Currency Exchange State
+  const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
+  const [isExchanging, setIsExchanging] = useState(false);
+  const [exchangeForm, setExchangeForm] = useState({
+    guestName: "",
+    fromCurrency: "USD",
+    toCurrency: "MVR",
+    rate: "",
+    amountFrom: "",
+    amountTo: "",
+  });
 
   const fetchStatus = async () => {
     setIsLoading(true);
@@ -95,6 +110,30 @@ export default function CashieringPage() {
       setIsCloseModalOpen(false);
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  const handleCreateExchange = async () => {
+    setError("");
+    setIsExchanging(true);
+    try {
+      const res = await fetch("/api/cashiering/currency-exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(exchangeForm)
+      });
+      if (res.ok) {
+        setIsExchangeModalOpen(false);
+        setExchangeForm({ guestName: "", fromCurrency: "USD", toCurrency: "MVR", rate: "", amountFrom: "", amountTo: "" });
+        await fetchStatus();
+      } else {
+        const json = await res.json();
+        setError(json.error || "Failed to record currency exchange");
+      }
+    } catch (err) {
+      setError("Unexpected error recording currency exchange");
+    } finally {
+      setIsExchanging(false);
     }
   };
 
@@ -237,6 +276,47 @@ export default function CashieringPage() {
           </Card>
 
           <Card className="border-0 shadow-sm ring-1 ring-border">
+            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5 text-muted-foreground" />
+                Currency Exchange
+              </CardTitle>
+              <Button size="sm" onClick={() => setIsExchangeModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> New Exchange
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(status.shift.currencyExchanges?.length ?? 0) === 0 ? (
+                <EmptyState icon={ArrowRightLeft} title="No currency exchanges recorded yet" />
+              ) : (
+                <div className="divide-y divide-border">
+                  {status.shift.currencyExchanges.map((exchange: any) => (
+                    <div key={exchange.id} className="p-4 flex items-center justify-between hover:bg-muted">
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {exchange.amountFrom.toFixed(2)} {exchange.fromCurrency} → {exchange.amountTo.toFixed(2)} {exchange.toCurrency}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {exchange.guestName || "Walk-in"} • Rate {exchange.rate} • {format(parseISO(exchange.createdAt), "h:mm a")}
+                        </p>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        title="Print Exchange Receipt"
+                        onClick={() => window.open(`/e/${slug}/dashboard/cashiering/exchange/${exchange.id}/receipt`, '_blank')}
+                      >
+                        <Printer className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm ring-1 ring-border">
             <CardHeader className="bg-muted border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-muted-foreground" />
@@ -306,6 +386,106 @@ export default function CashieringPage() {
             >
               {isClosing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Submit Drop & Close Shift
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* NEW CURRENCY EXCHANGE MODAL */}
+      <Dialog open={isExchangeModalOpen} onOpenChange={setIsExchangeModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Currency Exchange</DialogTitle>
+            <DialogDescription>
+              Log a guest currency exchange against this shift. A printable receipt is generated once saved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Guest Name (Optional)</Label>
+              <Input
+                placeholder="Walk-in Customer"
+                value={exchangeForm.guestName}
+                onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>From Currency</Label>
+                <Input
+                  placeholder="USD"
+                  value={exchangeForm.fromCurrency}
+                  onChange={(e) => setExchangeForm(p => ({ ...p, fromCurrency: e.target.value.toUpperCase() }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>To Currency</Label>
+                <Input
+                  placeholder="MVR"
+                  value={exchangeForm.toCurrency}
+                  onChange={(e) => setExchangeForm(p => ({ ...p, toCurrency: e.target.value.toUpperCase() }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Exchange Rate</Label>
+              <Input
+                type="number"
+                step="0.0001"
+                placeholder="15.42"
+                value={exchangeForm.rate}
+                onChange={(e) => {
+                  const rate = e.target.value;
+                  const amountFrom = parseFloat(exchangeForm.amountFrom);
+                  const parsedRate = parseFloat(rate);
+                  setExchangeForm(p => ({
+                    ...p,
+                    rate,
+                    amountTo: !isNaN(amountFrom) && !isNaN(parsedRate) ? (amountFrom * parsedRate).toFixed(2) : p.amountTo,
+                  }));
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Amount Given ({exchangeForm.fromCurrency || "From"})</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={exchangeForm.amountFrom}
+                  onChange={(e) => {
+                    const amountFrom = e.target.value;
+                    const parsedAmount = parseFloat(amountFrom);
+                    const rate = parseFloat(exchangeForm.rate);
+                    setExchangeForm(p => ({
+                      ...p,
+                      amountFrom,
+                      amountTo: !isNaN(parsedAmount) && !isNaN(rate) ? (parsedAmount * rate).toFixed(2) : p.amountTo,
+                    }));
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Amount Received ({exchangeForm.toCurrency || "To"})</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={exchangeForm.amountTo}
+                  onChange={(e) => setExchangeForm(p => ({ ...p, amountTo: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExchangeModalOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleCreateExchange}
+              disabled={isExchanging || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
+            >
+              {isExchanging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save Exchange
             </Button>
           </DialogFooter>
         </DialogContent>

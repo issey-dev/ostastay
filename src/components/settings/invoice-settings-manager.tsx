@@ -23,12 +23,13 @@ export function InvoiceSettingsManager() {
     invoiceAddress: "",
     invoiceHeaderText: "",
     invoiceFooterText: "",
-    invoicePaymentTerms: ""
+    invoicePaymentTerms: "",
+    invoicePaymentAccountName: "",
+    invoicePaymentAccountNumber: "",
+    invoicePaymentIban: "",
+    invoicePaymentBankInfo: "",
+    confirmationLetterMessage: ""
   })
-
-  useEffect(() => {
-    fetchSettings()
-  }, [])
 
   const fetchSettings = async () => {
     setLoading(true)
@@ -47,7 +48,12 @@ export function InvoiceSettingsManager() {
           invoiceAddress: data.invoiceAddress || "",
           invoiceHeaderText: data.invoiceHeaderText || "",
           invoiceFooterText: data.invoiceFooterText || "",
-          invoicePaymentTerms: data.invoicePaymentTerms || ""
+          invoicePaymentTerms: data.invoicePaymentTerms || "",
+          invoicePaymentAccountName: data.invoicePaymentAccountName || "",
+          invoicePaymentAccountNumber: data.invoicePaymentAccountNumber || "",
+          invoicePaymentIban: data.invoicePaymentIban || "",
+          invoicePaymentBankInfo: data.invoicePaymentBankInfo || "",
+          confirmationLetterMessage: data.confirmationLetterMessage || ""
         })
       }
     } catch (e) {
@@ -56,6 +62,11 @@ export function InvoiceSettingsManager() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchSettings()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -200,13 +211,51 @@ export function InvoiceSettingsManager() {
           />
         </div>
 
+        <div className="space-y-3 border rounded-lg p-4">
+          <Label className="flex items-center gap-1"><Receipt className="w-4 h-4"/> Payment Information</Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Account Name</Label>
+              <Input
+                placeholder="Cozy Guest House LLC"
+                value={formData.invoicePaymentAccountName}
+                onChange={e => setFormData(p => ({ ...p, invoicePaymentAccountName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Account Number</Label>
+              <Input
+                placeholder="0123456789"
+                value={formData.invoicePaymentAccountNumber}
+                onChange={e => setFormData(p => ({ ...p, invoicePaymentAccountNumber: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">IBAN</Label>
+              <Input
+                placeholder="GB29 NWBK 6016 1331 9268 19"
+                value={formData.invoicePaymentIban}
+                onChange={e => setFormData(p => ({ ...p, invoicePaymentIban: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Bank Info</Label>
+              <Input
+                placeholder="Bank of Example, Swift: EXMPGB2L"
+                value={formData.invoicePaymentBankInfo}
+                onChange={e => setFormData(p => ({ ...p, invoicePaymentBankInfo: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <Label>Payment Terms & Conditions</Label>
-          <Textarea 
-            placeholder="Payment is due immediately upon check-out. Late payments accrue interest at 1.5% per month." 
+          <Label>Terms & Conditions</Label>
+          <Textarea
+            placeholder="Payment is due immediately upon check-out. Late payments accrue interest at 1.5% per month."
             rows={3}
-            value={formData.invoicePaymentTerms} 
-            onChange={e => setFormData(p => ({ ...p, invoicePaymentTerms: e.target.value }))} 
+            value={formData.invoicePaymentTerms}
+            onChange={e => setFormData(p => ({ ...p, invoicePaymentTerms: e.target.value }))}
           />
         </div>
 
@@ -217,6 +266,16 @@ export function InvoiceSettingsManager() {
             rows={2}
             value={formData.invoiceFooterText} 
             onChange={e => setFormData(p => ({ ...p, invoiceFooterText: e.target.value }))} 
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Confirmation Letter — Policy Text</Label>
+          <Textarea
+            placeholder="Check-in time is from 14:00 and check-out time is until 12:00. We kindly request that all guests carry a valid photo ID or passport upon arrival."
+            rows={3}
+            value={formData.confirmationLetterMessage}
+            onChange={e => setFormData(p => ({ ...p, confirmationLetterMessage: e.target.value }))}
           />
         </div>
 
@@ -324,12 +383,27 @@ export function InvoiceSettingsManager() {
 
           {/* Footer & Terms */}
           <div className="border-t pt-3 mt-4 space-y-2">
-            {formData.invoicePaymentTerms && (
-              <div>
-                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Payment Terms:</span>
-                <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">
-                  {formData.invoicePaymentTerms}
-                </p>
+            {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo || formData.invoicePaymentTerms) && (
+              <div className="grid grid-cols-2 gap-3">
+                {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo) && (
+                  <div>
+                    <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Payment Information:</span>
+                    <div className="text-[7.5px] text-muted-foreground leading-tight space-y-0.5">
+                      {formData.invoicePaymentAccountName && <p>Account Name: {formData.invoicePaymentAccountName}</p>}
+                      {formData.invoicePaymentAccountNumber && <p>Account Number: {formData.invoicePaymentAccountNumber}</p>}
+                      {formData.invoicePaymentIban && <p>IBAN: {formData.invoicePaymentIban}</p>}
+                      {formData.invoicePaymentBankInfo && <p className="whitespace-pre-line">{formData.invoicePaymentBankInfo}</p>}
+                    </div>
+                  </div>
+                )}
+                {formData.invoicePaymentTerms && (
+                  <div>
+                    <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Terms & Conditions:</span>
+                    <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">
+                      {formData.invoicePaymentTerms}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             {formData.invoiceFooterText && (

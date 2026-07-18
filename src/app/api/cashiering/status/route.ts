@@ -24,6 +24,9 @@ export async function GET() {
           include: {
             paymentMethod: true
           }
+        },
+        currencyExchanges: {
+          orderBy: { createdAt: "desc" }
         }
       }
     });

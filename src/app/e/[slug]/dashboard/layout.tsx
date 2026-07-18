@@ -41,10 +41,12 @@ export default async function DashboardLayout({
   return (
     <PropertyProvider>
       <SidebarProvider>
-        <AppSidebar />
-        <main className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden">
+        <div className="print:hidden">
+          <AppSidebar />
+        </div>
+        <main className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible">
 
-          <div className="sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
+          <div className="print:hidden sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
             <PropertyBannerBar />
 
             {ctx?.isActingAsSupport && enterprise && (
@@ -70,8 +72,8 @@ export default async function DashboardLayout({
           </div>
 
           {/* Floating Main Content Area */}
-          <div className="flex-1 p-4 md:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto w-full">
+          <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
+            <div className="max-w-7xl mx-auto w-full print:max-w-none">
               {children}
             </div>
           </div>
