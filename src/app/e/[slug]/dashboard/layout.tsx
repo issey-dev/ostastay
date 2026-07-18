@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { ShieldAlert } from "lucide-react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -10,15 +11,32 @@ import { SupportSessionExitButton } from "@/components/controls/support-session-
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode
+  params: Promise<{ slug: string }>
+}) {
   // App chrome (buttons, links, focus rings) stays a fixed monochrome neutral for every
   // property — see src/app/theme.css. The only per-property color is the thin banner
   // line (PropertyBannerBar), sourced client-side from PropertyProvider so it updates
   // live when the property switcher changes properties, without a full page reload.
+  const { slug } = await params
   const ctx = await requireSession().catch(() => null)
-  const enterprise = ctx
-    ? await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { name: true } })
-    : null
+  if (!ctx) redirect("/login")
+
+  // The URL's enterprise slug is a display/navigation convenience only — it is never the
+  // security boundary (that's always the session, re-checked via requireSession() above
+  // on every request regardless of URL). This keeps the slug in the address bar honest:
+  // if it doesn't match the session's actual (possibly support-acting-as) enterprise,
+  // redirect to the one that does, rather than silently rendering the real data under a
+  // misleading URL. Deliberately scoped to /dashboard only — the public /e/[slug]/login
+  // page must never require a session, so this check must not live at the [slug] layout
+  // level (it used to, and broke logged-out visits to the enterprise login page).
+  const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { name: true, slug: true } })
+  if (!enterprise) redirect("/login")
+  if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/dashboard`)
 
   return (
     <PropertyProvider>
