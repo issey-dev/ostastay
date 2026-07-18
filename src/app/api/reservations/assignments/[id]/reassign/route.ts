@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { id } = await params;
     const body = await request.json();
     const { roomId } = body; // Could be null/string
@@ -21,6 +25,7 @@ export async function PATCH(
     if (!assignment) {
       return NextResponse.json({ error: "Room assignment not found" }, { status: 404 });
     }
+    await assertPropertyAccess(ctx, assignment.reservation.propertyId);
 
     if (roomId) {
       // Find the new room
@@ -29,7 +34,7 @@ export async function PATCH(
         include: { roomType: true }
       });
 
-      if (!newRoom) {
+      if (!newRoom || newRoom.propertyId !== assignment.reservation.propertyId) {
         return NextResponse.json({ error: "New room not found" }, { status: 404 });
       }
 
@@ -96,7 +101,7 @@ export async function PATCH(
     }
 
   } catch (error) {
-    console.error("Failed to reassign room assignment:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

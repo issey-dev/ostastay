@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { addDays, parseISO, startOfDay, endOfDay } from "date-fns";
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
+    const ctx = await requireSession();
     const { searchParams } = new URL(request.url);
     const startDateParam = searchParams.get('startDate');
     const daysParam = searchParams.get('days') || '14';
-    const propertyId = searchParams.get('propertyId') || '00000000-0000-0000-0000-000000000000';
-    
+    const propertyId = searchParams.get('propertyId');
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, propertyId);
+
     // Default to today if not provided
     const startDate = startDateParam ? startOfDay(parseISO(startDateParam)) : startOfDay(new Date());
     const days = parseInt(daysParam, 10);
@@ -84,8 +91,7 @@ export async function GET(request: Request) {
       }
     });
   } catch (error) {
-    console.error("Tape Chart Error:", error);
-    return NextResponse.json({ error: "Failed to fetch tape chart data" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
-

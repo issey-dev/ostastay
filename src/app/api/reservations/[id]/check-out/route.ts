@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { id } = await params;
-    
+
     // 1. Fetch reservation and folios with their line items and payments
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -25,6 +29,7 @@ export async function POST(
     if (!reservation) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
+    await assertPropertyAccess(ctx, reservation.propertyId);
 
     if (reservation.status !== "IN_HOUSE") {
       return NextResponse.json({ error: "Only in-house guests can be checked out" }, { status: 400 });
@@ -52,7 +57,7 @@ export async function POST(
     // Allow a small floating point tolerance
     const balance = totalCharges - totalPayments;
     if (Math.abs(balance) > 0.01) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Cannot check out with an outstanding balance",
         balance
       }, { status: 400 });
@@ -74,7 +79,7 @@ export async function POST(
           data: { status: "DIRTY" }
         });
       }
-      
+
       // Close all folios
       for (const folio of reservation.folios) {
         if (!folio.isClosed) {
@@ -88,7 +93,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Check-out error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

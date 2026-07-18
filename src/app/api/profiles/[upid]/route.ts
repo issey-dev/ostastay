@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+
+async function assertProfileAccess(upid: string, enterpriseId: string) {
+  const profile = await prisma.profile.findUnique({ where: { upid } });
+  if (!profile || profile.enterpriseId !== enterpriseId) {
+    return null;
+  }
+  return profile;
+}
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ upid: string }> }
 ) {
   try {
+    const ctx = await requireSession();
     const { upid } = await params;
+
     const profile = await prisma.profile.findUnique({
       where: { upid },
       include: {
@@ -17,14 +28,14 @@ export async function GET(
       }
     });
 
-    if (!profile) {
+    if (!profile || profile.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
     return NextResponse.json(profile);
   } catch (error) {
-    console.error("Failed to fetch profile:", error);
-    return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
@@ -33,7 +44,15 @@ export async function PUT(
   { params }: { params: Promise<{ upid: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "update");
+
     const { upid } = await params;
+    const existing = await assertProfileAccess(upid, ctx.enterpriseId);
+    if (!existing) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
     const body = await request.json();
 
     if (!body.firstName && !body.companyName) {
@@ -124,8 +143,8 @@ export async function PUT(
 
     return NextResponse.json(updatedProfile);
   } catch (error) {
-    console.error("Failed to update profile:", error);
-    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
@@ -134,7 +153,14 @@ export async function DELETE(
   { params }: { params: Promise<{ upid: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "delete");
+
     const { upid } = await params;
+    const existing = await assertProfileAccess(upid, ctx.enterpriseId);
+    if (!existing) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
 
     // Check if the profile has any active reservations
     const reservations = await prisma.reservation.findFirst({
@@ -154,7 +180,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("Failed to delete profile:", error);
-    return NextResponse.json({ error: "Failed to delete profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

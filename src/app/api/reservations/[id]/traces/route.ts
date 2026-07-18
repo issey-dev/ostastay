@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+
     const { id } = await params;
+    const reservation = await prisma.reservation.findUnique({ where: { id } });
+    if (!reservation) {
+      return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, reservation.propertyId);
+
     const traces = await prisma.reservationTrace.findMany({
       where: { reservationId: id },
       orderBy: { createdAt: 'desc' }
     });
     return NextResponse.json(traces);
   } catch (error) {
-    console.error("Failed to fetch traces", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
@@ -23,9 +32,18 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { id } = await params;
+    const reservation = await prisma.reservation.findUnique({ where: { id } });
+    if (!reservation) {
+      return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, reservation.propertyId);
+
     const body = await request.json();
-    
+
     if (!body.traceType || !body.description) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -41,7 +59,7 @@ export async function POST(
 
     return NextResponse.json(trace, { status: 201 });
   } catch (error) {
-    console.error("Failed to create trace", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

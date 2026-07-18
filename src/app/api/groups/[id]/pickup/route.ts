@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { randomBytes } from "crypto"
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 // Generates an alphanumeric reservation number
 const generateReservationNumber = () => {
@@ -9,18 +10,21 @@ const generateReservationNumber = () => {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, "GROUP_BLOCKS", "update")
+
     const { id } = await params
     const body = await request.json()
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      phone, 
-      roomTypeId, 
-      roomId, 
-      checkInDate, 
-      checkOutDate, 
-      adults 
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      roomTypeId,
+      roomId,
+      checkInDate,
+      checkOutDate,
+      adults
     } = body
 
     if (!firstName || !lastName || !roomTypeId || !checkInDate || !checkOutDate) {
@@ -33,6 +37,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })
 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
+    await assertPropertyAccess(ctx, group.propertyId)
+
+    const roomType = await prisma.roomType.findUnique({ where: { id: roomTypeId } })
+    if (!roomType || roomType.propertyId !== group.propertyId) {
+      return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 })
+    }
+    if (roomId) {
+      const room = await prisma.room.findUnique({ where: { id: roomId } })
+      if (!room || room.propertyId !== group.propertyId) {
+        return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 })
+      }
+    }
 
     const ratePlan = await prisma.ratePlan.findFirst({
       where: { propertyId: group.propertyId },
@@ -104,7 +120,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error("Error creating group pickup:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

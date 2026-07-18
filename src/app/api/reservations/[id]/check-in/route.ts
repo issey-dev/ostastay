@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { id } = await params;
-    
+
     // 1. Fetch reservation
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -20,6 +24,7 @@ export async function POST(
     if (!reservation) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
+    await assertPropertyAccess(ctx, reservation.propertyId);
 
     if (reservation.status === "IN_HOUSE") {
       return NextResponse.json({ error: "Guest is already checked in" }, { status: 400 });
@@ -52,8 +57,8 @@ export async function POST(
           }
         });
       }
-      
-      // Update physical room status to OCCUPIED? 
+
+      // Update physical room status to OCCUPIED?
       // In this PMS, we might just track physical room status as CLEAN/DIRTY.
       // The fact that it's occupied is derived from the reservation.
       // But we could enforce it. For now, we leave Room status as is (CLEAN/DIRTY).
@@ -61,7 +66,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Check-in error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

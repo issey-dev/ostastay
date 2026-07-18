@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
+import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const enterpriseId = searchParams.get("enterpriseId");
-  const search = searchParams.get("search"); // Used for global search
-  const profileType = searchParams.get("profileType");
-
   try {
+    const ctx = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search"); // Used for global search
+    const profileType = searchParams.get("profileType");
+
     const profiles = await prisma.profile.findMany({
       where: {
-        enterpriseId: enterpriseId ? enterpriseId : undefined,
+        enterpriseId: ctx.enterpriseId,
         profileType: profileType ? profileType : undefined,
         OR: search ? [
           { firstName: { contains: search } },
@@ -27,21 +28,25 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(profiles);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch profiles" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "create");
+
     const body = await request.json();
-    
-    if (!body.enterpriseId || (!body.firstName && !body.companyName)) {
+
+    if (!body.firstName && !body.companyName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const newProfile = await prisma.profile.create({
       data: {
-        enterpriseId: body.enterpriseId,
+        enterpriseId: ctx.enterpriseId,
         profileType: body.profileType as ProfileType || ProfileType.GUEST,
         title: body.title,
         firstName: body.firstName || "",
@@ -116,10 +121,10 @@ export async function POST(request: Request) {
         preferences: true,
       }
     });
-    
+
     return NextResponse.json(newProfile, { status: 201 });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to create profile" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

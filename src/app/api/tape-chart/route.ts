@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const propertyId = searchParams.get("propertyId");
-  const startDateStr = searchParams.get("startDate");
-  const endDateStr = searchParams.get("endDate");
-
-  if (!propertyId || !startDateStr || !endDateStr) {
-    return NextResponse.json({ error: "Missing required parameters (propertyId, startDate, endDate)" }, { status: 400 });
-  }
-
   try {
+    const ctx = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get("propertyId");
+    const startDateStr = searchParams.get("startDate");
+    const endDateStr = searchParams.get("endDate");
+
+    if (!propertyId || !startDateStr || !endDateStr) {
+      return NextResponse.json({ error: "Missing required parameters (propertyId, startDate, endDate)" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, propertyId);
+
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
 
@@ -51,7 +54,7 @@ export async function GET(request: Request) {
       assignments
     });
   } catch (error) {
-    console.error("Failed to fetch tape chart data:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

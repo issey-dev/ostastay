@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
 
     if (!propertyId) {
       return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
     }
+    await assertPropertyAccess(ctx, propertyId);
 
     // Find all reservations that have at least one room assignment still missing a physical room
     const unassignedReservations = await prisma.reservation.findMany({
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error("Failed to auto-assign rooms:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

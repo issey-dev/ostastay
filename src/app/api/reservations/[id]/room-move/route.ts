@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+
     const { id } = await params;
     const body = await request.json();
     const { newRoomId, newRoomTypeId, reason } = body;
@@ -23,6 +27,7 @@ export async function POST(
     if (!currentRes) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
+    await assertPropertyAccess(ctx, currentRes.propertyId);
 
     if (currentRes.status !== "IN_HOUSE") {
       return NextResponse.json({ error: "Only IN_HOUSE guests can be moved." }, { status: 400 });
@@ -41,8 +46,13 @@ export async function POST(
       where: { id: newRoomId }
     });
 
-    if (!newRoom) {
+    if (!newRoom || newRoom.propertyId !== currentRes.propertyId) {
       return NextResponse.json({ error: "New room not found" }, { status: 404 });
+    }
+
+    const newRoomType = await prisma.roomType.findUnique({ where: { id: newRoomTypeId } });
+    if (!newRoomType || newRoomType.propertyId !== currentRes.propertyId) {
+      return NextResponse.json({ error: "New room type not found" }, { status: 404 });
     }
 
     // 3. Perform the room move transaction
@@ -100,7 +110,7 @@ export async function POST(
     return NextResponse.json(updatedReservation);
 
   } catch (error) {
-    console.error("Room move error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

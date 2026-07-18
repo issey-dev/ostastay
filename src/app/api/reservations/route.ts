@@ -1,21 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ReservationStatus } from "@/lib/enums";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const propertyId = searchParams.get("propertyId");
-
   try {
+    const ctx = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, propertyId);
+
     const reservations = await prisma.reservation.findMany({
-      where: propertyId ? { propertyId } : undefined,
+      where: { propertyId },
       include: {
         primaryGuest: true,
         travelAgent: true,
         accompanyingGuests: { include: { profile: true } },
         assignments: {
-          include: { 
-            roomType: true, 
+          include: {
+            roomType: true,
             room: {
               include: {
                 housekeepingTasks: {
@@ -23,8 +29,8 @@ export async function GET(request: Request) {
                   orderBy: { createdAt: 'desc' }
                 }
               }
-            }, 
-            ratePlan: true 
+            },
+            ratePlan: true
           }
         },
         folios: true,
@@ -34,27 +40,72 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(reservations);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch reservations" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "create");
+
     const body = await request.json();
-    
+
     if (!body.propertyId || !body.primaryGuestId || !body.checkInDate || !body.checkOutDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    await assertPropertyAccess(ctx, body.propertyId);
+
+    const primaryGuest = await prisma.profile.findUnique({ where: { upid: body.primaryGuestId } });
+    if (!primaryGuest || primaryGuest.enterpriseId !== ctx.enterpriseId) {
+      return NextResponse.json({ error: "Guest profile not found" }, { status: 404 });
+    }
+
+    if (body.travelAgentId) {
+      const travelAgent = await prisma.profile.findUnique({ where: { upid: body.travelAgentId } });
+      if (!travelAgent || travelAgent.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Travel agent profile not found" }, { status: 404 });
+      }
+    }
+
+    if (Array.isArray(body.accompanyingGuestIds) && body.accompanyingGuestIds.length > 0) {
+      const accompanying = await prisma.profile.findMany({ where: { upid: { in: body.accompanyingGuestIds } } });
+      if (accompanying.length !== body.accompanyingGuestIds.length || accompanying.some((p) => p.enterpriseId !== ctx.enterpriseId)) {
+        return NextResponse.json({ error: "One or more accompanying guest profiles were not found" }, { status: 404 });
+      }
+    }
+
+    const assignmentsInput = body.assignments ? body.assignments : [
+      {
+        roomTypeId: body.roomTypeId,
+        roomId: body.roomId || null,
+        ratePlanId: body.ratePlanId,
+        overrideRate: body.overrideRate || null,
+        startDate: new Date(body.checkInDate),
+        endDate: new Date(body.checkOutDate)
+      }
+    ];
+
+    for (const a of assignmentsInput) {
+      const [roomType, ratePlan, room] = await Promise.all([
+        prisma.roomType.findUnique({ where: { id: a.roomTypeId } }),
+        prisma.ratePlan.findUnique({ where: { id: a.ratePlanId } }),
+        a.roomId ? prisma.room.findUnique({ where: { id: a.roomId } }) : Promise.resolve(null),
+      ]);
+      if (!roomType || roomType.propertyId !== body.propertyId) {
+        return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
+      }
+      if (!ratePlan || ratePlan.propertyId !== body.propertyId) {
+        return NextResponse.json({ error: "Rate plan does not belong to this property" }, { status: 400 });
+      }
+      if (a.roomId && (!room || room.propertyId !== body.propertyId)) {
+        return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 });
+      }
+    }
 
     // Fetch EnterpriseSettings to determine confirmation number format.
-    // TODO(Phase 3): resolve enterpriseId via the property's own enterprise (or the
-    // session), not "whichever enterprise's settings happen to be found first" — see
-    // the approved plan's note that every enterprise currently shares one enterprise's
-    // numbering config.
-    const property = await prisma.property.findUnique({ where: { id: body.propertyId } });
-    const settings = property
-      ? await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: property.enterpriseId } })
-      : null;
+    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
 
     const prefix = settings?.resConfirmPrefix || "";
     const length = settings?.resConfirmLength || 6;
@@ -74,16 +125,7 @@ export async function POST(request: Request) {
         mealPlan: body.mealPlan || "NONE",
         status: "CONFIRMED", // Default status
         assignments: {
-          create: body.assignments ? body.assignments : [
-            {
-              roomTypeId: body.roomTypeId,
-              roomId: body.roomId || null,
-              ratePlanId: body.ratePlanId,
-              overrideRate: body.overrideRate || null,
-              startDate: new Date(body.checkInDate),
-              endDate: new Date(body.checkOutDate)
-            }
-          ]
+          create: assignmentsInput
         },
         accompanyingGuests: Array.isArray(body.accompanyingGuestIds) && body.accompanyingGuestIds.length > 0 ? {
           create: body.accompanyingGuestIds.map((id: string) => ({ profileId: id }))
@@ -100,8 +142,8 @@ export async function POST(request: Request) {
         travelAgent: true,
         accompanyingGuests: { include: { profile: true } },
         assignments: {
-          include: { 
-            roomType: true, 
+          include: {
+            roomType: true,
             room: {
               include: {
                 housekeepingTasks: {
@@ -109,17 +151,17 @@ export async function POST(request: Request) {
                   orderBy: { createdAt: 'desc' }
                 }
               }
-            }, 
-            ratePlan: true 
+            },
+            ratePlan: true
           }
         },
         folios: true,
       }
     });
-    
+
     return NextResponse.json(newReservation, { status: 201 });
   } catch (error) {
-    console.error("Failed to create reservation:", error);
-    return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

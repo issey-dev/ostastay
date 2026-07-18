@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/db"
+import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await requireSession()
     const { id } = await params
     const group = await prisma.groupBlock.findUnique({
       where: { id },
@@ -34,10 +34,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     })
 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
+    await assertPropertyAccess(ctx, group.propertyId)
 
     return NextResponse.json(group)
   } catch (error) {
-    console.error("Error fetching group:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }
