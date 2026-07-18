@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 
 const DEMO_ENTERPRISE_ID = "00000000-0000-0000-0000-000000000000"
 
@@ -123,9 +125,13 @@ export function PaymentMethodsManager() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+              ))
             ) : methods.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No payment methods configured.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="py-0">
+                <EmptyState icon={CreditCard} title="No payment methods configured" />
+              </TableCell></TableRow>
             ) : (
               methods.map(method => (
                 <TableRow key={method.id}>

@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { RoomStatusCard } from "@/components/housekeeping/room-status-card"
-import { ClipboardList, RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users } from "lucide-react"
+import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
 
 export default function HousekeepingDashboard() {
@@ -235,7 +236,7 @@ export default function HousekeepingDashboard() {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto pb-32">
+      <div className="pb-32">
         <div className="flex justify-between items-center mb-8">
           <div>
             <Skeleton className="h-9 w-64 mb-2" />
@@ -256,16 +257,11 @@ export default function HousekeepingDashboard() {
   const isBulkMode = selectedRooms.length > 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto pb-32 relative">
+    <div className="pb-32 relative">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <div className="p-2 bg-muted rounded-lg">
-              <ClipboardList className="w-6 h-6 text-foreground" />
-            </div>
-            Housekeeping Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-2">Manage room statuses, turnovers, and attendant tasks.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Housekeeping Dashboard</h2>
+          <p className="text-muted-foreground">Manage room statuses, turnovers, and attendant tasks.</p>
         </div>
         <div className="flex items-center gap-3">
           {isBulkMode && (
@@ -281,11 +277,12 @@ export default function HousekeepingDashboard() {
       </div>
 
       {Object.keys(roomsByFloor).length === 0 && (
-        <div className="text-center py-20 bg-muted rounded-xl border border-dashed">
-          <Layers className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No rooms found</h3>
-          <p className="text-muted-foreground">Add rooms and floors in Settings to see them here.</p>
-        </div>
+        <EmptyState
+          icon={Layers}
+          title="No rooms found"
+          description="Add rooms and floors in Settings to see them here."
+          className="rounded-xl border border-dashed bg-muted"
+        />
       )}
 
       {Object.keys(roomsByFloor).map((floorName) => (
@@ -328,7 +325,7 @@ export default function HousekeepingDashboard() {
       {isBulkMode && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-4 flex items-center gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex items-center gap-3 border-r pr-6 border-border">
-            <div className="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
+            <div className="bg-primary text-primary-foreground w-8 h-8 rounded-none flex items-center justify-center font-bold text-sm">
               {selectedRooms.length}
             </div>
             <span className="font-semibold text-foreground">Selected</span>
@@ -383,7 +380,7 @@ export default function HousekeepingDashboard() {
             variant="ghost"
             size="icon"
             onClick={() => setSelectedRooms([])}
-            className="ml-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full"
+            className="ml-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-none"
           >
             <X className="w-5 h-5" />
           </Button>

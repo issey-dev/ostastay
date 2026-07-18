@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function CashieringPage() {
   const [status, setStatus] = useState<any>(null);
@@ -98,17 +100,21 @@ export default function CashieringPage() {
 
   if (isLoading && !status) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-96 mb-2" />
+          <Skeleton className="h-5 w-full max-w-xl" />
+        </div>
+        <Skeleton className="h-64 max-w-md mx-auto mt-12 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Cashiering & Shift Reconciliation</h2>
-        <p className="text-muted-foreground mt-2">
+        <h2 className="text-3xl font-bold tracking-tight">Cashiering & Shift Reconciliation</h2>
+        <p className="text-muted-foreground">
           Manage your physical cash drawer and track all financial postings during your shift.
         </p>
       </div>
@@ -157,7 +163,7 @@ export default function CashieringPage() {
       {!status?.hasActiveShift && !reconciliation && (
         <Card className="max-w-md mx-auto border-0 shadow-lg ring-1 ring-border mt-12 overflow-hidden">
           <div className="bg-muted border-b border-border p-8 flex justify-center">
-            <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center shadow-sm border border-border">
+            <div className="w-20 h-20 bg-card rounded-none flex items-center justify-center shadow-sm border border-border">
               <Lock className="w-8 h-8 text-muted-foreground" />
             </div>
           </div>
@@ -238,7 +244,7 @@ export default function CashieringPage() {
             </CardHeader>
             <CardContent className="p-0">
               {status.shift.payments.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">No payments posted yet.</div>
+                <EmptyState icon={Wallet} title="No payments posted yet" />
               ) : (
                 <div className="divide-y divide-border">
                   {status.shift.payments.map((payment: any) => (

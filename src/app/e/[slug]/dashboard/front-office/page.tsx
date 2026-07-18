@@ -10,8 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
+import { useProperty } from "@/components/providers/property-provider"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 
 export default function FrontOfficeDashboard() {
+  const { currentProperty } = useProperty()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -35,13 +39,14 @@ export default function FrontOfficeDashboard() {
     checkOutDate: string;
   } | null>(null)
 
-  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const propertyId = currentProperty?.id
 
   useEffect(() => {
     fetchSummary()
-  }, [])
+  }, [currentProperty])
 
   const fetchSummary = async () => {
+    if (!propertyId) return
     setLoading(true)
     try {
       const res = await fetch(`/api/front-office/summary?propertyId=${propertyId}`)
@@ -98,14 +103,27 @@ export default function FrontOfficeDashboard() {
   }
 
   if (loading && !data) {
-    return <div className="p-8 text-center text-muted-foreground">Loading Front Desk Operations...</div>
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-72 mb-2" />
+          <Skeleton className="h-5 w-96" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Front Desk Operations</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Front Desk Operations</h2>
           <p className="text-muted-foreground">Manage today's arrivals, departures, and in-house guests.</p>
         </div>
       </div>
@@ -182,8 +200,8 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
@@ -214,7 +232,9 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.arrivals?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No arrivals scheduled for today.</TableCell>
+                      <TableCell colSpan={5} className="py-0">
+                        <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -240,8 +260,8 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
@@ -270,7 +290,9 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.departures?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No departures scheduled for today.</TableCell>
+                      <TableCell colSpan={4} className="py-0">
+                        <EmptyState icon={LogOut} title="No departures scheduled for today" />
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -296,8 +318,8 @@ export default function FrontOfficeDashboard() {
                           {res.primaryGuest.firstName} {res.primaryGuest.lastName}
                           {res.traces?.length > 0 && (
                             <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
                             </div>
                           )}
                         </div>
@@ -321,7 +343,9 @@ export default function FrontOfficeDashboard() {
                   ))}
                   {data?.inHouse?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No guests currently in-house.</TableCell>
+                      <TableCell colSpan={4} className="py-0">
+                        <EmptyState icon={CheckCircle} title="No guests currently in-house" />
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -332,9 +356,9 @@ export default function FrontOfficeDashboard() {
       </Card>
 
       {/* Global Folio Panel */}
-      <FolioPanel 
+      <FolioPanel
         reservationId={folioPanelResId}
-        propertyId={propertyId}
+        propertyId={propertyId ?? ""}
         isOpen={isFolioPanelOpen}
         onClose={() => {
           setIsFolioPanelOpen(false)
@@ -361,7 +385,7 @@ export default function FrontOfficeDashboard() {
           setRoomMoveData(null)
           fetchSummary() // Refresh to show new room
         }}
-        propertyId={propertyId}
+        propertyId={propertyId ?? ""}
         reservationId={roomMoveData?.reservationId || null}
         currentRoomNumber={roomMoveData?.currentRoomNumber}
         currentRoomType={roomMoveData?.currentRoomType}

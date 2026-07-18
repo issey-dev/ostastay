@@ -17,9 +17,9 @@ import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
-import { statusMutedClasses } from "@/lib/status-tone"
-import { Skeleton } from "@/components/ui/skeleton"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 type Reservation = {
   id: string
@@ -436,8 +436,8 @@ export default function ReservationsDashboard() {
           <Bell className="h-4 w-4" />
           {getActiveTasks(res).length > 0 && (
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
+              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" />
             </span>
           )}
         </Button>
@@ -666,7 +666,7 @@ export default function ReservationsDashboard() {
                           <Label className="flex items-center gap-2">
                             Check-Out Date <span className="text-destructive">*</span>
                             {assignment.startDate && assignment.endDate && (
-                              <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-full">
+                              <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-none">
                                 {Math.max(0, Math.round((new Date(assignment.endDate).getTime() - new Date(assignment.startDate).getTime()) / (1000 * 3600 * 24)))} Nights
                               </span>
                             )}
@@ -832,9 +832,11 @@ export default function ReservationsDashboard() {
                         <div className="font-medium text-foreground">{guestName}</div>
                         <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold border shrink-0 ${statusMutedClasses(res.status)} ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
-                        {res.status.replace('_', ' ')}
-                      </span>
+                      <StatusBadge
+                        label={res.status.replace('_', ' ')}
+                        status={res.status}
+                        className={`shrink-0 ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}
+                      />
                     </div>
                     <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border">
                       <span className="text-muted-foreground">
@@ -870,13 +872,12 @@ export default function ReservationsDashboard() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10">Loading reservations...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : reservations.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10">
-                  <div className="flex flex-col items-center justify-center">
-                    <CalendarDays className="h-10 w-10 text-muted-foreground/50 mb-4" />
-                    No active reservations found.
-                  </div>
+                <TableRow><TableCell colSpan={8} className="py-0">
+                  <EmptyState icon={CalendarDays} title="No active reservations found" />
                 </TableCell></TableRow>
               ) : (
                 reservations.map((res) => {
@@ -931,9 +932,11 @@ export default function ReservationsDashboard() {
                       <TableCell>{format(new Date(res.checkOutDate), "dd-MMM-yy")}</TableCell>
                       <TableCell>{nights}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${statusMutedClasses(res.status)} ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
-                          {res.status.replace('_', ' ')}
-                        </span>
+                        <StatusBadge
+                          label={res.status.replace('_', ' ')}
+                          status={res.status}
+                          className={res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}
+                        />
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         {renderActions(res)}
@@ -980,9 +983,7 @@ export default function ReservationsDashboard() {
                 {getActiveTasks(selectedRes).map(task => (
                   <div key={task.id} className="flex justify-between items-center text-sm bg-card p-2 rounded shadow-sm border border-border">
                     <span className="font-medium text-foreground">{task.notes}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${statusMutedClasses(task.status)}`}>
-                      {task.status.replace('_', ' ')}
-                    </span>
+                    <StatusBadge label={task.status.replace('_', ' ')} status={task.status} />
                   </div>
                 ))}
               </div>

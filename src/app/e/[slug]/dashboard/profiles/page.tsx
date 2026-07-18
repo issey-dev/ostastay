@@ -152,22 +152,22 @@ export default function ProfilesDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col">
-        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6">
-          <TabsTrigger 
-            value="GUEST" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+        <TabsList variant="line" className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6">
+          <TabsTrigger
+            value="GUEST"
+            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Users className="w-4 h-4 mr-2" /> Guests
           </TabsTrigger>
-          <TabsTrigger 
-            value="COMPANY" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+          <TabsTrigger
+            value="COMPANY"
+            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Building2 className="w-4 h-4 mr-2" /> Corporate Accounts
           </TabsTrigger>
-          <TabsTrigger 
-            value="TRAVEL_AGENT" 
-            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+          <TabsTrigger
+            value="TRAVEL_AGENT"
+            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
           >
             <Briefcase className="w-4 h-4 mr-2" /> Travel Agents
           </TabsTrigger>
@@ -206,7 +206,7 @@ export default function ProfilesDashboard() {
             ) : (
               profiles.map((p) => (
                 <div key={p.upid} className="p-4 flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+                  <div className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
                     {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -216,7 +216,7 @@ export default function ProfilesDashboard() {
                           ? `${p.firstName} ${p.lastName || ''}`.trim()
                           : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                      <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
                         {p.classification}
                       </span>
                     </div>
@@ -256,15 +256,17 @@ export default function ProfilesDashboard() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">Loading profiles...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : profiles.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">No profiles found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={Users} title="No profiles found" /></TableCell></TableRow>
               ) : (
                 profiles.map((p) => (
                   <TableRow key={p.upid} className="hover:bg-muted/40">
                     <TableCell className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+                        <div className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
                           {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
                         </div>
                         <div className="flex flex-col">
@@ -287,11 +289,11 @@ export default function ProfilesDashboard() {
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="flex flex-col gap-1 items-start">
-                        <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                        <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
                           {p.classification}
                         </span>
                         {p.loyaltyTier && (
-                          <span className="px-2 py-1 rounded-full text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
+                          <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
                             {p.loyaltyTier}
                           </span>
                         )}

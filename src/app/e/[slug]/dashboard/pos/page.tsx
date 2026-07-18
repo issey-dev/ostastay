@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Utensils, Search, Send, Clock, Store, Coffee, ReceiptText } from "lucide-react"
+import { Search, Send, Clock, Store, Coffee, ReceiptText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 export default function POSDashboard() {
   const { currentProperty } = useProperty()
@@ -112,10 +114,7 @@ export default function POSDashboard() {
   const recentPostingsBody = (
     <>
       {recentPostings.length === 0 ? (
-        <div className="text-center py-10">
-          <Coffee className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">No charges posted from this terminal yet today.</p>
-        </div>
+        <EmptyState icon={Coffee} title="No charges posted from this terminal yet today" className="py-10" />
       ) : (
         <div className="space-y-4">
           {recentPostings.map((item, i) => (
@@ -136,18 +135,13 @@ export default function POSDashboard() {
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)] pb-24 md:pb-0">
+    <div className="flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)] pb-24 md:pb-0">
 
       {/* Left Column: Search & Post */}
       <div className="flex-1 space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <div className="p-2 bg-destructive-muted rounded-lg">
-              <Utensils className="w-6 h-6 text-destructive" />
-            </div>
-            Point of Sale Routing
-          </h1>
-          <p className="text-muted-foreground mt-2">Search for in-house guests and route outlet charges to their room.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Point of Sale Routing</h2>
+          <p className="text-muted-foreground">Search for in-house guests and route outlet charges to their room.</p>
         </div>
 
         {/* 1. Search Guest */}
@@ -181,9 +175,7 @@ export default function POSDashboard() {
                     <p className="text-sm text-muted-foreground">Room {g.roomNumber}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs px-2 py-1 bg-success-muted text-success rounded-full font-semibold">
-                      {g.status}
-                    </span>
+                    <StatusBadge label={g.status} status={g.status} />
                   </div>
                 </div>
               ))}

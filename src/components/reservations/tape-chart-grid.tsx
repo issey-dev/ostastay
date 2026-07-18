@@ -146,7 +146,7 @@ export function TapeChartGrid() {
             <div className="space-y-4 py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(selectedReservation.status).split(' ')[0]}`} />
+                  <div className={`w-3 h-3 rounded-none ${getStatusColor(selectedReservation.status).split(' ')[0]}`} />
                   <span className="font-semibold">{selectedReservation.status.replace('_', ' ')}</span>
                 </div>
                 <Badge variant="outline" className="font-mono">{selectedReservation.confirmationNo}</Badge>

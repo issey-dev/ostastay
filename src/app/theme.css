@@ -58,8 +58,12 @@
     --input: #E2E8F0;
     --ring: var(--primary); /* Focus rings match primary */
 
-    /* 7. CORNER ROUNDNESS */
-    --radius: 0.75rem; /* 12px - Soft modern corners */
+    /* 7. CORNER ROUNDNESS — 0 everywhere, no curves anywhere in the app. This single
+       value drives the whole rounded-sm..rounded-4xl scale (see globals.css's
+       @theme inline block), so this one line zeroes every component's corners at once.
+       rounded-full (avatars/pills/dots) isn't derived from this token — those are
+       squared off individually at each call site instead. */
+    --radius: 0px;
 
     /* 7b. ELEVATION — neutral shadow scale (never brand/accent-tinted). Replaces the old
        indigo-tinted ad hoc shadows that used to live in globals.css/card.tsx. */

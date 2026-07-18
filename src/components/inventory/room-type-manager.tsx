@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { Plus, Pencil, Trash2, BedDouble } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 import { RoomFeaturePicker, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import {
   Table,
@@ -318,13 +320,13 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Loading...</TableCell>
-              </TableRow>
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+              ))
             ) : roomTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                  No room types found. Create one to get started.
+                <TableCell colSpan={6} className="py-0">
+                  <EmptyState icon={BedDouble} title="No room types found" description="Create one to get started." />
                 </TableCell>
               </TableRow>
             ) : (

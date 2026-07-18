@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { statusMutedClasses } from "@/lib/status-tone"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
+import { DoorOpen } from "lucide-react"
 import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, groupFeaturesByCategory, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import {
   Select,
@@ -316,9 +319,13 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={2} className="text-center py-6 text-muted-foreground">Loading...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={2}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : buildings.length === 0 ? (
-                <TableRow><TableCell colSpan={2} className="text-center py-6 text-muted-foreground">No buildings configured.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={2} className="py-0">
+                  <EmptyState icon={Building2} title="No buildings configured" />
+                </TableCell></TableRow>
               ) : (
                 buildings.map((building) => (
                   <TableRow key={building.id} className="hover:bg-muted/40">
@@ -416,9 +423,13 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Loading...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : allFloors.length === 0 ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">No floors configured.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={3} className="py-0">
+                  <EmptyState icon={Map} title="No floors configured" />
+                </TableCell></TableRow>
               ) : (
                 allFloors.map((floor) => (
                   <TableRow key={floor.id} className="hover:bg-muted/40">
@@ -589,13 +600,17 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">Loading...</TableCell>
-                </TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : rooms.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                    No rooms configured. Add a building, a floor, and then create rooms.
+                  <TableCell colSpan={5} className="py-0">
+                    <EmptyState
+                      icon={DoorOpen}
+                      title="No rooms configured"
+                      description="Add a building, a floor, and then create rooms."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -610,9 +625,7 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
                       )}
                     </TableCell>
                     <TableCell className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${statusMutedClasses(room.status)}`}>
-                        {room.status.replace(/_/g, ' ')}
-                      </span>
+                      <StatusBadge label={room.status.replace(/_/g, ' ')} status={room.status} />
                     </TableCell>
                     <TableCell className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2 transition-opacity">

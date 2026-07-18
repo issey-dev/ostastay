@@ -26,8 +26,8 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-8">
-      <h1 className="text-3xl font-bold text-foreground">Daily Arrival & Departure Reports</h1>
+    <div className="max-w-4xl mx-auto space-y-8">
+      <h2 className="text-3xl font-bold tracking-tight">Daily Arrival & Departure Reports</h2>
       <div className="flex items-center space-x-4">
         <Calendar
           mode="single"

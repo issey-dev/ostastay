@@ -52,7 +52,7 @@ export function PropertyBannerColorManager() {
             !currentProperty.bannerColor ? "border-foreground" : "border-transparent hover:border-border"
           )}
         >
-          <span className="w-10 h-10 rounded-full flex items-center justify-center shadow-sm bg-muted text-muted-foreground">
+          <span className="w-10 h-10 rounded-none flex items-center justify-center shadow-sm bg-muted text-muted-foreground">
             {!currentProperty.bannerColor ? <Check className="w-5 h-5" /> : <Ban className="w-4 h-4" />}
           </span>
           <span className="text-xs font-medium text-muted-foreground">None</span>
@@ -72,7 +72,7 @@ export function PropertyBannerColorManager() {
               )}
             >
               <span
-                className="w-10 h-10 rounded-full flex items-center justify-center shadow-sm"
+                className="w-10 h-10 rounded-none flex items-center justify-center shadow-sm"
                 style={{ backgroundColor: preset.primary }}
               >
                 {isSelected && <Check className="w-5 h-5" style={{ color: preset.primaryForeground }} />}

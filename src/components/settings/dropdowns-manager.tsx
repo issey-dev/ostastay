@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X } from "lucide-react"
+import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   Table,
   TableBody,
@@ -247,12 +249,17 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : codes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    <p className="text-sm">No items found for <strong>{currentCategoryLabel}</strong>.</p>
-                    <p className="text-xs mt-1">Add your first option using the form above.</p>
+                  <TableCell colSpan={4} className="py-0">
+                    <EmptyState
+                      icon={ListChecks}
+                      title={`No items found for ${currentCategoryLabel}`}
+                      description="Add your first option using the form above."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

@@ -120,7 +120,17 @@ export default function RoomMatrix() {
     .sort((a, b) => a.localeCompare(b))
 
   if (loading && !propertyId) {
-    return <div className="p-10 flex justify-center text-muted-foreground">Loading inventory...</div>
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-64 mb-2" />
+        <Skeleton className="h-5 w-96 mb-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   if (!propertyId) {
@@ -168,7 +178,7 @@ export default function RoomMatrix() {
             {isBulkMode && (
               <div className="bg-muted border-b border-border p-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between shadow-inner">
                 <div className="font-medium text-foreground flex items-center">
-                  <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full mr-3">
+                  <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-none mr-3">
                     {selectedRooms.length}
                   </span>
                   rooms selected
@@ -201,7 +211,7 @@ export default function RoomMatrix() {
             </div>
           ) : rooms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 max-w-sm mx-auto">
-              <div className="h-20 w-20 bg-muted rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <div className="h-20 w-20 bg-muted rounded-none flex items-center justify-center mb-6 shadow-inner">
                 <svg className="w-10 h-10 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
@@ -213,7 +223,7 @@ export default function RoomMatrix() {
             floors.map(floorName => (
               <div key={floorName} className="space-y-4">
                 <h3 className="font-semibold text-foreground text-lg border-b border-border pb-2 flex items-center">
-                  <span className="w-2 h-2 rounded-full bg-foreground mr-2"></span> Floor {floorName}
+                  <span className="w-2 h-2 rounded-none bg-foreground mr-2"></span> Floor {floorName}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                   {rooms.filter(r => (r.floor?.name || "Unassigned") === floorName).map(room => {
@@ -221,13 +231,13 @@ export default function RoomMatrix() {
                     const roomContent = (
                       <div className="flex flex-col w-full h-full justify-between items-start text-left relative">
                         {isSelected && (
-                          <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full p-0.5 shadow-md z-10">
+                          <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-none p-0.5 shadow-md z-10">
                             <Check className="w-3 h-3" strokeWidth={3} />
                           </div>
                         )}
                         {!isSelected && room.maintenance && room.maintenance.length > 0 && (
                           <div
-                            className={`absolute -top-1 -right-1 rounded-full p-1 shadow-md z-10 ${
+                            className={`absolute -top-1 -right-1 rounded-none p-1 shadow-md z-10 ${
                               room.maintenance.some((m: any) => m.priority === 'HIGH')
                                 ? `${toneSolidClasses("danger")} animate-pulse`
                                 : room.maintenance.some((m: any) => m.priority === 'MEDIUM')
@@ -272,13 +282,13 @@ export default function RoomMatrix() {
                             <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">Update Status</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="cursor-pointer font-medium" onClick={() => handleStatusChange(room.id, "CLEAN")}>
-                              <span className="w-2 h-2 rounded-full bg-success mr-2"></span> Mark Clean
+                              <span className="w-2 h-2 rounded-none bg-success mr-2"></span> Mark Clean
                             </DropdownMenuItem>
                             <DropdownMenuItem className="cursor-pointer font-medium" onClick={() => handleStatusChange(room.id, "DIRTY")}>
-                              <span className="w-2 h-2 rounded-full bg-destructive mr-2"></span> Mark Dirty
+                              <span className="w-2 h-2 rounded-none bg-destructive mr-2"></span> Mark Dirty
                             </DropdownMenuItem>
                             <DropdownMenuItem className="cursor-pointer font-medium" onClick={() => handleStatusChange(room.id, "INSPECTED")}>
-                              <span className="w-2 h-2 rounded-full bg-info mr-2"></span> Mark Inspected
+                              <span className="w-2 h-2 rounded-none bg-info mr-2"></span> Mark Inspected
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="cursor-pointer text-muted-foreground" onClick={() => handleStatusChange(room.id, "OUT_OF_ORDER")}>

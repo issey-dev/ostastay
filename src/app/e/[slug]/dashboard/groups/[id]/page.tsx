@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
-import { statusMutedClasses } from "@/lib/status-tone"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
@@ -38,18 +41,34 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   }, [currentProperty, unwrappedParams.id])
 
   if (loading) {
-    return <div className="p-8 flex justify-center text-muted-foreground">Loading group details...</div>
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-9 rounded-none" />
+          <div>
+            <Skeleton className="h-8 w-56 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    )
   }
 
   if (!group) {
-    return <div className="p-8 text-center text-muted-foreground">Group not found.</div>
+    return <EmptyState icon={Users} title="Group not found" className="py-24" />
   }
 
   const pickedUp = group.reservations?.length || 0;
   const remaining = Math.max(0, group.totalRoomsHeld - pickedUp);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
@@ -60,10 +79,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-foreground">{group.name}</h1>
-              <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${statusMutedClasses(group.status)}`}>
-                {group.status}
-              </span>
+              <h1 className="text-3xl font-bold tracking-tight">{group.name}</h1>
+              <StatusBadge label={group.status} status={group.status} />
             </div>
             <p className="text-muted-foreground mt-1 font-mono text-sm">Code: {group.code}</p>
           </div>
@@ -118,52 +135,50 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         </div>
 
         {group.reservations && group.reservations.length > 0 ? (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-card text-muted-foreground text-xs uppercase tracking-wider border-b">
-                <th className="p-4 font-semibold">Res #</th>
-                <th className="p-4 font-semibold">Guest</th>
-                <th className="p-4 font-semibold">Dates</th>
-                <th className="p-4 font-semibold">Room</th>
-                <th className="p-4 font-semibold">Status</th>
-                <th className="p-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Res #</TableHead>
+                <TableHead>Guest</TableHead>
+                <TableHead>Dates</TableHead>
+                <TableHead>Room</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {group.reservations.map((res: any) => (
-                <tr key={res.id} className="hover:bg-muted/50">
-                  <td className="p-4 font-mono text-sm text-foreground">{res.reservationNumber}</td>
-                  <td className="p-4 font-semibold text-foreground">
+                <TableRow key={res.id}>
+                  <TableCell className="font-mono text-sm text-foreground">{res.reservationNumber}</TableCell>
+                  <TableCell className="font-semibold text-foreground">
                     {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
-                  </td>
-                  <td className="p-4 text-sm text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
                     {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
-                  </td>
-                  <td className="p-4 text-sm font-semibold text-foreground">
+                  </TableCell>
+                  <TableCell className="text-sm font-semibold text-foreground">
                     {res.assignments?.[0]?.room?.number || "Unassigned"}
-                  </td>
-                  <td className="p-4">
-                    <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${statusMutedClasses(res.status)}`}>
-                      {res.status}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge label={res.status} status={res.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
                       <Button variant="ghost" size="sm">
                         View
                       </Button>
                     </Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ) : (
-          <div className="text-center py-16">
-            <Users className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-            <p className="text-muted-foreground font-medium">No reservations picked up yet.</p>
-            <p className="text-sm text-muted-foreground mt-1">Click "Pickup Room" to add a guest to this group.</p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No reservations picked up yet"
+            description={'Click "Pickup Room" to add a guest to this group.'}
+          />
         )}
       </div>
 

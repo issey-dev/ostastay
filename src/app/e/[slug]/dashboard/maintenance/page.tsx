@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Wrench, Clock, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react"
+import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
 
 type Ticket = {
@@ -105,23 +107,32 @@ export default function MaintenanceDashboard() {
   ]
 
   const priorityTone: Record<string, StatusTone> = { HIGH: "danger", MEDIUM: "warning", LOW: "info" }
-  const getPriorityColor = (priority: string) => toneMutedClasses(priorityTone[priority] ?? "neutral")
 
   if (loading) {
-    return <div className="p-8 flex justify-center text-muted-foreground">Loading...</div>
+    return (
+      <div>
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <Skeleton className="h-9 w-64 mb-2" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-[500px] rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen">
+    <div>
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <div className="p-2 bg-muted rounded-lg">
-              <Wrench className="w-6 h-6 text-foreground" />
-            </div>
-            Maintenance Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-2">Track, manage, and resolve property maintenance issues.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Maintenance Dashboard</h2>
+          <p className="text-muted-foreground">Track, manage, and resolve property maintenance issues.</p>
         </div>
         <Button
           variant="outline"
@@ -143,7 +154,7 @@ export default function MaintenanceDashboard() {
               <div className={`flex items-center gap-3 p-3 rounded-xl border mb-4 ${toneMutedClasses(col.tone)}`}>
                 {col.icon}
                 <h2 className="font-bold text-lg">{col.title}</h2>
-                <div className="ml-auto bg-background/50 px-2 py-0.5 rounded-full text-sm font-semibold">
+                <div className="ml-auto bg-background/50 px-2 py-0.5 rounded-none text-sm font-semibold">
                   {colTickets.length}
                 </div>
               </div>
@@ -154,9 +165,7 @@ export default function MaintenanceDashboard() {
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-lg text-foreground">Room {ticket.room?.roomNumber}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getPriorityColor(ticket.priority)}`}>
-                          {ticket.priority}
-                        </span>
+                        <StatusBadge label={ticket.priority} tone={priorityTone[ticket.priority] ?? "neutral"} className="font-bold" />
                       </div>
                       <select
                         className="text-xs bg-muted border border-border rounded p-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"

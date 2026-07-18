@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter, useParams } from "next/navigation"
-import { Users, Save, ArrowLeft } from "lucide-react"
+import { Save, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,7 +58,7 @@ export default function NewGroupBlock() {
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
         <Link href={`/e/${slug}/dashboard/groups`}>
           <Button variant="outline" size="icon">
@@ -66,10 +66,8 @@ export default function NewGroupBlock() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            New Group Block
-          </h1>
-          <p className="text-muted-foreground mt-1">Reserve inventory for an upcoming event or corporate group.</p>
+          <h2 className="text-3xl font-bold tracking-tight">New Group Block</h2>
+          <p className="text-muted-foreground">Reserve inventory for an upcoming event or corporate group.</p>
         </div>
       </div>
 

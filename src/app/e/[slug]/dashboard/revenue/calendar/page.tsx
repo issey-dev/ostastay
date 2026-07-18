@@ -263,7 +263,7 @@ function PriceCalendarPageContent() {
                     return (
                       <div key={day.toISOString()} className={`bg-card min-h-[100px] p-2 flex flex-col group hover:bg-muted transition-colors ${isToday ? 'bg-info-muted/30' : ''}`}>
                         <div className="flex justify-between items-start">
-                          <span className={`text-sm font-medium ${isToday ? 'bg-info text-info-foreground rounded-full w-6 h-6 flex items-center justify-center' : 'text-muted-foreground'}`}>
+                          <span className={`text-sm font-medium ${isToday ? 'bg-info text-info-foreground rounded-none w-6 h-6 flex items-center justify-center' : 'text-muted-foreground'}`}>
                             {format(day, "d")}
                           </span>
                         </div>

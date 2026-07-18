@@ -138,9 +138,9 @@ export function FlashReport() {
               {Object.entries(data.revenueByCategory).map(([category, amount]) => (
                 <div key={category} className="flex items-center">
                   <div className="w-32 text-sm font-medium text-muted-foreground">{category}</div>
-                  <div className="flex-1 bg-muted rounded-full h-4 overflow-hidden relative mx-4">
+                  <div className="flex-1 bg-muted rounded-none h-4 overflow-hidden relative mx-4">
                     <div 
-                      className="absolute top-0 left-0 h-full bg-primary rounded-full"
+                      className="absolute top-0 left-0 h-full bg-primary rounded-none"
                       style={{ width: `${((amount as number) / data.totalRevenue) * 100}%` }}
                     ></div>
                   </div>

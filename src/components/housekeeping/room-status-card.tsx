@@ -71,7 +71,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
       onClick={handleCardClick}
     >
       {isSelected && (
-        <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-0.5 shadow-md z-10">
+        <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-none p-0.5 shadow-md z-10">
           <CheckCircle2 className="w-4 h-4" />
         </div>
       )}
@@ -86,7 +86,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
                   if (onEditMaintenance && activeTicket) onEditMaintenance(activeTicket);
                 }}
                 title={`${activeTicket?.status}: ${activeTicket?.description}${activeTicket?.assignedTo ? `\nAssigned to: ${activeTicket.assignedTo.firstName} ${activeTicket.assignedTo.lastName}` : ''}`} 
-                className={`transition-colors p-1 rounded-full flex items-center justify-center cursor-pointer
+                className={`transition-colors p-1 rounded-none flex items-center justify-center cursor-pointer
                   ${activeTicket?.status === 'IN_PROGRESS'
                     ? 'text-warning bg-warning-muted hover:bg-warning/20'
                     : 'text-destructive bg-destructive-muted hover:bg-destructive/20'}
@@ -98,7 +98,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
           </h3>
           <p className="text-xs font-medium opacity-80 mt-0.5">{room.roomType.name}</p>
         </div>
-        <div className="bg-background/60 p-2 rounded-full shadow-sm">
+        <div className="bg-background/60 p-2 rounded-none shadow-sm">
           {getStatusIcon(room.status)}
         </div>
       </div>
@@ -114,7 +114,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
             <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
               <Users className="w-3 h-3" />
               Occupied
-              {hasSharer && <span className="bg-info-muted text-info px-1.5 py-0.5 rounded-full text-[10px]">Sharer</span>}
+              {hasSharer && <span className="bg-info-muted text-info px-1.5 py-0.5 rounded-none text-[10px]">Sharer</span>}
             </div>
             <p className="text-xs text-muted-foreground mt-1 truncate">
               {activeAssignment.reservation.primaryGuest?.firstName} {activeAssignment.reservation.primaryGuest?.lastName}
@@ -155,7 +155,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
 
         {room.assignedAttendant && (
           <div className="mt-2 text-[11px] font-semibold bg-background/70 text-foreground/80 px-2 py-1 rounded border border-border flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[9px]">
+            <div className="w-4 h-4 rounded-none bg-muted flex items-center justify-center text-[9px]">
               {room.assignedAttendant.firstName[0]}
             </div>
             {room.assignedAttendant.firstName} {room.assignedAttendant.lastName}

@@ -9,9 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, KeyRound } from "lucide-react"
 import { RolePermissionMatrix, emptyPermissionMatrix, type PermissionMatrix } from "./role-permission-matrix"
 import { MODULES } from "@/lib/modules"
+import type { StatusTone } from "@/lib/status-tone"
 
 type Role = {
   id: string
@@ -173,12 +177,11 @@ export function UsersRolesManager({
     }
   }
 
-  const getRoleBadgeColor = (roleName: string) => {
-    if (roleName === "Admin" || roleName === "Manager") return "bg-muted text-primary"
-    if (roleName === "Housekeeping") return "bg-success-muted text-success"
-    if (roleName === "Maintenance") return "bg-warning-muted text-warning"
-    if (roleName === "Reservations") return "bg-info-muted text-info"
-    return "bg-muted text-foreground"
+  const getRoleTone = (roleName: string): StatusTone => {
+    if (roleName === "Housekeeping") return "success"
+    if (roleName === "Maintenance") return "warning"
+    if (roleName === "Reservations") return "info"
+    return "neutral"
   }
 
   // ---- Roles ----
@@ -257,7 +260,14 @@ export function UsersRolesManager({
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading team members...</div>
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-9 w-full max-w-sm" />
+        <Skeleton className="h-48 rounded-md" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -291,7 +301,7 @@ export function UsersRolesManager({
                   <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={getRoleBadgeColor(user.role.name)}>{user.role.name}</Badge>
+                    <StatusBadge label={user.role.name} tone={getRoleTone(user.role.name)} />
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {user.scope === "ENTERPRISE"
@@ -317,7 +327,9 @@ export function UsersRolesManager({
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No users found. Create your first team member!</TableCell>
+                  <TableCell colSpan={6} className="py-0">
+                    <EmptyState icon={Users} title="No users found" description="Create your first team member." />
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

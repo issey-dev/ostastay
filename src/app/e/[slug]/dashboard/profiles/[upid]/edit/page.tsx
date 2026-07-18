@@ -2,6 +2,9 @@
 
 import { useEffect, useState, use } from "react"
 import ProfileForm from "@/components/profiles/ProfileForm"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
+import { UserX } from "lucide-react"
 
 export default function EditProfilePage({ params }: { params: Promise<{ upid: string }> }) {
   const { upid } = use(params)
@@ -32,11 +35,16 @@ export default function EditProfilePage({ params }: { params: Promise<{ upid: st
   }, [upid])
 
   if (loading) {
-    return <div className="p-8 text-center">Loading profile...</div>
+    return (
+      <div className="max-w-3xl mx-auto space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    )
   }
 
   if (!profile) {
-    return <div className="p-8 text-center text-destructive">Profile not found.</div>
+    return <EmptyState icon={UserX} title="Profile not found" className="py-24" />
   }
 
   return (

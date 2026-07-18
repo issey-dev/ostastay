@@ -61,15 +61,10 @@ export default function NightAuditDashboard() {
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-          <div className="p-2 bg-muted rounded-lg">
-            <MoonStar className="w-6 h-6 text-foreground" />
-          </div>
-          Night Audit & End of Day
-        </h1>
-        <p className="text-muted-foreground mt-2">Verify checklist items and execute the end of day processing.</p>
+        <h2 className="text-3xl font-bold tracking-tight">Night Audit & End of Day</h2>
+        <p className="text-muted-foreground">Verify checklist items and execute the end of day processing.</p>
       </div>
 
       {/* Checklist */}
@@ -81,7 +76,7 @@ export default function NightAuditDashboard() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center justify-between p-4 rounded-lg bg-muted border">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="w-6 h-6 rounded-full" />
+                  <Skeleton className="w-6 h-6 rounded-none" />
                   <Skeleton className="h-4 w-40" />
                 </div>
                 <Skeleton className="h-4 w-6" />

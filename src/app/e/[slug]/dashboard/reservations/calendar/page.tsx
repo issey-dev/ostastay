@@ -237,7 +237,7 @@ export default function ReservationsCalendarPage() {
                         <div key={room.id} className="flex border-b hover:bg-muted transition-colors group">
                           {/* Room Label */}
                           <div className="w-48 flex-shrink-0 border-r p-3 font-medium text-foreground bg-card flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-muted-foreground"></span>
+                            <span className="w-2 h-2 rounded-none bg-muted-foreground"></span>
                             Room {room.roomNumber}
                           </div>
                           

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
 
 type FolioPanelProps = {
@@ -19,6 +21,7 @@ type FolioPanelProps = {
 }
 
 export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: FolioPanelProps) {
+  const { slug } = useParams<{ slug: string }>()
   const [folios, setFolios] = useState<any[]>([])
   const [activeFolioId, setActiveFolioId] = useState<string>("")
   const [loading, setLoading] = useState(false)
@@ -326,7 +329,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          onClick={() => window.open(`/print/folios/${activeFolio.id}`, '_blank')}
+                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print`, '_blank')}
                           className="h-9 shadow-sm border-border ml-2"
                         >
                           <Printer className="w-4 h-4 mr-2" /> Print
@@ -422,7 +425,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           ))}
                           {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No transactions posted yet.</TableCell>
+                              <TableCell colSpan={8} className="py-0">
+                                <EmptyState icon={Receipt} title="No transactions posted yet" />
+                              </TableCell>
                             </TableRow>
                           )}
                         </TableBody>

@@ -62,7 +62,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary text-primary-foreground mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-none bg-primary text-primary-foreground mb-4 shadow-lg">
             <Hotel size={32} />
           </div>
           <h1 className="text-3xl font-bold text-foreground">{enterpriseName ?? "Guest House PMS"}</h1>

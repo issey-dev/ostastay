@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Splits the old combined "Tax Profiles & Charge Codes" section — this half is Tax
 // only (Maldives Tax config + Custom Tax profiles). Charge Codes now live in their own
@@ -161,7 +163,12 @@ export function TaxManager() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading tax configuration...</div>
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-48 rounded-xl" />
+      </div>
+    )
   }
 
   return (
@@ -450,7 +457,9 @@ export function TaxManager() {
               })}
               {taxProfiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No custom tax profiles configured.</TableCell>
+                  <TableCell colSpan={5} className="py-0">
+                    <EmptyState icon={Percent} title="No custom tax profiles configured" />
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

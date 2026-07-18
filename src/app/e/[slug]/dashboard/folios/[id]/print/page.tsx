@@ -6,7 +6,7 @@ import { Printer, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { resolveInvoiceBrandColor, resolveBalanceColor } from "@/lib/invoice-branding"
 
-export default function PrintInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default function PrintInvoicePage({ params }: { params: Promise<{ id: string; slug: string }> }) {
   const { id } = use(params)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -56,18 +56,23 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   }
 
   const { folio, settings } = data
-  const { reservation } = folio
-  const { primaryGuest } = reservation
+  const { reservation, payeeProfile } = folio
+  const invoiceGuest = payeeProfile || reservation.primaryGuest
 
   // Calculate totals
   let totalBaseCharges = 0
   let totalServiceCharges = 0
   let totalTaxes = 0
+  let totalGreenTax = 0
   let totalPayments = 0
 
   folio.lineItems.forEach((i: any) => {
     if (!i.isVoid) {
-      totalBaseCharges += i.amount
+      if (i.chargeCode?.code === 'GTX' || i.description.includes('Green Tax')) {
+        totalGreenTax += i.amount
+      } else {
+        totalBaseCharges += i.amount
+      }
       totalServiceCharges += i.serviceChargeAmount || 0
       totalTaxes += i.taxAmount
     }
@@ -78,7 +83,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     else totalPayments -= p.amount
   })
 
-  const balance = (totalBaseCharges + totalServiceCharges + totalTaxes) - totalPayments
+  const balance = (totalBaseCharges + totalServiceCharges + totalTaxes + totalGreenTax) - totalPayments
 
   const fontFamilies: Record<string, string> = {
     Geist: "font-sans",
@@ -92,9 +97,9 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const brandColor = resolveInvoiceBrandColor(settings.invoiceBrandColor)
 
   return (
-    <div className={`bg-white min-h-screen text-slate-800 ${selectedFont}`}>
+    <div className={`bg-white min-h-screen text-slate-800 p-4 sm:p-12 print:p-0 ${selectedFont}`}>
       {/* Control bar - hidden during print */}
-      <div className="print:hidden bg-muted border-b border-border p-4 flex justify-between items-center sticky top-0 z-[var(--z-sticky)]">
+      <div className="print:hidden max-w-[800px] mx-auto mb-6 bg-muted border border-border rounded-lg p-4 flex justify-between items-center sticky top-0 z-[var(--z-sticky)] shadow-sm">
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => window.close()}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -107,20 +112,20 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Invoice Document Page */}
-      <div className="max-w-[800px] mx-auto p-8 sm:p-12 print:p-0">
-        
+      <div className="max-w-[800px] mx-auto print:border-0 border p-8 sm:p-12 rounded-xl shadow-sm bg-white">
+
         {/* Header Block */}
         <div className="flex justify-between items-start border-b-2 pb-6 mb-8" style={{ borderBottomColor: brandColor }}>
           <div>
             {settings.invoiceLogoUrl ? (
-              <img 
-                src={settings.invoiceLogoUrl} 
-                alt="Brand Logo" 
+              <img
+                src={settings.invoiceLogoUrl}
+                alt="Brand Logo"
                 className="max-h-16 max-w-[200px] mb-4 object-contain"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             ) : (
-              <div 
+              <div
                 className="w-12 h-12 rounded flex items-center justify-center text-white mb-4 font-bold text-lg shadow-sm"
                 style={{ backgroundColor: brandColor }}
               >
@@ -162,10 +167,10 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
         <div className="grid grid-cols-2 gap-8 bg-slate-50/50 p-6 rounded-lg border border-slate-100 mb-8 text-xs">
           <div>
             <h3 className="font-bold text-slate-400 uppercase tracking-wider text-[10px] mb-2">Guest Information</h3>
-            <p className="font-bold text-sm text-slate-900">{primaryGuest.firstName} {primaryGuest.lastName}</p>
-            {primaryGuest.contacts?.[0]?.address && <p className="text-slate-500 mt-1">{primaryGuest.contacts[0].address}</p>}
-            {primaryGuest.contacts?.[0]?.email && <p className="text-slate-500">Email: {primaryGuest.contacts[0].email}</p>}
-            {primaryGuest.contacts?.[0]?.mobile && <p className="text-slate-500">Phone: {primaryGuest.contacts[0].mobile}</p>}
+            <p className="font-bold text-sm text-slate-900">{invoiceGuest.firstName} {invoiceGuest.lastName}</p>
+            {invoiceGuest.contacts?.[0]?.address && <p className="text-slate-500 mt-1">{invoiceGuest.contacts[0].address}</p>}
+            {invoiceGuest.contacts?.[0]?.email && <p className="text-slate-500">Email: {invoiceGuest.contacts[0].email}</p>}
+            {invoiceGuest.contacts?.[0]?.mobile && <p className="text-slate-500">Phone: {invoiceGuest.contacts[0].mobile}</p>}
           </div>
 
           <div>
@@ -226,23 +231,31 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
               <tr className="border-b text-slate-500 font-semibold">
                 <th className="text-left pb-2 w-28">Date</th>
                 <th className="text-left pb-2">Description</th>
-                <th className="text-right pb-2 w-24">Base Price</th>
-                <th className="text-right pb-2 w-20">SC</th>
-                <th className="text-right pb-2 w-20">Tax</th>
+                <th className="text-right pb-2 w-20">Base</th>
+                <th className="text-right pb-2 w-20">Svc Chg</th>
+                <th className="text-right pb-2 w-20">TGST</th>
                 <th className="text-right pb-2 w-24">Total</th>
               </tr>
             </thead>
             <tbody>
-              {folio.lineItems.map((item: any) => (
-                <tr key={item.id} className="border-b text-slate-700">
-                  <td className="py-2.5 text-slate-500">{format(parseISO(item.date), "dd-MMM-yy")}</td>
-                  <td className="py-2.5">{item.description}</td>
-                  <td className="text-right py-2.5">${item.amount.toFixed(2)}</td>
-                  <td className="text-right py-2.5 text-slate-400">${(item.serviceChargeAmount || 0).toFixed(2)}</td>
-                  <td className="text-right py-2.5 text-slate-400">${item.taxAmount.toFixed(2)}</td>
-                  <td className="text-right py-2.5 font-semibold text-slate-900">${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}</td>
-                </tr>
-              ))}
+              {folio.lineItems.map((item: any) => {
+                const isGTX = item.chargeCode?.code === 'GTX' || item.description.includes('Green Tax');
+                const rowTotal = item.amount + (item.serviceChargeAmount || 0) + item.taxAmount;
+                return (
+                  <tr key={item.id} className="border-b text-slate-700">
+                    <td className="py-2.5 text-slate-500">{format(parseISO(item.date), "dd-MMM-yy")}</td>
+                    <td className="py-2.5">{item.description}</td>
+                    <td className="text-right py-2.5">${item.amount.toFixed(2)}</td>
+                    <td className="text-right py-2.5 text-slate-400">
+                      {isGTX ? "-" : `$${(item.serviceChargeAmount || 0).toFixed(2)}`}
+                    </td>
+                    <td className="text-right py-2.5 text-slate-400">
+                      {isGTX ? "-" : `$${item.taxAmount.toFixed(2)}`}
+                    </td>
+                    <td className="text-right py-2.5 font-semibold text-slate-900">${rowTotal.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
               {folio.lineItems.length === 0 && (
                 <tr>
                   <td colSpan={6} className="text-center py-6 text-slate-400 italic">No charges posted.</td>
@@ -289,14 +302,24 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
               <span>Subtotal Charges:</span>
               <span className="font-medium text-slate-900">${totalBaseCharges.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Service Charge (SC):</span>
-              <span className="font-medium text-slate-900">${totalServiceCharges.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Total Taxes & VAT:</span>
-              <span className="font-medium text-slate-900">${totalTaxes.toFixed(2)}</span>
-            </div>
+            {settings.serviceChargeEnabled && totalServiceCharges > 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span>Service Charge ({settings.serviceChargeRate}%):</span>
+                <span className="font-medium text-slate-900">${totalServiceCharges.toFixed(2)}</span>
+              </div>
+            )}
+            {settings.tgstEnabled && totalTaxes > 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span>TGST ({settings.tgstRate}%):</span>
+                <span className="font-medium text-slate-900">${totalTaxes.toFixed(2)}</span>
+              </div>
+            )}
+            {settings.greenTaxEnabled && totalGreenTax > 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span>Green Tax (flat):</span>
+                <span className="font-medium text-slate-900">${totalGreenTax.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-600 border-b pb-2 mb-2">
               <span>Total Paid:</span>
               <span className="font-medium text-slate-900">${totalPayments.toFixed(2)}</span>
@@ -334,9 +357,11 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
       {/* Inject print-specific styling */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          body {
+          html, body {
             background-color: white !important;
             color: black !important;
+            overflow: visible !important;
+            height: auto !important;
           }
           .print\\:hidden {
             display: none !important;
@@ -344,9 +369,22 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
           .print\\:p-0 {
             padding: 0 !important;
           }
+          .print\\:border-0 {
+            border: 0 !important;
+            box-shadow: none !important;
+          }
+          /* Hide scrollbars and force overflow visible on print */
+          * {
+            overflow: visible !important;
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+          }
+          ::-webkit-scrollbar {
+            display: none !important;
+          }
           @page {
             size: auto;
-            margin: 20mm;
+            margin: 15mm;
           }
         }
       `}} />
