@@ -175,6 +175,35 @@ async function main() {
     create: { enterpriseId: veyo.id, code: "FB", description: "Food & Beverage", category: "FOOD_BEVERAGE", taxProfileId: taxProfile.id },
   });
 
+  // Sample chart of charge codes. ChargeCode.category has no SPA bucket (ROOM |
+  // FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | PAYMENT | SYSTEM), so spa items
+  // are grouped under OTHERS. All use the enterprise default tax engine.
+  const sampleChargeCodes: Array<{ code: string; description: string; category: string }> = [
+    // Accommodation
+    { code: "10RV", description: "Accommodation Revenue", category: "ROOM" },
+    { code: "11RV", description: "Accommodation Upgrade", category: "ROOM" },
+    { code: "13RV", description: "Cancellation Penalty", category: "ROOM" },
+    { code: "14RV", description: "Noshow Penalty", category: "ROOM" },
+    // F&B
+    { code: "60RV", description: "Package Breakfast", category: "FOOD_BEVERAGE" },
+    { code: "61RV", description: "Package Lunch", category: "FOOD_BEVERAGE" },
+    { code: "62RV", description: "Package Dinner", category: "FOOD_BEVERAGE" },
+    // Transport
+    { code: "50RV", description: "Airport Transfer", category: "TRANSPORTATION" },
+    { code: "51RV", description: "SpeedBoat Transfer", category: "TRANSPORTATION" },
+    // Spa
+    { code: "40RV", description: "Spa Massage", category: "OTHERS" },
+    { code: "41RV", description: "Spa Treatment", category: "OTHERS" },
+    { code: "49RV", description: "Spa Misc", category: "OTHERS" },
+  ];
+  for (const cc of sampleChargeCodes) {
+    await prisma.chargeCode.upsert({
+      where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
+      update: {},
+      create: { enterpriseId: veyo.id, ...cc },
+    });
+  }
+
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CARD" } });
   if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Credit Card", type: "CARD" } });
   const pmCash = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CASH" } });
