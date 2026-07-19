@@ -121,8 +121,6 @@ export function PropertiesManager() {
       </Dialog>
 
       <ControlsSectionHeader
-        title="Property Portfolio"
-        description="A list of all properties currently managed in the PMS."
         action={
           <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
             <Plus className="mr-2 h-4 w-4" /> Add Property

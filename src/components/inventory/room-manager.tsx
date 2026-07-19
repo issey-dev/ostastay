@@ -266,8 +266,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
       <>
       {/* Buildings Table */}
       <ControlsSectionHeader
-        title="Buildings"
-        description="Manage your property's physical buildings."
         action={
         <Dialog open={isBuildingDialogOpen} onOpenChange={(open) => {
             setIsBuildingDialogOpen(open)
@@ -353,8 +351,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
       <>
       {/* Floors Table */}
       <ControlsSectionHeader
-        title="Floors"
-        description="Manage floors within your buildings."
         action={
         <Dialog open={isFloorDialogOpen} onOpenChange={(open) => {
             setIsFloorDialogOpen(open)
@@ -458,8 +454,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
     {view === "rooms" && (
       <>
       <ControlsSectionHeader
-        title="Rooms"
-        description="Manage individual rooms and assign them to floors."
         action={
         <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
             setIsRoomDialogOpen(open)
