@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench } from "lucide-react"
+import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack } from "lucide-react"
 import { requireSession, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "./logout-button"
@@ -83,10 +83,22 @@ const items: { title: string; url: string; icon: typeof MonitorPlay; module: Mod
     module: "POS",
   },
   {
+    title: "Debtors",
+    url: "/dashboard/debtors",
+    icon: Landmark,
+    module: "DEBTORS",
+  },
+  {
     title: "Daily Reports",
     url: "/dashboard/reports",
     icon: CalendarDays,
     module: "REPORTS",
+  },
+  {
+    title: "Stationaries",
+    url: "/dashboard/stationaries",
+    icon: FileStack,
+    module: "CONTROLS",
   },
   {
     title: "Controls",

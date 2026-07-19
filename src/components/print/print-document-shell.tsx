@@ -23,10 +23,14 @@ export function PrintDocumentShell({
   previewLabel,
   fontClassName,
   children,
+  extraActions,
 }: {
   previewLabel: string
   fontClassName: string
   children: React.ReactNode
+  // Rendered before the Print button — e.g. an "Email" button for documents (like the
+  // Debtor Statement) that offer more than one delivery action.
+  extraActions?: React.ReactNode
 }) {
   return (
     <div className={`bg-white min-h-screen text-slate-800 p-4 sm:p-12 print:p-0 ${fontClassName}`}>
@@ -37,9 +41,12 @@ export function PrintDocumentShell({
           </Button>
           <span className="text-xs text-muted-foreground font-medium">{previewLabel}</span>
         </div>
-        <Button onClick={() => window.print()}>
-          <Printer className="w-4 h-4 mr-2" /> Print / Save as PDF
-        </Button>
+        <div className="flex items-center gap-2">
+          {extraActions}
+          <Button onClick={() => window.print()}>
+            <Printer className="w-4 h-4 mr-2" /> Print / Save as PDF
+          </Button>
+        </div>
       </div>
 
       <div className="max-w-[800px] mx-auto print:border-0 border p-8 sm:p-12 rounded-xl shadow-sm bg-white">

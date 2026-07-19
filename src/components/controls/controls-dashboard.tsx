@@ -23,7 +23,6 @@ import {
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
-import { InvoiceSettingsManager } from "@/components/settings/invoice-settings-manager"
 import { PropertiesManager } from "@/components/settings/properties-manager"
 import { FacilitiesManager } from "@/components/settings/facilities-manager"
 import { FacilityAmenitiesManager } from "@/components/settings/facility-amenities-manager"
@@ -148,9 +147,6 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       icon: FileBarChart,
       render: () => (
         <div className="space-y-6">
-          <ControlsCard title="Invoice Design" description="Customize the look, colors, headers, footers, and payment terms of guest invoices.">
-            <InvoiceSettingsManager />
-          </ControlsCard>
           <ControlsCard title="SMTP / SFTP" description="Outgoing email and file-transfer connection settings.">
             <SmtpSftpManager />
           </ControlsCard>
