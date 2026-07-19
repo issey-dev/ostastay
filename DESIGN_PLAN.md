@@ -1,6 +1,13 @@
 # Design Consistency & Theming Plan — Guest House PMS
 
-Status: **planning only** — no code in this document has been applied to the repo.
+Status: **largely implemented**, not "planning only" (this header was stale — see
+`git log` commit `4420587 Implement DESIGN_PLAN.md: monochromatic design system +
+responsive layouts`, plus `ec30870 Rescope the banner accent from enterprise to
+property`, which superseded §3.3 below to be per-property rather than per-enterprise).
+Treat this document as a record of the design rationale and target state, verify
+against current code before assuming any specific finding/gap listed in §1 is still
+open. See [`.agents/docs/DECISIONS.md`](.agents/docs/DECISIONS.md) for a short summary
+and the per-property banner correction.
 Audience: a coding agent executing this phase-by-phase.
 Scope: `D:\Osta\ostastay` (Next.js 16 / React 19 App Router, "Guest House PMS").
 

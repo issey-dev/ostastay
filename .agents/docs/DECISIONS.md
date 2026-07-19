@@ -362,3 +362,246 @@
 - **Payment Receipt** is scoped **one per existing `Payment` row** (confirmed
   explicitly, not a separate "receipt batch" concept) — printed from a per-row action
   in the Folio Panel's payments table, which previously had no trailing actions column.
+
+## Debtors (Accounts Receivable) (2026-07-19)
+
+App owner requested a new "Debtors" module: credit accounts for Travel Agents and
+corporate clients, transferring/managing charges paid by agents, Night Audit posting to
+the right billing target, and a Folio "bill to account" option gated on a City Ledger
+settlement method (default when a TA/corporate is attached). Clarifying questions and
+answers, confirmed before building:
+
+- **Credit accounts extend existing `Profile` rows** (COMPANY/TRAVEL_AGENT), not a
+  separate account model — `Profile` already had dormant `arNumber`/`creditLimit`/
+  `iataNumber`/`commissionRate` fields nothing read before this. New
+  `Profile.isCreditAccount` formally activates them.
+- **"Transfer agent charges"** means routing a folio charge from the guest's own folio
+  onto the account's AR ledger (the classic bill-to-account/City Ledger transfer) — not
+  agent-commission tracking.
+- **V1 is the full AR suite**: accounts, charge routing, running balance, recording
+  payments received, a FIFO aging report (Current/1-30/31-60/61-90/90+), and a
+  printable/emailable Account Statement.
+- **Credit limit is warn-only, never blocking** — mirrors the existing Outlet
+  appointment-capacity `capWarning` pattern, surfaced in the Night Audit results page
+  and the bill-to-account response, never persisted.
+- **Module access**: `DEBTORS` was added only to `Cashier` (beyond the always-full
+  Admin/Manager) — Front Desk and Reservations were explicitly *not* granted it at
+  launch. **Live-verified this exposed a real, general RBAC bug**: a brand-new module
+  added to `MODULES` was not retroactively granted to any enterprise's already-seeded
+  `RolePermission` rows (`ensureRoles()`'s `upsert` only populates permissions on
+  first create), and System roles are read-only in the Controls UI, leaving no
+  self-service fix. **Fixed the same day** (see "RBAC self-healing permission
+  backfill" below) rather than left as a known gap — every existing role now
+  self-heals the first time it's used after a new module ships.
+- **A debtor's AR ledger is a `Folio`**, not a new model — `isDebtorAccount: true`,
+  `payeeProfileId` set to the credit-account Profile (reusing the existing
+  `payeeProfile` relation, which was already used by the ordinary "Change Payee" flow),
+  `reservationId: null` like a walk-in folio, one per `(Profile, Property)` created
+  lazily on first use — mirrors how `GroupBlock.masterFolios` and walk-in folios are
+  already provisioned on demand. No DB-level uniqueness enforces the one-per-pair rule
+  (a filtered/partial unique index isn't clean in SQLite/Prisma, and `payeeProfileId`
+  is legitimately reused by non-debtor folios); the lazy-creation helper
+  (`src/lib/debtor-accounts.ts`'s `findOrCreateDebtorFolio`) does a find-then-create
+  and documents this as an accepted, low-risk gap.
+- **`POST /api/debtors/accounts/[profileId]/bill-charges` is a new, separate endpoint**
+  from `/api/folios/line-items/move` — that route's walk-in-rejection and
+  same-reservation-only checks are real safety invariants for the ordinary "Move to
+  Folio" action; weakening them to admit an AR folio (`reservationId: null`, accepting
+  charges from any reservation at the property) would also loosen what that existing
+  action permits. `bill-charges` has its own guards instead: rejects re-billing a
+  charge already on a debtor folio, and rejects billing from a group master folio.
+- **Settlement routing is automatic where it can be, manual elsewhere**: a new
+  reservation's initial folio defaults `settlementMethod` to `CITY_LEDGER` only if its
+  `travelAgentId` resolves to an `isCreditAccount` profile (not re-evaluated on later
+  edits, so a staff override sticks); Night Audit then posts the nightly ROOM/Green Tax
+  charges straight onto that account's AR folio instead of the guest folio whenever
+  that's set. Because those charges never land on the guest folio, **checkout's
+  existing zero-balance check required no code changes**. Any other charge (POS,
+  incidentals, corrections) is routed manually via a new "Bill to Account" action in
+  the Folio Panel, enabled only when `settlementMethod === CITY_LEDGER`.
+- **`PrintDocumentShell` gained an `extraActions` slot** (rendered before the Print
+  button) so the new Account Statement page could offer both Print and Email actions
+  without duplicating the shell — the same dual-action need the Confirmation Letter
+  page solved with a bespoke header; this generalizes it for future documents that need
+  more than one delivery action.
+
+## RBAC self-healing permission backfill (2026-07-19)
+
+App owner asked to address the gap discovered above directly: "adding a new RBAC
+module isn't retroactively granted to existing enterprises' System roles, and System
+roles can't be edited via the Controls UI at all."
+
+- **Chose self-healing over a one-off migration script**: `requireSession()`
+  (`src/lib/scope.ts`) already re-queries the live `User`→`Role`→`RolePermission`
+  chain fresh on every request (no JWT/session caching of permissions — confirmed by
+  reading the whole function first). A one-time migration script would only fix
+  enterprises that exist *today*; a self-healing check fixes every enterprise
+  automatically, forever, the first time any of its users makes a request after a new
+  module ships — no deploy-time step to remember, no risk of a new enterprise's
+  System roles drifting out of sync again the next time `MODULES` grows.
+- **What it does**: after loading `user.role.permissions`, diff the module names
+  present against the current `MODULES` array. If any are missing, backfill them:
+  System/Support roles get the canonical value from `SYSTEM_ROLE_DEFS`/
+  `SUPPORT_ROLE_DEFS` (looked up by exact role name — both dicts merged into one
+  lookup table), custom (non-system) roles get all-`false` (`NO_ACCESS`) — the same
+  default they'd have received had the module existed when an enterprise admin
+  created that role via the Controls UI. Cheap on the common path (`missing.length
+  === 0` returns immediately) and self-limiting (a no-op forever once a role has been
+  backfilled once).
+- **SQLite doesn't support `createMany`'s `skipDuplicates`** (Postgres/MySQL/
+  CockroachDB only) — the backfill instead does one `upsert` per missing row, keyed
+  on `RolePermission`'s `@@unique([roleId, module])` compound key. Still fully
+  race-safe if two concurrent requests for the same under-provisioned role both hit
+  the gap at once.
+- **Deliberately did not touch the "System roles cannot be edited" restriction** in
+  the Controls UI (`src/app/api/roles/[id]/route.ts`) or relax it in any way — that
+  block exists because System roles are shared *across every enterprise*, and letting
+  one enterprise's admin edit a shared row (or silently forking it per-enterprise on
+  first edit) is a materially different, riskier feature than what was actually
+  asked for. The self-heal fixes the concrete bug (a legitimate new module never
+  reaching existing roles); it doesn't change who can edit what.
+- **Live-verified against the real dev database, not just the two new
+  `tests/scope.test.ts` cases**: found 8 genuinely pre-existing roles missing the
+  `DEBTORS` row from before this fix shipped (Manager, Front Desk, Housekeeping,
+  Maintenance, Cashier, Reservations, Osta Support, Osta Support Admin) — logged in
+  as the `Manager` role and confirmed the row appeared correctly on the very first
+  request, matching `SYSTEM_ROLE_DEFS.Manager.DEBTORS` exactly, with no server
+  restart or manual step involved.
+
+## Stationaries page (2026-07-19)
+
+App owner: "in Controls > Reports we have option to define invoice some details, i
+want to move that to a separate page > Stationaries... a way to properly manage
+certain details of the stationaries a simple way" — followed shortly after by "side
+bar does not show Stationary option can you add there?" once they saw the first
+version (a Controls tab).
+
+- **Audited which `EnterpriseSettings` fields each of the 5 printable/emailable
+  documents actually reads** (Tax/Proforma Invoice, Confirmation Letter, Payment
+  Receipt, Currency Exchange Receipt, Debtor Statement) before designing anything —
+  confirmed brand identity (name/logo/color/font/address/contact) is shared by all
+  5, `invoiceHeaderText` is Invoice-only, footer/terms/payment-account fields are
+  shared by Invoice + both Receipt types + Statement, and
+  `confirmationLetterMessage` is Confirmation-Letter-only. This matrix drove the
+  three-tab grouping in the new `StationariesManager` (Branding / Financial
+  Documents / Confirmation Letter) instead of guessing a layout.
+- **No schema or API changes** — every field already existed and was already read
+  correctly by all 5 documents; this was purely a settings-UI relocation and
+  reorganization, confirmed via the audit above before writing any code.
+- **Chose grouped tabs with a switchable live preview** (3 mockups: Invoice,
+  Confirmation Letter, generic Receipt/Statement) over one long undifferentiated
+  form — app owner's explicit choice between the two when asked, on the reasoning
+  that a field like "Header Text" being invoice-only is invisible in a flat form but
+  obvious once it's the only field in its own tab.
+- **Sidebar placement**: shipped first as a new Controls tab (matching how
+  Sequences/Tax/Users & Roles all live inside Controls, since this looked like pure
+  settings/configuration, not a new operational module). The app owner then asked
+  for it in the main left sidebar directly, same as Debtors got — promoted to a
+  standalone page (`src/app/e/[slug]/dashboard/stationaries/page.tsx`) with its own
+  `app-sidebar.tsx` entry, and removed the now-redundant Controls tab so there's one
+  canonical path, not two. Deliberately reused the existing `CONTROLS` permission
+  rather than minting a new RBAC module for it — it's still fundamentally a settings
+  page, and reusing an already-granted permission meant every existing Admin/Manager
+  saw the new sidebar item immediately with no backfill needed (unlike `DEBTORS`,
+  which genuinely needed its own module since it's a real operational domain with
+  its own CRUD permissions).
+- **Live-verified end-to-end**: all three tabs load and save correctly, all three
+  preview modes render, and a saved `confirmationLetterMessage` change was confirmed
+  to persist through a full page reload by reading it back from the database
+  directly (then reset to empty afterward, since it was test data).
+- **Unrelated discovery during verification, explicitly not touched**: the Controls
+  page intermittently failed to compile due to JSX syntax errors in
+  `room-manager.tsx` and then `tax-manager.tsx` — different files erroring on
+  successive checks, consistent with another session actively editing them at the
+  same time. Neither file was touched by this work.
+
+## Debtors: checkout-triggered invoice pipeline redesign (2026-07-19)
+
+App owner: "statement and receipt currently together -- it should be two seperate
+ones, statement should show line per invoice with totals and guest name and also
+summary age of folios (open only)." Digging into "one row per invoice" surfaced a
+real architecture mismatch with the original Debtors design (see "Debtors (Accounts
+Receivable)" above): every charge billed to a credit account landed on **one shared
+pooled ledger folio per (account, property)**, with no memory of which
+guest/reservation it came from — structurally impossible to produce "one row per
+invoice" from. Asked to clarify what "open folios" should mean; the app owner's
+answer redefined the pipeline outright: **"Debtors will only work once guest is
+checked out - so no active reservations should be there. Make sure the debtors
+module also follow the same pipeline."**
+
+- **A debtor invoice is now a reservation's own `Folio`** — not a shared pooled
+  ledger folio. This supersedes the "one per `(Profile, Property)`,
+  `findOrCreateDebtorFolio`" design from the original Debtors entry above, which is
+  now fully removed (the function and the pooled-folio model both deleted, no
+  successor). Every field reused, no schema migration: `settlementMethod` and
+  `payeeProfileId` are now **both** set at reservation creation (previously only
+  `settlementMethod` was); `isDebtorAccount` is **repurposed** to mean "this
+  specific folio has been finalized into a debtor invoice," flipping `true` only at
+  **checkout**, only for a folio still `CITY_LEDGER` at that moment with a still-valid
+  `isCreditAccount` travel agent attached. Before checkout it's always `false` — this
+  is the literal mechanism that keeps in-house reservations invisible to Debtors.
+- **Night Audit reverted to settlement-agnostic**: the City-Ledger routing branch
+  added by the original Debtors work is removed entirely. Night Audit always posts
+  the nightly Room/Green Tax charges to the reservation's own folio, full stop — no
+  credit-limit checks or account routing during the stay. Charges accumulate exactly
+  like a normal guest folio throughout the stay; only checkout transfers them.
+- **Checkout is now the pipeline trigger**, not Night Audit and not a manual action.
+  The balance check is split by settlement method: `DIRECT` folios must still net to
+  ~0 (unchanged rule) or checkout is blocked; `CITY_LEDGER` folios are excluded from
+  that requirement — but only if `reservation.travelAgentId` still resolves to a
+  valid `isCreditAccount` profile at that moment (a defensive fallback mirroring the
+  one removed from Night Audit) — otherwise the folio is treated like `DIRECT` for
+  the balance check, so a misconfigured folio can't silently write off real revenue.
+  Qualifying folios get `isDebtorAccount: true` + `payeeProfileId` set inside the
+  same transaction that closes every folio and marks the reservation
+  `CHECKED_OUT`. A non-blocking credit-limit check (same `checkCreditLimitWarning`
+  helper as before) runs after the transaction and returns in the checkout response.
+- **The mid-stay "Bill to Account" feature is removed outright** — a real capability
+  removal, not an oversight. `POST /api/debtors/accounts/[profileId]/bill-charges`
+  and the Folio Panel's "Bill to Account" button/dialog are both deleted. The old
+  feature let staff cherry-pick individual charges onto a shared account ledger *at
+  any point* during a stay, which doesn't fit "no active reservations in Debtors,
+  ever." The equivalent split-billing scenario (guest pays for the room, one POS
+  charge goes to a corporate account) is still fully achievable with existing
+  primitives that needed no changes: **Add Folio** (open a second window on the same
+  reservation) → toggle that window's **Settlement** to City Ledger → **Move to
+  Folio** the specific charge onto it. That window finalizes into its own invoice at
+  checkout exactly like the main folio.
+- **Aging changed from FIFO-over-flat-line-items to per-invoice bucketing**:
+  `computeAgingBuckets` (which applied payments FIFO against the oldest charges
+  first, across one shared ledger) is replaced by `computeFolioAgingBuckets`, much
+  simpler since each invoice/folio is now independent — bucket each still-open
+  invoice's own balance by the age of its own `reservation.checkOutDate`, no
+  cross-invoice allocation needed. "Open" means `balance > 0.005`, not
+  `Folio.isClosed` (checkout closes every folio regardless of settlement method, so
+  `isClosed` can no longer mean "unpaid").
+- **A real regression was caught and fixed while building the account detail
+  page**: `POST /api/folios/[id]/payments` unconditionally rejected payments to any
+  closed folio. Since checkout now closes every folio including finalized
+  City-Ledger ones, this would have made "Record Payment" against any debtor invoice
+  completely non-functional — every invoice is closed the moment it's born. Fixed to
+  allow payments on a closed folio specifically when `isDebtorAccount` is true.
+- **Debtors account list/detail/statement now query per-reservation invoice folios
+  directly** (`WHERE payeeProfileId = ? AND isDebtorAccount = true`), each result row
+  = one invoice via the new shared `buildInvoiceSummary()` helper
+  (`src/lib/debtor-accounts.ts`) — guest name from `folio.reservation.primaryGuest`,
+  total/balance from the same charge-minus-payment formula as before. The account
+  detail page, Statement print page, and send-statement email all rebuilt around this
+  invoice-table shape instead of a flat charge/payment ledger.
+- **Stationaries preview split accordingly**: the combined "Receipt / Statement"
+  preview mode in `StationariesManager` is now two separate modes — `ReceiptPreview`
+  (Payment Receipt / Currency Exchange Receipt, unchanged content) and a new
+  `StatementPreview` (dummy invoice table + open-folio aging summary strip,
+  reflecting the new statement shape). No changes to which settings fields apply to
+  which document — same matrix from the original Stationaries entry above still
+  holds, Statement just gets its own accurate mockup now.
+- **Full suite rewritten**: `tests/tenant-isolation/debtors.test.ts` (15 tests) and
+  `tests/business-rules/debtor-aging.test.ts` (9 tests) replaced entirely — the old
+  bill-charges and pooled-folio tests no longer apply. New coverage: Night Audit
+  posts to the guest's own folio regardless of settlement method; an in-house
+  City-Ledger folio does not appear in Debtors until checkout; checkout finalizes a
+  qualifying folio into an invoice and succeeds despite nonzero balance; checkout
+  still blocks a nonzero `DIRECT` folio and falls back to blocking when the travel
+  agent isn't a valid credit account; a post-checkout invoice shows the correct guest
+  name/total; recording a payment against one invoice updates only that invoice.
+  149/149 full suite passing, `tsc --noEmit` clean.

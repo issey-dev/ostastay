@@ -1,3 +1,27 @@
+<!-- BEGIN:project-docs -->
+# Project docs — read this first
+
+This is a team project (multiple contributors, human and agent). Before starting work,
+read `.agents/docs/`:
+- [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) — the multi-tenancy/RBAC
+  architecture retrofit: context, architecture decisions, phase-by-phase status
+  (Phase 0-4 done, Phase 5-6 not started).
+- [`.agents/docs/TODO.md`](.agents/docs/TODO.md) — the actionable remaining-work list:
+  what's left, what was deliberately deferred, what was found broken along the way but
+  is out of scope to fix without asking first. **Update this file** when you close or
+  discover an item — it's how the next session (yours or a teammate's) knows what's
+  still open without reading chat history.
+- [`.agents/docs/DECISIONS.md`](.agents/docs/DECISIONS.md) — business rules and design
+  decisions the app owner has given verbally, dated. Check here before assuming a
+  business rule, especially around Room Types, Tax/Charge Codes, Sequence Manager, and
+  theming.
+
+`DESIGN_PLAN.md` at the repo root is the full design-token/theming plan (large, kept
+separate) — `.agents/docs/DECISIONS.md` has a short pointer to it plus a status
+correction (its own header is stale — treat it as partially-to-mostly implemented, not
+"planning only").
+<!-- END:project-docs -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

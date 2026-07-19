@@ -1,5 +1,10 @@
 # Guest House PMS Agent Rules
 
+> See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md), [`docs/TODO.md`](docs/TODO.md), and
+> [`docs/DECISIONS.md`](docs/DECISIONS.md) in this folder for the multi-tenancy/RBAC
+> retrofit's architecture, remaining work, and business-rule history. Read those before
+> starting non-trivial work in this repo.
+
 ## APP STANDARD 001 - Form Validation
 All forms in this application MUST use Zod and React Hook Form with shadcn/ui components to provide strict, inline, real-time validation before submitting to the API.
 

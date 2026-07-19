@@ -1,0 +1,498 @@
+# Consolidated TODO — as of 2026-07-18
+
+> Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
+> This file is the actionable list: what's left, what was deferred on purpose, and what
+> was found broken along the way but is out of scope for whoever finds it next to fix
+> without checking first. Keep this file current — when you close an item, move it to
+> "Recently completed" with a date, don't just delete it silently, so teammates opening
+> the repo mid-stream can see momentum.
+
+## Phase 4 loose end (money & shift data) — resolved, no action needed
+
+`cashiering/{open,close,status}/route.ts` were named in the original Phase 4 scope but
+weren't part of the Phase 4 commit (`9d501d5`) — **checked 2026-07-18: all three already
+call `requireSession`/`requirePermission("CASHIERING", ...)` correctly**, so Phase 4 is
+in fact fully closed. (Likely retrofitted incidentally during an earlier phase since
+cashiering shifts are referenced by folio payments.) No further action here.
+
+## Business logic not yet wired (fields/UI exist, no posting logic anywhere)
+
+_(none currently — see "Recently completed" for Green Tax posting, the base price
+fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
+
+## Deferred by explicit user instruction (do not build unless asked)
+
+- Transaction-level tax inclusive/exclusive override (property-level toggle exists;
+  user said "we will think of something" for per-transaction override — not scoped yet).
+
+## Known non-blocking issues / things to flag, not silently fix
+
+- **SMTP settings are still stored in plaintext (`EnterpriseSettings.smtpPassword`)** —
+  the Confirmation Letter feature (2026-07-19) now does real SMTP sending via
+  `src/lib/mailer.ts` on top of this, per explicit app-owner instruction ("printable and
+  smtp both options"). No encryption-at-rest or GET-response redaction was added — both
+  are pre-existing gaps, flagged again here as a real follow-up, not fixed as part of
+  this feature (out of scope, needs a key-management decision from the app owner first).
+- **SFTP settings are still scaffold-only** — Controls has UI for them but nothing
+  actually uses SFTP today.
+- **`TierModuleAccess` licensing gate fails open by design** (see MASTER_PLAN
+  "Architecture decisions") — this is intentional scaffolding, not a bug, but it means
+  Pro/Max tier module restrictions currently enforce nothing. Don't "fix" this without
+  an explicit tier→module mapping decision from the app owner first.
+- ~~A new RBAC module isn't retroactively granted to existing enterprises' System
+  roles~~ — **fixed 2026-07-19**, see "Recently completed" below.
+- **~25 files sitting uncommitted in the working tree** as of the Phase 4 commit,
+  touched by what looks like a concurrent design-system pass this agent session did not
+  make and deliberately did not stage/commit: `src/app/theme.css`,
+  `src/components/ui/{switch,checkbox,card,empty-state,status-badge,tooltip}.tsx`,
+  `src/components/auth/login-form.tsx`,
+  `src/components/controls/property-banner-color-manager.tsx`,
+  `src/components/housekeeping/room-status-card.tsx`,
+  `src/components/reservations/tape-chart-grid.tsx`,
+  `src/components/revenue/flash-report.tsx`,
+  `src/components/settings/properties-manager.tsx`, and ~13
+  `src/app/e/[slug]/dashboard/*/page.tsx` files. Run `git status` and `git diff` on
+  these before your next commit — they may be your own uncommitted work from a prior
+  session, or someone else's. Do not assume, and do not discard.
+
+## Recently completed (for momentum visibility — trim entries older than a few weeks)
+
+- **2026-07-19** — Redesigned the **Debtors pipeline to be checkout-triggered**, per
+  direct app-owner request ("statement and receipt currently together -- it should
+  be two seperate ones, statement should show line per invoice with totals and
+  guest name and also summary age of folios (open only)"), which surfaced that "one
+  row per invoice" was structurally impossible under the original shared-pooled-
+  ledger design — the app owner's clarifying answer ("Debtors will only work once
+  guest is checked out - so no active reservations should be there") defined the
+  real intended architecture. Full design/rationale in
+  [DECISIONS.md](DECISIONS.md) "Debtors: checkout-triggered invoice pipeline
+  redesign"; summary here:
+  - **A debtor invoice is now a reservation's own `Folio`**, not a shared pooled
+    ledger folio — `findOrCreateDebtorFolio` and the old pooled-folio model are
+    gone. `settlementMethod` + `payeeProfileId` are set at reservation creation;
+    `isDebtorAccount` now flips `true` only **at checkout**, only for a still-
+    `CITY_LEDGER` folio with a valid credit-account travel agent — before that it's
+    always `false`, which is what keeps in-house reservations out of Debtors
+    entirely. No schema migration — every field reused.
+  - **Night Audit reverted to settlement-agnostic**: always posts nightly charges to
+    the guest's own folio; the City-Ledger routing branch is removed.
+  - **Checkout is now the pipeline trigger**: `DIRECT` folios must still net to ~0;
+    `CITY_LEDGER` folios are excluded from that check (with a defensive fallback if
+    the travel agent isn't a valid credit account) and get finalized into an invoice
+    in the same transaction that closes the reservation.
+  - **Removed the mid-stay "Bill to Account" feature outright** (real capability
+    removal) — the equivalent split-billing case is still covered by existing
+    Add Folio + Settlement-toggle + Move-to-Folio primitives.
+  - **Aging rewritten**: `computeAgingBuckets` (FIFO over a flat shared ledger) →
+    `computeFolioAgingBuckets` (buckets each independent open invoice by its own
+    checkout-date age — much simpler, no cross-invoice allocation needed).
+  - **Found and fixed a real regression while building the account detail page**:
+    `POST /api/folios/[id]/payments` unconditionally rejected payments to closed
+    folios, which would have broken Record Payment for every debtor invoice (every
+    invoice is closed the moment checkout creates it). Fixed to allow payments on a
+    closed folio when `isDebtorAccount` is true.
+  - Account list/detail/Statement print page/send-statement email all rebuilt around
+    a per-invoice table (via new `buildInvoiceSummary()` in
+    `src/lib/debtor-accounts.ts`) instead of a flat charge/payment ledger.
+    Stationaries' combined "Receipt / Statement" preview split into two separate
+    preview modes to match.
+  - **Full test suite rewritten**: `tests/tenant-isolation/debtors.test.ts` (15
+    tests) and `tests/business-rules/debtor-aging.test.ts` (9 tests) replaced
+    entirely. 149/149 full suite passing, `tsc --noEmit` clean.
+  - **Live-verified end-to-end against the real `demo` enterprise dev database**
+    (driven via authenticated `fetch` calls from the browser session, plus direct UI
+    checks, after the interactive booking-form widgets proved too flaky to drive
+    reliably through the browser-automation tool): created a City-Ledger credit
+    account ("Verify Travel Co"), booked and checked in a reservation against it,
+    confirmed the account showed **0 invoices** while `IN_HOUSE`; ran Night Audit and
+    confirmed the nightly Room + Green Tax charges posted onto the *reservation's own*
+    folio (`isDebtorAccount` still `false`) — Debtors still showed 0 invoices
+    afterward; checked the reservation out despite a nonzero City-Ledger balance
+    (succeeded, unlike a `DIRECT` folio which would block) and confirmed the invoice
+    then appeared with the correct guest name ("Test Guest"), confirmation number, and
+    total ($124), bucketed into the "current" aging bucket; recorded a payment against
+    that specific invoice's (closed) folio — succeeded per the payments-route fix
+    above — and confirmed balance/aging both dropped to zero and the status flipped to
+    "Paid" on both the account detail page and the Statement print page (which
+    rendered the invoice table + aging summary correctly, not a flat ledger); cycled
+    the Stationaries live preview through all four modes (Invoice/Confirmation
+    Letter/Receipt/Statement) and confirmed Statement shows its own dedicated
+    invoice-table mockup, distinct from Receipt's flat payment-row mockup. Deleted the
+    test reservation/profile afterward to leave the demo enterprise clean.
+  - **Side effect, not a bug**: the `demo` enterprise had no `ROOM`/`GTX` charge
+    codes or any `PaymentMethod` configured at all (Night Audit and payment recording
+    were previously unexercisable there) — created minimal ones as part of this
+    verification and left them in place, since they're exactly what any real property
+    needs and their absence was a pre-existing seed-data gap, not something this
+    change should revert.
+  - **Found, not fixed**: deleting a `Profile` that's still referenced by a
+    `Folio.payeeProfileId` (e.g. via `DELETE /api/profiles/[id]`) succeeds and leaves
+    the folio with a dangling foreign key, which then makes deleting the owning
+    reservation 500 with a raw Prisma `P2003` foreign key error instead of a clean
+    error message. Hit only via manual test-data cleanup (not a real user flow — there
+    is no UI path to delete a credit-account profile that already has invoice
+    history), so left as a flagged gap rather than fixed under this task's scope;
+    worth a proper fix (block the profile delete, or `onDelete: SetNull` the relation)
+    if it ever turns out to be reachable from the UI.
+- **2026-07-19** — Added a **Stationaries** page, per direct app-owner request: moved
+  the "Invoice Design" settings out of Controls > Reports (which previously mixed it
+  with unrelated SMTP/SFTP config) into its own top-level sidebar page covering all 5
+  printable/emailable documents (Tax/Proforma Invoice, Confirmation Letter, Payment
+  Receipt, Currency Exchange Receipt, Debtor Statement). No schema/API changes — every
+  field already existed on `EnterpriseSettings` and was already read correctly by all
+  5 documents; this was a pure UI relocation/reorganization.
+  - New `src/components/settings/stationaries-manager.tsx` (replaces the deleted
+    `invoice-settings-manager.tsx`) groups fields into three tabs matching an audited
+    per-document usage matrix, instead of one undifferentiated form: **Branding**
+    (shared by all 5 documents), **Financial Documents** (header/footer text, payment
+    terms, payment account info — used by Invoice + Receipt + Exchange Receipt +
+    Statement), **Confirmation Letter** (its own policy-text field only). A switchable
+    live-preview selector flips between three mockups (Invoice, Confirmation Letter,
+    generic Receipt/Statement) reading from the same form state.
+  - **Sidebar placement changed mid-build per follow-up request**: first shipped as a
+    Controls tab (matching Sequences/Tax/Users & Roles precedent), then promoted to
+    its own top-level `app-sidebar.tsx` entry when the app owner asked for it there
+    directly — reuses the existing `CONTROLS` permission rather than a new RBAC module
+    (it's a settings page, not a new operational domain; reusing an already-granted
+    permission also meant every existing Admin/Manager saw it immediately, no
+    self-heal backfill needed). New standalone page
+    `src/app/e/[slug]/dashboard/stationaries/page.tsx`; the Controls tab entry was
+    removed once the sidebar entry existed, to avoid two maintained paths to the same
+    settings.
+  - Full suite: 147/147 passing, `tsc --noEmit` clean. **Live-verified**: all three
+    tabs load/save correctly, all three preview modes render, a saved
+    `confirmationLetterMessage` change persisted through a full page reload and was
+    confirmed directly in the database, then reset back to empty afterward.
+  - **Noted, not a bug of this change**: mid-verification, the Controls page (a
+    different route, not touched by this work) was found intermittently failing to
+    compile due to JSX tag-mismatch syntax errors in `room-manager.tsx` and then
+    `tax-manager.tsx` — moving targets consistent with a concurrent session actively
+    editing those files. Did not touch either file. If Controls still won't load next
+    session, check those two files first before assuming new work broke something.
+- **2026-07-19** — Fixed the **reservation status mismatch blocking Check-In** flagged
+  above (previously spawned as its own follow-up task): `reservations/route.ts`'s POST
+  handler and `groups/[id]/pickup/route.ts`'s pickup-conversion handler both created new
+  reservations with the literal status `"CONFIRMED"`, which is **not** a value in the
+  `ReservationStatus` enum (`RESERVED | IN_HOUSE | CHECKED_OUT | NO_SHOW | CANCELLED`).
+  Check-in gating (reservations page row actions, Front Office arrivals query) filters on
+  `status === 'RESERVED'`, so every freshly created reservation had an unreachable
+  Check-In button and never surfaced in Front Office arrivals — **confirmed live**: a
+  fresh reservation created via `POST /api/reservations` came back with `"CONFIRMED"`
+  before the fix. Both creation sites now use `"RESERVED"`. Also fixed
+  `analytics/route.ts`'s "Occupied Rooms" query, which filtered on
+  `{ in: ["CONFIRMED", "CHECKED_IN"] }` — two more values absent from the enum (the real
+  one is `IN_HOUSE`) — that would have gone permanently dead (always 0 occupied rooms)
+  once the creation bug was fixed, since it depended on reservations actually landing in
+  `"CONFIRMED"`. Now filters on `{ in: ["RESERVED", "IN_HOUSE"] }`, matching the same
+  "active reservation" pattern already used by `pos/search/route.ts`. Removed the
+  defensive `res.status === 'CONFIRMED'` branch from the reservations page's
+  Confirmation Letter button gating (added earlier as a workaround for this exact bug,
+  per the note below) since it's no longer reachable. Full suite: 147/147 passing,
+  `tsc --noEmit` clean. **Live-verified end-to-end** against a real dev database: created
+  a property/room type/rate plan/guest/reservation via the actual API, confirmed the new
+  reservation's status was `RESERVED`, confirmed the Check-In button rendered on the
+  Reservations page, assigned a room, and clicked Check-In through the real UI —
+  reservation correctly transitioned to `IN_HOUSE`.
+- **2026-07-19** — Fixed the RBAC gap found while live-verifying Debtors: a module
+  added to `MODULES` was never retroactively granted to any enterprise's
+  already-seeded roles, and System roles can't be edited via the Controls UI at all
+  (no self-service fix existed). `src/lib/scope.ts`'s `requireSession()` now
+  self-heals: on every request it diffs the role's actual `RolePermission` rows
+  against the current `MODULES` array and backfills any gap — System/Support roles
+  get their canonical default from `SYSTEM_ROLE_DEFS`/`SUPPORT_ROLE_DEFS` (keyed by
+  role name), custom roles get `NONE` (the same safe default they'd have gotten if
+  the module had existed when they were created). Idempotent and race-safe via
+  `RolePermission`'s `@@unique([roleId, module])` plus an upsert (SQLite doesn't
+  support `createMany`'s `skipDuplicates`, so this backfills per-row via `upsert`
+  rather than a batch insert). Cheap on the hot path — a `Set` diff against ~14
+  known modules, no-op after the first backfill per role. 2 new tests in
+  `tests/scope.test.ts` (System-role default matrix applied, custom-role NONE
+  default, idempotency across two requests). **Live-verified against the real dev
+  database**: found 8 pre-existing roles genuinely missing the `DEBTORS` row
+  (Manager, Front Desk, Housekeeping, Maintenance, Cashier, Reservations, both Osta
+  Support roles) — logged in as the `Manager` role and confirmed the row was created
+  correctly (matching `SYSTEM_ROLE_DEFS.Manager.DEBTORS`, all `true`) on the very
+  first request, and the sidebar's Debtors link appeared immediately with no restart
+  or manual intervention needed. Full suite: 147/147 passing, `tsc --noEmit` clean.
+  Deliberately did **not** relax the "System roles cannot be edited" UI restriction —
+  that's a separate, intentional design choice (editing a role shared across every
+  enterprise from one enterprise's Controls page would be a much larger and riskier
+  change); this fix addresses the actual reported bug (a legitimate new module not
+  reaching existing roles), not the read-only-ness itself.
+- **2026-07-19** — Added the **Debtors** module (Accounts Receivable), per direct
+  app-owner request: credit accounts for Travel Agents/corporate clients, charge
+  transfer/billing to those accounts, Night Audit posting to the correct account, and a
+  Folio "Bill to Account" option gated on a City Ledger settlement method. Full design
+  in [DECISIONS.md](DECISIONS.md) "Debtors (Accounts Receivable)"; summary here:
+  - **Schema** (migration `20260719020000_debtors_module`, no new models): `Profile.
+    isCreditAccount` activates the already-existing-but-dormant `arNumber`/
+    `creditLimit`/`iataNumber`/`commissionRate` fields as a live account;
+    `Folio.settlementMethod` (`DIRECT` default | `CITY_LEDGER`) and
+    `Folio.isDebtorAccount` (true only for an account's AR ledger folio). A debtor's AR
+    ledger **is** a Folio — `reservationId: null` like a walk-in, `payeeProfileId` set
+    to the credit-account Profile (reusing the existing relation), one per
+    `(Profile, Property)`, created lazily on first use via
+    `src/lib/debtor-accounts.ts`'s `findOrCreateDebtorFolio`.
+  - **New `DEBTORS` module/sidebar entry**: `Admin`/`Manager` (full, as always) +
+    `Cashier` (`EDIT_NO_DELETE`, plus `PROFILES: EDIT_NO_DELETE` since a credit account
+    IS a Profile). All other roles get none by default.
+  - **Charge routing**: a new dedicated `POST /api/debtors/accounts/[profileId]/
+    bill-charges` — deliberately **not** an extension of the existing
+    `/api/folios/line-items/move` route, since that route's walk-in-rejection and
+    same-reservation-only guards are load-bearing safety invariants for the ordinary
+    "Move to Folio" action and would need weakening in ways that risk that feature.
+    Rejects double-transfers (billing a charge already on an AR folio, or billing from
+    a group master folio). Credit-limit overage is **warn-only, never blocking**
+    (mirrors the Outlet appointment `capWarning` pattern) — returned in the response,
+    never persisted.
+  - **Automatic + manual routing**: reservation creation defaults a new folio's
+    `settlementMethod` to `CITY_LEDGER` when the attached Travel Agent/corporate
+    profile is a credit account (not re-evaluated on edit, so a staff override isn't
+    clobbered); Night Audit then posts the nightly ROOM/Green-Tax charges straight onto
+    the account's AR folio instead of the guest folio when that's set — since the
+    charges never land on the guest folio, **checkout's existing zero-balance check
+    needed no code changes at all**. Any other charge (POS, incidentals) can be
+    manually routed via the new "Bill to Account" Folio Panel action (only enabled
+    when `settlementMethod === CITY_LEDGER`).
+  - **Full AR suite** (per app-owner's explicit scope choice): account list + detail
+    ledger with FIFO aging buckets (`src/lib/debtor-aging.ts`, pure function, unit
+    tested standalone), recording payments received (reuses the existing
+    `POST /api/folios/[id]/payments` unchanged), and a printable/emailable Account
+    Statement following the Confirmation Letter/Invoice pattern exactly (`PrintDocument
+    Shell` gained an `extraActions` slot to support the dual Print+Email actions).
+  - **14 new tenant-isolation tests** (`tests/tenant-isolation/debtors.test.ts`,
+    mailer mocked) + **8 aging-bucket unit tests**
+    (`tests/business-rules/debtor-aging.test.ts`). Full suite: 145/145 passing,
+    `tsc --noEmit` clean.
+- **2026-07-19** — Added the **Confirmation Letter** feature (previously explicitly
+  deferred as "the 'Confirmations' branded document/email template feature under
+  Reports" — now un-deferred per direct app-owner request, who supplied a reference
+  image and asked for both printable and real SMTP-sent delivery: "printable and smtp
+  both options"). Sent to a guest once their stay is confirmed — entry to the Maldives
+  requires a hotel confirmation, sent by mail.
+  - **Schema** (migration `20260719000000_confirmation_letter`): new
+    `Reservation.remarks` (free-text front-desk note, e.g. "Honeymoon — high floor
+    requested" — deliberately its own field, not sourced from `ReservationTrace`, which
+    is an operational task log rather than curated guest-facing text) and
+    `EnterpriseSettings.confirmationLetterMessage` (editable generic policy paragraph,
+    falls back to sensible default wording referencing the property's own
+    check-in/check-out times when null).
+  - **`src/lib/mailer.ts`** (new, `nodemailer` installed): the one place that turns
+    `EnterpriseSettings.smtp*` into an actual outgoing email —
+    `sendMail`/`assertSmtpConfigured`/`SmtpNotConfiguredError`. Any future
+    mail-sending feature should go through this rather than its own transport.
+  - **`src/lib/confirmation-letter.ts`** (new): pure formatting helpers
+    (`formatAllGuestNames`, `nightsCount`, `formatRoomCategories`) shared between the
+    print page (Tailwind/JSX) and the email (inline-styled HTML string, since email
+    clients don't support modern CSS) so content stays consistent despite the markup
+    necessarily differing.
+  - **Two new API routes**: `GET /api/reservations/[id]/confirmation-letter-data`
+    (fetch, `RESERVATIONS`/`view`) and `POST /api/reservations/[id]/send-confirmation`
+    (send, `RESERVATIONS`/`update`) — the latter 400s cleanly with a clear message when
+    SMTP isn't configured or the primary guest has no email on file, 502s on an
+    unexpected send failure.
+  - **New print page** `.../reservations/[id]/confirmation-letter` — reuses the
+    existing `EnterpriseSettings.invoice*` branding tokens (logo, brand color, font)
+    rather than a parallel branding system; a 3px brand-color left accent strip stands
+    in for the reference image's illustrated artwork (no image assets exist for that,
+    and recreating it would be disproportionate scope). One page, includes guest
+    name(s) incl. accompanying guests, stay period, nights, room category, remarks (if
+    present), and the generic policy paragraph. Deliberately does **not**
+    auto-`window.print()` on load (unlike the folio print page) since it offers two
+    distinct actions — Email and Print — via a control bar.
+  - **UI wiring**: reservations page row actions gained a "Confirmation Letter" button
+    (gated on `status` being `RESERVED`, `CONFIRMED`, or `IN_HOUSE` — see the status
+    mismatch bug noted below), a Remarks textarea on the reservation form, and a new
+    "Confirmation Letter — Policy Text" field on the Controls → Invoice Design card.
+  - **7 new tests** in `tests/tenant-isolation/confirmation-letter.test.ts` (mailer
+    mocked, no real SMTP calls) covering cross-enterprise 403s on both routes, the
+    no-email-on-file 400, the SMTP-not-configured 400, a successful send, and the
+    unexpected-failure 502. Full suite: 123/123 passing, `tsc --noEmit` clean.
+    Live-verified in browser: created a reservation with remarks, opened the letter
+    (all fields render correctly), confirmed the Email button 400s cleanly with dev
+    SMTP unconfigured, confirmed Print renders a clean one-page layout.
+  - **Found and fixed a real, severe pre-existing bug while live-verifying the Remarks
+    field**: `PUT /api/reservations/[id]` (the reservation edit endpoint) required
+    top-level `roomTypeId`/`ratePlanId` fields that the multi-segment reservation form
+    (`reservations/page.tsx`) never sent (it only ever sends a nested `assignments`
+    array) — every reservation edit through the UI 400'd, silently, for every
+    reservation, regardless of this feature. Fixed by changing `updateSchema` and the
+    PUT handler to accept the same `assignments` array shape POST already uses,
+    validating each segment individually (room type/rate plan/room existence and
+    active/in-service checks now scoped per-segment against the reservation's *existing*
+    assignments, not a single `currentAssignment`). Caught live in the browser (a real
+    edit 400'd with a Zod validation error on `roomTypeId`/`ratePlanId`), fixed, and
+    re-verified live afterward.
+  - **Known gap flagged, not fixed** — see "Known non-blocking issues" above: SMTP
+    credentials remain plaintext at rest; a pre-existing reservation-status bug was
+    found (not caused) while wiring the row action.
+- **2026-07-18** — Added the **Outlets** feature (Spa, Restaurant, Bar, etc.) end to end,
+  per the app owner's brief: log outlet revenue, let already-booked guests charge
+  treatments to their room, and generate standalone bills for passerby guests with no
+  booking, with a smooth onboarding flow. Full design/decisions in
+  [DECISIONS.md](DECISIONS.md) "Outlets"; summary here:
+  - **Schema** (two migrations — `20260718173000_outlets_foundation` additive, then
+    `20260718173500_folio_walkin_and_outlet_line_items` for the risky part): new
+    `Outlet`/`OutletChargeCode`/`OutletAppointment` models; `Folio.reservationId` is now
+    **nullable** with a new required `Folio.propertyId` (backfilled from each existing
+    row's Reservation) and `walkInGuestName`/`walkInGuestContact` fields for walk-in
+    bills; `FolioLineItem.outletId` for revenue attribution.
+  - **Every Folio-touching route retrofitted** to scope off `folio.propertyId` directly
+    instead of `folio.reservation.propertyId` (that path is now only ever present for
+    reservation-backed folios) — `folios/[id]/*`, `payments`, `pos/charge`,
+    `folios/line-items/move` (which now also flatly rejects moving charges to/from a
+    walk-in folio, since a null-vs-null reservationId comparison would otherwise wrongly
+    permit it), plus every folio-creation site (`folios/route.ts`, `reservations/route.ts`,
+    `groups/[id]/pickup`, `reservations/[id]/check-in`, `prisma/seed-operations.ts`,
+    `prisma/add-sharers.ts`). New `GET /api/folios/[id]` (didn't exist before — was the
+    missing fetch path for a folio with no reservation to key off). Print page now
+    handles a null `reservation` with a walk-in fallback.
+  - **Outlet CRUD** under Controls → new "Outlets" tab (positioned right after
+    Inventory), reusing the `CONTROLS` permission — name, type, active toggle, optional
+    top-level tax override, optional appointment capacity, and a curated many-to-many
+    charge-code pool (`OutletChargeCodePicker`, mirrors `RoomFeaturePicker`'s dual-panel
+    pattern). **Amenities relocated here too** (from Inventory), per the app owner's
+    request — same `FacilityAmenitiesManager`, just moved, no code changes to it.
+  - **Tax override**: `resolveOutletChargeTax` in `src/lib/tax-calc.ts` — a thin wrapper
+    around the existing `resolveChargeTax` (unchanged, still used everywhere with no
+    outlet context) that substitutes the outlet's own tax handling when
+    `taxOverrideMode` is set, else defers to the charge code's own setting exactly as
+    before.
+  - **POS integration**: outlet selector filters the charge-code dropdown to that
+    outlet's pool and attributes posted revenue to it; a "Walk-in" toggle opens a
+    standalone folio via new `POST /api/folios/walk-in`, then reuses the *existing*
+    `pos/charge` flow unchanged (it only ever needed a `folioId`) — no separate walk-in
+    charge endpoint. New `WalkInFolioPanel` (view charges/payments, take payment, close,
+    print) since the existing reservation-coupled `FolioPanel` was intentionally left
+    untouched (confirmed it's never reachable for a walk-in folio).
+  - **Pre-booking**: `OutletAppointment` is a simple log (no resource-capacity model,
+    per the app owner's explicit scope cut — "extended full version" deferred to a
+    future tier) — guest is either an in-house reservation or a walk-in name. An
+    optional `appointmentCapPerSlot` on the Outlet produces a **non-blocking**
+    `capWarning` in the create response when an overlapping slot would exceed it; the
+    booking is never rejected. Lives as a second "Appointments" tab on the existing POS
+    page rather than a new sidebar item/RBAC module — deliberately avoids opening the
+    MODULES-mirrors-sidebar question for a feature this tightly coupled to POS.
+  - **RBAC**: no new module — Outlet config rides on `CONTROLS`, Outlet operations
+    (charges, walk-ins, appointments) ride on `POS`, both already existed.
+  - **34 new tests** across 5 files (`tests/tenant-isolation/outlets.test.ts`,
+    `walk-in-folios.test.ts`; `tests/business-rules/outlet-tax-override.test.ts`, plus
+    appointment-capacity coverage folded into `outlets.test.ts`). Full suite: 116/116
+    passing, `tsc --noEmit` clean. Live-verified in browser end-to-end: created a real
+    Outlet with a curated charge code, started a walk-in bill, posted a charge through
+    the outlet (correct tax math), printed the resulting invoice (walk-in fallback
+    rendered correctly), booked two overlapping appointments and confirmed the second
+    correctly returned a non-blocking `capWarning`, and confirmed the outlet DELETE
+    guard blocks removal once it has real revenue/appointment history (deactivation is
+    the path from there).
+- **2026-07-18** — Custom Tax profiles made multi-line and actually wired to charge
+  posting (previously the `useDefaultTax`/`taxProfileId` config on a `ChargeCode` was
+  fully editable but silently ignored by every posting route). `TaxRate` gained `name`/
+  `calculateOn` (`BASE` | `COMPOUND`)/`order` (migration `20260718172500_tax_rate_
+  multiline`) so a profile can hold several lines, each either a flat % of the subtotal
+  or compounding on the running total — generalizing the existing Service-Charge-then-
+  GST relationship. New shared engine `src/lib/tax-calc.ts`
+  (`computeDefaultEngineTax`/`computeCustomProfileTax`/`resolveChargeTax`) replaces the
+  same calculation that used to be duplicated inline in `pos/charge`,
+  `folios/[id]/line-items`, and `night-audit/run`'s room charge — all three now call
+  `resolveChargeTax` instead. Tax Manager UI redesigned for multi-line editing. 15 new
+  tests (`tests/business-rules/tax-calc.test.ts`,
+  `tests/business-rules/custom-tax-posting.test.ts`); live-verified in browser that
+  adding a two-line profile through the real UI persists correctly. See
+  [DECISIONS.md](DECISIONS.md) "Custom Tax profiles" for the full design.
+- **2026-07-18** — Closed out the remaining post-Phase-6 backlog (folio print merge,
+  Green Tax posting, base price fallback audit, housekeepingEnabled enforcement,
+  reservations hardcoded-UUID cleanup):
+  - **Folio print routes merged**: `/print/folios/[id]` deleted; `/e/[slug]/dashboard/
+    folios/[id]/print` is now canonical (per app owner's explicit call) and was brought
+    to feature parity first — payee-profile display (`payeeProfile || primaryGuest`),
+    Green Tax line-item handling/display, and the more robust print CSS were ported
+    over from the old page, which had actually been the more complete of the two.
+    `FolioPanel`'s print button now opens the canonical route (via `useParams()` for
+    the enterprise slug) instead of the deleted one.
+  - **Green Tax posting implemented**, nightly, alongside room-charge posting in
+    `night-audit/run/route.ts`. **Schema change**: added `Reservation.infants` (new
+    migration `20260718171500_reservation_infants`) as its own occupancy bucket,
+    separate from `adults`/`children` — the app owner's explicit call after discussion
+    revealed `Reservation.children` is a raw headcount with no per-guest birthdate, so
+    "children under 2 exempt" couldn't be computed from it. Green Tax = `adults ×
+    greenTaxAdultAmount + children × greenTaxChildAmount`; infants are fully exempt and
+    excluded from occupancy entirely. Posts against a `GTX` charge code (looked up per
+    enterprise, same pattern as the existing `ROOM` code) — if `greenTaxEnabled` is on
+    but no `GTX` code exists, the run 400s with a clear message rather than silently
+    skipping or guessing. `infants` wired through `reservations` POST/PUT, `groups/[id]/
+    pickup`, and the reservation form UI (new "Infants" field). 3 new tests in
+    `tests/business-rules/green-tax.test.ts`.
+  - **Base price fallback rate — audited, no gap found**: confirmed `night-audit/run/
+    route.ts`'s existing `calendarEntry?.price ?? roomType.basePrice` fallback is in
+    fact the *only* place a nightly rate is ever resolved or charged anywhere in the
+    app — there is no reservation-creation-time rate preview/quote endpoint that would
+    also need this fallback. No code change needed; this closes the open question.
+  - **`RoomType.housekeepingEnabled` now enforced**: rooms of such a type are excluded
+    from the `GET /api/housekeeping` board, and `POST /api/housekeeping/tasks`,
+    `POST /api/housekeeping/maintenance`, and `POST /api/maintenance` all 400 when
+    targeting one — matches how `isActive` blocks new activity without touching
+    history. 4 new tests added to `tests/tenant-isolation/operations.test.ts`.
+  - **`reservations/page.tsx` hardcoded-UUID fallback removed** (`?? ""` instead of the
+    old demo UUID), matching the `front-office/page.tsx` fix from Phase 6.
+  - Full suite: 76/76 passing, `tsc --noEmit` clean. Live-verified in browser: the
+    reservation form's Infants field renders and defaults to 0; the canonical print
+    page renders real invoice data correctly.
+  - **Note for next session**: this work required a schema migration + `prisma
+    generate`, which needed the dev-server-held Prisma engine lock released — a
+    *different* concurrent chat session's dev server (PID 6504) was stopped with the
+    user's explicit confirmation to unblock this. If you hit the same `EPERM` error on
+    `prisma generate`, check for other running dev servers before assuming it's yours.
+- **2026-07-18** — Phase 6: remaining routes & final hardening (`analytics`,
+  `front-office/summary`, `auth/seed`). Replaced raw `new PrismaClient()` in
+  `analytics/route.ts` with the shared `@/lib/db` import; both routes retrofitted onto
+  `requireSession`/`requirePermission`/`assertPropertyAccess` (REVENUE for analytics,
+  FRONT_DESK for front-office/summary). Gated `POST /api/auth/seed` (creates accounts
+  with a well-known password, previously reachable with zero auth) behind
+  `NODE_ENV !== "production"`, returning 404 in prod; the "[Dev Tool] Seed Initial
+  Users" button on `/login` is now hidden the same way. **Found and fixed a real bug
+  while adding scoping**: `front-office/page.tsx` had a leftover hardcoded
+  `00000000-0000-0000-0000-000000000000` propertyId (the pre-retrofit `DEMO_TENANT_ID`
+  pattern) instead of using `useProperty()` like every other dashboard page — before
+  this fix the route had zero auth so it silently queried garbage and returned empty
+  results; after adding real scoping it 403'd outright, which is how it was caught live
+  in the browser. Fixed to resolve `propertyId` from `useProperty()`, guarded
+  `fetchSummary` on it being set. 6 new tests in `tests/tenant-isolation/reporting.test.ts`.
+  Live-verified via browser (front-office, revenue/analytics, housekeeping dashboards
+  all render real scoped data; a foreign/fake propertyId 403s; seed still works in dev).
+  The full 7-item manual cross-role/cross-enterprise checklist in MASTER_PLAN was not
+  re-run item-by-item by hand — 6 of 7 items (enterprise vs. property scope,
+  cross-enterprise 403, support-access grant approve/enter/revoke) are already
+  deterministically exercised by `tests/scope.test.ts` and the `tenant-isolation/*`
+  suites against the real route/scope code, which is stronger evidence than a manual
+  click-through; only the license-limit-enforcement and wrong-slug-login items rely on
+  static/code-level verification rather than a fresh end-to-end run. **Phase 0-6 are
+  now all closed** — see MASTER_PLAN.md.
+- **2026-07-18** — Phase 5: operations scoping (`housekeeping`, `housekeeping/maintenance`,
+  `housekeeping/tasks`, `maintenance`, `maintenance/[id]`). Replaced raw `new PrismaClient()`
+  in `housekeeping/route.ts` and `housekeeping/maintenance/route.ts` with the shared
+  `@/lib/db` import. Fixed the real cross-enterprise leak named in the master plan's
+  original bug list: `maintenance` GET's `propertyId` filter was optional, now mandatory +
+  `assertPropertyAccess`-checked. Bulk writes (room-status PATCH, maintenance-ticket POST)
+  now validate every targeted room's property before touching any of them. Attendant
+  assignment 404s on a cross-enterprise user id. 25 new tests in
+  `tests/tenant-isolation/operations.test.ts`.
+- **2026-07-18** — Phase 4: money & shift data scoping (`folios`, `payments`,
+  `pos/charge`, `pos/search`, `night-audit`). Fixed a real cross-property data leak in
+  `reports/arrival-pdf`/`departure-pdf` and a real wrong-model bug in
+  `night-audit/status`. Removed a `"mock-shift-id"` demo hack in
+  `folios/[id]/payments/route.ts`. 9 new tests in `tests/tenant-isolation/money.test.ts`.
+- **2026-07-18** — Controls: Room Type feature model (Bed Type/View/Amenity unified into
+  one multi-select `RoomTypeFeature`/`RoomFeature`), Inactive room-type cascade, Rooms UI
+  (Building→Floor dependent selects, pseudo-room handling, inherited + additional
+  features), Sequence Manager, Tax/Charge Code split into two Controls cards with
+  category-based charge codes and default/custom tax selection. Discovered and fixed two
+  previously-unauthenticated routes (`charge-codes/[id]`, `taxes/[id]`) along the way.
+  Full business-rule detail in [DECISIONS.md](DECISIONS.md).
+- **2026-07-18** — Phase 3: guest & booking data scoping.
+- **2026-07-18** — Design system pass: monochromatic theming, responsive layouts (see
+  `DESIGN_PLAN.md` at repo root — status: plan says "planning only" in its header, but
+  a commit titled "Implement DESIGN_PLAN.md" exists in git log; reconcile that
+  discrepancy before treating the plan doc as still purely aspirational).
+- **2026-07-18** — Phase 2: core reference/configuration data scoping.
+- Phase 0/1: schema foundation, RBAC, Controls UI redesign, enterprise login.
