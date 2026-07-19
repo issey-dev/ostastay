@@ -67,6 +67,7 @@ export async function POST(request: Request) {
         isIncognito: body.isIncognito !== undefined ? body.isIncognito : false,
         arNumber: body.arNumber || null,
         creditLimit: body.creditLimit ? parseFloat(body.creditLimit) : null,
+        isCreditAccount: body.isCreditAccount !== undefined ? body.isCreditAccount : false,
         contacts: {
           create: body.contacts ? body.contacts.map((c: any) => ({
             contactType: c.contactType || "PRIMARY",

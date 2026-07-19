@@ -82,6 +82,7 @@ export async function PUT(
         isIncognito: body.isIncognito !== undefined ? body.isIncognito : false,
         arNumber: body.arNumber || null,
         creditLimit: body.creditLimit ? parseFloat(body.creditLimit) : null,
+        isCreditAccount: body.isCreditAccount !== undefined ? body.isCreditAccount : existing.isCreditAccount,
         contacts: {
           deleteMany: {},
           create: body.contacts ? body.contacts.map((c: any) => ({
