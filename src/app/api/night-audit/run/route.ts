@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { resolveChargeTax } from "@/lib/tax-calc"
 import { applyRateAdjustment } from "@/lib/derived-rate"
+import { allocationAmountForNight } from "@/lib/allocations"
 
 export async function POST(request: Request) {
   try {
@@ -67,7 +68,19 @@ export async function POST(request: Request) {
         assignments: {
           orderBy: { startDate: 'desc' },
           include: { roomType: true, ratePlan: true }
-        }
+        },
+        // The materialized allocation set (see ReservationAllocation) — each with its
+        // allocation's rates and charge code (incl. tax profile) for posting.
+        allocations: {
+          include: {
+            allocation: {
+              include: {
+                rates: true,
+                chargeCode: { include: { taxProfile: { include: { rates: true } } } },
+              },
+            },
+          },
+        },
       }
     })
 
@@ -141,9 +154,42 @@ export async function POST(request: Request) {
         inputAmount = baseRoomPrice
       }
 
+      // Resolve tonight's allocation postings (see src/lib/allocations.ts — the same
+      // rhythm/date-range/pax math the reservation form previews with). Attached rows
+      // post regardless of the allocation's current isActive — deactivation only stops
+      // NEW attachments; a guest who booked breakfast still gets billed for it.
+      const allocationsTonight: Array<{
+        reservationAllocation: (typeof res.allocations)[number]
+        grossInput: number
+      }> = []
+      for (const ra of res.allocations) {
+        const amount = allocationAmountForNight({
+          allocation: ra.allocation,
+          adults: res.adults,
+          children: res.children,
+          checkInDate: res.checkInDate,
+          checkOutDate: res.checkOutDate,
+          auditDate: today,
+          overrideAdultPrice: ra.overrideAdultPrice,
+          overrideChildPrice: ra.overrideChildPrice,
+        })
+        if (amount != null && amount > 0) {
+          allocationsTonight.push({ reservationAllocation: ra, grossInput: amount })
+        }
+      }
+
+      // INCLUDE_IN_RATE allocations are carved OUT of the room line before it is
+      // tax-resolved — folio total unchanged, revenue attribution moves to the
+      // allocation's charge code. Clamped at zero: allocations can never push the
+      // room line negative (the allocation lines still post in full).
+      const includeInRateGross = allocationsTonight
+        .filter((a) => a.reservationAllocation.allocation.mode === "INCLUDE_IN_RATE")
+        .reduce((sum, a) => sum + a.grossInput, 0)
+      const roomInputAfterCarveOut = Math.max(0, inputAmount - includeInRateGross)
+
       const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
         chargeCode: roomCode,
-        inputAmount,
+        inputAmount: roomInputAfterCarveOut,
         settings,
         pricesIncludeTaxes
       })
@@ -202,11 +248,40 @@ export async function POST(request: Request) {
         totalPostings += 1
       }
 
-      // Meal plan pricing is NOT a separate charge here — it's fully captured by
-      // whichever Rate Plan the reservation is booked on (e.g. a reservation on
-      // "BAR-BB", a Derived Rate Plan of "BAR", already gets BAR's price plus the
-      // meal-plan adjustment via the room-charge resolution above).
-      // Reservation.mealPlan is purely an informational tag, not a Night Audit input.
+      // 2a-bis. Post tonight's allocations (Breakfast, Transfers, Spa... — see
+      // .agents/docs/ALLOCATIONS_PLAN.md). Each posts against its own charge code
+      // through the same tax engine; INCLUDE_IN_RATE ones were already carved out of
+      // the room line above, ADD_TO_RATE/SELL_SEPARATE ones are purely additive.
+      // (A meal plan's per-person pricing arrives here via its linked allocations —
+      // materialized on the reservation at booking time, not re-resolved live.)
+      for (const { reservationAllocation: ra, grossInput } of allocationsTonight) {
+        const alloc = ra.allocation
+        const allocTax = resolveChargeTax({
+          chargeCode: alloc.chargeCode,
+          inputAmount: grossInput,
+          settings,
+          pricesIncludeTaxes
+        })
+
+        const paxParts = []
+        if (res.adults > 0) paxParts.push(`${res.adults} adult${res.adults > 1 ? "s" : ""}`)
+        if (res.children > 0) paxParts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
+
+        await prisma.folioLineItem.create({
+          data: {
+            folioId: targetFolioId,
+            chargeCodeId: alloc.chargeCodeId,
+            amount: allocTax.baseAmount,
+            taxAmount: allocTax.taxAmount,
+            serviceChargeAmount: allocTax.serviceChargeAmount,
+            description: `${alloc.name} (${paxParts.join(", ")})`,
+            date: today
+          }
+        })
+
+        totalTaxPosted += allocTax.taxAmount + allocTax.serviceChargeAmount
+        totalPostings += 1
+      }
 
       // 2b. Post nightly Green Tax — flat per adult/child, infants exempt.
       if (greenTaxEnabled && gtxCode) {

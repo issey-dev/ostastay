@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react"
+import { Plus, Pencil, Trash2, CalendarDays, Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -15,7 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
+import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
+
+const ALLOCATION_TYPE_LABELS: Record<string, string> = {
+  FNB: "Food & Beverage",
+  TRANSFER: "Transfers",
+  SPA: "Spa",
+  EXCURSION: "Excursions",
+  OTHER: "Other",
+}
 
 type RatePlan = {
   id: string
@@ -28,6 +38,7 @@ type RatePlan = {
   derivedAdjustmentType: string | null
   derivedAdjustmentValue: number | null
   parentRatePlan?: { id: string; name: string; code: string } | null
+  allocationLinks?: Array<{ allocation: { id: string; code: string; name: string; mode: string } }>
 }
 
 export default function RevenueDashboard() {
@@ -54,6 +65,9 @@ export default function RevenueDashboard() {
     derivedAdjustmentType: "PERCENT",
     derivedAdjustmentValue: "",
   })
+  // Package contents — which allocations this rate plan carries.
+  const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
+  const [allocations, setAllocations] = useState<AllocationDto[]>([])
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
@@ -69,8 +83,18 @@ export default function RevenueDashboard() {
       .finally(() => setLoading(false))
   }
 
+  const fetchAllocations = () => {
+    if (!propertyId) return
+    fetch(`/api/allocations?propertyId=${propertyId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setAllocations(data)
+      })
+  }
+
   useEffect(() => {
     fetchRatePlans()
+    fetchAllocations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId])
 
@@ -85,6 +109,7 @@ export default function RevenueDashboard() {
       derivedAdjustmentType: "PERCENT",
       derivedAdjustmentValue: "",
     })
+    setSelectedAllocationIds([])
     setSelectedPlan(null)
   }
 
@@ -100,6 +125,7 @@ export default function RevenueDashboard() {
       derivedAdjustmentType: plan.derivedAdjustmentType || "PERCENT",
       derivedAdjustmentValue: plan.derivedAdjustmentValue != null ? plan.derivedAdjustmentValue.toString() : "",
     })
+    setSelectedAllocationIds((plan.allocationLinks ?? []).map(l => l.allocation.id))
     setIsDialogOpen(true)
   }
 
@@ -118,6 +144,7 @@ export default function RevenueDashboard() {
         parentRatePlanId: form.parentRatePlanId || null,
         derivedAdjustmentType: form.parentRatePlanId ? form.derivedAdjustmentType : null,
         derivedAdjustmentValue: form.parentRatePlanId && form.derivedAdjustmentValue !== "" ? parseFloat(form.derivedAdjustmentValue) : null,
+        allocationIds: selectedAllocationIds,
       }
 
       const url = selectedPlan ? `/api/rate-plans/${selectedPlan.id}` : `/api/rate-plans`
@@ -174,11 +201,16 @@ export default function RevenueDashboard() {
         <TabsList className="bg-muted/50 mb-6">
           <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
           <TabsTrigger value="rate-plans">Rate Plans</TabsTrigger>
+          <TabsTrigger value="allocations">Allocations</TabsTrigger>
           <TabsTrigger value="seasonal-pricing">Rate Details</TabsTrigger>
         </TabsList>
 
         <TabsContent value="flash-report" className="m-0">
           <FlashReport />
+        </TabsContent>
+
+        <TabsContent value="allocations" className="m-0">
+          <AllocationsManager />
         </TabsContent>
 
         <TabsContent value="rate-plans" className="m-0">
@@ -192,7 +224,7 @@ export default function RevenueDashboard() {
                   <Plus className="mr-2 h-4 w-4" /> New Rate Plan
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleCreateOrUpdate}>
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}</DialogTitle>
@@ -200,8 +232,10 @@ export default function RevenueDashboard() {
                   {isEditMode ? "Modify details for this rate plan." : "Enter the configuration for a new rate plan."}
                 </DialogDescription>
               </DialogHeader>
-              
-              <div className="grid gap-6 py-4">
+
+              <div className="grid sm:grid-cols-2 gap-6 py-4">
+                {/* Left column — rate definition */}
+                <div className="flex flex-col gap-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Rate Code <span className="text-destructive">*</span></Label>
@@ -284,18 +318,83 @@ export default function RevenueDashboard() {
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2 mt-2">
-                  <Checkbox 
-                    id="negotiated" 
-                    checked={form.isNegotiated} 
+                <div className="flex items-center space-x-2 mt-auto">
+                  <Checkbox
+                    id="negotiated"
+                    checked={form.isNegotiated}
                     onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
                   />
                   <Label htmlFor="negotiated" className="font-normal cursor-pointer">
                     This is a negotiated rate (Corporate/Wholesale)
                   </Label>
                 </div>
+                </div>
+                {/* End left column */}
+
+                {/* Right column — package allocations chip picker */}
+                <div className="flex flex-col gap-2 border rounded-lg p-4 bg-muted/30 min-h-[240px]">
+                  <div className="flex items-center justify-between">
+                    <Label>Package Allocations</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedAllocationIds.length} selected
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Components this rate carries. Tap to include; each allocation&apos;s own mode
+                    (included in / added to rate) decides how it posts. Manage them on the Allocations tab.
+                  </p>
+                  {(() => {
+                    const linkable = allocations.filter(a => a.isActive)
+                    if (linkable.length === 0) {
+                      return <p className="text-xs text-muted-foreground italic">No allocations configured yet.</p>
+                    }
+                    const grouped = linkable.reduce((acc, a) => {
+                      (acc[a.type] ||= []).push(a)
+                      return acc
+                    }, {} as Record<string, AllocationDto[]>)
+                    return (
+                      <div className="flex flex-col gap-4">
+                        {Object.entries(grouped).map(([type, items]) => (
+                          <div key={type}>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                              {ALLOCATION_TYPE_LABELS[type] ?? type}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {items.map(a => {
+                                const selected = selectedAllocationIds.includes(a.id)
+                                return (
+                                  <button
+                                    type="button"
+                                    key={a.id}
+                                    onClick={() =>
+                                      setSelectedAllocationIds(prev =>
+                                        selected ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                                      )
+                                    }
+                                    title={a.mode === "INCLUDE_IN_RATE" ? "Included in rate" : "Added to rate"}
+                                    className={cn(
+                                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+                                      selected
+                                        ? "border-primary text-primary bg-primary/5 font-medium"
+                                        : "border-border text-muted-foreground hover:border-foreground/40"
+                                    )}
+                                  >
+                                    {selected && <Check className="h-3.5 w-3.5" />}
+                                    <span className="font-mono">{a.code}</span>
+                                    <span>{a.name}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+                {/* End right column */}
               </div>
-              
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Rate Plan"}</Button>
@@ -350,6 +449,11 @@ export default function RevenueDashboard() {
                               : `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${plan.derivedAdjustmentValue}%`}
                           </Badge>
                         )}
+                        {(plan.allocationLinks ?? []).map(l => (
+                          <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
+                            {l.allocation.code}
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell className="text-right space-x-2">

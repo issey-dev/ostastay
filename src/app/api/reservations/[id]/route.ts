@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { materializeReservationAllocations } from "@/lib/allocations-server";
 
 const updateSchema = z.object({
   primaryGuestId: z.string().min(1),
@@ -26,6 +27,7 @@ const updateSchema = z.object({
   remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
   accompanyingGuestIds: z.array(z.string()).optional(),
+  manualAllocationIds: z.array(z.string()).optional(),
   status: z.string().min(1)
 });
 
@@ -137,6 +139,19 @@ export async function PUT(
         },
       }
     });
+
+    // Re-derive rate-plan/meal-plan allocation rows against the edited values; MANUAL
+    // rows are replaced only when the client sent manualAllocationIds, otherwise kept.
+    const allocationResult = await materializeReservationAllocations({
+      reservationId: id,
+      propertyId: existing.propertyId,
+      ratePlanId: data.assignments[0]?.ratePlanId ?? null,
+      mealPlanCode: data.mealPlan || "NONE",
+      manualAllocationIds: data.manualAllocationIds,
+    });
+    if (allocationResult.error) {
+      return NextResponse.json({ ...updatedReservation, allocationWarning: allocationResult.error });
+    }
 
     return NextResponse.json(updatedReservation);
   } catch (error) {

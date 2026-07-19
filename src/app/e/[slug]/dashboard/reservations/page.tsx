@@ -21,6 +21,9 @@ import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { allocationStayTotal, type AllocationLike } from "@/lib/allocations"
 
 type Reservation = {
   id: string
@@ -53,6 +56,34 @@ type Reservation = {
     ratePlan: { code: string, name: string }
     overrideRate: number | null
   }[]
+  allocations?: {
+    id: string
+    allocationId: string
+    source: string
+    overrideAdultPrice: number | null
+    overrideChildPrice: number | null
+    allocation: {
+      id: string
+      code: string
+      name: string
+      mode: string
+      postingRhythm: string
+      isActive: boolean
+      chargeCode?: { code: string }
+      rates: { adultPrice: number, childPrice: number, effectiveFrom: string, effectiveTo: string | null }[]
+    }
+  }[]
+}
+
+type AllocationOption = {
+  id: string
+  code: string
+  name: string
+  mode: string
+  postingRhythm: string
+  sellSeparate: boolean
+  isActive: boolean
+  rates: { adultPrice: number, childPrice: number, effectiveFrom: string, effectiveTo: string | null }[]
 }
 
 const getActiveTasks = (res: Reservation) => {
@@ -84,6 +115,7 @@ export default function ReservationsDashboard() {
   const [rooms, setRooms] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
   const [mealPlans, setMealPlans] = useState<any[]>([])
+  const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
   const [housekeepingCodes, setHousekeepingCodes] = useState<any[]>([])
   const [autoAssigning, setAutoAssigning] = useState(false)
@@ -106,6 +138,7 @@ export default function ReservationsDashboard() {
     travelAgentId: "none",
     status: "RESERVED",
     accompanyingGuestIds: [] as string[],
+    manualAllocationIds: [] as string[],
     assignments: [
       {
         roomTypeId: "",
@@ -122,14 +155,15 @@ export default function ReservationsDashboard() {
     if (!currentProperty) return
     setLoading(true)
     try {
-      const [resReq, profReq, rtReq, rpReq, rmReq, hkReq, mpReq] = await Promise.all([
+      const [resReq, profReq, rtReq, rpReq, rmReq, hkReq, mpReq, alReq] = await Promise.all([
         fetch(`/api/reservations?propertyId=${propertyId}`),
         fetch(`/api/profiles?enterpriseId=${enterpriseId}`),
         fetch(`/api/room-types?propertyId=${propertyId}`),
         fetch(`/api/rate-plans?propertyId=${propertyId}`),
         fetch(`/api/rooms?propertyId=${propertyId}`),
         fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`),
-        fetch(`/api/meal-plans?propertyId=${propertyId}`)
+        fetch(`/api/meal-plans?propertyId=${propertyId}`),
+        fetch(`/api/allocations?propertyId=${propertyId}`)
       ])
 
       const resData = await resReq.json()
@@ -152,6 +186,9 @@ export default function ReservationsDashboard() {
 
       const hkData = await hkReq.json()
       if (Array.isArray(hkData)) setHousekeepingCodes(hkData)
+
+      const alData = await alReq.json()
+      if (Array.isArray(alData)) setAllocations(alData)
 
     } catch (e) {
       console.error("Failed to load data", e)
@@ -181,6 +218,57 @@ export default function ReservationsDashboard() {
     }
   }, [form.checkInDate, form.checkOutDate, form.assignments, selectedRes?.id])
 
+  // ── Allocation preview (mirrors the server's materialization in
+  // src/lib/allocations-server.ts): rate-plan links (parent fallback for derived
+  // plans) + meal-plan links = auto-attached; anything else active is offerable as a
+  // manual add-on. Totals come from the same shared math Night Audit posts with.
+  const selectedRatePlanForAlloc = ratePlans.find(rp => rp.id === form.assignments[0]?.ratePlanId)
+  const parentPlanForAlloc = selectedRatePlanForAlloc?.parentRatePlanId
+    ? ratePlans.find(rp => rp.id === selectedRatePlanForAlloc.parentRatePlanId)
+    : null
+  const ratePlanAllocLinks: Array<{ allocation: { id: string } }> =
+    (selectedRatePlanForAlloc?.allocationLinks?.length
+      ? selectedRatePlanForAlloc.allocationLinks
+      : parentPlanForAlloc?.allocationLinks) ?? []
+  const mealPlanAllocLinks: Array<{ allocation: { id: string } }> =
+    mealPlans.find(mp => mp.code === form.mealPlan)?.allocationLinks ?? []
+  const autoAllocationIds = [
+    ...new Set([...ratePlanAllocLinks, ...mealPlanAllocLinks].map(l => l.allocation.id)),
+  ].filter(id => allocations.some(a => a.id === id && a.isActive))
+
+  const stayDatesForAlloc = (() => {
+    const dates = form.assignments
+      .flatMap(a => [a.startDate, a.endDate])
+      .filter(Boolean)
+      .map(d => new Date(d).getTime())
+    if (dates.length < 2) return null
+    return { checkIn: new Date(Math.min(...dates)), checkOut: new Date(Math.max(...dates)) }
+  })()
+
+  const allocationPreviewTotal = (a: AllocationOption): number | null => {
+    if (!stayDatesForAlloc) return null
+    const like: AllocationLike = {
+      id: a.id,
+      code: a.code,
+      name: a.name,
+      mode: a.mode,
+      postingRhythm: a.postingRhythm,
+      rates: a.rates.map(r => ({
+        adultPrice: r.adultPrice,
+        childPrice: r.childPrice,
+        effectiveFrom: new Date(r.effectiveFrom),
+        effectiveTo: r.effectiveTo ? new Date(r.effectiveTo) : null,
+      })),
+    }
+    return allocationStayTotal({
+      allocation: like,
+      adults: form.adults,
+      children: form.children,
+      checkInDate: stayDatesForAlloc.checkIn,
+      checkOutDate: stayDatesForAlloc.checkOut,
+    })
+  }
+
   const resetForm = () => {
     setForm({
       primaryGuestId: "",
@@ -194,6 +282,7 @@ export default function ReservationsDashboard() {
       travelAgentId: "none",
       status: "RESERVED",
       accompanyingGuestIds: [],
+      manualAllocationIds: [],
       assignments: [
         {
           roomTypeId: "",
@@ -222,6 +311,7 @@ export default function ReservationsDashboard() {
       travelAgentId: res.travelAgentId || "none",
       status: res.status,
       accompanyingGuestIds: res.accompanyingGuests?.map(ag => ag.profile.upid) || [],
+      manualAllocationIds: res.allocations?.filter(a => a.source === "MANUAL").map(a => a.allocationId) || [],
       assignments: res.assignments && res.assignments.length > 0 ? res.assignments.map(a => ({
         roomTypeId: a.roomTypeId,
         roomId: a.roomId || "none",
@@ -823,8 +913,106 @@ export default function ReservationsDashboard() {
                   </Button>
                 </div>
 
+                <div className="flex flex-col gap-3 mt-2">
+                  <h3 className="font-semibold text-lg border-b pb-2">Allocations & Add-ons</h3>
+
+                  {autoAllocationIds.length > 0 && (
+                    <div className="rounded-md border p-3 bg-muted/40">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">
+                        Included via rate plan / meal plan
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {autoAllocationIds.map(id => {
+                          const a = allocations.find(al => al.id === id)
+                          if (!a) return null
+                          const total = allocationPreviewTotal(a)
+                          return (
+                            <div key={id} className="flex items-center justify-between text-sm">
+                              <span>
+                                <span className="font-mono font-medium">{a.code}</span> — {a.name}
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  {a.mode === "INCLUDE_IN_RATE" ? "in rate" : "added to rate"}
+                                </Badge>
+                              </span>
+                              {total != null && <span className="font-mono text-muted-foreground">${total.toFixed(2)}</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(() => {
+                    // Only sell-separate allocations are offered as manual add-ons (an
+                    // allocation that's part of a rate/meal plan is auto-attached above).
+                    const addOnOptions = allocations.filter(
+                      a => a.isActive && a.sellSeparate && !autoAllocationIds.includes(a.id)
+                    )
+                    if (addOnOptions.length === 0) return (
+                      <p className="text-xs text-muted-foreground italic">
+                        No sell-separate add-ons available for this property.
+                      </p>
+                    )
+                    return (
+                      <div className="rounded-md border p-3">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">
+                          Add-ons (sold separately, posted nightly by Night Audit)
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {addOnOptions.map(a => {
+                            const total = allocationPreviewTotal(a)
+                            return (
+                              <label key={a.id} className="flex items-center justify-between cursor-pointer text-sm">
+                                <span className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={form.manualAllocationIds.includes(a.id)}
+                                    onCheckedChange={(checked) =>
+                                      setForm(p => ({
+                                        ...p,
+                                        manualAllocationIds: checked
+                                          ? [...p.manualAllocationIds, a.id]
+                                          : p.manualAllocationIds.filter(x => x !== a.id),
+                                      }))
+                                    }
+                                  />
+                                  <span>
+                                    <span className="font-mono font-medium">{a.code}</span> — {a.name}
+                                  </span>
+                                </span>
+                                {total != null && form.manualAllocationIds.includes(a.id) && (
+                                  <span className="font-mono text-muted-foreground">${total.toFixed(2)}</span>
+                                )}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {(() => {
+                    if (!stayDatesForAlloc) return null
+                    const attached = [
+                      ...autoAllocationIds,
+                      ...form.manualAllocationIds.filter(id => !autoAllocationIds.includes(id)),
+                    ]
+                    const grand = attached.reduce((sum, id) => {
+                      const a = allocations.find(al => al.id === id)
+                      if (!a) return sum
+                      return sum + (allocationPreviewTotal(a) ?? 0)
+                    }, 0)
+                    if (attached.length === 0) return null
+                    return (
+                      <p className="text-sm text-right text-muted-foreground">
+                        Estimated allocations total for stay:{" "}
+                        <span className="font-mono font-semibold text-foreground">${grand.toFixed(2)}</span>
+                      </p>
+                    )
+                  })()}
+                </div>
+
               </div>
-              
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Booking"}</Button>
@@ -956,6 +1144,19 @@ export default function ReservationsDashboard() {
                           {res.mealPlan && res.mealPlan !== 'NONE' && (
                             <span className="inline-flex items-center rounded-md bg-warning-muted px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/20 w-max mt-1">
                               {res.mealPlan}
+                            </span>
+                          )}
+                          {(res.allocations ?? []).length > 0 && (
+                            <span className="inline-flex flex-wrap gap-1 mt-1">
+                              {(res.allocations ?? []).map(ra => (
+                                <span
+                                  key={ra.id}
+                                  title={`${ra.allocation.name} (${ra.source === "MANUAL" ? "add-on" : "via " + ra.source.toLowerCase().replace("_", " ")})`}
+                                  className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground ring-1 ring-inset ring-border w-max"
+                                >
+                                  {ra.allocation.code}
+                                </span>
+                              ))}
                             </span>
                           )}
                         </div>

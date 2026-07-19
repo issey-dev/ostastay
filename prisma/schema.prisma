@@ -222,6 +222,7 @@ model Property {
   outlets      Outlet[]
   folios       Folio[]
   currencyExchanges CurrencyExchange[]
+  allocations  Allocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -325,6 +326,11 @@ model MealPlan {
   name       String
   isActive   Boolean  @default(true)
 
+  // Which Allocations selecting this meal plan brings onto a reservation (BB → {BF},
+  // HB → {BF, DN}) — this is what makes a meal plan actually price per-person, versus
+  // the older Derived-Rate-Plan approach which can only shift the room rate.
+  allocationLinks MealPlanAllocation[]
+
   @@unique([propertyId, code])
 }
 
@@ -420,6 +426,7 @@ model ChargeCode {
   // outlet, it can be exposed by any number of them (or none). See OutletChargeCode.
   outletCharges      OutletChargeCode[]
   outletAppointments OutletAppointment[]
+  allocations        Allocation[]
 
   @@unique([enterpriseId, code])
 }
@@ -570,6 +577,10 @@ model RatePlan {
 
   calendars      PriceCalendar[]
   RoomAssignment RoomAssignment[]
+  // Which Allocations this plan carries as a package (see Allocation.mode for whether
+  // each is carved out of or added on top of the room rate). A derived plan with no
+  // links of its own inherits its parent's — see src/lib/allocations.ts.
+  allocationLinks RatePlanAllocation[]
 
   @@unique([propertyId, code])
 }
@@ -629,6 +640,9 @@ model Reservation {
   traces             ReservationTrace[]
   accompanyingGuests AccompanyingGuest[]
   outletAppointments OutletAppointment[]
+  // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
+  // written at create/edit, read by Night Audit. See ReservationAllocation.
+  allocations        ReservationAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1079,4 +1093,116 @@ model PropertySequence {
   updatedAt    DateTime @updatedAt
 
   @@unique([propertyId, sequenceType])
+}
+
+// ── Allocations (see .agents/docs/ALLOCATIONS_PLAN.md) ──────────────────────────────
+// A per-person, date-range-priced component (Breakfast, Dinner, Speedboat Transfer,
+// Spa, Excursion...) that attaches to Rate Plans (packages), Meal Plans, and
+// Reservations, and posts to folios at Night Audit against its own ChargeCode.
+// Property-scoped like RatePlan/MealPlan (offerings and prices differ per property);
+// the ChargeCode it posts under stays enterprise-wide, same split as Outlets use.
+model Allocation {
+  id           String     @id @default(uuid())
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code         String     // BF, LN, DN, TRF-SB, SPA-60...
+  name         String     // "Breakfast", "Speedboat Transfer"
+  // Grouping for filtering/reporting only — FNB | TRANSFER | SPA | EXCURSION | OTHER.
+  // Plain string, same convention as ChargeCode.category / Outlet.outletType.
+  type         String     @default("OTHER")
+  chargeCodeId String
+  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  // When during the stay Night Audit posts this — EVERY_NIGHT | ARRIVAL_NIGHT |
+  // DEPARTURE_NIGHT (departure = the stay's last night; no audit runs for a guest on
+  // their checkout date itself).
+  postingRhythm String @default("EVERY_NIGHT")
+  // How this allocation behaves *when it is part of a rate plan* — INCLUDE_IN_RATE |
+  // ADD_TO_RATE (owner-confirmed, defined per allocation item/code, never per link):
+  // INCLUDE_IN_RATE — its value is carved OUT of the room line at posting (room line
+  //   reduced, folio total unchanged — pure revenue attribution to this allocation's
+  //   charge code).
+  // ADD_TO_RATE — posts on top of the room rate as its own line.
+  mode String @default("ADD_TO_RATE")
+  // Independent of `mode` (owner-confirmed): whether this allocation can *also* be
+  // attached manually to a reservation on its own, whether or not it's part of any
+  // rate/meal plan. Turning this on doesn't change how it posts when it IS in a rate —
+  // it just additionally exposes it in the reservation Add-ons picker.
+  sellSeparate Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  rates                  AllocationRate[]
+  ratePlanLinks          RatePlanAllocation[]
+  mealPlanLinks          MealPlanAllocation[]
+  reservationAllocations ReservationAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
+}
+
+// Date-range pricing rows — ranges must never overlap (validated in the API, like rate
+// pricing; SQLite can't enforce range exclusion). Null effectiveTo = open-ended. The
+// row covering a given audit date supplies that night's prices; no covering row means
+// the allocation simply posts nothing that night. Adults/children only — infants are
+// never charged (owner-confirmed, consistent with the Green Tax infant exemption).
+model AllocationRate {
+  id            String     @id @default(uuid())
+  allocationId  String
+  allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  adultPrice    Float      @default(0)
+  childPrice    Float      @default(0)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+}
+
+// "This package rate includes these allocations." Explicit join model with its own id,
+// matching OutletChargeCode's convention. Whether each allocation is carved out of or
+// added on top of the rate is the allocation's own mode, not a per-link setting.
+model RatePlanAllocation {
+  id           String     @id @default(uuid())
+  ratePlanId   String
+  ratePlan     RatePlan   @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  allocationId String
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([ratePlanId, allocationId])
+}
+
+// "Choosing this meal plan on a reservation brings these allocations" (BB → {BF}).
+model MealPlanAllocation {
+  id           String     @id @default(uuid())
+  mealPlanId   String
+  mealPlan     MealPlan   @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  allocationId String
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([mealPlanId, allocationId])
+}
+
+// The materialized per-reservation attachment set — written at reservation create/edit
+// (RATE_PLAN/MEAL_PLAN rows re-derived on relevant edits, MANUAL rows preserved), and
+// the ONLY thing Night Audit reads. Editing a rate plan's links later never silently
+// reprices an in-house stay. No onDelete cascade from Allocation: deleting an
+// allocation that reservations reference is blocked by the FK, which is the safe
+// default (deactivate instead).
+model ReservationAllocation {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  allocationId  String
+  allocation    Allocation  @relation(fields: [allocationId], references: [id])
+  source        String      // RATE_PLAN | MEAL_PLAN | MANUAL
+
+  // Nullable per-reservation negotiated price overrides; null = use AllocationRate.
+  overrideAdultPrice Float?
+  overrideChildPrice Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([reservationId, allocationId])
 }

@@ -1,6 +1,19 @@
 # Consolidated TODO — as of 2026-07-18
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
+
+## Allocations (Revenue model extension) — BUILT 2026-07-19, pending owner review
+
+Full plan and architecture in [ALLOCATIONS_PLAN.md](ALLOCATIONS_PLAN.md) — **Phases A–E
+all implemented and green** (167/167 suite incl. 18 new allocation tests; owner
+confirmed every design decision, see DECISIONS.md "Allocations"). Per-person
+date-range-priced components (BF/LN/DN, transfers, spa, excursions) under Revenue >
+Allocations, linkable to Rate Plans and Meal Plans, materialized onto reservations
+(`ReservationAllocation`), posted at Night Audit with Include-in-Rate carve-out /
+Add-to-Rate / Sell-Separate semantics. Awaiting app-owner UI review/fine-tuning.
+Known follow-up flagged, not built: Night Audit still has **no double-run guard** for
+any posting (room charges included — pre-existing gap, allocations deliberately
+inherit the same behavior rather than getting a bespoke guard).
 > This file is the actionable list: what's left, what was deferred on purpose, and what
 > was found broken along the way but is out of scope for whoever finds it next to fix
 > without checking first. Keep this file current — when you close an item, move it to
@@ -545,7 +558,7 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   Full business-rule detail in [DECISIONS.md](DECISIONS.md).
 - **2026-07-18** — Phase 3: guest & booking data scoping.
 - **2026-07-18** — Design system pass: monochromatic theming, responsive layouts (see
-  `DESIGN_PLAN.md` at repo root — status: plan says "planning only" in its header, but
+  [`DESIGN_PLAN.md`](DESIGN_PLAN.md) — status: plan says "planning only" in its header, but
   a commit titled "Implement DESIGN_PLAN.md" exists in git log; reconcile that
   discrepancy before treating the plan doc as still purely aspirational).
 - **2026-07-18** — Phase 2: core reference/configuration data scoping.

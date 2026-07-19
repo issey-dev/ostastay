@@ -245,7 +245,7 @@
 
 ## Theming & Design System
 
-- Full audit, token system, and migration plan: see `DESIGN_PLAN.md` at the repo root
+- Full audit, token system, and migration plan: see [`DESIGN_PLAN.md`](DESIGN_PLAN.md)
   (not duplicated here — it's a large, self-contained document). Status note: its header
   says "planning only — no code in this document has been applied to the repo," but
   `git log` shows a commit `4420587 Implement DESIGN_PLAN.md: monochromatic design
@@ -699,3 +699,66 @@ matrix, and the Night Audit "Meal Plan Charge" posting block were all deleted.
 `Reservation.mealPlan` is now purely an informational tag, not a Night Audit
 pricing input. New migration `20260719100019_remove_meal_plan_room_type_rates`
 drops the table. 149/149 passing, `tsc --noEmit` clean after the removal too.
+
+## Allocations (2026-07-19)
+
+- **New first-class revenue entity**: an Allocation is a per-person, date-range-priced
+  component (BF/LN/DN, transfers, spa, excursions) configured under Revenue >
+  Allocations, linkable to Rate Plans (package contents) and Meal Plans (BB → BF),
+  attachable manually per reservation, and posted by Night Audit against its own
+  ChargeCode. Full architecture and phase history: `ALLOCATIONS_PLAN.md` in this folder.
+- **Owner-confirmed rules** (all dated 2026-07-19, given verbally in-session):
+  - Prices are **adult/child only — infants are never charged** (consistent with the
+    Green Tax infant exemption). No infant price field exists anywhere.
+  - Pricing is **controlled by date only** — date ranges that must not overlap
+    (API-validated, like rate pricing). Room type and meal plan never affect an
+    allocation's price.
+  - The Include-in-Rate / Add-to-Rate / Sell-Separate **mode is defined per allocation
+    item/code** — one allocation can be include-in-rate while another is add-to-rate,
+    but a single allocation is never both.
+  - **Include-in-Rate = revenue carve-out**: room line reduced by the allocation amount
+    (clamped at zero), folio total unchanged, attribution moves to the allocation's
+    charge code.
+  - **Departure-night rhythm posts on the stay's last night** (no audit runs for a
+    guest on their checkout date).
+- **Supersedes (extends) the "price meal plans via Derived Rate Plans" decision
+  above**: a derived plan mathematically cannot price per person, so per-pax meal
+  pricing now flows through MealPlan → Allocation links. Derived Rate Plans remain
+  fully supported for flat/percent room-rate adjustments — the two mechanisms compose
+  (a reservation on "BAR-BB" can get BAR+$20 room pricing AND the BB meal plan's BF
+  allocation).
+- **Attachment is materialized at booking/edit time** into `ReservationAllocation`
+  (source RATE_PLAN | MEAL_PLAN | MANUAL, with optional negotiated price overrides) —
+  Night Audit reads only those rows, so later edits to a plan's links never silently
+  reprice an in-house stay. Derived plans inherit their parent's links unless they
+  have their own.
+- 167/167 full suite passing (18 new allocation tests: rhythm gating, date-range
+  selection, pax math, carve-out clamp, override honouring, link inheritance,
+  materialization lifecycle, tenant isolation), `tsc --noEmit` clean.
+
+## Allocations: Sell-Separate is an independent toggle, not a mode (2026-07-19)
+
+**Correction to the Allocations entry above, same day**, from app-owner feedback on the
+built UI (verbatim intent): *"sell separate — it is a separate toggle from add to rate /
+include in rate. Despite including in rate or not, sell separate allows users to attach
+these packages manually to reservation. The purpose of defining allocations like BF, LN,
+DN was so revenue allocations are allocated by default and posted during night audit."*
+
+- **`Allocation.mode`** is now strictly 2-way: `INCLUDE_IN_RATE | ADD_TO_RATE` — it only
+  governs how the allocation posts *when it is part of a rate plan*.
+- **`Allocation.sellSeparate`** (new Boolean, independent of `mode`) — when true, the
+  allocation is *additionally* offered as a manual add-on in the reservation form,
+  whether or not it's part of any rate/meal plan. It does not change posting behavior.
+- **All allocations are linkable** to rate plans and meal plans now (the earlier rule
+  that SELL_SEPARATE allocations couldn't be packaged is removed — that concept no
+  longer exists). The reservation Add-ons picker shows only `sellSeparate` allocations
+  that aren't already auto-attached via a rate/meal plan.
+- **UI**: the allocation form's 3-way "Rate Behaviour" radio became a 2-way radio
+  (Include in Rate / Add to Rate) plus a separate "Sell Separately" switch. The Rate
+  Plan dialog was widened and split into two side-by-side columns — rate definition on
+  the left, a chip-style allocation picker grouped by type (selected chips highlighted,
+  unselected gray) on the right — to fix an unscrollable single-column dialog.
+- Migration `20260719140000_allocation_sell_separate` adds the column and backfills any
+  legacy `mode='SELL_SEPARATE'` row to `mode='ADD_TO_RATE', sellSeparate=true`.
+- 169/169 suite passing (2 new tests: SELL_SEPARATE rejected as a mode value; a
+  sell-separate allocation is still linkable to a rate plan), `tsc --noEmit` clean.

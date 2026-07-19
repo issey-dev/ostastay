@@ -15,7 +15,12 @@ export async function GET(request: Request) {
 
     const ratePlans = await prisma.ratePlan.findMany({
       where: { propertyId },
-      include: { parentRatePlan: { select: { id: true, name: true, code: true } } },
+      include: {
+        parentRatePlan: { select: { id: true, name: true, code: true } },
+        allocationLinks: {
+          include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
+        },
+      },
       orderBy: { priority: 'asc' }, // Higher priority (lower number) first
     });
     return NextResponse.json(ratePlans);
@@ -64,6 +69,23 @@ export async function POST(request: Request) {
       derivedAdjustmentValue = adjustmentValue;
     }
 
+    // Package contents: which Allocations this plan carries. Any allocation belonging
+    // to this property is linkable — the allocation's own `mode` (include/add) decides
+    // how it posts; `sellSeparate` is independent and doesn't affect linkability.
+    let allocationIds: string[] = [];
+    if (Array.isArray(body.allocationIds) && body.allocationIds.length > 0) {
+      allocationIds = [...new Set(body.allocationIds as string[])];
+      const linkable = await prisma.allocation.findMany({
+        where: { id: { in: allocationIds }, propertyId: body.propertyId },
+      });
+      if (linkable.length !== allocationIds.length) {
+        return NextResponse.json(
+          { error: "Allocations must belong to this property" },
+          { status: 400 }
+        );
+      }
+    }
+
     const newRatePlan = await prisma.ratePlan.create({
       data: {
         propertyId: body.propertyId,
@@ -75,6 +97,14 @@ export async function POST(request: Request) {
         parentRatePlanId,
         derivedAdjustmentType,
         derivedAdjustmentValue,
+        allocationLinks: allocationIds.length > 0
+          ? { create: allocationIds.map((allocationId) => ({ allocationId })) }
+          : undefined,
+      },
+      include: {
+        allocationLinks: {
+          include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
+        },
       },
     });
 

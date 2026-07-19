@@ -19,12 +19,43 @@ export async function PUT(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
+    // Linked allocations (full replacement when provided) — what selecting this meal
+    // plan brings onto a reservation (BB → {BF}). Any allocation belonging to this
+    // property is linkable.
+    let allocationIds: string[] | undefined;
+    if (body.allocationIds !== undefined) {
+      if (!Array.isArray(body.allocationIds)) {
+        return NextResponse.json({ error: "allocationIds must be an array" }, { status: 400 });
+      }
+      allocationIds = [...new Set(body.allocationIds as string[])];
+      if (allocationIds.length > 0) {
+        const linkable = await prisma.allocation.findMany({
+          where: { id: { in: allocationIds }, propertyId: existing.propertyId },
+        });
+        if (linkable.length !== allocationIds.length) {
+          return NextResponse.json(
+            { error: "Allocations must belong to this property" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const mealPlan = await prisma.mealPlan.update({
       where: { id },
       data: {
         code: body.code ? body.code.toUpperCase() : existing.code,
         name: body.name ?? existing.name,
         isActive: body.isActive !== undefined ? !!body.isActive : existing.isActive,
+        allocationLinks:
+          allocationIds !== undefined
+            ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
+            : undefined,
+      },
+      include: {
+        allocationLinks: {
+          include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
+        },
       },
     });
 

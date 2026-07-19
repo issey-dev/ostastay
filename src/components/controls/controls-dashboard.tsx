@@ -138,7 +138,7 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       label: "Revenue",
       icon: TrendingUp,
       render: () => (
-        <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). To price one, create a Derived Rate Plan on the Rate Plans tab (e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot;) rather than setting a rate here.">
+        <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments.">
           <MealPlansManager />
         </ControlsCard>
       ),

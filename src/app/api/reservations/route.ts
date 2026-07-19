@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { materializeReservationAllocations } from "@/lib/allocations-server";
 
 export async function GET(request: Request) {
   try {
@@ -34,6 +35,13 @@ export async function GET(request: Request) {
           }
         },
         folios: true,
+        allocations: {
+          include: {
+            allocation: {
+              include: { rates: true, chargeCode: { select: { code: true } } },
+            },
+          },
+        },
       },
       orderBy: { checkInDate: 'asc' },
       take: 100, // Limit for dashboard performance
@@ -189,6 +197,20 @@ export async function POST(request: Request) {
         folios: true,
       }
     });
+
+    // Materialize the allocation attachment set (rate plan + meal plan links, plus any
+    // manually-picked add-ons) — the rows Night Audit will post from.
+    const allocationResult = await materializeReservationAllocations({
+      reservationId: newReservation.id,
+      propertyId: body.propertyId,
+      ratePlanId: assignmentsInput[0]?.ratePlanId ?? null,
+      mealPlanCode: body.mealPlan || "NONE",
+      manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
+    });
+    if (allocationResult.error) {
+      // The reservation itself is valid — surface the add-on problem without losing it.
+      return NextResponse.json({ ...newReservation, allocationWarning: allocationResult.error }, { status: 201 });
+    }
 
     const capacityWarning = overCapacityRoomTypes.size > 0
       ? `${totalOccupants} guests exceeds max occupancy for: ${Array.from(overCapacityRoomTypes).join(", ")}`

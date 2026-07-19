@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useProperty } from "@/components/providers/property-provider"
@@ -18,7 +19,10 @@ type MealPlan = {
   code: string
   name: string
   isActive: boolean
+  allocationLinks?: Array<{ allocation: { id: string; code: string; name: string; mode: string } }>
 }
+
+type AllocationOption = { id: string; code: string; name: string; mode: string; isActive: boolean }
 
 // Purely the LOV — which meal plan codes exist and their display name. Pricing a
 // meal plan is done via a Derived Rate Plan (e.g. "BAR-BB" derived from "BAR"), not
@@ -29,10 +33,12 @@ export function MealPlansManager() {
   const propertyId = currentProperty?.id ?? ""
 
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([])
+  const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ code: "", name: "", isActive: true })
+  const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
 
   const fetchMealPlans = () => {
     if (!propertyId) return
@@ -45,16 +51,25 @@ export function MealPlansManager() {
 
   useEffect(() => {
     fetchMealPlans()
+    if (propertyId) {
+      fetch(`/api/allocations?propertyId=${propertyId}`)
+        .then(r => r.json())
+        .then(data => { if (Array.isArray(data)) setAllocations(data) })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId])
+
+  const linkableAllocations = allocations.filter(a => a.isActive)
 
   const openDialog = (mp?: MealPlan) => {
     if (mp) {
       setEditingId(mp.id)
       setFormData({ code: mp.code, name: mp.name, isActive: mp.isActive })
+      setSelectedAllocationIds((mp.allocationLinks ?? []).map(l => l.allocation.id))
     } else {
       setEditingId(null)
       setFormData({ code: "", name: "", isActive: true })
+      setSelectedAllocationIds([])
     }
     setIsDialogOpen(true)
   }
@@ -67,7 +82,7 @@ export function MealPlansManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, propertyId }),
+        body: JSON.stringify({ ...formData, propertyId, allocationIds: selectedAllocationIds }),
       })
       if (res.ok) {
         setIsDialogOpen(false)
@@ -125,7 +140,18 @@ export function MealPlansManager() {
                 mealPlans.map(mp => (
                   <TableRow key={mp.id}>
                     <TableCell className="font-mono font-semibold">{mp.code}</TableCell>
-                    <TableCell className="font-medium">{mp.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {mp.name}
+                      {(mp.allocationLinks ?? []).length > 0 && (
+                        <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                          {(mp.allocationLinks ?? []).map(l => (
+                            <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
+                              {l.allocation.code}
+                            </Badge>
+                          ))}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={mp.isActive ? "bg-success-muted text-success border-success/30" : "bg-muted text-muted-foreground"}>
                         {mp.isActive ? "Active" : "Inactive"}
@@ -161,6 +187,34 @@ export function MealPlansManager() {
             <div className="space-y-2">
               <Label>Name <span className="text-destructive">*</span></Label>
               <Input required placeholder="e.g. Bed & Breakfast" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+              <Label>Included Allocations</Label>
+              <p className="text-xs text-muted-foreground">
+                Selecting this meal plan on a reservation attaches these allocations (e.g. BB → BF).
+                Configure allocations under Revenue &gt; Allocations.
+              </p>
+              {linkableAllocations.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No linkable allocations configured yet.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {linkableAllocations.map(a => (
+                    <label key={a.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={selectedAllocationIds.includes(a.id)}
+                        onCheckedChange={(checked) =>
+                          setSelectedAllocationIds(prev =>
+                            checked ? [...prev, a.id] : prev.filter(id => id !== a.id)
+                          )
+                        }
+                      />
+                      <span className="text-sm">
+                        <span className="font-mono font-medium">{a.code}</span> — {a.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between pt-2">
               <Label className="flex-1">Active Status</Label>

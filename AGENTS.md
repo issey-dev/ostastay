@@ -15,11 +15,18 @@ read `.agents/docs/`:
   decisions the app owner has given verbally, dated. Check here before assuming a
   business rule, especially around Room Types, Tax/Charge Codes, Sequence Manager, and
   theming.
+- [`.agents/docs/FORM_VALIDATION_STANDARD.md`](.agents/docs/FORM_VALIDATION_STANDARD.md)
+  — APP STANDARD 001: every form must use Zod + React Hook Form + shadcn/ui with
+  inline, real-time validation.
+- [`.agents/docs/ALLOCATIONS_PLAN.md`](.agents/docs/ALLOCATIONS_PLAN.md) — Master Plan
+  v2: the Allocations revenue-model extension (per-person priced components linked to
+  rate plans/meal plans/reservations, posted at Night Audit). Read before touching
+  Revenue, Meal Plans, or Night Audit posting.
 
-`DESIGN_PLAN.md` at the repo root is the full design-token/theming plan (large, kept
-separate) — `.agents/docs/DECISIONS.md` has a short pointer to it plus a status
-correction (its own header is stale — treat it as partially-to-mostly implemented, not
-"planning only").
+[`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
+theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
+it plus a status correction (its own header is stale — treat it as partially-to-mostly
+implemented, not "planning only").
 <!-- END:project-docs -->
 
 <!-- BEGIN:nextjs-agent-rules -->

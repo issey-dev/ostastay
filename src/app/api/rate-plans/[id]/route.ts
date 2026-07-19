@@ -12,6 +12,7 @@ const updateSchema = z.object({
   parentRatePlanId: z.string().uuid().nullable().optional(),
   derivedAdjustmentType: z.enum(["PERCENT", "FLAT"]).nullable().optional(),
   derivedAdjustmentValue: z.number().nullable().optional(),
+  allocationIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function PUT(
@@ -72,6 +73,24 @@ export async function PUT(
       derivedAdjustmentValue = data.derivedAdjustmentValue;
     }
 
+    // Package contents (full replacement when provided). Any allocation belonging to
+    // this property is linkable — `sellSeparate` is independent of package membership.
+    let allocationIds: string[] | undefined;
+    if (data.allocationIds !== undefined) {
+      allocationIds = [...new Set(data.allocationIds)];
+      if (allocationIds.length > 0) {
+        const linkable = await prisma.allocation.findMany({
+          where: { id: { in: allocationIds }, propertyId: existing.propertyId },
+        });
+        if (linkable.length !== allocationIds.length) {
+          return NextResponse.json(
+            { error: "Allocations must belong to this property" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const updatedRatePlan = await prisma.ratePlan.update({
       where: { id },
       data: {
@@ -83,6 +102,15 @@ export async function PUT(
         parentRatePlanId,
         derivedAdjustmentType,
         derivedAdjustmentValue,
+        allocationLinks:
+          allocationIds !== undefined
+            ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
+            : undefined,
+      },
+      include: {
+        allocationLinks: {
+          include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
+        },
       },
     });
 
