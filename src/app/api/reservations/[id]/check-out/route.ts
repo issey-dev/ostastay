@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
 
 export async function POST(
   request: Request,
@@ -35,26 +36,39 @@ export async function POST(
       return NextResponse.json({ error: "Only in-house guests can be checked out" }, { status: 400 });
     }
 
-    // 2. Calculate balance
+    // 2. A City Ledger folio only transfers to a debtor account if the reservation's
+    // travel agent is still a valid, activated credit account at checkout time — this
+    // is the moment (not Night Audit, not folio creation) an invoice is actually born.
+    // Falls back to treating the folio as guest-payable if the TA isn't valid, so a
+    // misconfigured folio can't silently write off real revenue nobody will collect.
+    let creditAccount: { upid: string; firstName: string; lastName: string | null; companyName: string | null; creditLimit: number | null } | null = null;
+    if (reservation.travelAgentId) {
+      const travelAgent = await prisma.profile.findUnique({ where: { upid: reservation.travelAgentId } });
+      if (travelAgent?.isCreditAccount) {
+        creditAccount = travelAgent;
+      }
+    }
+
+    const qualifiesForAccount = (folio: (typeof reservation.folios)[number]) =>
+      folio.settlementMethod === "CITY_LEDGER" && creditAccount !== null;
+
+    // 3. Guest-payable balance excludes folios transferring to a debtor account —
+    // those are the account's responsibility now, not the guest's, regardless of
+    // their balance. Every other folio must still net to ~0, same rule as before.
     let totalCharges = 0;
     let totalPayments = 0;
-
     for (const folio of reservation.folios) {
+      if (qualifiesForAccount(folio)) continue;
       for (const item of folio.lineItems) {
         if (!item.isVoid) {
           totalCharges += (item.amount + item.taxAmount + (item.serviceChargeAmount || 0));
         }
       }
       for (const payment of folio.payments) {
-        if (!payment.isRefund) {
-          totalPayments += payment.amount;
-        } else {
-          totalPayments -= payment.amount;
-        }
+        totalPayments += payment.isRefund ? -payment.amount : payment.amount;
       }
     }
 
-    // Allow a small floating point tolerance
     const balance = totalCharges - totalPayments;
     if (Math.abs(balance) > 0.01) {
       return NextResponse.json({
@@ -63,7 +77,7 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // 3. Perform check-out in transaction
+    // 4. Perform check-out in transaction
     await prisma.$transaction(async (tx) => {
       // Update Reservation Status
       await tx.reservation.update({
@@ -80,18 +94,38 @@ export async function POST(
         });
       }
 
-      // Close all folios
+      // Close all folios, finalizing any City-Ledger folio into a debtor invoice —
+      // this is the one place isDebtorAccount ever flips true. payeeProfileId is set
+      // defensively here too, in case settlement was toggled mid-stay without it.
       for (const folio of reservation.folios) {
-        if (!folio.isClosed) {
+        if (!folio.isClosed || qualifiesForAccount(folio)) {
           await tx.folio.update({
             where: { id: folio.id },
-            data: { isClosed: true }
+            data: {
+              isClosed: true,
+              ...(qualifiesForAccount(folio) && {
+                isDebtorAccount: true,
+                payeeProfileId: creditAccount!.upid,
+              }),
+            }
           });
         }
       }
     });
 
-    return NextResponse.json({ success: true });
+    // 5. Non-blocking credit-limit check against the account's full open balance at
+    // this property (not just this one stay) — mirrors the Outlet capWarning pattern.
+    let creditLimitWarning: { balance: number; creditLimit: number } | undefined;
+    if (creditAccount) {
+      const openInvoices = await prisma.folio.findMany({
+        where: { propertyId: reservation.propertyId, payeeProfileId: creditAccount.upid, isDebtorAccount: true },
+        include: { lineItems: true, payments: true },
+      });
+      const accountBalance = openInvoices.reduce((sum, f) => sum + computeFolioBalance(f.lineItems, f.payments), 0);
+      creditLimitWarning = checkCreditLimitWarning(accountBalance, creditAccount.creditLimit);
+    }
+
+    return NextResponse.json({ success: true, creditLimitWarning });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

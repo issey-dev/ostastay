@@ -62,10 +62,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Guest profile not found" }, { status: 404 });
     }
 
+    // Defaults the initial folio's settlement method to City Ledger when the attached
+    // TA/corporate profile is an activated credit account — staff can still override it
+    // afterward in the Folio Panel; not re-evaluated on later edits so an override isn't
+    // silently clobbered. payeeProfileId is set alongside it so the folio is
+    // identifiable as this account's invoice throughout the stay (shown on printed
+    // documents, etc) — the actual transfer to the account only happens at checkout
+    // (see check-out/route.ts), not here.
+    let initialSettlementMethod = "DIRECT";
+    let initialPayeeProfileId: string | null = null;
     if (body.travelAgentId) {
       const travelAgent = await prisma.profile.findUnique({ where: { upid: body.travelAgentId } });
       if (!travelAgent || travelAgent.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: "Travel agent profile not found" }, { status: 404 });
+      }
+      if (travelAgent.isCreditAccount) {
+        initialSettlementMethod = "CITY_LEDGER";
+        initialPayeeProfileId = travelAgent.upid;
       }
     }
 
@@ -125,8 +138,10 @@ export async function POST(request: Request) {
         checkOutDate: new Date(body.checkOutDate),
         adults: parseInt(body.adults) || 1,
         children: parseInt(body.children) || 0,
+        infants: parseInt(body.infants) || 0,
         mealPlan: body.mealPlan || "NONE",
-        status: "CONFIRMED", // Default status
+        remarks: body.remarks || null,
+        status: "RESERVED", // Default status
         assignments: {
           create: assignmentsInput
         },
@@ -137,6 +152,9 @@ export async function POST(request: Request) {
         folios: {
           create: {
             folioNumber: 1,
+            propertyId: body.propertyId,
+            settlementMethod: initialSettlementMethod,
+            payeeProfileId: initialPayeeProfileId,
           }
         }
       },

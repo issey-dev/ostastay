@@ -51,6 +51,7 @@ const profileFormSchema = z.object({
   commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   arNumber: z.string().optional(),
   creditLimit: z.coerce.number().min(0).optional().nullable(),
+  isCreditAccount: z.boolean().default(false),
   dietaryRequirement: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.profileType === "COMPANY" || data.profileType === "TRAVEL_AGENT") {
@@ -81,11 +82,11 @@ const profileFormSchema = z.object({
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>
 
-export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }: { initialData?: any, upid?: string, defaultType?: string }) {
+export default function ProfileForm({ initialData, upid, defaultType = "GUEST", contextMode }: { initialData?: any, upid?: string, defaultType?: string, contextMode?: "debtor" }) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const isEditMode = !!upid
-  const enterpriseId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const isDebtorContext = contextMode === "debtor"
 
   const [submitting, setSubmitting] = useState(false)
 
@@ -124,6 +125,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
       commissionRate: initialData?.commissionRate || null,
       arNumber: initialData?.arNumber || "",
       creditLimit: initialData?.creditLimit || null,
+      isCreditAccount: initialData?.isCreditAccount ?? isDebtorContext,
       dietaryRequirement: initialData?.preferences?.find((p: any) => p.category === "DIETARY")?.value || initialData?.dietaryRequirement || "",
     }
   })
@@ -142,7 +144,6 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
     const payload = {
       ...data,
       address: combinedAddress,
-      enterpriseId,
       preferences: data.dietaryRequirement ? [{ category: "DIETARY", value: data.dietaryRequirement }] : []
     }
 
@@ -157,7 +158,12 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
       })
 
       if (res.ok) {
-        router.push(`/e/${slug}/dashboard/profiles`)
+        if (isDebtorContext) {
+          const saved = await res.json()
+          router.push(`/e/${slug}/dashboard/debtors/${saved.upid}`)
+        } else {
+          router.push(`/e/${slug}/dashboard/profiles`)
+        }
         router.refresh()
       } else {
         const error = await res.json()
@@ -181,10 +187,12 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
             </Button>
             <div>
               <h2 className="text-2xl font-bold tracking-tight">
-                {isEditMode ? "Edit Profile" : "New Profile"}
+                {isDebtorContext ? "New Credit Account" : isEditMode ? "Edit Profile" : "New Profile"}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {isEditMode ? `Updating Profile` : "Fill out the details to register a new profile."}
+                {isDebtorContext
+                  ? "Register a Company or Travel Agent as a Debtors credit account."
+                  : isEditMode ? `Updating Profile` : "Fill out the details to register a new profile."}
               </p>
             </div>
           </div>
@@ -523,10 +531,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="GUEST">Guest</SelectItem>
+                          {!isDebtorContext && <SelectItem value="GUEST">Guest</SelectItem>}
                           <SelectItem value="COMPANY">Company</SelectItem>
                           <SelectItem value="TRAVEL_AGENT">Travel Agent</SelectItem>
-                          <SelectItem value="STAFF">Staff</SelectItem>
+                          {!isDebtorContext && <SelectItem value="STAFF">Staff</SelectItem>}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -584,6 +592,23 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST" }
 
                 {isB2B && (
                   <>
+                    <FormField
+                      control={form.control}
+                      name="isCreditAccount"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-2 space-y-0">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isDebtorContext} />
+                          </FormControl>
+                          <div>
+                            <FormLabel className="cursor-pointer text-sm">Credit Account (Debtors)</FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              Activates AR Number/Credit Limit as a live account — enables billing charges to this profile from the Debtors module.
+                            </p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
                     <div className="pt-2 border-t border-border">
                       <FormField
                         control={form.control}

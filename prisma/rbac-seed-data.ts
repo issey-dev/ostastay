@@ -16,6 +16,7 @@ export const MODULES = [
   "CASHIERING",
   "POS",
   "NIGHT_AUDIT",
+  "DEBTORS",
   "REVENUE",
   "REPORTS",
   "CONTROLS",
@@ -73,10 +74,20 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     HOUSEKEEPING: VIEW_ONLY,
   }),
 
+  // DEBTORS added here (not Front Desk) — Accounts Receivable is back-office billing
+  // work closely related to Cashiering's settlement responsibilities; can create/view/
+  // update credit accounts and record payments, but not delete an account once it has
+  // transaction history. Other roles get none by default; an enterprise admin can
+  // grant DEBTORS to any role later via Controls > Users & Roles with no code change.
+  // PROFILES: EDIT_NO_DELETE is also granted — "Create Credit Account" reuses the
+  // existing Profile create/edit form (a credit account IS a COMPANY/TRAVEL_AGENT
+  // Profile), so managing debtor accounts requires being able to create/edit Profiles.
   Cashier: matrix({
     CASHIERING: FULL,
     POS: EDIT_NO_DELETE,
     FRONT_DESK: VIEW_ONLY,
+    DEBTORS: EDIT_NO_DELETE,
+    PROFILES: EDIT_NO_DELETE,
   }),
 
   Reservations: matrix({

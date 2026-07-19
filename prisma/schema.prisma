@@ -434,6 +434,11 @@ model Profile {
   isIncognito       Boolean   @default(false)
   arNumber          String?   @unique
   creditLimit       Float?
+  // Formally activates arNumber/creditLimit as a live Accounts Receivable account —
+  // see the Debtors module (src/app/e/[slug]/dashboard/debtors/). Only meaningful for
+  // COMPANY/TRAVEL_AGENT profiles, but not enforced at the DB level (profileType is a
+  // free string, not an enum).
+  isCreditAccount   Boolean   @default(false)
   totalStays        Int       @default(0)
   totalNights       Int       @default(0)
   totalRevenue      Float     @default(0.0)
@@ -591,6 +596,20 @@ model Folio {
   folioNumber   Int          @default(1)
   isClosed      Boolean      @default(false)
   isMaster      Boolean      @default(false)
+
+  // DIRECT (guest pays, default) | CITY_LEDGER (billed to a TA/corporate credit
+  // account — enables the "Bill to Account" action in the Folio Panel). Defaults to
+  // CITY_LEDGER at reservation creation when a credit-account Travel Agent/corporate
+  // profile is attached; not re-evaluated on edit so a staff override isn't clobbered.
+  settlementMethod String @default("DIRECT")
+
+  // True only once this reservation's own folio has been finalized into a debtor
+  // invoice (see the Debtors module) — flips at checkout, and only for a folio still
+  // set to CITY_LEDGER at that moment with a valid isCreditAccount travel agent
+  // attached (src/app/api/reservations/[id]/check-out/route.ts). Before checkout
+  // it's always false, which is what keeps in-house reservations out of the Debtors
+  // module entirely. One invoice = one reservation's folio, not a shared ledger.
+  isDebtorAccount Boolean @default(false)
 
   // Populated only when reservationId is null — who a walk-in folio's bill is for.
   walkInGuestName    String?

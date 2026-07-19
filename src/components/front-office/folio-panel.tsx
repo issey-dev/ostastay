@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 
 type FolioPanelProps = {
   reservationId: string | null
@@ -42,6 +43,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // Payee State
   const [isPayeeDialogOpen, setIsPayeeDialogOpen] = useState(false)
   const [selectedPayeeId, setSelectedPayeeId] = useState<string>("")
+
+  // Settlement Method State (Direct vs City Ledger — see the Debtors module; charges
+  // billed to an account finalize automatically at checkout, no mid-stay transfer here)
+  const [settlementSaving, setSettlementSaving] = useState(false)
 
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
@@ -174,6 +179,27 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       }
     } catch (e) {
       setNotification({ title: "Error", message: "Error moving charges.", isError: true })
+    }
+  }
+
+  const handleSetSettlementMethod = async (method: "DIRECT" | "CITY_LEDGER") => {
+    if (!activeFolioId) return
+    setSettlementSaving(true)
+    try {
+      const res = await fetch(`/api/folios/${activeFolioId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settlementMethod: method })
+      })
+      if (res.ok) {
+        fetchFolios()
+      } else {
+        setNotification({ title: "Error", message: "Failed to update settlement method.", isError: true })
+      }
+    } catch (e) {
+      setNotification({ title: "Error", message: "Error updating settlement method.", isError: true })
+    } finally {
+      setSettlementSaving(false)
     }
   }
 
@@ -322,6 +348,22 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         </Button>
                       </div>
 
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">Settlement:</span>
+                        <Badge variant={activeFolio.settlementMethod === "CITY_LEDGER" ? "default" : "outline"}>
+                          {activeFolio.settlementMethod === "CITY_LEDGER" ? "City Ledger" : "Direct"}
+                        </Badge>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-primary"
+                          disabled={settlementSaving}
+                          onClick={() => handleSetSettlementMethod(activeFolio.settlementMethod === "CITY_LEDGER" ? "DIRECT" : "CITY_LEDGER")}
+                        >
+                          Change
+                        </Button>
+                      </div>
+
                       <div className="flex items-center gap-3 mt-1">
                         <p className={`text-4xl font-bold ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
@@ -368,7 +410,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                       <span className="text-sm font-medium text-primary">
                         {selectedLineItemIds.length} charge(s) selected
                       </span>
-                      <Button size="sm" onClick={() => setIsMoveDialogOpen(true)} className="">
+                      <Button size="sm" onClick={() => setIsMoveDialogOpen(true)}>
                         <ArrowRightLeft className="w-4 h-4 mr-2" /> Move to Folio
                       </Button>
                     </div>

@@ -10,7 +10,7 @@ export default function NightAuditDashboard() {
   const { currentProperty } = useProperty()
   const [running, setRunning] = useState(false)
   const [auditResult, setAuditResult] = useState<any>(null)
-  
+
   // Dummy checks for the UI
   const [checks, setChecks] = useState({
     pendingArrivals: 0,
@@ -38,7 +38,7 @@ export default function NightAuditDashboard() {
     
     setRunning(true)
     setAuditResult(null)
-    
+
     try {
       const res = await fetch('/api/night-audit/run', {
         method: "POST",

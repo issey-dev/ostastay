@@ -19,14 +19,16 @@ export async function POST(
 
     // Check if folio exists and is open
     const folio = await prisma.folio.findUnique({
-      where: { id: folioId },
-      include: { reservation: true }
+      where: { id: folioId }
     });
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, folio.reservation.propertyId);
-    if (folio.isClosed) {
+    await assertPropertyAccess(ctx, folio.propertyId);
+    // Debtor invoice folios are always closed (checkout closes every folio) but must
+    // still accept payments after the fact — that's the whole point of an account
+    // paying off an invoice later. Only block posting to an ordinary closed guest folio.
+    if (folio.isClosed && !folio.isDebtorAccount) {
       return NextResponse.json({ error: "Cannot post payments to a closed folio" }, { status: 400 });
     }
 

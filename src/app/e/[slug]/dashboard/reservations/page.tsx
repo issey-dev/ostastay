@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell } from "lucide-react"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -29,6 +30,8 @@ type Reservation = {
   checkOutDate: string
   adults: number
   children: number
+  infants: number
+  remarks: string | null
   mealPlan: string
   primaryGuestId: string
   primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string }
@@ -59,8 +62,8 @@ const getActiveTasks = (res: Reservation) => {
 export default function ReservationsDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id || "00000000-0000-0000-0000-000000000000"
-  const enterpriseId = currentProperty?.enterpriseId || "00000000-0000-0000-0000-000000000000"
+  const propertyId = currentProperty?.id ?? ""
+  const enterpriseId = currentProperty?.enterpriseId ?? ""
   
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,6 +99,8 @@ export default function ReservationsDashboard() {
     checkOutDate: "",
     adults: 1,
     children: 0,
+    infants: 0,
+    remarks: "",
     mealPlan: "NONE",
     travelAgentId: "none",
     status: "RESERVED",
@@ -178,6 +183,8 @@ export default function ReservationsDashboard() {
       checkOutDate: "",
       adults: 1,
       children: 0,
+      infants: 0,
+      remarks: "",
       mealPlan: "NONE",
       travelAgentId: "none",
       status: "RESERVED",
@@ -204,6 +211,8 @@ export default function ReservationsDashboard() {
       checkOutDate: res.checkOutDate ? new Date(res.checkOutDate).toISOString().split('T')[0] : "",
       adults: res.adults,
       children: res.children,
+      infants: res.infants || 0,
+      remarks: res.remarks || "",
       mealPlan: res.mealPlan || "NONE",
       travelAgentId: res.travelAgentId || "none",
       status: res.status,
@@ -385,7 +394,10 @@ export default function ReservationsDashboard() {
       const resp = await fetch(`/api/reservations/${res.id}/check-out`, { method: "POST" })
       const data = await resp.json()
       if (resp.ok) {
-        setNotification({ title: "Check-out Complete", message: "Guest has been successfully checked out and room marked as dirty." })
+        const warning = data.creditLimitWarning
+          ? ` Note: this account is now over its credit limit ($${data.creditLimitWarning.balance.toFixed(2)} of $${data.creditLimitWarning.creditLimit.toFixed(2)}).`
+          : ""
+        setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
         fetchData()
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
@@ -440,6 +452,16 @@ export default function ReservationsDashboard() {
               <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" />
             </span>
           )}
+        </Button>
+      )}
+      {(res.status === 'RESERVED' || res.status === 'IN_HOUSE') && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => window.open(`/e/${slug}/dashboard/reservations/${res.id}/confirmation-letter`, '_blank')}
+          title="Confirmation Letter"
+        >
+          <FileText className="h-4 w-4" />
         </Button>
       )}
       <Button variant="outline" size="icon" onClick={() => handleEdit(res)} title="Edit">
@@ -622,7 +644,7 @@ export default function ReservationsDashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="grid gap-2">
                     <Label>Adults</Label>
                     <Input type="number" min="1" value={form.adults} onChange={e => setForm(p => ({ ...p, adults: parseInt(e.target.value) || 1 }))} />
@@ -631,6 +653,20 @@ export default function ReservationsDashboard() {
                     <Label>Children</Label>
                     <Input type="number" min="0" value={form.children} onChange={e => setForm(p => ({ ...p, children: parseInt(e.target.value) || 0 }))} />
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Infants</Label>
+                    <Input type="number" min="0" value={form.infants} onChange={e => setForm(p => ({ ...p, infants: parseInt(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Remarks</Label>
+                  <Textarea
+                    value={form.remarks}
+                    onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))}
+                    placeholder="e.g. Honeymoon — high floor requested"
+                    rows={2}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-4 mt-2">

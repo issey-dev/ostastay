@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { resolveChargeTax } from "@/lib/tax-calc"
 
 export async function POST(request: Request) {
   try {
@@ -29,11 +30,27 @@ export async function POST(request: Request) {
 
     // Ensure we have a ROOM charge code to post nightly room revenue against
     const roomCode = await prisma.chargeCode.findFirst({
-      where: { enterpriseId: property.enterpriseId, code: "ROOM" }
+      where: { enterpriseId: property.enterpriseId, code: "ROOM" },
+      include: { taxProfile: { include: { rates: true } } }
     })
 
     if (!roomCode) {
       return NextResponse.json({ error: "Missing ROOM charge code in system settings." }, { status: 400 })
+    }
+
+    // Green Tax (Maldives): a flat per-adult/per-child nightly government levy, separate
+    // from GST/service charge and unaffected by the property's tax-inclusive toggle.
+    // Infants (Reservation.infants) are exempt and not counted. Only require the GTX
+    // charge code to exist when Green Tax is actually enabled for this enterprise.
+    const greenTaxEnabled = settings?.greenTaxEnabled ?? false
+    let gtxCode = null
+    if (greenTaxEnabled) {
+      gtxCode = await prisma.chargeCode.findFirst({
+        where: { enterpriseId: property.enterpriseId, code: "GTX" }
+      })
+      if (!gtxCode) {
+        return NextResponse.json({ error: "Missing GTX charge code in system settings." }, { status: 400 })
+      }
     }
 
     // 1. Fetch all currently checked-in reservations
@@ -71,8 +88,6 @@ export async function POST(request: Request) {
     }
 
     const today = new Date()
-    const serviceRate = settings?.serviceChargeEnabled ? (settings.serviceChargeRate / 100) : 0.0
-    const tgstRateFraction = settings?.tgstEnabled ? (settings.tgstRate / 100) : 0.0
     const pricesIncludeTaxes = property.pricesIncludeTaxes
 
     let totalRoomRevenue = 0
@@ -85,6 +100,13 @@ export async function POST(request: Request) {
 
       const activeAssignment = res.assignments[0]
       if (!activeAssignment) continue
+
+      // Always posts to the reservation's own folio, regardless of settlement method —
+      // City Ledger reservations accumulate charges on their own folio exactly like
+      // any other stay; the transfer to a debtor account only happens at checkout
+      // (see reservations/[id]/check-out/route.ts), not here. Debtors intentionally
+      // never sees anything from an in-house reservation.
+      const targetFolioId = res.folios[0].id
 
       let inputAmount = activeAssignment.overrideRate
       if (inputAmount == null) {
@@ -101,28 +123,16 @@ export async function POST(request: Request) {
         inputAmount = calendarEntry?.price ?? activeAssignment.roomType.basePrice
       }
 
-      let baseAmount = inputAmount
-      let serviceChargeAmount = 0.0
-      let taxAmount = 0.0
-
-      if (pricesIncludeTaxes) {
-        baseAmount = inputAmount / ((1 + serviceRate) * (1 + tgstRateFraction))
-        serviceChargeAmount = baseAmount * serviceRate
-        taxAmount = (baseAmount + serviceChargeAmount) * tgstRateFraction
-      } else {
-        serviceChargeAmount = baseAmount * serviceRate
-        taxAmount = (baseAmount + serviceChargeAmount) * tgstRateFraction
-      }
-
-      baseAmount = Math.round(baseAmount * 100) / 100
-      serviceChargeAmount = Math.round(serviceChargeAmount * 100) / 100
-      taxAmount = Math.round(taxAmount * 100) / 100
-
-      const folioId = res.folios[0].id
+      const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+        chargeCode: roomCode,
+        inputAmount,
+        settings,
+        pricesIncludeTaxes
+      })
 
       await prisma.folioLineItem.create({
         data: {
-          folioId,
+          folioId: targetFolioId,
           chargeCodeId: roomCode.id,
           amount: baseAmount,
           taxAmount,
@@ -135,6 +145,30 @@ export async function POST(request: Request) {
       totalRoomRevenue += baseAmount
       totalTaxPosted += taxAmount + serviceChargeAmount
       totalPostings += 1
+
+      // 2b. Post nightly Green Tax — flat per adult/child, infants exempt.
+      if (greenTaxEnabled && gtxCode) {
+        const greenTaxAmount = Math.round(
+          (res.adults * (settings!.greenTaxAdultAmount) + res.children * (settings!.greenTaxChildAmount)) * 100
+        ) / 100
+
+        if (greenTaxAmount > 0) {
+          await prisma.folioLineItem.create({
+            data: {
+              folioId: targetFolioId,
+              chargeCodeId: gtxCode.id,
+              amount: greenTaxAmount,
+              taxAmount: 0,
+              serviceChargeAmount: 0,
+              description: "Green Tax",
+              date: today
+            }
+          })
+
+          totalTaxPosted += greenTaxAmount
+          totalPostings += 1
+        }
+      }
     }
 
     // 3. Log the audit run
