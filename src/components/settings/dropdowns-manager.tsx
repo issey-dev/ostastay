@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -75,18 +75,17 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [form, setForm] = useState({ code: "", value: "" })
-  const enterpriseId = "00000000-0000-0000-0000-000000000000"
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const fetchCodes = useCallback(() => {
     setLoading(true)
-    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=${category}`)
+    fetch(`/api/settings/system-codes?category=${category}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCodes(data)
       })
       .finally(() => setLoading(false))
-  }, [category, enterpriseId])
+  }, [category])
 
   useEffect(() => {
     fetchCodes()
@@ -101,12 +100,12 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
       const res = await fetch("/api/settings/system-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, category, enterpriseId, sortOrder: codes.length + 1 })
+        body: JSON.stringify({ ...form, category, sortOrder: codes.length + 1 })
       })
 
       if (res.ok) {
         setForm({ code: "", value: "" })
-        invalidateSystemCodeCache(category, enterpriseId)
+        invalidateSystemCodeCache(category)
         fetchCodes()
         setFeedback({ message: "Code added successfully", type: "success" })
         setTimeout(() => setFeedback(null), 4000)
@@ -132,7 +131,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
         body: JSON.stringify({ id, isActive: false })
       })
       if (res.ok) {
-        invalidateSystemCodeCache(category, enterpriseId)
+        invalidateSystemCodeCache(category)
         fetchCodes()
       }
     } catch (e) {
@@ -150,7 +149,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
       })
       if (res.ok) {
         setEditingId(null)
-        invalidateSystemCodeCache(category, enterpriseId)
+        invalidateSystemCodeCache(category)
         fetchCodes()
       }
     } catch (e) {
@@ -174,7 +173,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newCodes.map(c => ({ id: c.id, sortOrder: c.sortOrder, isActive: c.isActive, value: c.value })))
     })
-    invalidateSystemCodeCache(category, enterpriseId)
+    invalidateSystemCodeCache(category)
   }
 
   const currentCategoryLabel = categories.find(c => c.code === category)?.label || category
@@ -201,43 +200,41 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           {feedback.message}
         </div>
       )}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Add New {currentCategoryLabel} Option</CardTitle>
-          <CardDescription>Enter a unique code and its display label.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAdd} className="flex gap-4 items-end">
-            <div className="grid gap-2 flex-1">
-              <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
-              <Input
-                placeholder="e.g. M, F, VEG"
-                value={form.code}
-                onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-              />
-            </div>
-            <div className="grid gap-2 flex-1">
-              <Label className="text-xs text-muted-foreground">Display Value</Label>
-              <Input
-                placeholder="e.g. Male, Female, Vegan"
-                value={form.value}
-                onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
-              />
-            </div>
-            <Button type="submit" disabled={saving || !form.code || !form.value}>
-              <Plus className="w-4 h-4 mr-2" /> Add
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <div>
+        <ControlsSectionHeader
+          title={`Add New ${currentCategoryLabel} Option`}
+          description="Enter a unique code and its display label."
+        />
+        <form onSubmit={handleAdd} className="flex gap-4 items-end">
+          <div className="grid gap-2 flex-1">
+            <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
+            <Input
+              placeholder="e.g. M, F, VEG"
+              value={form.code}
+              onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+            />
+          </div>
+          <div className="grid gap-2 flex-1">
+            <Label className="text-xs text-muted-foreground">Display Value</Label>
+            <Input
+              placeholder="e.g. Male, Female, Vegan"
+              value={form.value}
+              onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
+            />
+          </div>
+          <Button type="submit" disabled={saving || !form.code || !form.value}>
+            <Plus className="w-4 h-4 mr-2" /> Add
+          </Button>
+        </form>
+      </div>
 
       {/* Item List — a simple table, not a reorderable card stack */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Current {currentCategoryLabel} Options</CardTitle>
-          <CardDescription>Use the arrows to reorder — that order is the dropdown order throughout the system.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
+      <div>
+        <ControlsSectionHeader
+          title={`Current ${currentCategoryLabel} Options`}
+          description="Use the arrows to reorder — that order is the dropdown order throughout the system."
+        />
+        <ControlsSectionBody>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
@@ -348,8 +345,8 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </ControlsSectionBody>
+      </div>
     </div>
   )
 }

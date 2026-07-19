@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { statusSolidClasses } from "@/lib/status-tone";
 import { useDeviceTier } from "@/hooks/use-mobile";
 import { TapeChartMobileList } from "@/components/reservations/tape-chart-mobile-list";
+import { useProperty } from "@/components/providers/property-provider";
 
 export interface Room {
   id: string;
@@ -32,6 +33,7 @@ export interface Reservation {
 }
 
 export function TapeChartGrid() {
+  const { currentProperty } = useProperty();
   const deviceTier = useDeviceTier();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -187,10 +189,10 @@ export function TapeChartGrid() {
         </DialogContent>
       </Dialog>
 
-      {selectedReservation && (
+      {selectedReservation && currentProperty && (
         <FolioPanel
           reservationId={selectedReservation.reservationId}
-          propertyId="00000000-0000-0000-0000-000000000000"
+          propertyId={currentProperty.id}
           isOpen={isFolioOpen}
           onClose={() => setIsFolioOpen(false)}
         />

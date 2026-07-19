@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
+import { useProperty } from "@/components/providers/property-provider"
 
 type RatePlan = {
   id: string
@@ -49,9 +50,11 @@ export default function RevenueDashboard() {
     mealPlan: "NONE"
   })
 
-  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const { currentProperty } = useProperty()
+  const propertyId = currentProperty?.id ?? ""
 
   const fetchRatePlans = () => {
+    if (!propertyId) return
     setLoading(true)
     fetch(`/api/rate-plans?propertyId=${propertyId}`)
       .then(res => res.json())
@@ -63,7 +66,8 @@ export default function RevenueDashboard() {
 
   useEffect(() => {
     fetchRatePlans()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId])
 
   const resetForm = () => {
     setForm({

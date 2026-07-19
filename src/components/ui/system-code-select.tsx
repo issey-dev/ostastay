@@ -16,7 +16,10 @@ type SystemCode = {
   sortOrder: number
 }
 
-// Simple in-memory cache to avoid re-fetching the same category
+// Simple in-memory cache to avoid re-fetching the same category. Scoped by category
+// only — the API itself scopes by the caller's session enterprise, and this cache is
+// already session-local (one browser tab is always one logged-in enterprise), so no
+// enterprise key is needed here.
 const cache: Record<string, { data: SystemCode[]; ts: number }> = {}
 const CACHE_TTL = 60_000 // 1 minute
 
@@ -33,8 +36,6 @@ interface SystemCodeSelectProps {
   required?: boolean
   /** Whether the field is disabled */
   disabled?: boolean
-  /** Enterprise ID — defaults to the demo enterprise */
-  enterpriseId?: string
 }
 
 export function SystemCodeSelect({
@@ -44,7 +45,6 @@ export function SystemCodeSelect({
   placeholder = "Select...",
   required = false,
   disabled = false,
-  enterpriseId = "00000000-0000-0000-0000-000000000000",
 }: SystemCodeSelectProps) {
   const [options, setOptions] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,8 +55,7 @@ export function SystemCodeSelect({
     if (fetchedRef.current) return
     fetchedRef.current = true
 
-    const cacheKey = `${enterpriseId}:${category}`
-    const cached = cache[cacheKey]
+    const cached = cache[category]
 
     // Return cached data if still fresh
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -65,19 +64,19 @@ export function SystemCodeSelect({
       return
     }
 
-    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=${category}`)
+    fetch(`/api/settings/system-codes?category=${category}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
           setOptions(data)
-          cache[cacheKey] = { data, ts: Date.now() }
+          cache[category] = { data, ts: Date.now() }
         }
       })
       .catch((err) => {
         console.error(`Failed to fetch system codes for ${category}:`, err)
       })
       .finally(() => setLoading(false))
-  }, [category, enterpriseId])
+  }, [category])
 
   if (loading) {
     return (
@@ -126,9 +125,9 @@ export function SystemCodeSelect({
  * Utility: Invalidate the cache for a specific category so the next
  * render re-fetches. Call this after adding/editing/deleting system codes.
  */
-export function invalidateSystemCodeCache(category?: string, enterpriseId?: string) {
-  if (category && enterpriseId) {
-    delete cache[`${enterpriseId}:${category}`]
+export function invalidateSystemCodeCache(category?: string) {
+  if (category) {
+    delete cache[category]
   } else {
     // Clear everything
     for (const key of Object.keys(cache)) {

@@ -13,8 +13,6 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 
-const DEMO_ENTERPRISE_ID = "00000000-0000-0000-0000-000000000000"
-
 type PaymentMethod = {
   id: string
   name: string
@@ -37,7 +35,7 @@ export function PaymentMethodsManager() {
   const fetchMethods = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/payment-methods?enterpriseId=${DEMO_ENTERPRISE_ID}`)
+      const res = await fetch(`/api/payment-methods`)
       if (res.ok) setMethods(await res.json())
     } catch (e) {
       console.error(e)
@@ -70,7 +68,7 @@ export function PaymentMethodsManager() {
         await fetch(`/api/payment-methods`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, enterpriseId: DEMO_ENTERPRISE_ID })
+          body: JSON.stringify(formData)
         })
       }
       setIsDialogOpen(false)

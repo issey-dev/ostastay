@@ -23,7 +23,6 @@ const propertyFormSchema = z.object({
   timeZone: z.string().min(1, { message: "Time zone is required." }),
   checkInTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Must be in HH:MM format"),
   checkOutTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Must be in HH:MM format"),
-  enterpriseId: z.string().uuid("Invalid Enterprise ID"), // In reality, this would be hidden or context-provided
 })
 
 import { useEffect } from "react"
@@ -40,7 +39,6 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
       timeZone: "UTC",
       checkInTime: "14:00",
       checkOutTime: "11:00",
-      enterpriseId: "00000000-0000-0000-0000-000000000000", // Dummy for now
     },
   })
 
@@ -56,7 +54,6 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
         timeZone: "UTC",
         checkInTime: "14:00",
         checkOutTime: "11:00",
-        enterpriseId: "00000000-0000-0000-0000-000000000000",
       })
     }
   }, [initialData, form])

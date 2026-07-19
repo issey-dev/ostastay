@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { statusMutedClasses } from "@/lib/status-tone"
+import { useProperty } from "@/components/providers/property-provider"
 
 type Reservation = {
   id: string
@@ -37,9 +38,11 @@ export default function ReservationsCalendarPage() {
   const [windowStart, setWindowStart] = useState(startOfDay(new Date()))
   const WINDOW_DAYS = 14
 
-  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const { currentProperty } = useProperty()
+  const propertyId = currentProperty?.id ?? ""
 
   useEffect(() => {
+    if (!propertyId) return
     setLoading(true)
     Promise.all([
       fetch(`/api/reservations?propertyId=${propertyId}`).then(r => r.json()),
@@ -50,7 +53,7 @@ export default function ReservationsCalendarPage() {
       if (Array.isArray(rmData)) setRooms(rmData)
       if (Array.isArray(rtData)) setRoomTypes(rtData)
     }).finally(() => setLoading(false))
-  }, [])
+  }, [propertyId])
 
   // Generate the array of dates for the header
   const windowDates = useMemo(() => {

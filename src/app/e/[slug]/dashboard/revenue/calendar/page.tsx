@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { DateRange } from "react-day-picker"
+import { useProperty } from "@/components/providers/property-provider"
 
 type RatePlan = { id: string; name: string; code: string }
 type RoomType = { id: string; name: string; code: string }
@@ -50,16 +51,18 @@ function PriceCalendarPageContent() {
   })
   const [bulkPrice, setBulkPrice] = useState("")
 
-  const propertyId = "00000000-0000-0000-0000-000000000000" // Hardcoded for demo
+  const { currentProperty } = useProperty()
+  const propertyId = currentProperty?.id ?? ""
 
   useEffect(() => {
+    if (!propertyId) return
     Promise.all([
       fetch(`/api/rate-plans?propertyId=${propertyId}`).then(r => r.json()),
       fetch(`/api/room-types?propertyId=${propertyId}`).then(r => r.json())
     ]).then(([rpData, rtData]) => {
       setRatePlans(rpData)
       setRoomTypes(rtData)
-      
+
       if (!initialRatePlanId && rpData.length > 0) {
         setSelectedRatePlanId(rpData[0].id)
       }
@@ -67,7 +70,7 @@ function PriceCalendarPageContent() {
         setSelectedRoomTypeId(rtData[0].id)
       }
     })
-  }, [initialRatePlanId])
+  }, [initialRatePlanId, propertyId])
 
   const fetchPrices = () => {
     if (!selectedRatePlanId || !selectedRoomTypeId) {
