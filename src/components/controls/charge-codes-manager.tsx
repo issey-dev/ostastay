@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -256,7 +257,7 @@ export function ChargeCodesManager() {
         </DialogContent>
       </Dialog>
 
-      <div className="border rounded-lg bg-card overflow-hidden shadow-sm">
+      <ControlsSectionBody>
         <Table>
           <TableHeader className="bg-muted/80">
             <TableRow>
@@ -304,7 +305,7 @@ export function ChargeCodesManager() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </ControlsSectionBody>
     </div>
   )
 }

@@ -10,7 +10,7 @@ export async function GET() {
       where: { enterpriseId: ctx.enterpriseId },
       include: {
         rates: {
-          orderBy: { effectiveFrom: 'desc' }
+          orderBy: { order: 'asc' }
         }
       }
     });
@@ -21,6 +21,9 @@ export async function GET() {
   }
 }
 
+// A profile's `rates` are its tax lines applied together — e.g. "State Tax" (BASE, a
+// flat % of the subtotal) plus "Local Fee" (COMPOUND, a % of subtotal + State Tax),
+// applied in ascending `order`. At least one line is required.
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
@@ -28,25 +31,31 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    if (!body.name || body.ratePercent === undefined || !body.effectiveFrom) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!body.name || !Array.isArray(body.rates) || body.rates.length === 0) {
+      return NextResponse.json({ error: "A name and at least one tax line are required" }, { status: 400 });
+    }
+    if (body.rates.some((r: any) => !r.name || r.ratePercent === undefined || r.ratePercent === null)) {
+      return NextResponse.json({ error: "Every tax line needs a name and a rate" }, { status: 400 });
     }
 
-    // Create the profile and its initial rate in a single transaction
+    const now = new Date();
     const newTaxProfile = await prisma.taxProfile.create({
       data: {
         enterpriseId: ctx.enterpriseId,
         name: body.name,
         description: body.description,
         rates: {
-          create: {
-            ratePercent: parseFloat(body.ratePercent),
-            effectiveFrom: new Date(body.effectiveFrom),
-          }
+          create: body.rates.map((r: any, index: number) => ({
+            name: r.name,
+            ratePercent: parseFloat(r.ratePercent),
+            calculateOn: r.calculateOn === "COMPOUND" ? "COMPOUND" : "BASE",
+            order: index,
+            effectiveFrom: now,
+          }))
         }
       },
       include: {
-        rates: true
+        rates: { orderBy: { order: 'asc' } }
       }
     });
 

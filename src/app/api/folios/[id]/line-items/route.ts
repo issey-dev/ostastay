@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { resolveChargeTax } from "@/lib/tax-calc";
 
 export async function POST(
   request: Request,
@@ -20,52 +21,36 @@ export async function POST(
     // Check if folio exists and is open
     const folio = await prisma.folio.findUnique({
       where: { id: folioId },
-      include: { reservation: { include: { property: true } } }
+      include: { property: true }
     });
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, folio.reservation.propertyId);
+    await assertPropertyAccess(ctx, folio.propertyId);
     if (folio.isClosed) {
       return NextResponse.json({ error: "Cannot post charges to a closed folio" }, { status: 400 });
     }
 
-    const chargeCode = await prisma.chargeCode.findUnique({ where: { id: body.chargeCodeId } });
+    const chargeCode = await prisma.chargeCode.findUnique({
+      where: { id: body.chargeCodeId },
+      include: { taxProfile: { include: { rates: true } } }
+    });
     if (!chargeCode || chargeCode.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
     }
 
     // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
-    // reservation → property → enterprise (not a hardcoded constant).
+    // property → enterprise (not a hardcoded constant).
     const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: folio.reservation.property.enterpriseId }
+      where: { enterpriseId: folio.property.enterpriseId }
     });
 
-    const inputAmount = parseFloat(body.amount);
-    let baseAmount = inputAmount;
-    let serviceChargeAmount = 0.0;
-    let calculatedTaxAmount = 0.0;
-
-    if (settings) {
-      const serviceRate = settings.serviceChargeEnabled ? (settings.serviceChargeRate / 100) : 0.0;
-      const tgstRateFraction = settings.tgstEnabled ? (settings.tgstRate / 100) : 0.0;
-
-      if (folio.reservation.property.pricesIncludeTaxes) {
-        // Extract taxes (tax-inclusive rate)
-        baseAmount = inputAmount / ((1 + serviceRate) * (1 + tgstRateFraction));
-        serviceChargeAmount = baseAmount * serviceRate;
-        calculatedTaxAmount = (baseAmount + serviceChargeAmount) * tgstRateFraction;
-      } else {
-        // Add taxes on top (tax-exclusive rate)
-        baseAmount = inputAmount;
-        serviceChargeAmount = baseAmount * serviceRate;
-        calculatedTaxAmount = (baseAmount + serviceChargeAmount) * tgstRateFraction;
-      }
-    }
-
-    baseAmount = Math.round(baseAmount * 100) / 100;
-    serviceChargeAmount = Math.round(serviceChargeAmount * 100) / 100;
-    calculatedTaxAmount = Math.round(calculatedTaxAmount * 100) / 100;
+    const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+      chargeCode,
+      inputAmount: parseFloat(body.amount),
+      settings,
+      pricesIncludeTaxes: folio.property.pricesIncludeTaxes
+    });
 
     const lineItem = await prisma.folioLineItem.create({
       data: {
@@ -74,8 +59,8 @@ export async function POST(
         date: new Date(),
         description: body.description,
         amount: baseAmount,
-        taxAmount: calculatedTaxAmount,
-        serviceChargeAmount: serviceChargeAmount,
+        taxAmount,
+        serviceChargeAmount,
       },
       include: {
         chargeCode: true
