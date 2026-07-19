@@ -24,7 +24,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       roomId,
       checkInDate,
       checkOutDate,
-      adults
+      adults,
+      children,
+      infants
     } = body
 
     if (!firstName || !lastName || !roomTypeId || !checkInDate || !checkOutDate) {
@@ -95,7 +97,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           checkInDate: new Date(checkInDate),
           checkOutDate: new Date(checkOutDate),
           adults: parseInt(adults) || 1,
-          status: "CONFIRMED"
+          children: parseInt(children) || 0,
+          infants: parseInt(infants) || 0,
+          status: "RESERVED"
         }
       })
 
@@ -114,7 +118,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // 4. Create the Folio for this reservation
       await tx.folio.create({
         data: {
-          reservationId: reservation.id
+          reservationId: reservation.id,
+          propertyId: group.propertyId
         }
       })
 

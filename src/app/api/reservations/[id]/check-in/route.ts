@@ -52,6 +52,7 @@ export async function POST(
         await tx.folio.create({
           data: {
             reservationId: id,
+            propertyId: reservation.propertyId,
             folioNumber: 1,
             isClosed: false
           }

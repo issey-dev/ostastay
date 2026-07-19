@@ -110,6 +110,7 @@ async function main() {
         folios: {
           create: [{
             folioNumber: 1,
+            propertyId: property.id,
             lineItems: {
               create: [
                 { chargeCodeId: rmCode.id, date: new Date(), description: "Room Charge", amount: 150, taxAmount: 24, serviceChargeAmount: 15 },
@@ -147,6 +148,7 @@ async function main() {
         folios: {
           create: [{
             folioNumber: 1,
+            propertyId: property.id,
             isClosed: true,
             lineItems: {
               create: [

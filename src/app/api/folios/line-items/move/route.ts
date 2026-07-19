@@ -16,21 +16,29 @@ export async function POST(request: Request) {
 
     // Verify target folio exists and belongs to a property this actor can reach
     const targetFolio = await prisma.folio.findUnique({
-      where: { id: targetFolioId },
-      include: { reservation: true }
+      where: { id: targetFolioId }
     });
 
     if (!targetFolio) {
       return NextResponse.json({ error: "Target folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, targetFolio.reservation.propertyId);
+    await assertPropertyAccess(ctx, targetFolio.propertyId);
+
+    // Walk-in/outlet folios have no reservation to group charges under — moving charges
+    // to or from one isn't a meaningful concept here (a walk-in's whole point is being
+    // closed out on the spot), so it's rejected outright rather than falling through to
+    // a reservationId comparison that would be meaningless (or, for two walk-ins,
+    // wrongly permissive — null !== null is false).
+    if (!targetFolio.reservationId) {
+      return NextResponse.json({ error: "Cannot move charges to a walk-in folio" }, { status: 400 });
+    }
 
     // Every line item must belong to a folio under the *same reservation* as the
     // target — moving a charge across guests/reservations, not just across an
     // enterprise boundary, would be a real billing bug, not just a tenant-scope one.
     const lineItems = await prisma.folioLineItem.findMany({
       where: { id: { in: lineItemIds } },
-      include: { folio: { include: { reservation: true } } }
+      include: { folio: true }
     });
     if (
       lineItems.length !== lineItemIds.length ||

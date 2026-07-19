@@ -47,6 +47,7 @@ async function main() {
       await prisma.folio.create({
         data: {
           reservationId: res.id,
+          propertyId: res.propertyId,
           folioNumber: 2
         }
       })

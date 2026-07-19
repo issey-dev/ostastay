@@ -94,7 +94,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
       data: {
         propertyId: propertyAId, confirmationNo: `P4A-${Date.now()}`, primaryGuestId: guestA.upid,
         checkInDate: new Date("2026-09-01"), checkOutDate: new Date("2026-09-03"), status: "CONFIRMED",
-        folios: { create: { folioNumber: 1 } },
+        folios: { create: { folioNumber: 1, propertyId: propertyAId } },
       },
       include: { folios: true },
     });
@@ -105,7 +105,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
       data: {
         propertyId: propertyBId, confirmationNo: `P4B-${Date.now()}`, primaryGuestId: guestB.upid,
         checkInDate: new Date("2026-09-01"), checkOutDate: new Date("2026-09-03"), status: "CONFIRMED",
-        folios: { create: { folioNumber: 1 } },
+        folios: { create: { folioNumber: 1, propertyId: propertyBId } },
       },
       include: { folios: true },
     });

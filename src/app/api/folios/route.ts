@@ -47,6 +47,7 @@ export async function GET(request: Request) {
       const newFolio = await prisma.folio.create({
         data: {
           reservationId,
+          propertyId: reservation.propertyId,
           folioNumber: 1
         },
         include: FOLIO_INCLUDE
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     const newFolio = await prisma.folio.create({
       data: {
         reservationId,
+        propertyId: reservation.propertyId,
         folioNumber: nextFolioNumber
       },
       include: FOLIO_INCLUDE

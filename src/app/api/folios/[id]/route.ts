@@ -2,6 +2,51 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
+const FOLIO_DETAIL_INCLUDE = {
+  reservation: {
+    include: {
+      primaryGuest: true,
+      accompanyingGuests: { include: { profile: true } },
+    },
+  },
+  payeeProfile: true,
+  lineItems: {
+    include: { chargeCode: true },
+    orderBy: { date: "asc" as const },
+  },
+  payments: {
+    include: { paymentMethod: true, shift: true },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
+
+// Fetches a single folio by id — the fetch path for both a reservation's own Front
+// Desk folio panel and the walk-in folio panel (walk-in folios have no reservationId
+// to key a lookup off of, so they need this rather than GET /api/folios?reservationId=).
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+
+    const { id } = await params;
+    const folio = await prisma.folio.findUnique({
+      where: { id },
+      include: FOLIO_DETAIL_INCLUDE,
+    });
+    if (!folio) {
+      return NextResponse.json({ error: "Folio not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, folio.propertyId);
+
+    return NextResponse.json(folio);
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -18,14 +63,13 @@ export async function DELETE(
       include: {
         lineItems: true,
         payments: true,
-        reservation: true,
       }
     });
 
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, folio.reservation.propertyId);
+    await assertPropertyAccess(ctx, folio.propertyId);
 
     if (folio.folioNumber === 1) {
       return NextResponse.json({ error: "Cannot delete the primary folio (Folio 1)" }, { status: 400 });
@@ -56,13 +100,13 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { payeeProfileId } = body;
+    const { payeeProfileId, isClosed, settlementMethod } = body;
 
-    const existing = await prisma.folio.findUnique({ where: { id }, include: { reservation: true } });
+    const existing = await prisma.folio.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, existing.reservation.propertyId);
+    await assertPropertyAccess(ctx, existing.propertyId);
 
     if (payeeProfileId) {
       const payee = await prisma.profile.findUnique({ where: { upid: payeeProfileId } });
@@ -71,9 +115,17 @@ export async function PATCH(
       }
     }
 
+    if (settlementMethod !== undefined && settlementMethod !== "DIRECT" && settlementMethod !== "CITY_LEDGER") {
+      return NextResponse.json({ error: "Invalid settlement method" }, { status: 400 });
+    }
+
     const updatedFolio = await prisma.folio.update({
       where: { id },
-      data: { payeeProfileId },
+      data: {
+        ...(payeeProfileId !== undefined && { payeeProfileId }),
+        ...(isClosed !== undefined && { isClosed }),
+        ...(settlementMethod !== undefined && { settlementMethod }),
+      },
       include: {
         payeeProfile: true,
         lineItems: {
