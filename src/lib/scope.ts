@@ -3,6 +3,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { MODULES, type Module, type Action } from "@/lib/modules";
+import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
 export { MODULES, type Module, type Action };
 
@@ -110,6 +111,61 @@ export async function clearSupportSession() {
   cookieStore.delete("support_session");
 }
 
+const ROLE_DEFAULT_MATRICES: Record<string, Record<string, PermissionRow>> = {
+  ...SYSTEM_ROLE_DEFS,
+  ...SUPPORT_ROLE_DEFS,
+};
+const NO_ACCESS: PermissionRow = { canView: false, canCreate: false, canUpdate: false, canDelete: false };
+
+type RawRolePermission = { module: string; canView: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean };
+
+// Self-heals a real gap: when a new entry is added to MODULES, an already-seeded
+// Role never gets a RolePermission row for it — ensureRoles() in
+// prisma/rbac-seed-data.ts only populates permissions the first time a Role is
+// created (`update: {}` on its upsert is a true no-op for existing roles). System
+// roles compound this, since Controls > Users & Roles blocks editing them entirely
+// ("System roles are shared across enterprises and cannot be edited" —
+// src/app/api/roles/[id]/route.ts), leaving no self-service way to grant a brand-new
+// module. Runs on every requireSession() call but is cheap: a Set diff against the
+// small MODULES array, and a DB write only the first time a gap is found — after
+// that this is a no-op for the life of the role. Safe under concurrent requests
+// racing to backfill the same role, since RolePermission's @@unique([roleId, module])
+// plus skipDuplicates makes the insert idempotent.
+async function backfillMissingRolePermissions(
+  roleId: string,
+  roleName: string,
+  isSystem: boolean,
+  existing: RawRolePermission[]
+): Promise<RawRolePermission[]> {
+  const existingModules = new Set(existing.map((p) => p.module));
+  const missing = MODULES.filter((m) => !existingModules.has(m));
+  if (missing.length === 0) return existing;
+
+  // Only System/Support roles have a canonical default defined in code — a custom
+  // role an enterprise admin created themselves gets NONE for a new module, exactly
+  // like every other module did when that role was first created via the Controls UI.
+  const defaults = isSystem ? ROLE_DEFAULT_MATRICES[roleName] : undefined;
+  const newRows: RawRolePermission[] = missing.map((module) => ({
+    module,
+    ...(defaults?.[module] ?? NO_ACCESS),
+  }));
+
+  // SQLite doesn't support createMany's skipDuplicates, so backfill via upsert per
+  // row instead — still race-safe (RolePermission's @@unique([roleId, module])
+  // backs the compound where clause) if two requests hit the same gap concurrently.
+  await Promise.all(
+    newRows.map((r) =>
+      prisma.rolePermission.upsert({
+        where: { roleId_module: { roleId, module: r.module } },
+        update: {},
+        create: { roleId, ...r },
+      })
+    )
+  );
+
+  return [...existing, ...newRows];
+}
+
 // The single entry point every route handler must call. Re-fetches the live User row
 // (role, enterpriseId, propertyId, isActive) on every request rather than trusting the
 // JWT, which carries identity only. If the user is an Osta/INTERNAL user with a live
@@ -133,8 +189,15 @@ export async function requireSession(): Promise<AuthContext> {
   const ostaEnterpriseId = await getOstaEnterpriseId();
   const isInternal = user.enterpriseId === ostaEnterpriseId;
 
+  const rolePermissions = await backfillMissingRolePermissions(
+    user.roleId,
+    user.role.name,
+    user.role.isSystem,
+    user.role.permissions
+  );
+
   const permissions = new Map<string, PermissionRow>(
-    user.role.permissions.map((p) => [
+    rolePermissions.map((p) => [
       p.module,
       { canView: p.canView, canCreate: p.canCreate, canUpdate: p.canUpdate, canDelete: p.canDelete },
     ])

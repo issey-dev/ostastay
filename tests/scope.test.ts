@@ -210,4 +210,97 @@ describe("src/lib/scope.ts", () => {
 
     await destroySession();
   });
+
+  it("requireSession backfills a System role's missing RolePermission row for a module added after it was seeded, using that role's canonical default", async () => {
+    // Simulates the real bug: an "Admin" role row that predates DEBTORS being added
+    // to MODULES — every module except DEBTORS has a row, exactly like an
+    // already-seeded enterprise's Admin role would look after a code deploy adds a
+    // module. ensureRoles()'s upsert would never touch this on its own. A fresh
+    // enterprise (not enterpriseAId, which already has its own "Admin" role from
+    // beforeAll — @@unique([enterpriseId, name]) would collide) with a role named
+    // exactly "Admin" so the backfill's name-keyed lookup into SYSTEM_ROLE_DEFS matches.
+    const legacyEnterprise = await prisma.enterprise.create({
+      data: { name: `Legacy Enterprise ${Date.now()}`, slug: `test-legacy-${Date.now()}`, type: "STANDARD" },
+    });
+    const legacyAdminRole = await prisma.role.create({
+      data: {
+        enterpriseId: legacyEnterprise.id,
+        name: "Admin",
+        isSystem: true,
+        permissions: {
+          create: (Object.keys(SYSTEM_ROLE_DEFS.Admin) as Array<keyof typeof SYSTEM_ROLE_DEFS.Admin>)
+            .filter((m) => m !== "DEBTORS")
+            .map((module) => ({ module, ...SYSTEM_ROLE_DEFS.Admin[module] })),
+        },
+      },
+    });
+    expect(await prisma.rolePermission.count({ where: { roleId: legacyAdminRole.id, module: "DEBTORS" } })).toBe(0);
+
+    const passwordHash = await bcrypt.hash("password123", 10);
+    const legacyAdminUser = await prisma.user.create({
+      data: {
+        enterpriseId: legacyEnterprise.id,
+        email: `legacy-admin-${Date.now()}@test.local`,
+        passwordHash,
+        firstName: "Legacy",
+        lastName: "Admin",
+        roleId: legacyAdminRole.id,
+        scope: "ENTERPRISE",
+      },
+    });
+
+    cookieJar.clear();
+    await createSession(legacyAdminUser.id);
+    const ctx = await requireSession();
+    // Admin's canonical default for DEBTORS is FULL — the backfilled row must match
+    // it, not just be present.
+    expect(ctx.permissions.get("DEBTORS")).toEqual(SYSTEM_ROLE_DEFS.Admin.DEBTORS);
+    expect(() => requirePermission(ctx, "DEBTORS", "delete")).not.toThrow();
+    await destroySession();
+
+    const backfilled = await prisma.rolePermission.findUnique({
+      where: { roleId_module: { roleId: legacyAdminRole.id, module: "DEBTORS" } },
+    });
+    expect(backfilled).toMatchObject(SYSTEM_ROLE_DEFS.Admin.DEBTORS);
+
+    // A second request for the same role must not error or duplicate the row —
+    // RolePermission's @@unique([roleId, module]) plus the upsert-based backfill
+    // makes this idempotent.
+    cookieJar.clear();
+    await createSession(legacyAdminUser.id);
+    await expect(requireSession()).resolves.toBeTruthy();
+    await destroySession();
+    expect(await prisma.rolePermission.count({ where: { roleId: legacyAdminRole.id, module: "DEBTORS" } })).toBe(1);
+  });
+
+  it("requireSession backfills a custom (non-system) role's missing module with NO_ACCESS, not the System default", async () => {
+    const customRole = await prisma.role.create({
+      data: {
+        enterpriseId: enterpriseAId,
+        name: `Custom Role ${Date.now()}`,
+        isSystem: false,
+        permissions: { create: { module: "FRONT_DESK", canView: true, canCreate: false, canUpdate: false, canDelete: false } },
+      },
+    });
+
+    const passwordHash = await bcrypt.hash("password123", 10);
+    const customUser = await prisma.user.create({
+      data: {
+        enterpriseId: enterpriseAId,
+        email: `custom-role-${Date.now()}@test.local`,
+        passwordHash,
+        firstName: "Custom",
+        lastName: "Role",
+        roleId: customRole.id,
+        scope: "ENTERPRISE",
+      },
+    });
+
+    cookieJar.clear();
+    await createSession(customUser.id);
+    const ctx = await requireSession();
+    expect(ctx.permissions.get("DEBTORS")).toEqual({ canView: false, canCreate: false, canUpdate: false, canDelete: false });
+    expect(() => requirePermission(ctx, "DEBTORS", "view")).toThrow(ForbiddenError);
+    await destroySession();
+  });
 });
