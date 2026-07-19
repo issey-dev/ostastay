@@ -6,7 +6,7 @@ import { DarkModeProvider } from "@/components/providers/dark-mode-provider";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Guest House PMS",
+  title: "OstaStay",
   description: "Next-Generation Property Management System",
 };
 

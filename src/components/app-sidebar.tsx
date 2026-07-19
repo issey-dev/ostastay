@@ -131,7 +131,7 @@ export async function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Guest House PMS</SidebarGroupLabel>
+          <SidebarGroupLabel>OstaStay</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredItems.map((item) => (

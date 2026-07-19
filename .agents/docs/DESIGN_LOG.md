@@ -3,7 +3,7 @@
 > Scope: **UI/UX and visual-design changes only** — spacing, color, typography, layout,
 > component styling, responsiveness, theming. Not the multi-tenancy/RBAC retrofit (see
 > [MASTER_PLAN.md](MASTER_PLAN.md) / [TODO.md](TODO.md) for that). Full rationale and the
-> original audit/plan still live in `DESIGN_PLAN.md` at the repo root — this file is the
+> original audit/plan still live in [`DESIGN_PLAN.md`](DESIGN_PLAN.md) — this file is the
 > running, dated log of individual fixes made on top of that plan, so a fix doesn't need
 > chat history to be understood later.
 >

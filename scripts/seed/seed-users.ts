@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
-import { SYSTEM_ROLE_DEFS, ensureRoles } from "../prisma/rbac-seed-data"
+import { SYSTEM_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data"
 
 const prisma = new PrismaClient()
 

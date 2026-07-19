@@ -61,7 +61,7 @@ export default async function DashboardLayout({
             <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
               <div>
-                <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight">Guest House PMS</h1>
+                <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight">OstaStay</h1>
                 {enterprise && <p className="text-xs text-muted-foreground leading-tight">{enterprise.name}</p>}
               </div>
               <PropertySwitcher />

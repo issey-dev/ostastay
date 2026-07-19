@@ -65,7 +65,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-none bg-primary text-primary-foreground mb-4 shadow-lg">
             <Hotel size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">{enterpriseName ?? "Guest House PMS"}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{enterpriseName ?? "OstaStay"}</h1>
           <p className="text-muted-foreground mt-2">Sign in to your property management system</p>
         </div>
 
