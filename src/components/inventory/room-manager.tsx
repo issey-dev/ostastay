@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Building2, Map, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -265,13 +265,11 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
     {view === "buildings" && (
       <>
       {/* Buildings Table */}
-      <Card className="overflow-hidden">
-        <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">Buildings</CardTitle>
-            <CardDescription>Manage your property's physical buildings.</CardDescription>
-          </div>
-          <Dialog open={isBuildingDialogOpen} onOpenChange={(open) => {
+      <ControlsSectionHeader
+        title="Buildings"
+        description="Manage your property's physical buildings."
+        action={
+        <Dialog open={isBuildingDialogOpen} onOpenChange={(open) => {
             setIsBuildingDialogOpen(open)
             if (!open) resetBuildingForm()
           }}>
@@ -292,24 +290,26 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
+        }
+      />
 
-          {/* Delete Building Dialog */}
-          <Dialog open={isBuildingDeleteDialogOpen} onOpenChange={setIsBuildingDeleteDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Delete Building</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsBuildingDeleteDialogOpen(false)}>Cancel</Button>
-                <Button type="button" variant="destructive" onClick={handleDeleteBuilding}>Delete Permanently</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="p-0">
+      {/* Delete Building Dialog */}
+      <Dialog open={isBuildingDeleteDialogOpen} onOpenChange={setIsBuildingDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Building</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => setIsBuildingDeleteDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteBuilding}>Delete Permanently</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ControlsSectionBody>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -345,21 +345,18 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </ControlsSectionBody>
       </>
     )}
 
     {view === "floors" && (
       <>
       {/* Floors Table */}
-      <Card className="overflow-hidden">
-        <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">Floors</CardTitle>
-            <CardDescription>Manage floors within your buildings.</CardDescription>
-          </div>
-          <Dialog open={isFloorDialogOpen} onOpenChange={(open) => {
+      <ControlsSectionHeader
+        title="Floors"
+        description="Manage floors within your buildings."
+        action={
+        <Dialog open={isFloorDialogOpen} onOpenChange={(open) => {
             setIsFloorDialogOpen(open)
             if (!open) resetFloorForm()
           }}>
@@ -395,24 +392,26 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
+        }
+      />
 
-          {/* Delete Floor Dialog */}
-          <Dialog open={isFloorDeleteDialogOpen} onOpenChange={setIsFloorDeleteDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Delete Floor</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this floor? This will permanently delete all rooms on this floor.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsFloorDeleteDialogOpen(false)}>Cancel</Button>
-                <Button type="button" variant="destructive" onClick={handleDeleteFloor}>Delete Permanently</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="p-0">
+      {/* Delete Floor Dialog */}
+      <Dialog open={isFloorDeleteDialogOpen} onOpenChange={setIsFloorDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Floor</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this floor? This will permanently delete all rooms on this floor.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => setIsFloorDeleteDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteFloor}>Delete Permanently</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ControlsSectionBody>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -452,20 +451,17 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </ControlsSectionBody>
       </>
     )}
 
     {view === "rooms" && (
       <>
-      <Card className="overflow-hidden">
-        <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">Rooms</CardTitle>
-            <CardDescription>Manage individual rooms and assign them to floors.</CardDescription>
-          </div>
-          <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
+      <ControlsSectionHeader
+        title="Rooms"
+        description="Manage individual rooms and assign them to floors."
+        action={
+        <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
             setIsRoomDialogOpen(open)
             if (!open) resetRoomForm()
           }}>
@@ -570,24 +566,26 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
+        }
+      />
 
-          {/* Delete Room Dialog */}
-          <Dialog open={isRoomDeleteDialogOpen} onOpenChange={setIsRoomDeleteDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Delete Room</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this room? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsRoomDeleteDialogOpen(false)}>Cancel</Button>
-                <Button type="button" variant="destructive" onClick={handleDeleteRoom}>Delete Permanently</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="p-0">
+      {/* Delete Room Dialog */}
+      <Dialog open={isRoomDeleteDialogOpen} onOpenChange={setIsRoomDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Room</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this room? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => setIsRoomDeleteDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteRoom}>Delete Permanently</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ControlsSectionBody>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -654,8 +652,7 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </ControlsSectionBody>
       </>
     )}
     </div>

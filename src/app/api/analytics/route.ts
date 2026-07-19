@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/db"
 import { startOfDay, endOfDay } from "date-fns"
-
-const prisma = new PrismaClient()
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function GET(request: Request) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, "REVENUE", "view")
+
     const { searchParams } = new URL(request.url)
     const propertyId = searchParams.get("propertyId")
-    
+
     // Default to today for "Flash Report"
     const dateParam = searchParams.get("date")
     const targetDate = dateParam ? new Date(dateParam) : new Date()
-    
+
     if (!propertyId) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 })
     }
+    await assertPropertyAccess(ctx, propertyId)
 
     const start = startOfDay(targetDate)
     const end = endOfDay(targetDate)
@@ -29,7 +32,7 @@ export async function GET(request: Request) {
     const occupiedReservations = await prisma.reservation.findMany({
       where: {
         propertyId,
-        status: { in: ["CONFIRMED", "CHECKED_IN"] },
+        status: { in: ["RESERVED", "IN_HOUSE"] },
         checkInDate: { lte: end },
         checkOutDate: { gt: start }
       }
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
     let roomRevenue = 0
     let otherRevenue = 0
     let totalRevenue = 0
-    
+
     const revenueByCategory: Record<string, number> = {}
 
     todayLineItems.forEach(item => {
@@ -61,7 +64,7 @@ export async function GET(request: Request) {
       totalRevenue += amount
 
       const category = item.chargeCode?.code || "OTHER"
-      
+
       if (category === "ROOM") {
         roomRevenue += amount
       } else {
@@ -91,7 +94,7 @@ export async function GET(request: Request) {
     })
 
   } catch (error) {
-    console.error("Error generating analytics:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

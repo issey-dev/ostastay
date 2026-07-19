@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Pencil, Trash2, BedDouble } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -168,12 +168,11 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <Card className="overflow-hidden mt-6">
-      <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
-        <div>
-          <CardTitle className="text-lg">Room Types</CardTitle>
-          <CardDescription>Manage your property's room categories, pricing, and occupancy limits.</CardDescription>
-        </div>
+    <div className="mt-6">
+      <ControlsSectionHeader
+        title="Room Types"
+        description="Manage your property's room categories, pricing, and occupancy limits."
+        action={
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open)
           if (!open) resetForm()
@@ -287,26 +286,28 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
             </form>
           </DialogContent>
         </Dialog>
+        }
+      />
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Delete Room Type</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this room type? This action cannot be undone and will cascade delete all rooms associated with it.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-              <Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-                {isSubmitting ? "Deleting..." : "Delete Permanently"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent className="p-0">
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Room Type</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this room type? This action cannot be undone and will cascade delete all rooms associated with it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+              {isSubmitting ? "Deleting..." : "Delete Permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ControlsSectionBody>
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="border-border">
@@ -377,7 +378,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
             )}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </ControlsSectionBody>
+    </div>
   )
 }

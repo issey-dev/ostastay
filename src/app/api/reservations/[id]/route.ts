@@ -5,14 +5,25 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 
 const updateSchema = z.object({
   primaryGuestId: z.string().min(1),
-  roomTypeId: z.string().min(1),
-  ratePlanId: z.string().min(1),
-  roomId: z.string().optional().nullable(),
+  // Multi-segment (split-stay) assignments — mirrors POST's shape. The reservation form
+  // has supported multiple room segments per stay for a while; this schema previously
+  // still required single top-level roomTypeId/ratePlanId fields the form never sent,
+  // which made every edit through the UI 400.
+  assignments: z.array(z.object({
+    roomTypeId: z.string().min(1),
+    roomId: z.string().optional().nullable(),
+    ratePlanId: z.string().min(1),
+    overrideRate: z.number().optional().nullable(),
+    startDate: z.string().min(1),
+    endDate: z.string().min(1),
+  })).min(1),
   checkInDate: z.string().min(1),
   checkOutDate: z.string().min(1),
   adults: z.number().or(z.string().transform(v => parseInt(v))),
   children: z.number().or(z.string().transform(v => parseInt(v))),
+  infants: z.number().or(z.string().transform(v => parseInt(v))).optional(),
   mealPlan: z.string().optional(),
+  remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
   accompanyingGuestIds: z.array(z.string()).optional(),
   status: z.string().min(1)
@@ -29,13 +40,12 @@ export async function PUT(
     const { id } = await params;
     const existing = await prisma.reservation.findUnique({
       where: { id },
-      include: { assignments: { orderBy: { startDate: 'desc' }, take: 1 } },
+      include: { assignments: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, existing.propertyId);
-    const currentAssignment = existing.assignments[0];
 
     const body = await request.json();
 
@@ -59,30 +69,32 @@ export async function PUT(
       }
     }
 
-    const [roomType, ratePlan, room] = await Promise.all([
-      prisma.roomType.findUnique({ where: { id: data.roomTypeId } }),
-      prisma.ratePlan.findUnique({ where: { id: data.ratePlanId } }),
-      data.roomId ? prisma.room.findUnique({ where: { id: data.roomId } }) : Promise.resolve(null),
-    ]);
-    if (!roomType || roomType.propertyId !== existing.propertyId) {
-      return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
-    }
-    // Only enforced when the room type/room is actually changing — an existing
-    // reservation already sitting in a room whose type has since been deactivated can
-    // still be edited (name, dates, etc.) without being blocked by that.
-    const isChangingRoomType = data.roomTypeId !== currentAssignment?.roomTypeId;
-    const isChangingRoom = (data.roomId || null) !== (currentAssignment?.roomId || null);
-    if (isChangingRoomType && !roomType.isActive) {
-      return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
-    }
-    if (!ratePlan || ratePlan.propertyId !== existing.propertyId) {
-      return NextResponse.json({ error: "Rate plan does not belong to this property" }, { status: 400 });
-    }
-    if (data.roomId && (!room || room.propertyId !== existing.propertyId)) {
-      return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 });
-    }
-    if (data.roomId && isChangingRoom && room?.status === "OUT_OF_SERVICE") {
-      return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+    // Only enforced for a room type/room not already on this reservation — a segment
+    // already sitting in a room whose type has since been deactivated can still be
+    // edited (dates, other segments, etc.) without being blocked by that.
+    for (const a of data.assignments) {
+      const [roomType, ratePlan, room] = await Promise.all([
+        prisma.roomType.findUnique({ where: { id: a.roomTypeId } }),
+        prisma.ratePlan.findUnique({ where: { id: a.ratePlanId } }),
+        a.roomId ? prisma.room.findUnique({ where: { id: a.roomId } }) : Promise.resolve(null),
+      ]);
+      if (!roomType || roomType.propertyId !== existing.propertyId) {
+        return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
+      }
+      const isExistingRoomType = existing.assignments.some((ex) => ex.roomTypeId === a.roomTypeId);
+      if (!isExistingRoomType && !roomType.isActive) {
+        return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
+      }
+      if (!ratePlan || ratePlan.propertyId !== existing.propertyId) {
+        return NextResponse.json({ error: "Rate plan does not belong to this property" }, { status: 400 });
+      }
+      if (a.roomId && (!room || room.propertyId !== existing.propertyId)) {
+        return NextResponse.json({ error: "Room does not belong to this property" }, { status: 400 });
+      }
+      const isExistingRoom = existing.assignments.some((ex) => ex.roomId === a.roomId);
+      if (a.roomId && !isExistingRoom && room?.status === "OUT_OF_SERVICE") {
+        return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+      }
     }
 
     const updatedReservation = await prisma.reservation.update({
@@ -93,18 +105,21 @@ export async function PUT(
         checkOutDate: new Date(data.checkOutDate),
         adults: data.adults,
         children: data.children,
+        ...(data.infants !== undefined && { infants: data.infants }),
         mealPlan: data.mealPlan,
+        ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
         status: data.status,
         assignments: {
           deleteMany: {},
-          create: [{
-            roomTypeId: data.roomTypeId,
-            roomId: data.roomId || null,
-            ratePlanId: data.ratePlanId,
-            startDate: new Date(data.checkInDate),
-            endDate: new Date(data.checkOutDate)
-          }]
+          create: data.assignments.map((a) => ({
+            roomTypeId: a.roomTypeId,
+            roomId: a.roomId || null,
+            ratePlanId: a.ratePlanId,
+            overrideRate: a.overrideRate ?? null,
+            startDate: new Date(a.startDate),
+            endDate: new Date(a.endDate),
+          }))
         },
         ...(data.accompanyingGuestIds !== undefined && {
           accompanyingGuests: {

@@ -4,6 +4,12 @@ import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../../../../prisma/rbac-seed-data";
 
 export async function POST() {
+  // Creates accounts with a well-known password ("password123") and zero auth of its
+  // own — must never be reachable once real customer data exists.
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   try {
     // 1. Ensure the Osta INTERNAL enterprise exists — exactly one row, type INTERNAL.
     const osta = await prisma.enterprise.upsert({

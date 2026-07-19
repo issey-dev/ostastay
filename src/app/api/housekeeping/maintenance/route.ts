@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/db"
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireSession()
+    requirePermission(ctx, "MAINTENANCE", "create")
+
     const body = await request.json()
     const { roomIds, issueType, description, reportedBy } = body
 
@@ -16,9 +18,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "issueType and description are required" }, { status: 400 })
     }
 
-    // Bulk create maintenance notes
-    const dataToInsert = roomIds.map(roomId => ({
-      roomId,
+    // Confirm every targeted room belongs to a property this actor can reach before
+    // touching any of them — a guessed id from another enterprise/property must not be
+    // silently included.
+    const rooms = await prisma.room.findMany({ where: { id: { in: roomIds } }, include: { roomType: true } })
+    const distinctPropertyIds = [...new Set(rooms.map((r) => r.propertyId))]
+    for (const propertyId of distinctPropertyIds) {
+      await assertPropertyAccess(ctx, propertyId)
+    }
+    if (rooms.some((r) => !r.roomType.housekeepingEnabled)) {
+      return NextResponse.json({ error: "One or more rooms belong to a room type that does not offer housekeeping" }, { status: 400 })
+    }
+
+    const dataToInsert = rooms.map((room) => ({
+      roomId: room.id,
       issueType,
       description,
       reportedBy: reportedBy || "Housekeeping",
@@ -32,7 +45,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, count: result.count })
   } catch (error) {
-    console.error("Error creating maintenance tickets:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    const { status, body } = toErrorResponse(error)
+    return NextResponse.json(body, { status })
   }
 }

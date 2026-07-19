@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const propertyId = searchParams.get("propertyId");
-
-  if (!propertyId) {
-    return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
-  }
-
   try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "FRONT_DESK", "view");
+
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    }
+    await assertPropertyAccess(ctx, propertyId);
+
     // Determine the start and end of "Today" in the server timezone
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -68,7 +73,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error("Failed to fetch front office summary:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }
