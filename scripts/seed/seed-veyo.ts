@@ -195,6 +195,9 @@ async function main() {
     { code: "40RV", description: "Spa Massage", category: "OTHERS" },
     { code: "41RV", description: "Spa Treatment", category: "OTHERS" },
     { code: "49RV", description: "Spa Misc", category: "OTHERS" },
+    // Green Tax — required by night-audit/run whenever EnterpriseSettings.greenTaxEnabled
+    // is true (defaults to true), which it is for Veyo; without this code Night Audit 400s.
+    { code: "GTX", description: "Green Tax", category: "TAX" },
   ];
   for (const cc of sampleChargeCodes) {
     await prisma.chargeCode.upsert({
