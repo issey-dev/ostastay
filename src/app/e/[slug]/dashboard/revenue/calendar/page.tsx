@@ -16,9 +16,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { DateRange } from "react-day-picker"
 import { useProperty } from "@/components/providers/property-provider"
 
-type RatePlan = { id: string; name: string; code: string }
+type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
 type RoomType = { id: string; name: string; code: string }
-type PriceEntry = { date: string; price: number }
+type PriceEntry = { date: string; price: number; extraAdultPrice: number | null; extraChildPrice: number | null }
 
 export default function PriceCalendarPage() {
   return (
@@ -50,6 +50,8 @@ function PriceCalendarPageContent() {
     to: endOfMonth(new Date()),
   })
   const [bulkPrice, setBulkPrice] = useState("")
+  const [bulkExtraAdultPrice, setBulkExtraAdultPrice] = useState("")
+  const [bulkExtraChildPrice, setBulkExtraChildPrice] = useState("")
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
@@ -108,13 +110,17 @@ function PriceCalendarPageContent() {
           roomTypeId: selectedRoomTypeId,
           startDate: bulkDateRange?.from ? format(bulkDateRange.from, "yyyy-MM-dd") : "",
           endDate: bulkDateRange?.to ? format(bulkDateRange.to, "yyyy-MM-dd") : "",
-          price: parseFloat(bulkPrice)
+          price: parseFloat(bulkPrice),
+          extraAdultPrice: bulkExtraAdultPrice === "" ? null : parseFloat(bulkExtraAdultPrice),
+          extraChildPrice: bulkExtraChildPrice === "" ? null : parseFloat(bulkExtraChildPrice),
         })
       })
 
       if (res.ok) {
         alert("Prices updated successfully!")
         setBulkPrice("")
+        setBulkExtraAdultPrice("")
+        setBulkExtraChildPrice("")
         fetchPrices()
       } else {
         alert("Failed to update prices.")
@@ -133,10 +139,12 @@ function PriceCalendarPageContent() {
 
   const startingDayIndex = getDay(currentMonth) // 0 = Sunday, 1 = Monday, etc.
 
-  const getPriceForDate = (date: Date) => {
-    const entry = prices.find(p => isSameDay(new Date(p.date), date))
-    return entry ? entry.price : null
+  const getEntryForDate = (date: Date) => {
+    return prices.find(p => isSameDay(new Date(p.date), date)) ?? null
   }
+
+  const selectedRatePlan = ratePlans.find(r => r.id === selectedRatePlanId)
+  const isDerivedPlan = !!selectedRatePlan?.parentRatePlanId
 
   return (
     <div className="flex flex-col gap-6">
@@ -196,31 +204,56 @@ function PriceCalendarPageContent() {
             </CardContent>
           </Card>
 
-          <Card className="border-info/30 shadow-sm bg-info-muted/50">
-            <CardHeader>
-              <CardTitle className="text-info">Bulk Update</CardTitle>
-              <CardDescription>Apply a price to a date range.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleBulkUpdate} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Date Range</Label>
-                  <DateRangePicker 
-                    value={bulkDateRange} 
-                    onChange={setBulkDateRange} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Daily Price ($)</Label>
-                  <Input type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
-                </div>
-                <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || !selectedRoomTypeId}>
-                  {bulkSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Apply Prices
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          {isDerivedPlan ? (
+            <Card className="border-info/30 shadow-sm bg-info-muted/50">
+              <CardHeader>
+                <CardTitle className="text-info">Derived Rate Plan</CardTitle>
+                <CardDescription>
+                  This plan&apos;s price is computed live from &quot;{selectedRatePlan?.parentRatePlan?.name}&quot;
+                  {selectedRatePlan?.derivedAdjustmentType === "FLAT"
+                    ? ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${selectedRatePlan?.derivedAdjustmentValue} flat`
+                    : ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${selectedRatePlan?.derivedAdjustmentValue}%`}
+                  . It has no calendar of its own to edit here — change the parent plan&apos;s prices, or edit this plan&apos;s adjustment on the Rate Plans tab.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <Card className="border-info/30 shadow-sm bg-info-muted/50">
+              <CardHeader>
+                <CardTitle className="text-info">Bulk Update</CardTitle>
+                <CardDescription>Apply a price to a date range.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleBulkUpdate} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Date Range</Label>
+                    <DateRangePicker
+                      value={bulkDateRange}
+                      onChange={setBulkDateRange}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Daily Price ($)</Label>
+                    <Input type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Extra Adult ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
+                      <Input type="number" min="0" step="0.01" value={bulkExtraAdultPrice} onChange={e => setBulkExtraAdultPrice(e.target.value)} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Extra Child ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
+                      <Input type="number" min="0" step="0.01" value={bulkExtraChildPrice} onChange={e => setBulkExtraChildPrice(e.target.value)} placeholder="0.00" />
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || !selectedRoomTypeId}>
+                    {bulkSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Apply Prices
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Side: Calendar Grid */}
@@ -261,7 +294,7 @@ function PriceCalendarPageContent() {
 
                   {/* Calendar Days */}
                   {daysInMonth.map(day => {
-                    const price = getPriceForDate(day)
+                    const entry = getEntryForDate(day)
                     const isToday = isSameDay(day, new Date())
                     return (
                       <div key={day.toISOString()} className={`bg-card min-h-[100px] p-2 flex flex-col group hover:bg-muted transition-colors ${isToday ? 'bg-info-muted/30' : ''}`}>
@@ -270,9 +303,18 @@ function PriceCalendarPageContent() {
                             {format(day, "d")}
                           </span>
                         </div>
-                        <div className="mt-auto pt-2 flex flex-col gap-1">
-                          {price !== null ? (
-                            <span className="text-lg font-bold text-success">${price.toFixed(2)}</span>
+                        <div className="mt-auto pt-2 flex flex-col gap-0.5">
+                          {entry !== null ? (
+                            <>
+                              <span className="text-lg font-bold text-success">${entry.price.toFixed(2)}</span>
+                              {(entry.extraAdultPrice != null || entry.extraChildPrice != null) && (
+                                <span className="text-[11px] text-muted-foreground leading-tight">
+                                  {entry.extraAdultPrice != null && `+$${entry.extraAdultPrice.toFixed(2)} adult`}
+                                  {entry.extraAdultPrice != null && entry.extraChildPrice != null && " · "}
+                                  {entry.extraChildPrice != null && `+$${entry.extraChildPrice.toFixed(2)} child`}
+                                </span>
+                              )}
+                            </>
                           ) : (
                             <span className="text-sm text-muted-foreground italic">No Rate</span>
                           )}

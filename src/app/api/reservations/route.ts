@@ -100,6 +100,13 @@ export async function POST(request: Request) {
       }
     ];
 
+    // Non-blocking: a room type whose maxOccupancy is exceeded by this reservation's
+    // adults+children (infants don't count toward occupancy, same convention as Green
+    // Tax) still books — front desk may legitimately override for a crib, rollaway,
+    // etc. — but the response flags it so the UI can surface a warning.
+    const totalOccupants = (parseInt(body.adults) || 1) + (parseInt(body.children) || 0);
+    const overCapacityRoomTypes = new Set<string>();
+
     for (const a of assignmentsInput) {
       const [roomType, ratePlan, room] = await Promise.all([
         prisma.roomType.findUnique({ where: { id: a.roomTypeId } }),
@@ -117,6 +124,9 @@ export async function POST(request: Request) {
       }
       if (a.roomId && (!room || room.propertyId !== body.propertyId || room.status === "OUT_OF_SERVICE")) {
         return NextResponse.json({ error: "Room does not belong to this property or is out of service" }, { status: 400 });
+      }
+      if (totalOccupants > roomType.maxOccupancy) {
+        overCapacityRoomTypes.add(`${roomType.name} (max ${roomType.maxOccupancy})`);
       }
     }
 
@@ -180,7 +190,11 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json(newReservation, { status: 201 });
+    const capacityWarning = overCapacityRoomTypes.size > 0
+      ? `${totalOccupants} guests exceeds max occupancy for: ${Array.from(overCapacityRoomTypes).join(", ")}`
+      : undefined;
+
+    return NextResponse.json({ ...newReservation, capacityWarning }, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

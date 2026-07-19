@@ -213,6 +213,7 @@ model Property {
   roomTypes    RoomType[]
   rooms        Room[]
   ratePlans    RatePlan[]
+  mealPlans    MealPlan[]
   reservations Reservation[]
   groupBlocks  GroupBlock[]
   nightAudits  PropertyNightAuditLog[]
@@ -260,6 +261,13 @@ model RoomType {
   code         String
   maxOccupancy Int
   basePrice    Float    @default(0.0)
+  // Adults included in basePrice (and any PriceCalendar override) before an extra-
+  // adult surcharge applies at Night Audit — e.g. 2 for standard double occupancy.
+  // Editable per room type since a Family Suite's base occupancy differs from a
+  // Standard Room's. Children always incur PriceCalendar's extraChildPrice (no
+  // separate "included children" threshold — kept simple to match how Green Tax
+  // already treats children as a flat per-child charge with no baseline exemption).
+  baseOccupancy Int      @default(2)
   description  String?
 
   // Deactivating a room type blocks any *new* reservation from being assigned to it and
@@ -298,6 +306,26 @@ model RoomTypeFeature {
   code       String
 
   @@unique([roomTypeId, category, code])
+}
+
+// Meal plans (Room Only / Bed & Breakfast / Half Board / ...) as first-class, property-
+// configurable entities (Controls > Revenue) instead of a free string duplicated on
+// both RatePlan and Reservation. `code` is what Reservation.mealPlan actually stores.
+// Pricing for a given meal plan is NOT modeled here — the app owner's chosen
+// mechanism is a Derived Rate Plan per meal plan variant (e.g. "BAR-BB" derived from
+// "BAR" — see RatePlan.parentRatePlanId), so this model is purely the LOV: what meal
+// plan codes exist and their display name, used to populate the Reservation form's
+// selector and as an informational tag (kitchen/back-office visibility), not a
+// pricing input to Night Audit.
+model MealPlan {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code       String
+  name       String
+  isActive   Boolean  @default(true)
+
+  @@unique([propertyId, code])
 }
 
 // RoomStatus: CLEAN, DIRTY, INSPECTED, OUT_OF_ORDER, OUT_OF_SERVICE
@@ -521,7 +549,24 @@ model RatePlan {
   description  String?
   priority     Int      @default(0)
   isNegotiated Boolean  @default(false)
-  mealPlan     String   @default("NONE")
+
+  // Derived Rate Plans: a plan can inherit its per-night price from another plan at
+  // the same property, plus a percent or flat adjustment (e.g. "BAR-BB" derived from
+  // "BAR" at +$20 flat, or a promo code derived at -10%). Resolved live at every
+  // lookup (Night Audit, Price Calendar display) — never materialized into this
+  // plan's own PriceCalendar rows, so it always tracks the parent's current pricing
+  // with no sync step. Chaining is disallowed (a derived plan's parent must not
+  // itself be derived) — enforced in the API, not the DB, to keep resolution a single
+  // hop. onDelete: SetNull rather than Cascade so deleting a parent doesn't cascade-
+  // delete every plan derived from it — it just orphans them back to independent.
+  parentRatePlanId String?
+  parentRatePlan   RatePlan?  @relation("DerivedRatePlans", fields: [parentRatePlanId], references: [id], onDelete: SetNull)
+  derivedRatePlans RatePlan[] @relation("DerivedRatePlans")
+  // "PERCENT" | "FLAT" — null when this plan is not derived from another.
+  derivedAdjustmentType  String?
+  // For PERCENT: e.g. 10 means parent price + 10%, -10 means parent price - 10%.
+  // For FLAT: e.g. 20 means parent price + $20, -20 means parent price - $20.
+  derivedAdjustmentValue Float?
 
   calendars      PriceCalendar[]
   RoomAssignment RoomAssignment[]
@@ -537,6 +582,12 @@ model PriceCalendar {
   roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
   date       DateTime
   price      Float
+  // Optional per-night surcharge for occupants beyond RoomType.baseOccupancy (adults)
+  // or any child (children) on this date — null means no surcharge, not "use the
+  // room's default," since there's no RoomType-level fallback for these (unlike
+  // `price`, which falls back to RoomType.basePrice).
+  extraAdultPrice Float?
+  extraChildPrice Float?
 
   @@unique([ratePlanId, roomTypeId, date])
 }

@@ -34,6 +34,7 @@ type RoomType = {
   code: string
   maxOccupancy: number
   basePrice: number
+  baseOccupancy: number
   description?: string
   isActive: boolean
   isPseudo: boolean
@@ -57,6 +58,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
     code: "",
     maxOccupancy: "2",
     basePrice: "100.00",
+    baseOccupancy: "2",
     description: "",
     isInactive: false,
     isPseudo: false,
@@ -95,6 +97,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           code: formData.code,
           maxOccupancy: parseInt(formData.maxOccupancy),
           basePrice: parseFloat(formData.basePrice),
+          baseOccupancy: parseInt(formData.baseOccupancy),
           description: formData.description || undefined,
           isActive: !formData.isInactive,
           isPseudo: formData.isPseudo,
@@ -138,7 +141,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
 
   const resetForm = () => {
     setFormData({
-      name: "", code: "", maxOccupancy: "2", basePrice: "100.00", description: "",
+      name: "", code: "", maxOccupancy: "2", basePrice: "100.00", baseOccupancy: "2", description: "",
       isInactive: false, isPseudo: false, housekeepingEnabled: true, features: [],
     })
     setIsEditMode(false)
@@ -151,6 +154,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
       code: rt.code,
       maxOccupancy: rt.maxOccupancy.toString(),
       basePrice: rt.basePrice.toString(),
+      baseOccupancy: rt.baseOccupancy.toString(),
       description: rt.description || "",
       isInactive: !rt.isActive,
       isPseudo: rt.isPseudo,
@@ -170,8 +174,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
   return (
     <div className="mt-6">
       <ControlsSectionHeader
-        title="Room Types"
-        description="Manage your property's room categories, pricing, and occupancy limits."
         action={
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open)
@@ -222,18 +224,32 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                     />
                   </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="basePrice">Default Base Price</Label>
-                  <Input
-                    id="basePrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.basePrice}
-                    onChange={(e) => setFormData({...formData, basePrice: e.target.value})}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">Charged per night whenever a reservation has no rate plan/calendar price selected — flat, regardless of adult/child count.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="basePrice">Default Base Price</Label>
+                    <Input
+                      id="basePrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.basePrice}
+                      onChange={(e) => setFormData({...formData, basePrice: e.target.value})}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Charged per night whenever a reservation has no rate plan/calendar price selected.</p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="baseOccupancy">Base Occupancy (Adults)</Label>
+                    <Input
+                      id="baseOccupancy"
+                      type="number"
+                      min="1"
+                      value={formData.baseOccupancy}
+                      onChange={(e) => setFormData({...formData, baseOccupancy: e.target.value})}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Details) applies.</p>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description (Optional)</Label>
@@ -335,7 +351,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                 <TableRow key={rt.id} className="hover:bg-muted/40">
                   <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
                   <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
-                  <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons</TableCell>
+                  <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons ({rt.baseOccupancy} base)</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">${rt.basePrice.toFixed(2)}</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">
                     <div className="flex gap-1.5">

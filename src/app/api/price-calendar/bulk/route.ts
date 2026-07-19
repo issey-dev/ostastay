@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     requirePermission(ctx, "REVENUE", "update");
 
     const body = await request.json();
-    const { ratePlanId, roomTypeIds, startDate, endDate, price } = body;
+    const { ratePlanId, roomTypeIds, startDate, endDate, price, extraAdultPrice, extraChildPrice } = body;
 
     if (!ratePlanId || !roomTypeIds || !startDate || !endDate || price === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -23,6 +23,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Rate plan not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, ratePlan.propertyId);
+    if (ratePlan.parentRatePlanId) {
+      return NextResponse.json({ error: "This is a derived rate plan — its price is computed from its parent plan's price and adjustment, edit those on the Rate Plan instead." }, { status: 400 });
+    }
 
     const roomTypes = await prisma.roomType.findMany({ where: { id: { in: roomTypeIds } } });
     if (roomTypes.length !== roomTypeIds.length || roomTypes.some((rt) => rt.propertyId !== ratePlan.propertyId)) {
@@ -32,8 +35,14 @@ export async function POST(request: Request) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const parsedPrice = parseFloat(price);
+    const parsedExtraAdultPrice = extraAdultPrice === "" || extraAdultPrice == null ? null : parseFloat(extraAdultPrice);
+    const parsedExtraChildPrice = extraChildPrice === "" || extraChildPrice == null ? null : parseFloat(extraChildPrice);
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(parsedPrice)) {
+    if (
+      isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(parsedPrice) ||
+      (parsedExtraAdultPrice !== null && isNaN(parsedExtraAdultPrice)) ||
+      (parsedExtraChildPrice !== null && isNaN(parsedExtraChildPrice))
+    ) {
       return NextResponse.json({ error: "Invalid data formats" }, { status: 400 });
     }
 
@@ -65,13 +74,17 @@ export async function POST(request: Request) {
               }
             },
             update: {
-              price: parsedPrice
+              price: parsedPrice,
+              extraAdultPrice: parsedExtraAdultPrice,
+              extraChildPrice: parsedExtraChildPrice,
             },
             create: {
               ratePlanId,
               roomTypeId,
               date,
-              price: parsedPrice
+              price: parsedPrice,
+              extraAdultPrice: parsedExtraAdultPrice,
+              extraChildPrice: parsedExtraChildPrice,
             }
           })
         );

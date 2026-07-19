@@ -24,7 +24,10 @@ type RatePlan = {
   description?: string
   priority: number
   isNegotiated: boolean
-  mealPlan: string
+  parentRatePlanId: string | null
+  derivedAdjustmentType: string | null
+  derivedAdjustmentValue: number | null
+  parentRatePlan?: { id: string; name: string; code: string } | null
 }
 
 export default function RevenueDashboard() {
@@ -47,7 +50,9 @@ export default function RevenueDashboard() {
     description: "",
     priority: 10,
     isNegotiated: false,
-    mealPlan: "NONE"
+    parentRatePlanId: "",
+    derivedAdjustmentType: "PERCENT",
+    derivedAdjustmentValue: "",
   })
 
   const { currentProperty } = useProperty()
@@ -76,7 +81,9 @@ export default function RevenueDashboard() {
       description: "",
       priority: 10,
       isNegotiated: false,
-      mealPlan: "NONE"
+      parentRatePlanId: "",
+      derivedAdjustmentType: "PERCENT",
+      derivedAdjustmentValue: "",
     })
     setSelectedPlan(null)
   }
@@ -89,7 +96,9 @@ export default function RevenueDashboard() {
       description: plan.description || "",
       priority: plan.priority,
       isNegotiated: plan.isNegotiated,
-      mealPlan: plan.mealPlan || "NONE"
+      parentRatePlanId: plan.parentRatePlanId || "",
+      derivedAdjustmentType: plan.derivedAdjustmentType || "PERCENT",
+      derivedAdjustmentValue: plan.derivedAdjustmentValue != null ? plan.derivedAdjustmentValue.toString() : "",
     })
     setIsDialogOpen(true)
   }
@@ -105,9 +114,12 @@ export default function RevenueDashboard() {
     try {
       const payload = {
         ...form,
-        propertyId
+        propertyId,
+        parentRatePlanId: form.parentRatePlanId || null,
+        derivedAdjustmentType: form.parentRatePlanId ? form.derivedAdjustmentType : null,
+        derivedAdjustmentValue: form.parentRatePlanId && form.derivedAdjustmentValue !== "" ? parseFloat(form.derivedAdjustmentValue) : null,
       }
-      
+
       const url = selectedPlan ? `/api/rate-plans/${selectedPlan.id}` : `/api/rate-plans`
       const method = selectedPlan ? "PUT" : "POST"
 
@@ -160,9 +172,9 @@ export default function RevenueDashboard() {
 
       <Tabs defaultValue="rate-plans" className="w-full">
         <TabsList className="bg-muted/50 mb-6">
-          <TabsTrigger value="flash-report">Manager's Flash Report</TabsTrigger>
-          <TabsTrigger value="rate-plans">Rate Plans Configuration</TabsTrigger>
-          <TabsTrigger value="seasonal-pricing">Seasonal Bulk Pricing</TabsTrigger>
+          <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
+          <TabsTrigger value="rate-plans">Rate Plans</TabsTrigger>
+          <TabsTrigger value="seasonal-pricing">Rate Details</TabsTrigger>
         </TabsList>
 
         <TabsContent value="flash-report" className="m-0">
@@ -217,31 +229,59 @@ export default function RevenueDashboard() {
                   />
                 </div>
 
-                <div className="grid gap-2">
-                  <Label>Meal Plan Included</Label>
-                  <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "" }))}>
+                <div className="grid gap-2 border rounded-lg p-4 bg-muted/30">
+                  <Label>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></Label>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Instead of its own Price Calendar, this plan's price is computed live as the parent plan's price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
+                  </p>
+                  <Select
+                    value={form.parentRatePlanId || "__none__"}
+                    onValueChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v === "__none__" ? "" : (v ?? "") }))}
+                  >
                     <SelectTrigger>
-                      <SelectValue>
-                        {(() => {
-                          const labels: Record<string, string> = {
-                            NONE: "Room Only",
-                            BB: "Bed & Breakfast",
-                            HB: "Half Board",
-                            FB: "Full Board",
-                            AI: "All Inclusive"
-                          }
-                          return labels[form.mealPlan] || form.mealPlan
-                        })()}
+                      <SelectValue placeholder="None — independent rate plan">
+                        {form.parentRatePlanId
+                          ? ratePlans.find(r => r.id === form.parentRatePlanId)?.name
+                          : "None — independent rate plan"}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="NONE">Room Only</SelectItem>
-                      <SelectItem value="BB">Bed & Breakfast</SelectItem>
-                      <SelectItem value="HB">Half Board</SelectItem>
-                      <SelectItem value="FB">Full Board</SelectItem>
-                      <SelectItem value="AI">All Inclusive</SelectItem>
+                      <SelectItem value="__none__">None — independent rate plan</SelectItem>
+                      {ratePlans
+                        .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id)
+                        .map(r => (
+                          <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
+
+                  {form.parentRatePlanId && (
+                    <div className="grid grid-cols-2 gap-4 mt-3">
+                      <div className="grid gap-2">
+                        <Label className="text-xs">Adjustment Type</Label>
+                        <Select value={form.derivedAdjustmentType} onValueChange={(v) => setForm(p => ({ ...p, derivedAdjustmentType: v ?? "PERCENT" }))}>
+                          <SelectTrigger>
+                            <SelectValue>{form.derivedAdjustmentType === "FLAT" ? "Flat Amount ($)" : "Percent (%)"}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PERCENT">Percent (%)</SelectItem>
+                            <SelectItem value="FLAT">Flat Amount ($)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-xs">Adjustment Value</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          required
+                          placeholder={form.derivedAdjustmentType === "FLAT" ? "e.g. 20 or -20" : "e.g. 10 or -10"}
+                          value={form.derivedAdjustmentValue}
+                          onChange={e => setForm(p => ({ ...p, derivedAdjustmentValue: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2 mt-2">
@@ -297,11 +337,20 @@ export default function RevenueDashboard() {
                     <TableCell className="font-mono font-bold text-info">{plan.code}</TableCell>
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell>
-                      {plan.isNegotiated ? (
-                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {plan.isNegotiated ? (
+                          <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
+                        )}
+                        {plan.parentRatePlan && (
+                          <Badge variant="outline" className="bg-info-muted text-info border-info/30">
+                            ← {plan.parentRatePlan.code} {plan.derivedAdjustmentType === "FLAT"
+                              ? `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${plan.derivedAdjustmentValue}`
+                              : `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${plan.derivedAdjustmentValue}%`}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Link href={`/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>

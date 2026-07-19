@@ -605,3 +605,97 @@ module also follow the same pipeline."**
   agent isn't a valid credit account; a post-checkout invoice shows the correct guest
   name/total; recording a payment against one invoice updates only that invoice.
   149/149 full suite passing, `tsc --noEmit` clean.
+
+## Occupancy pricing, Derived Rate Plans, and decoupled Meal Plans (2026-07-19)
+
+Three related app-owner requests in one session: extra adult/child pricing on the
+Price Calendar ("that price is default occupancy rate - please also add for extra
+adult, extra child prices"); renaming the Revenue tabs (Manager Flash / Rate Plans /
+Rate Details) with the same extra pricing on Rate Details' bulk tool; and a design
+discussion on Meal Plan being awkwardly coupled to Rate Plan ("I have to create
+seperate Rates for seperate Meal Plans... ideally i want the meal plan to be
+configurable in the controls as well"). The app owner then proposed their own
+mechanism for the same underlying pain — "derived" rate plans that inherit a parent
+plan's price plus a percent/flat adjustment — and asked for both designs to be
+built, not one instead of the other. They solve different problems: Derived Rate
+Plans is a general rate-variant tool (works for meal-plan variants, but also
+negotiated/OTA/promo rates); Meal Plans is a dedicated, simpler per-(RoomType,
+MealPlan) surcharge that doesn't require minting a whole new Rate Plan per
+combination.
+
+- **Occupancy pricing — `RoomType.baseOccupancy`**: no existing concept of "adults
+  included in the base rate" existed anywhere (`maxOccupancy` is purely a capacity
+  label, confirmed via a full-codebase check to be read in exactly 3 CRUD-only
+  places and enforced nowhere). Added `baseOccupancy` (Int, default 2, editable per
+  room type) as the threshold: adults beyond it incur `PriceCalendar.extraAdultPrice`
+  per night; every child incurs `extraChildPrice` (no "included children" baseline —
+  deliberately kept simple, matching how Green Tax already treats children as a flat
+  per-child charge with no exemption threshold below the separate infants bucket).
+  Both extra-price fields live on `PriceCalendar` (same granularity as `price`, so
+  seasonal variation applies to them too) with no `RoomType`-level fallback — unset
+  simply means no surcharge for that day, not "use a default."
+- **Derived Rate Plans — resolved live, never materialized**: `RatePlan` gains a
+  self-relation (`parentRatePlanId`, `onDelete: SetNull` so deleting a parent
+  doesn't cascade-delete its derived children) plus `derivedAdjustmentType`
+  (PERCENT|FLAT) and `derivedAdjustmentValue` (signed — negative means a discount).
+  A derived plan has **no `PriceCalendar` rows of its own**; every lookup (Price
+  Calendar display, Night Audit) resolves the parent's entry for that date and
+  applies `applyRateAdjustment()` (`src/lib/derived-rate.ts`) — including as the
+  final step when falling back to `RoomType.basePrice` if the parent has no
+  calendar entry for that day, so a derived plan is always "parent price +
+  adjustment" no matter where the parent's price came from. This means a derived
+  plan can never drift out of sync with its parent — there's no sync/materialize
+  step to forget. **Chaining is explicitly disallowed** (a derived plan's own
+  parent must not itself be derived, and a plan that already has children can't
+  become derived itself) — enforced in the API on both create and update, not the
+  DB, keeping every resolution path a single hop. The Price Calendar page shows a
+  read-only explanatory banner instead of the Bulk Update form for a derived plan;
+  both `POST /api/price-calendar` and `.../bulk` reject direct price-pushes to one
+  server-side too (not just a UI omission).
+- **Meal Plans decoupled from Rate Plans**: new property-scoped `MealPlan` model
+  (code/name/isActive) and `RoomTypeMealPlanRate` join (one flat per-night
+  surcharge per Room Type × Meal Plan — deliberately **not** date-seasonal like
+  `PriceCalendar`, since the app owner described it as "a set rate," not something
+  needing its own calendar). `RatePlan.mealPlan` is removed entirely — a Rate Plan
+  is now purely about the room's own price curve, meal plan is a fully orthogonal
+  concern. `Reservation.mealPlan` deliberately stays a plain string (not converted
+  to a hard FK) to minimize blast radius — it now sources its dropdown options from
+  the live `MealPlan` list instead of 5 hardcoded values baked into two separate
+  duplicated `<Select>`s (Rate Plan form + Reservation form), resolved by
+  `(propertyId, code)` at Night Audit time, the same lookup pattern already used for
+  `ChargeCode`. New Controls category "Revenue" (previously Meal Plans had no home;
+  grouping money-adjacent config together — Finance for tax/charge codes/payment
+  methods, Revenue for pricing structure) hosts a combined Meal Plans list +
+  Room Type × Meal Plan rate matrix (per-cell save-on-blur, not a bulk submit).
+  Migration seeds BB/HB/FB/AI per existing property (matching the old hardcoded
+  dropdown's 4 non-"Room Only" options) so Controls isn't empty after upgrade —
+  "Room Only"/NONE is deliberately never seeded, since no `MealPlan` row for it
+  means no surcharge lookup at all, which is exactly correct for a zero-cost plan.
+- **Also fixed while in this area**: `POST /api/reservations` now returns a
+  non-blocking `capacityWarning` when a booking's adults+children exceeds a room
+  type's `maxOccupancy` — surfaced in the reservation form's save notification, the
+  first time this field has ever been enforced anywhere (previously a pure label).
+  `BulkPricingTool` (Rate Details) switched from two plain `<input type="date">`
+  fields to the shared `DateRangePicker` component per the AGENTS.md convention it
+  had been quietly violating.
+- **Live-verified end-to-end**: created "BAR-BB" derived from "BAR" at +$20 flat;
+  confirmed its Price Calendar shows the computed $170 (not directly editable) when
+  BAR itself is $150; configured a $25 Bed & Breakfast rate for Standard Room via
+  the new Controls > Revenue matrix; booked a reservation on the derived plan with
+  that meal plan and 6 occupants (correctly triggering the capacity warning); ran
+  Night Audit and confirmed the folio posted exactly three separately-itemized,
+  correctly-taxed line items: $170.00 room charge, $25.00 meal plan charge, $60.00
+  Green Tax. 149/149 full suite passing, `tsc --noEmit` clean.
+
+**Correction, same day**: the `RoomTypeMealPlanRate` matrix described above was
+removed again a few hours later, per explicit app-owner feedback on a screenshot of
+it — *"this isn't required as i mentioned the association will be done on rate
+detail level... BAR / BAR-BB / BAR-HB / BAR-FB / BAR-AI will create rates
+seperately."* The Derived Rate Plan mechanism (already built, above) **is** the
+meal-plan-pricing association — a reservation booked on "BAR-BB" already gets the
+right total nightly price with no separate charge needed. `MealPlan` (the LOV —
+code/name/isActive) stays; `RoomTypeMealPlanRate`, its API route, the Controls rate
+matrix, and the Night Audit "Meal Plan Charge" posting block were all deleted.
+`Reservation.mealPlan` is now purely an informational tag, not a Night Audit
+pricing input. New migration `20260719100019_remove_meal_plan_room_type_rates`
+drops the table. 149/149 passing, `tsc --noEmit` clean after the removal too.

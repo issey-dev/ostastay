@@ -9,7 +9,9 @@ const updateSchema = z.object({
   description: z.string().optional().nullable(),
   priority: z.number().int().nonnegative(),
   isNegotiated: z.boolean(),
-  mealPlan: z.string().optional(),
+  parentRatePlanId: z.string().uuid().nullable().optional(),
+  derivedAdjustmentType: z.enum(["PERCENT", "FLAT"]).nullable().optional(),
+  derivedAdjustmentValue: z.number().nullable().optional(),
 });
 
 export async function PUT(
@@ -23,7 +25,10 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const existing = await prisma.ratePlan.findUnique({ where: { id } });
+    const existing = await prisma.ratePlan.findUnique({
+      where: { id },
+      include: { _count: { select: { derivedRatePlans: true } } },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Rate plan not found" }, { status: 404 });
     }
@@ -34,8 +39,38 @@ export async function PUT(
       ...body,
       priority: parseInt(body.priority) || 0,
       isNegotiated: !!body.isNegotiated,
-      mealPlan: body.mealPlan,
+      parentRatePlanId: body.parentRatePlanId || null,
+      derivedAdjustmentType: body.derivedAdjustmentType || null,
+      derivedAdjustmentValue:
+        body.derivedAdjustmentValue === undefined || body.derivedAdjustmentValue === null || body.derivedAdjustmentValue === ""
+          ? null
+          : parseFloat(body.derivedAdjustmentValue),
     });
+
+    let parentRatePlanId: string | null = null;
+    let derivedAdjustmentType: string | null = null;
+    let derivedAdjustmentValue: number | null = null;
+    if (data.parentRatePlanId) {
+      if (data.parentRatePlanId === id) {
+        return NextResponse.json({ error: "A rate plan cannot derive from itself" }, { status: 400 });
+      }
+      if (existing._count.derivedRatePlans > 0) {
+        return NextResponse.json({ error: "Cannot derive this rate plan from another — other rate plans already derive from it" }, { status: 400 });
+      }
+      const parent = await prisma.ratePlan.findUnique({ where: { id: data.parentRatePlanId } });
+      if (!parent || parent.propertyId !== existing.propertyId) {
+        return NextResponse.json({ error: "Parent rate plan not found" }, { status: 404 });
+      }
+      if (parent.parentRatePlanId) {
+        return NextResponse.json({ error: "Cannot derive from a rate plan that is itself derived" }, { status: 400 });
+      }
+      if (data.derivedAdjustmentType == null || data.derivedAdjustmentValue == null || isNaN(data.derivedAdjustmentValue)) {
+        return NextResponse.json({ error: "derivedAdjustmentType and derivedAdjustmentValue are required when deriving from another rate plan" }, { status: 400 });
+      }
+      parentRatePlanId = parent.id;
+      derivedAdjustmentType = data.derivedAdjustmentType;
+      derivedAdjustmentValue = data.derivedAdjustmentValue;
+    }
 
     const updatedRatePlan = await prisma.ratePlan.update({
       where: { id },
@@ -45,7 +80,9 @@ export async function PUT(
         description: data.description,
         priority: data.priority,
         isNegotiated: data.isNegotiated,
-        mealPlan: data.mealPlan,
+        parentRatePlanId,
+        derivedAdjustmentType,
+        derivedAdjustmentValue,
       },
     });
 

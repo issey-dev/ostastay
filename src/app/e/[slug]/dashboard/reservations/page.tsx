@@ -83,6 +83,7 @@ export default function ReservationsDashboard() {
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
+  const [mealPlans, setMealPlans] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
   const [housekeepingCodes, setHousekeepingCodes] = useState<any[]>([])
   const [autoAssigning, setAutoAssigning] = useState(false)
@@ -121,15 +122,16 @@ export default function ReservationsDashboard() {
     if (!currentProperty) return
     setLoading(true)
     try {
-      const [resReq, profReq, rtReq, rpReq, rmReq, hkReq] = await Promise.all([
+      const [resReq, profReq, rtReq, rpReq, rmReq, hkReq, mpReq] = await Promise.all([
         fetch(`/api/reservations?propertyId=${propertyId}`),
         fetch(`/api/profiles?enterpriseId=${enterpriseId}`),
         fetch(`/api/room-types?propertyId=${propertyId}`),
         fetch(`/api/rate-plans?propertyId=${propertyId}`),
         fetch(`/api/rooms?propertyId=${propertyId}`),
-        fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`)
+        fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`),
+        fetch(`/api/meal-plans?propertyId=${propertyId}`)
       ])
-      
+
       const resData = await resReq.json()
       if (Array.isArray(resData)) setReservations(resData)
 
@@ -144,6 +146,9 @@ export default function ReservationsDashboard() {
 
       const rmData = await rmReq.json()
       if (Array.isArray(rmData)) setRooms(rmData)
+
+      const mpData = await mpReq.json()
+      if (Array.isArray(mpData)) setMealPlans(mpData)
 
       const hkData = await hkReq.json()
       if (Array.isArray(hkData)) setHousekeepingCodes(hkData)
@@ -329,10 +334,15 @@ export default function ReservationsDashboard() {
       })
 
       if (res.ok) {
+        const body = await res.json()
         setIsDialogOpen(false)
         resetForm()
         fetchData()
-        setNotification({ title: "Success", message: "Reservation saved successfully." })
+        setNotification(
+          body.capacityWarning
+            ? { title: "Saved with a warning", message: `Reservation saved successfully. ${body.capacityWarning}.` }
+            : { title: "Success", message: "Reservation saved successfully." }
+        )
       } else {
         const err = await res.json()
         setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
@@ -618,27 +628,17 @@ export default function ReservationsDashboard() {
                   </div>
                   <div className="grid gap-2">
                     <Label>Meal Plan</Label>
-                    <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "" }))}>
+                    <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "NONE" }))}>
                       <SelectTrigger>
                         <SelectValue>
-                          {(() => {
-                            const labels: Record<string, string> = {
-                              NONE: "Room Only",
-                              BB: "Bed & Breakfast",
-                              HB: "Half Board",
-                              FB: "Full Board",
-                              AI: "All Inclusive"
-                            }
-                            return labels[form.mealPlan] || form.mealPlan
-                          })()}
+                          {form.mealPlan === "NONE" ? "Room Only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">Room Only</SelectItem>
-                        <SelectItem value="BB">Bed & Breakfast</SelectItem>
-                        <SelectItem value="HB">Half Board</SelectItem>
-                        <SelectItem value="FB">Full Board</SelectItem>
-                        <SelectItem value="AI">All Inclusive</SelectItem>
+                        {mealPlans.filter(mp => mp.isActive).map(mp => (
+                          <SelectItem key={mp.id} value={mp.code}>{mp.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -747,12 +747,8 @@ export default function ReservationsDashboard() {
                         <div className="grid gap-2">
                           <Label>Rate Plan <span className="text-destructive">*</span></Label>
                           <Select required value={assignment.ratePlanId} onValueChange={(v) => {
-                            const selectedPlan = ratePlans.find(rp => rp.id === v);
                             const newAssignments = [...form.assignments];
                             newAssignments[index].ratePlanId = v ?? "";
-                            if (index === 0 && selectedPlan?.mealPlan) {
-                               setForm(p => ({ ...p, mealPlan: selectedPlan.mealPlan }));
-                            }
                             setForm(p => ({ ...p, assignments: newAssignments }));
                           }}>
                             <SelectTrigger>

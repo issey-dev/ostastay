@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from "react"
 import { CalendarDays, Save, CheckSquare } from "lucide-react"
+import { format } from "date-fns"
+import type { DateRange } from "react-day-picker"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 
 export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -17,9 +20,10 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
 
   // Form State
   const [ratePlanId, setRatePlanId] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [price, setPrice] = useState("")
+  const [extraAdultPrice, setExtraAdultPrice] = useState("")
+  const [extraChildPrice, setExtraChildPrice] = useState("")
   const [selectedRoomTypes, setSelectedRoomTypes] = useState<string[]>([])
 
   useEffect(() => {
@@ -59,9 +63,13 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (selectedRoomTypes.length === 0) {
       alert("Please select at least one Room Type.")
+      return
+    }
+    if (!dateRange?.from || !dateRange?.to) {
+      alert("Please select a date range.")
       return
     }
 
@@ -73,9 +81,11 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         body: JSON.stringify({
           ratePlanId,
           roomTypeIds: selectedRoomTypes,
-          startDate,
-          endDate,
-          price
+          startDate: format(dateRange.from, "yyyy-MM-dd"),
+          endDate: format(dateRange.to, "yyyy-MM-dd"),
+          price,
+          extraAdultPrice: extraAdultPrice === "" ? null : extraAdultPrice,
+          extraChildPrice: extraChildPrice === "" ? null : extraChildPrice,
         })
       })
 
@@ -83,9 +93,10 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
       if (res.ok) {
         alert(data.message)
         // Reset form
-        setStartDate("")
-        setEndDate("")
+        setDateRange(undefined)
         setPrice("")
+        setExtraAdultPrice("")
+        setExtraChildPrice("")
         setSelectedRoomTypes([])
       } else {
         alert(data.error || "Failed to push prices")
@@ -121,33 +132,47 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
             <div className="max-w-md">
               <Select required value={ratePlanId} onValueChange={(val) => setRatePlanId(val ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a Rate Plan..." />
+                  <SelectValue placeholder="Choose a Rate Plan...">
+                    {(() => {
+                      const rp = ratePlans.find(r => r.id === ratePlanId)
+                      return rp ? `${rp.name}${rp.isNegotiated ? " (Negotiated)" : ""}` : undefined
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {ratePlans.map(rp => (
+                  {ratePlans.filter(rp => !rp.parentRatePlanId).map(rp => (
                     <SelectItem key={rp.id} value={rp.id}>
                       {rp.name} {rp.isNegotiated ? "(Negotiated)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-2">Derived rate plans aren&apos;t listed — their price is computed from their parent plan, not pushed directly. Edit the adjustment on the Rate Plans tab instead.</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-foreground border-b pb-2">2. Define Season (Date Range) & Price</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label>Start Date *</Label>
-                <Input type="date" required value={startDate} onChange={e => setStartDate(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date *</Label>
-                <Input type="date" required value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} />
+                <Label>Date Range *</Label>
+                <DateRangePicker value={dateRange} onChange={setDateRange} />
               </div>
               <div className="space-y-2">
                 <Label>Daily Price *</Label>
                 <Input type="number" step="0.01" min="0" required placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <Label>Extra Adult Price <span className="text-muted-foreground font-normal">Optional</span></Label>
+                <Input type="number" step="0.01" min="0" placeholder="0.00" value={extraAdultPrice} onChange={e => setExtraAdultPrice(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Per night, per adult beyond each room type's Base Occupancy.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Extra Child Price <span className="text-muted-foreground font-normal">Optional</span></Label>
+                <Input type="number" step="0.01" min="0" placeholder="0.00" value={extraChildPrice} onChange={e => setExtraChildPrice(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Per night, per child.</p>
               </div>
             </div>
           </div>

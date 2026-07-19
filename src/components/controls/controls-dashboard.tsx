@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Store,
+  TrendingUp,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -38,6 +39,7 @@ import { PropertyProfileManager } from "@/components/controls/property-profile-m
 import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 import { SequenceManager } from "@/components/controls/sequence-manager"
+import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 
 // Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
 // Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
@@ -129,6 +131,16 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
             <PaymentMethodsManager />
           </ControlsCard>
         </div>
+      ),
+    },
+    {
+      key: "revenue",
+      label: "Revenue",
+      icon: TrendingUp,
+      render: () => (
+        <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). To price one, create a Derived Rate Plan on the Rate Plans tab (e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot;) rather than setting a rate here.">
+          <MealPlansManager />
+        </ControlsCard>
       ),
     },
     {

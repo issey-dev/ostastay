@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { resolveChargeTax } from "@/lib/tax-calc"
+import { applyRateAdjustment } from "@/lib/derived-rate"
 
 export async function POST(request: Request) {
   try {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
         },
         assignments: {
           orderBy: { startDate: 'desc' },
-          include: { roomType: true }
+          include: { roomType: true, ratePlan: true }
         }
       }
     })
@@ -108,19 +109,36 @@ export async function POST(request: Request) {
       // never sees anything from an in-house reservation.
       const targetFolioId = res.folios[0].id
 
+      // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
+      // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is
+      // applied below to whatever price results, including the RoomType.basePrice
+      // fallback, so a derived plan is always "parent price + adjustment" no matter
+      // where the parent's price actually came from.
+      const activeRatePlan = activeAssignment.ratePlan
+      const isDerivedRatePlan = !!activeRatePlan.parentRatePlanId
+      const calendarRatePlanId = isDerivedRatePlan ? activeRatePlan.parentRatePlanId! : activeAssignment.ratePlanId
+
+      // Fetched unconditionally (not just when overrideRate is unset) since extra-
+      // occupancy surcharges are a separate additive charge tied to today's calendar
+      // entry — a manual base-rate override shouldn't silently suppress them.
+      const calendarEntry = await prisma.priceCalendar.findFirst({
+        where: {
+          ratePlanId: calendarRatePlanId,
+          roomTypeId: activeAssignment.roomTypeId,
+          date: {
+            gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+            lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+          }
+        }
+      })
+
       let inputAmount = activeAssignment.overrideRate
       if (inputAmount == null) {
-        const calendarEntry = await prisma.priceCalendar.findFirst({
-          where: {
-            ratePlanId: activeAssignment.ratePlanId,
-            roomTypeId: activeAssignment.roomTypeId,
-            date: {
-              gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-              lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
-            }
-          }
-        })
-        inputAmount = calendarEntry?.price ?? activeAssignment.roomType.basePrice
+        let baseRoomPrice = calendarEntry?.price ?? activeAssignment.roomType.basePrice
+        if (isDerivedRatePlan) {
+          baseRoomPrice = applyRateAdjustment(baseRoomPrice, activeRatePlan.derivedAdjustmentType!, activeRatePlan.derivedAdjustmentValue!)
+        }
+        inputAmount = baseRoomPrice
       }
 
       const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
@@ -145,6 +163,50 @@ export async function POST(request: Request) {
       totalRoomRevenue += baseAmount
       totalTaxPosted += taxAmount + serviceChargeAmount
       totalPostings += 1
+
+      // 2a. Post an extra-occupancy surcharge — adults beyond RoomType.baseOccupancy
+      // at today's calendar extraAdultPrice, plus every child at extraChildPrice (no
+      // "included children" baseline, same convention as Green Tax). Both rates are
+      // optional per PriceCalendar day (no RoomType-level fallback), so this is a
+      // no-op unless the property has actually configured them for today.
+      const extraAdults = Math.max(0, res.adults - activeAssignment.roomType.baseOccupancy)
+      const extraOccupancyInput =
+        extraAdults * (calendarEntry?.extraAdultPrice ?? 0) + res.children * (calendarEntry?.extraChildPrice ?? 0)
+
+      if (extraOccupancyInput > 0) {
+        const extraOccupancy = resolveChargeTax({
+          chargeCode: roomCode,
+          inputAmount: extraOccupancyInput,
+          settings,
+          pricesIncludeTaxes
+        })
+
+        const parts = []
+        if (extraAdults > 0) parts.push(`${extraAdults} extra adult${extraAdults > 1 ? "s" : ""}`)
+        if (res.children > 0) parts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
+
+        await prisma.folioLineItem.create({
+          data: {
+            folioId: targetFolioId,
+            chargeCodeId: roomCode.id,
+            amount: extraOccupancy.baseAmount,
+            taxAmount: extraOccupancy.taxAmount,
+            serviceChargeAmount: extraOccupancy.serviceChargeAmount,
+            description: `Extra Occupancy Charge (${parts.join(", ")})`,
+            date: today
+          }
+        })
+
+        totalRoomRevenue += extraOccupancy.baseAmount
+        totalTaxPosted += extraOccupancy.taxAmount + extraOccupancy.serviceChargeAmount
+        totalPostings += 1
+      }
+
+      // Meal plan pricing is NOT a separate charge here — it's fully captured by
+      // whichever Rate Plan the reservation is booked on (e.g. a reservation on
+      // "BAR-BB", a Derived Rate Plan of "BAR", already gets BAR's price plus the
+      // meal-plan adjustment via the room-charge resolution above).
+      // Reservation.mealPlan is purely an informational tag, not a Night Audit input.
 
       // 2b. Post nightly Green Tax — flat per adult/child, infants exempt.
       if (greenTaxEnabled && gtxCode) {
