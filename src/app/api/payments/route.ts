@@ -20,11 +20,11 @@ export async function GET(request: Request) {
       }
     }
     if (folioId) {
-      const folio = await prisma.folio.findUnique({ where: { id: folioId }, include: { reservation: true } });
+      const folio = await prisma.folio.findUnique({ where: { id: folioId } });
       if (!folio) {
         return NextResponse.json({ error: "Folio not found" }, { status: 404 });
       }
-      await assertPropertyAccess(ctx, folio.reservation.propertyId);
+      await assertPropertyAccess(ctx, folio.propertyId);
     }
 
     const payments = await prisma.payment.findMany({
@@ -55,11 +55,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const folio = await prisma.folio.findUnique({ where: { id: body.folioId }, include: { reservation: true } });
+    const folio = await prisma.folio.findUnique({ where: { id: body.folioId } });
     if (!folio) {
       return NextResponse.json({ error: "Folio not found" }, { status: 404 });
     }
-    await assertPropertyAccess(ctx, folio.reservation.propertyId);
+    await assertPropertyAccess(ctx, folio.propertyId);
     if (folio.isClosed) {
       return NextResponse.json({ error: "Cannot post payments to a closed folio" }, { status: 400 });
     }
