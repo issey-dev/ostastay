@@ -84,7 +84,7 @@ export function SmtpSftpManager() {
     <form onSubmit={handleSave} className="space-y-8">
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SMTP (Outgoing Email)</h3>
-        <p className="text-xs text-muted-foreground">Not yet wired to any actual sending — saved for when email sending is built.</p>
+        <p className="text-xs text-muted-foreground">Used to send guest Confirmation Letters. Configure these before using the "Email to Guest" button on a reservation's Confirmation Letter.</p>
         <div className="grid gap-4 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
           <div className="space-y-2">
             <Label>Host</Label>

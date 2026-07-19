@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Plus, Pencil, Trash2, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -120,17 +120,16 @@ export function PropertiesManager() {
         </DialogContent>
       </Dialog>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">Property Portfolio</CardTitle>
-            <CardDescription>A list of all properties currently managed in the PMS.</CardDescription>
-          </div>
+      <ControlsSectionHeader
+        title="Property Portfolio"
+        description="A list of all properties currently managed in the PMS."
+        action={
           <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
             <Plus className="mr-2 h-4 w-4" /> Add Property
           </Button>
-        </CardHeader>
-        <CardContent className="p-0">
+        }
+      />
+      <ControlsSectionBody>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border hover:bg-transparent">
@@ -213,8 +212,7 @@ export function PropertiesManager() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </ControlsSectionBody>
     </div>
   )
 }
