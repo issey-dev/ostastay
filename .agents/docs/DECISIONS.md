@@ -762,3 +762,57 @@ DN was so revenue allocations are allocated by default and posted during night a
   legacy `mode='SELL_SEPARATE'` row to `mode='ADD_TO_RATE', sellSeparate=true`.
 - 169/169 suite passing (2 new tests: SELL_SEPARATE rejected as a mode value; a
   sell-separate allocation is still linkable to a rate plan), `tsc --noEmit` clean.
+
+## Base Rate Plan replaces RoomType.basePrice (2026-07-19)
+
+App-owner instruction (verbatim intent): *"Remove the column base price from Room Type
+config — by default during onboarding a 'Base' Rate will be created which is locked
+and cannot be deleted (lock icon). You cannot edit anything for the rate detail
+section — however packages can be added if preferred — this will be default rate for
+all room types all rate plans if nothing custom is specified."*
+
+- **`RoomType.basePrice` is gone** (dropped column, migration
+  `20260719170000_remove_room_type_base_price`). The Room Type form/table no longer
+  shows it.
+- **Every property gets exactly one locked Rate Plan** (`RatePlan.isLocked = true`,
+  code `"BASE"`, name "Base Rate", priority 999) — created automatically at property
+  onboarding (`POST /api/properties`). A migration
+  (`20260719160000_rate_plan_locked` + a one-time backfill script,
+  `scripts/dev-tools/backfill-base-rate-plans.ts`, now historical/inert since the
+  column it read no longer exists) provisioned one for every pre-existing property
+  and carried its room types' old `basePrice` values forward into today's
+  `PriceCalendar` row, so no configured pricing was silently lost.
+- **Clarified interpretation of "cannot edit rate detail"**: this locks the plan's own
+  *identity* fields (code, name, priority, negotiated flag, derive-from settings) —
+  not its pricing. The Base plan is priced through the **exact same Price Calendar
+  mechanism as any other rate plan** (Calendar button / Revenue > Rate Details), so an
+  admin can and should bulk-price it (e.g. a year or more out) via the existing
+  seasonal/bulk pricing tool. **Package Allocations remain fully editable** on it, per
+  the instruction. Enforced both in the UI (disabled inputs, lock icon, hidden delete)
+  and independently in the API (`PUT` on a locked plan silently ignores everything
+  except `allocationIds`; `DELETE` 400s; `POST` rejects a client-submitted code of
+  `"BASE"` as reserved).
+- **Night Audit fallback chain**, in order: (1) the reservation's `overrideRate`, (2)
+  the assigned rate plan's own Price Calendar entry for tonight (or its parent's, if
+  derived), (3) **the property's Base Rate plan's Price Calendar entry for the same
+  room type/date** (skipped if the assigned plan already IS the Base plan), (4) `0` if
+  even that's missing — same as `RoomType.basePrice`'s old implicit `@default(0.0)`
+  when a room type was never explicitly priced. A derived plan's adjustment still
+  applies on top of whichever raw price resolves, including a Base-sourced one.
+  **Practical consequence worth knowing**: unlike the old `RoomType.basePrice` (a
+  single number that worked for literally every future date with zero setup), the
+  Base plan's fallback is only as good as its Price Calendar coverage — an
+  unconfigured future date has no price at all (posts $0) unless the admin has bulk
+  priced that far out.
+- Seed (`scripts/seed/seed-veyo.ts`) demonstrates this: creates Veyo's locked Base
+  plan and bulk-inserts a full year of Price Calendar rows per room type at the
+  former `basePrice` values (250/450), via `createMany` rather than 730 individual
+  upserts.
+- Also added while in this area: the `GTX` (Green Tax) charge code was missing from
+  Veyo's seed entirely — `EnterpriseSettings.greenTaxEnabled` defaults to `true`, so
+  Night Audit would have 400'd on "Missing GTX charge code" the moment it was run.
+  Also seeded a sample chart of charge codes (Accommodation/F&B/Transport/Spa, `RV`
+  suffix) per the app owner's list.
+- 177/177 suite passing (8 new Base Rate Plan tests: onboarding auto-creation, lock
+  enforcement on PUT/DELETE/POST, and the full Night Audit fallback chain incl. the
+  derived-plan-on-top-of-Base-fallback case), `tsc --noEmit` clean.

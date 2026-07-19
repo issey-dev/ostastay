@@ -1,6 +1,11 @@
 # Consolidated TODO — as of 2026-07-18
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
+> This file is the actionable list: what's left, what was deferred on purpose, and what
+> was found broken along the way but is out of scope for whoever finds it next to fix
+> without checking first. Keep this file current — when you close an item, move it to
+> "Recently completed" with a date, don't just delete it silently, so teammates opening
+> the repo mid-stream can see momentum.
 
 ## Allocations (Revenue model extension) — BUILT 2026-07-19, pending owner review
 
@@ -14,11 +19,18 @@ Add-to-Rate / Sell-Separate semantics. Awaiting app-owner UI review/fine-tuning.
 Known follow-up flagged, not built: Night Audit still has **no double-run guard** for
 any posting (room charges included — pre-existing gap, allocations deliberately
 inherit the same behavior rather than getting a bespoke guard).
-> This file is the actionable list: what's left, what was deferred on purpose, and what
-> was found broken along the way but is out of scope for whoever finds it next to fix
-> without checking first. Keep this file current — when you close an item, move it to
-> "Recently completed" with a date, don't just delete it silently, so teammates opening
-> the repo mid-stream can see momentum.
+
+## Base Rate Plan replaces RoomType.basePrice — BUILT 2026-07-19
+
+See DECISIONS.md "Base Rate Plan replaces RoomType.basePrice" for the full account.
+`RoomType.basePrice` is gone; every property now gets one locked Rate Plan (code
+`BASE`, `isLocked: true`) at onboarding, priced through the normal Price Calendar like
+any other plan, and Night Audit falls back to it when the assigned plan has no entry
+for the date. **Note for whoever configures a new property**: unlike the old flat
+`basePrice` (worked for every future date automatically), the Base plan only covers
+whatever date range its Price Calendar has actually been bulk-priced for — an admin
+should set it out at least a year via Revenue > Rate Details right after onboarding.
+177/177 suite passing (8 new tests), `tsc --noEmit` clean.
 
 ## Phase 4 loose end (money & shift data) — resolved, no action needed
 

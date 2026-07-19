@@ -40,6 +40,12 @@ export async function POST(request: Request) {
     if (!body.code || !body.name || !body.propertyId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    if (body.code.toUpperCase() === "BASE") {
+      return NextResponse.json(
+        { error: '"BASE" is reserved for the property\'s own Base Rate plan, created automatically at onboarding' },
+        { status: 400 }
+      );
+    }
     await assertPropertyAccess(ctx, body.propertyId);
 
     // Derived Rate Plans: a plan can inherit its per-night price from another plan at

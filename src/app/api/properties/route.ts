@@ -53,6 +53,13 @@ export async function POST(request: Request) {
       },
     });
 
+    // Every property gets a locked "Base Rate" plan at onboarding (see RatePlan.isLocked)
+    // — the default rate for any room type/date when nothing custom is specified.
+    // priority 999 keeps it sorted last in the Rate Plan Hierarchy table.
+    await prisma.ratePlan.create({
+      data: { propertyId: newProperty.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
+    });
+
     return NextResponse.json(newProperty, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

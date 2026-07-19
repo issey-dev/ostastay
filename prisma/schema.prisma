@@ -261,13 +261,12 @@ model RoomType {
   name         String
   code         String
   maxOccupancy Int
-  basePrice    Float    @default(0.0)
-  // Adults included in basePrice (and any PriceCalendar override) before an extra-
-  // adult surcharge applies at Night Audit — e.g. 2 for standard double occupancy.
-  // Editable per room type since a Family Suite's base occupancy differs from a
-  // Standard Room's. Children always incur PriceCalendar's extraChildPrice (no
-  // separate "included children" threshold — kept simple to match how Green Tax
-  // already treats children as a flat per-child charge with no baseline exemption).
+  // Adults included before an extra-adult surcharge applies at Night Audit — e.g. 2
+  // for standard double occupancy. Editable per room type since a Family Suite's base
+  // occupancy differs from a Standard Room's. Children always incur PriceCalendar's
+  // extraChildPrice (no separate "included children" threshold — kept simple to match
+  // how Green Tax already treats children as a flat per-child charge with no baseline
+  // exemption).
   baseOccupancy Int      @default(2)
   description  String?
 
@@ -557,6 +556,18 @@ model RatePlan {
   priority     Int      @default(0)
   isNegotiated Boolean  @default(false)
 
+  // Marks the property's system-provisioned "Base Rate" (code "BASE", auto-created at
+  // property onboarding — see src/app/api/properties/route.ts) — exactly one per
+  // property, cannot be deleted, and its own identity fields (code/name/priority/
+  // negotiated/derive-from) cannot be edited via the API (src/app/api/rate-plans/
+  // [id]/route.ts silently ignores those on a locked plan). Its PriceCalendar and
+  // Package Allocations links remain fully editable like any other plan. Night Audit
+  // falls back to this plan's PriceCalendar entry (see night-audit/run/route.ts) when
+  // the reservation's own assigned rate plan has no entry for that date — this is the
+  // "default rate for all room types/rate plans when nothing custom is specified,"
+  // replacing the old flat, always-on RoomType.basePrice fallback.
+  isLocked Boolean @default(false)
+
   // Derived Rate Plans: a plan can inherit its per-night price from another plan at
   // the same property, plus a percent or flat adjustment (e.g. "BAR-BB" derived from
   // "BAR" at +$20 flat, or a promo code derived at -10%). Resolved live at every
@@ -594,9 +605,9 @@ model PriceCalendar {
   date       DateTime
   price      Float
   // Optional per-night surcharge for occupants beyond RoomType.baseOccupancy (adults)
-  // or any child (children) on this date — null means no surcharge, not "use the
-  // room's default," since there's no RoomType-level fallback for these (unlike
-  // `price`, which falls back to RoomType.basePrice).
+  // or any child (children) on this date — null means no surcharge; there is no
+  // further fallback for these (unlike `price`, which falls back to the property's
+  // locked Base rate plan's own PriceCalendar entry — see RatePlan.isLocked).
   extraAdultPrice Float?
   extraChildPrice Float?
 

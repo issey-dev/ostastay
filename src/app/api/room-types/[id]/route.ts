@@ -12,7 +12,6 @@ const updateSchema = z.object({
   name: z.string().min(2),
   code: z.string().min(2),
   maxOccupancy: z.number().int().positive(),
-  basePrice: z.number().nonnegative(),
   baseOccupancy: z.number().int().positive().optional(),
   description: z.string().optional(),
   isActive: z.boolean().optional(),

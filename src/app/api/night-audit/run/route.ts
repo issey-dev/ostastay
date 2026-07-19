@@ -40,6 +40,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing ROOM charge code in system settings." }, { status: 400 })
     }
 
+    // The property's system-provisioned Base Rate plan (see RatePlan.isLocked,
+    // created at onboarding by api/properties/route.ts) — the default price for any
+    // room type/date when the reservation's own assigned rate plan has no Price
+    // Calendar entry for tonight. Replaces the old flat RoomType.basePrice fallback.
+    const baseRatePlan = await prisma.ratePlan.findFirst({ where: { propertyId, isLocked: true } })
+
     // Green Tax (Maldives): a flat per-adult/per-child nightly government levy, separate
     // from GST/service charge and unaffected by the property's tax-inclusive toggle.
     // Infants (Reservation.infants) are exempt and not counted. Only require the GTX
@@ -124,30 +130,38 @@ export async function POST(request: Request) {
 
       // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
       // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is
-      // applied below to whatever price results, including the RoomType.basePrice
+      // applied below to whatever price results, including the Base Rate plan
       // fallback, so a derived plan is always "parent price + adjustment" no matter
       // where the parent's price actually came from.
       const activeRatePlan = activeAssignment.ratePlan
       const isDerivedRatePlan = !!activeRatePlan.parentRatePlanId
       const calendarRatePlanId = isDerivedRatePlan ? activeRatePlan.parentRatePlanId! : activeAssignment.ratePlanId
 
+      const todayRange = {
+        gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+        lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+      }
+
       // Fetched unconditionally (not just when overrideRate is unset) since extra-
       // occupancy surcharges are a separate additive charge tied to today's calendar
       // entry — a manual base-rate override shouldn't silently suppress them.
       const calendarEntry = await prisma.priceCalendar.findFirst({
-        where: {
-          ratePlanId: calendarRatePlanId,
-          roomTypeId: activeAssignment.roomTypeId,
-          date: {
-            gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-            lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
-          }
-        }
+        where: { ratePlanId: calendarRatePlanId, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
       })
 
       let inputAmount = activeAssignment.overrideRate
       if (inputAmount == null) {
-        let baseRoomPrice = calendarEntry?.price ?? activeAssignment.roomType.basePrice
+        let baseRoomPrice = calendarEntry?.price
+        // No entry under the assigned (or derived-from) plan — fall back to the
+        // property's locked Base Rate plan's own Price Calendar entry for tonight
+        // (skip the extra lookup if that's already what we just checked above).
+        if (baseRoomPrice == null && baseRatePlan && calendarRatePlanId !== baseRatePlan.id) {
+          const baseCalendarEntry = await prisma.priceCalendar.findFirst({
+            where: { ratePlanId: baseRatePlan.id, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
+          })
+          baseRoomPrice = baseCalendarEntry?.price
+        }
+        baseRoomPrice = baseRoomPrice ?? 0
         if (isDerivedRatePlan) {
           baseRoomPrice = applyRateAdjustment(baseRoomPrice, activeRatePlan.derivedAdjustmentType!, activeRatePlan.derivedAdjustmentValue!)
         }

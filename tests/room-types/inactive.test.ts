@@ -70,7 +70,7 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
     propertyId = property.id;
 
     const roomType = await prisma.roomType.create({
-      data: { propertyId, name: "Standard", code: "STD", maxOccupancy: 2, basePrice: 100 },
+      data: { propertyId, name: "Standard", code: "STD", maxOccupancy: 2 },
     });
     roomTypeId = roomType.id;
 
@@ -112,7 +112,7 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
         new Request(`http://localhost/api/room-types/${roomTypeId}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: "Standard", code: "STD", maxOccupancy: 2, basePrice: 100, isActive: false }),
+          body: JSON.stringify({ name: "Standard", code: "STD", maxOccupancy: 2, isActive: false }),
         }),
         { params: Promise.resolve({ id: roomTypeId }) }
       )
@@ -165,7 +165,7 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
         new Request(`http://localhost/api/room-types/${roomTypeId}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: "Standard", code: "STD", maxOccupancy: 2, basePrice: 100, isActive: true }),
+          body: JSON.stringify({ name: "Standard", code: "STD", maxOccupancy: 2, isActive: true }),
         }),
         { params: Promise.resolve({ id: roomTypeId }) }
       )

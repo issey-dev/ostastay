@@ -64,7 +64,7 @@ async function setupCheckedInReservation(opts: {
   });
 
   const roomType = await prisma.roomType.create({
-    data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 4, basePrice: 100 },
+    data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 4 },
   });
   const room = await prisma.room.create({
     data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `10${Math.floor(Math.random() * 90 + 10)}` },

@@ -96,7 +96,7 @@ describe("Phase 3 tenant isolation: profiles, reservations, groups, tape-chart",
     propertyBId = propertyB.id;
 
     const roomTypeA = await prisma.roomType.create({
-      data: { propertyId: propertyAId, name: "Standard", code: "STD", maxOccupancy: 2, basePrice: 100 },
+      data: { propertyId: propertyAId, name: "Standard", code: "STD", maxOccupancy: 2 },
     });
     roomTypeAId = roomTypeA.id;
 

@@ -33,7 +33,6 @@ type RoomType = {
   name: string
   code: string
   maxOccupancy: number
-  basePrice: number
   baseOccupancy: number
   description?: string
   isActive: boolean
@@ -57,7 +56,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
     name: "",
     code: "",
     maxOccupancy: "2",
-    basePrice: "100.00",
     baseOccupancy: "2",
     description: "",
     isInactive: false,
@@ -96,7 +94,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           name: formData.name,
           code: formData.code,
           maxOccupancy: parseInt(formData.maxOccupancy),
-          basePrice: parseFloat(formData.basePrice),
           baseOccupancy: parseInt(formData.baseOccupancy),
           description: formData.description || undefined,
           isActive: !formData.isInactive,
@@ -141,7 +138,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
 
   const resetForm = () => {
     setFormData({
-      name: "", code: "", maxOccupancy: "2", basePrice: "100.00", baseOccupancy: "2", description: "",
+      name: "", code: "", maxOccupancy: "2", baseOccupancy: "2", description: "",
       isInactive: false, isPseudo: false, housekeepingEnabled: true, features: [],
     })
     setIsEditMode(false)
@@ -153,7 +150,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
       name: rt.name,
       code: rt.code,
       maxOccupancy: rt.maxOccupancy.toString(),
-      basePrice: rt.basePrice.toString(),
       baseOccupancy: rt.baseOccupancy.toString(),
       description: rt.description || "",
       isInactive: !rt.isActive,
@@ -224,33 +220,21 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="basePrice">Default Base Price</Label>
-                    <Input
-                      id="basePrice"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.basePrice}
-                      onChange={(e) => setFormData({...formData, basePrice: e.target.value})}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">Charged per night whenever a reservation has no rate plan/calendar price selected.</p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="baseOccupancy">Base Occupancy (Adults)</Label>
-                    <Input
-                      id="baseOccupancy"
-                      type="number"
-                      min="1"
-                      value={formData.baseOccupancy}
-                      onChange={(e) => setFormData({...formData, baseOccupancy: e.target.value})}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Details) applies.</p>
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="baseOccupancy">Base Occupancy (Adults)</Label>
+                  <Input
+                    id="baseOccupancy"
+                    type="number"
+                    min="1"
+                    value={formData.baseOccupancy}
+                    onChange={(e) => setFormData({...formData, baseOccupancy: e.target.value})}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Details) applies.</p>
                 </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Default nightly price is set per room type on the locked <span className="font-medium">Base Rate</span> plan (Revenue &gt; Rate Plans &gt; Calendar) — it applies whenever no other rate plan has a price for the date.
+                </p>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description (Optional)</Label>
                   <Input
@@ -330,7 +314,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Code</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Base Price</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
             </TableRow>
@@ -338,11 +321,11 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
           <TableBody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
               ))
             ) : roomTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-0">
+                <TableCell colSpan={5} className="py-0">
                   <EmptyState icon={BedDouble} title="No room types found" description="Create one to get started." />
                 </TableCell>
               </TableRow>
@@ -352,7 +335,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                   <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
                   <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons ({rt.baseOccupancy} base)</TableCell>
-                  <TableCell className="px-6 py-4 text-muted-foreground">${rt.basePrice.toFixed(2)}</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">
                     <div className="flex gap-1.5">
                       {!rt.isActive && (

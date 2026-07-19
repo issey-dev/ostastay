@@ -99,7 +99,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     });
 
     const roomTypeA = await prisma.roomType.create({
-      data: { propertyId: propertyAId, name: "Standard", code: "STD", maxOccupancy: 2, basePrice: 100 },
+      data: { propertyId: propertyAId, name: "Standard", code: "STD", maxOccupancy: 2 },
     });
     roomTypeAId = roomTypeA.id;
     const roomA = await prisma.room.create({

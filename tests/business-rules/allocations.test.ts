@@ -79,7 +79,7 @@ async function setupWithAllocation(opts: {
   });
 
   const roomType = await prisma.roomType.create({
-    data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 6, basePrice: 100 },
+    data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 6 },
   });
   const room = await prisma.room.create({
     data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `1${Math.floor(Math.random() * 900 + 100)}` },

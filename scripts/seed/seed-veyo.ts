@@ -118,12 +118,12 @@ async function main() {
   const deluxe =
     (await prisma.roomType.findFirst({ where: { propertyId: property.id, code: "DLX" } })) ||
     (await prisma.roomType.create({
-      data: { propertyId: property.id, name: "Deluxe Beach Villa", code: "DLX", basePrice: 250, maxOccupancy: 2 },
+      data: { propertyId: property.id, name: "Deluxe Beach Villa", code: "DLX", maxOccupancy: 2 },
     }));
   const suite =
     (await prisma.roomType.findFirst({ where: { propertyId: property.id, code: "STE" } })) ||
     (await prisma.roomType.create({
-      data: { propertyId: property.id, name: "Overwater Suite", code: "STE", basePrice: 450, maxOccupancy: 4 },
+      data: { propertyId: property.id, name: "Overwater Suite", code: "STE", maxOccupancy: 4 },
     }));
 
   const rooms = [
@@ -141,7 +141,30 @@ async function main() {
     });
   }
 
-  // 6. Rate plans.
+  // 6. Rate plans. Every property gets a locked "Base Rate" at onboarding (see
+  // RatePlan.isLocked) — the default price for any room type/date when nothing
+  // custom applies. This seed backfills its Price Calendar for today through a
+  // year out so Night Audit and the demo both have real fallback pricing.
+  const baseRate = await prisma.ratePlan.upsert({
+    where: { propertyId_code: { propertyId: property.id, code: "BASE" } },
+    update: {},
+    create: { propertyId: property.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
+  });
+  const existingBaseCalendarCount = await prisma.priceCalendar.count({ where: { ratePlanId: baseRate.id } });
+  if (existingBaseCalendarCount === 0) {
+    const basePrices: Record<string, number> = { [deluxe.id]: 250, [suite.id]: 450 };
+    const rows: Array<{ ratePlanId: string; roomTypeId: string; date: Date; price: number }> = [];
+    for (const [roomTypeId, price] of Object.entries(basePrices)) {
+      for (let d = 0; d < 365; d++) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + d);
+        rows.push({ ratePlanId: baseRate.id, roomTypeId, date, price });
+      }
+    }
+    await prisma.priceCalendar.createMany({ data: rows });
+  }
+
   const bar = await prisma.ratePlan.upsert({
     where: { propertyId_code: { propertyId: property.id, code: "BAR" } },
     update: {},

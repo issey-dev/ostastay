@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, Pencil, Trash2, CalendarDays, Check } from "lucide-react"
+import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,6 +34,7 @@ type RatePlan = {
   description?: string
   priority: number
   isNegotiated: boolean
+  isLocked: boolean
   parentRatePlanId: string | null
   derivedAdjustmentType: string | null
   derivedAdjustmentValue: number | null
@@ -185,6 +186,9 @@ export default function RevenueDashboard() {
   }
 
   const isEditMode = !!selectedPlan
+  // The property's system-provisioned Base Rate (see RatePlan.isLocked) can't have its
+  // own identity fields edited or be deleted — only Package Allocations stay live.
+  const isLockedPlan = !!selectedPlan?.isLocked
 
   return (
     <div className="flex flex-col gap-6">
@@ -227,9 +231,18 @@ export default function RevenueDashboard() {
               <DialogContent className="sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleCreateOrUpdate}>
               <DialogHeader>
-                <DialogTitle>{isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  {isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}
+                  {isLockedPlan && (
+                    <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
+                      <Lock className="h-3 w-3" /> Locked
+                    </Badge>
+                  )}
+                </DialogTitle>
                 <DialogDescription>
-                  {isEditMode ? "Modify details for this rate plan." : "Enter the configuration for a new rate plan."}
+                  {isLockedPlan
+                    ? "This is the property's Base Rate — its code, name, priority, and pricing rules are fixed and it can't be deleted. You can still add Package Allocations."
+                    : isEditMode ? "Modify details for this rate plan." : "Enter the configuration for a new rate plan."}
                 </DialogDescription>
               </DialogHeader>
 
@@ -239,30 +252,32 @@ export default function RevenueDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Rate Code <span className="text-destructive">*</span></Label>
-                    <Input required placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                    <Input required disabled={isLockedPlan} placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Priority</Label>
-                    <Input type="number" min="0" value={form.priority} onChange={e => setForm(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
+                    <Input type="number" min="0" disabled={isLockedPlan} value={form.priority} onChange={e => setForm(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
                     <p className="text-xs text-muted-foreground">Lower number = higher priority</p>
                   </div>
                 </div>
 
                 <div className="grid gap-2">
                   <Label>Plan Name <span className="text-destructive">*</span></Label>
-                  <Input required placeholder="Best Available Rate" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  <Input required disabled={isLockedPlan} placeholder="Best Available Rate" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                 </div>
 
                 <div className="grid gap-2">
                   <Label>Description</Label>
-                  <textarea 
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" 
+                  <textarea
+                    disabled={isLockedPlan}
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="Enter details about this rate plan..."
                     value={form.description}
                     onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                   />
                 </div>
 
+                {!isLockedPlan && (
                 <div className="grid gap-2 border rounded-lg p-4 bg-muted/30">
                   <Label>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></Label>
                   <p className="text-xs text-muted-foreground mb-1">
@@ -282,7 +297,7 @@ export default function RevenueDashboard() {
                     <SelectContent>
                       <SelectItem value="__none__">None — independent rate plan</SelectItem>
                       {ratePlans
-                        .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id)
+                        .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id && !r.isLocked)
                         .map(r => (
                           <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
                         ))}
@@ -317,10 +332,12 @@ export default function RevenueDashboard() {
                     </div>
                   )}
                 </div>
+                )}
 
                 <div className="flex items-center space-x-2 mt-auto">
                   <Checkbox
                     id="negotiated"
+                    disabled={isLockedPlan}
                     checked={form.isNegotiated}
                     onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
                   />
@@ -433,11 +450,18 @@ export default function RevenueDashboard() {
                     <TableCell>
                       <span className="font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
                     </TableCell>
-                    <TableCell className="font-mono font-bold text-info">{plan.code}</TableCell>
+                    <TableCell className="font-mono font-bold text-info">
+                      <span className="inline-flex items-center gap-1.5">
+                        {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                        {plan.code}
+                      </span>
+                    </TableCell>
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">
-                        {plan.isNegotiated ? (
+                        {plan.isLocked ? (
+                          <Badge variant="outline" className="text-muted-foreground">Base Rate</Badge>
+                        ) : plan.isNegotiated ? (
                           <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
                         ) : (
                           <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
@@ -465,9 +489,11 @@ export default function RevenueDashboard() {
                       <Button variant="outline" size="icon" onClick={() => handleEdit(plan)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(plan)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {!plan.isLocked && (
+                        <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(plan)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

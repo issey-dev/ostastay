@@ -48,10 +48,15 @@ export async function PUT(
           : parseFloat(body.derivedAdjustmentValue),
     });
 
-    let parentRatePlanId: string | null = null;
-    let derivedAdjustmentType: string | null = null;
-    let derivedAdjustmentValue: number | null = null;
-    if (data.parentRatePlanId) {
+    let parentRatePlanId: string | null = existing.parentRatePlanId;
+    let derivedAdjustmentType: string | null = existing.derivedAdjustmentType;
+    let derivedAdjustmentValue: number | null = existing.derivedAdjustmentValue;
+
+    // A locked plan (the property's system-provisioned Base Rate — see
+    // RatePlan.isLocked) keeps its own identity fields no matter what the client
+    // sends; only Package Allocations remain editable. This mirrors the UI, which
+    // disables those inputs for a locked plan, but is enforced here independently.
+    if (!existing.isLocked && data.parentRatePlanId) {
       if (data.parentRatePlanId === id) {
         return NextResponse.json({ error: "A rate plan cannot derive from itself" }, { status: 400 });
       }
@@ -71,6 +76,10 @@ export async function PUT(
       parentRatePlanId = parent.id;
       derivedAdjustmentType = data.derivedAdjustmentType;
       derivedAdjustmentValue = data.derivedAdjustmentValue;
+    } else if (!existing.isLocked && !data.parentRatePlanId) {
+      parentRatePlanId = null;
+      derivedAdjustmentType = null;
+      derivedAdjustmentValue = null;
     }
 
     // Package contents (full replacement when provided). Any allocation belonging to
@@ -93,20 +102,28 @@ export async function PUT(
 
     const updatedRatePlan = await prisma.ratePlan.update({
       where: { id },
-      data: {
-        code: data.code.toUpperCase(),
-        name: data.name,
-        description: data.description,
-        priority: data.priority,
-        isNegotiated: data.isNegotiated,
-        parentRatePlanId,
-        derivedAdjustmentType,
-        derivedAdjustmentValue,
-        allocationLinks:
-          allocationIds !== undefined
-            ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
-            : undefined,
-      },
+      data: existing.isLocked
+        ? {
+            // Locked plan: only Package Allocations can change.
+            allocationLinks:
+              allocationIds !== undefined
+                ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
+                : undefined,
+          }
+        : {
+            code: data.code.toUpperCase(),
+            name: data.name,
+            description: data.description,
+            priority: data.priority,
+            isNegotiated: data.isNegotiated,
+            parentRatePlanId,
+            derivedAdjustmentType,
+            derivedAdjustmentValue,
+            allocationLinks:
+              allocationIds !== undefined
+                ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
+                : undefined,
+          },
       include: {
         allocationLinks: {
           include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
@@ -138,6 +155,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Rate plan not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, existing.propertyId);
+
+    if (existing.isLocked) {
+      return NextResponse.json({ error: "The Base Rate plan cannot be deleted" }, { status: 400 });
+    }
 
     await prisma.ratePlan.delete({
       where: { id },

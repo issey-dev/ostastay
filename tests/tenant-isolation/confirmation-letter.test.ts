@@ -98,7 +98,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     propertyBId = propertyB.id;
 
     const roomTypeA = await prisma.roomType.create({
-      data: { propertyId: propertyAId, name: "Deluxe", code: "DLX", maxOccupancy: 2, basePrice: 150 },
+      data: { propertyId: propertyAId, name: "Deluxe", code: "DLX", maxOccupancy: 2 },
     });
     roomTypeAId = roomTypeA.id;
 

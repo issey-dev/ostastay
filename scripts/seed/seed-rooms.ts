@@ -34,7 +34,6 @@ async function main() {
       name: "Deluxe King",
       code: "DLX-K",
       maxOccupancy: 2,
-      basePrice: 200,
     }
   })
 
@@ -44,7 +43,6 @@ async function main() {
       name: "Standard Queen",
       code: "STD-Q",
       maxOccupancy: 2,
-      basePrice: 120,
     }
   })
 
