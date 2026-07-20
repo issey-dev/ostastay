@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -93,6 +94,14 @@ export async function POST(request: Request) {
 
     // Execute all upserts in a transaction for atomicity and speed
     await prisma.$transaction(operations);
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "UPDATE",
+      entityType: "PriceCalendar",
+      description: `Bulk-set prices on rate plan ${ratePlan.code}: ${parsedPrice} across ${roomTypeIds.length} room type(s), ${datesToUpdate.length} day(s)`,
+    });
 
     return NextResponse.json({
       success: true,

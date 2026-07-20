@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // PAYMENT removed — payment types are Payment Methods, not charge codes.
 const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM"];
@@ -62,6 +63,15 @@ export async function PUT(
       }
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "ChargeCode",
+      entityId: updatedChargeCode.id,
+      description: `Updated charge code ${updatedChargeCode.code} — ${updatedChargeCode.description}`,
+    });
+
     return NextResponse.json(updatedChargeCode);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -97,6 +107,15 @@ export async function DELETE(
 
     await prisma.chargeCode.delete({
       where: { id },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "ChargeCode",
+      entityId: id,
+      description: `Deleted charge code ${existing.code} — ${existing.description}`,
     });
 
     return new NextResponse(null, { status: 204 });

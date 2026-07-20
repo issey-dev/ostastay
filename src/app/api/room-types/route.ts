@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
+import { logActivity } from '@/lib/activity-log'
 
 const featureSchema = z.object({
   category: z.enum(["BED_TYPE", "ROOM_VIEW", "ROOM_AMENITY"]),
@@ -60,6 +61,15 @@ export async function POST(request: Request) {
         features: features && features.length > 0 ? { create: features } : undefined,
       },
       include: { features: true },
+    })
+
+    await logActivity({
+      ctx,
+      module: 'CONTROLS',
+      action: 'CREATE',
+      entityType: 'RoomType',
+      entityId: roomType.id,
+      description: `Created room type "${roomType.name}" (${roomType.code})`,
     })
 
     return NextResponse.json(roomType, { status: 201 })

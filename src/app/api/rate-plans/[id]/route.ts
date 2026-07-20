@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const updateSchema = z.object({
   name: z.string().min(2),
@@ -153,6 +154,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "UPDATE",
+      entityType: "RatePlan",
+      entityId: updatedRatePlan.id,
+      description: `Updated rate plan "${updatedRatePlan.name}" (${updatedRatePlan.code})`,
+    });
+
     return NextResponse.json(updatedRatePlan);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -185,6 +195,16 @@ export async function DELETE(
     await prisma.ratePlan.delete({
       where: { id },
     });
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "DELETE",
+      entityType: "RatePlan",
+      entityId: id,
+      description: `Deleted rate plan "${existing.name}" (${existing.code})`,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

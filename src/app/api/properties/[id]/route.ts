@@ -69,10 +69,19 @@ export async function DELETE(
     const { id } = await params
     const ctx = await requireSession()
     requirePermission(ctx, "CONTROLS", "delete")
-    await assertPropertyInEnterprise(id, ctx.enterpriseId)
+    const property = await assertPropertyInEnterprise(id, ctx.enterpriseId)
 
     await prisma.property.delete({
       where: { id },
+    })
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "Property",
+      entityId: id,
+      description: `Deleted property "${property.name}" (${property.code})`,
     })
 
     return NextResponse.json({ success: true })

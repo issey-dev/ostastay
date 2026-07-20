@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { RoomStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -86,6 +87,15 @@ export async function POST(request: Request) {
       }
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "Room",
+      entityId: newRoom.id,
+      description: `Created room ${newRoom.roomNumber}`,
+    });
+
     return NextResponse.json(newRoom, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -118,6 +128,15 @@ export async function PATCH(request: Request) {
         where: { id: { in: rooms.map((r) => r.id) } },
         data: { status: body.status as RoomStatus },
       });
+
+      await logActivity({
+        ctx,
+        module: "HOUSEKEEPING",
+        action: "UPDATE",
+        entityType: "Room",
+        description: `Set ${result.count} room(s) to ${body.status} (${rooms.map((r) => r.roomNumber).join(", ")})`,
+      });
+
       return NextResponse.json({ success: true, count: result.count });
     }
 
@@ -136,7 +155,14 @@ export async function PATCH(request: Request) {
       data: { status: body.status as RoomStatus },
     });
 
-    // In a real system, you would create an Audit Log entry here for the status change
+    await logActivity({
+      ctx,
+      module: "HOUSEKEEPING",
+      action: "UPDATE",
+      entityType: "Room",
+      entityId: updatedRoom.id,
+      description: `Set room ${updatedRoom.roomNumber} status to ${body.status}`,
+    });
 
     return NextResponse.json(updatedRoom);
   } catch (error) {

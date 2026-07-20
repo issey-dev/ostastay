@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { addDays, differenceInDays, startOfDay } from "date-fns";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 import { applyRateAdjustment } from "@/lib/derived-rate";
 
 const bulkUpsertSchema = z.object({
@@ -144,6 +145,14 @@ export async function POST(request: Request) {
 
     // Execute all upserts in a transaction
     await prisma.$transaction(upserts);
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "UPDATE",
+      entityType: "PriceCalendar",
+      description: `Set prices for ${roomType.code} on rate plan ${ratePlan.code}: ${data.price} (${data.startDate} to ${data.endDate}, ${totalDays} day(s))`,
+    });
 
     return NextResponse.json({ success: true, updatedDays: totalDays });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -126,6 +127,15 @@ export async function POST(request: Request) {
           include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
         },
       },
+    });
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "CREATE",
+      entityType: "RatePlan",
+      entityId: newRatePlan.id,
+      description: `Created rate plan "${newRatePlan.name}" (${newRatePlan.code})`,
     });
 
     return NextResponse.json(newRatePlan, { status: 201 });

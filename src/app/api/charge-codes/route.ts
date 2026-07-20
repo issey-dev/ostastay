@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // PAYMENT removed — payment types are Payment Methods, not charge codes.
 const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM"];
@@ -69,6 +70,15 @@ export async function POST(request: Request) {
       include: {
         taxProfile: true
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "ChargeCode",
+      entityId: newChargeCode.id,
+      description: `Created charge code ${newChargeCode.code} — ${newChargeCode.description}`,
     });
 
     return NextResponse.json(newChargeCode, { status: 201 });

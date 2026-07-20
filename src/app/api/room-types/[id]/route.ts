@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
+import { logActivity } from '@/lib/activity-log'
 
 const featureSchema = z.object({
   category: z.enum(["BED_TYPE", "ROOM_VIEW", "ROOM_AMENITY"]),
@@ -68,6 +69,17 @@ export async function PUT(
       return updated
     })
 
+    await logActivity({
+      ctx,
+      module: 'CONTROLS',
+      action: 'UPDATE',
+      entityType: 'RoomType',
+      entityId: roomType.id,
+      description: isBeingDeactivated
+        ? `Deactivated room type "${roomType.name}" (${roomType.code}) — its rooms set to Out of Service`
+        : `Updated room type "${roomType.name}" (${roomType.code})`,
+    })
+
     return NextResponse.json(roomType)
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -100,6 +112,15 @@ export async function DELETE(
 
     await prisma.roomType.delete({
       where: { id: id },
+    })
+
+    await logActivity({
+      ctx,
+      module: 'CONTROLS',
+      action: 'DELETE',
+      entityType: 'RoomType',
+      entityId: id,
+      description: `Deleted room type "${existing.name}" (${existing.code}) and its rooms`,
     })
 
     return new NextResponse(null, { status: 204 })
