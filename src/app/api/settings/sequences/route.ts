@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 // Just the plain integer counter itself — no prefix/format handling here (that's
 // EnterpriseSettings.resConfirmPrefix's job for confirmation numbers elsewhere). These
@@ -54,6 +55,15 @@ export async function PUT(request: Request) {
       where: { propertyId_sequenceType: { propertyId: data.propertyId, sequenceType: data.sequenceType } },
       update: { currentValue: data.currentValue },
       create: { propertyId: data.propertyId, sequenceType: data.sequenceType, currentValue: data.currentValue },
+    })
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "PropertySequence",
+      entityId: updated.id,
+      description: `Set sequence ${data.sequenceType} to ${data.currentValue}`,
     })
 
     return NextResponse.json(updated)

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(
   request: Request,
@@ -49,6 +50,16 @@ export async function PATCH(
         name: body.name,
       },
     });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "Enterprise",
+      entityId: enterprise.id,
+      description: `Updated enterprise "${enterprise.name}"`,
+    });
+
     return NextResponse.json(enterprise);
   } catch (error) {
     const { status, body } = toErrorResponse(error);

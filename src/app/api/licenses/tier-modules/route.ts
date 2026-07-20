@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // Scaffold only — see src/lib/scope.ts's requireModuleLicensed(). This just lets the
 // Licensing tab display/edit the (currently mostly-empty) TierModuleAccess table; it is
@@ -45,6 +46,15 @@ export async function PATCH(request: Request) {
       where: { tier_module: { tier: body.tier, module: body.module } },
       update: { enabled: body.enabled },
       create: { tier: body.tier, module: body.module, enabled: body.enabled },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "TierModuleAccess",
+      entityId: row.id,
+      description: `${body.enabled ? "Enabled" : "Disabled"} module ${body.module} for tier ${body.tier}`,
     });
 
     return NextResponse.json(row);

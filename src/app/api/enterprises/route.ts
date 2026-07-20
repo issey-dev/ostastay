@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { slugify } from "@/lib/slug";
+import { logActivity } from "@/lib/activity-log";
 
 // Enterprise management is Osta-only — this is the renamed, real replacement for the old
 // /api/tenants (which had zero auth and let anyone list/create tenants).
@@ -57,6 +58,15 @@ export async function POST(request: Request) {
         },
       },
       include: { license: true },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "Enterprise",
+      entityId: enterprise.id,
+      description: `Created enterprise "${enterprise.name}" (${enterprise.slug})`,
     });
 
     return NextResponse.json(enterprise, { status: 201 });

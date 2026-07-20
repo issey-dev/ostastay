@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { OUTLET_TYPES, TAX_OVERRIDE_MODES } from "../route";
+import { logActivity } from "@/lib/activity-log";
 
 const OUTLET_INCLUDE = {
   taxProfile: { include: { rates: true } },
@@ -122,6 +123,15 @@ export async function PATCH(
       return tx.outlet.findUniqueOrThrow({ where: { id }, include: OUTLET_INCLUDE });
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "Outlet",
+      entityId: updatedOutlet.id,
+      description: `Updated outlet "${updatedOutlet.name}"`,
+    });
+
     return NextResponse.json(updatedOutlet);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -159,6 +169,15 @@ export async function DELETE(
     }
 
     await prisma.outlet.delete({ where: { id } });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "Outlet",
+      entityId: id,
+      description: `Deleted outlet "${existing.name}"`,
+    });
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

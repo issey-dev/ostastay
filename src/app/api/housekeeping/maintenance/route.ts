@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +42,14 @@ export async function POST(request: Request) {
 
     const result = await prisma.roomMaintenance.createMany({
       data: dataToInsert
+    })
+
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "CREATE",
+      entityType: "RoomMaintenance",
+      description: `Reported ${issueType} issue for room(s) ${rooms.map((r) => r.roomNumber).join(", ")}: ${description}`,
     })
 
     return NextResponse.json({ success: true, count: result.count })

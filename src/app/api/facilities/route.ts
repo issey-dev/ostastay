@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +42,15 @@ export async function POST(request: Request) {
         name: body.name,
         description: body.description,
       },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "Facility",
+      entityId: newFacility.id,
+      description: `Created facility "${newFacility.name}"`,
     });
 
     return NextResponse.json(newFacility, { status: 201 });

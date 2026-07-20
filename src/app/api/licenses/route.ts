@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // Non-Osta enterprises can view their own license (read-only, so an admin understands
 // why e.g. property creation was rejected) but only Osta staff can change it — see the
@@ -58,6 +59,16 @@ export async function PATCH(request: Request) {
         maxProperties: body.maxProperties !== undefined ? parseInt(body.maxProperties) : 1,
         notes: body.notes,
       },
+    });
+
+    const target = await prisma.enterprise.findUnique({ where: { id: body.enterpriseId }, select: { name: true } });
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "EnterpriseLicense",
+      entityId: license.id,
+      description: `Updated license for enterprise "${target?.name ?? body.enterpriseId}" — tier ${license.tier}, max ${license.maxProperties} propert${license.maxProperties === 1 ? "y" : "ies"}`,
     });
 
     return NextResponse.json(license);

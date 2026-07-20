@@ -53,6 +53,7 @@ export async function GET(
         systemDate: new Date(),
         defaultAccommodationChargeCodeId: null,
         cityLedgerPaymentMethodId: null,
+        commissionChargeCodeId: null,
         invoiceBrandName: "Cozy Guest House",
         invoiceLogoUrl: "",
         invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,

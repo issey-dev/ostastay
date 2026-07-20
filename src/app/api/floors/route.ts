@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
+import { logActivity } from '@/lib/activity-log'
 
 const createSchema = z.object({
   buildingId: z.string().uuid(),
@@ -24,6 +25,15 @@ export async function POST(request: Request) {
 
     const floor = await prisma.floor.create({
       data,
+    })
+
+    await logActivity({
+      ctx,
+      module: 'CONTROLS',
+      action: 'CREATE',
+      entityType: 'Floor',
+      entityId: floor.id,
+      description: `Created floor "${floor.name}" in building "${building.name}"`,
     })
 
     return NextResponse.json(floor, { status: 201 })

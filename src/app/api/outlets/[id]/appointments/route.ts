@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const DEFAULT_DURATION_MS = 60 * 60 * 1000; // 1 hour, used only for overlap computation
 // when no endTime is given — the stored row keeps endTime null either way.
@@ -134,6 +135,19 @@ export async function POST(
         capWarning = { cap: outlet.appointmentCapPerSlot, overlappingCount };
       }
     }
+
+    await logActivity({
+      ctx,
+      module: "POS",
+      action: "CREATE",
+      entityType: "OutletAppointment",
+      entityId: appointment.id,
+      description: `Booked appointment at "${outlet.name}" for ${
+        appointment.reservation?.primaryGuest
+          ? `${appointment.reservation.primaryGuest.firstName} ${appointment.reservation.primaryGuest.lastName}`
+          : walkInGuestName
+      } on ${newStart.toISOString()}`,
+    });
 
     return NextResponse.json({ appointment, capWarning }, { status: 201 });
   } catch (error) {

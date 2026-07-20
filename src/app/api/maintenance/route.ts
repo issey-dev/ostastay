@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -61,6 +62,15 @@ export async function POST(request: Request) {
       include: { room: true }
     });
 
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "CREATE",
+      entityType: "RoomMaintenance",
+      entityId: order.id,
+      description: `Opened ${order.issueType} maintenance ticket for room ${room.roomNumber}: ${order.description}`,
+    });
+
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -110,6 +120,15 @@ export async function PATCH(request: Request) {
       include: { room: true }
     });
 
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "UPDATE",
+      entityType: "RoomMaintenance",
+      entityId: updatedTicket.id,
+      description: `Updated maintenance ticket for room ${updatedTicket.room.roomNumber}${status ? ` — status ${status}` : ""}`,
+    });
+
     return NextResponse.json(updatedTicket);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -140,6 +159,15 @@ export async function DELETE(request: Request) {
 
     await prisma.roomMaintenance.delete({
       where: { id: ticketId }
+    });
+
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "DELETE",
+      entityType: "RoomMaintenance",
+      entityId: ticketId,
+      description: `Deleted maintenance ticket for room ${existing.room.roomNumber} (${existing.issueType})`,
     });
 
     return NextResponse.json({ success: true });

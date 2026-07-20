@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from '@/lib/scope'
+import { logActivity } from '@/lib/activity-log'
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,15 @@ export async function POST(request: Request) {
       }
     })
 
+    await logActivity({
+      ctx,
+      module: 'CONTROLS',
+      action: 'CREATE',
+      entityType: 'SystemCode',
+      entityId: newCode.id,
+      description: `Created system code ${newCode.code} ("${newCode.value}") in ${newCode.category}`,
+    })
+
     return NextResponse.json(newCode)
   } catch (error: any) {
     if (error.code === 'P2002') {
@@ -79,6 +89,15 @@ export async function PUT(request: Request) {
         })
       )
       await prisma.$transaction(updates)
+
+      await logActivity({
+        ctx,
+        module: 'CONTROLS',
+        action: 'UPDATE',
+        entityType: 'SystemCode',
+        description: `Updated ${body.length} system code(s) (bulk reorder/edit)`,
+      })
+
       return NextResponse.json({ success: true })
     } else {
       // Single update
@@ -98,6 +117,15 @@ export async function PUT(request: Request) {
           isActive
         }
       })
+      await logActivity({
+        ctx,
+        module: 'CONTROLS',
+        action: 'UPDATE',
+        entityType: 'SystemCode',
+        entityId: updatedCode.id,
+        description: `Updated system code ${updatedCode.code} ("${updatedCode.value}") in ${updatedCode.category}`,
+      })
+
       return NextResponse.json(updatedCode)
     }
   } catch (error) {

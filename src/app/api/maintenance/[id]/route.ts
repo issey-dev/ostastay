@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PATCH(
   request: Request,
@@ -33,6 +34,15 @@ export async function PATCH(
       }
     });
 
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "UPDATE",
+      entityType: "RoomMaintenance",
+      entityId: order.id,
+      description: `Set maintenance ticket for room ${existing.room.roomNumber} to ${body.status}`,
+    });
+
     return NextResponse.json(order);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -62,6 +72,16 @@ export async function DELETE(
     await prisma.roomMaintenance.delete({
       where: { id }
     });
+
+    await logActivity({
+      ctx,
+      module: "MAINTENANCE",
+      action: "DELETE",
+      entityType: "RoomMaintenance",
+      entityId: id,
+      description: `Deleted maintenance ticket for room ${existing.room.roomNumber} (${existing.issueType})`,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

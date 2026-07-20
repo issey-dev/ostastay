@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const STATUSES = ["SCHEDULED", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
@@ -41,6 +42,18 @@ export async function PATCH(
         chargeCode: true,
         reservation: { include: { primaryGuest: true } },
       },
+    });
+
+    await logActivity({
+      ctx,
+      module: "POS",
+      action: body.status !== undefined && body.status !== existing.status ? body.status : "UPDATE",
+      entityType: "OutletAppointment",
+      entityId: updated.id,
+      description:
+        body.status !== undefined && body.status !== existing.status
+          ? `Marked appointment at "${outlet.name}" as ${body.status}`
+          : `Updated appointment at "${outlet.name}"`,
     });
 
     return NextResponse.json(updated);

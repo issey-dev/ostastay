@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +33,15 @@ export async function POST(request: Request) {
         notes,
         scheduledDate: new Date()
       }
+    })
+
+    await logActivity({
+      ctx,
+      module: "HOUSEKEEPING",
+      action: "CREATE",
+      entityType: "HousekeepingTask",
+      entityId: task.id,
+      description: `Created special request for room ${room.roomNumber}: ${notes}`,
     })
 
     return NextResponse.json(task, { status: 201 })
@@ -68,6 +78,15 @@ export async function PATCH(request: Request) {
         status,
         completedAt: status === "COMPLETED" ? new Date() : null
       }
+    })
+
+    await logActivity({
+      ctx,
+      module: "HOUSEKEEPING",
+      action: "UPDATE",
+      entityType: "HousekeepingTask",
+      entityId: task.id,
+      description: `Set housekeeping task for room ${existing.room.roomNumber} to ${status}`,
     })
 
     return NextResponse.json(task)
