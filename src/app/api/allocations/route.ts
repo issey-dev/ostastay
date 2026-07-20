@@ -82,6 +82,15 @@ export async function POST(request: Request) {
       },
     });
 
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "CREATE",
+      entityType: "Allocation",
+      entityId: allocation.id,
+      description: `Created allocation "${allocation.name}" (${allocation.code})`,
+    });
+
     return NextResponse.json(allocation, { status: 201 });
   } catch (error: unknown) {
     if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {

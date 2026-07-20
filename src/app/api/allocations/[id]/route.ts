@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 import { ALLOCATION_TYPES, POSTING_RHYTHMS, ALLOCATION_MODES, parseRatesInput } from "@/lib/allocations";
 
 export async function PUT(
@@ -70,6 +71,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "UPDATE",
+      entityType: "Allocation",
+      entityId: allocation.id,
+      description: `Updated allocation "${allocation.name}" (${allocation.code})`,
+    });
+
     return NextResponse.json(allocation);
   } catch (error: unknown) {
     if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {
@@ -106,6 +116,16 @@ export async function DELETE(
     }
 
     await prisma.allocation.delete({ where: { id } });
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "DELETE",
+      entityType: "Allocation",
+      entityId: id,
+      description: `Deleted allocation "${existing.name}" (${existing.code})`,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

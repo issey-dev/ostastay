@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET() {
   try {
@@ -35,6 +36,15 @@ export async function POST(request: Request) {
         type: body.type,
         isActive: body.isActive ?? true,
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "PaymentMethod",
+      entityId: newPaymentMethod.id,
+      description: `Created payment method "${newPaymentMethod.name}" (${newPaymentMethod.type})`,
     });
 
     return NextResponse.json(newPaymentMethod, { status: 201 });

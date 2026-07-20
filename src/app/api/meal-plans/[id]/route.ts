@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PUT(
   request: Request,
@@ -59,6 +60,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "UPDATE",
+      entityType: "MealPlan",
+      entityId: mealPlan.id,
+      description: `Updated meal plan "${mealPlan.name}" (${mealPlan.code})`,
+    });
+
     return NextResponse.json(mealPlan);
   } catch (error: any) {
     if (error.code === "P2002") {
@@ -88,6 +98,16 @@ export async function DELETE(
     // referencing this plan's code keep their string value — it simply stops
     // resolving to anything at Night Audit, same as an unconfigured meal plan.
     await prisma.mealPlan.delete({ where: { id } });
+
+    await logActivity({
+      ctx,
+      module: "REVENUE",
+      action: "DELETE",
+      entityType: "MealPlan",
+      entityId: id,
+      description: `Deleted meal plan "${existing.name}" (${existing.code})`,
+    });
+
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
