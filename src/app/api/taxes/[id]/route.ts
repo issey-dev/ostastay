@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PUT(
   request: Request,
@@ -64,6 +65,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "TaxProfile",
+      entityId: updatedTaxProfile.id,
+      description: `Updated tax profile "${updatedTaxProfile.name}"`,
+    });
+
     return NextResponse.json(updatedTaxProfile);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -87,6 +97,15 @@ export async function DELETE(
 
     await prisma.taxProfile.delete({
       where: { id },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "TaxProfile",
+      entityId: id,
+      description: `Deleted tax profile "${existing.name}"`,
     });
 
     return new NextResponse(null, { status: 204 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET() {
   try {
@@ -57,6 +58,15 @@ export async function POST(request: Request) {
       include: {
         rates: { orderBy: { order: 'asc' } }
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "TaxProfile",
+      entityId: newTaxProfile.id,
+      description: `Created tax profile "${newTaxProfile.name}" with ${newTaxProfile.rates.length} tax line(s)`,
     });
 
     return NextResponse.json(newTaxProfile, { status: 201 });
