@@ -22,10 +22,18 @@ export async function GET(request: Request) {
         allocationLinks: {
           include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
         },
+        agentAccess: { select: { upid: true } },
       },
       orderBy: { priority: 'asc' }, // Higher priority (lower number) first
     });
-    return NextResponse.json(ratePlans);
+    // Flatten agentAccess into a plain id list — only meaningful when isNegotiated is
+    // true, see RatePlanAgentAccess. The reservation form's rate-plan selector uses
+    // this to restrict a negotiated plan to bookings through one of these profiles.
+    const withAgentIds = ratePlans.map((rp) => ({
+      ...rp,
+      negotiatedForProfileIds: rp.agentAccess.map((a) => a.upid),
+    }));
+    return NextResponse.json(withAgentIds);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -114,6 +122,8 @@ export async function POST(request: Request) {
         description: body.description,
         priority: parseInt(body.priority) || 10,
         isNegotiated: !!body.isNegotiated,
+        isComplimentary: !!body.isComplimentary,
+        isHouseUse: !!body.isHouseUse,
         chargeCodeId,
         parentRatePlanId,
         derivedAdjustmentType,

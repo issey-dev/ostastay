@@ -79,6 +79,12 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "The City Ledger settlement method must be a CITY_LEDGER payment method" }, { status: 400 });
       }
     }
+    if (body.commissionChargeCodeId) {
+      const cc = await prisma.chargeCode.findUnique({ where: { id: body.commissionChargeCodeId } });
+      if (!cc || cc.enterpriseId !== enterpriseId) {
+        return NextResponse.json({ error: "Commission charge code not found" }, { status: 400 });
+      }
+    }
     const normalizeId = (v: unknown) => (v === undefined ? undefined : v || null);
 
     const settings = await prisma.enterpriseSettings.upsert({
@@ -89,6 +95,7 @@ export async function PATCH(request: Request) {
 
         defaultAccommodationChargeCodeId: normalizeId(body.defaultAccommodationChargeCodeId),
         cityLedgerPaymentMethodId: normalizeId(body.cityLedgerPaymentMethodId),
+        commissionChargeCodeId: normalizeId(body.commissionChargeCodeId),
 
         invoiceBrandName: body.invoiceBrandName !== undefined ? body.invoiceBrandName : undefined,
         invoiceLogoUrl: body.invoiceLogoUrl !== undefined ? body.invoiceLogoUrl : undefined,
@@ -134,6 +141,7 @@ export async function PATCH(request: Request) {
 
         defaultAccommodationChargeCodeId: body.defaultAccommodationChargeCodeId || null,
         cityLedgerPaymentMethodId: body.cityLedgerPaymentMethodId || null,
+        commissionChargeCodeId: body.commissionChargeCodeId || null,
 
         invoiceBrandName: body.invoiceBrandName || "",
         invoiceLogoUrl: body.invoiceLogoUrl || "",

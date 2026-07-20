@@ -20,6 +20,9 @@ const CATEGORIES = [
   { value: "OTHERS", label: "Others" },
   { value: "TAX", label: "Tax" },
   { value: "SYSTEM", label: "System" },
+  // For lines that shouldn't count as room/F&B/etc. revenue — e.g. a Travel Agent
+  // Commission credit posted at checkout (see EnterpriseSettings.commissionChargeCodeId).
+  { value: "NON_REVENUE", label: "Non-Revenue" },
 ]
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(CATEGORIES.map(c => [c.value, c.label]))
 

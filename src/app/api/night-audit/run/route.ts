@@ -272,6 +272,7 @@ export async function POST(request: Request) {
             data: {
               folioId: targetFolioId,
               chargeCodeId: roomCode.id,
+              roomAssignmentId: activeAssignment.id,
               amount: baseAmount,
               taxAmount,
               serviceChargeAmount,
@@ -309,6 +310,7 @@ export async function POST(request: Request) {
               data: {
                 folioId: targetFolioId,
                 chargeCodeId: roomCode.id,
+                roomAssignmentId: activeAssignment.id,
                 amount: extraOccupancy.baseAmount,
                 taxAmount: extraOccupancy.taxAmount,
                 serviceChargeAmount: extraOccupancy.serviceChargeAmount,

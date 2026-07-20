@@ -19,6 +19,7 @@ export function PostingDefaultsManager() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [accommodationId, setAccommodationId] = useState("")
   const [cityLedgerId, setCityLedgerId] = useState("")
+  const [commissionId, setCommissionId] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
@@ -34,6 +35,7 @@ export function PostingDefaultsManager() {
         if (Array.isArray(pm)) setPaymentMethods(pm)
         setAccommodationId(settings?.defaultAccommodationChargeCodeId || "")
         setCityLedgerId(settings?.cityLedgerPaymentMethodId || "")
+        setCommissionId(settings?.commissionChargeCodeId || "")
       })
       .finally(() => setLoading(false))
   }, [])
@@ -48,6 +50,7 @@ export function PostingDefaultsManager() {
         body: JSON.stringify({
           defaultAccommodationChargeCodeId: accommodationId || "",
           cityLedgerPaymentMethodId: cityLedgerId || "",
+          commissionChargeCodeId: commissionId || "",
         }),
       })
       if (res.ok) {
@@ -102,6 +105,25 @@ export function PostingDefaultsManager() {
         <p className="text-xs text-muted-foreground">
           The payment method used to settle a City Ledger folio when it transfers to a debtor
           account at checkout. Must be a CITY_LEDGER-type Payment Method (add one above).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Commission Charge Code</Label>
+        <SearchableSelect
+          value={commissionId}
+          onChange={setCommissionId}
+          placeholder="Select a commission charge code..."
+          options={[
+            { value: "", label: "None (disables commission posting)" },
+            ...chargeCodes.map(c => ({ label: `${c.code} — ${c.description}`, value: c.id })),
+          ]}
+        />
+        <p className="text-xs text-muted-foreground">
+          The charge code a Travel Agent commission credit posts against when a City Ledger
+          folio settles to a debtor account at checkout (Profiles &gt; Negotiated Rates). Usually
+          categorized Non-Revenue (Charge Codes above) so it doesn&apos;t inflate room revenue
+          reporting. Leave unset to disable commission posting entirely.
         </p>
       </div>
 

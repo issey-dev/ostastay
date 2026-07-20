@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
+import { calculateFolioCommission } from "@/lib/commission";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
@@ -78,7 +79,29 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // 3b. Travel Agent commission prerequisites, read once outside the transaction —
+    // eligible only when a folio is actually finalizing to this account
+    // (qualifiesForAccount), the account has a commission % linked to whichever rate
+    // plan(s) earned the room revenue, and the enterprise has a Commission charge code
+    // configured (EnterpriseSettings.commissionChargeCodeId). See src/lib/commission.ts.
+    let commissionChargeCode: { id: string } | null = null;
+    let rateLinks: { ratePlanId: string; commissionRate: number | null }[] = [];
+    if (creditAccount && reservation.folios.some(qualifiesForAccount)) {
+      const [settings, links] = await Promise.all([
+        prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } }),
+        prisma.ratePlanAgentAccess.findMany({ where: { upid: creditAccount.upid }, select: { ratePlanId: true, commissionRate: true } }),
+      ]);
+      rateLinks = links;
+      if (settings?.commissionChargeCodeId) {
+        commissionChargeCode = await prisma.chargeCode.findFirst({
+          where: { id: settings.commissionChargeCodeId, enterpriseId: ctx.enterpriseId },
+          select: { id: true },
+        });
+      }
+    }
+
     // 4. Perform check-out in transaction
+    const commissionsPosted: { folioId: string; amount: number; agentName: string }[] = [];
     await prisma.$transaction(async (tx) => {
       // Update Reservation Status
       await tx.reservation.update({
@@ -124,11 +147,34 @@ export async function POST(
               }),
             }
           });
+
+          // Commission credit — posted the moment this folio actually becomes the
+          // account's debtor invoice, on the room revenue it just settled, not before
+          // (see src/lib/commission.ts for the per-rate-plan attribution math).
+          if (qualifiesForAccount(folio) && commissionChargeCode) {
+            const { amount: commissionAmount } = calculateFolioCommission(
+              folio.lineItems, reservation.assignments, rateLinks
+            );
+            if (commissionAmount > 0.01) {
+              const agentName = creditAccount!.companyName || `${creditAccount!.firstName} ${creditAccount!.lastName ?? ""}`.trim();
+              await tx.folioLineItem.create({
+                data: {
+                  folioId: folio.id,
+                  chargeCodeId: commissionChargeCode.id,
+                  amount: -commissionAmount,
+                  description: `Travel Agent Commission — ${agentName}`,
+                  date: new Date(),
+                },
+              });
+              commissionsPosted.push({ folioId: folio.id, amount: commissionAmount, agentName });
+            }
+          }
         }
       }
     });
 
     const finalizedInvoices = reservation.folios.filter((f) => qualifiesForAccount(f)).length;
+    const totalCommission = commissionsPosted.reduce((sum, c) => sum + c.amount, 0);
     await logActivity({
       ctx,
       module: "RESERVATIONS",
@@ -136,7 +182,8 @@ export async function POST(
       entityType: "Reservation",
       entityId: id,
       description: `Checked out ${reservation.confirmationNo}` +
-        (finalizedInvoices > 0 ? ` — ${finalizedInvoices} folio${finalizedInvoices > 1 ? "s" : ""} finalized to City Ledger` : ""),
+        (finalizedInvoices > 0 ? ` — ${finalizedInvoices} folio${finalizedInvoices > 1 ? "s" : ""} finalized to City Ledger` : "") +
+        (totalCommission > 0.01 ? ` — $${totalCommission.toFixed(2)} commission credited to ${commissionsPosted[0].agentName}` : ""),
     });
 
     // 5. Non-blocking credit-limit check against the account's full open balance at
@@ -151,7 +198,7 @@ export async function POST(
       creditLimitWarning = checkCreditLimitWarning(accountBalance, creditAccount.creditLimit);
     }
 
-    return NextResponse.json({ success: true, creditLimitWarning });
+    return NextResponse.json({ success: true, creditLimitWarning, commissionsPosted });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

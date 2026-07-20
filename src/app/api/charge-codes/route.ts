@@ -4,7 +4,7 @@ import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log";
 
 // PAYMENT removed — payment types are Payment Methods, not charge codes.
-const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM"];
+const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM", "NON_REVENUE"];
 
 export async function GET() {
   try {
