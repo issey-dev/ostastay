@@ -82,6 +82,45 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
 
+- **2026-07-20** — **Profiles module redesign**, per direct app-owner request (Loyalty→VIP,
+  multi-row Communications/Address/Identification, CRM section, consolidated Guest/Staff/
+  Company/Corporate table, Stay History). Full design in
+  [PROFILES_REDESIGN_PLAN.md](PROFILES_REDESIGN_PLAN.md), decisions in
+  [DECISIONS.md](DECISIONS.md) "Profiles redesign". Summary:
+  - New child tables `ProfileCommunication`/`ProfileAddress` (real per-row CRUD, at-most-
+    one-primary each) replace the old single-row `ProfileContact`; `ProfileDocument`
+    (Identification) upgraded off destructive replace-all onto the same pattern.
+    `ProfileAttachment` added (URL-referenced list, not real upload). `Profile.vipLevel`
+    replaces `loyaltyTier` (new `VIP_LEVEL` Controls LOV); added `middleName`, `nationality`,
+    `originPropertyId` (set-once breadcrumb).
+  - New `STAFF` profile type, independent of the `User` login/RBAC model (pure directory
+    bucket). Company/Corporate profiles use a single Name field and skip Personal
+    Information/Identification — all four types share one `Profile` table.
+  - New `GET /api/profiles/[upid]/stay-history` — live-computed Future/History stay list +
+    per-stay revenue breakdown by charge code + "Visits to Property"/"Visits to Chain"
+    counts (never stored columns, since `Profile` has no `propertyId`).
+  - `ProfileForm` fully rebuilt around the new section order (Personal Information →
+    Communications → Address → Identification → CRM → Attachments → Notes); new multi-row
+    manager components under `src/components/profiles/`; new read-only profile detail/view
+    page with Overview + Stay History tabs.
+  - Two-phase migration (additive → Prisma-Client backfill of all 5 existing `ProfileContact`
+    rows → destructive drop), same pattern as the earlier Base Rate Plan work. ~15 files
+    outside the Profiles module updated for the `.contacts` → `.communications` rename
+    (invoice/receipt/confirmation-letter data routes, group pickup, print pages, seed
+    script, 2 test files).
+  - Found and fixed a real bug via the new test suite: the documents (Identification) POST
+    route defaulted `isPrimary` to `true` when unspecified (inconsistent with Communications/
+    Address, which default `false`) — every new ID document silently became primary without
+    demoting the previous one. Fixed in both the dedicated route and the profile-create
+    nested-create mapping.
+  - 12 new tests in `tests/business-rules/profile-communications.test.ts`. Full suite
+    210/210 passing, `tsc --noEmit` clean. Seed script (`scripts/seed/seed-veyo.ts`)
+    extended with `VIP_LEVEL`/`PREFERENCE`/`DIETARY_REQ`/`CLASSIFICATION` LOV entries, a
+    sample Note/Attachment/Preference tag on a VIP guest, and a Staff profile — verified to
+    run clean end-to-end.
+  - **Not yet done**: live browser click-through (list page STAFF tab, create→edit
+    redirect, multi-row managers, new view page, Debtors `contextMode="debtor"` regression
+    check) — next step for whoever picks this up.
 - **2026-07-20** — **User Activity Log module** (per direct app-owner request: "proper
   audit log added to each action (view excluded), login and all actions"):
   - **Schema**: `UserActivityLog` (migration `20260720120000_user_activity_log`) —
@@ -109,12 +148,20 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
     CUD, tenant-settings, housekeeping room-status, and the full support-access cycle
     (request/approve/deny/revoke/ENTER — ENTER logs into the target enterprise's
     trail with isSupport=true).
-  - **Not yet wired** (spawned as a follow-up task chip; same 2-line pattern): the
-    low-traffic config CRUD routes — rooms/room-types/rate-plans/price-calendar/
+  - **All remaining routes wired (2026-07-20, follow-up session)**: the low-traffic
+    config CRUD routes — rooms/room-types/rate-plans/price-calendar(+bulk)/
     charge-codes/taxes/payment-methods/meal-plans/allocations/outlets(+appointments)/
-    buildings/floors/facilities/system-codes/sequences/groups[id]/properties/
-    enterprises/licenses/traces/housekeeping-tasks/maintenance, plus the
-    send-confirmation/send-statement emails.
+    buildings/floors/facilities/system-codes/sequences/properties/enterprises/
+    licenses(+tier-modules)/traces/housekeeping-tasks/housekeeping-maintenance/
+    maintenance, plus the send-confirmation (`SEND_CONFIRMATION`) and send-statement
+    (`SEND_STATEMENT`) emails. groups/[id] is GET-only — nothing to wire. Every
+    mutation handler in `src/app/api` now logs.
+  - **Fixed while wiring (auth holes found in passing)**: `payment-methods/[id]`
+    (PATCH/DELETE) and `traces/[id]` (PATCH/DELETE) had NO auth at all — no
+    requireSession, no tenant scoping; any logged-out caller could mutate any
+    enterprise's rows by guessed id. Both now use the standard requireSession +
+    requirePermission + ownership-check pattern of their sibling routes (needed a
+    ctx to log from anyway).
   - **Fixed while testing**: the new sequential confirmation numbers collided
     *across properties* (confirmationNo is globally unique, sequences are
     per-property — two properties both produce "000001"). No-prefix enterprises now

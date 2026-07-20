@@ -864,3 +864,415 @@ App-owner instructions this session, with two design questions the owner answere
   transaction/idempotency, reservation state machine, sequence numbers) also landed in
   the working tree this session — the Night Audit room-charge-code change layers on top
   of that pass's refactor of the same route.
+
+## Profiles redesign (2026-07-20)
+
+Full architecture in [PROFILES_REDESIGN_PLAN.md](PROFILES_REDESIGN_PLAN.md). Per direct
+app-owner request: replace Loyalty with a configurable VIP tier, split single Communication/
+Address/ID fields into real multi-row child tables, add CRM fields, and consolidate all
+profile types (Guest/Staff/Company/Corporate) into one table.
+
+- **Loyalty → VIP**: `Profile.loyaltyTier` removed, replaced with `Profile.vipLevel`
+  (free-string, sourced from a new `VIP_LEVEL` SystemCode LOV in Controls, not a hardcoded
+  enum — matches every other LOV in the app).
+- **ProfileContact split into `ProfileCommunication` + `ProfileAddress`**, each a real
+  multi-row child table (type + value/fields + `isPrimary`), replacing the old
+  one-row-per-profile `ProfileContact`. `ProfileDocument` (Identification) kept its existing
+  shape but was upgraded from destructive `deleteMany+create` "replace-all" to real per-row
+  CRUD, matching Communications/Address. **Rule: at most one primary per profile per
+  resource type** — enforced server-side by demoting all siblings before setting a new
+  primary, never client-trusted.
+- **Communications value validation is type-aware**: EMAIL and MOBILE each have their own
+  regex (`src/lib/profile-communications.ts`), SOCIAL just requires non-empty.
+- **Attachments are a URL-referenced list, not real file upload** — owner confirmed this
+  scope explicitly (no upload/storage infra exists elsewhere in the app to build on).
+- **STAFF is a 4th `ProfileType`, independent of the `User` login/RBAC model** — owner
+  confirmed explicitly. A Staff profile is purely a directory bucket (same fields as Guest);
+  it has zero relation to who can log in or what they can do.
+- **Company/Corporate profiles use a single `Name` field and skip Personal
+  Information/Identification entirely** (`companyName` already existed on `Profile`; the
+  form conditionally renders based on `profileType`) — per the owner's explicit follow-up
+  ("Company and Corporate the personal information and identification is not needed, Name
+  also would be just one single field"). All four profile types share one `Profile` table.
+- **"Visits to Property" and "Visits to Property Chain" are live-computed, never stored
+  columns** — `Profile` has no `propertyId` (shared enterprise-wide, same precedent as
+  Debtors' per-property AR balance against a shared Profile), so a per-property visit count
+  can't be a simple column. Computed on demand by the new `GET /api/profiles/[upid]/
+  stay-history` endpoint from `Reservation` rows, filtered by `propertyId` when the caller
+  has an active property in context.
+- **`Profile.originPropertyId` is a set-once breadcrumb, not a scoping field** — captured
+  from the caller's active property at creation time if it validates against the caller's
+  enterprise, and never changed after. Profile itself stays enterprise-wide/unscoped; this
+  field only answers "where was this profile first created."
+- **Stay History (Future/History tab)** shows past+upcoming reservations with a per-stay
+  revenue breakdown by charge code, computed from non-void folio line items
+  (`amount + taxAmount + serviceChargeAmount`). Split: `RESERVED`/`IN_HOUSE` with a
+  checkout date still in the future → Future; `CHECKED_OUT` → History.
+- Migration `20260720140000_profile_communications_addresses` (additive) →
+  `scripts/dev-tools/backfill-profile-communications.ts` (one-time, historical, ran
+  successfully against all 5 existing `ProfileContact` rows) →
+  `20260720150000_drop_profile_contact` (destructive, drops the old table) — same two-phase
+  pattern as the earlier Base Rate Plan migration.
+- 210/210 suite passing (13 new Profiles tests), `tsc --noEmit` clean.
+
+## Negotiated Rate Plans restricted to specific agent profiles (2026-07-20)
+
+Prompted by the app owner asking what `RatePlan.isNegotiated` (checkbox: "This is a
+negotiated rate (Corporate/Wholesale)") actually did — **answer: nothing**, it was a
+purely cosmetic flag (badge only) with zero gating anywhere, and no mechanism linked a
+Rate Plan to a Profile at all. Per the owner's follow-up request, built the actual
+restriction:
+
+- **New join table `RatePlanAgentAccess`** (migration `20260720142424_rate_plan_agent_access`,
+  additive, `@@unique([ratePlanId, upid])`) links a `RatePlan` to specific Company/Travel
+  Agent `Profile`s. Only meaningful when `RatePlan.isNegotiated` is true; a negotiated plan
+  with zero linked profiles is unselectable by anyone (not a bug — it means "negotiated but
+  not yet configured," same as any negotiated plan with a non-matching travel agent).
+- **Managed from the Profile side**, per the owner's explicit ask: a new "Negotiated Rates"
+  section on the Company/Travel Agent `ProfileForm` (`isB2B`-only, mirrors the Guest-only
+  CRM section's `isIndividual` gating) — a checkbox list of every negotiated Rate Plan
+  across the enterprise's properties (`GET /api/profiles/[upid]/negotiated-rates`), grouped
+  by property, saved via whole-set replace on each toggle (`PUT`, same convention as
+  Preferences). Matching read-only summary added to the profile View page.
+- **Enforced on the reservation form**: `GET /api/rate-plans` now also returns each plan's
+  `negotiatedForProfileIds`. The Room Segments' Rate Plan selector filters out a negotiated
+  plan unless the booking's own Booking Source/Travel Agent field
+  (`Reservation.travelAgentId`) is one of that plan's linked profiles — a non-negotiated
+  plan is never filtered, exactly as before. Group Block pickup is untouched (a block
+  already carries its own fixed rate plan, no free-form selector to restrict).
+  Revenue &gt; Rate Plans' list also gained a "N agents linked" / "No agents linked" badge
+  next to "Negotiated" so an admin can see at a glance whether a negotiated plan is
+  actually reachable by anyone yet.
+- 212/212 suite passing (2 new tests in `tests/business-rules/negotiated-rates.test.ts`:
+  linkage validation incl. rejecting a non-negotiated or cross-enterprise plan, and
+  `negotiatedForProfileIds` exposure on the rate-plans list), `tsc --noEmit` clean.
+  **Live-verified end-to-end**: created a Company profile and a negotiated Rate Plan via
+  the real API, linked them via the real checkbox in the profile's Negotiated Rates
+  section, opened New Booking and confirmed the plan was absent from the Rate Plan
+  dropdown with no Travel Agent selected, then present (labeled "(Negotiated)") the moment
+  that Company was selected as the Booking Source. Test data cleaned up afterward.
+
+## Travel Agent commission, calculated and posted at checkout (2026-07-20)
+
+Follow-up to Negotiated Rate Plans, per direct app-owner request: "make sure a
+commission % amount can be set per rate plan - optional... once room rate is posted
+and settled to city ledger for that account make sure commission is calculated if
+eligible (use a commission charge code created under non revenue)."
+
+- **`RatePlanAgentAccess.commissionRate`** (optional Float, 0-100, validated server-side)
+  — the per-rate-plan-per-agent commission %, set in the same Negotiated Rates section
+  on the Company/Travel Agent profile (checkbox reveals a "%" input). `GET/PUT
+  /api/profiles/[upid]/negotiated-rates` restructured from a flat `ratePlanIds[]` to
+  `links: [{ratePlanId, commissionRate}]` to carry it.
+- **Commission is calculated at *checkout*, not Night Audit** — Night Audit always posts
+  nightly charges to the reservation's own folio regardless of settlement method (see
+  the "Debtors: checkout-triggered invoice pipeline redesign" entry above); a City-Ledger
+  folio only becomes the account's actual debtor invoice (`isDebtorAccount: true`) at
+  checkout. That is the moment "room rate is posted and settled to city ledger" the app
+  owner meant, and the only correct place to calculate a commission against real, final
+  room revenue.
+- **`FolioLineItem.roomAssignmentId`** (new nullable FK to `RoomAssignment`, additive) —
+  Night Audit now tags the Nightly Room Charge and Extra Occupancy Charge lines with
+  which assignment/segment posted them. Needed because a split-stay reservation can span
+  more than one Rate Plan; without this tag there'd be no way to attribute posted room
+  revenue back to the specific plan (and therefore the specific commission rate) that
+  earned it. `src/lib/commission.ts`'s `calculateFolioCommission` is the pure function
+  that does this attribution (assignment → rate plan → commission link → this rate
+  plan's own room-revenue share × its own %), independently unit-tested.
+- **Posted as a *negative* line (a credit) on the same debtor folio**, using the
+  enterprise's configured Commission charge code (`EnterpriseSettings.
+  commissionChargeCodeId`, new Controls > Finance selector) — reduces the net amount the
+  agent's invoice shows, which is the correct real-world treatment (the hotel owes the
+  agent the commission; there's no separate Accounts-Payable ledger in this app to record
+  it against instead, so crediting the same invoice nets it correctly and is the standard
+  small-PMS convention for negotiated/wholesale settlement). **Flagged explicitly to the
+  app owner as the one modeling assumption made without an explicit answer** — if the
+  intended treatment is actually a separate payable that does *not* reduce what the agent
+  is invoiced, this needs revisiting.
+- **"If eligible" is enforced at three independent gates**, any one of which silently
+  disables commission (no error, since it's meant to be optional): (1) the linked rate
+  plan actually has a `commissionRate` set for this specific agent — being merely listed
+  in Negotiated Rates isn't enough; (2) `EnterpriseSettings.commissionChargeCodeId` is
+  configured at all — leaving it unset disables commission posting enterprise-wide; (3)
+  the folio is actually finalizing to a debtor account at this checkout
+  (`qualifiesForAccount`) — a DIRECT-settlement or guest-payable stay never triggers it
+  regardless of any commission rate on file.
+- **New `NON_REVENUE` charge-code category** (Controls > Finance > Charge Codes) so a
+  Commission code doesn't inflate room/F&B revenue reporting — added to both the UI
+  constant and the **separate server-side allowlist** in `src/app/api/charge-codes/
+  route.ts` / `[id]/route.ts` (a real bug caught live: the UI would have offered the
+  category but the API rejected it with "Invalid category" until both lists were
+  updated).
+- 217/217 suite passing (5 new tests in `tests/business-rules/commission.test.ts`: pure
+  attribution/eligibility math, and a full checkout-route integration test for the
+  posted-credit case, the no-charge-code-configured case, and the no-commission-rate-
+  linked case; `negotiated-rates.test.ts` updated for the new `links[]` payload shape).
+  `tsc --noEmit` clean.
+- **Live-verified end-to-end against the real Veyo dev database**: created a `COMM`
+  charge code (category Non-Revenue) via the real Add Charge Code dialog, set it as the
+  Commission Charge Code in Controls > Finance, created a Travel Agent profile and a
+  negotiated Rate Plan, checked the box and typed `15` into the real commission-%
+  input in the profile's Negotiated Rates section (confirmed persisted via a fresh
+  fetch), booked a real reservation on that plan with a $250 override rate, checked it
+  in, ran a real Night Audit (posted $194.25 base room revenue after Maldives tax
+  back-out, tagged with the assignment's id), then checked out and confirmed the
+  response returned `commissionsPosted: [{amount: 29.1375, agentName: "Commission Test
+  Agency"}]` (194.25 × 15%) and the folio gained a real `-29.1375` line item against
+  `COMM`, dropping the Debtors account balance from what it would otherwise have been.
+  Cleaned up the test reservation's side effects afterward (Night Audit had flipped an
+  unrelated pre-existing reservation, RES435395, to NO_SHOW as an incidental side effect
+  of running a real audit in the shared dev database — reinstated it to RESERVED).
+  **Left in place, not test pollution**: the `COMM` charge code and the Commission
+  Charge Code setting are the actual feature configuration, not throwaway test
+  artifacts. **Not fully cleaned up**: the test reservation (VBR0000000003, checked out,
+  real charges) couldn't be deleted per the existing checked-out delete-guard, and its
+  linked test Travel Agent profile *was* deleted successfully — this is the same
+  pre-existing "dangling payeeProfileId" gap already flagged under Debtors above, not a
+  new one.
+
+## Price Calendar bulk-update: silent no-op on an inverted date range (2026-07-20)
+
+Reported by the app owner as "cannot update any price now" — first suspected of being a
+regression from the earlier From/To date-picker split (splitting the combined range
+picker into two independent single-date pickers made an inverted range trivially
+reachable: pick a "To" before the "From" already set, which the old combined
+range-select picker structurally couldn't produce). Investigation found **two separate
+real bugs**, not one:
+
+- **`POST /api/price-calendar/bulk`** (the Rate Details "Bulk Seasonal Pricing Tool",
+  `src/components/revenue/bulk-pricing-tool.tsx`) had no guard against `start > end` at
+  all. Its date-generation `while` loop simply never executed, `datesToUpdate` stayed
+  empty, and an **empty Prisma transaction trivially "succeeds"** — the route returned
+  `{success: true, message: "Successfully updated 0 price records."}` with a 201. The
+  frontend just alerted `data.message` verbatim, so a distracted read looked exactly
+  like "no error, but nothing happened." This is almost certainly what the app owner
+  hit. Fixed: explicit `start > end` check (400, clear message) plus the same 2-year
+  range ceiling the sibling endpoint already had (no cap previously existed here either
+  — a valid-but-huge range risked an oversized transaction).
+- **`POST /api/price-calendar`** (the Price Calendar page's own single-room-type Bulk
+  Update sidebar, `src/app/e/[slug]/dashboard/revenue/calendar/page.tsx`) already
+  rejected an inverted range with a real 400, but the frontend's error handler
+  swallowed the reason behind a generic "Failed to update prices." alert (fixed
+  earlier the same session) and had no client-side pre-check, so the round-trip was
+  needed just to find out what was wrong.
+- **Client-side guards added to both forms** (`from > to`, missing From/To) so the
+  wrong case is caught before a network round-trip, with a message that actually
+  names the problem.
+- **New: Price Calendar auto-navigates to the applied range's month on a successful
+  bulk update.** Splitting the picker in two makes it easy to set a From/To in a month
+  the grid isn't currently showing — previously a successful write left the visible
+  grid unchanged (still "No Rate" for whatever month was on screen), which reads
+  exactly like "no error, but doesn't update" even when the price was written
+  correctly. Not a bug in the write path, but a real, reproducible UX trap worth
+  closing.
+- **5 new tests** in `tests/business-rules/price-calendar-bulk.test.ts` (inverted-range
+  rejection + zero-rows-written assertion for both endpoints, oversized-range rejection
+  for the bulk endpoint, and a valid-range row-count sanity check for both). 222/222
+  suite passing, `tsc --noEmit` clean. **Live-verified end-to-end** against the real
+  Veyo database: reproduced the exact original failure via direct API calls against
+  both endpoints (confirmed the bulk endpoint really did return 201/0-rows pre-fix, and
+  a clear 400 post-fix); then drove the real Price Calendar UI through the full
+  cross-month scenario — set From 05 Aug / To 10 Aug while the grid was showing July,
+  submitted, and confirmed the grid auto-jumped to August and displayed the correct
+  $88.00 across Aug 5–10.
+
+## Price Calendar range bumped to 10 years + negative-amount hardening (2026-07-20)
+
+Follow-up to the above, per direct app-owner request: "why is it limited to two years?
+set the maximum date range to 10 years min 1 day, proper validation as well end date
+cannot be less than begin date... no negative rate amounts."
+
+- **Shared `MAX_PRICE_CALENDAR_RANGE_DAYS`/`_YEARS` constant** added
+  (`src/lib/price-calendar.ts`, `365 * 10`) and used by both `/api/price-calendar` and
+  `/api/price-calendar/bulk` instead of each hardcoding its own `365 * 2` — avoids the
+  two endpoints drifting apart again the way the "2 years" cap did.
+- **`/api/price-calendar/bulk` gained the negative-price/extra-price check it never
+  had** (`price < 0 || extraAdultPrice < 0 || extraChildPrice < 0` → 400) — the
+  single-room endpoint already had this via its Zod schema (`z.number().min(0)`), but
+  the bulk endpoint parsed with plain `parseFloat` + only a `isNaN` check, silently
+  accepting a negative price before now.
+- Min-1-day is unchanged (already enforced — `totalDays < 1` / an inverted-range check
+  — this session's earlier fix), just re-confirmed with an explicit same-day-range test.
+- 9 new tests added to `tests/business-rules/price-calendar-bulk.test.ts` (min-1-day,
+  exact-boundary accept-at-10-years / reject-one-day-over for both endpoints via a
+  computed boundary date rather than a hardcoded one, negative price/extra-price
+  rejection for both endpoints). 228/228 suite passing, `tsc --noEmit` clean.
+
+## Rate Plan: Complimentary / House Use flags (2026-07-20)
+
+Per the same request: "please also set two tickbox on rate plan level to mark them as
+complimentary, house use." Added as **pure classification labels, deliberately with no
+posting/reporting behavior wired yet** — same starting point `isNegotiated` had before
+its Negotiated Rates follow-up (see above). `RatePlan.isComplimentary` /
+`RatePlan.isHouseUse` (migration `20260720162039_rate_plan_comp_house_use`), two new
+checkboxes in the Rate Plan dialog (disabled on the locked Base plan, like the existing
+Negotiated checkbox), and matching badges on the Rate Plan list. 1 new test in
+`base-rate-plan.test.ts` (create + update round-trip, defaults to false when omitted).
+**Flagged, not fixed** (see the redundancy audit the owner also asked for, same
+request): neither flag currently stops Night Audit from posting a real nightly charge —
+a "Complimentary" or "House Use" rate plan bills exactly like any other unless staff
+also manually zero the room's `overrideRate`. Revisit when/if the owner wants automatic
+$0 posting tied to these flags.
+
+## Redundancy audit: Revenue / Rate Plan / Reservation (2026-07-20)
+
+Per the owner's open question in the same request ("anything else that you feel i have
+made redundant..."), a full audit turned up:
+- **`Profile.commissionRate` is a dead, never-read field** (superseded by
+  `RatePlanAgentAccess.commissionRate`) — was still shown as an editable "Commission
+  Rate (%)" field on Company/Travel Agent profiles, and read-only on the profile detail
+  page. **Fixed 2026-07-20** during the full Revenue/Profiles review pass: removed both
+  UI displays (a user filling it in would reasonably assume it affects payouts; it did
+  nothing). The schema column and API accept/store it unchanged (harmless, and dropping
+  it is a separate migration decision) — only the misleading UI is gone.
+- **No mutual-exclusivity guard** between `isComplimentary`/`isHouseUse`/`isLocked`/
+  derived — a plan can be ticked as both, or House Use + derived, with no warning.
+  Matches point above (not wired yet); flagging so it's not forgotten when it is.
+- **`Reservation.mealPlan` and a Derived Rate Plan's own name/composition (e.g.
+  "BAR-BB") are two independent, unsynced pickers** — booking on a "BB"-suffixed rate
+  plan doesn't pre-select or suggest the matching Meal Plan. By design per the existing
+  Meal Plan/Derived Rate Plan decoupling, but worth a UI hint someday.
+- **No seed/onboarding path sets up a Commission charge code** — every new enterprise
+  has commission posting silently disabled until an admin finds Controls > Finance and
+  configures one. Minor onboarding gap, not urgent.
+- Checked and found **no drift** between the two Price Calendar endpoints, and **no
+  charge-code miscategorization** worth moving to `NON_REVENUE`.
+
+## Price Calendar page: multi-room-type Bulk Update (2026-07-20)
+
+Per direct app-owner request: the Price Calendar page's own Bulk Update sidebar only
+ever wrote to whichever single Room Type was selected in the Configuration card,
+forcing the whole select-room-type → set-range → set-price → Apply cycle to be
+repeated once per room type. Rate Details' "Bulk Seasonal Pricing Tool" already solved
+this with a room-type checkbox list backed by `/api/price-calendar/bulk`
+(`roomTypeIds[]`) — ported that same pattern into the Price Calendar page instead of
+maintaining two different UX patterns for the same underlying action.
+
+- New `bulkRoomTypeIds` state, independent of the Configuration card's single Room Type
+  selector (which now only controls what the grid *displays*, not what Apply Prices
+  writes to). Defaults to the currently-viewed room type whenever that selector
+  changes, with a "Select all" / "Clear all" toggle to expand from there.
+- `handleBulkUpdate` now posts to `/api/price-calendar/bulk` (not the single-room
+  `/api/price-calendar`) with the checked room type list — same validation, same
+  auto-navigate-to-month behavior from the earlier date-range fix, unchanged.
+- The Rate Plan pre-selection from the Rate Plans list's "Calendar" link
+  (`?ratePlanId=`) was already working correctly before this change — confirmed, not
+  touched.
+- `tsc --noEmit` clean, full suite 228/228 (no dedicated new tests — this is a pure UI
+  wiring change onto an endpoint the Rate Details tool already exercises).
+  **Live-verified**: checked both room types via Select All, applied a price to July
+  20–31 in one Apply Prices click, got "Successfully updated 24 price records" (12 days
+  × 2 room types), and confirmed via a direct API read that the room type *not* being
+  viewed in the grid (Overwater Suite) received the identical price.
+
+## Price Calendar page: Configuration panel redesign (2026-07-20)
+
+Direct app-owner correction on the multi-room-type redesign above, from a screenshot
+circling the Configuration card: "when i click calender here - it takes me to a generic
+price calender page - but it needs to take the rate withi it so i don't have to take the
+rate again in config part - make it simple... the select rate should show and be loced
+cannot swithc no need to show it twice - the calender view section header part you can
+have a toggle switch buttons to switch between different room types."
+
+- **Rate Plan `<Select>` in Configuration is now locked/disabled** (shows the plan the
+  page was entered with via a specific Rate Plan's "Calendar" link, no `onValueChange`).
+  Reason: the page is always entered scoped to one rate plan, and Bulk Update always
+  writes against that same plan — letting staff switch it there would silently desync
+  what the grid displays from what Apply Prices actually writes to.
+- **Removed the duplicate Room Type `<Select>` from the Configuration card entirely** —
+  it was redundant with the Bulk Update sidebar's own room-type checkbox list added in
+  the entry above.
+- **Room-type switching moved to a toggle-button group in the Calendar Grid's own
+  header** (one button per room type, `default`/`outline` variant reflecting selection)
+  — controls only what the grid *previews*, fully independent of Bulk Update's
+  multi-select checkboxes which control what gets *written*.
+
+## Allocation Calculation mode: Meal Plan vs Rate Plan level (2026-07-20)
+
+Per direct app-owner request, added a top-level per-property toggle in
+Controls > Revenue ("Allocation Calculation") deciding which side drives automatic
+Allocation attachment on a reservation. Two live examples were walked through with the
+owner and confirmed before implementation:
+
+- **Meal Plan level** (`Property.allocationCalculationMode = "MEAL_PLAN"`): the
+  reservation's selected Meal Plan is the only source of automatic allocations (e.g. a
+  "BB" meal plan linked to the `BF` Breakfast allocation in Controls > Revenue > Meal
+  Plans auto-attaches `BF`). A Rate Plan's own Package Allocations (Revenue > Rate Plans)
+  are **disabled and never post**, even if configured.
+- **Rate Plan level** (`"RATE_PLAN"`, the schema default): the assigned Rate Plan's own
+  Package Allocations drive what attaches. The reservation's Meal Plan field becomes
+  display-only — it never affects posting.
+- **Exclusive, not additive** — this replaced `resolveLinkedAllocationIds`'s prior
+  behavior of combining both rate-plan-linked and meal-plan-linked allocations with
+  dedup-by-id. Confirmed with the owner this was intentional, not a bug to preserve.
+- **Scope confirmed by the owner**: per-property (not enterprise-wide) — different
+  properties in the same enterprise can run different modes. **Not retroactive** —
+  switching only affects reservations created or edited *after* the change; existing
+  bookings keep whatever allocations they already materialized. A "refresh rate" tool to
+  re-apply the current mode to an already-booked reservation is planned but explicitly
+  **not built in this pass**.
+- Implementation: `Property.allocationCalculationMode` (migration
+  `20260720172019_allocation_calculation_mode`, default `"RATE_PLAN"`);
+  `resolveLinkedAllocationIds` (`src/lib/allocations.ts`) takes a required `mode` param
+  and branches exclusively; `materializeReservationAllocations`
+  (`src/lib/allocations-server.ts`) fetches the property's mode and passes it through;
+  reservation-form client-side allocation preview mirrors the same branch; new
+  `AllocationCalculationManager` component in Controls > Revenue.
+- 14 tests in `tests/business-rules/allocations.test.ts` (pure-function exclusivity for
+  both modes, materialization integration tests for both modes including the
+  default-when-unset case). Full suite 230/230 passing.
+- **Live-verified against the real Veyo database**: set Veyo to `MEAL_PLAN` mode, linked
+  a Package Allocation (`TRF-AIR`) to the `BAR` rate plan (which had none previously) and
+  confirmed `BB` meal plan already had `BF` linked from seed data, then created a real
+  reservation with `ratePlanId: BAR` and `mealPlan: BB`. Result: only `BF`
+  (`source: "MEAL_PLAN"`) attached; `TRF-AIR` did not — matching the mode's contract
+  exactly. Test reservation, the `TRF-AIR`→`BAR` link, and the mode override were all
+  cleaned up afterward; Veyo is left at the `RATE_PLAN` default.
+
+## Full Revenue/Profiles review pass — bugs found and fixed (2026-07-20)
+
+Per direct app-owner request, once Revenue and Profiles felt feature-complete: "act as a
+senior code reviewer to check for bugs and missing links... fix those issues." Went
+file-by-file through every Revenue and Profiles change made this session (schema,
+migrations, API routes, components, pages). Findings:
+
+- **Missing `/e/{slug}` prefix on client-side navigation — a real, recurring bug
+  class.** Two confirmed instances, both fixed:
+  - Revenue > Rate Plans' "Calendar" link (`revenue/page.tsx`) built
+    `/dashboard/revenue/calendar?ratePlanId=...` with no enterprise-slug prefix. The
+    bare `/dashboard/...` path only resolves through a legacy backward-compat redirect
+    (`src/app/dashboard/[[...rest]]/page.tsx`) that preserves the sub-path but **drops
+    the query string** — so the Price Calendar always silently defaulted to whichever
+    rate plan sorts first (`NRF`, priority 0), no matter which plan's Calendar link was
+    actually clicked. Root-caused live in the browser (clicking BAR/COMMTEST always
+    landed on "Non-Refundable"). Fixed by pulling `slug` via `useParams` and prefixing
+    the link; verified BAR and COMMTEST each now show their own plan/pricing.
+  - The Profiles dashboard (`profiles/page.tsx`) had the identical bug in **six**
+    places — every row-click, Edit button, and the "New {type}" button all pushed bare
+    `/dashboard/profiles/...` paths. Path-only navigations (profile view/edit) still
+    worked via the same redirect since there's no query string to lose, but the "New
+    Company" / "New Travel Agent" / "New Staff" buttons pass `?type=...` — which got
+    dropped, so **every "New X" button silently opened a New Guest form instead**
+    (`new/page.tsx` defaults `type` to `"GUEST"` when the param is absent). Fixed the
+    same way; verified `?type=TRAVEL_AGENT` now survives end to end.
+  - Grepped the whole `src/` tree afterward for the same anti-pattern
+    (`push(\`/dashboard/`) — no other instances found.
+- **`Profile.commissionRate` dead-field UI removed** (see the Redundancy audit entry
+  above, which had flagged but not acted on this) — it actively misled Company/Travel
+  Agent profile users into thinking it affected payouts.
+- Everything else audited clean: all Profiles child-resource routes (communications,
+  addresses, documents, notes, attachments, preferences, negotiated-rates,
+  stay-history) — consistent tenant scoping, validation, and "at most one primary"
+  handling; Rate Plan locked/negotiated/complimentary/house-use logic; Allocation
+  Calculation mode's client/server exclusivity; Price Calendar's date-range/negative-
+  price guards; the full commission attribution and posting pipeline; charge-code
+  `NON_REVENUE` category consistency across all three places it's declared; the
+  Preferences/Room Preferences LOV merge (confirmed zero remaining `ROOM_PREF`
+  references anywhere).
+- Two minor, non-live-bug items intentionally left as-is (unreachable through any
+  current UI path, and per this project's "don't validate scenarios that can't
+  happen" convention): `RatePlanAgentAccess` bulk-replace could theoretically 500 on a
+  duplicate `ratePlanId` in the request body (the checkbox-driven UI can't produce
+  one); `SystemCodeMultiSelect`'s fetch-once ref would get stuck if the same instance
+  were reused with a changing `category` prop (both current call sites are static).
+- Full suite 230/230 passing, `tsc --noEmit` clean after all fixes.
