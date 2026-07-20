@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 async function assertPropertyInEnterprise(id: string, enterpriseId: string) {
   const property = await prisma.property.findUnique({ where: { id } })
@@ -42,6 +43,15 @@ export async function PUT(
         bannerColor: body.bannerColor,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
       },
+    })
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "Property",
+      entityId: property.id,
+      description: `Updated property "${property.name}" (${property.code})`,
     })
 
     return NextResponse.json(property)

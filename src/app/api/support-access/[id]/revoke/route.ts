@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // The target enterprise can revoke an APPROVED grant early at any time — this takes
 // effect immediately because requireSession() re-verifies the grant's status live on
@@ -31,6 +32,15 @@ export async function POST(
     const updated = await prisma.supportAccessGrant.update({
       where: { id },
       data: { status: "REVOKED", revokedAt: new Date() },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "SUPPORT_REVOKE",
+      entityType: "SupportAccessGrant",
+      entityId: id,
+      description: "Revoked an active support access grant",
     });
 
     return NextResponse.json(updated);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -19,9 +21,9 @@ export async function POST(request: Request) {
     const unassignedReservations = await prisma.reservation.findMany({
       where: {
         propertyId,
-        status: {
-          notIn: ["CANCELLED"]
-        },
+        // Only reservations that still hold inventory need a room — assigning one to
+        // a CHECKED_OUT/NO_SHOW stay would just re-block the room for nothing.
+        status: { in: INVENTORY_HOLDING_STATUSES },
         assignments: {
           some: { roomId: null }
         }
@@ -47,12 +49,14 @@ export async function POST(request: Request) {
           where: {
             propertyId,
             roomTypeId: assignment.roomTypeId,
+            // Never auto-assign an out-of-order/out-of-service room.
+            status: { notIn: UNSELLABLE_ROOM_STATUSES },
             NOT: {
               RoomAssignment: {
                 some: {
                   id: { not: assignment.id },
                   reservation: {
-                    status: { notIn: ["CANCELLED"] }
+                    status: { in: INVENTORY_HOLDING_STATUSES }
                   },
                   AND: [
                     { startDate: { lt: assignment.endDate } },
@@ -75,6 +79,15 @@ export async function POST(request: Request) {
           assignedCount++;
         }
       }
+    }
+
+    if (assignedCount > 0) {
+      await logActivity({
+        ctx,
+        module: "RESERVATIONS",
+        action: "UPDATE",
+        description: `Auto-assigned rooms to ${assignedCount} reservation${assignedCount > 1 ? "s" : ""}`,
+      });
     }
 
     return NextResponse.json({

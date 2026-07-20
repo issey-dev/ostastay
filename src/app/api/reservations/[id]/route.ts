@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
+import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
+import { logActivity } from "@/lib/activity-log";
 
 const updateSchema = z.object({
   primaryGuestId: z.string().min(1),
@@ -54,6 +56,22 @@ export async function PUT(
     // Parse and validate the body
     const data = updateSchema.parse(body);
 
+    if (new Date(data.checkOutDate) <= new Date(data.checkInDate)) {
+      return NextResponse.json({ error: "Check-out date must be after check-in date" }, { status: 400 });
+    }
+
+    // Status is lifecycle-managed, never a plain editable field: check-in/check-out
+    // have dedicated routes (room validation, settlement, debtor finalization) and
+    // cancel/no-show/reinstate go through PATCH .../status (transition table +
+    // financial guards). Accepting a different status here would silently bypass all
+    // of that — the form always echoes the current status back.
+    if (data.status !== existing.status) {
+      return NextResponse.json(
+        { error: "Reservation status cannot be changed here — use the Check-In / Check-Out / Cancel actions." },
+        { status: 400 }
+      );
+    }
+
     const primaryGuest = await prisma.profile.findUnique({ where: { upid: data.primaryGuestId } });
     if (!primaryGuest || primaryGuest.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Guest profile not found" }, { status: 404 });
@@ -97,6 +115,39 @@ export async function PUT(
       if (a.roomId && !isExistingRoom && room?.status === "OUT_OF_SERVICE") {
         return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
       }
+      // A specifically-requested room must be free of OTHER reservations' assignments
+      // for the segment's dates (this reservation's own current assignments are
+      // excluded — they're about to be replaced below).
+      if (a.roomId) {
+        const roomTaken = await hasRoomConflict({
+          roomId: a.roomId,
+          startDate: new Date(a.startDate),
+          endDate: new Date(a.endDate),
+          excludeReservationId: id,
+        });
+        if (roomTaken) {
+          return NextResponse.json(
+            { error: `Room ${room?.roomNumber ?? ""} is already booked for the selected dates` },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
+    // Type-level overbooking guard (excluding this reservation's own existing
+    // assignments) — an edit that grows the stay or switches room type must still fit
+    // the property's sellable inventory. See src/lib/availability.ts.
+    const availabilityConflicts = await findTypeAvailabilityConflicts({
+      propertyId: existing.propertyId,
+      segments: data.assignments.map((a) => ({
+        roomTypeId: a.roomTypeId,
+        startDate: new Date(a.startDate),
+        endDate: new Date(a.endDate),
+      })),
+      excludeReservationId: id,
+    });
+    if (availabilityConflicts.length > 0) {
+      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
     }
 
     const updatedReservation = await prisma.reservation.update({
@@ -140,6 +191,15 @@ export async function PUT(
       }
     });
 
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "UPDATE",
+      entityType: "Reservation",
+      entityId: id,
+      description: `Updated reservation ${updatedReservation.confirmationNo} (${new Date(data.checkInDate).toISOString().slice(0, 10)} → ${new Date(data.checkOutDate).toISOString().slice(0, 10)}, ${data.adults} adult${data.adults === 1 ? "" : "s"})`,
+    });
+
     // Re-derive rate-plan/meal-plan allocation rows against the edited values; MANUAL
     // rows are replaced only when the client sent manualAllocationIds, otherwise kept.
     const allocationResult = await materializeReservationAllocations({
@@ -172,14 +232,46 @@ export async function DELETE(
     requirePermission(ctx, "RESERVATIONS", "delete");
 
     const { id } = await params;
-    const existing = await prisma.reservation.findUnique({ where: { id } });
+    const existing = await prisma.reservation.findUnique({
+      where: { id },
+      include: { folios: { include: { lineItems: true, payments: true } } },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
+    // Deleting a reservation cascades into its folios and line items — if any money
+    // has ever been posted or taken, deletion would destroy financial history (or
+    // 500 on the Payment FK). Those reservations must be cancelled instead, which
+    // preserves the ledger. Delete stays available for true data-entry mistakes
+    // (nothing posted yet).
+    const hasFinancialHistory = existing.folios.some(
+      (f) => f.lineItems.length > 0 || f.payments.length > 0
+    );
+    if (hasFinancialHistory) {
+      return NextResponse.json(
+        { error: "This reservation has posted charges or payments and cannot be deleted. Cancel it instead." },
+        { status: 400 }
+      );
+    }
+    if (existing.status === "IN_HOUSE" || existing.status === "CHECKED_OUT") {
+      return NextResponse.json(
+        { error: `A ${existing.status === "IN_HOUSE" ? "checked-in" : "checked-out"} reservation cannot be deleted.` },
+        { status: 400 }
+      );
+    }
+
     await prisma.reservation.delete({
       where: { id },
+    });
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "DELETE",
+      entityType: "Reservation",
+      entityId: id,
+      description: `Deleted reservation ${existing.confirmationNo} (no financial history)`,
     });
     return NextResponse.json({ success: true });
   } catch (error) {

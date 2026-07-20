@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
+import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
+import { allocateSequenceNumber } from "@/lib/document-sequence";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -62,6 +65,9 @@ export async function POST(request: Request) {
 
     if (!body.propertyId || !body.primaryGuestId || !body.checkInDate || !body.checkOutDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (new Date(body.checkOutDate) <= new Date(body.checkInDate)) {
+      return NextResponse.json({ error: "Check-out date must be after check-in date" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, body.propertyId);
 
@@ -136,15 +142,64 @@ export async function POST(request: Request) {
       if (totalOccupants > roomType.maxOccupancy) {
         overCapacityRoomTypes.add(`${roomType.name} (max ${roomType.maxOccupancy})`);
       }
+      // A specifically-requested room must actually be free for the segment's dates.
+      if (a.roomId) {
+        const roomTaken = await hasRoomConflict({
+          roomId: a.roomId,
+          startDate: new Date(a.startDate),
+          endDate: new Date(a.endDate),
+        });
+        if (roomTaken) {
+          return NextResponse.json(
+            { error: `Room ${room?.roomNumber ?? ""} is already booked for the selected dates` },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
+    // Type-level overbooking guard: block the booking outright when any night of any
+    // segment would exceed the sellable rooms of that type (see src/lib/availability.ts).
+    // This runs whether or not a specific room was picked — unassigned bookings hold
+    // inventory too.
+    const availabilityConflicts = await findTypeAvailabilityConflicts({
+      propertyId: body.propertyId,
+      segments: assignmentsInput.map((a: { roomTypeId: string; startDate: string | Date; endDate: string | Date }) => ({
+        roomTypeId: a.roomTypeId,
+        startDate: new Date(a.startDate),
+        endDate: new Date(a.endDate),
+      })),
+    });
+    if (availabilityConflicts.length > 0) {
+      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
     }
 
     // Fetch EnterpriseSettings to determine confirmation number format.
     const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
 
-    const prefix = settings?.resConfirmPrefix || "";
+    // Sequential confirmation number via the Sequence Manager's REGISTRATION_NO
+    // counter (Controls > Reservations) — the app owner's explicit "sequential
+    // numbers only" rule; replaces the old Math.random() string, which could collide
+    // (raw 500) and gave staff no usable reference ordering. Prefix and zero-pad
+    // length come from EnterpriseSettings; when no prefix is configured, the
+    // property's own (globally unique) code is used — confirmationNo is globally
+    // unique while sequences are per-property, so a bare "000001" from two different
+    // properties would otherwise collide.
+    const bookedProperty = await prisma.property.findUnique({ where: { id: body.propertyId } });
+    const prefix = settings?.resConfirmPrefix || `${bookedProperty?.code ?? "RES"}-`;
     const length = settings?.resConfirmLength || 6;
-    const randomPart = Math.random().toString(36).substring(2, 2 + length).toUpperCase();
-    const confirmationNo = `${prefix}${randomPart}`;
+    let seq = await allocateSequenceNumber(body.propertyId, "REGISTRATION_NO");
+    let confirmationNo = `${prefix}${String(seq).padStart(length, "0")}`;
+    // confirmationNo is globally unique; pre-sequence reservations used random strings
+    // that could (rarely) occupy a number we generate — skip past any taken value
+    // rather than 500 on the unique constraint. Concurrent creates are safe without
+    // this loop: the sequence increment itself is atomic, so they never share a seq.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const taken = await prisma.reservation.findUnique({ where: { confirmationNo }, select: { id: true } });
+      if (!taken) break;
+      seq = await allocateSequenceNumber(body.propertyId, "REGISTRATION_NO");
+      confirmationNo = `${prefix}${String(seq).padStart(length, "0")}`;
+    }
 
     const newReservation = await prisma.reservation.create({
       data: {
@@ -196,6 +251,16 @@ export async function POST(request: Request) {
         },
         folios: true,
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "CREATE",
+      entityType: "Reservation",
+      entityId: newReservation.id,
+      description: `Created reservation ${confirmationNo} for ${primaryGuest.firstName} ${primaryGuest.lastName ?? ""}`.trim() +
+        ` (${new Date(body.checkInDate).toISOString().slice(0, 10)} → ${new Date(body.checkOutDate).toISOString().slice(0, 10)})`,
     });
 
     // Materialize the allocation attachment set (rate plan + meal plan links, plus any

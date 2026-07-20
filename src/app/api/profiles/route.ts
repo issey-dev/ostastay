@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -121,6 +122,15 @@ export async function POST(request: Request) {
         documents: true,
         preferences: true,
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "PROFILES",
+      action: "CREATE",
+      entityType: "Profile",
+      entityId: newProfile.upid,
+      description: `Created ${(newProfile.profileType || "GUEST").toLowerCase().replace("_", " ")} profile ${newProfile.companyName || `${newProfile.firstName} ${newProfile.lastName ?? ""}`.trim()}`,
     });
 
     return NextResponse.json(newProfile, { status: 201 });

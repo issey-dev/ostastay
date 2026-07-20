@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const FOLIO_INCLUDE = {
   lineItems: {
@@ -96,6 +97,15 @@ export async function POST(request: Request) {
         folioNumber: nextFolioNumber
       },
       include: FOLIO_INCLUDE
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "CREATE",
+      entityType: "Folio",
+      entityId: newFolio.id,
+      description: `Opened folio #${nextFolioNumber} on reservation ${reservation.confirmationNo}`,
     });
 
     return NextResponse.json(newFolio);

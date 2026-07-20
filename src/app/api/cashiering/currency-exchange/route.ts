@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -42,6 +43,15 @@ export async function POST(request: Request) {
         amountTo: parseFloat(body.amountTo),
         createdByUserId: ctx.userId,
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "CREATE",
+      entityType: "CurrencyExchange",
+      entityId: currencyExchange.id,
+      description: `Currency exchange ${currencyExchange.amountFrom} ${currencyExchange.fromCurrency} → ${currencyExchange.amountTo} ${currencyExchange.toCurrency}${body.guestName ? ` for ${body.guestName}` : ""}`,
     });
 
     return NextResponse.json(currencyExchange, { status: 201 });

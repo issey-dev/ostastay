@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -87,6 +88,15 @@ export async function POST(request: Request) {
       include: {
         paymentMethod: true,
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: body.isRefund ? "REFUND" : "PAYMENT",
+      entityType: "Payment",
+      entityId: newPayment.id,
+      description: `${body.isRefund ? "Refunded" : "Received"} $${parseFloat(body.amount).toFixed(2)} (${paymentMethod.name}) on folio #${folio.folioNumber}`,
     });
 
     return NextResponse.json(newPayment, { status: 201 });

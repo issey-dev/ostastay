@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -65,6 +66,15 @@ export async function POST(request: Request) {
         closedAt: new Date(),
         closingDrop: closingDrop
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "SHIFT_CLOSE",
+      entityType: "CashierShift",
+      entityId: closedShift.id,
+      description: `Closed cashier shift — drop $${closingDrop.toFixed(2)}, expected $${expectedCash.toFixed(2)}, ${discrepancy === 0 ? "balanced" : discrepancy > 0 ? `over $${discrepancy.toFixed(2)}` : `short $${Math.abs(discrepancy).toFixed(2)}`}`,
     });
 
     return NextResponse.json({

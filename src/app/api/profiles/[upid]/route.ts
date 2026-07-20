@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 async function assertProfileAccess(upid: string, enterpriseId: string) {
   const profile = await prisma.profile.findUnique({ where: { upid } });
@@ -142,6 +143,15 @@ export async function PUT(
       }
     });
 
+    await logActivity({
+      ctx,
+      module: "PROFILES",
+      action: "UPDATE",
+      entityType: "Profile",
+      entityId: upid,
+      description: `Updated profile ${updatedProfile.companyName || `${updatedProfile.firstName} ${updatedProfile.lastName ?? ""}`.trim()}`,
+    });
+
     return NextResponse.json(updatedProfile);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -177,6 +187,15 @@ export async function DELETE(
 
     await prisma.profile.delete({
       where: { upid },
+    });
+
+    await logActivity({
+      ctx,
+      module: "PROFILES",
+      action: "DELETE",
+      entityType: "Profile",
+      entityId: upid,
+      description: `Deleted profile ${existing.companyName || `${existing.firstName} ${existing.lastName ?? ""}`.trim()}`,
     });
 
     return new NextResponse(null, { status: 204 });

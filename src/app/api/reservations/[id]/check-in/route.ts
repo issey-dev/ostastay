@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
   request: Request,
@@ -39,6 +40,23 @@ export async function POST(
       return NextResponse.json({ error: "A room must be assigned before checking in" }, { status: 400 });
     }
 
+    // Room readiness: never check a guest into a room that's out of order/service.
+    // A DIRTY room doesn't block (housekeeping status can lag reality and front desk
+    // may knowingly proceed) but the response carries a warning to surface.
+    const assignedRoom = activeAssignment.room;
+    let roomWarning: string | undefined;
+    if (assignedRoom) {
+      if (assignedRoom.status === "OUT_OF_ORDER" || assignedRoom.status === "OUT_OF_SERVICE") {
+        return NextResponse.json(
+          { error: `Room ${assignedRoom.roomNumber} is ${assignedRoom.status === "OUT_OF_ORDER" ? "out of order" : "out of service"} — assign a different room before check-in.` },
+          { status: 400 }
+        );
+      }
+      if (assignedRoom.status === "DIRTY") {
+        roomWarning = `Room ${assignedRoom.roomNumber} has not been cleaned yet (status: Dirty).`;
+      }
+    }
+
     // 2. Perform the update in a transaction
     await prisma.$transaction(async (tx) => {
       // Update Reservation Status
@@ -65,7 +83,16 @@ export async function POST(
       // But we could enforce it. For now, we leave Room status as is (CLEAN/DIRTY).
     });
 
-    return NextResponse.json({ success: true });
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "CHECK_IN",
+      entityType: "Reservation",
+      entityId: id,
+      description: `Checked in ${reservation.confirmationNo}${assignedRoom ? ` to Room ${assignedRoom.roomNumber}` : ""}`,
+    });
+
+    return NextResponse.json({ success: true, ...(roomWarning && { roomWarning }) });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 export async function GET(request: Request) {
   try {
@@ -111,6 +112,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
     }
 
+    const changeDesc = [
+      status !== undefined ? `status → ${status}` : null,
+      assignedAttendantId !== undefined ? (assignedAttendantId ? "attendant assigned" : "attendant cleared") : null,
+    ].filter(Boolean).join(", ")
+
     if (roomIds && roomIds.length > 0) {
       // Bulk update — confirm every targeted room belongs to a property this actor can
       // reach before touching any of them (a guessed id from another enterprise/property
@@ -125,6 +131,13 @@ export async function PATCH(request: Request) {
         where: { id: { in: rooms.map((r) => r.id) } },
         data: dataToUpdate
       })
+      await logActivity({
+        ctx,
+        module: "HOUSEKEEPING",
+        action: "UPDATE",
+        entityType: "Room",
+        description: `Bulk room update (${result.count} room${result.count === 1 ? "" : "s"}): ${changeDesc}`,
+      })
       return NextResponse.json({ success: true, count: result.count })
     } else {
       const existing = await prisma.room.findUnique({ where: { id: roomId } })
@@ -136,6 +149,14 @@ export async function PATCH(request: Request) {
       const updatedRoom = await prisma.room.update({
         where: { id: roomId },
         data: dataToUpdate
+      })
+      await logActivity({
+        ctx,
+        module: "HOUSEKEEPING",
+        action: "UPDATE",
+        entityType: "Room",
+        entityId: roomId,
+        description: `Room ${existing.roomNumber}: ${changeDesc}`,
       })
       return NextResponse.json(updatedRoom)
     }

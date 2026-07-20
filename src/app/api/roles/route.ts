@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, getOstaEnterpriseId, MODULES } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // A role's own module rows are stored sparsely; MODULES is the canonical list so the UI
 // always gets a full, ordered matrix (missing rows default to all-false).
@@ -59,6 +60,15 @@ export async function POST(request: Request) {
         },
       },
       include: { permissions: true },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "Role",
+      entityId: role.id,
+      description: `Created role "${body.name}"`,
     });
 
     return NextResponse.json(role, { status: 201 });

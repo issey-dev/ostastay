@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId, type AuthContext } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // Accepts either a real Role id, or (for compatibility with the existing role-name
 // dropdown in team-manager.tsx) a role name — resolved against the enterprise's own
@@ -133,6 +134,15 @@ export async function POST(request: Request) {
       select: USER_SELECT,
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "User",
+      entityId: newUser.id,
+      description: `Created user ${firstName} ${lastName} (${email}) with role ${newUser.role.name}`,
+    });
+
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -209,6 +219,20 @@ export async function PATCH(request: Request) {
       select: USER_SELECT,
     });
 
+    const sensitive: string[] = [];
+    if (updateData.roleId && updateData.roleId !== existing.roleId) sensitive.push(`role → ${updatedUser.role.name}`);
+    if (updateData.passwordHash) sensitive.push("password changed");
+    if (updateData.isActive === false) sensitive.push("deactivated");
+    if (updateData.isActive === true && !existing.isActive) sensitive.push("reactivated");
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "User",
+      entityId: id,
+      description: `Updated user ${updatedUser.email}${sensitive.length ? ` — ${sensitive.join(", ")}` : ""}`,
+    });
+
     return NextResponse.json(updatedUser);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -238,6 +262,15 @@ export async function DELETE(request: Request) {
     // However, if they aren't, it will succeed.
     await prisma.user.delete({
       where: { id },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "User",
+      entityId: id,
+      description: `Deleted user ${existing.email}`,
     });
 
     return NextResponse.json({ success: true });

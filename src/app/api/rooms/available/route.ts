@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isValid, parseISO } from "date-fns";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
 
 export async function GET(request: Request) {
   try {
@@ -32,16 +33,18 @@ export async function GET(request: Request) {
       where: {
         propertyId,
         roomTypeId,
-        status: { not: "OUT_OF_SERVICE" },
+        // OUT_OF_ORDER (maintenance) rooms are just as unsellable as OUT_OF_SERVICE —
+        // previously only the latter was excluded and OOO rooms were offered for sale.
+        status: { notIn: UNSELLABLE_ROOM_STATUSES },
         // Exclude rooms that have any room assignment overlapping the requested dates
         NOT: {
           RoomAssignment: {
             some: {
               ...(excludeReservationId ? { reservationId: { not: excludeReservationId } } : {}),
               reservation: {
-                status: {
-                  notIn: ["CANCELLED"] // Cancelled reservations don't block availability
-                }
+                // Only RESERVED/IN_HOUSE hold inventory — a NO_SHOW or CHECKED_OUT
+                // reservation's room goes back on sale for the remaining nights.
+                status: { in: INVENTORY_HOLDING_STATUSES }
               },
               AND: [
                 { startDate: { lt: checkOutDate } },

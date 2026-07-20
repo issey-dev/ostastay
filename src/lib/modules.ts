@@ -16,6 +16,7 @@ export const MODULES = [
   "REVENUE",
   "REPORTS",
   "CONTROLS",
+  "ACTIVITY_LOG",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -36,4 +37,5 @@ export const MODULE_LABELS: Record<Module, string> = {
   REVENUE: "Revenue",
   REPORTS: "Daily Reports",
   CONTROLS: "Controls",
+  ACTIVITY_LOG: "Activity Log",
 };

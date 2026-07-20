@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { logActivity } from "@/lib/activity-log"
 
 export async function GET(request: Request) {
   try {
@@ -62,6 +63,15 @@ export async function POST(request: Request) {
         totalRoomsHeld: parseInt(totalRoomsHeld) || 0,
         status: "TENTATIVE"
       }
+    })
+
+    await logActivity({
+      ctx,
+      module: "GROUP_BLOCKS",
+      action: "CREATE",
+      entityType: "GroupBlock",
+      entityId: newGroup.id,
+      description: `Created group block ${code} "${name}" (${parseInt(totalRoomsHeld) || 0} rooms held)`,
     })
 
     return NextResponse.json(newGroup)

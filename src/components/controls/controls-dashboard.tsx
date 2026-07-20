@@ -31,6 +31,7 @@ import { OutletsManager } from "@/components/controls/outlets-manager"
 import { TaxManager } from "@/components/controls/tax-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
+import { PostingDefaultsManager } from "@/components/controls/posting-defaults-manager"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { LicensingManager } from "@/components/controls/licensing-manager"
@@ -127,8 +128,11 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           <ControlsCard title="Charge Codes" description="System-wide transaction codes, grouped by category for reporting — used by Night Audit and Cashiering.">
             <ChargeCodesManager />
           </ControlsCard>
-          <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, or Bank Transfers.">
+          <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, Bank Transfers, or City Ledger.">
             <PaymentMethodsManager />
+          </ControlsCard>
+          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, and which City Ledger method settles debtor folios at checkout.">
+            <PostingDefaultsManager />
           </ControlsCard>
         </div>
       ),

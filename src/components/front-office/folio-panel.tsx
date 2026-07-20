@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle } from "lucide-react"
+import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, Ban } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -43,6 +43,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // Payee State
   const [isPayeeDialogOpen, setIsPayeeDialogOpen] = useState(false)
   const [selectedPayeeId, setSelectedPayeeId] = useState<string>("")
+
+  // Void Charge State — voiding flags the line isVoid (never deletes); requires a reason
+  const [voidTarget, setVoidTarget] = useState<any | null>(null)
+  const [voidReason, setVoidReason] = useState("")
+  const [voidSaving, setVoidSaving] = useState(false)
 
   // Settlement Method State (Direct vs City Ledger — see the Debtors module; charges
   // billed to an account finalize automatically at checkout, no mid-stay transfer here)
@@ -87,6 +92,31 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       if (pmRes.ok) setPaymentMethods(await pmRes.json())
     } catch (e) {
       console.error("Failed to fetch lookup data", e)
+    }
+  }
+
+  const handleVoidCharge = async () => {
+    if (!voidTarget || !activeFolioId || !voidReason.trim()) return
+    setVoidSaving(true)
+    try {
+      const res = await fetch(`/api/folios/${activeFolioId}/line-items/${voidTarget.id}/void`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: voidReason.trim() }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setNotification({ title: "Charge Voided", message: `"${voidTarget.description}" was voided.` })
+        setVoidTarget(null)
+        setVoidReason("")
+        fetchFolios()
+      } else {
+        setNotification({ title: "Error", message: data.error || "Failed to void charge.", isError: true })
+      }
+    } catch (e) {
+      setNotification({ title: "Error", message: "Error voiding charge.", isError: true })
+    } finally {
+      setVoidSaving(false)
     }
   }
 
@@ -424,10 +454,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <TableRow>
                             <TableHead className="w-12 text-center">
                               <Checkbox 
-                                checked={activeFolio.lineItems.length > 0 && selectedLineItemIds.length === activeFolio.lineItems.length}
+                                checked={activeFolio.lineItems.filter((i: any) => !i.isVoid).length > 0 && selectedLineItemIds.length === activeFolio.lineItems.filter((i: any) => !i.isVoid).length}
                                 onCheckedChange={(checked) => {
                                   if (checked) {
-                                    setSelectedLineItemIds(activeFolio.lineItems.map((i: any) => i.id))
+                                    setSelectedLineItemIds(activeFolio.lineItems.filter((i: any) => !i.isVoid).map((i: any) => i.id))
                                   } else {
                                     setSelectedLineItemIds([])
                                   }
@@ -446,21 +476,38 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         </TableHeader>
                         <TableBody>
                           {activeFolio.lineItems.map((item: any) => (
-                            <TableRow key={item.id} className={selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}>
+                            <TableRow key={item.id} className={item.isVoid ? "opacity-50" : selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}>
                               <TableCell className="text-center">
-                                <Checkbox
-                                  checked={selectedLineItemIds.includes(item.id)}
-                                  onCheckedChange={() => toggleLineItemSelection(item.id)}
-                                />
+                                {!item.isVoid && (
+                                  <Checkbox
+                                    checked={selectedLineItemIds.includes(item.id)}
+                                    onCheckedChange={() => toggleLineItemSelection(item.id)}
+                                  />
+                                )}
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground">{new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
-                              <TableCell>{item.description}</TableCell>
-                              <TableCell className="text-right">${item.amount.toFixed(2)}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">${(item.serviceChargeAmount || 0).toFixed(2)}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">${item.taxAmount.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-medium text-destructive">${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}</TableCell>
+                              <TableCell className={item.isVoid ? "line-through text-muted-foreground" : ""}>
+                                {item.description}
+                                {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
+                              </TableCell>
+                              <TableCell className={`text-right ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>${item.amount.toFixed(2)}</TableCell>
+                              <TableCell className={`text-right text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>${(item.serviceChargeAmount || 0).toFixed(2)}</TableCell>
+                              <TableCell className={`text-right text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>${item.taxAmount.toFixed(2)}</TableCell>
+                              <TableCell className={`text-right font-medium ${item.isVoid ? "line-through text-muted-foreground" : "text-destructive"}`}>${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}</TableCell>
                               <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell></TableCell>
+                              <TableCell>
+                                {!item.isVoid && !activeFolio.isClosed && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    title="Void Charge"
+                                    onClick={() => { setVoidTarget(item); setVoidReason("") }}
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                           {activeFolio.payments.map((payment: any) => (
@@ -583,6 +630,36 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
           </div>
         )}
       </DialogContent>
+
+      {/* Void Charge Dialog */}
+      <Dialog open={!!voidTarget} onOpenChange={(open) => { if (!open) setVoidTarget(null) }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Void Charge</DialogTitle>
+            <DialogDescription>
+              {voidTarget && (
+                <>Void "{voidTarget.description}" (${(voidTarget.amount + (voidTarget.serviceChargeAmount || 0) + voidTarget.taxAmount).toFixed(2)})?
+                The line stays on the folio marked VOID and no longer counts toward the balance.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="void-reason">Reason (required)</Label>
+            <Input
+              id="void-reason"
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="e.g. Posted to wrong folio"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVoidTarget(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={!voidReason.trim() || voidSaving} onClick={handleVoidCharge}>
+              {voidSaving ? "Voiding..." : "Void Charge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Move Charges Dialog */}
       <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>

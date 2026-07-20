@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const FOLIO_DETAIL_INCLUDE = {
   reservation: {
@@ -83,6 +84,15 @@ export async function DELETE(
       where: { id }
     });
 
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "DELETE",
+      entityType: "Folio",
+      entityId: id,
+      description: `Deleted empty folio #${folio.folioNumber}`,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -138,6 +148,21 @@ export async function PATCH(
         }
       }
     });
+
+    const changes: string[] = [];
+    if (payeeProfileId !== undefined && payeeProfileId !== existing.payeeProfileId) changes.push("payee");
+    if (isClosed !== undefined && isClosed !== existing.isClosed) changes.push(isClosed ? "closed" : "reopened");
+    if (settlementMethod !== undefined && settlementMethod !== existing.settlementMethod) changes.push(`settlement → ${settlementMethod}`);
+    if (changes.length > 0) {
+      await logActivity({
+        ctx,
+        module: "CASHIERING",
+        action: "UPDATE",
+        entityType: "Folio",
+        entityId: id,
+        description: `Updated folio #${existing.folioNumber}: ${changes.join(", ")}`,
+      });
+    }
 
     return NextResponse.json(updatedFolio);
   } catch (error) {

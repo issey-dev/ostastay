@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
   request: Request,
@@ -85,13 +86,27 @@ export async function POST(
         data: { status: "CHECKED_OUT" }
       });
 
-      // Update Room Status to DIRTY
+      // Update Room Status to DIRTY and queue the checkout clean so the room shows up
+      // on the housekeeping board as actionable work, not just a status color.
       const activeRoomId = reservation.assignments[0]?.roomId;
       if (activeRoomId) {
-        await tx.room.update({
+        const room = await tx.room.update({
           where: { id: activeRoomId },
-          data: { status: "DIRTY" }
+          data: { status: "DIRTY" },
+          include: { roomType: { select: { housekeepingEnabled: true } } }
         });
+        if (room.roomType.housekeepingEnabled) {
+          await tx.housekeepingTask.create({
+            data: {
+              roomId: activeRoomId,
+              taskType: "CHECKOUT",
+              status: "PENDING",
+              priority: "NORMAL",
+              notes: "Departure clean (auto-created at check-out)",
+              scheduledDate: new Date(),
+            }
+          });
+        }
       }
 
       // Close all folios, finalizing any City-Ledger folio into a debtor invoice —
@@ -111,6 +126,17 @@ export async function POST(
           });
         }
       }
+    });
+
+    const finalizedInvoices = reservation.folios.filter((f) => qualifiesForAccount(f)).length;
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "CHECK_OUT",
+      entityType: "Reservation",
+      entityId: id,
+      description: `Checked out ${reservation.confirmationNo}` +
+        (finalizedInvoices > 0 ? ` — ${finalizedInvoices} folio${finalizedInvoices > 1 ? "s" : ""} finalized to City Ledger` : ""),
     });
 
     // 5. Non-blocking credit-limit check against the account's full open balance at

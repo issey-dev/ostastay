@@ -38,6 +38,8 @@ export async function GET(
         resConfirmPrefix: "",
         resConfirmLength: 6,
         systemDate: new Date(),
+        defaultAccommodationChargeCodeId: null,
+        cityLedgerPaymentMethodId: null,
         invoiceBrandName: "Cozy Guest House",
         invoiceLogoUrl: "",
         invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,

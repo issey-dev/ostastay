@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, toErrorResponse, ForbiddenError, mintSupportSession } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // Mints the short-lived "acting as Enterprise X" cookie — only callable by the grant's
 // own requester, only while it's APPROVED and unexpired. See src/lib/scope.ts for how
@@ -31,6 +32,17 @@ export async function POST(
     }
 
     await mintSupportSession(ctx.userId, grant.enterpriseId, grant.id, grant.expiresAt);
+
+    // Logged into the TARGET enterprise's trail (not Osta's) — the enterprise being
+    // accessed is the one whose auditors need to see support entering.
+    await logActivity({
+      ctx: { ...ctx, enterpriseId: grant.enterpriseId, isActingAsSupport: true },
+      module: "CONTROLS",
+      action: "SUPPORT_ENTER",
+      entityType: "SupportAccessGrant",
+      entityId: grant.id,
+      description: "Osta support entered this enterprise under an approved grant",
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

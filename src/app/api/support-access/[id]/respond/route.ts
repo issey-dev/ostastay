@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const GRANT_DEFAULT_DURATION_HOURS = 24;
 
@@ -46,6 +47,15 @@ export async function POST(
         respondedAt: new Date(),
         expiresAt: body.action === "approve" ? new Date(Date.now() + durationHours * 60 * 60 * 1000) : null,
       },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: body.action === "approve" ? "SUPPORT_APPROVE" : "SUPPORT_DENY",
+      entityType: "SupportAccessGrant",
+      entityId: id,
+      description: `${body.action === "approve" ? `Approved support access for ${durationHours}h` : "Denied support access request"}`,
     });
 
     return NextResponse.json(updated);

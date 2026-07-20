@@ -17,6 +17,7 @@ export async function GET(request: Request) {
       where: { propertyId },
       include: {
         parentRatePlan: { select: { id: true, name: true, code: true } },
+        chargeCode: { select: { id: true, code: true, description: true } },
         allocationLinks: {
           include: { allocation: { select: { id: true, code: true, name: true, mode: true } } },
         },
@@ -75,6 +76,18 @@ export async function POST(request: Request) {
       derivedAdjustmentValue = adjustmentValue;
     }
 
+    // Optional accommodation charge code this plan's room charge posts against at Night
+    // Audit (null = use the enterprise default). Must belong to the same enterprise.
+    let chargeCodeId: string | null = null;
+    if (body.chargeCodeId) {
+      const property = await prisma.property.findUnique({ where: { id: body.propertyId } });
+      const chargeCode = await prisma.chargeCode.findUnique({ where: { id: body.chargeCodeId } });
+      if (!property || !chargeCode || chargeCode.enterpriseId !== property.enterpriseId) {
+        return NextResponse.json({ error: "Charge code does not belong to this enterprise" }, { status: 400 });
+      }
+      chargeCodeId = chargeCode.id;
+    }
+
     // Package contents: which Allocations this plan carries. Any allocation belonging
     // to this property is linkable — the allocation's own `mode` (include/add) decides
     // how it posts; `sellSeparate` is independent and doesn't affect linkability.
@@ -100,6 +113,7 @@ export async function POST(request: Request) {
         description: body.description,
         priority: parseInt(body.priority) || 10,
         isNegotiated: !!body.isNegotiated,
+        chargeCodeId,
         parentRatePlanId,
         derivedAdjustmentType,
         derivedAdjustmentValue,

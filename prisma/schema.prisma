@@ -411,7 +411,7 @@ model ChargeCode {
   code         String
   description  String
   // Grouping for reporting only — ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX |
-  // PAYMENT | SYSTEM.
+  // SYSTEM. (PAYMENT was removed — payment types are Payment Methods, not charge codes.)
   category     String     @default("OTHERS")
   // Whether this charge code applies the enterprise's own Maldives Tax config (Green
   // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
@@ -426,6 +426,11 @@ model ChargeCode {
   outletCharges      OutletChargeCode[]
   outletAppointments OutletAppointment[]
   allocations        Allocation[]
+  // Rate plans that post their nightly room charge against this code (see
+  // RatePlan.chargeCodeId). SetNull on delete, so removing a charge code just drops
+  // those plans back to the enterprise default accommodation code, never cascade-
+  // deletes a rate plan.
+  ratePlans          RatePlan[]
 
   @@unique([enterpriseId, code])
 }
@@ -555,6 +560,14 @@ model RatePlan {
   description  String?
   priority     Int      @default(0)
   isNegotiated Boolean  @default(false)
+
+  // The charge code this plan's nightly room charge posts against at Night Audit —
+  // usually the property's main Accommodation code. Null means "use the enterprise
+  // default accommodation code" (EnterpriseSettings.defaultAccommodationChargeCodeId,
+  // then the legacy "ROOM" code as a last resort). onDelete SetNull so removing a
+  // charge code just drops the plan back to the default, never deletes the plan.
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id], onDelete: SetNull)
 
   // Marks the property's system-provisioned "Base Rate" (code "BASE", auto-created at
   // property onboarding — see src/app/api/properties/route.ts) — exactly one per
@@ -891,6 +904,16 @@ model EnterpriseSettings {
 
   systemDate DateTime @default(now())
 
+  // Posting & settlement defaults (see Controls > Finance). Plain nullable id pointers
+  // (not FK relations) validated in the API — a dangling id is tolerated by falling
+  // back at posting time. defaultAccommodationChargeCodeId: the ChargeCode a rate
+  // plan's nightly room charge posts against when the plan itself doesn't specify one
+  // (RatePlan.chargeCodeId). cityLedgerPaymentMethodId: the PaymentMethod (a
+  // CITY_LEDGER-type method) used to record a settlement payment when a City Ledger
+  // folio transfers to a debtor account at checkout.
+  defaultAccommodationChargeCodeId String?
+  cityLedgerPaymentMethodId        String?
+
   // Custom Invoice Settings
   invoiceBrandName    String?
   invoiceLogoUrl      String?
@@ -1104,6 +1127,35 @@ model PropertySequence {
   updatedAt    DateTime @updatedAt
 
   @@unique([propertyId, sequenceType])
+}
+
+// Append-only user activity trail — one row per mutating action (views are
+// deliberately never logged). Written exclusively through src/lib/activity-log.ts.
+// Snapshot design, no FK relations: userEmail/userName are copied at write time so
+// the trail survives user renames/deletions, and nothing can cascade-delete audit
+// history. enterpriseId is null only for anonymous events (e.g. a failed login
+// against an unknown email).
+model UserActivityLog {
+  id           String  @id @default(uuid())
+  enterpriseId String?
+  userId       String?
+  userEmail    String?
+  userName     String?
+  // True when the action was performed by an Osta support user acting under an
+  // approved SupportAccessGrant — support actions must be distinguishable in the
+  // target enterprise's own trail.
+  isSupport Boolean @default(false)
+  module    String // RBAC module name, or "AUTH" for login/logout events
+  action    String // CREATE | UPDATE | DELETE | LOGIN | LOGIN_FAILED | LOGOUT | CHECK_IN | CHECK_OUT | VOID | RUN | ...
+  entityType String?
+  entityId   String?
+  description String
+  metadata    String? // JSON blob for structured detail (amounts, old→new values...)
+
+  createdAt DateTime @default(now())
+
+  @@index([enterpriseId, createdAt])
+  @@index([userId, createdAt])
 }
 
 // ── Allocations (see .agents/docs/ALLOCATIONS_PLAN.md) ──────────────────────────────

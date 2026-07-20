@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET() {
   try {
@@ -58,6 +59,15 @@ export async function POST(request: Request) {
     // priority 999 keeps it sorted last in the Rate Plan Hierarchy table.
     await prisma.ratePlan.create({
       data: { propertyId: newProperty.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "CREATE",
+      entityType: "Property",
+      entityId: newProperty.id,
+      description: `Created property "${newProperty.name}" (${newProperty.code})`,
     });
 
     return NextResponse.json(newProperty, { status: 201 });

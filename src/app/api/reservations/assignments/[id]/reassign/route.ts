@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { hasRoomConflict } from "@/lib/availability";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PATCH(
   request: Request,
@@ -37,25 +39,20 @@ export async function PATCH(
       if (!newRoom || newRoom.propertyId !== assignment.reservation.propertyId) {
         return NextResponse.json({ error: "New room not found" }, { status: 404 });
       }
-      if (newRoom.status === "OUT_OF_SERVICE") {
-        return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+      if (newRoom.status === "OUT_OF_SERVICE" || newRoom.status === "OUT_OF_ORDER") {
+        return NextResponse.json({ error: "That room is out of order or out of service" }, { status: 400 });
       }
       if (!newRoom.roomType.isActive) {
         return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
       }
 
-      // Check if new room is available for these dates
-      // Overlap condition: existing.startDate < assignment.endDate AND existing.endDate > assignment.startDate
-      const conflictingAssignment = await prisma.roomAssignment.findFirst({
-        where: {
-          id: { not: id },
-          roomId: roomId,
-          startDate: { lt: assignment.endDate },
-          endDate: { gt: assignment.startDate },
-          reservation: {
-            status: { not: "CANCELLED" }
-          }
-        }
+      // Check if new room is available for these dates (only RESERVED/IN_HOUSE hold
+      // inventory — see src/lib/availability.ts).
+      const conflictingAssignment = await hasRoomConflict({
+        roomId,
+        startDate: assignment.startDate,
+        endDate: assignment.endDate,
+        excludeAssignmentId: id,
       });
 
       if (conflictingAssignment) {
@@ -81,6 +78,15 @@ export async function PATCH(
           actionDate: new Date(),
           isResolved: true
         }
+      });
+
+      await logActivity({
+        ctx,
+        module: "RESERVATIONS",
+        action: "UPDATE",
+        entityType: "RoomAssignment",
+        entityId: id,
+        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})`,
       });
 
       return NextResponse.json({ success: true, assignment: updated });

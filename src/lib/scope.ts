@@ -7,9 +7,7 @@ import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data
 
 export { MODULES, type Module, type Action };
 
-const SUPPORT_JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "default_super_secret_jwt_key_that_should_be_changed_in_prod"
-);
+import { JWT_SECRET as SUPPORT_JWT_SECRET } from "@/lib/jwt-secret";
 
 export class UnauthorizedError extends Error {
   status = 401;

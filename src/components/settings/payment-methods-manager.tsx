@@ -186,6 +186,7 @@ export function PaymentMethodsManager() {
                   <SelectItem value="CASH">CASH</SelectItem>
                   <SelectItem value="CARD">CARD</SelectItem>
                   <SelectItem value="TRANSFER">TRANSFER</SelectItem>
+                  <SelectItem value="CITY_LEDGER">CITY LEDGER</SelectItem>
                   <SelectItem value="CHEQUE">CHEQUE</SelectItem>
                   <SelectItem value="VOUCHER">VOUCHER</SelectItem>
                 </SelectContent>

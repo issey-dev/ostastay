@@ -16,9 +16,9 @@ date-range-priced components (BF/LN/DN, transfers, spa, excursions) under Revenu
 Allocations, linkable to Rate Plans and Meal Plans, materialized onto reservations
 (`ReservationAllocation`), posted at Night Audit with Include-in-Rate carve-out /
 Add-to-Rate / Sell-Separate semantics. Awaiting app-owner UI review/fine-tuning.
-Known follow-up flagged, not built: Night Audit still has **no double-run guard** for
-any posting (room charges included — pre-existing gap, allocations deliberately
-inherit the same behavior rather than getting a bespoke guard).
+~~Known follow-up flagged, not built: Night Audit still has no double-run guard~~ —
+**closed 2026-07-19** by the alpha-hardening pass (see "Recently completed"): one
+successful audit per property per business date, whole run transactional.
 
 ## Base Rate Plan replaces RoomType.basePrice — BUILT 2026-07-19
 
@@ -81,6 +81,135 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   session, or someone else's. Do not assume, and do not discard.
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
+
+- **2026-07-20** — **User Activity Log module** (per direct app-owner request: "proper
+  audit log added to each action (view excluded), login and all actions"):
+  - **Schema**: `UserActivityLog` (migration `20260720120000_user_activity_log`) —
+    append-only, snapshot design (userEmail/userName copied at write time, NO FK
+    relations, so the trail survives user deletion and nothing cascade-deletes audit
+    history). `isSupport` flags actions performed under a SupportAccessGrant; support
+    actions land in the TARGET enterprise's trail. `enterpriseId` null only for
+    anonymous events (failed login to an unknown email).
+  - **Writer**: `src/lib/activity-log.ts` — `logActivity()` (session actions) and
+    `logAuthActivity()` (login/logout, no ctx). Awaited but never throws — a logging
+    failure can't break the action it describes. The ONLY code that writes rows;
+    there is deliberately no write API.
+  - **Module**: `ACTIVITY_LOG` added to `MODULES` + `rbac-seed-data.ts` (Admin/
+    Manager/Osta Support Admin get it via their all-module matrices; everyone else
+    NONE; existing roles picked it up automatically via the requireSession()
+    self-heal). Read-only `GET /api/activity-log` (filters: module/action/user/text/
+    date + offset pagination), sidebar entry, dashboard page
+    (`.../dashboard/activity-log`) with module/action/search filters + load-more.
+  - **Wired into every significant mutation** (~35 handlers): login success/failure
+    (incl. reason + unknown-email), logout, reservation create/edit/delete/status/
+    check-in/check-out/room-move/reassign/auto-assign, group create/pickup, folio
+    create/walk-in/update/delete, charge post, VOID, payments/refunds (both routes),
+    charge move, POS charge, night-audit RUN, cashier shift open/close, currency
+    exchange, profile CUD, user CUD (flags role changes/password/deactivation), role
+    CUD, tenant-settings, housekeeping room-status, and the full support-access cycle
+    (request/approve/deny/revoke/ENTER — ENTER logs into the target enterprise's
+    trail with isSupport=true).
+  - **Not yet wired** (spawned as a follow-up task chip; same 2-line pattern): the
+    low-traffic config CRUD routes — rooms/room-types/rate-plans/price-calendar/
+    charge-codes/taxes/payment-methods/meal-plans/allocations/outlets(+appointments)/
+    buildings/floors/facilities/system-codes/sequences/groups[id]/properties/
+    enterprises/licenses/traces/housekeeping-tasks/maintenance, plus the
+    send-confirmation/send-statement emails.
+  - **Fixed while testing**: the new sequential confirmation numbers collided
+    *across properties* (confirmationNo is globally unique, sequences are
+    per-property — two properties both produce "000001"). No-prefix enterprises now
+    default the prefix to the property's globally-unique `code` ("VEYO-000001");
+    a configured `resConfirmPrefix` still wins.
+  - Tests: 3 new in `alpha-hardening.test.ts` (trail rows exist for every action
+    class exercised, auth events incl. anonymous failures, API enterprise-scoping +
+    ACTIVITY_LOG permission gate). Full suite 197/197, `tsc --noEmit` clean.
+
+- **2026-07-20** — **Alpha-hardening pass 2 (P1 batch from the pre-alpha audit)**, again
+  no schema migrations:
+  - **Cancellation/no-show fee workflow** via existing primitives: the CANCELLED guard
+    in `reservations/[id]/status` is now **balance-based** (folios must net to ~0)
+    instead of blocking on any charge existing — so front desk posts a fee (any
+    charge code, e.g. a CXL code) via the Folio Panel, takes payment, then cancels.
+    An unrefunded deposit equally blocks until refunded. No new endpoint or config.
+  - **Auto-no-show at Night Audit**: RESERVED reservations whose check-in date has
+    passed are flipped NO_SHOW inside the audit transaction; response returns
+    `noShowsProcessed` + confirmation numbers. Nothing financial is automatic — any
+    deposit stays on the still-open folio for front office (refund or fee-forfeit).
+  - **Zero-rate warning**: the audit response now lists reservations that posted a $0
+    room charge because no Price Calendar rate covered tonight (`zeroRateWarning`) —
+    the direct mitigation for the Base-plan coverage cliff flagged at onboarding.
+  - **Group pickup guards**: rejects pickups on a CANCELLED block, past `cutoffDate`,
+    or beyond `totalRoomsHeld` (counting non-cancelled/non-no-show pickups); pickups
+    now also **materialize the rate plan's allocations** (previously a group pickup
+    on a package rate silently lost its packages).
+  - **Login rate limiting** (`src/lib/login-rate-limit.ts`): 5 failures per email per
+    15 min → 15-min lockout (429), in-memory by design (single-node deployment; swap
+    point documented in the file). Reset on successful login.
+  - **SMTP/SFTP password redaction**: `tenant-settings` GET/PATCH responses replace a
+    stored password with `********`; PATCH treats the round-tripped mask as
+    "unchanged" so the settings form can't clobber the real secret. The actual value
+    still reaches `src/lib/mailer.ts` (reads the DB directly). **Encryption at rest
+    remains open** — still needs the key-management decision.
+  - Tests: `alpha-hardening.test.ts` grew to 14 (fee workflow end-to-end, pickup
+    held-count/cutoff 400s + sequential pickup numbering, lockout at the 6th attempt,
+    mask round-trip incl. stored-value integrity, auto-no-show flip + response
+    fields). Full suite 194/194 passing, `tsc --noEmit` clean.
+  - **Still open from the audit's P1 list**: financial audit-trail table (schema
+    migration — deferred while concurrent sessions are active in this repo),
+    optimistic concurrency, Litestream backup story, SMTP encryption at rest
+    (key-management decision), check-in `roomWarning` toast in the UI.
+- **2026-07-19** — **Alpha-hardening pass (P0 blockers from the pre-alpha audit)**, all
+  code-level guards, no schema migrations:
+  - **Type-level availability / overbooking guard** (`src/lib/availability.ts`):
+    per-night sellable-rooms-vs-booked check (pseudo room types exempt), wired into
+    reservations POST/PUT, group pickup, and status-reinstate; plus a physical-room
+    double-booking check (`hasRoomConflict`) wired into reservations POST/PUT, group
+    pickup, room-move (which previously had NO conflict check), and reassign. Bookings
+    that don't fit now 409. `rooms/available` and auto-assign now exclude
+    `OUT_OF_ORDER` rooms (previously sellable!) and only treat `RESERVED`/`IN_HOUSE`
+    as inventory-holding (NO_SHOW/CHECKED_OUT release the room).
+  - **Night Audit hardened** (`night-audit/run`): whole posting loop + audit log in one
+    `$transaction` (mid-run failure rolls back everything and writes a `FAILED` log
+    row); idempotency guard — one `COMPLETED` run per (property, business date), rerun
+    → 409; room charges bounded by `checkOutDate` (overstays skipped, surfaced via
+    `overstayWarning` in the response instead of accruing forever);
+    `EnterpriseSettings.systemDate` now rolls to the next day on success (was never
+    advanced by anything).
+  - **Reservation lifecycle is a guarded state machine**: `PATCH .../status` enforces a
+    transition table (no jumping to `CHECKED_OUT`/`IN_HOUSE` — dedicated routes only;
+    cancel blocked while non-void charges/payments exist; reinstate re-checks
+    availability; cancel closes clean folios, reinstate reopens them). Reservation PUT
+    rejects status changes outright. DELETE blocked once any folio has line
+    items/payments (cancel instead) or the stay is in-house/checked-out.
+  - **Charge void** (`POST /api/folios/[id]/line-items/[itemId]/void`): sets
+    `isVoid=true` (never deletes), requires a reason, blocked on closed folios, writes
+    a ReservationTrace audit line; Void button + reason dialog in FolioPanel (voided
+    rows show struck-through with a VOID badge).
+  - **JWT secret fails closed** (`src/lib/jwt-secret.ts`): production boot now throws
+    if `JWT_SECRET` is unset instead of silently using the hardcoded dev fallback
+    (was in auth.ts, scope.ts, proxy.ts — all three now import the one resolver).
+  - **Sequential confirmation numbers**: reservations POST + group pickup now allocate
+    from the Sequence Manager's `REGISTRATION_NO` counter (prefix/pad from
+    EnterpriseSettings) instead of `Math.random()`/`randomBytes` — with a skip-ahead
+    loop in case a legacy random number occupies a generated value.
+  - **Check-in readiness**: OOO/OOS room blocks check-in; DIRTY room checks in but
+    returns a `roomWarning` (surfacing it in the check-in UI is a nice-to-have not yet
+    wired). **Check-out** now auto-creates a `CHECKOUT` housekeeping task for the
+    vacated room (skipped when the room type has housekeeping disabled).
+  - **Validation sweep**: `checkOutDate > checkInDate` on create/edit; amount must be
+    a positive finite number on folio payments, folio line items, and POS charge.
+  - **Tests**: new `tests/business-rules/alpha-hardening.test.ts` (10 tests: overbook
+    409, exclusive checkout-day boundary, cancel-releases-inventory, sequential
+    confirmation numbers, forbidden transitions incl. the PUT smuggle, cancel-blocked-
+    until-void, void semantics incl. double-void, delete protection, amount/date
+    validation, audit idempotency + overstay skip). `tests/tenant-isolation/
+    booking.test.ts` setup gained a room (a type with zero rooms is now correctly
+    unbookable). Full suite 190/190 passing, `tsc --noEmit` clean.
+  - **Not done here** (still open from the audit's P1 list at the time — most were
+    closed the next day by pass 2 above): ~~no-show/cancellation fees, auto-no-show,
+    login rate-limiting, group-block inventory, SMTP redaction~~ ✅; still open:
+    financial audit-trail table, SMTP encryption at rest, Litestream backups,
+    optimistic concurrency.
 
 - **2026-07-19** — Added **occupancy-based pricing, Derived Rate Plans, and a
   decoupled Meal Plan model**, per direct app-owner request across three asks in one

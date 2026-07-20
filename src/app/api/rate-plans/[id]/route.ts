@@ -13,6 +13,7 @@ const updateSchema = z.object({
   derivedAdjustmentType: z.enum(["PERCENT", "FLAT"]).nullable().optional(),
   derivedAdjustmentValue: z.number().nullable().optional(),
   allocationIds: z.array(z.string().uuid()).optional(),
+  chargeCodeId: z.string().uuid().nullable().optional(),
 });
 
 export async function PUT(
@@ -46,7 +47,25 @@ export async function PUT(
         body.derivedAdjustmentValue === undefined || body.derivedAdjustmentValue === null || body.derivedAdjustmentValue === ""
           ? null
           : parseFloat(body.derivedAdjustmentValue),
+      chargeCodeId: body.chargeCodeId || null,
     });
+
+    // Accommodation charge code the room charge posts against — a posting setting, so
+    // it stays editable even on a locked Base plan (unlike the identity fields). null
+    // clears it (fall back to the enterprise default). Undefined leaves it unchanged.
+    let chargeCodeId: string | null | undefined;
+    if (data.chargeCodeId !== undefined) {
+      if (data.chargeCodeId === null) {
+        chargeCodeId = null;
+      } else {
+        const property = await prisma.property.findUnique({ where: { id: existing.propertyId } });
+        const chargeCode = await prisma.chargeCode.findUnique({ where: { id: data.chargeCodeId } });
+        if (!property || !chargeCode || chargeCode.enterpriseId !== property.enterpriseId) {
+          return NextResponse.json({ error: "Charge code does not belong to this enterprise" }, { status: 400 });
+        }
+        chargeCodeId = chargeCode.id;
+      }
+    }
 
     let parentRatePlanId: string | null = existing.parentRatePlanId;
     let derivedAdjustmentType: string | null = existing.derivedAdjustmentType;
@@ -104,7 +123,9 @@ export async function PUT(
       where: { id },
       data: existing.isLocked
         ? {
-            // Locked plan: only Package Allocations can change.
+            // Locked plan: only its accommodation charge code and Package Allocations
+            // can change (both posting settings, not identity).
+            ...(chargeCodeId !== undefined && { chargeCodeId }),
             allocationLinks:
               allocationIds !== undefined
                 ? { deleteMany: {}, create: allocationIds.map((allocationId) => ({ allocationId })) }
@@ -116,6 +137,7 @@ export async function PUT(
             description: data.description,
             priority: data.priority,
             isNegotiated: data.isNegotiated,
+            ...(chargeCodeId !== undefined && { chargeCodeId }),
             parentRatePlanId,
             derivedAdjustmentType,
             derivedAdjustmentValue,

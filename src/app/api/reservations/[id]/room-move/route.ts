@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { hasRoomConflict } from "@/lib/availability";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
   request: Request,
@@ -49,8 +51,22 @@ export async function POST(
     if (!newRoom || newRoom.propertyId !== currentRes.propertyId) {
       return NextResponse.json({ error: "New room not found" }, { status: 404 });
     }
-    if (newRoom.status === "OUT_OF_SERVICE") {
-      return NextResponse.json({ error: "That room is out of service" }, { status: 400 });
+    if (newRoom.status === "OUT_OF_SERVICE" || newRoom.status === "OUT_OF_ORDER") {
+      return NextResponse.json({ error: "That room is out of order or out of service" }, { status: 400 });
+    }
+
+    // The target room must be free for the remainder of the stay — previously a move
+    // could land a guest in a room already assigned to someone else.
+    const now = new Date();
+    const moveStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const roomTaken = await hasRoomConflict({
+      roomId: newRoomId,
+      startDate: moveStart,
+      endDate: currentRes.checkOutDate,
+      excludeReservationId: id,
+    });
+    if (roomTaken) {
+      return NextResponse.json({ error: "That room is already booked during the remainder of this stay" }, { status: 409 });
     }
 
     const newRoomType = await prisma.roomType.findUnique({ where: { id: newRoomTypeId } });
@@ -111,6 +127,15 @@ export async function POST(
       });
 
       return res;
+    });
+
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "ROOM_MOVE",
+      entityType: "Reservation",
+      entityId: id,
+      description: `Moved ${currentRes.confirmationNo} from Room ${oldRoomNumber} to Room ${newRoom.roomNumber} — ${reason}`,
     });
 
     return NextResponse.json(updatedReservation);

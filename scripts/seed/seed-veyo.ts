@@ -199,8 +199,9 @@ async function main() {
   });
 
   // Sample chart of charge codes. ChargeCode.category has no SPA bucket (ROOM |
-  // FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | PAYMENT | SYSTEM), so spa items
-  // are grouped under OTHERS. All use the enterprise default tax engine.
+  // FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | SYSTEM), so spa items are grouped
+  // under OTHERS. All use the enterprise default tax engine. (No PAYMENT category —
+  // payment types are Payment Methods, seeded below.)
   const sampleChargeCodes: Array<{ code: string; description: string; category: string }> = [
     // Accommodation
     { code: "10RV", description: "Accommodation Revenue", category: "ROOM" },
@@ -222,64 +223,72 @@ async function main() {
     // is true (defaults to true), which it is for Veyo; without this code Night Audit 400s.
     { code: "GTX", description: "Green Tax", category: "TAX" },
   ];
+  const chargeCodeByCode: Record<string, string> = {};
   for (const cc of sampleChargeCodes) {
-    await prisma.chargeCode.upsert({
+    const created = await prisma.chargeCode.upsert({
       where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
       update: {},
       create: { enterpriseId: veyo.id, ...cc },
     });
+    chargeCodeByCode[cc.code] = created.id;
   }
 
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CARD" } });
   if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Credit Card", type: "CARD" } });
   const pmCash = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CASH" } });
   if (!pmCash) await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Cash", type: "CASH" } });
+  const pmTransfer = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "TRANSFER" } });
+  if (!pmTransfer) await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Bank Transfer", type: "TRANSFER" } });
+  let pmCityLedger = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CITY_LEDGER" } });
+  if (!pmCityLedger) pmCityLedger = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "City Ledger", type: "CITY_LEDGER" } });
 
-  // 7b. Allocations (per-person priced components — see .agents/docs/ALLOCATIONS_PLAN.md)
-  // + a Bed & Breakfast meal plan linked to BF, and BAR carries the speedboat transfer.
-  const bfAllocation =
-    (await prisma.allocation.findFirst({ where: { propertyId: property.id, code: "BF" } })) ||
-    (await prisma.allocation.create({
+  // Posting & settlement defaults (Controls > Finance): the main Accommodation code
+  // (10RV) is what rate plans post the nightly room charge against by default, and the
+  // City Ledger payment method settles debtor-account folios at checkout.
+  await prisma.enterpriseSettings.update({
+    where: { enterpriseId: veyo.id },
+    data: {
+      defaultAccommodationChargeCodeId: chargeCodeByCode["10RV"],
+      cityLedgerPaymentMethodId: pmCityLedger.id,
+    },
+  });
+
+  // 7b. Allocations (per-person priced components — see .agents/docs/ALLOCATIONS_PLAN.md),
+  // each posting against its own dedicated charge code (Package Breakfast/Lunch/Dinner,
+  // the transfer codes) rather than the generic FB catch-all, so revenue reports break
+  // down by meal/service. Upserts so re-seeding repoints an existing allocation's
+  // charge code. Rate rows are only created when the allocation is first inserted.
+  const seedAllocation = async (opts: {
+    code: string; name: string; type: string; chargeCode: string; postingRhythm: string;
+    mode?: string; sellSeparate?: boolean; adultPrice: number; childPrice: number;
+  }) => {
+    const existing = await prisma.allocation.findFirst({ where: { propertyId: property.id, code: opts.code } });
+    if (existing) {
+      return prisma.allocation.update({
+        where: { id: existing.id },
+        data: { chargeCodeId: chargeCodeByCode[opts.chargeCode] },
+      });
+    }
+    return prisma.allocation.create({
       data: {
         propertyId: property.id,
-        code: "BF",
-        name: "Breakfast",
-        type: "FNB",
-        chargeCodeId: fbCode.id,
-        postingRhythm: "EVERY_NIGHT",
-        mode: "ADD_TO_RATE",
-        rates: { create: { adultPrice: 10, childPrice: 5, effectiveFrom: new Date("2026-01-01") } },
+        code: opts.code,
+        name: opts.name,
+        type: opts.type,
+        chargeCodeId: chargeCodeByCode[opts.chargeCode],
+        postingRhythm: opts.postingRhythm,
+        mode: opts.mode ?? "ADD_TO_RATE",
+        sellSeparate: opts.sellSeparate ?? false,
+        rates: { create: { adultPrice: opts.adultPrice, childPrice: opts.childPrice, effectiveFrom: new Date("2026-01-01") } },
       },
-    }));
-  const dnAllocation =
-    (await prisma.allocation.findFirst({ where: { propertyId: property.id, code: "DN" } })) ||
-    (await prisma.allocation.create({
-      data: {
-        propertyId: property.id,
-        code: "DN",
-        name: "Dinner",
-        type: "FNB",
-        chargeCodeId: fbCode.id,
-        postingRhythm: "EVERY_NIGHT",
-        mode: "ADD_TO_RATE",
-        rates: { create: { adultPrice: 30, childPrice: 15, effectiveFrom: new Date("2026-01-01") } },
-      },
-    }));
-  const trfAllocation =
-    (await prisma.allocation.findFirst({ where: { propertyId: property.id, code: "TRF-SB" } })) ||
-    (await prisma.allocation.create({
-      data: {
-        propertyId: property.id,
-        code: "TRF-SB",
-        name: "Speedboat Transfer",
-        type: "TRANSFER",
-        chargeCodeId: fbCode.id,
-        postingRhythm: "ARRIVAL_NIGHT",
-        mode: "ADD_TO_RATE",
-        sellSeparate: true,
-        rates: { create: { adultPrice: 50, childPrice: 25, effectiveFrom: new Date("2026-01-01") } },
-      },
-    }));
+    });
+  };
+  const bfAllocation = await seedAllocation({ code: "BF", name: "Breakfast", type: "FNB", chargeCode: "60RV", postingRhythm: "EVERY_NIGHT", adultPrice: 10, childPrice: 5 });
+  const lnAllocation = await seedAllocation({ code: "LN", name: "Lunch", type: "FNB", chargeCode: "61RV", postingRhythm: "EVERY_NIGHT", sellSeparate: true, adultPrice: 20, childPrice: 10 });
+  const dnAllocation = await seedAllocation({ code: "DN", name: "Dinner", type: "FNB", chargeCode: "62RV", postingRhythm: "EVERY_NIGHT", adultPrice: 30, childPrice: 15 });
+  await seedAllocation({ code: "TRF-AIR", name: "Airport Transfer", type: "TRANSFER", chargeCode: "50RV", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 40, childPrice: 20 });
+  await seedAllocation({ code: "TRF-SB", name: "Speedboat Transfer", type: "TRANSFER", chargeCode: "51RV", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 50, childPrice: 25 });
+  void lnAllocation;
 
   const bbPlan = await prisma.mealPlan.upsert({
     where: { propertyId_code: { propertyId: property.id, code: "BB" } },
@@ -303,8 +312,6 @@ async function main() {
       create: { mealPlanId: hbPlan.id, allocationId: allocId },
     });
   }
-  void trfAllocation; // sell-separate: attachable per reservation, linked to no plan
-
   // 8. System codes (LOVs).
   const systemCodes = [
     { category: "GENDER", code: "M", value: "Male", sortOrder: 1 },

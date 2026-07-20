@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -37,6 +38,15 @@ export async function POST(request: Request) {
         userId,
         openingFloat: openingFloat
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "SHIFT_OPEN",
+      entityType: "CashierShift",
+      entityId: newShift.id,
+      description: `Opened cashier shift with $${openingFloat.toFixed(2)} float`,
     });
 
     return NextResponse.json({

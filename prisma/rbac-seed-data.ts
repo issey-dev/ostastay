@@ -20,6 +20,11 @@ export const MODULES = [
   "REVENUE",
   "REPORTS",
   "CONTROLS",
+  // Read-only audit trail (User Activity Log). Rows are machine-written via
+  // src/lib/activity-log.ts — the create/update/delete bits are meaningless for it;
+  // only canView matters. Deliberately granted to Admin/Manager only by default
+  // (they get FULL automatically via their all-modules matrices below).
+  "ACTIVITY_LOG",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];

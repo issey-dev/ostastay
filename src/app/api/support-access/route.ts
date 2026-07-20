@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 const INCLUDE = {
   enterprise: { select: { id: true, name: true, slug: true } },
@@ -61,6 +62,15 @@ export async function POST(request: Request) {
         status: "PENDING",
       },
       include: INCLUDE,
+    });
+
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "SUPPORT_REQUEST",
+      entityType: "SupportAccessGrant",
+      entityId: grant.id,
+      description: `Requested support access to ${target.name}${body.reason ? ` — ${body.reason}` : ""}`,
     });
 
     return NextResponse.json(grant, { status: 201 });

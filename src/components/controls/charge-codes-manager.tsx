@@ -12,13 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 
+// Payment is intentionally absent — payment types live in Payment Methods, not here.
 const CATEGORIES = [
   { value: "ROOM", label: "Room" },
   { value: "FOOD_BEVERAGE", label: "Food & Beverage" },
   { value: "TRANSPORTATION", label: "Transportation" },
   { value: "OTHERS", label: "Others" },
   { value: "TAX", label: "Tax" },
-  { value: "PAYMENT", label: "Payment" },
   { value: "SYSTEM", label: "System" },
 ]
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(CATEGORIES.map(c => [c.value, c.label]))

@@ -816,3 +816,51 @@ all room types all rate plans if nothing custom is specified."*
 - 177/177 suite passing (8 new Base Rate Plan tests: onboarding auto-creation, lock
   enforcement on PUT/DELETE/POST, and the full Night Audit fallback chain incl. the
   derived-plan-on-top-of-Base-fallback case), `tsc --noEmit` clean.
+
+## Charge codes, payment methods, room-charge posting code (2026-07-19)
+
+App-owner instructions this session, with two design questions the owner answered:
+
+- **PAYMENT category removed from Charge Codes** — payment types are Payment Methods,
+  and having both was redundant ("payment method and charge code seems redundant —
+  remove payment from charge codes"). `ChargeCode.category` is now
+  ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | SYSTEM.
+- **Payment Methods** gained a **CITY_LEDGER** type (alongside CASH/CARD/TRANSFER/
+  CHEQUE/VOUCHER). Veyo seed now provisions Cash, Credit Card, Bank Transfer, City
+  Ledger.
+- **Tax reporting — owner chose "identify from source charge code"** (not separate tax
+  charge codes): taxes stay embedded on each folio line (`taxAmount` +
+  `serviceChargeAmount`) tagged by the charge code that produced them, so reports break
+  tax down per charge code natively with no decoupling. Green Tax remains its own
+  GTX-coded line. (If per-tax-line itemisation of a multi-line custom profile is ever
+  needed, add a per-line breakdown child table on top — flagged, not built.)
+- **Rate plans can select an accommodation charge code** (`RatePlan.chargeCodeId`,
+  nullable FK, onDelete SetNull) — the code its nightly room charge posts against at
+  Night Audit. Editable even on the locked Base plan (a posting setting, not identity).
+- **Enterprise posting/settlement defaults** (`EnterpriseSettings`
+  `defaultAccommodationChargeCodeId` + `cityLedgerPaymentMethodId`, Controls > Finance
+  > "Posting & Settlement Defaults"). Night Audit resolves the room charge code as:
+  rate plan's own chargeCode → enterprise default accommodation code → legacy "ROOM"
+  code; 400 only if none of the three exist.
+- **Allocations repointed to dedicated charge codes** in the seed (BF→60RV Package
+  Breakfast, LN→61RV Package Lunch, DN→62RV Package Dinner, Airport→50RV, Speedboat→
+  51RV) instead of the generic FB, so F&B/transfer revenue breaks down by service.
+- **City Ledger settlement — owner chose to LEAVE checkout behavior as-is (2026-07-20).**
+  The settlement *code* (which CITY_LEDGER payment method settles debtor folios) is
+  definable in Controls > Finance, but **no settlement Payment line is posted at
+  checkout, deliberately.** Reason surfaced when the owner and I looked closer: the app
+  models a City-Ledger folio AS the debtor invoice itself (checkout flips
+  `isDebtorAccount = true` and the folio is excluded from the guest-balance check), so
+  the guest already nets to zero and the debtor already carries the full invoice —
+  posting a literal settlement Payment onto that same folio would net it to zero and
+  *erase the debtor's balance*, which is wrong. A visible auditable settlement line
+  would require a two-folio transfer (guest folio gets the payment; a separate invoice
+  folio opens on the debtor account) — owner declined that for now ("option 1"). Do NOT
+  build a checkout settlement-payment posting without first switching to the two-folio
+  model; the current single-folio transfer is the intended behavior. `Payment.shiftId`
+  was therefore left required (no nullable-shift migration needed).
+- 190/190 suite passing (3 new room-charge-code-resolution tests), `tsc --noEmit`
+  clean. Note: a concurrent alpha-hardening pass (availability guard, Night Audit
+  transaction/idempotency, reservation state machine, sequence numbers) also landed in
+  the working tree this session — the Night Audit room-charge-code change layers on top
+  of that pass's refactor of the same route.

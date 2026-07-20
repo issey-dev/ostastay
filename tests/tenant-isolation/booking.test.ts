@@ -100,6 +100,12 @@ describe("Phase 3 tenant isolation: profiles, reservations, groups, tape-chart",
     });
     roomTypeAId = roomTypeA.id;
 
+    // The availability guard requires at least one sellable room of the type — a
+    // type with zero physical rooms is (correctly) never bookable.
+    await prisma.room.create({
+      data: { propertyId: propertyAId, roomTypeId: roomTypeAId, roomNumber: `B${Math.floor(Math.random() * 9000 + 1000)}` },
+    });
+
     const ratePlanA = await prisma.ratePlan.create({
       data: { propertyId: propertyAId, code: "BAR", name: "Best Available Rate" },
     });

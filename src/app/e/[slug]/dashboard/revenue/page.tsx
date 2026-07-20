@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
@@ -39,8 +40,12 @@ type RatePlan = {
   derivedAdjustmentType: string | null
   derivedAdjustmentValue: number | null
   parentRatePlan?: { id: string; name: string; code: string } | null
+  chargeCodeId: string | null
+  chargeCode?: { id: string; code: string; description: string } | null
   allocationLinks?: Array<{ allocation: { id: string; code: string; name: string; mode: string } }>
 }
+
+type ChargeCodeOption = { id: string; code: string; description: string; category: string }
 
 export default function RevenueDashboard() {
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
@@ -65,10 +70,13 @@ export default function RevenueDashboard() {
     parentRatePlanId: "",
     derivedAdjustmentType: "PERCENT",
     derivedAdjustmentValue: "",
+    chargeCodeId: "",
   })
   // Package contents — which allocations this rate plan carries.
   const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
   const [allocations, setAllocations] = useState<AllocationDto[]>([])
+  // Charge codes (enterprise-wide) for the accommodation charge code selector.
+  const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
@@ -96,6 +104,9 @@ export default function RevenueDashboard() {
   useEffect(() => {
     fetchRatePlans()
     fetchAllocations()
+    fetch(`/api/charge-codes`)
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId])
 
@@ -109,6 +120,7 @@ export default function RevenueDashboard() {
       parentRatePlanId: "",
       derivedAdjustmentType: "PERCENT",
       derivedAdjustmentValue: "",
+      chargeCodeId: "",
     })
     setSelectedAllocationIds([])
     setSelectedPlan(null)
@@ -125,6 +137,7 @@ export default function RevenueDashboard() {
       parentRatePlanId: plan.parentRatePlanId || "",
       derivedAdjustmentType: plan.derivedAdjustmentType || "PERCENT",
       derivedAdjustmentValue: plan.derivedAdjustmentValue != null ? plan.derivedAdjustmentValue.toString() : "",
+      chargeCodeId: plan.chargeCodeId || "",
     })
     setSelectedAllocationIds((plan.allocationLinks ?? []).map(l => l.allocation.id))
     setIsDialogOpen(true)
@@ -145,6 +158,7 @@ export default function RevenueDashboard() {
         parentRatePlanId: form.parentRatePlanId || null,
         derivedAdjustmentType: form.parentRatePlanId ? form.derivedAdjustmentType : null,
         derivedAdjustmentValue: form.parentRatePlanId && form.derivedAdjustmentValue !== "" ? parseFloat(form.derivedAdjustmentValue) : null,
+        chargeCodeId: form.chargeCodeId || null,
         allocationIds: selectedAllocationIds,
       }
 
@@ -275,6 +289,25 @@ export default function RevenueDashboard() {
                     value={form.description}
                     onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                   />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Accommodation Charge Code</Label>
+                  <SearchableSelect
+                    value={form.chargeCodeId}
+                    onChange={(v) => setForm(p => ({ ...p, chargeCodeId: v }))}
+                    placeholder="Enterprise default (Accommodation)"
+                    options={[
+                      { value: "", label: "Enterprise default (Accommodation)" },
+                      ...chargeCodes
+                        .filter(c => c.category === "ROOM")
+                        .map(c => ({ label: `${c.code} — ${c.description}`, value: c.id })),
+                    ]}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
+                    default to use the enterprise-wide accommodation code (Controls &gt; Finance).
+                  </p>
                 </div>
 
                 {!isLockedPlan && (

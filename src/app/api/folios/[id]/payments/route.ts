@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
   request: Request,
@@ -15,6 +16,10 @@ export async function POST(
 
     if (!body.paymentMethodId || !body.amount) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
     }
 
     // Check if folio exists and is open
@@ -54,7 +59,7 @@ export async function POST(
         folioId,
         paymentMethodId: body.paymentMethodId,
         shiftId: shift.id,
-        amount: parseFloat(body.amount),
+        amount,
         referenceNumber: body.referenceNumber || null,
         isRefund: body.isRefund || false,
       },
@@ -62,6 +67,15 @@ export async function POST(
         paymentMethod: true,
         shift: true
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: body.isRefund ? "REFUND" : "PAYMENT",
+      entityType: "Payment",
+      entityId: payment.id,
+      description: `${body.isRefund ? "Refunded" : "Received"} $${amount.toFixed(2)} (${paymentMethod.name}) on folio #${folio.folioNumber}${body.referenceNumber ? ` ref ${body.referenceNumber}` : ""}`,
     });
 
     return NextResponse.json(payment, { status: 201 });

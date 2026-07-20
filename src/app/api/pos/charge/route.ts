@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { resolveOutletChargeTax } from "@/lib/tax-calc"
+import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
 
     if (!folioId || !amount || !chargeCodeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+    const chargeAmount = Number(amount)
+    if (!Number.isFinite(chargeAmount) || chargeAmount <= 0) {
+      return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 })
     }
 
     // Verify folio exists and is open
@@ -66,7 +71,7 @@ export async function POST(request: Request) {
     const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
       chargeCode,
       outlet,
-      inputAmount: parseFloat(amount),
+      inputAmount: chargeAmount,
       settings,
       pricesIncludeTaxes: folio.property.pricesIncludeTaxes
     })
@@ -85,6 +90,15 @@ export async function POST(request: Request) {
       include: {
         chargeCode: true
       }
+    })
+
+    await logActivity({
+      ctx,
+      module: "POS",
+      action: "CREATE",
+      entityType: "FolioLineItem",
+      entityId: lineItem.id,
+      description: `POS charge "${description || "POS Charge"}" (${chargeCode.code}, $${(baseAmount + taxAmount + serviceChargeAmount).toFixed(2)})${outlet ? ` via ${outlet.name}` : ""}`,
     })
 
     return NextResponse.json(lineItem)

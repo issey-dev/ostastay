@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "default_super_secret_jwt_key_that_should_be_changed_in_prod"
-)
+import { JWT_SECRET } from '@/lib/jwt-secret'
 
 export async function proxy(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value

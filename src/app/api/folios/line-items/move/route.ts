@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   try {
@@ -55,6 +56,15 @@ export async function POST(request: Request) {
       data: {
         folioId: targetFolioId
       }
+    });
+
+    await logActivity({
+      ctx,
+      module: "CASHIERING",
+      action: "UPDATE",
+      entityType: "Folio",
+      entityId: targetFolioId,
+      description: `Moved ${lineItemIds.length} charge${lineItemIds.length > 1 ? "s" : ""} to folio #${targetFolio.folioNumber}`,
     });
 
     return NextResponse.json({ success: true });

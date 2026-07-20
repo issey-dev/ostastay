@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
+import { logActivity } from "@/lib/activity-log";
+
+// Stored SMTP/SFTP passwords are never sent to the browser — GET (and the PATCH
+// response) replace a set password with this sentinel. The settings form round-trips
+// the sentinel untouched, and PATCH treats it as "leave the stored value alone", so
+// only an actually-typed new password ever overwrites. (Encryption at rest is a
+// separate, still-open item — needs a key-management decision, see TODO.md.)
+const SECRET_MASK = "********";
+
+function redactSecrets<T extends { smtpPassword: string | null; sftpPassword: string | null }>(settings: T): T {
+  return {
+    ...settings,
+    smtpPassword: settings.smtpPassword ? SECRET_MASK : settings.smtpPassword,
+    sftpPassword: settings.sftpPassword ? SECRET_MASK : settings.sftpPassword,
+  };
+}
 
 // Enterprise-wide settings (booking codes, invoice branding, Maldives tax defaults,
 // app theme, SMTP/SFTP scaffold) — scoped to the session's own enterprise, never a
@@ -26,7 +42,7 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json(settings);
+    return NextResponse.json(redactSecrets(settings));
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -41,11 +57,38 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const enterpriseId = ctx.enterpriseId;
 
+    // A round-tripped mask means "unchanged" — never store the literal sentinel.
+    if (body.smtpPassword === SECRET_MASK) delete body.smtpPassword;
+    if (body.sftpPassword === SECRET_MASK) delete body.sftpPassword;
+
+    // Posting & settlement defaults reference other enterprise records — validate they
+    // belong to this enterprise (and that the city-ledger method is actually a
+    // CITY_LEDGER payment method). Empty string clears the pointer (stored as null).
+    if (body.defaultAccommodationChargeCodeId) {
+      const cc = await prisma.chargeCode.findUnique({ where: { id: body.defaultAccommodationChargeCodeId } });
+      if (!cc || cc.enterpriseId !== enterpriseId) {
+        return NextResponse.json({ error: "Default accommodation charge code not found" }, { status: 400 });
+      }
+    }
+    if (body.cityLedgerPaymentMethodId) {
+      const pm = await prisma.paymentMethod.findUnique({ where: { id: body.cityLedgerPaymentMethodId } });
+      if (!pm || pm.enterpriseId !== enterpriseId) {
+        return NextResponse.json({ error: "City Ledger payment method not found" }, { status: 400 });
+      }
+      if (pm.type !== "CITY_LEDGER") {
+        return NextResponse.json({ error: "The City Ledger settlement method must be a CITY_LEDGER payment method" }, { status: 400 });
+      }
+    }
+    const normalizeId = (v: unknown) => (v === undefined ? undefined : v || null);
+
     const settings = await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },
       update: {
         resConfirmPrefix: body.resConfirmPrefix !== undefined ? body.resConfirmPrefix : undefined,
         resConfirmLength: body.resConfirmLength !== undefined ? parseInt(body.resConfirmLength) : undefined,
+
+        defaultAccommodationChargeCodeId: normalizeId(body.defaultAccommodationChargeCodeId),
+        cityLedgerPaymentMethodId: normalizeId(body.cityLedgerPaymentMethodId),
 
         invoiceBrandName: body.invoiceBrandName !== undefined ? body.invoiceBrandName : undefined,
         invoiceLogoUrl: body.invoiceLogoUrl !== undefined ? body.invoiceLogoUrl : undefined,
@@ -89,6 +132,9 @@ export async function PATCH(request: Request) {
         resConfirmPrefix: body.resConfirmPrefix || "",
         resConfirmLength: body.resConfirmLength ? parseInt(body.resConfirmLength) : 6,
 
+        defaultAccommodationChargeCodeId: body.defaultAccommodationChargeCodeId || null,
+        cityLedgerPaymentMethodId: body.cityLedgerPaymentMethodId || null,
+
         invoiceBrandName: body.invoiceBrandName || "",
         invoiceLogoUrl: body.invoiceLogoUrl || "",
         invoiceBrandColor: body.invoiceBrandColor || DEFAULT_INVOICE_BRAND_COLOR,
@@ -124,7 +170,16 @@ export async function PATCH(request: Request) {
       }
     });
 
-    return NextResponse.json(settings);
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "EnterpriseSettings",
+      entityId: settings.id,
+      description: `Updated enterprise settings (${Object.keys(body).join(", ")})`,
+    });
+
+    return NextResponse.json(redactSecrets(settings));
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

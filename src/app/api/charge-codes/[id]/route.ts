@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 
-const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "PAYMENT", "SYSTEM"];
+// PAYMENT removed — payment types are Payment Methods, not charge codes.
+const CATEGORIES = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM"];
 
 export async function PUT(
   request: Request,

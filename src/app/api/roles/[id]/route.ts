@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 export async function PATCH(
   request: Request,
@@ -55,6 +56,15 @@ export async function PATCH(
       return tx.role.findUnique({ where: { id }, include: { permissions: true } });
     });
 
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "UPDATE",
+      entityType: "Role",
+      entityId: id,
+      description: `Updated role "${updated?.name ?? role.name}"${body.permissions ? " — permission matrix changed" : ""}`,
+    });
+
     return NextResponse.json(updated);
   } catch (error: any) {
     if (error?.code === "P2002") {
@@ -92,6 +102,14 @@ export async function DELETE(
     }
 
     await prisma.role.delete({ where: { id } });
+    await logActivity({
+      ctx,
+      module: "CONTROLS",
+      action: "DELETE",
+      entityType: "Role",
+      entityId: id,
+      description: `Deleted role "${role.name}"`,
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

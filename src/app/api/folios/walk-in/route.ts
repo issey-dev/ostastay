@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { logActivity } from "@/lib/activity-log";
 
 // Opens a standalone bill for a guest who has no reservation — a passerby using an
 // outlet without staying. Once created, this folio is posted to and paid off exactly
@@ -26,6 +27,15 @@ export async function POST(request: Request) {
         walkInGuestName,
         walkInGuestContact: walkInGuestContact || null,
       },
+    });
+
+    await logActivity({
+      ctx,
+      module: "POS",
+      action: "CREATE",
+      entityType: "Folio",
+      entityId: folio.id,
+      description: `Opened walk-in folio for ${walkInGuestName}`,
     });
 
     return NextResponse.json(folio, { status: 201 });
