@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,8 @@ type RatePlan = {
   description?: string
   priority: number
   isNegotiated: boolean
+  isComplimentary: boolean
+  isHouseUse: boolean
   isLocked: boolean
   parentRatePlanId: string | null
   derivedAdjustmentType: string | null
@@ -43,11 +46,13 @@ type RatePlan = {
   chargeCodeId: string | null
   chargeCode?: { id: string; code: string; description: string } | null
   allocationLinks?: Array<{ allocation: { id: string; code: string; name: string; mode: string } }>
+  negotiatedForProfileIds?: string[]
 }
 
 type ChargeCodeOption = { id: string; code: string; description: string; category: string }
 
 export default function RevenueDashboard() {
+  const { slug } = useParams<{ slug: string }>()
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -67,6 +72,8 @@ export default function RevenueDashboard() {
     description: "",
     priority: 10,
     isNegotiated: false,
+    isComplimentary: false,
+    isHouseUse: false,
     parentRatePlanId: "",
     derivedAdjustmentType: "PERCENT",
     derivedAdjustmentValue: "",
@@ -117,6 +124,8 @@ export default function RevenueDashboard() {
       description: "",
       priority: 10,
       isNegotiated: false,
+      isComplimentary: false,
+      isHouseUse: false,
       parentRatePlanId: "",
       derivedAdjustmentType: "PERCENT",
       derivedAdjustmentValue: "",
@@ -134,6 +143,8 @@ export default function RevenueDashboard() {
       description: plan.description || "",
       priority: plan.priority,
       isNegotiated: plan.isNegotiated,
+      isComplimentary: plan.isComplimentary,
+      isHouseUse: plan.isHouseUse,
       parentRatePlanId: plan.parentRatePlanId || "",
       derivedAdjustmentType: plan.derivedAdjustmentType || "PERCENT",
       derivedAdjustmentValue: plan.derivedAdjustmentValue != null ? plan.derivedAdjustmentValue.toString() : "",
@@ -367,16 +378,40 @@ export default function RevenueDashboard() {
                 </div>
                 )}
 
-                <div className="flex items-center space-x-2 mt-auto">
-                  <Checkbox
-                    id="negotiated"
-                    disabled={isLockedPlan}
-                    checked={form.isNegotiated}
-                    onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
-                  />
-                  <Label htmlFor="negotiated" className="font-normal cursor-pointer">
-                    This is a negotiated rate (Corporate/Wholesale)
-                  </Label>
+                <div className="flex flex-col gap-2 mt-auto">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="negotiated"
+                      disabled={isLockedPlan}
+                      checked={form.isNegotiated}
+                      onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
+                    />
+                    <Label htmlFor="negotiated" className="font-normal cursor-pointer">
+                      This is a negotiated rate (Corporate/Wholesale)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="complimentary"
+                      disabled={isLockedPlan}
+                      checked={form.isComplimentary}
+                      onCheckedChange={(checked) => setForm(p => ({ ...p, isComplimentary: !!checked }))}
+                    />
+                    <Label htmlFor="complimentary" className="font-normal cursor-pointer">
+                      Complimentary
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="houseUse"
+                      disabled={isLockedPlan}
+                      checked={form.isHouseUse}
+                      onCheckedChange={(checked) => setForm(p => ({ ...p, isHouseUse: !!checked }))}
+                    />
+                    <Label htmlFor="houseUse" className="font-normal cursor-pointer">
+                      House Use
+                    </Label>
+                  </div>
                 </div>
                 </div>
                 {/* End left column */}
@@ -495,9 +530,24 @@ export default function RevenueDashboard() {
                         {plan.isLocked ? (
                           <Badge variant="outline" className="text-muted-foreground">Base Rate</Badge>
                         ) : plan.isNegotiated ? (
-                          <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
+                          <>
+                            <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
+                            {(plan.negotiatedForProfileIds?.length ?? 0) === 0 ? (
+                              <Badge variant="outline" className="bg-destructive-muted text-destructive border-destructive/30">No agents linked</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground">
+                                {plan.negotiatedForProfileIds?.length} agent{plan.negotiatedForProfileIds?.length === 1 ? "" : "s"} linked
+                              </Badge>
+                            )}
+                          </>
                         ) : (
                           <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
+                        )}
+                        {plan.isComplimentary && (
+                          <Badge variant="outline" className="bg-info-muted text-info border-info/30">Complimentary</Badge>
+                        )}
+                        {plan.isHouseUse && (
+                          <Badge variant="outline" className="text-muted-foreground">House Use</Badge>
                         )}
                         {plan.parentRatePlan && (
                           <Badge variant="outline" className="bg-info-muted text-info border-info/30">
@@ -514,7 +564,7 @@ export default function RevenueDashboard() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Link href={`/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>
+                      <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>
                         <Button variant="outline" size="sm">
                           <CalendarDays className="mr-2 h-3 w-3" /> Calendar
                         </Button>

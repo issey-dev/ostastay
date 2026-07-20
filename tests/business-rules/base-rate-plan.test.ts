@@ -156,6 +156,48 @@ describe("Base Rate Plan: lock enforcement", () => {
     // But the allocation link was applied.
     expect(reloaded!.allocationLinks.some((l) => l.allocationId === allocation.id)).toBe(true);
   });
+});
+
+describe("Rate Plan: Complimentary / House Use flags", () => {
+  it("persists isComplimentary and isHouseUse through create and update, defaulting to false", async () => {
+    const { adminId, enterpriseId } = await setupProperty("test-brp-comp");
+    const property = await prisma.property.create({
+      data: {
+        enterpriseId, name: "P", code: `CH-${uniq()}`, legalName: "P LLC",
+        defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+      },
+    });
+
+    const createRes = await asUser(adminId, () =>
+      ratePlansRoute.POST(
+        new Request("http://localhost/api/rate-plans", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ propertyId: property.id, code: "COMPTEST", name: "Comp Test", isComplimentary: true }),
+        })
+      )
+    );
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+    expect(created.isComplimentary).toBe(true);
+    expect(created.isHouseUse).toBe(false); // not sent — defaults false, not undefined/omitted
+
+    const updateRes = await asUser(adminId, () =>
+      ratePlansIdRoute.PUT(
+        new Request(`http://localhost/api/rate-plans/${created.id}`, {
+          method: "PUT", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            code: created.code, name: created.name, priority: created.priority,
+            isNegotiated: false, isComplimentary: false, isHouseUse: true,
+          }),
+        }),
+        { params: Promise.resolve({ id: created.id }) }
+      )
+    );
+    expect(updateRes.status).toBe(200);
+    const updated = await updateRes.json();
+    expect(updated.isComplimentary).toBe(false);
+    expect(updated.isHouseUse).toBe(true);
+  });
 
   it("DELETE is blocked for a locked plan", async () => {
     const { adminId, enterpriseId } = await setupProperty("test-brp-lockdelete");
