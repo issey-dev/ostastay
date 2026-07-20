@@ -18,10 +18,12 @@ export async function materializeReservationAllocations(params: {
 }): Promise<{ error?: string }> {
   const { reservationId, propertyId, ratePlanId, mealPlanCode } = params
 
-  // Resolve the linked (RATE_PLAN + MEAL_PLAN) attachment set. Only active
+  // Resolve the linked attachment set — exclusively RATE_PLAN or MEAL_PLAN per the
+  // property's Allocation Calculation setting (Controls > Revenue). Only active
   // allocations attach — a deactivated allocation stops appearing on new/edited
   // reservations without touching historical ones.
-  const [ratePlan, mealPlan] = await Promise.all([
+  const [property, ratePlan, mealPlan] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { allocationCalculationMode: true } }),
     ratePlanId
       ? prisma.ratePlan.findUnique({
           where: { id: ratePlanId },
@@ -47,6 +49,7 @@ export async function materializeReservationAllocations(params: {
     (links ?? []).filter((l) => l.allocation.isActive).map((l) => ({ allocationId: l.allocationId }))
 
   const linked = resolveLinkedAllocationIds({
+    mode: property?.allocationCalculationMode === "MEAL_PLAN" ? "MEAL_PLAN" : "RATE_PLAN",
     ratePlanLinks: activeLinks(ratePlan?.allocationLinks),
     parentRatePlanLinks: activeLinks(ratePlan?.parentRatePlan?.allocationLinks),
     mealPlanLinks: activeLinks(mealPlan?.allocationLinks),

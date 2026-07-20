@@ -7,6 +7,9 @@ type Property = {
   enterpriseId: string
   name: string
   bannerColor: string | null
+  // "RATE_PLAN" or "MEAL_PLAN" — which side drives automatic Allocation attachment
+  // on a reservation (Controls > Revenue). See src/lib/allocations.ts.
+  allocationCalculationMode: string
 }
 
 type PropertyContextType = {
@@ -15,6 +18,11 @@ type PropertyContextType = {
   isLocked: boolean
   loading: boolean
   setCurrentProperty: (property: Property) => void
+  // Re-fetches the property list/current-property from the server without switching
+  // which one is active — for a page that just edited the current property's own
+  // fields (e.g. Controls > Revenue's Allocation Calculation toggle) and needs the
+  // rest of the app to see the new value without a full reload.
+  refreshProperties: () => void
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
@@ -25,24 +33,28 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [isLocked, setIsLocked] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch("/api/session/current-property")
+  const fetchCurrentProperty = useCallback(() => {
+    return fetch("/api/session/current-property")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (cancelled || !data) return
+        if (!data) return
         setProperties(data.properties ?? [])
         setIsLocked(!!data.isLocked)
         const current = (data.properties ?? []).find((p: Property) => p.id === data.currentPropertyId) ?? data.properties?.[0] ?? null
         setCurrentPropertyState(current)
       })
       .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchCurrentProperty().finally(() => {
+      if (!cancelled) setLoading(false)
+    })
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const setCurrentProperty = useCallback((property: Property) => {
@@ -57,7 +69,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   }, [isLocked])
 
   return (
-    <PropertyContext.Provider value={{ currentProperty, properties, isLocked, loading, setCurrentProperty }}>
+    <PropertyContext.Provider value={{ currentProperty, properties, isLocked, loading, setCurrentProperty, refreshProperties: fetchCurrentProperty }}>
       {children}
     </PropertyContext.Provider>
   )
@@ -69,6 +81,7 @@ const FALLBACK_CONTEXT: PropertyContextType = {
   isLocked: false,
   loading: true,
   setCurrentProperty: () => {},
+  refreshProperties: () => {},
 }
 
 export function useProperty() {

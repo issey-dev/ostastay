@@ -32,7 +32,7 @@ import { TaxManager } from "@/components/controls/tax-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
 import { PostingDefaultsManager } from "@/components/controls/posting-defaults-manager"
-import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
+import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { LicensingManager } from "@/components/controls/licensing-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
@@ -41,6 +41,7 @@ import { PropertyBannerColorManager } from "@/components/controls/property-banne
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 import { SequenceManager } from "@/components/controls/sequence-manager"
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
+import { AllocationCalculationManager } from "@/components/controls/allocation-calculation-manager"
 
 // Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
 // Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
@@ -131,7 +132,7 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, Bank Transfers, or City Ledger.">
             <PaymentMethodsManager />
           </ControlsCard>
-          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, and which City Ledger method settles debtor folios at checkout.">
+          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, which City Ledger method settles debtor folios at checkout, and which charge code posts a Travel Agent commission credit.">
             <PostingDefaultsManager />
           </ControlsCard>
         </div>
@@ -142,9 +143,14 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       label: "Revenue",
       icon: TrendingUp,
       render: () => (
-        <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments.">
-          <MealPlansManager />
-        </ControlsCard>
+        <div className="space-y-6">
+          <ControlsCard title="Allocation Calculation" description="Which side drives automatic Allocation attachment on a reservation — Meal Plan or Rate Plan. Per-property; changing this only affects reservations created or edited afterward, not existing bookings.">
+            <AllocationCalculationManager />
+          </ControlsCard>
+          <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments.">
+            <MealPlansManager />
+          </ControlsCard>
+        </div>
       ),
     },
     {
@@ -189,9 +195,14 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       label: "Reservations",
       icon: CalendarDays,
       render: () => (
-        <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
-          <GeneralSettingsManager />
-        </ControlsCard>
+        <div className="space-y-6">
+          <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
+            <GeneralSettingsManager />
+          </ControlsCard>
+          <ControlsCard title="Reservation Dropdown Lists" description="Special Requests and other reservation-level lists.">
+            <DropdownsManager categories={RESERVATION_LOV_CATEGORIES} />
+          </ControlsCard>
+        </div>
       ),
     },
     {

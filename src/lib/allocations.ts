@@ -108,31 +108,38 @@ export function allocationStayTotal(params: {
   return round2(total)
 }
 
-// The attachment set a reservation should carry, derived from its rate plan and meal
-// plan links. A DERIVED rate plan with no links of its own inherits its parent's
-// (consistent with "a derived plan is parent + adjustment" — single hop, mirroring
-// src/lib/derived-rate.ts); if it has its own links they replace the parent's.
-// Dedupe: a rate-plan link wins over a meal-plan link for the same allocation (the
-// source tag matters for UI/edit-preservation, the amount math is identical).
+export type AllocationCalculationMode = "RATE_PLAN" | "MEAL_PLAN"
+
+// The attachment set a reservation should carry — exclusively driven by ONE side,
+// per the property's Allocation Calculation setting (Controls > Revenue, see
+// Property.allocationCalculationMode): "RATE_PLAN" only reads ratePlanLinks (falling
+// back to parentRatePlanLinks for a DERIVED plan with no links of its own — "a
+// derived plan is parent + adjustment," single hop, mirroring src/lib/derived-rate.ts
+// — and mealPlanLinks is ignored entirely); "MEAL_PLAN" only reads mealPlanLinks and
+// ignores the rate plan's links entirely. The two sources are never combined.
 export function resolveLinkedAllocationIds(params: {
+  mode: AllocationCalculationMode
   ratePlanLinks: Array<{ allocationId: string }>
   parentRatePlanLinks?: Array<{ allocationId: string }> | null
   mealPlanLinks: Array<{ allocationId: string }>
 }): Array<{ allocationId: string; source: "RATE_PLAN" | "MEAL_PLAN" }> {
-  const effectiveRatePlanLinks =
-    params.ratePlanLinks.length > 0 ? params.ratePlanLinks : params.parentRatePlanLinks ?? []
-
   const out: Array<{ allocationId: string; source: "RATE_PLAN" | "MEAL_PLAN" }> = []
   const seen = new Set<string>()
-  for (const l of effectiveRatePlanLinks) {
-    if (seen.has(l.allocationId)) continue
-    seen.add(l.allocationId)
-    out.push({ allocationId: l.allocationId, source: "RATE_PLAN" })
-  }
-  for (const l of params.mealPlanLinks) {
-    if (seen.has(l.allocationId)) continue
-    seen.add(l.allocationId)
-    out.push({ allocationId: l.allocationId, source: "MEAL_PLAN" })
+
+  if (params.mode === "RATE_PLAN") {
+    const effectiveRatePlanLinks =
+      params.ratePlanLinks.length > 0 ? params.ratePlanLinks : params.parentRatePlanLinks ?? []
+    for (const l of effectiveRatePlanLinks) {
+      if (seen.has(l.allocationId)) continue
+      seen.add(l.allocationId)
+      out.push({ allocationId: l.allocationId, source: "RATE_PLAN" })
+    }
+  } else {
+    for (const l of params.mealPlanLinks) {
+      if (seen.has(l.allocationId)) continue
+      seen.add(l.allocationId)
+      out.push({ allocationId: l.allocationId, source: "MEAL_PLAN" })
+    }
   }
   return out
 }

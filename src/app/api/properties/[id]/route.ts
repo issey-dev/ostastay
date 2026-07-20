@@ -23,6 +23,10 @@ export async function PUT(
 
     const body = await request.json()
 
+    if (body.allocationCalculationMode !== undefined && !["RATE_PLAN", "MEAL_PLAN"].includes(body.allocationCalculationMode)) {
+      return NextResponse.json({ error: "allocationCalculationMode must be RATE_PLAN or MEAL_PLAN" }, { status: 400 })
+    }
+
     // enterpriseId is deliberately never accepted here — a property can never be
     // reassigned to a different enterprise via this route.
     const property = await prisma.property.update({
@@ -42,6 +46,7 @@ export async function PUT(
         starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
         bannerColor: body.bannerColor,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
+        allocationCalculationMode: body.allocationCalculationMode,
       },
     })
 

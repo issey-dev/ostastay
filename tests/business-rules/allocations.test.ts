@@ -268,26 +268,46 @@ describe("Allocations: pure helpers", () => {
     ).toBe(2 * 8 + 1 * 4);
   });
 
-  it("resolveLinkedAllocationIds inherits parent links for derived plans and dedupes meal-plan links", () => {
+  it("resolveLinkedAllocationIds in RATE_PLAN mode inherits parent links for derived plans and ignores meal-plan links entirely", () => {
     // Derived plan with no links of its own → parent's links, tagged RATE_PLAN.
+    // mealPlanLinks is present in the input but must be completely ignored in this mode.
     expect(
       resolveLinkedAllocationIds({
+        mode: "RATE_PLAN",
         ratePlanLinks: [],
         parentRatePlanLinks: [{ allocationId: "bf" }],
         mealPlanLinks: [{ allocationId: "bf" }, { allocationId: "dn" }],
       })
-    ).toEqual([
-      { allocationId: "bf", source: "RATE_PLAN" },
-      { allocationId: "dn", source: "MEAL_PLAN" },
-    ]);
+    ).toEqual([{ allocationId: "bf", source: "RATE_PLAN" }]);
     // Own links replace the parent's.
     expect(
       resolveLinkedAllocationIds({
+        mode: "RATE_PLAN",
         ratePlanLinks: [{ allocationId: "spa" }],
         parentRatePlanLinks: [{ allocationId: "bf" }],
         mealPlanLinks: [],
       })
     ).toEqual([{ allocationId: "spa", source: "RATE_PLAN" }]);
+  });
+
+  it("resolveLinkedAllocationIds in MEAL_PLAN mode uses only meal-plan links, ignoring the rate plan's entirely", () => {
+    expect(
+      resolveLinkedAllocationIds({
+        mode: "MEAL_PLAN",
+        ratePlanLinks: [{ allocationId: "spa" }],
+        parentRatePlanLinks: [{ allocationId: "bf" }],
+        mealPlanLinks: [{ allocationId: "dn" }],
+      })
+    ).toEqual([{ allocationId: "dn", source: "MEAL_PLAN" }]);
+    // No meal plan selected → nothing attaches, even though the rate plan has links.
+    expect(
+      resolveLinkedAllocationIds({
+        mode: "MEAL_PLAN",
+        ratePlanLinks: [{ allocationId: "spa" }],
+        parentRatePlanLinks: [],
+        mealPlanLinks: [],
+      })
+    ).toEqual([]);
   });
 });
 
@@ -422,13 +442,17 @@ describe("Allocations: Night Audit posting", () => {
 });
 
 describe("Allocations: reservation materialization", () => {
-  it("derives RATE_PLAN + MEAL_PLAN rows, preserves MANUAL rows across re-materialization", async () => {
+  it("RATE_PLAN mode (the default) attaches only rate-plan-linked allocations, ignoring the meal plan entirely; MANUAL rows survive re-materialization", async () => {
     const { propertyId, reservationId, ratePlanId, allocationId, enterpriseId } = await setupWithAllocation({
       slug: "test-alloc-materialize",
       adults: 2, children: 0,
       checkInOffsetDays: 1, checkOutOffsetDays: 4,
       allocation: { mode: "ADD_TO_RATE", postingRhythm: "EVERY_NIGHT", adultPrice: 10, childPrice: 5 },
     });
+
+    // Confirm the property defaults to RATE_PLAN mode without anything setting it explicitly.
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    expect(property!.allocationCalculationMode).toBe("RATE_PLAN");
 
     // A second allocation linked to the rate plan, and a third linked to a meal plan.
     const cc = await prisma.chargeCode.create({
@@ -454,35 +478,73 @@ describe("Allocations: reservation materialization", () => {
       data: { propertyId, code: "HB", name: "Half Board", allocationLinks: { create: { allocationId: dinner.id } } },
     });
 
-    // Materialize: rate plan (→ transfer) + meal plan HB (→ dinner); the existing
-    // MANUAL BF row (from setup) must survive untouched.
+    // Materialize in RATE_PLAN mode with mealPlanCode "HB" set: only the rate plan's
+    // own link (transfer) attaches — dinner (meal-plan-linked) must NOT attach even
+    // though a meal plan is selected. The existing MANUAL BF row (from setup) must
+    // survive untouched.
     const result = await materializeReservationAllocations({
       reservationId, propertyId, ratePlanId, mealPlanCode: "HB",
     });
     expect(result.error).toBeUndefined();
 
     let rows = await prisma.reservationAllocation.findMany({ where: { reservationId } });
-    expect(rows).toHaveLength(3);
-    expect(rows.find((r) => r.allocationId === transfer.id)?.source).toBe("RATE_PLAN");
-    expect(rows.find((r) => r.allocationId === dinner.id)?.source).toBe("MEAL_PLAN");
-    expect(rows.find((r) => r.allocationId === allocationId)?.source).toBe("MANUAL");
-
-    // Switch meal plan off (NONE): dinner row goes, transfer re-derives, manual stays.
-    await materializeReservationAllocations({
-      reservationId, propertyId, ratePlanId, mealPlanCode: "NONE",
-    });
-    rows = await prisma.reservationAllocation.findMany({ where: { reservationId } });
     expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.allocationId === transfer.id)?.source).toBe("RATE_PLAN");
     expect(rows.some((r) => r.allocationId === dinner.id)).toBe(false);
     expect(rows.find((r) => r.allocationId === allocationId)?.source).toBe("MANUAL");
 
-    // Explicitly clearing the manual set removes the manual row too.
+    // Explicitly clearing the manual set removes the manual row too; transfer stays
+    // (still rate-plan-linked).
     await materializeReservationAllocations({
-      reservationId, propertyId, ratePlanId, mealPlanCode: "NONE", manualAllocationIds: [],
+      reservationId, propertyId, ratePlanId, mealPlanCode: "HB", manualAllocationIds: [],
     });
     rows = await prisma.reservationAllocation.findMany({ where: { reservationId } });
     expect(rows).toHaveLength(1);
     expect(rows[0].allocationId).toBe(transfer.id);
     expect(mealPlan.id).toBeDefined();
+  });
+
+  it("MEAL_PLAN mode attaches only the selected meal plan's linked allocations, ignoring the rate plan's own links entirely", async () => {
+    const { propertyId, reservationId, ratePlanId, enterpriseId } = await setupWithAllocation({
+      slug: "test-alloc-materialize-mp",
+      adults: 2, children: 0,
+      checkInOffsetDays: 1, checkOutOffsetDays: 4,
+      allocation: { mode: "ADD_TO_RATE", postingRhythm: "EVERY_NIGHT", adultPrice: 10, childPrice: 5 },
+    });
+    await prisma.property.update({ where: { id: propertyId }, data: { allocationCalculationMode: "MEAL_PLAN" } });
+
+    const cc = await prisma.chargeCode.create({
+      data: { enterpriseId, code: "TRF2", description: "Transfers", category: "TRANSPORTATION" },
+    });
+    const transfer = await prisma.allocation.create({
+      data: {
+        propertyId, code: "TRF-SB2", name: "Speedboat Transfer", type: "TRANSFER",
+        chargeCodeId: cc.id, postingRhythm: "ARRIVAL_NIGHT", mode: "ADD_TO_RATE",
+        rates: { create: { adultPrice: 100, childPrice: 50, effectiveFrom: new Date("2020-01-01") } },
+      },
+    });
+    await prisma.ratePlanAllocation.create({ data: { ratePlanId, allocationId: transfer.id } });
+
+    const dinner = await prisma.allocation.create({
+      data: {
+        propertyId, code: "DN2", name: "Dinner", type: "FNB",
+        chargeCodeId: cc.id, postingRhythm: "EVERY_NIGHT", mode: "ADD_TO_RATE",
+        rates: { create: { adultPrice: 30, childPrice: 15, effectiveFrom: new Date("2020-01-01") } },
+      },
+    });
+    await prisma.mealPlan.create({
+      data: { propertyId, code: "HB2", name: "Half Board", allocationLinks: { create: { allocationId: dinner.id } } },
+    });
+
+    // Meal plan selected: only dinner (meal-plan-linked) attaches — transfer
+    // (rate-plan-linked) must NOT attach even though the same rate plan is assigned.
+    await materializeReservationAllocations({ reservationId, propertyId, ratePlanId, mealPlanCode: "HB2" });
+    let rows = await prisma.reservationAllocation.findMany({ where: { reservationId, source: { not: "MANUAL" } } });
+    expect(rows.map((r) => r.allocationId)).toEqual([dinner.id]);
+
+    // No meal plan selected: nothing linked attaches, even with the same rate plan.
+    await materializeReservationAllocations({ reservationId, propertyId, ratePlanId, mealPlanCode: "NONE" });
+    rows = await prisma.reservationAllocation.findMany({ where: { reservationId, source: { not: "MANUAL" } } });
+    expect(rows).toHaveLength(0);
   });
 });

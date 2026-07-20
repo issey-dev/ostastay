@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText } from "lucide-react"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
@@ -37,7 +37,7 @@ type Reservation = {
   remarks: string | null
   mealPlan: string
   primaryGuestId: string
-  primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string }
+  primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string, vipLevel: string | null }
   travelAgentId: string | null
   travelAgent: { companyName: string, firstName: string, lastName: string } | null
   accompanyingGuests?: { profile: { upid: string, firstName: string, lastName: string, companyName: string, profileType: string } }[]
@@ -219,9 +219,11 @@ export default function ReservationsDashboard() {
   }, [form.checkInDate, form.checkOutDate, form.assignments, selectedRes?.id])
 
   // ── Allocation preview (mirrors the server's materialization in
-  // src/lib/allocations-server.ts): rate-plan links (parent fallback for derived
-  // plans) + meal-plan links = auto-attached; anything else active is offerable as a
-  // manual add-on. Totals come from the same shared math Night Audit posts with.
+  // src/lib/allocations-server.ts): exclusively RATE_PLAN (links on the assigned rate
+  // plan, parent fallback for a derived plan) or MEAL_PLAN (links on the selected
+  // meal plan) per the property's Allocation Calculation setting (Controls >
+  // Revenue) — never both. Totals come from the same shared math Night Audit posts
+  // with.
   const selectedRatePlanForAlloc = ratePlans.find(rp => rp.id === form.assignments[0]?.ratePlanId)
   const parentPlanForAlloc = selectedRatePlanForAlloc?.parentRatePlanId
     ? ratePlans.find(rp => rp.id === selectedRatePlanForAlloc.parentRatePlanId)
@@ -232,8 +234,9 @@ export default function ReservationsDashboard() {
       : parentPlanForAlloc?.allocationLinks) ?? []
   const mealPlanAllocLinks: Array<{ allocation: { id: string } }> =
     mealPlans.find(mp => mp.code === form.mealPlan)?.allocationLinks ?? []
+  const linksForMode = currentProperty?.allocationCalculationMode === "MEAL_PLAN" ? mealPlanAllocLinks : ratePlanAllocLinks
   const autoAllocationIds = [
-    ...new Set([...ratePlanAllocLinks, ...mealPlanAllocLinks].map(l => l.allocation.id)),
+    ...new Set(linksForMode.map(l => l.allocation.id)),
   ].filter(id => allocations.some(a => a.id === id && a.isActive))
 
   const stayDatesForAlloc = (() => {
@@ -656,7 +659,10 @@ export default function ReservationsDashboard() {
                           : `${prof.firstName} ${prof.lastName || ''}`.trim();
                         return (
                           <div key={gid} className="flex justify-between items-center bg-card px-3 py-2 rounded border text-sm shadow-sm">
-                            <span>{name}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              {name}
+                              {prof.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                            </span>
                             <Button
                               type="button"
                               variant="ghost"
@@ -761,7 +767,16 @@ export default function ReservationsDashboard() {
 
                 <div className="flex flex-col gap-4 mt-2">
                   <h3 className="font-semibold text-lg border-b pb-2">Room Segments</h3>
-                  {form.assignments.map((assignment, index) => (
+                  {(() => {
+                    // Negotiated Rate Plans are only selectable for the Company/Travel
+                    // Agent profile(s) they're linked to (see RatePlanAgentAccess) — a
+                    // negotiated plan is hidden here unless the booking's own Travel
+                    // Agent/Booking Source matches one of its linked profiles.
+                    const availableRatePlans = ratePlans.filter((rp) =>
+                      !rp.isNegotiated ||
+                      (form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId))
+                    )
+                    return form.assignments.map((assignment, index) => (
                     <div key={index} className="flex flex-col gap-4 p-4 border rounded-md relative bg-muted shadow-sm">
                       <div className="font-semibold text-sm text-foreground flex justify-between items-center">
                         <span>Segment {index + 1}</span>
@@ -850,9 +865,9 @@ export default function ReservationsDashboard() {
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              {ratePlans.map(rp => (
+                              {availableRatePlans.map(rp => (
                                 <SelectItem key={rp.id} value={rp.id}>
-                                  {rp.name}
+                                  {rp.name}{rp.isNegotiated ? " (Negotiated)" : ""}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -894,7 +909,8 @@ export default function ReservationsDashboard() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  })()}
                   <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => {
                     const lastAssignment = form.assignments[form.assignments.length - 1];
                     setForm(p => ({
@@ -1049,7 +1065,10 @@ export default function ReservationsDashboard() {
                   <div key={res.id} className="bg-card border border-border rounded-lg p-4 shadow-elevation-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-medium text-foreground">{guestName}</div>
+                        <div className="font-medium text-foreground inline-flex items-center gap-1.5">
+                          {guestName}
+                          {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                        </div>
                         <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
                       </div>
                       <StatusBadge
@@ -1111,7 +1130,10 @@ export default function ReservationsDashboard() {
                     <TableRow key={res.id}>
                       <TableCell className="font-mono font-bold">{res.confirmationNo}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{guestName}</div>
+                        <div className="font-medium inline-flex items-center gap-1.5">
+                          {guestName}
+                          {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
+                        </div>
                         {res.accompanyingGuests && res.accompanyingGuests.length > 0 && (
                           <div className="text-xs text-muted-foreground mt-1">
                             + {res.accompanyingGuests.length} Accompanying
