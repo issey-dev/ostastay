@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react"
 import { useSearchParams } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
+import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import {
   PrintDocumentShell,
   PrintLoading,
@@ -127,10 +128,12 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
       ]
     : ["Walk-in / Outlet Sale — no room booking"]
 
+  const invoiceGuestEmail = primaryEmail(invoiceGuest.communications)
+  const invoiceGuestMobile = primaryMobile(invoiceGuest.communications)
   const guestLines = [
     `${invoiceGuest.firstName} ${invoiceGuest.lastName}`.trim(),
-    invoiceGuest.contacts?.[0]?.email ? `Email: ${invoiceGuest.contacts[0].email}` : "",
-    invoiceGuest.contacts?.[0]?.mobile ? `Phone: ${invoiceGuest.contacts[0].mobile}` : "",
+    invoiceGuestEmail ? `Email: ${invoiceGuestEmail}` : "",
+    invoiceGuestMobile ? `Phone: ${invoiceGuestMobile}` : "",
   ]
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react"
 import { format, parseISO } from "date-fns"
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
+import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import {
   PrintDocumentShell,
   PrintLoading,
@@ -82,10 +83,12 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ id: s
     amount: payment.isRefund ? -payment.amount : payment.amount,
   }]
 
+  const guestEmail = primaryEmail(guest.communications)
+  const guestMobile = primaryMobile(guest.communications)
   const guestLines = [
     `${guest.firstName} ${guest.lastName}`.trim(),
-    guest.contacts?.[0]?.email ? `Email: ${guest.contacts[0].email}` : "",
-    guest.contacts?.[0]?.mobile ? `Phone: ${guest.contacts[0].mobile}` : "",
+    guestEmail ? `Email: ${guestEmail}` : "",
+    guestMobile ? `Phone: ${guestMobile}` : "",
   ]
 
   const paymentLines = [

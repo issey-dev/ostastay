@@ -311,6 +311,18 @@ export async function assertPropertyAccess(ctx: AuthContext, propertyId: string)
   requirePropertyScope(ctx, propertyId);
 }
 
+// Shared guard for every Profile child-resource route (communications, addresses,
+// documents, attachments, notes): confirms the profile exists and belongs to the
+// caller's enterprise. Profile has no propertyId of its own (enterprise-wide, shared
+// across every property) so there's no requirePropertyScope step here.
+export async function assertProfileAccess(ctx: AuthContext, upid: string) {
+  const profile = await prisma.profile.findUnique({ where: { upid } });
+  if (!profile || profile.enterpriseId !== ctx.enterpriseId) {
+    throw new ForbiddenError("Profile not found");
+  }
+  return profile;
+}
+
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {
   const perm = ctx.permissions.get(module);
   const allowed =

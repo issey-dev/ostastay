@@ -51,12 +51,17 @@ export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "NATIONALITY", label: "Nationality" },
   { code: "ID_TYPE",     label: "ID / Document Type" },
   { code: "CLASSIFICATION", label: "Profile Classification" },
+  { code: "VIP_LEVEL",   label: "VIP Level" },
   { code: "DIETARY_REQ", label: "Dietary Requirements" },
-  { code: "ROOM_PREF",   label: "Room Preferences" },
+  { code: "PREFERENCE",  label: "Preferences" },
 ]
 
 export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
+]
+
+export const RESERVATION_LOV_CATEGORIES: DropdownCategory[] = [
+  { code: "SPECIAL_REQUEST", label: "Special Requests" },
 ]
 
 // Room-specific feature lists, assigned per Room Type (all multi-select) via the Room

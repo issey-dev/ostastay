@@ -4,8 +4,8 @@ import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 const CONFIRMATION_LETTER_INCLUDE = {
-  primaryGuest: { include: { contacts: true } },
-  accompanyingGuests: { include: { profile: { include: { contacts: true } } } },
+  primaryGuest: { include: { communications: true } },
+  accompanyingGuests: { include: { profile: { include: { communications: true } } } },
   assignments: { include: { roomType: true }, orderBy: { startDate: "asc" as const } },
   property: true,
 };
@@ -40,6 +40,7 @@ export async function GET(
         systemDate: new Date(),
         defaultAccommodationChargeCodeId: null,
         cityLedgerPaymentMethodId: null,
+        commissionChargeCodeId: null,
         invoiceBrandName: "Cozy Guest House",
         invoiceLogoUrl: "",
         invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,

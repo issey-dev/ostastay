@@ -127,7 +127,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     const guestWithEmail = await prisma.profile.create({
       data: {
         enterpriseId: enterpriseA.id, profileType: "GUEST", firstName: "Guest", lastName: "WithEmail",
-        contacts: { create: { email: "guest@example.com", isPrimary: true } },
+        communications: { create: { type: "EMAIL", value: "guest@example.com", isPrimary: true } },
       },
     });
 

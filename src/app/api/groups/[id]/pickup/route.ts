@@ -131,20 +131,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // 1. Create or Find Profile
       let profile = email
         ? await tx.profile.findFirst({
-            where: { enterpriseId: group.property.enterpriseId, contacts: { some: { email } } }
+            where: { enterpriseId: group.property.enterpriseId, communications: { some: { type: "EMAIL", value: email } } }
           })
         : null
 
       if (!profile) {
+        const commRows = [
+          ...(email ? [{ type: "EMAIL", value: email, isPrimary: true }] : []),
+          ...(phone ? [{ type: "MOBILE", value: phone, isPrimary: !email }] : []),
+        ]
         profile = await tx.profile.create({
           data: {
             enterpriseId: group.property.enterpriseId,
             profileType: "GUEST",
             firstName,
             lastName,
-            contacts: (email || phone) ? {
-              create: [{ contactType: "PRIMARY", isPrimary: true, email, mobile: phone }]
-            } : undefined
+            communications: commRows.length > 0 ? { create: commRows } : undefined
           }
         })
       }

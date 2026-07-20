@@ -11,14 +11,14 @@ const PAYMENT_INCLUDE = {
       property: true,
       payeeProfile: {
         include: {
-          contacts: true
+          communications: true
         }
       },
       reservation: {
         include: {
           primaryGuest: {
             include: {
-              contacts: true
+              communications: true
             }
           }
         }
@@ -73,6 +73,7 @@ export async function GET(
         systemDate: new Date(),
         defaultAccommodationChargeCodeId: null,
         cityLedgerPaymentMethodId: null,
+        commissionChargeCodeId: null,
         invoiceBrandName: "Cozy Guest House",
         invoiceLogoUrl: "",
         invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,

@@ -72,7 +72,8 @@ export async function GET(request: Request) {
       status: a.reservation.status,
       primaryGuest: {
         firstName: a.reservation.primaryGuest.firstName,
-        lastName: a.reservation.primaryGuest.lastName || ""
+        lastName: a.reservation.primaryGuest.lastName || "",
+        vipLevel: a.reservation.primaryGuest.vipLevel
       },
       roomType: {
         code: a.roomType.code,

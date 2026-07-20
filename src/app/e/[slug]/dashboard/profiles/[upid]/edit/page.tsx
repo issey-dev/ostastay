@@ -12,24 +12,12 @@ export default function EditProfilePage({ params }: { params: Promise<{ upid: st
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // ProfileForm reads scalar fields straight off this + manages Communications/
+    // Address/Identification/Attachments/Notes/Preferences via their own dedicated
+    // endpoints (see .agents/docs/PROFILES_REDESIGN_PLAN.md) — no flattening needed.
     fetch(`/api/profiles/${upid}`)
       .then(res => res.json())
-      .then(data => {
-        // Transform the nested relations back to flat form structure for the initial data
-        setProfile({
-          ...data,
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split('T')[0] : "",
-          anniversaryDate: data.anniversaryDate ? new Date(data.anniversaryDate).toISOString().split('T')[0] : "",
-          mobile: data.contacts?.[0]?.mobile || "",
-          email: data.contacts?.[0]?.email || "",
-          address: data.contacts?.[0]?.address || "",
-          country: data.contacts?.[0]?.country || "",
-          documentType: data.documents?.[0]?.documentType || "",
-          documentNumber: data.documents?.[0]?.documentNumber || "",
-          issuingCountry: data.documents?.[0]?.issuingCountry || "",
-          expiryDate: data.documents?.[0]?.expiryDate ? new Date(data.documents[0].expiryDate).toISOString().split('T')[0] : ""
-        })
-      })
+      .then(data => setProfile(data))
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [upid])

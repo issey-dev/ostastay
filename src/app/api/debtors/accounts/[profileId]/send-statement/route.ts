@@ -5,6 +5,8 @@ import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { buildInvoiceSummary, type DebtorInvoiceSummary } from "@/lib/debtor-accounts";
 import { computeFolioAgingBuckets, totalOutstanding } from "@/lib/debtor-aging";
+import { logActivity } from "@/lib/activity-log";
+import { primaryEmail } from "@/lib/profile-communications";
 
 function formatDate(d: Date | string | null): string {
   if (!d) return "—";
@@ -109,13 +111,12 @@ export async function POST(
     }
     await assertPropertyAccess(ctx, propertyId);
 
-    const profile = await prisma.profile.findUnique({ where: { upid: profileId }, include: { contacts: true } });
+    const profile = await prisma.profile.findUnique({ where: { upid: profileId }, include: { communications: true } });
     if (!profile || profile.enterpriseId !== ctx.enterpriseId || !profile.isCreditAccount) {
       return NextResponse.json({ error: "Credit account not found" }, { status: 404 });
     }
 
-    const accountEmail =
-      profile.contacts.find((c) => c.isPrimary)?.email || profile.contacts[0]?.email;
+    const accountEmail = primaryEmail(profile.communications);
     if (!accountEmail) {
       return NextResponse.json({ error: "This account has no email address on file." }, { status: 400 });
     }
@@ -164,6 +165,15 @@ export async function POST(
         { status: 502 }
       );
     }
+
+    await logActivity({
+      ctx,
+      module: "DEBTORS",
+      action: "SEND_STATEMENT",
+      entityType: "Profile",
+      entityId: profile.upid,
+      description: `Emailed account statement for "${accountName}" to ${accountEmail}`,
+    });
 
     return NextResponse.json({ success: true, sentTo: accountEmail });
   } catch (error) {

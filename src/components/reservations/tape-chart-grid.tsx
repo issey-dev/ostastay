@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
-import { Loader2, Calendar, User, Hash, DoorOpen } from "lucide-react";
+import { Loader2, Calendar, User, Hash, DoorOpen, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -28,7 +28,7 @@ export interface Reservation {
   checkInDate: string;
   checkOutDate: string;
   status: string;
-  primaryGuest: { firstName: string; lastName: string };
+  primaryGuest: { firstName: string; lastName: string; vipLevel?: string | null };
   roomType: { code: string; name: string };
 }
 
@@ -157,7 +157,10 @@ export function TapeChartGrid() {
               <div className="grid grid-cols-2 gap-4 bg-muted p-4 rounded-lg">
                 <div className="space-y-1">
                   <div className="flex items-center text-xs text-muted-foreground"><User className="w-3 h-3 mr-1" /> Guest</div>
-                  <div className="font-medium">{selectedReservation.primaryGuest.firstName} {selectedReservation.primaryGuest.lastName}</div>
+                  <div className="font-medium inline-flex items-center gap-1.5">
+                    {selectedReservation.primaryGuest.firstName} {selectedReservation.primaryGuest.lastName}
+                    {selectedReservation.primaryGuest.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center text-xs text-muted-foreground"><DoorOpen className="w-3 h-3 mr-1" /> Room</div>

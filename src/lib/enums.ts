@@ -20,7 +20,8 @@ export enum PaymentType {
 export enum ProfileType {
   GUEST = "GUEST",
   COMPANY = "COMPANY",
-  TRAVEL_AGENT = "TRAVEL_AGENT"
+  TRAVEL_AGENT = "TRAVEL_AGENT",
+  STAFF = "STAFF"
 }
 
 export enum ProfileClassification {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search, UserPlus, Pencil, Trash2 } from "lucide-react"
+import { Search, UserPlus, Pencil, Trash2, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,10 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { useRouter } from "next/navigation"
-import { Users, Building2, Briefcase } from "lucide-react"
+import { useRouter, useParams } from "next/navigation"
+import { Users, Building2, Briefcase, UserCog } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
+import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 
 type Profile = {
   upid: string
@@ -25,17 +27,19 @@ type Profile = {
   preferredLanguage: string
   dateOfBirth: string | null
   anniversaryDate: string | null
-  loyaltyTier: string | null
+  vipLevel: string | null
   photoUrl: string | null
   greenTaxExempt: boolean
   gender: string | null
   marketingOptIn: boolean
   isIncognito: boolean
-  contacts: {
-    mobile: string | null
-    email: string | null
+  communications: {
+    type: string
+    value: string
+    isPrimary: boolean
+  }[]
+  addresses?: {
     country: string | null
-    address: string | null
   }[]
   documents?: {
     documentType: string
@@ -60,8 +64,17 @@ const classColors: Record<string, string> = {
 // with color reserved for status/tone, not decorative identity).
 const AVATAR_COLOR = "bg-muted text-foreground"
 
+const PROFILE_TYPE_LABELS: Record<string, string> = {
+  GUEST: "Guest",
+  COMPANY: "Company",
+  TRAVEL_AGENT: "Travel Agent",
+  STAFF: "Staff",
+}
+
 export default function ProfilesDashboard() {
   const router = useRouter()
+  const { slug } = useParams<{ slug: string }>()
+  const { label } = useSystemCodeLabels()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -127,8 +140,8 @@ export default function ProfilesDashboard() {
           </p>
         </div>
         
-        <Button onClick={() => router.push(`/dashboard/profiles/new?type=${activeTab}`)}>
-          <UserPlus className="mr-2 h-4 w-4" /> New {activeTab === "GUEST" ? "Guest" : activeTab === "COMPANY" ? "Company" : "Travel Agent"}
+        <Button onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
+          <UserPlus className="mr-2 h-4 w-4" /> New {PROFILE_TYPE_LABELS[activeTab] ?? activeTab}
         </Button>
         
         {/* Delete Modal */}
@@ -169,6 +182,12 @@ export default function ProfilesDashboard() {
           >
             <Briefcase className="w-4 h-4 mr-2" /> Travel Agents
           </TabsTrigger>
+          <TabsTrigger
+            value="STAFF"
+            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+          >
+            <UserCog className="w-4 h-4 mr-2" /> Staff
+          </TabsTrigger>
         </TabsList>
 
       <Card>
@@ -176,7 +195,7 @@ export default function ProfilesDashboard() {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="text-lg">
-                {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : "Travel Agents"}
+                {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : activeTab === "STAFF" ? "Staff Directory" : "Travel Agents"}
               </CardTitle>
               <CardDescription>Search by name, email, or phone.</CardDescription>
             </div>
@@ -204,27 +223,34 @@ export default function ProfilesDashboard() {
             ) : (
               profiles.map((p) => (
                 <div key={p.upid} className="p-4 flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+                  <div
+                    className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 cursor-pointer ${AVATAR_COLOR}`}
+                    onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}
+                  >
                     {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-medium text-foreground truncate">
-                        {p.profileType === 'GUEST'
+                      <span
+                        className="font-medium text-foreground truncate cursor-pointer hover:underline inline-flex items-center gap-1.5"
+                        onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}
+                      >
+                        {p.profileType === 'GUEST' || p.profileType === 'STAFF'
                           ? `${p.firstName} ${p.lastName || ''}`.trim()
                           : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
+                        {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                       </span>
                       <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                        {p.classification}
+                        {label("CLASSIFICATION", p.classification)}
                       </span>
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      {p.contacts?.[0]?.email || "No email"} {p.contacts?.[0]?.mobile ? `· ${p.contacts[0].mobile}` : ""}
+                      {primaryEmail(p.communications) || "No email"} {primaryMobile(p.communications) ? `· ${primaryMobile(p.communications)}` : ""}
                     </div>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
                       <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" className="text-primary" onClick={() => router.push(`/dashboard/profiles/${p.upid}/edit`)}>
+                        <Button variant="ghost" size="icon-sm" className="text-primary" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => {
@@ -263,36 +289,37 @@ export default function ProfilesDashboard() {
                 profiles.map((p) => (
                   <TableRow key={p.upid} className="hover:bg-muted/40">
                     <TableCell className="px-6 py-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}>
                         <div className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
                           {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">
-                            {p.profileType === 'GUEST' 
-                              ? `${p.firstName} ${p.lastName || ''}`.trim() 
+                          <span className="font-medium text-foreground hover:underline inline-flex items-center gap-1.5">
+                            {p.profileType === 'GUEST' || p.profileType === 'STAFF'
+                              ? `${p.firstName} ${p.lastName || ''}`.trim()
                               : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
+                            {p.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </span>
-                          {p.contacts?.[0]?.country && (
-                            <span className="text-xs text-muted-foreground font-medium">{p.contacts[0].country}</span>
+                          {p.addresses?.[0]?.country && (
+                            <span className="text-xs text-muted-foreground font-medium">{p.addresses[0].country}</span>
                           )}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="text-sm">
-                        {p.contacts?.[0]?.email ? <div className="text-foreground">{p.contacts[0].email}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
-                        {p.contacts?.[0]?.mobile ? <div className="text-muted-foreground">{p.contacts[0].mobile}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
+                        {primaryEmail(p.communications) ? <div className="text-foreground">{primaryEmail(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
+                        {primaryMobile(p.communications) ? <div className="text-muted-foreground">{primaryMobile(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="flex flex-col gap-1 items-start">
                         <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                          {p.classification}
+                          {label("CLASSIFICATION", p.classification)}
                         </span>
-                        {p.loyaltyTier && (
+                        {p.vipLevel && (
                           <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
-                            {p.loyaltyTier}
+                            {label("VIP_LEVEL", p.vipLevel)}
                           </span>
                         )}
                       </div>
@@ -305,7 +332,7 @@ export default function ProfilesDashboard() {
                     </TableCell>
                     <TableCell className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2 transition-opacity">
-                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => router.push(`/dashboard/profiles/${p.upid}/edit`)}>
+                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </Button>
                         <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {

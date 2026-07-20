@@ -80,7 +80,7 @@ export function SystemCodeSelect({
 
   if (loading) {
     return (
-      <Select disabled>
+      <Select value={value} disabled>
         <SelectTrigger>
           <SelectValue placeholder="Loading..." />
         </SelectTrigger>
@@ -90,7 +90,7 @@ export function SystemCodeSelect({
 
   if (options.length === 0) {
     return (
-      <Select disabled>
+      <Select value={value} disabled>
         <SelectTrigger>
           <SelectValue placeholder="No options available" />
         </SelectTrigger>

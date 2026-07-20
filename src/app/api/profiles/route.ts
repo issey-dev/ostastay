@@ -4,6 +4,14 @@ import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
+const PROFILE_CHILD_INCLUDE = {
+  communications: true,
+  addresses: true,
+  documents: true,
+  preferences: true,
+  attachments: true,
+} as const;
+
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
@@ -22,7 +30,8 @@ export async function GET(request: Request) {
         ] : undefined
       },
       include: {
-        contacts: true,
+        communications: true,
+        addresses: true,
       },
       orderBy: { updatedAt: 'desc' },
       take: 50 // Limit results for dashboard
@@ -45,19 +54,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Set once at creation from the client's active property context — a "first seen
+    // at" breadcrumb only (Profile stays enterprise-wide, never re-scoped by this).
+    let originPropertyId: string | null = null;
+    if (body.originPropertyId) {
+      const property = await prisma.property.findUnique({ where: { id: body.originPropertyId } });
+      if (property && property.enterpriseId === ctx.enterpriseId) {
+        originPropertyId = property.id;
+      }
+    }
+
     const newProfile = await prisma.profile.create({
       data: {
         enterpriseId: ctx.enterpriseId,
         profileType: body.profileType as ProfileType || ProfileType.GUEST,
         title: body.title,
         firstName: body.firstName || "",
+        middleName: body.middleName || null,
         lastName: body.lastName,
         companyName: body.companyName,
         classification: body.classification as ProfileClassification || ProfileClassification.REGULAR,
-        preferredLanguage: body.preferredLanguage,
+        preferredLanguage: body.preferredLanguage || "en",
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
+        nationality: body.nationality || null,
         anniversaryDate: body.anniversaryDate ? new Date(body.anniversaryDate) : null,
-        loyaltyTier: body.loyaltyTier,
+        vipLevel: body.vipLevel || null,
         photoUrl: body.photoUrl,
         iataNumber: body.iataNumber,
         commissionRate: body.commissionRate ? parseFloat(body.commissionRate) : null,
@@ -69,59 +90,45 @@ export async function POST(request: Request) {
         arNumber: body.arNumber || null,
         creditLimit: body.creditLimit ? parseFloat(body.creditLimit) : null,
         isCreditAccount: body.isCreditAccount !== undefined ? body.isCreditAccount : false,
-        contacts: {
-          create: body.contacts ? body.contacts.map((c: any) => ({
-            contactType: c.contactType || "PRIMARY",
-            firstName: c.firstName,
-            lastName: c.lastName,
-            mobile: c.mobile,
-            workPhone: c.workPhone,
-            email: c.email,
-            address: c.address,
-            city: c.city,
-            stateProvince: c.stateProvince,
-            postalCode: c.postalCode,
-            country: c.country,
-            isPrimary: c.isPrimary !== undefined ? c.isPrimary : true
-          })) : [{
-            contactType: "PRIMARY",
-            mobile: body.mobile,
-            email: body.email,
-            country: body.country,
-            address: body.address || body.addressStreet,
-            city: body.city || body.addressCity,
-            stateProvince: body.stateProvince || body.addressState,
-            postalCode: body.postalCode || body.addressZip,
-            workPhone: body.workPhone,
-            isPrimary: true
-          }]
-        },
-        ...(body.preferences && {
-          preferences: {
-            create: body.preferences.map((p: any) => ({
-              category: p.category,
-              value: p.value,
-              notes: p.notes
-            }))
-          }
+        originPropertyId,
+        // Convenience initial rows on create only — ongoing management of these is via
+        // their own dedicated endpoints (/communications, /addresses, /documents,
+        // /preferences, /attachments), never a destructive replace-all from here.
+        ...(Array.isArray(body.communications) && body.communications.length > 0 && {
+          communications: {
+            create: body.communications.map((c: { type: string; value: string; isPrimary?: boolean }) => ({
+              type: c.type,
+              value: c.value,
+              isPrimary: !!c.isPrimary,
+            })),
+          },
         }),
-        ...(body.documentType && body.documentNumber ? {
+        ...(Array.isArray(body.addresses) && body.addresses.length > 0 && {
+          addresses: {
+            create: body.addresses.map((a: { type: string; fullAddress: string; city?: string; stateProvince?: string; postalCode?: string; country?: string; isPrimary?: boolean }) => ({
+              type: a.type,
+              fullAddress: a.fullAddress || "",
+              city: a.city,
+              stateProvince: a.stateProvince,
+              postalCode: a.postalCode,
+              country: a.country,
+              isPrimary: !!a.isPrimary,
+            })),
+          },
+        }),
+        ...(Array.isArray(body.documents) && body.documents.length > 0 && {
           documents: {
-            create: {
-              documentType: body.documentType,
-              documentNumber: body.documentNumber,
-              issuingCountry: body.issuingCountry,
-              issueDate: body.issueDate ? new Date(body.issueDate) : null,
-              expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
-            }
-          }
-        } : {})
+            create: body.documents.map((d: { documentType: string; documentNumber: string; issuingCountry?: string; expiryDate?: string; isPrimary?: boolean }) => ({
+              documentType: d.documentType,
+              documentNumber: d.documentNumber,
+              issuingCountry: d.issuingCountry || null,
+              expiryDate: d.expiryDate ? new Date(d.expiryDate) : null,
+              isPrimary: !!d.isPrimary,
+            })),
+          },
+        }),
       },
-      include: {
-        contacts: true,
-        documents: true,
-        preferences: true,
-      }
+      include: PROFILE_CHILD_INCLUDE,
     });
 
     await logActivity({

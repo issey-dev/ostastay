@@ -4,6 +4,8 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/confirmation-letter";
+import { logActivity } from "@/lib/activity-log";
+import { primaryEmail } from "@/lib/profile-communications";
 
 function formatDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -78,8 +80,8 @@ export async function POST(
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
-        primaryGuest: { include: { contacts: true } },
-        accompanyingGuests: { include: { profile: { include: { contacts: true } } } },
+        primaryGuest: { include: { communications: true } },
+        accompanyingGuests: { include: { profile: { include: { communications: true } } } },
         assignments: { include: { roomType: true }, orderBy: { startDate: "asc" } },
         property: true,
       },
@@ -89,9 +91,7 @@ export async function POST(
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    const guestEmail =
-      reservation.primaryGuest.contacts.find((c) => c.isPrimary)?.email ||
-      reservation.primaryGuest.contacts[0]?.email;
+    const guestEmail = primaryEmail(reservation.primaryGuest.communications);
     if (!guestEmail) {
       return NextResponse.json({ error: "The primary guest has no email address on file." }, { status: 400 });
     }
@@ -127,6 +127,15 @@ export async function POST(
         { status: 502 }
       );
     }
+
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "SEND_CONFIRMATION",
+      entityType: "Reservation",
+      entityId: reservation.id,
+      description: `Emailed booking confirmation ${reservation.confirmationNo} to ${guestEmail}`,
+    });
 
     return NextResponse.json({ success: true, sentTo: guestEmail });
   } catch (error) {

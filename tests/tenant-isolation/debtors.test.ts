@@ -147,7 +147,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
       data: {
         enterpriseId: enterpriseA.id, profileType: "TRAVEL_AGENT", firstName: "Sunny", lastName: "Travels",
         companyName: "Sunny Travels", isCreditAccount: true, creditLimit: 500, arNumber: "AR-1001",
-        contacts: { create: { email: "billing@sunnytravels.test", isPrimary: true } },
+        communications: { create: { type: "EMAIL", value: "billing@sunnytravels.test", isPrimary: true } },
       },
     });
     creditAccountAId = creditAccountA.upid;

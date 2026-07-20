@@ -4,6 +4,16 @@ import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
+const PROFILE_CHILD_INCLUDE = {
+  communications: true,
+  addresses: true,
+  documents: true,
+  preferences: true,
+  attachments: true,
+  notes: { orderBy: [{ isPinned: "desc" as const }, { createdAt: "desc" as const }] },
+  originProperty: { select: { id: true, name: true } },
+};
+
 async function assertProfileAccess(upid: string, enterpriseId: string) {
   const profile = await prisma.profile.findUnique({ where: { upid } });
   if (!profile || profile.enterpriseId !== enterpriseId) {
@@ -22,11 +32,7 @@ export async function GET(
 
     const profile = await prisma.profile.findUnique({
       where: { upid },
-      include: {
-        contacts: true,
-        documents: true,
-        preferences: true,
-      }
+      include: PROFILE_CHILD_INCLUDE,
     });
 
     if (!profile || profile.enterpriseId !== ctx.enterpriseId) {
@@ -60,19 +66,25 @@ export async function PUT(
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    // Scalar fields only — Communications, Address, Identification, Preferences,
+    // Attachments, and Notes are all managed via their own dedicated per-row CRUD
+    // endpoints now, never a destructive replace-all from the main profile PUT.
+    // originPropertyId is likewise untouched here: set once at creation, immutable.
     const updatedProfile = await prisma.profile.update({
       where: { upid },
       data: {
         profileType: body.profileType as ProfileType,
         title: body.title,
         firstName: body.firstName || "",
+        middleName: body.middleName || null,
         lastName: body.lastName,
         companyName: body.companyName,
         classification: body.classification as ProfileClassification,
         preferredLanguage: body.preferredLanguage,
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
+        nationality: body.nationality || null,
         anniversaryDate: body.anniversaryDate ? new Date(body.anniversaryDate) : null,
-        loyaltyTier: body.loyaltyTier,
+        vipLevel: body.vipLevel || null,
         photoUrl: body.photoUrl,
         iataNumber: body.iataNumber,
         commissionRate: body.commissionRate ? parseFloat(body.commissionRate) : null,
@@ -84,63 +96,8 @@ export async function PUT(
         arNumber: body.arNumber || null,
         creditLimit: body.creditLimit ? parseFloat(body.creditLimit) : null,
         isCreditAccount: body.isCreditAccount !== undefined ? body.isCreditAccount : existing.isCreditAccount,
-        contacts: {
-          deleteMany: {},
-          create: body.contacts ? body.contacts.map((c: any) => ({
-            contactType: c.contactType || "PRIMARY",
-            firstName: c.firstName,
-            lastName: c.lastName,
-            mobile: c.mobile,
-            workPhone: c.workPhone,
-            email: c.email,
-            address: c.address,
-            city: c.city,
-            stateProvince: c.stateProvince,
-            postalCode: c.postalCode,
-            country: c.country,
-            isPrimary: c.isPrimary !== undefined ? c.isPrimary : true
-          })) : [{
-            contactType: "PRIMARY",
-            mobile: body.mobile,
-            email: body.email,
-            country: body.country,
-            address: body.address || body.addressStreet,
-            city: body.city || body.addressCity,
-            stateProvince: body.stateProvince || body.addressState,
-            postalCode: body.postalCode || body.addressZip,
-            workPhone: body.workPhone,
-            isPrimary: true
-          }]
-        },
-        ...(body.preferences && {
-          preferences: {
-            deleteMany: {},
-            create: body.preferences.map((p: any) => ({
-              category: p.category,
-              value: p.value,
-              notes: p.notes
-            }))
-          }
-        }),
-        ...(body.documentType && body.documentNumber ? {
-          documents: {
-            deleteMany: {}, // For MVP, we replace all documents with the primary one submitted
-            create: {
-              documentType: body.documentType,
-              documentNumber: body.documentNumber,
-              issuingCountry: body.issuingCountry,
-              issueDate: body.issueDate ? new Date(body.issueDate) : null,
-              expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
-              isPrimary: true
-            }
-          }
-        } : {})
       },
-      include: {
-        contacts: true,
-        documents: true,
-        preferences: true,
-      }
+      include: PROFILE_CHILD_INCLUDE,
     });
 
     await logActivity({
