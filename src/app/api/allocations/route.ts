@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { ALLOCATION_TYPES, POSTING_RHYTHMS, ALLOCATION_MODES, parseRatesInput } from "@/lib/allocations";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
