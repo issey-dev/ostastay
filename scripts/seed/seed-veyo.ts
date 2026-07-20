@@ -323,6 +323,22 @@ async function main() {
     { category: "NATIONALITY", code: "US", value: "American", sortOrder: 2 },
     { category: "NATIONALITY", code: "GB", value: "British", sortOrder: 3 },
     { category: "ID_TYPE", code: "PASSPORT", value: "Passport", sortOrder: 1 },
+    // Profiles redesign (2026-07-20) — VIP Level replaces the old free-text Loyalty
+    // Tier; Preferences is a new general multi-select distinct from Dietary/Room prefs.
+    { category: "VIP_LEVEL", code: "SILVER", value: "Silver", sortOrder: 1 },
+    { category: "VIP_LEVEL", code: "GOLD", value: "Gold", sortOrder: 2 },
+    { category: "VIP_LEVEL", code: "PLATINUM", value: "Platinum", sortOrder: 3 },
+    { category: "PREFERENCE", code: "HIGH_FLOOR", value: "High Floor", sortOrder: 1 },
+    { category: "PREFERENCE", code: "QUIET_ROOM", value: "Quiet Room", sortOrder: 2 },
+    { category: "PREFERENCE", code: "EXTRA_PILLOWS", value: "Extra Pillows", sortOrder: 3 },
+    { category: "PREFERENCE", code: "NON_SMOKING", value: "Non-Smoking", sortOrder: 4 },
+    { category: "DIETARY_REQ", code: "VEGAN", value: "Vegan", sortOrder: 1 },
+    { category: "DIETARY_REQ", code: "VEGETARIAN", value: "Vegetarian", sortOrder: 2 },
+    { category: "DIETARY_REQ", code: "GLUTEN_FREE", value: "Gluten-Free", sortOrder: 3 },
+    { category: "DIETARY_REQ", code: "HALAL", value: "Halal", sortOrder: 4 },
+    { category: "CLASSIFICATION", code: "VIP", value: "VIP", sortOrder: 1 },
+    { category: "CLASSIFICATION", code: "REGULAR", value: "Regular", sortOrder: 2 },
+    { category: "CLASSIFICATION", code: "BLACKLISTED", value: "Blacklisted", sortOrder: 3 },
   ];
   for (const sc of systemCodes) {
     await prisma.systemCode.upsert({
@@ -335,7 +351,7 @@ async function main() {
   // 9. Guest profiles.
   const guestData = [
     { firstName: "John", lastName: "Smith", title: "MR", gender: "M", country: "US" },
-    { firstName: "Mary", lastName: "Davis", title: "MRS", gender: "F", country: "GB" },
+    { firstName: "Mary", lastName: "Davis", title: "MRS", gender: "F", country: "GB", vipLevel: "GOLD" },
     { firstName: "David", lastName: "Williams", title: "MR", gender: "M", country: "AU" },
     { firstName: "Jennifer", lastName: "Wilson", title: "MRS", gender: "F", country: "US" },
     { firstName: "Michael", lastName: "Johnson", title: "MR", gender: "M", country: "MV" },
@@ -354,23 +370,57 @@ async function main() {
           firstName: g.firstName,
           lastName: g.lastName,
           gender: g.gender,
+          nationality: g.country,
           preferredLanguage: "en",
-          contacts: {
+          vipLevel: g.vipLevel ?? null,
+          originPropertyId: property.id,
+          communications: {
             create: [
               {
-                contactType: "PRIMARY",
-                firstName: g.firstName,
-                lastName: g.lastName,
-                email: `${g.firstName.toLowerCase()}.${g.lastName.toLowerCase()}@example.com`,
-                country: g.country,
+                type: "EMAIL",
+                value: `${g.firstName.toLowerCase()}.${g.lastName.toLowerCase()}@example.com`,
                 isPrimary: true,
               },
             ],
           },
+          addresses: {
+            create: [
+              { type: "HOME", fullAddress: "", country: g.country, isPrimary: true },
+            ],
+          },
         },
       });
+      // A sample note + attachment + preference tag on the VIP guest, so the CRM
+      // sections have something to show out of the box.
+      if (g.vipLevel) {
+        await prisma.profileNote.create({
+          data: { upid: profile.upid, authorUserId: admin.id, noteText: "Repeat guest — always requests late checkout.", isPinned: true },
+        });
+        await prisma.profileAttachment.create({
+          data: { upid: profile.upid, label: "Signed registration card", url: "https://example.com/docs/registration-card.pdf" },
+        });
+        await prisma.profilePreference.create({ data: { upid: profile.upid, category: "PREFERENCE", value: "HIGH_FLOOR" } });
+      }
     }
     profiles.push(profile);
+  }
+
+  // A Staff profile (see .agents/docs/PROFILES_REDESIGN_PLAN.md) — same shape as
+  // Guest, no relation to the User/login model.
+  const staffExists = await prisma.profile.findFirst({ where: { enterpriseId: veyo.id, profileType: "STAFF", firstName: "Aisha" } });
+  if (!staffExists) {
+    await prisma.profile.create({
+      data: {
+        enterpriseId: veyo.id,
+        profileType: "STAFF",
+        firstName: "Aisha",
+        lastName: "Naeem",
+        gender: "F",
+        nationality: "MV",
+        originPropertyId: property.id,
+        communications: { create: [{ type: "EMAIL", value: "aisha.naeem@veyo.example.com", isPrimary: true }] },
+      },
+    });
   }
 
   // 10. Reservations across a few scenarios (future / in-house / checked-out).

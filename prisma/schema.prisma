@@ -208,6 +208,16 @@ model Property {
   // not enterprise-wide — see src/components/controls/tax-manager.tsx.
   pricesIncludeTaxes Boolean @default(true)
 
+  // "Allocation Calculation" (Controls > Revenue) — which side drives automatic
+  // Allocation attachment on a reservation. "RATE_PLAN": only the assigned Rate
+  // Plan's own linked Allocations attach; the reservation's Meal Plan field becomes
+  // a cosmetic label with no attachment effect. "MEAL_PLAN": only the selected Meal
+  // Plan's linked Allocations attach; a Rate Plan's own linked Allocations are
+  // ignored. Exclusive — never both at once (see src/lib/allocations.ts
+  // resolveLinkedAllocationIds). Per-property, and changing it is NOT retroactive —
+  // only reservations created/edited afterward are affected (see DECISIONS.md).
+  allocationCalculationMode String @default("RATE_PLAN")
+
   buildings    Building[]
   facilities   Facility[]
   roomTypes    RoomType[]
@@ -223,6 +233,9 @@ model Property {
   folios       Folio[]
   currencyExchanges CurrencyExchange[]
   allocations  Allocation[]
+  // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
+  // only; does not restrict the profile to this property (Profile stays enterprise-wide).
+  originatingProfiles Profile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -447,7 +460,10 @@ model PaymentMethod {
   payments Payment[]
 }
 
-// ProfileType: GUEST, COMPANY, TRAVEL_AGENT
+// ProfileType: GUEST, COMPANY, TRAVEL_AGENT, STAFF (GUEST/STAFF are "individual
+// person" profiles — full Personal Information + Identification; COMPANY/TRAVEL_AGENT
+// are "entity" profiles — single Name field, no Identification. STAFF is a directory
+// record only, deliberately with no relation to User, the separate login/RBAC model.)
 // ProfileClassification: VIP, REGULAR, BLACKLISTED
 model Profile {
   upid              String     @id @default(uuid())
@@ -456,13 +472,19 @@ model Profile {
   profileType       String    @default("GUEST")
   title             String?
   firstName         String
+  middleName        String?
   lastName          String?
   companyName       String?
   classification    String    @default("REGULAR")
   photoUrl          String?
   dateOfBirth       DateTime?
+  // Distinct from ProfileAddress.country / ProfileDocument.issuingCountry — a single
+  // Profile-level fact (SystemCode category NATIONALITY), not per-row.
+  nationality       String?
   anniversaryDate   DateTime?
-  loyaltyTier       String?
+  // Replaces the old free-text loyaltyTier — SystemCode category VIP_LEVEL,
+  // configurable via Controls > Dropdowns Manager.
+  vipLevel          String?
   preferredLanguage String    @default("en")
   iataNumber        String?
   commissionRate    Float?
@@ -478,12 +500,24 @@ model Profile {
   // COMPANY/TRAVEL_AGENT profiles, but not enforced at the DB level (profileType is a
   // free string, not an enum).
   isCreditAccount   Boolean   @default(false)
+  // Enterprise/chain-wide stay totals (Profile has no propertyId — these accumulate
+  // across every property). "Visits to Property" (singular, current property) is
+  // NOT stored here — it's computed live from Reservation at read time, since a
+  // per-property count can't live on an enterprise-scoped model. See stay-history route.
   totalStays        Int       @default(0)
   totalNights       Int       @default(0)
   totalRevenue      Float     @default(0.0)
   lastStayDate      DateTime?
 
-  contacts                 ProfileContact[]
+  // Set once at creation from the active property context, never changed afterward —
+  // a lightweight "first seen at" breadcrumb, not a scoping mechanism. The profile
+  // remains fully usable/shared across every property in the enterprise regardless.
+  originPropertyId String?
+  originProperty   Property? @relation(fields: [originPropertyId], references: [id], onDelete: SetNull)
+
+  communications           ProfileCommunication[]
+  addresses                ProfileAddress[]
+  attachments              ProfileAttachment[]
   preferences              ProfilePreference[]
   notes                    ProfileNote[]
   documents                ProfileDocument[]
@@ -491,34 +525,60 @@ model Profile {
   travelAgentReservations  Reservation[]       @relation("TravelAgent")
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]             @relation("PayeeProfile")
+  // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
+  // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
+  negotiatedRateAccess     RatePlanAgentAccess[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model ProfileContact {
-  id            String  @id @default(uuid())
+// Multiple per profile, one may be marked primary — type is a fixed 3-value enum
+// (not an admin-configurable LOV; only VIP Level and Preferences were asked to be).
+model ProfileCommunication {
+  id        String   @id @default(uuid())
+  upid      String
+  profile   Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  type      String   // EMAIL | MOBILE | SOCIAL
+  value     String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Multiple per profile, one may be marked primary. fullAddress is one free-text block
+// (not street-line-broken) per the app owner's spec; city/state/zip/country are
+// separate structured fields alongside it.
+model ProfileAddress {
+  id            String   @id @default(uuid())
   upid          String
-  profile       Profile @relation(fields: [upid], references: [upid], onDelete: Cascade)
-  contactType   String  @default("PRIMARY") // PRIMARY, ACCOUNTS_PAYABLE, BOOKING
-  firstName     String?
-  lastName      String?
-  mobile        String?
-  workPhone     String?
-  email         String?
-  address       String?
+  profile       Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  type          String   // HOME | BUSINESS | BILLING
+  fullAddress   String
   city          String?
   stateProvince String?
   postalCode    String?
   country       String?
-  isPrimary     Boolean @default(false)
+  isPrimary     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+// A clickable reference list (label + externally-hosted URL) — deliberately not a
+// file-upload/storage system, which doesn't exist anywhere else in this app either
+// (owner-confirmed: URL-referenced list, not real upload).
+model ProfileAttachment {
+  id        String   @id @default(uuid())
+  upid      String
+  profile   Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime @default(now())
 }
 
 model ProfilePreference {
   id       String  @id @default(uuid())
   upid     String
   profile  Profile @relation(fields: [upid], references: [upid], onDelete: Cascade)
-  category String // ROOM, BEDDING, DIETARY, AMENITY
+  category String // DIETARY | PREFERENCE | ROOM | BEDDING | AMENITY
   value    String
   notes    String?
 }
@@ -560,6 +620,12 @@ model RatePlan {
   description  String?
   priority     Int      @default(0)
   isNegotiated Boolean  @default(false)
+  // Classification flags for zero/nominal-rate stays — comp'd rooms (VIPs, media,
+  // familiarization trips) and internal staff/owner use. Pure labels for now, same
+  // starting point isNegotiated had before its Negotiated Rates follow-up; no posting
+  // or reporting behavior is tied to them yet.
+  isComplimentary Boolean @default(false)
+  isHouseUse      Boolean @default(false)
 
   // The charge code this plan's nightly room charge posts against at Night Audit —
   // usually the property's main Accommodation code. Null means "use the enterprise
@@ -605,6 +671,12 @@ model RatePlan {
   // each is carved out of or added on top of the room rate). A derived plan with no
   // links of its own inherits its parent's — see src/lib/allocations.ts.
   allocationLinks RatePlanAllocation[]
+  // Only meaningful when isNegotiated is true — restricts this plan to the linked
+  // Company/Travel Agent profiles' bookings (see RatePlanAgentAccess). Empty means
+  // "negotiated but not yet restricted to anyone," which the reservation form treats
+  // as unselectable until at least one profile is linked, same as any other negotiated
+  // plan with a non-matching travel agent.
+  agentAccess RatePlanAgentAccess[]
 
   @@unique([propertyId, code])
 }
@@ -734,6 +806,14 @@ model FolioLineItem {
   // charge code itself works.
   outletId     String?
   outlet       Outlet?    @relation(fields: [outletId], references: [id])
+  // Which RoomAssignment (segment) this line came from — set on the Nightly Room
+  // Charge and Extra Occupancy Charge lines posted by Night Audit, null for every
+  // other charge type. Lets checkout attribute room revenue back to the specific rate
+  // plan that earned it for Travel Agent commission calculation (a split-stay
+  // reservation can span more than one rate plan). onDelete SetNull — losing the
+  // attribution on room reassignment doesn't need to delete billing history.
+  roomAssignmentId String?
+  roomAssignment   RoomAssignment? @relation(fields: [roomAssignmentId], references: [id], onDelete: SetNull)
   date         DateTime
   description  String
   amount       Float
@@ -913,6 +993,10 @@ model EnterpriseSettings {
   // folio transfers to a debtor account at checkout.
   defaultAccommodationChargeCodeId String?
   cityLedgerPaymentMethodId        String?
+  // The (typically NON_REVENUE-categorized) ChargeCode a Travel Agent commission posts
+  // against as a credit line at checkout — see RatePlanAgentAccess.commissionRate.
+  // Null disables commission posting entirely, even if a rate plan has a rate set.
+  commissionChargeCodeId           String?
 
   // Custom Invoice Settings
   invoiceBrandName    String?
@@ -1041,6 +1125,8 @@ model RoomAssignment {
 
   startDate DateTime
   endDate   DateTime
+
+  folioLineItems FolioLineItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1232,6 +1318,30 @@ model RatePlanAllocation {
   createdAt DateTime @default(now())
 
   @@unique([ratePlanId, allocationId])
+}
+
+// Restricts a negotiated RatePlan (RatePlan.isNegotiated) to specific Company/Travel
+// Agent profiles — the reservation form's rate-plan selector only offers a negotiated
+// plan when the booking's Travel Agent/Booking Source (Reservation.travelAgentId) is
+// one of the profiles linked here. Non-negotiated plans are never gated by this table.
+// Managed from the Profile side (Negotiated Rates section on a Company/Travel Agent
+// profile) — see /api/profiles/[upid]/negotiated-rates.
+model RatePlanAgentAccess {
+  id         String   @id @default(uuid())
+  ratePlanId String
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  upid       String
+  profile    Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  // Optional per-rate-plan commission % owed to this agent — null means no commission
+  // for this specific plan. Calculated at checkout (see reservations/[id]/check-out/
+  // route.ts) once the folio actually settles to this agent's City Ledger account, and
+  // posted as a credit against the enterprise's configured Commission charge code
+  // (EnterpriseSettings.commissionChargeCodeId).
+  commissionRate Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([ratePlanId, upid])
 }
 
 // "Choosing this meal plan on a reservation brings these allocations" (BB → {BF}).
