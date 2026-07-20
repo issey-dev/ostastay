@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { MAX_PRICE_CALENDAR_RANGE_DAYS, MAX_PRICE_CALENDAR_RANGE_YEARS } from "@/lib/price-calendar";
 
 export async function POST(request: Request) {
   try {
@@ -46,6 +47,9 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "Invalid data formats" }, { status: 400 });
     }
+    if (parsedPrice < 0 || (parsedExtraAdultPrice !== null && parsedExtraAdultPrice < 0) || (parsedExtraChildPrice !== null && parsedExtraChildPrice < 0)) {
+      return NextResponse.json({ error: "Prices cannot be negative." }, { status: 400 });
+    }
 
     // Generate array of dates between start and end (inclusive)
     const datesToUpdate: Date[] = [];
@@ -54,6 +58,19 @@ export async function POST(request: Request) {
     currentDate.setHours(0, 0, 0, 0);
     const endMidnight = new Date(end);
     endMidnight.setHours(0, 0, 0, 0);
+
+    // An inverted range (start after end) previously fell through silently: the loop
+    // below never runs, datesToUpdate stays empty, and an empty transaction "succeeds"
+    // with zero rows touched — no error, nothing updated, no visible sign why. Reject
+    // it explicitly instead, same as the single-room-type Price Calendar endpoint.
+    if (currentDate > endMidnight) {
+      return NextResponse.json({ error: "Invalid date range — the start date must be on or before the end date." }, { status: 400 });
+    }
+    // Same ceiling as /api/price-calendar — this loop also builds one row per room
+    // type per day, so an unbounded range risks a very large transaction.
+    if (Math.round((endMidnight.getTime() - currentDate.getTime()) / 86400000) + 1 > MAX_PRICE_CALENDAR_RANGE_DAYS) {
+      return NextResponse.json({ error: `Date range too large (max ${MAX_PRICE_CALENDAR_RANGE_YEARS} years).` }, { status: 400 });
+    }
 
     while (currentDate <= endMidnight) {
       datesToUpdate.push(new Date(currentDate));

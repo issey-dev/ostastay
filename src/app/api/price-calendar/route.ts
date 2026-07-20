@@ -5,6 +5,7 @@ import { addDays, differenceInDays, startOfDay } from "date-fns";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { applyRateAdjustment } from "@/lib/derived-rate";
+import { MAX_PRICE_CALENDAR_RANGE_DAYS, MAX_PRICE_CALENDAR_RANGE_YEARS } from "@/lib/price-calendar";
 
 const bulkUpsertSchema = z.object({
   ratePlanId: z.string().uuid(),
@@ -109,8 +110,11 @@ export async function POST(request: Request) {
 
     const totalDays = differenceInDays(endDate, startDate) + 1;
 
-    if (totalDays <= 0 || totalDays > 365 * 2) {
-      return NextResponse.json({ error: "Invalid date range or range too large (max 2 years)" }, { status: 400 });
+    if (totalDays < 1) {
+      return NextResponse.json({ error: "The end date must be on or after the start date." }, { status: 400 });
+    }
+    if (totalDays > MAX_PRICE_CALENDAR_RANGE_DAYS) {
+      return NextResponse.json({ error: `Date range too large (max ${MAX_PRICE_CALENDAR_RANGE_YEARS} years).` }, { status: 400 });
     }
 
     const upserts = [];

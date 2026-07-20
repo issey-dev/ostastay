@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { DatePicker } from "@/components/ui/date-picker"
 
 export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -70,6 +70,10 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
     }
     if (!dateRange?.from || !dateRange?.to) {
       alert("Please select a date range.")
+      return
+    }
+    if (dateRange.from > dateRange.to) {
+      alert("The From date must be on or before the To date.")
       return
     }
 
@@ -153,10 +157,20 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
 
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-foreground border-b pb-2">2. Define Season (Date Range) & Price</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label>Date Range *</Label>
-                <DateRangePicker value={dateRange} onChange={setDateRange} />
+                <Label>From *</Label>
+                <DatePicker
+                  value={dateRange?.from}
+                  onChange={(date) => setDateRange(prev => ({ from: date ? new Date(date) : undefined, to: prev?.to }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>To *</Label>
+                <DatePicker
+                  value={dateRange?.to}
+                  onChange={(date) => setDateRange(prev => ({ from: prev?.from, to: date ? new Date(date) : undefined }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Daily Price *</Label>

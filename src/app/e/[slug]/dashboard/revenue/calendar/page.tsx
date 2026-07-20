@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { DateRange } from "react-day-picker"
 import { useProperty } from "@/components/providers/property-provider"
@@ -52,6 +53,12 @@ function PriceCalendarPageContent() {
   const [bulkPrice, setBulkPrice] = useState("")
   const [bulkExtraAdultPrice, setBulkExtraAdultPrice] = useState("")
   const [bulkExtraChildPrice, setBulkExtraChildPrice] = useState("")
+  // Which room type(s) Apply Prices writes to — independent of the single Room Type
+  // selector above (that one only controls which room type's grid is being viewed).
+  // Defaults to whichever room type is being viewed, then the admin can check more so
+  // one Apply Prices call can price several room types at once instead of repeating
+  // the whole flow per room type.
+  const [bulkRoomTypeIds, setBulkRoomTypeIds] = useState<string[]>([])
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
@@ -70,9 +77,30 @@ function PriceCalendarPageContent() {
       }
       if (rtData.length > 0) {
         setSelectedRoomTypeId(rtData[0].id)
+        setBulkRoomTypeIds([rtData[0].id])
       }
     })
   }, [initialRatePlanId, propertyId])
+
+  // Clicking a different rate plan's "Calendar" link while already on this page is a
+  // client-side navigation to the same route (only the ?ratePlanId= query differs), so
+  // Next.js doesn't remount the component — the useState initial value above only ever
+  // runs once. Without this, the plan shown stays stuck at whichever was first opened.
+  useEffect(() => {
+    if (initialRatePlanId) setSelectedRatePlanId(initialRatePlanId)
+  }, [initialRatePlanId])
+
+  // Switching which room type the grid is viewing also resets the bulk-apply
+  // selection to just that one — an admin who then wants to price several room
+  // types the same way checks the extra boxes from there.
+  useEffect(() => {
+    if (selectedRoomTypeId) setBulkRoomTypeIds([selectedRoomTypeId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoomTypeId])
+
+  const toggleBulkRoomType = (id: string, checked: boolean) => {
+    setBulkRoomTypeIds(prev => checked ? [...prev, id] : prev.filter(rid => rid !== id))
+  }
 
   const fetchPrices = () => {
     if (!selectedRatePlanId || !selectedRoomTypeId) {
@@ -98,18 +126,36 @@ function PriceCalendarPageContent() {
 
   const handleBulkUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedRatePlanId || !selectedRoomTypeId || !bulkPrice) return
+    if (!selectedRatePlanId || !bulkPrice) return
+
+    // Edge cases the server would otherwise reject with a generic 400 — catch them
+    // here with a message that actually says what's wrong.
+    if (bulkRoomTypeIds.length === 0) {
+      alert("Check at least one room type to apply this price to.")
+      return
+    }
+    if (!bulkDateRange?.from || !bulkDateRange?.to) {
+      alert("Pick both a From and a To date.")
+      return
+    }
+    if (bulkDateRange.from > bulkDateRange.to) {
+      alert("The From date must be on or before the To date.")
+      return
+    }
 
     setBulkSubmitting(true)
     try {
-      const res = await fetch("/api/price-calendar", {
+      // Same multi-room-type endpoint the Rate Details "Bulk Seasonal Pricing Tool"
+      // uses — one Apply Prices call now covers every checked room type instead of
+      // requiring the whole flow to be repeated per room type.
+      const res = await fetch("/api/price-calendar/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ratePlanId: selectedRatePlanId,
-          roomTypeId: selectedRoomTypeId,
-          startDate: bulkDateRange?.from ? format(bulkDateRange.from, "yyyy-MM-dd") : "",
-          endDate: bulkDateRange?.to ? format(bulkDateRange.to, "yyyy-MM-dd") : "",
+          roomTypeIds: bulkRoomTypeIds,
+          startDate: format(bulkDateRange.from, "yyyy-MM-dd"),
+          endDate: format(bulkDateRange.to, "yyyy-MM-dd"),
           price: parseFloat(bulkPrice),
           extraAdultPrice: bulkExtraAdultPrice === "" ? null : parseFloat(bulkExtraAdultPrice),
           extraChildPrice: bulkExtraChildPrice === "" ? null : parseFloat(bulkExtraChildPrice),
@@ -117,13 +163,25 @@ function PriceCalendarPageContent() {
       })
 
       if (res.ok) {
-        alert("Prices updated successfully!")
+        const data = await res.json().catch(() => null)
+        alert(data?.message || "Prices updated successfully!")
         setBulkPrice("")
         setBulkExtraAdultPrice("")
         setBulkExtraChildPrice("")
-        fetchPrices()
+        // The applied range can fall outside whatever month the grid currently shows
+        // (the two independent From/To pickers make that easy to do by accident) —
+        // jump the grid to the start of the range just priced so the update is
+        // actually visible instead of looking like nothing happened.
+        const targetMonth = startOfMonth(bulkDateRange.from)
+        if (targetMonth.getTime() !== startOfMonth(currentMonth).getTime()) {
+          setCurrentMonth(targetMonth)
+        } else {
+          fetchPrices()
+        }
       } else {
-        alert("Failed to update prices.")
+        const data = await res.json().catch(() => null)
+        const message = typeof data?.error === "string" ? data.error : Array.isArray(data?.error) ? data.error.map((i: { message: string }) => i.message).join(", ") : "Failed to update prices."
+        alert(message)
       }
     } catch (err) {
       alert("An error occurred.")
@@ -173,7 +231,11 @@ function PriceCalendarPageContent() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Rate Plan</Label>
-                <Select value={selectedRatePlanId} onValueChange={(val) => setSelectedRatePlanId(val ?? "")}>
+                {/* Locked — this page is always entered from a specific plan's
+                    "Calendar" link on the Rate Plans list; switching plans here would
+                    silently change what Bulk Update writes to. Go back and click
+                    Calendar on a different row to view/edit a different plan. */}
+                <Select value={selectedRatePlanId} disabled>
                   <SelectTrigger>
                     <SelectValue placeholder="Select Rate Plan">
                       {ratePlans.find(r => r.id === selectedRatePlanId)?.name}
@@ -181,21 +243,6 @@ function PriceCalendarPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     {ratePlans.map(r => (
-                      <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Room Type</Label>
-                <Select value={selectedRoomTypeId} onValueChange={(val) => setSelectedRoomTypeId(val ?? "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Room Type">
-                      {roomTypes.find(r => r.id === selectedRoomTypeId)?.name}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roomTypes.map(r => (
                       <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
                     ))}
                   </SelectContent>
@@ -226,11 +273,46 @@ function PriceCalendarPageContent() {
               <CardContent>
                 <form onSubmit={handleBulkUpdate} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Date Range</Label>
-                    <DateRangePicker
-                      value={bulkDateRange}
-                      onChange={setBulkDateRange}
-                    />
+                    <div className="flex items-center justify-between">
+                      <Label>Room Type(s)</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-info hover:underline"
+                        onClick={() => setBulkRoomTypeIds(bulkRoomTypeIds.length === roomTypes.length ? [] : roomTypes.map(r => r.id))}
+                      >
+                        {bulkRoomTypeIds.length === roomTypes.length ? "Clear all" : "Select all"}
+                      </button>
+                    </div>
+                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1.5 bg-card">
+                      {roomTypes.map(rt => (
+                        <div key={rt.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`bulk-rt-${rt.id}`}
+                            checked={bulkRoomTypeIds.includes(rt.id)}
+                            onCheckedChange={(checked) => toggleBulkRoomType(rt.id, !!checked)}
+                          />
+                          <Label htmlFor={`bulk-rt-${rt.id}`} className="font-normal cursor-pointer text-sm">
+                            {rt.name} <span className="text-muted-foreground text-xs">({rt.code})</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>From</Label>
+                      <DatePicker
+                        value={bulkDateRange?.from}
+                        onChange={(date) => setBulkDateRange(prev => ({ from: date ? new Date(date) : undefined, to: prev?.to }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>To</Label>
+                      <DatePicker
+                        value={bulkDateRange?.to}
+                        onChange={(date) => setBulkDateRange(prev => ({ from: prev?.from, to: date ? new Date(date) : undefined }))}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Daily Price ($)</Label>
@@ -246,9 +328,9 @@ function PriceCalendarPageContent() {
                       <Input type="number" min="0" step="0.01" value={bulkExtraChildPrice} onChange={e => setBulkExtraChildPrice(e.target.value)} placeholder="0.00" />
                     </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || !selectedRoomTypeId}>
+                  <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || bulkRoomTypeIds.length === 0}>
                     {bulkSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Apply Prices
+                    Apply Prices{bulkRoomTypeIds.length > 1 ? ` (${bulkRoomTypeIds.length} room types)` : ""}
                   </Button>
                 </form>
               </CardContent>
@@ -259,13 +341,31 @@ function PriceCalendarPageContent() {
         {/* Right Side: Calendar Grid */}
         <div className="md:col-span-3">
           <Card className="h-full">
-            <CardHeader className="flex flex-row items-center justify-between border-b pb-4 mb-4">
-              <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>Previous</Button>
-                <h3 className="text-xl font-semibold w-48 text-center">{format(currentMonth, "MMMM yyyy")}</h3>
-                <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>Next</Button>
+            <CardHeader className="flex flex-col gap-4 border-b pb-4 mb-4">
+              {/* Room type being previewed — the only place this is chosen now
+                  (Configuration's old duplicate dropdown was removed). Independent of
+                  Bulk Update's own checkbox list, which controls what gets written. */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {roomTypes.map(rt => (
+                  <Button
+                    key={rt.id}
+                    type="button"
+                    variant={rt.id === selectedRoomTypeId ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedRoomTypeId(rt.id)}
+                  >
+                    {rt.name}
+                  </Button>
+                ))}
               </div>
-              <Button variant="outline" size="sm" onClick={() => setCurrentMonth(startOfMonth(new Date()))}>Today</Button>
+              <div className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>Previous</Button>
+                  <h3 className="text-xl font-semibold w-48 text-center">{format(currentMonth, "MMMM yyyy")}</h3>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>Next</Button>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setCurrentMonth(startOfMonth(new Date()))}>Today</Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loading ? (
