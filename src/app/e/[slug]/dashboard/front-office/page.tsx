@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MonitorPlay, LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, BellDot } from "lucide-react"
+import { MonitorPlay, LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, BellDot, ArrowLeftRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -172,10 +172,11 @@ export default function FrontOfficeDashboard() {
       <Card className="shadow-elevation-1">
         <Tabs defaultValue="arrivals" className="w-full">
           <CardHeader className="border-b px-6 py-4 bg-muted/50 rounded-t-xl">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsList className="grid w-full max-w-2xl grid-cols-4">
               <TabsTrigger value="arrivals">Arrivals ({data?.arrivals?.length})</TabsTrigger>
               <TabsTrigger value="departures">Departures ({data?.departures?.length})</TabsTrigger>
               <TabsTrigger value="inhouse">In-House ({data?.inHouse?.length})</TabsTrigger>
+              <TabsTrigger value="roommoves">Room Moves ({data?.roomMovesToday?.length})</TabsTrigger>
             </TabsList>
           </CardHeader>
           
@@ -469,6 +470,62 @@ export default function FrontOfficeDashboard() {
                     <TableRow>
                       <TableCell colSpan={4} className="py-0">
                         <EmptyState icon={CheckCircle} title="No guests currently in-house" />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TabsContent>
+
+            {/* Room Moves Tab — informational: the room already changes automatically
+                via the reservation's own segments, this is a heads-up for staff to
+                coordinate the physical move (luggage, keys, housekeeping). */}
+            <TabsContent value="roommoves" className="m-0 border-none outline-none">
+              <div className="md:hidden divide-y divide-border">
+                {data?.roomMovesToday?.length === 0 ? (
+                  <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
+                ) : (
+                  data?.roomMovesToday?.map((mv: any) => (
+                    <div key={mv.reservationId} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-medium">{mv.primaryGuest.firstName} {mv.primaryGuest.lastName}</span>
+                        <span className="text-muted-foreground font-mono text-xs shrink-0">{mv.confirmationNo}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="outline">{mv.fromRoomNumber}</Badge>
+                        <ArrowLeftRight className="w-3 h-3 text-muted-foreground" />
+                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge>
+                        <span className="text-muted-foreground text-xs">({mv.toRoomTypeName})</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <Table className="hidden md:table">
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="pl-6">Guest</TableHead>
+                    <TableHead>Conf. #</TableHead>
+                    <TableHead>From Room</TableHead>
+                    <TableHead>To Room</TableHead>
+                    <TableHead className="pr-6">New Room Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.roomMovesToday?.map((mv: any) => (
+                    <TableRow key={mv.reservationId}>
+                      <TableCell className="pl-6 font-medium">{mv.primaryGuest.firstName} {mv.primaryGuest.lastName}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{mv.confirmationNo}</TableCell>
+                      <TableCell><Badge variant="outline">{mv.fromRoomNumber}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge></TableCell>
+                      <TableCell className="pr-6 text-muted-foreground">{mv.toRoomTypeName}</TableCell>
+                    </TableRow>
+                  ))}
+                  {data?.roomMovesToday?.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-0">
+                        <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                       </TableCell>
                     </TableRow>
                   )}

@@ -27,6 +27,8 @@ export async function GET(request: Request) {
           { firstName: { contains: search } },
           { lastName: { contains: search } },
           { companyName: { contains: search } },
+          { communications: { some: { value: { contains: search } } } },
+          { addresses: { some: { fullAddress: { contains: search } } } },
         ] : undefined
       },
       include: {

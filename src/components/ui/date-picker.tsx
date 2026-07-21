@@ -19,11 +19,16 @@ interface DatePickerProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  /** Hard floor — days before this are not selectable in the calendar at all (e.g. a
+   * Departure picker's minDate = Arrival + 1 day, so an invalid range can't be picked
+   * in the first place, not just rejected after the fact). */
+  minDate?: string | Date | null
 }
 
-export function DatePicker({ value, onChange, placeholder = "Pick a date", className, disabled }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = "Pick a date", className, disabled, minDate }: DatePickerProps) {
   // Try to parse the incoming value securely
   const dateValue = typeof value === 'string' && value ? new Date(value) : (value instanceof Date ? value : undefined)
+  const minDateValue = typeof minDate === 'string' && minDate ? new Date(minDate) : (minDate instanceof Date ? minDate : undefined)
 
   const handleSelect = (date: Date | undefined) => {
     if (date) {
@@ -55,6 +60,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           mode="single"
           selected={dateValue}
           onSelect={handleSelect}
+          disabled={minDateValue ? { before: minDateValue } : undefined}
           autoFocus
         />
       </PopoverContent>

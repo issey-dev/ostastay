@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
+import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { logActivity } from "@/lib/activity-log";
+import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
 
 export async function GET(request: Request) {
   try {
@@ -45,6 +47,7 @@ export async function GET(request: Request) {
             },
           },
         },
+        specialRequests: true,
       },
       orderBy: { checkInDate: 'asc' },
       take: 100, // Limit for dashboard performance
@@ -101,6 +104,17 @@ export async function POST(request: Request) {
       if (accompanying.length !== body.accompanyingGuestIds.length || accompanying.some((p) => p.enterpriseId !== ctx.enterpriseId)) {
         return NextResponse.json({ error: "One or more accompanying guest profiles were not found" }, { status: 404 });
       }
+      // Hard cap: accompanying guests can't exceed the pax not already occupied by the
+      // primary guest (adults + children, minus the primary guest's own slot).
+      const maxAccompanying = Math.max(0, (parseInt(body.adults) || 1) + (parseInt(body.children) || 0) - 1);
+      if (body.accompanyingGuestIds.length > maxAccompanying) {
+        return NextResponse.json({ error: `Only ${maxAccompanying} accompanying guest(s) can be attached for ${body.adults} adult(s) and ${body.children || 0} child(ren).` }, { status: 400 });
+      }
+    }
+
+    const specialRequests = await validateSpecialRequestCodes(ctx.enterpriseId, body.specialRequestCodes);
+    if (!specialRequests.ok) {
+      return NextResponse.json({ error: specialRequests.error }, { status: 400 });
     }
 
     const assignmentsInput = body.assignments ? body.assignments : [
@@ -113,6 +127,11 @@ export async function POST(request: Request) {
         endDate: new Date(body.checkOutDate)
       }
     ];
+
+    // Hard rule: split-stay segments must be back-to-back with no gaps between them.
+    if (!assignmentsAreContiguous(assignmentsInput)) {
+      return NextResponse.json({ error: "Segments must run back-to-back with no gaps between stays." }, { status: 400 });
+    }
 
     // Non-blocking: a room type whose maxOccupancy is exceeded by this reservation's
     // adults+children (infants don't count toward occupancy, same convention as Green
@@ -215,11 +234,15 @@ export async function POST(request: Request) {
         mealPlan: body.mealPlan || "NONE",
         remarks: body.remarks || null,
         status: "RESERVED", // Default status
+        hasScheduledRoomMove: detectScheduledRoomMove(assignmentsInput),
         assignments: {
           create: assignmentsInput
         },
         accompanyingGuests: Array.isArray(body.accompanyingGuestIds) && body.accompanyingGuestIds.length > 0 ? {
           create: body.accompanyingGuestIds.map((id: string) => ({ profileId: id }))
+        } : undefined,
+        specialRequests: specialRequests.codes.length > 0 ? {
+          create: specialRequests.codes.map((code) => ({ code }))
         } : undefined,
         // Auto-create the Master Folio (Window 1) for the reservation
         folios: {
@@ -250,6 +273,7 @@ export async function POST(request: Request) {
           }
         },
         folios: true,
+        specialRequests: true,
       }
     });
 

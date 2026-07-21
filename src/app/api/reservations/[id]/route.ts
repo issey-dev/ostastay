@@ -3,8 +3,63 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
+import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
 import { logActivity } from "@/lib/activity-log";
+import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
+
+const RESERVATION_DETAIL_INCLUDE = {
+  primaryGuest: true,
+  travelAgent: true,
+  accompanyingGuests: { include: { profile: true } },
+  assignments: {
+    orderBy: { startDate: "asc" as const },
+    include: {
+      roomType: true,
+      room: {
+        include: {
+          housekeepingTasks: {
+            where: { taskType: "SPECIAL_REQUEST" },
+            orderBy: { createdAt: "desc" as const },
+          },
+        },
+      },
+      ratePlan: true,
+    },
+  },
+  allocations: {
+    include: {
+      allocation: {
+        include: { rates: true, chargeCode: { select: { code: true } } },
+      },
+    },
+  },
+  specialRequests: true,
+} as const;
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+    const { id } = await params;
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      include: RESERVATION_DETAIL_INCLUDE,
+    });
+    if (!reservation) {
+      return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, reservation.propertyId);
+
+    return NextResponse.json(reservation);
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
 
 const updateSchema = z.object({
   primaryGuestId: z.string().min(1),
@@ -30,7 +85,10 @@ const updateSchema = z.object({
   travelAgentId: z.string().optional().nullable(),
   accompanyingGuestIds: z.array(z.string()).optional(),
   manualAllocationIds: z.array(z.string()).optional(),
-  status: z.string().min(1)
+  specialRequestCodes: z.array(z.string()).optional(),
+  // Optional and lifecycle-managed elsewhere — kept only so an older client that still
+  // echoes the current status back doesn't 400 on the unknown-change guard below.
+  status: z.string().optional()
 });
 
 export async function PUT(
@@ -60,12 +118,17 @@ export async function PUT(
       return NextResponse.json({ error: "Check-out date must be after check-in date" }, { status: 400 });
     }
 
+    // Hard rule: split-stay segments must be back-to-back with no gaps between them.
+    if (!assignmentsAreContiguous(data.assignments)) {
+      return NextResponse.json({ error: "Segments must run back-to-back with no gaps between stays." }, { status: 400 });
+    }
+
     // Status is lifecycle-managed, never a plain editable field: check-in/check-out
     // have dedicated routes (room validation, settlement, debtor finalization) and
     // cancel/no-show/reinstate go through PATCH .../status (transition table +
     // financial guards). Accepting a different status here would silently bypass all
-    // of that — the form always echoes the current status back.
-    if (data.status !== existing.status) {
+    // of that — the form omits status entirely (or echoes the current one back).
+    if (data.status !== undefined && data.status !== existing.status) {
       return NextResponse.json(
         { error: "Reservation status cannot be changed here — use the Check-In / Check-Out / Cancel actions." },
         { status: 400 }
@@ -87,6 +150,17 @@ export async function PUT(
       if (accompanying.length !== data.accompanyingGuestIds.length || accompanying.some((p) => p.enterpriseId !== ctx.enterpriseId)) {
         return NextResponse.json({ error: "One or more accompanying guest profiles were not found" }, { status: 404 });
       }
+      // Hard cap: accompanying guests can't exceed the pax not already occupied by the
+      // primary guest (adults + children, minus the primary guest's own slot).
+      const maxAccompanying = Math.max(0, data.adults - 1 + data.children);
+      if (data.accompanyingGuestIds.length > maxAccompanying) {
+        return NextResponse.json({ error: `Only ${maxAccompanying} accompanying guest(s) can be attached for ${data.adults} adult(s) and ${data.children} child(ren).` }, { status: 400 });
+      }
+    }
+
+    const specialRequests = await validateSpecialRequestCodes(ctx.enterpriseId, data.specialRequestCodes);
+    if (!specialRequests.ok) {
+      return NextResponse.json({ error: specialRequests.error }, { status: 400 });
     }
 
     // Only enforced for a room type/room not already on this reservation — a segment
@@ -163,6 +237,7 @@ export async function PUT(
         ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
         status: data.status,
+        hasScheduledRoomMove: detectScheduledRoomMove(data.assignments),
         assignments: {
           deleteMany: {},
           create: data.assignments.map((a) => ({
@@ -179,6 +254,12 @@ export async function PUT(
             deleteMany: {},
             create: data.accompanyingGuestIds.map((id: string) => ({ profileId: id }))
           }
+        }),
+        ...(data.specialRequestCodes !== undefined && {
+          specialRequests: {
+            deleteMany: {},
+            create: specialRequests.codes.map((code) => ({ code }))
+          }
         })
       },
       include: {
@@ -188,6 +269,7 @@ export async function PUT(
         assignments: {
           include: { roomType: true, room: true, ratePlan: true }
         },
+        specialRequests: true,
       }
     });
 
