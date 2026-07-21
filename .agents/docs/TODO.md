@@ -46,13 +46,21 @@ the new dialogs (check-in, walk-in, deposit, OOO) remains recommended. Summary:
   auto-return-to-DIRTY on resolve), CashierPaidOut (petty cash, subtracted
   from expected drawer cash).
 
-**Deliberately not done from the v4 plan (still open):**
-- BookingForm Zod+RHF rebuild (1,160 lines — large, riskiest item; do as its own
-  focused session).
-- Per-attendant task-sheet view (board attendant filter covers part of it).
-- Full maintenance API unification onto the RESTful routes (both conventions
-  still exist; validation/priority gaps were fixed).
-- Cashiering defaults (float 300, USD/MVR) still hardcoded, not settings.
+**Follow-up session (2026-07-21, later the same day): all four deliberately-
+deferred items closed**, one commit each per app-owner instruction (they will
+move these to alpha-version-4 themselves — do not push):
+- `eef8fce` — cashiering defaults became EnterpriseSettings (Controls > General
+  "Cashiering Defaults"; migration 20260721180000; defaults match old hardcodes).
+- `e5b6509` — maintenance API unified onto RESTful /api/maintenance/[id]
+  (full-field PATCH with enum validation; collection PATCH/DELETE removed, all
+  callers migrated; shared vocabulary in src/lib/maintenance.ts).
+- `cd78eb3` — per-attendant task sheet (housekeeping/task-sheet): mobile-first,
+  defaults to "me", rooms in cleaning-priority order with one-tap actions.
+- `be85283` — BookingForm rebuilt onto Zod + React Hook Form per APP STANDARD
+  001 (schema in booking-form-schema.ts, LookToBookGrid + BookingSummary
+  extracted, inline real-time errors, identical API payloads). 8 schema unit
+  tests; full suite 300/300; new/edit pages smoke-tested 200 live.
+Alpha v4's plan is now fully executed with nothing deferred.
 > This file is the actionable list: what's left, what was deferred on purpose, and what
 > was found broken along the way but is out of scope for whoever finds it next to fix
 > without checking first. Keep this file current — when you close an item, move it to
