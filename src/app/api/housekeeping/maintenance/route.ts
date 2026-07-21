@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     requirePermission(ctx, "MAINTENANCE", "create")
 
     const body = await request.json()
-    const { roomIds, issueType, description, reportedBy } = body
+    const { roomIds, issueType, description, reportedBy, priority } = body
 
     if (!roomIds || !Array.isArray(roomIds) || roomIds.length === 0) {
       return NextResponse.json({ error: "An array of roomIds is required" }, { status: 400 })
@@ -17,6 +17,9 @@ export async function POST(request: Request) {
 
     if (!issueType || !description) {
       return NextResponse.json({ error: "issueType and description are required" }, { status: 400 })
+    }
+    if (priority !== undefined && !["LOW", "MEDIUM", "HIGH"].includes(priority)) {
+      return NextResponse.json({ error: "priority must be LOW, MEDIUM, or HIGH" }, { status: 400 })
     }
 
     // Confirm every targeted room belongs to a property this actor can reach before
@@ -37,7 +40,7 @@ export async function POST(request: Request) {
       description,
       reportedBy: reportedBy || "Housekeeping",
       status: "OPEN",
-      priority: "MEDIUM"
+      priority: priority || "MEDIUM"
     }))
 
     const result = await prisma.roomMaintenance.createMany({

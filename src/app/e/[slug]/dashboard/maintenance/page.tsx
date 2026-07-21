@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react"
+import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -41,9 +41,9 @@ export default function MaintenanceDashboard() {
     }
   }
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (silent = false) => {
     if (!currentProperty) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const res = await fetch(`/api/maintenance?propertyId=${currentProperty.id}`)
       if (res.ok) {
@@ -53,13 +53,21 @@ export default function MaintenanceDashboard() {
     } catch (e) {
       console.error(e)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchTickets()
     fetchMaintenanceTeam()
+  }, [currentProperty])
+
+  // The kanban previously fetched once on mount and went stale for the rest of
+  // the shift — silently refresh whenever the tab regains focus.
+  useEffect(() => {
+    const onFocus = () => fetchTickets(true)
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
   }, [currentProperty])
 
   const handleStatusChange = async (ticketId: string, newStatus: string) => {
@@ -134,14 +142,20 @@ export default function MaintenanceDashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Maintenance Dashboard</h2>
           <p className="text-muted-foreground">Track, manage, and resolve property maintenance issues.</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowResolved(!showResolved)}
-          className="flex items-center gap-2"
-        >
-          {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {showResolved ? "Hide Resolved" : "Show Resolved"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => fetchTickets()} className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowResolved(!showResolved)}
+            className="flex items-center gap-2"
+          >
+            {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showResolved ? "Hide Resolved" : "Show Resolved"}
+          </Button>
+        </div>
       </div>
 
       <div className={`grid grid-cols-1 ${showResolved ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>

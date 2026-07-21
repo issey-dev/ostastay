@@ -62,6 +62,10 @@ export async function PATCH(request: Request) {
     if (!taskId || !status) {
       return NextResponse.json({ error: "taskId and status are required" }, { status: 400 })
     }
+    const VALID_TASK_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED"]
+    if (!VALID_TASK_STATUSES.includes(status)) {
+      return NextResponse.json({ error: `Invalid task status — expected one of ${VALID_TASK_STATUSES.join(", ")}` }, { status: 400 })
+    }
 
     const existing = await prisma.housekeepingTask.findUnique({
       where: { id: taskId },
@@ -80,16 +84,25 @@ export async function PATCH(request: Request) {
       }
     })
 
+    // Completing a cleaning task (CHECKOUT etc. — anything but a special request)
+    // means the room is clean: flip a DIRTY room to CLEAN. INSPECTED is never
+    // set here (that's a supervisor's explicit call) and OOO/OOS are untouched.
+    let roomStatusUpdated = false
+    if (status === "COMPLETED" && existing.taskType !== "SPECIAL_REQUEST" && existing.room.status === "DIRTY") {
+      await prisma.room.update({ where: { id: existing.roomId }, data: { status: "CLEAN" } })
+      roomStatusUpdated = true
+    }
+
     await logActivity({
       ctx,
       module: "HOUSEKEEPING",
       action: "UPDATE",
       entityType: "HousekeepingTask",
       entityId: task.id,
-      description: `Set housekeeping task for room ${existing.room.roomNumber} to ${status}`,
+      description: `Set housekeeping task for room ${existing.room.roomNumber} to ${status}${roomStatusUpdated ? " (room marked CLEAN)" : ""}`,
     })
 
-    return NextResponse.json(task)
+    return NextResponse.json({ ...task, roomStatusUpdated })
   } catch (error) {
     const { status, body } = toErrorResponse(error)
     return NextResponse.json(body, { status })

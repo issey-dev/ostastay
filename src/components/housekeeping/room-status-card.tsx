@@ -14,9 +14,20 @@ type RoomStatusCardProps = {
 export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelect, onEditMaintenance, onCompleteTask }: RoomStatusCardProps) {
   const [loading, setLoading] = useState(false)
 
-  const activeAssignment = room.RoomAssignment?.[0]
+  // The board's assignments include both the current IN_HOUSE stay and any
+  // RESERVED stay arriving today — occupancy comes from the former only.
+  const assignments: any[] = room.RoomAssignment ?? []
+  const activeAssignment = assignments.find((a) => a.reservation?.status === "IN_HOUSE")
+  const arrivingAssignment = assignments.find((a) => a.reservation?.status === "RESERVED")
   const isOccupied = !!activeAssignment
   const hasSharer = isOccupied && activeAssignment.reservation?.accompanyingGuests?.length > 0
+
+  // Priority signals so attendants clean in the right order: rooms needed for an
+  // arrival first, due-outs next (they'll need a departure clean soon), stayovers last.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const isDueOut = isOccupied && activeAssignment.reservation?.checkOutDate?.slice(0, 10) === todayIso
+  const isStayover = isOccupied && !isDueOut
+  const hasArrivalToday = !!arrivingAssignment && arrivingAssignment.reservation?.checkInDate?.slice(0, 10) === todayIso
   const hasMaintenance = room.maintenance?.length > 0
   const activeTicket = hasMaintenance ? room.maintenance[0] : null
   
@@ -111,10 +122,12 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
 
         {isOccupied ? (
           <div className="bg-background/60 rounded-md p-2 mt-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80 flex-wrap">
               <Users className="w-3 h-3" />
               Occupied
               {hasSharer && <span className="bg-info-muted text-info px-1.5 py-0.5 rounded-none text-[10px]">Sharer</span>}
+              {isDueOut && <span className="bg-warning-muted text-warning px-1.5 py-0.5 rounded-none text-[10px] font-bold">Due Out</span>}
+              {isStayover && <span className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded-none text-[10px]">Stayover</span>}
             </div>
             <p className="text-xs text-muted-foreground mt-1 truncate">
               {activeAssignment.reservation.primaryGuest?.firstName} {activeAssignment.reservation.primaryGuest?.lastName}
@@ -122,7 +135,15 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
           </div>
         ) : (
           <div className="bg-background/40 rounded-md p-2 mt-2 border border-dashed border-border">
-            <p className="text-xs text-center font-medium text-muted-foreground">Vacant</p>
+            <p className="text-xs text-center font-medium text-muted-foreground">
+              Vacant
+            </p>
+          </div>
+        )}
+
+        {hasArrivalToday && (
+          <div className="mt-2 text-[11px] font-bold bg-info-muted text-info px-2 py-1 rounded border border-info/30 text-center">
+            Arrival today — prioritize
           </div>
         )}
 

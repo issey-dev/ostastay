@@ -17,29 +17,38 @@ export default function HousekeepingDashboard() {
   const [loading, setLoading] = useState(true)
   const [selectedRooms, setSelectedRooms] = useState<string[]>([])
   const [isUpdatingBulk, setIsUpdatingBulk] = useState(false)
+  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
+
+  // Board filters — client-side over the already-fetched board
+  const [filterStatus, setFilterStatus] = useState<string>("")
+  const [filterAttendantId, setFilterAttendantId] = useState<string>("")
   
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false)
   const [maintenanceDesc, setMaintenanceDesc] = useState("")
   const [maintenanceType, setMaintenanceType] = useState("HVAC")
+  const [maintenancePriority, setMaintenancePriority] = useState("MEDIUM")
   const [editingTicket, setEditingTicket] = useState<any>(null)
 
   const [housekeepers, setHousekeepers] = useState<any[]>([])
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [selectedAttendantId, setSelectedAttendantId] = useState<string>("UNASSIGNED")
 
-  const fetchRooms = async () => {
+  const fetchRooms = async (silent = false) => {
     if (!currentProperty) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const res = await fetch(`/api/housekeeping?propertyId=${currentProperty.id}`)
       if (res.ok) {
         const data = await res.json()
         setRooms(data)
+      } else if (!silent) {
+        setNotification({ title: "Error", message: "Failed to load the housekeeping board.", isError: true })
       }
     } catch (e) {
       console.error(e)
+      if (!silent) setNotification({ title: "Error", message: "Failed to load the housekeeping board.", isError: true })
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -51,10 +60,13 @@ export default function HousekeepingDashboard() {
         body: JSON.stringify({ taskId, status: "COMPLETED" })
       })
       if (res.ok) {
-        fetchRooms() // Refresh the rooms to remove the task from the view
+        fetchRooms(true) // Refresh — the room may also have flipped to CLEAN server-side
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Task Update Failed", message: data.error || "Failed to complete the task.", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred completing the task.", isError: true })
     }
   }
 
@@ -76,6 +88,14 @@ export default function HousekeepingDashboard() {
     fetchHousekeepers()
   }, [currentProperty])
 
+  // Multiple people work this board at once — silently refresh whenever the tab
+  // regains focus so a stale board doesn't sit open all shift.
+  useEffect(() => {
+    const onFocus = () => fetchRooms(true)
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [currentProperty])
+
   const handleStatusChange = async (roomId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/housekeeping`, {
@@ -84,11 +104,15 @@ export default function HousekeepingDashboard() {
         body: JSON.stringify({ roomId, status: newStatus })
       })
       if (res.ok) {
-        // Optimistically update local state
         setRooms(prev => prev.map(r => r.id === roomId ? { ...r, status: newStatus } : r))
+        // Marking clean/inspected may have auto-completed tasks server-side.
+        if (newStatus === "CLEAN" || newStatus === "INSPECTED") fetchRooms(true)
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Update Failed", message: data.error || "Failed to update the room status.", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred updating the room.", isError: true })
     }
   }
 
@@ -110,12 +134,15 @@ export default function HousekeepingDashboard() {
         body: JSON.stringify({ roomIds: selectedRooms, status: newStatus })
       })
       if (res.ok) {
-        // Optimistically update local state
         setRooms(prev => prev.map(r => selectedRooms.includes(r.id) ? { ...r, status: newStatus } : r))
         setSelectedRooms([]) // Clear selection after successful update
+        if (newStatus === "CLEAN" || newStatus === "INSPECTED") fetchRooms(true)
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Bulk Update Failed", message: data.error || "Failed to update the selected rooms.", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred during the bulk update.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -152,18 +179,22 @@ export default function HousekeepingDashboard() {
         const res = await fetch(`/api/maintenance`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            ticketId: editingTicket.id, 
-            issueType: maintenanceType, 
-            description: maintenanceDesc 
+          body: JSON.stringify({
+            ticketId: editingTicket.id,
+            issueType: maintenanceType,
+            description: maintenanceDesc,
+            priority: maintenancePriority
           })
         })
         if (res.ok) {
           closeMaintenanceDialog()
           fetchRooms() // Re-fetch to get updated Wrench info
+        } else {
+          const data = await res.json()
+          setNotification({ title: "Update Failed", message: data.error || "Failed to update the ticket.", isError: true })
         }
       } catch (e) {
-        console.error(e)
+        setNotification({ title: "Error", message: "An error occurred updating the ticket.", isError: true })
       } finally {
         setIsUpdatingBulk(false)
       }
@@ -177,18 +208,22 @@ export default function HousekeepingDashboard() {
       const res = await fetch(`/api/housekeeping/maintenance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          roomIds: selectedRooms, 
-          issueType: maintenanceType, 
-          description: maintenanceDesc 
+        body: JSON.stringify({
+          roomIds: selectedRooms,
+          issueType: maintenanceType,
+          description: maintenanceDesc,
+          priority: maintenancePriority
         })
       })
       if (res.ok) {
         closeMaintenanceDialog()
         fetchRooms() // Re-fetch to get new Wrench icons
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Report Failed", message: data.error || "Failed to create the ticket.", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred creating the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -204,9 +239,12 @@ export default function HousekeepingDashboard() {
       if (res.ok) {
         closeMaintenanceDialog()
         fetchRooms()
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Delete Failed", message: data.error || "Failed to delete the ticket.", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred deleting the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -223,11 +261,17 @@ export default function HousekeepingDashboard() {
     setEditingTicket(ticket)
     setMaintenanceType(ticket.issueType)
     setMaintenanceDesc(ticket.description)
+    setMaintenancePriority(ticket.priority || "MEDIUM")
     setShowMaintenanceDialog(true)
   }
 
-  // Group rooms by Floor
-  const roomsByFloor = rooms.reduce((acc: any, room: any) => {
+  // Apply board filters, then group by Floor
+  const filteredRooms = rooms.filter((room: any) => {
+    if (filterStatus && room.status !== filterStatus) return false
+    if (filterAttendantId && room.assignedAttendantId !== filterAttendantId) return false
+    return true
+  })
+  const roomsByFloor = filteredRooms.reduce((acc: any, room: any) => {
     const floorName = room.floor.name
     if (!acc[floorName]) acc[floorName] = []
     acc[floorName].push(room)
@@ -269,11 +313,49 @@ export default function HousekeepingDashboard() {
               Select All
             </Button>
           )}
-          <Button onClick={fetchRooms} variant="outline" className="flex items-center gap-2">
+          <Button onClick={() => fetchRooms()} variant="outline" className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
         </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        {[
+          { label: "All", value: "" },
+          { label: "Dirty", value: "DIRTY" },
+          { label: "Clean", value: "CLEAN" },
+          { label: "Inspected", value: "INSPECTED" },
+          { label: "Out of Order", value: "OUT_OF_ORDER" },
+          { label: "Out of Service", value: "OUT_OF_SERVICE" },
+        ].map((opt) => (
+          <Button
+            key={opt.value}
+            size="sm"
+            variant={filterStatus === opt.value ? "default" : "outline"}
+            onClick={() => setFilterStatus(opt.value)}
+          >
+            {opt.label}
+            {opt.value !== "" && (
+              <span className="ml-1.5 text-[10px] opacity-70">
+                {rooms.filter((r: any) => r.status === opt.value).length}
+              </span>
+            )}
+          </Button>
+        ))}
+        {housekeepers.length > 0 && (
+          <select
+            className="h-8 rounded-md border border-border bg-card px-2 text-sm ml-auto"
+            value={filterAttendantId}
+            onChange={(e) => setFilterAttendantId(e.target.value)}
+          >
+            <option value="">All attendants</option>
+            {housekeepers.map((hk: any) => (
+              <option key={hk.id} value={hk.id}>{hk.firstName} {hk.lastName}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {Object.keys(roomsByFloor).length === 0 && (
@@ -413,6 +495,18 @@ export default function HousekeepingDashboard() {
               </select>
             </div>
             <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Priority</label>
+              <select
+                className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+                value={maintenancePriority}
+                onChange={e => setMaintenancePriority(e.target.value)}
+              >
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Description</label>
               <textarea
                 className="w-full border-border rounded-md shadow-sm p-3 border bg-background focus:ring-ring focus:border-ring"
@@ -479,6 +573,19 @@ export default function HousekeepingDashboard() {
             <Button onClick={handleAssignSubmit} disabled={isUpdatingBulk}>
               {isUpdatingBulk ? "Saving..." : "Save Assignment"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notification Dialog */}
+      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>{notification?.title}</DialogTitle>
+            <DialogDescription>{notification?.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setNotification(null)}>OK</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

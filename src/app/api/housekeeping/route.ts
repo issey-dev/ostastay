@@ -63,10 +63,21 @@ export async function GET(request: Request) {
         RoomAssignment: {
           where: {
             startDate: { lte: new Date() },
-            endDate: { gte: new Date() }
+            endDate: { gte: new Date() },
+            // Only live stays: a CHECKED_OUT/CANCELLED/NO_SHOW reservation's
+            // assignment still spans today but the room is not occupied by it.
+            // RESERVED is included so the board can flag today's arrivals.
+            reservation: { status: { in: ["RESERVED", "IN_HOUSE"] } }
           },
           include: {
-            reservation: true
+            reservation: {
+              include: {
+                // The board card shows the occupant's name and a sharer badge —
+                // a bare `reservation: true` never carried these.
+                primaryGuest: { select: { firstName: true, lastName: true } },
+                accompanyingGuests: { select: { id: true } },
+              },
+            },
           }
         }
       },
@@ -94,6 +105,11 @@ export async function PATCH(request: Request) {
 
     if (!roomId && (!roomIds || roomIds.length === 0)) {
       return NextResponse.json({ error: "roomId or roomIds are required" }, { status: 400 })
+    }
+
+    const VALID_ROOM_STATUSES = ["CLEAN", "DIRTY", "INSPECTED", "OUT_OF_ORDER", "OUT_OF_SERVICE"]
+    if (status !== undefined && !VALID_ROOM_STATUSES.includes(status)) {
+      return NextResponse.json({ error: `Invalid room status — expected one of ${VALID_ROOM_STATUSES.join(", ")}` }, { status: 400 })
     }
 
     const dataToUpdate: any = {}
@@ -131,6 +147,14 @@ export async function PATCH(request: Request) {
         where: { id: { in: rooms.map((r) => r.id) } },
         data: dataToUpdate
       })
+      // Marking rooms clean/inspected completes their open cleaning work — the
+      // departure-clean task and the room status are one lifecycle, not two.
+      if (status === "CLEAN" || status === "INSPECTED") {
+        await prisma.housekeepingTask.updateMany({
+          where: { roomId: { in: rooms.map((r) => r.id) }, taskType: { not: "SPECIAL_REQUEST" }, status: { not: "COMPLETED" } },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        })
+      }
       await logActivity({
         ctx,
         module: "HOUSEKEEPING",
@@ -150,6 +174,14 @@ export async function PATCH(request: Request) {
         where: { id: roomId },
         data: dataToUpdate
       })
+      // Same coupling as the bulk path: a clean/inspected room has no open
+      // cleaning tasks left (special requests stay — they're guest asks, not cleans).
+      if (status === "CLEAN" || status === "INSPECTED") {
+        await prisma.housekeepingTask.updateMany({
+          where: { roomId, taskType: { not: "SPECIAL_REQUEST" }, status: { not: "COMPLETED" } },
+          data: { status: "COMPLETED", completedAt: new Date() },
+        })
+      }
       await logActivity({
         ctx,
         module: "HOUSEKEEPING",
