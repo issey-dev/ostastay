@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star } from "lucide-react"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
+import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -51,6 +52,7 @@ type Reservation = {
     overrideRate: number | null
   }[]
   specialRequests?: { id: string, code: string }[]
+  folios?: { id: string, payments?: { amount: number, isRefund: boolean }[] }[]
   allocations?: {
     id: string
     allocationId: string
@@ -72,6 +74,13 @@ type Reservation = {
 
 const getActiveTasks = (res: Reservation) => {
   return res.assignments?.flatMap(a => a.room?.housekeepingTasks || []).filter(t => t.status !== 'COMPLETED') || []
+}
+
+// Net payments already collected on a not-yet-arrived booking — by definition,
+// money on a RESERVED reservation's folio is deposit money.
+const getDepositTotal = (res: Reservation) => {
+  return res.folios?.flatMap(f => f.payments || [])
+    .reduce((sum, p) => sum + (p.isRefund ? -p.amount : p.amount), 0) ?? 0
 }
 
 export default function ReservationsDashboard() {
@@ -97,6 +106,7 @@ export default function ReservationsDashboard() {
   const [autoAssigning, setAutoAssigning] = useState(false)
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
   const [isFolioPanelOpen, setIsFolioPanelOpen] = useState(false)
+  const [depositRes, setDepositRes] = useState<Reservation | null>(null)
 
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
@@ -259,12 +269,17 @@ export default function ReservationsDashboard() {
           <Key className="h-4 w-4" />
         </Button>
       )}
+      {res.status === 'RESERVED' && (
+        <Button variant="outline" size="icon" onClick={() => setDepositRes(res)} title="Collect Deposit">
+          <Wallet className="h-4 w-4" />
+        </Button>
+      )}
       {res.status === 'IN_HOUSE' && (
         <Button variant="outline" size="icon" onClick={() => handleCheckOut(res)} title="Check Out">
           <LogOut className="h-4 w-4" />
         </Button>
       )}
-      {(res.status === 'IN_HOUSE' || res.status === 'CHECKED_OUT') && (
+      {(res.status === 'IN_HOUSE' || res.status === 'CHECKED_OUT' || (res.status === 'RESERVED' && (res.folios?.length ?? 0) > 0)) && (
         <Button variant="outline" size="icon" onClick={() => openFolio(res)} title="Folio">
           <ReceiptText className="h-4 w-4" />
         </Button>
@@ -383,6 +398,11 @@ export default function ReservationsDashboard() {
                     <div className="text-sm text-foreground mt-1">
                       {format(new Date(res.checkInDate), "dd-MMM-yy")} – {format(new Date(res.checkOutDate), "dd-MMM-yy")}
                     </div>
+                    {res.status === 'RESERVED' && getDepositTotal(res) > 0.005 && (
+                      <div className="text-xs font-medium text-success mt-1">
+                        Deposit ${getDepositTotal(res).toFixed(2)} collected
+                      </div>
+                    )}
                     <div className="flex justify-end gap-2 mt-3">
                       {renderActions(res)}
                     </div>
@@ -498,6 +518,14 @@ export default function ReservationsDashboard() {
                               Room Move
                             </span>
                           )}
+                          {res.status === 'RESERVED' && getDepositTotal(res) > 0.005 && (
+                            <span
+                              className="inline-flex items-center rounded-md bg-success-muted px-1.5 py-0.5 text-[10px] font-medium text-success ring-1 ring-inset ring-success/20"
+                              title="Deposit collected — will appear on the billing window at check-in."
+                            >
+                              Deposit ${getDepositTotal(res).toFixed(2)}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
@@ -585,7 +613,19 @@ export default function ReservationsDashboard() {
         onClose={() => {
           setIsFolioPanelOpen(false)
           fetchData() // Refresh in case balances/statuses changed
-        }} 
+        }}
+      />
+
+      <DepositDialog
+        reservationId={depositRes?.id ?? null}
+        confirmationNo={depositRes?.confirmationNo}
+        guestName={depositRes ? `${depositRes.primaryGuest?.firstName ?? ""} ${depositRes.primaryGuest?.lastName ?? ""}`.trim() : undefined}
+        isOpen={!!depositRes}
+        onClose={() => setDepositRes(null)}
+        onSaved={(message) => {
+          setNotification({ title: "Deposit Collected", message })
+          fetchData()
+        }}
       />
 
       {/* Notification Modal */}

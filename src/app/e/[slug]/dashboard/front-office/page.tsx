@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MonitorPlay, LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, BellDot, ArrowLeftRight } from "lucide-react"
+import { MonitorPlay, LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, BellDot, ArrowLeftRight, Search, UserX } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,6 +15,8 @@ import { useProperty } from "@/components/providers/property-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { CheckInDialog } from "@/components/front-office/check-in-dialog"
+import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog"
 
 export default function FrontOfficeDashboard() {
   const { currentProperty } = useProperty()
@@ -21,6 +24,10 @@ export default function FrontOfficeDashboard() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
+  const [checkInRes, setCheckInRes] = useState<any>(null)
+  const [noShowRes, setNoShowRes] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isWalkInOpen, setIsWalkInOpen] = useState(false)
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -62,31 +69,9 @@ export default function FrontOfficeDashboard() {
     }
   }
 
-  // Check-in/check-out go through their dedicated routes — the generic status
-  // endpoint is a guarded state machine that rejects IN_HOUSE/CHECKED_OUT directly.
-  const handleCheckIn = async (id: string) => {
-    setActionLoading(id)
-    try {
-      const res = await fetch(`/api/reservations/${id}/check-in`, { method: "POST" })
-      const data = await res.json()
-      if (res.ok) {
-        setNotification({
-          title: "Check-in Complete",
-          message: data.roomWarning
-            ? `Guest checked in. Warning: ${data.roomWarning}`
-            : "Guest has been successfully checked in.",
-        })
-        await fetchSummary()
-      } else {
-        setNotification({ title: "Check-in Failed", message: data.error || "Unknown error", isError: true })
-      }
-    } catch (e) {
-      setNotification({ title: "Error", message: "An error occurred during check-in.", isError: true })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
+  // Check-out goes through its dedicated route — the generic status endpoint is a
+  // guarded state machine that rejects CHECKED_OUT directly. Check-in opens the
+  // CheckInDialog (room assignment + optional payment) instead of a bare POST.
   const handleCheckOut = async (id: string) => {
     setActionLoading(id)
     try {
@@ -107,6 +92,43 @@ export default function FrontOfficeDashboard() {
       setActionLoading(null)
     }
   }
+
+  const handleNoShow = async () => {
+    if (!noShowRes) return
+    setActionLoading(noShowRes.id)
+    try {
+      const res = await fetch(`/api/reservations/${noShowRes.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "NO_SHOW" }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setNotification({ title: "Marked No-Show", message: `${noShowRes.confirmationNo} has been marked as a no-show. Any deposit stays on the folio for refund or fee handling.` })
+        await fetchSummary()
+      } else {
+        setNotification({ title: "No-Show Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred marking the no-show.", isError: true })
+    } finally {
+      setActionLoading(null)
+      setNoShowRes(null)
+    }
+  }
+
+  // Client-side quick lookup over today's operational lists — name, room, conf #.
+  const matchesSearch = (res: any) => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return true
+    const name = `${res.primaryGuest?.firstName ?? ""} ${res.primaryGuest?.lastName ?? ""}`.toLowerCase()
+    const conf = (res.confirmationNo ?? "").toLowerCase()
+    const rooms = (res.assignments ?? []).map((a: any) => a.room?.roomNumber ?? "").join(" ").toLowerCase()
+    return name.includes(q) || conf.includes(q) || rooms.includes(q)
+  }
+  const arrivals = (data?.arrivals ?? []).filter(matchesSearch)
+  const departures = (data?.departures ?? []).filter(matchesSearch)
+  const inHouse = (data?.inHouse ?? []).filter(matchesSearch)
 
   const openFolio = (reservationId: string) => {
     setFolioPanelResId(reservationId)
@@ -154,6 +176,9 @@ export default function FrontOfficeDashboard() {
           <h2 className="text-3xl font-bold tracking-tight">Front Desk Operations</h2>
           <p className="text-muted-foreground">Manage today's arrivals, departures, and in-house guests.</p>
         </div>
+        <Button onClick={() => setIsWalkInOpen(true)}>
+          <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking
+        </Button>
       </div>
 
       {/* KPI Row */}
@@ -200,13 +225,24 @@ export default function FrontOfficeDashboard() {
       {/* Operations Tabs */}
       <Card className="shadow-elevation-1">
         <Tabs defaultValue="arrivals" className="w-full">
-          <CardHeader className="border-b px-6 py-4 bg-muted/50 rounded-t-xl">
-            <TabsList className="grid w-full max-w-2xl grid-cols-4">
-              <TabsTrigger value="arrivals">Arrivals ({data?.arrivals?.length})</TabsTrigger>
-              <TabsTrigger value="departures">Departures ({data?.departures?.length})</TabsTrigger>
-              <TabsTrigger value="inhouse">In-House ({data?.inHouse?.length})</TabsTrigger>
-              <TabsTrigger value="roommoves">Room Moves ({data?.roomMovesToday?.length})</TabsTrigger>
-            </TabsList>
+          <CardHeader className="border-b px-6 py-4 bg-muted/50 rounded-t-xl space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <TabsList className="grid w-full max-w-2xl grid-cols-4">
+                <TabsTrigger value="arrivals">Arrivals ({arrivals.length})</TabsTrigger>
+                <TabsTrigger value="departures">Departures ({departures.length})</TabsTrigger>
+                <TabsTrigger value="inhouse">In-House ({inHouse.length})</TabsTrigger>
+                <TabsTrigger value="roommoves">Room Moves ({data?.roomMovesToday?.length})</TabsTrigger>
+              </TabsList>
+              <div className="relative md:ml-auto md:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Guest, room, or conf. #..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
           </CardHeader>
           
           <CardContent className="p-0">
@@ -214,10 +250,10 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
               {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
               <div className="md:hidden divide-y divide-border">
-                {data?.arrivals?.length === 0 ? (
+                {arrivals.length === 0 ? (
                   <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
                 ) : (
-                  data?.arrivals?.map((res: any) => (
+                  arrivals.map((res: any) => (
                     <div key={res.id} className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -245,9 +281,19 @@ export default function FrontOfficeDashboard() {
                         </Button>
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          disabled={actionLoading === res.id}
+                          onClick={() => setNoShowRes(res)}
+                          title="Mark as No-Show"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
                           className="flex-1"
-                          disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
-                          onClick={() => handleCheckIn(res.id)}
+                          disabled={actionLoading === res.id}
+                          onClick={() => setCheckInRes(res)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-In"}
                         </Button>
@@ -268,7 +314,7 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.arrivals?.map((res: any) => (
+                  {arrivals.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -296,16 +342,26 @@ export default function FrontOfficeDashboard() {
                         </Button>
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          disabled={actionLoading === res.id}
+                          onClick={() => setNoShowRes(res)}
+                          title="Mark as No-Show"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
                           className="w-24"
-                          disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
-                          onClick={() => handleCheckIn(res.id)}
+                          disabled={actionLoading === res.id}
+                          onClick={() => setCheckInRes(res)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-In"}
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {data?.arrivals?.length === 0 && (
+                  {arrivals.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="py-0">
                         <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
@@ -319,10 +375,10 @@ export default function FrontOfficeDashboard() {
             {/* Departures Tab */}
             <TabsContent value="departures" className="m-0 border-none outline-none">
               <div className="md:hidden divide-y divide-border">
-                {data?.departures?.length === 0 ? (
+                {departures.length === 0 ? (
                   <EmptyState icon={LogOut} title="No departures scheduled for today" />
                 ) : (
-                  data?.departures?.map((res: any) => (
+                  departures.map((res: any) => (
                     <div key={res.id} className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -370,7 +426,7 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.departures?.map((res: any) => (
+                  {departures.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -405,7 +461,7 @@ export default function FrontOfficeDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {data?.departures?.length === 0 && (
+                  {departures.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="py-0">
                         <EmptyState icon={LogOut} title="No departures scheduled for today" />
@@ -419,10 +475,10 @@ export default function FrontOfficeDashboard() {
             {/* In-House Tab */}
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
               <div className="md:hidden divide-y divide-border">
-                {data?.inHouse?.length === 0 ? (
+                {inHouse.length === 0 ? (
                   <EmptyState icon={CheckCircle} title="No guests currently in-house" />
                 ) : (
-                  data?.inHouse?.map((res: any) => (
+                  inHouse.map((res: any) => (
                     <div key={res.id} className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -465,7 +521,7 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.inHouse?.map((res: any) => (
+                  {inHouse.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -495,7 +551,7 @@ export default function FrontOfficeDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {data?.inHouse?.length === 0 && (
+                  {inHouse.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="py-0">
                         <EmptyState icon={CheckCircle} title="No guests currently in-house" />
@@ -585,6 +641,47 @@ export default function FrontOfficeDashboard() {
           setIsTracePanelOpen(false)
           setTracePanelResId(null)
           fetchSummary() // Refresh to clear badges if traces were resolved
+        }}
+      />
+
+      {/* No-Show confirmation */}
+      <Dialog open={!!noShowRes} onOpenChange={(open) => !open && setNoShowRes(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark as No-Show</DialogTitle>
+            <DialogDescription>
+              Mark {noShowRes?.primaryGuest?.firstName} {noShowRes?.primaryGuest?.lastName}'s reservation
+              ({noShowRes?.confirmationNo}) as a no-show? The room goes back on sale; any deposit stays on the folio
+              for refund or fee handling.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoShowRes(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleNoShow} disabled={!!actionLoading}>
+              Mark No-Show
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <CheckInDialog
+        reservation={checkInRes}
+        propertyId={propertyId ?? ""}
+        isOpen={!!checkInRes}
+        onClose={() => setCheckInRes(null)}
+        onDone={(result) => {
+          setNotification(result)
+          fetchSummary()
+        }}
+      />
+
+      <WalkInBookingDialog
+        propertyId={propertyId ?? ""}
+        isOpen={isWalkInOpen}
+        onClose={() => setIsWalkInOpen(false)}
+        onDone={(result) => {
+          setNotification(result)
+          fetchSummary()
         }}
       />
 

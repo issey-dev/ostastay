@@ -33,7 +33,14 @@ export async function GET(request: Request) {
           lte: endOfToday,
         }
       },
-      include: { primaryGuest: true, assignments: { include: { room: true, roomType: true } }, traces: { where: { isResolved: false } } }
+      include: {
+        primaryGuest: true,
+        assignments: { include: { room: true, roomType: true } },
+        traces: { where: { isResolved: false } },
+        // Deposits collected pre-arrival live as payments on the folio — the
+        // check-in dialog shows them so front desk knows what's already paid.
+        folios: { include: { payments: { select: { amount: true, isRefund: true } } } },
+      }
     });
 
     // 2. Departures Today

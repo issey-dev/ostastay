@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
 
 export async function POST(request: Request) {
   try {
@@ -39,24 +40,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No active shift found to close." }, { status: 400 });
     }
 
-    // 2. Calculate Expected Cash
-    // Expected Cash = Opening Float + (Total Cash Payments In - Total Cash Payments Refunded)
-    // For simplicity, let's assume paymentMethod.type === "CASH" (or we check the name if type isn't reliable)
-    let totalCashIn = 0;
-    let totalCashOut = 0;
-
-    activeShift.payments.forEach(payment => {
-      // Typically, only "CASH" impacts the physical drawer drop
-      if (payment.paymentMethod.type.toUpperCase() === "CASH" || payment.paymentMethod.name.toUpperCase().includes("CASH")) {
-        if (payment.isRefund) {
-          totalCashOut += payment.amount;
-        } else {
-          totalCashIn += payment.amount;
-        }
-      }
-    });
-
-    const expectedCash = activeShift.openingFloat + totalCashIn - totalCashOut;
+    // 2. Expected Cash = Opening Float + cash in − cash refunds, via the shared
+    // shift-summary helper so history and close views can never disagree.
+    const { byMethod } = summarizeShiftPayments(activeShift.payments);
+    const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments);
     const discrepancy = closingDrop - expectedCash; // Negative = Short, Positive = Over
 
     // 3. Close the shift (Blind Drop calculation saved)
@@ -83,6 +70,7 @@ export async function POST(request: Request) {
         expectedCash,
         actualDrop: closingDrop,
         discrepancy,
+        byMethod,
         shift: closedShift
       }
     });

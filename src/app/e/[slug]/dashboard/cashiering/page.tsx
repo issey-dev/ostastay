@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { useParams } from "next/navigation";
-import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft } from "lucide-react";
+import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,9 @@ export default function CashieringPage() {
   // Reconciliation Result State
   const [reconciliation, setReconciliation] = useState<any>(null);
 
+  // Closed-shift history
+  const [shiftHistory, setShiftHistory] = useState<any[]>([]);
+
   // Currency Exchange State
   const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
@@ -47,10 +50,17 @@ export default function CashieringPage() {
   const fetchStatus = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/cashiering/status");
-      const json = await res.json();
+      const [statusRes, historyRes] = await Promise.all([
+        fetch("/api/cashiering/status"),
+        fetch("/api/cashiering/shifts"),
+      ]);
+      const json = await statusRes.json();
       if (json.success) {
         setStatus(json.data);
+      }
+      const historyJson = await historyRes.json();
+      if (historyJson.success) {
+        setShiftHistory(historyJson.data);
       }
     } catch (err) {
       console.error(err);
@@ -58,6 +68,19 @@ export default function CashieringPage() {
       setIsLoading(false);
     }
   };
+
+  // Live totals-by-method for the open shift, mirroring the server's math.
+  const activeByMethod = (() => {
+    if (!status?.shift?.payments?.length) return [] as { method: string; received: number; refunded: number; net: number }[];
+    const map = new Map<string, { method: string; received: number; refunded: number; net: number }>();
+    for (const p of status.shift.payments) {
+      const row = map.get(p.paymentMethod.name) ?? { method: p.paymentMethod.name, received: 0, refunded: 0, net: 0 };
+      if (p.isRefund) { row.refunded += p.amount; row.net -= p.amount; }
+      else { row.received += p.amount; row.net += p.amount; }
+      map.set(p.paymentMethod.name, row);
+    }
+    return Array.from(map.values()).sort((a, b) => b.net - a.net);
+  })();
 
   useEffect(() => {
     fetchStatus();
@@ -191,8 +214,27 @@ export default function CashieringPage() {
                 </p>
               </div>
             </div>
+            {(reconciliation.byMethod?.length ?? 0) > 0 && (
+              <div className="mt-8 border-t border-border pt-6">
+                <p className="text-sm font-semibold text-muted-foreground mb-3">Takings by Payment Method</p>
+                <div className="divide-y divide-border border border-border rounded-lg">
+                  {reconciliation.byMethod.map((row: any) => (
+                    <div key={row.method} className="flex items-center justify-between p-3 text-sm">
+                      <span className="font-medium text-foreground">{row.method}</span>
+                      <span className="text-muted-foreground">
+                        +${row.received.toFixed(2)}{row.refunded > 0 && <span className="text-destructive"> / −${row.refunded.toFixed(2)}</span>}
+                      </span>
+                      <span className="font-mono font-bold text-foreground">${row.net.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
-          <CardFooter className="bg-muted p-4 border-t justify-center">
+          <CardFooter className="bg-muted p-4 border-t justify-center gap-3">
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="w-4 h-4 mr-2" /> Print Report
+            </Button>
             <Button variant="outline" onClick={() => setReconciliation(null)}>Dismiss Report</Button>
           </CardFooter>
         </Card>
@@ -316,6 +358,30 @@ export default function CashieringPage() {
             </CardContent>
           </Card>
 
+          {activeByMethod.length > 0 && (
+            <Card className="border-0 shadow-sm ring-1 ring-border">
+              <CardHeader className="bg-muted border-b border-border">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-muted-foreground" />
+                  Takings by Payment Method
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {activeByMethod.map((row) => (
+                    <div key={row.method} className="p-4 flex items-center justify-between">
+                      <span className="font-medium text-foreground">{row.method}</span>
+                      <span className="text-sm text-muted-foreground">
+                        +${row.received.toFixed(2)}{row.refunded > 0 && <span className="text-destructive"> / −${row.refunded.toFixed(2)}</span>}
+                      </span>
+                      <span className="font-mono font-bold text-foreground">${row.net.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-0 shadow-sm ring-1 ring-border">
             <CardHeader className="bg-muted border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -349,6 +415,60 @@ export default function CashieringPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* SHIFT HISTORY */}
+      {shiftHistory.length > 0 && (
+        <Card className="border-0 shadow-sm ring-1 ring-border">
+          <CardHeader className="bg-muted border-b border-border">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <History className="w-5 h-5 text-muted-foreground" />
+              Shift History
+            </CardTitle>
+            <CardDescription>Your past closed shifts with their reconciliation results.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {shiftHistory.map((shift) => (
+                <div key={shift.id} className="p-4 hover:bg-muted">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-foreground text-sm">
+                        {format(parseISO(shift.openedAt), "MMM d, h:mm a")} → {shift.closedAt ? format(parseISO(shift.closedAt), "h:mm a") : "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Float ${shift.openingFloat.toFixed(2)} · {shift.paymentCount} payment{shift.paymentCount === 1 ? "" : "s"}
+                        {shift.exchangeCount > 0 && ` · ${shift.exchangeCount} exchange${shift.exchangeCount === 1 ? "" : "s"}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-muted-foreground">Expected <span className="font-mono font-semibold text-foreground">${shift.expectedCash.toFixed(2)}</span></span>
+                      <span className="text-muted-foreground">Drop <span className="font-mono font-semibold text-foreground">${(shift.closingDrop ?? 0).toFixed(2)}</span></span>
+                      {shift.discrepancy != null && (
+                        Math.abs(shift.discrepancy) < 0.005 ? (
+                          <Badge className="bg-success-muted text-success border-success/30" variant="outline">Balanced</Badge>
+                        ) : (
+                          <Badge variant="destructive">
+                            ${Math.abs(shift.discrepancy).toFixed(2)} {shift.discrepancy < 0 ? "Short" : "Over"}
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  {(shift.byMethod?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {shift.byMethod.map((row: any) => (
+                        <span key={row.method} className="text-[11px] bg-muted border border-border rounded px-1.5 py-0.5 font-mono text-muted-foreground">
+                          {row.method}: ${row.net.toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* BLIND DROP MODAL */}

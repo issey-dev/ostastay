@@ -57,17 +57,21 @@ export async function POST(
       }
     }
 
-    // 2. Perform the update in a transaction
-    await prisma.$transaction(async (tx) => {
+    // 2. Perform the update in a transaction. Returns the billing folio's id so
+    // callers (e.g. the front-desk check-in dialog) can post a payment immediately
+    // after check-in without a second fetch.
+    const folioId = await prisma.$transaction(async (tx) => {
       // Update Reservation Status
       await tx.reservation.update({
         where: { id },
         data: { status: "IN_HOUSE" }
       });
 
-      // Create Folio if it doesn't exist
-      if (reservation.folios.length === 0) {
-        await tx.folio.create({
+      // Create Folio if it doesn't exist — a pre-arrival deposit may already have
+      // opened one, in which case the deposit is already on the billing window.
+      const existingFolio = reservation.folios.find((f) => !f.isClosed) ?? reservation.folios[0];
+      if (!existingFolio) {
+        const folio = await tx.folio.create({
           data: {
             reservationId: id,
             propertyId: reservation.propertyId,
@@ -75,12 +79,12 @@ export async function POST(
             isClosed: false
           }
         });
+        return folio.id;
       }
+      return existingFolio.id;
 
-      // Update physical room status to OCCUPIED?
-      // In this PMS, we might just track physical room status as CLEAN/DIRTY.
-      // The fact that it's occupied is derived from the reservation.
-      // But we could enforce it. For now, we leave Room status as is (CLEAN/DIRTY).
+      // Physical room status stays as-is (CLEAN/DIRTY) — occupancy is derived
+      // from the reservation, not stored on the room.
     });
 
     await logActivity({
@@ -92,7 +96,7 @@ export async function POST(
       description: `Checked in ${reservation.confirmationNo}${assignedRoom ? ` to Room ${assignedRoom.roomNumber}` : ""}`,
     });
 
-    return NextResponse.json({ success: true, ...(roomWarning && { roomWarning }) });
+    return NextResponse.json({ success: true, folioId, ...(roomWarning && { roomWarning }) });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

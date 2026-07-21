@@ -39,7 +39,7 @@ export async function GET(request: Request) {
             ratePlan: true
           }
         },
-        folios: true,
+        folios: { include: { payments: { select: { amount: true, isRefund: true } } } },
         allocations: {
           include: {
             allocation: {
