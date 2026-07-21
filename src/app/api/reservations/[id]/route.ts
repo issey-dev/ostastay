@@ -35,6 +35,15 @@ const RESERVATION_DETAIL_INCLUDE = {
     },
   },
   specialRequests: true,
+  // For the reservation detail page: folio balances and the trace log, slimmed to
+  // what the summary cards actually render.
+  folios: {
+    include: {
+      lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
+      payments: { select: { amount: true, isRefund: true } },
+    },
+  },
+  traces: { orderBy: { createdAt: "desc" as const } },
 } as const;
 
 export async function GET(

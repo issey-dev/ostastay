@@ -14,6 +14,8 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [roomTypes, setRoomTypes] = useState<any[]>([])
+  const [ratePlans, setRatePlans] = useState<any[]>([])
+  const [mealPlans, setMealPlans] = useState<any[]>([])
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -21,6 +23,8 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
     email: "",
     phone: "",
     roomTypeId: "",
+    ratePlanId: "",
+    mealPlanCode: "",
     checkInDate: "",
     checkOutDate: "",
     adults: "1"
@@ -31,6 +35,14 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
       fetch(`/api/room-types?propertyId=${currentProperty.id}`)
         .then(res => res.json())
         .then(data => setRoomTypes(data))
+        .catch(console.error)
+      fetch(`/api/rate-plans?propertyId=${currentProperty.id}`)
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setRatePlans(data.filter((rp: any) => rp.isActive !== false)) })
+        .catch(console.error)
+      fetch(`/api/meal-plans?propertyId=${currentProperty.id}`)
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setMealPlans(data.filter((mp: any) => mp.isActive !== false)) })
         .catch(console.error)
     }
   }, [open, currentProperty])
@@ -114,6 +126,35 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Rate Plan</Label>
+              <Select value={formData.ratePlanId} onValueChange={(val) => setFormData({ ...formData, ratePlanId: val ?? "" })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Property default" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ratePlans.map((rp) => (
+                    <SelectItem key={rp.id} value={rp.id}>{rp.code} — {rp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Meal Plan</Label>
+              <Select value={formData.mealPlanCode} onValueChange={(val) => setFormData({ ...formData, mealPlanCode: val ?? "" })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="None (Room Only)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mealPlans.map((mp) => (
+                    <SelectItem key={mp.id} value={mp.code}>{mp.code} — {mp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter className="pt-4">

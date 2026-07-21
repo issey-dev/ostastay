@@ -16,14 +16,19 @@ type WalkInBookingDialogProps = {
   isOpen: boolean
   onClose: () => void
   onDone: (result: { title: string; message: string; isError?: boolean }) => void
+  /** "walkIn" (default) checks the guest in immediately after booking; "book" just books. */
+  mode?: "walkIn" | "book"
+  /** Prefill (e.g. from a tape-chart cell click): room type, room, and arrival date. */
+  initial?: { roomTypeId?: string; roomId?: string; checkInDate?: string }
 }
 
 const toIsoDate = (d: Date) => format(d, "yyyy-MM-dd")
 
-// A compressed booking flow for guests standing at the desk: pick or quick-create
-// the guest, confirm dates/room/rate, and they're created AND checked in — one
-// dialog instead of the full multi-segment booking form.
-export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone }: WalkInBookingDialogProps) {
+// A compressed booking flow: pick or quick-create the guest, confirm dates/room/
+// rate, and book — one dialog instead of the full multi-segment booking form.
+// Walk-in mode additionally checks the guest straight in; book mode (used by the
+// tape chart's empty-cell click) leaves the booking RESERVED.
+export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode = "walkIn", initial }: WalkInBookingDialogProps) {
   const [profiles, setProfiles] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -44,14 +49,14 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone }: Wal
 
   useEffect(() => {
     if (!isOpen) return
-    const today = startOfDay(new Date())
-    setDates({ from: today, to: addDays(today, 1) })
+    const start = initial?.checkInDate ? startOfDay(new Date(initial.checkInDate)) : startOfDay(new Date())
+    setDates({ from: start, to: addDays(start, 1) })
     setGuestId("")
     setNewGuestMode(false)
     setNewFirstName("")
     setNewLastName("")
-    setRoomTypeId("")
-    setRoomId("")
+    setRoomTypeId(initial?.roomTypeId ?? "")
+    setRoomId(initial?.roomId ?? "")
     setRatePlanId("")
     setAdults("1")
     setChildren("0")
@@ -154,6 +159,17 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone }: Wal
         return
       }
 
+      if (mode === "book") {
+        onClose()
+        onDone({
+          title: "Booking Created",
+          message:
+            `${resData.confirmationNo} booked.` +
+            (resData.capacityWarning ? ` ${resData.capacityWarning}` : ""),
+        })
+        return
+      }
+
       // 3. Immediate check-in — that's the point of a walk-in.
       const checkIn = await fetch(`/api/reservations/${resData.id}/check-in`, { method: "POST" })
       const checkInData = await checkIn.json()
@@ -185,8 +201,12 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone }: Wal
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Walk-in Booking</DialogTitle>
-          <DialogDescription>Create a booking and check the guest straight in.</DialogDescription>
+          <DialogTitle>{mode === "book" ? "Quick Booking" : "Walk-in Booking"}</DialogTitle>
+          <DialogDescription>
+            {mode === "book"
+              ? "Create a booking for the selected room and dates."
+              : "Create a booking and check the guest straight in."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -275,7 +295,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone }: Wal
           <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Book &amp; Check In
+            {mode === "book" ? "Create Booking" : "Book & Check In"}
           </Button>
         </DialogFooter>
       </DialogContent>

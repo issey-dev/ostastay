@@ -3,12 +3,17 @@
 import { useEffect, useState, use } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus } from "lucide-react"
+import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -21,6 +26,49 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const [group, setGroup] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isMasterFolioOpen, setIsMasterFolioOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ name: "", status: "TENTATIVE", totalRoomsHeld: "0", cutoffDate: "" })
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const openEdit = () => {
+    setEditForm({
+      name: group.name,
+      status: group.status,
+      totalRoomsHeld: String(group.totalRoomsHeld),
+      cutoffDate: group.cutoffDate ? group.cutoffDate.split("T")[0] : "",
+    })
+    setEditError(null)
+    setIsEditOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    setSaving(true)
+    setEditError(null)
+    try {
+      const res = await fetch(`/api/groups/${unwrappedParams.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name,
+          status: editForm.status,
+          totalRoomsHeld: parseInt(editForm.totalRoomsHeld) || 0,
+          cutoffDate: editForm.cutoffDate || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setIsEditOpen(false)
+        fetchGroup()
+      } else {
+        setEditError(data.error || "Failed to update the block.")
+      }
+    } catch {
+      setEditError("An unexpected error occurred.")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const fetchGroup = async () => {
     if (!currentProperty) return
@@ -88,6 +136,10 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" className="flex items-center gap-2 flex-1 sm:flex-none" onClick={openEdit}>
+            <Pencil className="w-4 h-4" />
+            Edit Block
+          </Button>
           <Button
             variant="outline"
             className="flex items-center gap-2 flex-1 sm:flex-none"
@@ -147,7 +199,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
             <div className="md:hidden divide-y divide-border">
               {group.reservations.map((res: any) => (
-                <Link key={res.id} href={`/e/${slug}/dashboard/reservations/${res.id}/edit`} className="block p-4 space-y-2">
+                <Link key={res.id} href={`/e/${slug}/dashboard/reservations/${res.id}`} className="block p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-semibold text-foreground">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
@@ -193,7 +245,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                       <StatusBadge label={res.status} status={res.status} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/e/${slug}/dashboard/reservations/${res.id}/edit`}>
+                      <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
                         <Button variant="ghost" size="sm">
                           View
                         </Button>
@@ -219,6 +271,64 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         onClose={() => setIsMasterFolioOpen(false)}
         onClosed={fetchGroup}
       />
+
+      {/* Edit Block dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => !open && setIsEditOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Group Block</DialogTitle>
+            <DialogDescription>
+              Rooms held cannot go below what's already picked up; a block with active pickups cannot be cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v ?? p.status }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TENTATIVE">Tentative</SelectItem>
+                    <SelectItem value="DEFINITE">Definite</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Rooms Held</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editForm.totalRoomsHeld}
+                  onChange={(e) => setEditForm((p) => ({ ...p, totalRoomsHeld: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Cutoff Date</Label>
+              <DatePicker
+                value={editForm.cutoffDate || null}
+                onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
+                placeholder="No cutoff"
+              />
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

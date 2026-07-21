@@ -24,7 +24,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       checkOutDate,
       adults,
       children,
-      infants
+      infants,
+      ratePlanId: requestedRatePlanId,
+      mealPlanCode
     } = body
 
     if (!firstName || !lastName || !roomTypeId || !checkInDate || !checkOutDate) {
@@ -97,13 +99,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
-    const ratePlan = await prisma.ratePlan.findFirst({
-      where: { propertyId: group.propertyId },
-      orderBy: { priority: 'asc' }
-    })
+    // The pickup dialog can name a specific rate plan; absent one, fall back to the
+    // property's highest-priority plan (the pre-existing default).
+    const ratePlan = requestedRatePlanId
+      ? await prisma.ratePlan.findFirst({ where: { id: requestedRatePlanId, propertyId: group.propertyId } })
+      : await prisma.ratePlan.findFirst({ where: { propertyId: group.propertyId }, orderBy: { priority: 'asc' } })
 
     if (!ratePlan) {
-      return NextResponse.json({ error: "No rate plan configured for this property" }, { status: 400 })
+      return NextResponse.json(
+        { error: requestedRatePlanId ? "Rate plan does not belong to this property" : "No rate plan configured for this property" },
+        { status: 400 }
+      )
     }
 
     // Sequential confirmation number — same REGISTRATION_NO sequence and prefix
@@ -163,6 +169,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           adults: parseInt(adults) || 1,
           children: parseInt(children) || 0,
           infants: parseInt(infants) || 0,
+          mealPlan: mealPlanCode || "NONE",
           status: "RESERVED"
         }
       })
@@ -206,7 +213,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       reservationId: result.id,
       propertyId: group.propertyId,
       ratePlanId: ratePlan.id,
-      mealPlanCode: "NONE",
+      mealPlanCode: mealPlanCode || "NONE",
       manualAllocationIds: [],
     })
     if (allocationResult.error) {

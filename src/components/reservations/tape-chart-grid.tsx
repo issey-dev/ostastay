@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
-import { Loader2, Calendar, User, Hash, DoorOpen, Star } from "lucide-react";
+import { Loader2, Calendar, User, Hash, DoorOpen, Star, Key, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { FolioPanel } from "@/components/front-office/folio-panel";
+import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { statusSolidClasses } from "@/lib/status-tone";
 import { useDeviceTier } from "@/hooks/use-mobile";
@@ -16,6 +19,7 @@ import { useProperty } from "@/components/providers/property-provider";
 export interface Room {
   id: string;
   roomNumber: string;
+  roomTypeId: string;
   floor: { name: string };
   roomType: { code: string; name: string };
 }
@@ -33,6 +37,7 @@ export interface Reservation {
 }
 
 export function TapeChartGrid() {
+  const { slug } = useParams<{ slug: string }>();
   const { currentProperty } = useProperty();
   const deviceTier = useDeviceTier();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -42,7 +47,32 @@ export function TapeChartGrid() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [draggedAssignmentId, setDraggedAssignmentId] = useState<string | null>(null);
   const [isFolioOpen, setIsFolioOpen] = useState(false);
+  const [quickBook, setQuickBook] = useState<{ roomTypeId: string; roomId: string; checkInDate: string } | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null);
   const daysToShow = 14;
+
+  const handleQuickCheckIn = async (res: Reservation) => {
+    setCheckingIn(true);
+    try {
+      const resp = await fetch(`/api/reservations/${res.reservationId}/check-in`, { method: "POST" });
+      const data = await resp.json();
+      if (resp.ok) {
+        setSelectedReservation(null);
+        setNotification({
+          title: "Check-in Complete",
+          message: data.roomWarning ? `Guest checked in. Warning: ${data.roomWarning}` : "Guest has been successfully checked in.",
+        });
+        fetchData(startDate);
+      } else {
+        setNotification({ title: "Check-in Failed", message: data.error || "Unknown error", isError: true });
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred during check-in.", isError: true });
+    } finally {
+      setCheckingIn(false);
+    }
+  };
 
   const fetchData = async (start: Date) => {
     if (!currentProperty?.id) return;
@@ -184,8 +214,24 @@ export function TapeChartGrid() {
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end pt-4">
+              <div className="flex flex-wrap gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setSelectedReservation(null)}>Close</Button>
+                <Link href={`/e/${slug}/dashboard/reservations/${selectedReservation.reservationId}`}>
+                  <Button variant="outline">
+                    <ExternalLink className="w-4 h-4 mr-2" /> View Details
+                  </Button>
+                </Link>
+                {selectedReservation.status === "RESERVED" && (
+                  <Button
+                    variant="outline"
+                    className="bg-success-muted text-success hover:bg-success-muted/70 border-success/30"
+                    disabled={checkingIn || !selectedReservation.roomId}
+                    title={selectedReservation.roomId ? undefined : "Assign a room first (drag the bar onto a room row)"}
+                    onClick={() => handleQuickCheckIn(selectedReservation)}
+                  >
+                    <Key className="w-4 h-4 mr-2" /> {checkingIn ? "Checking in..." : "Check In"}
+                  </Button>
+                )}
                 <Button onClick={() => setIsFolioOpen(true)}>
                   Open Folio
                 </Button>
@@ -203,6 +249,32 @@ export function TapeChartGrid() {
           onClose={() => setIsFolioOpen(false)}
         />
       )}
+
+      {currentProperty && (
+        <WalkInBookingDialog
+          propertyId={currentProperty.id}
+          isOpen={!!quickBook}
+          onClose={() => setQuickBook(null)}
+          mode="book"
+          initial={quickBook ?? undefined}
+          onDone={(result) => {
+            setNotification(result);
+            fetchData(startDate);
+          }}
+        />
+      )}
+
+      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>{notification?.title}</DialogTitle>
+            <DialogDescription>{notification?.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setNotification(null)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -342,12 +414,17 @@ export function TapeChartGrid() {
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, room.id)}
                 >
-                  {/* Background Grid Lines (Empty clickable cells) */}
-                  {columns.map((_, i) => (
+                  {/* Background Grid Lines — clicking an empty cell opens a booking
+                      prefilled with this room and that date */}
+                  {columns.map((date, i) => (
                     <div
                       key={`${room.id}-grid-${i}`}
                       className="border-r border-border h-14 cursor-crosshair hover:bg-muted/50 transition-colors"
                       style={{ gridColumn: i + 1 }}
+                      title={`Book Room ${room.roomNumber} from ${format(date, "dd-MMM")}`}
+                      onClick={() =>
+                        setQuickBook({ roomTypeId: room.roomTypeId, roomId: room.id, checkInDate: format(date, "yyyy-MM-dd") })
+                      }
                     />
                   ))}
 

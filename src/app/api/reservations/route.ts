@@ -19,8 +19,34 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
 
+    // Optional server-side filters — response stays a plain array for existing
+    // callers; the list page pages through with skip/take (load-more style).
+    const statusParam = searchParams.get("status");
+    const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : null;
+    const search = searchParams.get("search")?.trim() || null;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const skip = Math.max(0, parseInt(searchParams.get("skip") ?? "0", 10) || 0);
+    const take = Math.min(100, Math.max(1, parseInt(searchParams.get("take") ?? "100", 10) || 100));
+
     const reservations = await prisma.reservation.findMany({
-      where: { propertyId },
+      where: {
+        propertyId,
+        ...(statuses ? { status: { in: statuses } } : {}),
+        ...(search
+          ? {
+              OR: [
+                { confirmationNo: { contains: search } },
+                { primaryGuest: { firstName: { contains: search } } },
+                { primaryGuest: { lastName: { contains: search } } },
+                { primaryGuest: { companyName: { contains: search } } },
+              ],
+            }
+          : {}),
+        // A date range filters to stays overlapping it, not just arrivals in it.
+        ...(to ? { checkInDate: { lte: new Date(to) } } : {}),
+        ...(from ? { checkOutDate: { gte: new Date(from) } } : {}),
+      },
       include: {
         primaryGuest: true,
         travelAgent: true,
@@ -50,7 +76,8 @@ export async function GET(request: Request) {
         specialRequests: true,
       },
       orderBy: { checkInDate: 'asc' },
-      take: 100, // Limit for dashboard performance
+      skip,
+      take,
     });
     return NextResponse.json(reservations);
   } catch (error) {

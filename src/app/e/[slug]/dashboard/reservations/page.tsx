@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet } from "lucide-react"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2 } from "lucide-react"
+import type { DateRange } from "react-day-picker"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
@@ -111,20 +114,32 @@ export default function ReservationsDashboard() {
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
 
+  // Server-side filters + load-more pagination
+  const PAGE_SIZE = 50
+  const [filterSearch, setFilterSearch] = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
+  const [filterDates, setFilterDates] = useState<DateRange | undefined>()
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const buildQuery = (skip: number) => {
+    const params = new URLSearchParams({ propertyId, take: String(PAGE_SIZE), skip: String(skip) })
+    if (filterSearch.trim()) params.set("search", filterSearch.trim())
+    if (filterStatus) params.set("status", filterStatus)
+    if (filterDates?.from) params.set("from", format(filterDates.from, "yyyy-MM-dd"))
+    if (filterDates?.to) params.set("to", format(filterDates.to, "yyyy-MM-dd"))
+    return params
+  }
+
   const fetchData = async () => {
     if (!currentProperty) return
     setLoading(true)
     try {
-      const [resReq, hkReq] = await Promise.all([
-        fetch(`/api/reservations?propertyId=${propertyId}`),
-        fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`),
-      ])
-
-      const resData = await resReq.json()
-      if (Array.isArray(resData)) setReservations(resData)
-
-      const hkData = await hkReq.json()
-      if (Array.isArray(hkData)) setHousekeepingCodes(hkData)
+      const resData = await (await fetch(`/api/reservations?${buildQuery(0)}`)).json()
+      if (Array.isArray(resData)) {
+        setReservations(resData)
+        setHasMore(resData.length === PAGE_SIZE)
+      }
     } catch (e) {
       console.error("Failed to load data", e)
     } finally {
@@ -132,10 +147,34 @@ export default function ReservationsDashboard() {
     }
   }
 
-  useEffect(() => {
-    if (currentProperty) {
-      fetchData()
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const more = await (await fetch(`/api/reservations?${buildQuery(reservations.length)}`)).json()
+      if (Array.isArray(more)) {
+        setReservations((prev) => [...prev, ...more])
+        setHasMore(more.length === PAGE_SIZE)
+      }
+    } catch (e) {
+      console.error("Failed to load more", e)
+    } finally {
+      setLoadingMore(false)
     }
+  }
+
+  // Refetch when filters change; text search is debounced.
+  useEffect(() => {
+    if (!currentProperty) return
+    const t = setTimeout(fetchData, filterSearch ? 350 : 0)
+    return () => clearTimeout(t)
+  }, [currentProperty, filterSearch, filterStatus, filterDates])
+
+  useEffect(() => {
+    if (!currentProperty) return
+    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setHousekeepingCodes(d) })
+      .catch(console.error)
   }, [currentProperty])
 
   const handleDeletePrompt = (res: Reservation) => {
@@ -340,9 +379,9 @@ export default function ReservationsDashboard() {
           <Button variant="outline" className="shadow-sm" onClick={handleAutoAssign} disabled={autoAssigning}>
             <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
           </Button>
-          <Link href={`/e/${slug}/dashboard/reservations/calendar`}>
+          <Link href={`/e/${slug}/dashboard/reservations/tape-chart`}>
             <Button variant="outline" className="shadow-sm">
-              <CalendarDays className="mr-2 h-4 w-4" /> Calendar View
+              <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
             </Button>
           </Link>
           <Link href={`/e/${slug}/dashboard/reservations/new`}>
@@ -353,10 +392,41 @@ export default function ReservationsDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Arrivals & In-House</CardTitle>
-          <CardDescription>
-            Overview of current and upcoming stays at the property.
-          </CardDescription>
+          <div className="flex flex-col xl:flex-row xl:items-end gap-4">
+            <div className="flex-1">
+              <CardTitle>Reservations</CardTitle>
+              <CardDescription>
+                Search and filter every booking at the property.
+              </CardDescription>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative sm:w-56">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Guest or conf. #..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <div className="sm:w-44">
+                <SearchableSelect
+                  value={filterStatus}
+                  onChange={(v: string) => setFilterStatus(v)}
+                  placeholder="All statuses"
+                  options={[
+                    { label: "All statuses", value: "" },
+                    { label: "Reserved", value: "RESERVED" },
+                    { label: "In-House", value: "IN_HOUSE" },
+                    { label: "Checked Out", value: "CHECKED_OUT" },
+                    { label: "No-Show", value: "NO_SHOW" },
+                    { label: "Cancelled", value: "CANCELLED" },
+                  ]}
+                />
+              </div>
+              <DateRangePicker value={filterDates} onChange={setFilterDates} placeholder="Any dates" className="sm:w-60" />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Mobile: stacked cards instead of an 8-column horizontally-scrolled table */}
@@ -381,7 +451,9 @@ export default function ReservationsDashboard() {
                           {guestName}
                           {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                         </div>
-                        <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
+                        <Link href={`/e/${slug}/dashboard/reservations/${res.id}`} className="text-xs font-mono text-muted-foreground mt-0.5 block hover:underline">
+                          {res.confirmationNo}
+                        </Link>
                       </div>
                       <StatusBadge
                         label={res.status.replace('_', ' ')}
@@ -445,7 +517,11 @@ export default function ReservationsDashboard() {
 
                   return (
                     <TableRow key={res.id}>
-                      <TableCell className="font-mono font-bold">{res.confirmationNo}</TableCell>
+                      <TableCell className="font-mono font-bold">
+                        <Link href={`/e/${slug}/dashboard/reservations/${res.id}`} className="hover:underline">
+                          {res.confirmationNo}
+                        </Link>
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium inline-flex items-center gap-1.5">
                           {guestName}
@@ -537,6 +613,15 @@ export default function ReservationsDashboard() {
               )}
             </TableBody>
           </Table>
+
+          {hasMore && !loading && (
+            <div className="flex justify-center pt-4">
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Load More
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
