@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date";
 
 export async function GET(request: Request) {
   try {
@@ -16,12 +17,15 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
 
-    // "Today" uses UTC day boundaries: reservation dates are stored as UTC midnights
-    // (forms submit plain YYYY-MM-DD), and the arrival/departure PDFs already use the
-    // same convention — server-local boundaries here made the two disagree near midnight.
-    const isoDate = new Date().toISOString().split("T")[0];
-    const startOfToday = new Date(isoDate + "T00:00:00.000Z");
-    const endOfToday = new Date(isoDate + "T23:59:59.999Z");
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) {
+      return NextResponse.json({ error: "Property not found" }, { status: 404 });
+    }
+    // "Today" for the front desk is the property's BUSINESS DATE (UTC midnight), not
+    // wall-clock — so arrivals/departures/room-moves match the operational day the
+    // property is actually working, and only advance when Night Audit rolls it.
+    const startOfToday = resolveBusinessDate(property);
+    const endOfToday = new Date(nextBusinessDate(startOfToday).getTime() - 1);
 
     // 1. Arrivals Today
     const arrivals = await prisma.reservation.findMany({
@@ -109,6 +113,7 @@ export async function GET(request: Request) {
     const vacantReadyCount = vacantRooms.filter(r => r.status === "CLEAN" || r.status === "INSPECTED").length;
 
     return NextResponse.json({
+      businessDate: startOfToday,
       arrivals,
       departures,
       inHouse,

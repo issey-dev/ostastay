@@ -102,6 +102,13 @@ async function setup() {
 
 async function createInHouseCityLedgerReservation(ctx: Awaited<ReturnType<typeof setup>>) {
   const today = new Date();
+  const checkOutDate = new Date(today.getTime() + 86400000);
+  // Mark the property due out on the checkout day so a normal (non-early) checkout
+  // passes the business-date gate.
+  await prisma.property.update({
+    where: { id: ctx.propertyId },
+    data: { businessDate: new Date(Date.UTC(checkOutDate.getUTCFullYear(), checkOutDate.getUTCMonth(), checkOutDate.getUTCDate())) },
+  });
   return prisma.reservation.create({
     data: {
       propertyId: ctx.propertyId,
@@ -109,7 +116,7 @@ async function createInHouseCityLedgerReservation(ctx: Awaited<ReturnType<typeof
       primaryGuestId: ctx.guestUpid,
       travelAgentId: ctx.agentUpid,
       checkInDate: new Date(today.getTime() - 86400000),
-      checkOutDate: new Date(today.getTime() + 86400000),
+      checkOutDate,
       status: "IN_HOUSE",
       assignments: {
         create: {

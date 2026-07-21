@@ -524,8 +524,12 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect((await get.json()).smtpPassword).toBe("********");
   });
 
-  it("night audit posts once, skips overstays with a warning, and 409s a same-day re-run", async () => {
+  it("night audit posts once, rolls the business date, and 409s a same-business-date re-run", async () => {
     const today = new Date();
+    // Pin the property's business date to today's UTC midnight so the audit's
+    // posting/roll dates are deterministic regardless of host timezone.
+    const bizDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: bizDate } });
     const mkInHouse = (checkOutOffsetDays: number) =>
       prisma.reservation.create({
         data: {
@@ -586,9 +590,17 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
 
     const currentItems = await prisma.folioLineItem.findMany({ where: { folioId: current.folios[0].id } });
     expect(currentItems.length).toBe(1); // exactly one room charge
+    expect(currentItems[0].date.getTime()).toBe(bizDate.getTime()); // stamped with the business date
     const overstayItems = await prisma.folioLineItem.findMany({ where: { folioId: overstay.folios[0].id } });
     expect(overstayItems.length).toBe(0); // no unbounded accrual
 
+    // The manual EOD run rolled the property's business date forward one day.
+    const afterRun1 = await prisma.property.findUnique({ where: { id: propertyId } });
+    expect(afterRun1!.businessDate!.getTime()).toBe(bizDate.getTime() + DAY);
+
+    // Idempotency: re-running for the SAME business date is blocked. A normal EOD run
+    // advances the date, so force it back to prove the one-COMPLETED-run-per-date guard.
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: bizDate } });
     const run2 = await asUser(adminId, () =>
       nightAuditRunRoute.POST(
         new Request("http://localhost/api/night-audit/run", {

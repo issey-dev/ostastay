@@ -19,9 +19,14 @@ export type AllocationLike = {
   rates: AllocationRateRange[]
 }
 
-const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+// Date-only comparisons are UTC-based, matching how the app stores every domain
+// date: reservation check-in/out dates (forms submit plain YYYY-MM-DD → UTC
+// midnight) and the property business date (src/lib/business-date.ts) are all UTC
+// midnights. Comparing with local calendar parts here would drift by a day
+// whenever the host timezone's local day differs from the UTC day.
+const dayStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate()
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 // The AllocationRate row covering `date`, or null (null = the allocation posts
@@ -48,8 +53,7 @@ export function isPostingNight(
     case "ARRIVAL_NIGHT":
       return sameDay(auditDate, checkInDate)
     case "DEPARTURE_NIGHT": {
-      const lastNight = new Date(dayStart(checkOutDate))
-      lastNight.setDate(lastNight.getDate() - 1)
+      const lastNight = new Date(dayStart(checkOutDate).getTime() - 86_400_000)
       return sameDay(auditDate, lastNight)
     }
     case "EVERY_NIGHT":
@@ -103,7 +107,7 @@ export function allocationStayTotal(params: {
   while (night < end) {
     const amount = allocationAmountForNight({ ...params, auditDate: new Date(night) })
     if (amount != null) total += amount
-    night.setDate(night.getDate() + 1)
+    night.setTime(night.getTime() + 86_400_000) // step one UTC day
   }
   return round2(total)
 }
@@ -182,7 +186,7 @@ export function allocationStayBreakdown(params: {
     } else {
       flush()
     }
-    night.setDate(night.getDate() + 1)
+    night.setTime(night.getTime() + 86_400_000) // step one UTC day
   }
   flush()
 

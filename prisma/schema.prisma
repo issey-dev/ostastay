@@ -255,6 +255,15 @@ model Property {
   // only reservations created/edited afterward are affected (see DECISIONS.md).
   allocationCalculationMode String @default("RATE_PLAN")
 
+  // The property's current BUSINESS DATE — the operational "today" that drives
+  // check-in/out gating, arrivals/departures, and the date every Night Audit
+  // posting is stamped with. Distinct from EnterpriseSettings.systemDate (the
+  // real server/wall-clock date); the business date only moves forward when
+  // Night Audit (End-of-Day) is run for this property. Nullable so pre-existing
+  // rows read through a server-date fallback until their first audit
+  // (see src/lib/business-date.ts). A future Auto-EOD will roll this off systemDate.
+  businessDate DateTime?
+
   buildings    Building[]
   facilities   Facility[]
   roomTypes    RoomType[]
@@ -488,6 +497,7 @@ model ChargeCode {
   // those plans back to the enterprise default accommodation code, never cascade-
   // deletes a rate plan.
   ratePlans          RatePlan[]
+  routingRules       FolioRoutingRule[]
 
   @@unique([enterpriseId, code])
 }
@@ -791,6 +801,7 @@ model Reservation {
   // written at create/edit, read by Night Audit. See ReservationAllocation.
   allocations        ReservationAllocation[]
   specialRequests    ReservationSpecialRequest[]
+  routingRules       FolioRoutingRule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -857,6 +868,9 @@ model Folio {
 
   lineItems FolioLineItem[]
   payments  Payment[]
+  // Standing routing rules that redirect charges of a given code INTO this folio
+  // (this folio is the target). See FolioRoutingRule.
+  routingTargetRules FolioRoutingRule[] @relation("RoutingTargetFolio")
 
   @@index([propertyId])
 }
@@ -881,13 +895,41 @@ model FolioLineItem {
   roomAssignmentId String?
   roomAssignment   RoomAssignment? @relation(fields: [roomAssignmentId], references: [id], onDelete: SetNull)
   date         DateTime
+  // The line's own descriptive text — auto-filled from the charge code's
+  // description at posting time, editable by the operator.
   description  String
+  // Free-text reference printed in the invoice's Reference column (folio/PMS
+  // ref, external doc number, "per agreement 2026-04", etc.). Distinct from
+  // description; null falls back to the charge code on the printed document.
+  reference    String?
   amount       Float
   taxAmount    Float      @default(0.0)
   serviceChargeAmount Float @default(0.0)
   isVoid       Boolean    @default(false)
 
   createdAt DateTime @default(now())
+}
+
+// A standing "routing instruction": charges of a given ChargeCode on a source
+// Reservation are automatically redirected INTO targetFolio when posted (by Night
+// Audit or manual posting), instead of landing on the reservation's own primary
+// folio. The target may be another folio window on the same reservation, or the
+// folio of another in-house reservation ("bill this room's X charges to that
+// room"). One rule per (reservation, chargeCode); creating a rule also moves any
+// already-posted matching charges (apply-now). Cascade-deleted with the source
+// reservation.
+model FolioRoutingRule {
+  id              String      @id @default(uuid())
+  reservationId   String
+  reservation     Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  chargeCodeId    String
+  chargeCode      ChargeCode  @relation(fields: [chargeCodeId], references: [id])
+  targetFolioId   String
+  targetFolio     Folio       @relation("RoutingTargetFolio", fields: [targetFolioId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdAt       DateTime    @default(now())
+
+  @@unique([reservationId, chargeCodeId])
 }
 
 model CashierShift {

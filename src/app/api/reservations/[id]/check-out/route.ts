@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
 import { calculateFolioCommission } from "@/lib/commission";
+import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
@@ -14,11 +15,14 @@ export async function POST(
     requirePermission(ctx, "RESERVATIONS", "update");
 
     const { id } = await params;
+    const body = await request.json().catch(() => ({}));
+    const early = body?.early === true;
 
     // 1. Fetch reservation and folios with their line items and payments
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
+        property: { select: { businessDate: true } },
         assignments: { orderBy: { startDate: 'desc' } },
         folios: {
           include: {
@@ -36,6 +40,22 @@ export async function POST(
 
     if (reservation.status !== "IN_HOUSE") {
       return NextResponse.json({ error: "Only in-house guests can be checked out" }, { status: 400 });
+    }
+
+    // Date gate against the property's business date: a normal checkout is only
+    // available once the guest is due out (business date >= checkout date). Leaving
+    // ahead of the checkout date is an "early check-out" and must be flagged
+    // explicitly (the UI surfaces a separate Early check-out action).
+    const businessDate = resolveBusinessDate(reservation.property);
+    const checkOutDay = toUtcMidnight(reservation.checkOutDate);
+    if (businessDate < checkOutDay && !early) {
+      return NextResponse.json(
+        {
+          error: "This reservation isn't due out until " + checkOutDay.toISOString().slice(0, 10) + ". Use Early check-out to depart ahead of the checkout date.",
+          earlyCheckoutRequired: true,
+        },
+        { status: 400 }
+      );
     }
 
     // 2. A City Ledger folio only transfers to a debtor account if the reservation's

@@ -4,6 +4,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { resolveChargeTax } from "@/lib/tax-calc"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
+import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -27,14 +28,13 @@ export async function POST(request: Request) {
     const runByUser = await prisma.user.findUnique({ where: { id: ctx.userId } })
     const executedBy = runByUser ? `${runByUser.firstName} ${runByUser.lastName}` : ctx.userId
 
-    // The business date being audited — normalized to day-start so the double-run
-    // guard below can match on it exactly. (Wall clock rather than
-    // EnterpriseSettings.systemDate, matching the app's existing behavior; systemDate
-    // is *advanced* to the next day at the end of a successful run so the Night Audit
-    // status page's pending-arrivals/departures counts stay in step.)
-    const now = new Date()
-    const auditDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    // The business date being audited is the PROPERTY's own business date (UTC
+    // midnight) — the operational "today". Night Audit posts every charge on it and,
+    // on success, rolls it forward one day (the manual EOD roll). This is the single
+    // source of truth for the posting/revenue date; EnterpriseSettings.systemDate is
+    // left as the real server date and is no longer touched here.
+    const auditDate = resolveBusinessDate(property)
+    const nextDay = nextBusinessDate(auditDate)
 
     // Idempotency guard: one successful audit per property per business date. Without
     // this, a double-click or an impatient retry double-posted every room charge,
@@ -136,7 +136,10 @@ export async function POST(request: Request) {
     })
 
     const pricesIncludeTaxes = property.pricesIncludeTaxes
-    const today = now
+    // Every posted line is stamped with the business date being audited (the
+    // property's operational "today"), not wall-clock — so posting/revenue dates
+    // track the business date and a late-night audit still books to the right day.
+    const today = auditDate
 
     // Overstays: IN_HOUSE reservations whose checkOutDate is today or earlier. They
     // should have been checked out — deliberately NOT charged another room night here
@@ -408,16 +411,13 @@ export async function POST(request: Request) {
           }
         })
 
-        // 4. Roll the business date forward so the Night Audit status page's
-        // pending-arrival/departure counts (which read systemDate) track reality.
-        // Enterprise-level while audits are per-property, so never move it backwards —
-        // a second property auditing the same night just leaves it in place.
-        if (settings && settings.systemDate < nextDay) {
-          await tx.enterpriseSettings.update({
-            where: { enterpriseId: property.enterpriseId },
-            data: { systemDate: nextDay }
-          })
-        }
+        // 4. Roll THIS property's business date forward one day — the manual EOD roll.
+        // Per-property, so it never affects a sibling property. EnterpriseSettings.
+        // systemDate (the server date) is deliberately left untouched now.
+        await tx.property.update({
+          where: { id: propertyId },
+          data: { businessDate: nextDay },
+        })
 
         return createdLog
       }, { timeout: 30_000 })

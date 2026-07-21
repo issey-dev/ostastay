@@ -72,10 +72,14 @@ export default function FrontOfficeDashboard() {
   // Check-out goes through its dedicated route — the generic status endpoint is a
   // guarded state machine that rejects CHECKED_OUT directly. Check-in opens the
   // CheckInDialog (room assignment + optional payment) instead of a bare POST.
-  const handleCheckOut = async (id: string) => {
+  const handleCheckOut = async (id: string, early = false) => {
     setActionLoading(id)
     try {
-      const res = await fetch(`/api/reservations/${id}/check-out`, { method: "POST" })
+      const res = await fetch(`/api/reservations/${id}/check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ early }),
+      })
       const data = await res.json()
       if (res.ok) {
         const warning = data.creditLimitWarning
@@ -83,6 +87,13 @@ export default function FrontOfficeDashboard() {
           : ""
         setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
         await fetchSummary()
+      } else if (data.earlyCheckoutRequired && !early) {
+        // Not due out yet — offer an explicit early check-out.
+        setActionLoading(null)
+        if (window.confirm(`${data.error}\n\nCheck out early anyway?`)) {
+          await handleCheckOut(id, true)
+        }
+        return
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
       }
@@ -174,7 +185,15 @@ export default function FrontOfficeDashboard() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Front Desk Operations</h2>
-          <p className="text-muted-foreground">Manage today's arrivals, departures, and in-house guests.</p>
+          <p className="text-muted-foreground">
+            Business date{" "}
+            <span className="font-medium text-foreground">
+              {data?.businessDate
+                ? new Date(data.businessDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
+                : "—"}
+            </span>{" "}
+            · arrivals, departures, and in-house guests.
+          </p>
         </div>
         <Button onClick={() => setIsWalkInOpen(true)}>
           <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking

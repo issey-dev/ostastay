@@ -21,6 +21,10 @@ import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { CheckInDialog } from "@/components/front-office/check-in-dialog"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
+import { useProperty } from "@/components/providers/property-provider"
+
+// Property business date (UTC midnight ms) vs a reservation date, both date-only.
+const dayMs = (d?: string | null) => (d ? Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), new Date(d).getUTCDate()) : NaN)
 
 const folioBalance = (folio: any) => {
   const charges = (folio.lineItems ?? []).reduce(
@@ -40,6 +44,7 @@ const folioBalance = (folio: any) => {
 export default function ReservationDetailPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params)
   const router = useRouter()
+  const { currentProperty } = useProperty()
   const [reservation, setReservation] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -72,10 +77,15 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     fetchReservation()
   }, [id])
 
-  const handleCheckOut = async () => {
+  const handleCheckOut = async (early = false) => {
+    if (early && !window.confirm("This guest isn't due out yet. Check them out early?")) return
     setCheckingOut(true)
     try {
-      const res = await fetch(`/api/reservations/${id}/check-out`, { method: "POST" })
+      const res = await fetch(`/api/reservations/${id}/check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ early }),
+      })
       const data = await res.json()
       if (res.ok) {
         const warning = data.creditLimitWarning
@@ -172,16 +182,34 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </Button>
             </>
           )}
-          {reservation.status === "IN_HOUSE" && (
-            <>
-              <Button onClick={handleCheckOut} disabled={checkingOut}>
-                <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out..." : "Check Out"}
-              </Button>
-              <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>
-                <ArrowLeftRight className="w-4 h-4 mr-2" /> Move Room
-              </Button>
-            </>
-          )}
+          {reservation.status === "IN_HOUSE" && (() => {
+            // Due out when the property's business date has reached the checkout date.
+            // Before that, checkout is an explicit "early check-out" (server-enforced).
+            const bd = dayMs(currentProperty?.businessDate)
+            const co = dayMs(reservation.checkOutDate)
+            const dueOut = !Number.isNaN(bd) && !Number.isNaN(co) ? bd >= co : true
+            return (
+              <>
+                {dueOut ? (
+                  <Button onClick={() => handleCheckOut(false)} disabled={checkingOut}>
+                    <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out..." : "Check Out"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="text-warning border-warning/40 hover:bg-warning-muted hover:text-warning"
+                    onClick={() => handleCheckOut(true)}
+                    disabled={checkingOut}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out..." : "Early Check-Out"}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>
+                  <ArrowLeftRight className="w-4 h-4 mr-2" /> Move Room
+                </Button>
+              </>
+            )
+          })()}
           {(reservation.folios?.length ?? 0) > 0 && (
             <Button variant="outline" onClick={() => setIsFolioOpen(true)}>
               <ReceiptText className="w-4 h-4 mr-2" /> Folio

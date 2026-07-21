@@ -10,6 +10,10 @@ type Property = {
   // "RATE_PLAN" or "MEAL_PLAN" — which side drives automatic Allocation attachment
   // on a reservation (Controls > Revenue). See src/lib/allocations.ts.
   allocationCalculationMode: string
+  // The property's operational business date (ISO string) — the "today" the front
+  // desk works against. Rolled forward only by Night Audit (EOD). Null until a
+  // property has been initialized. See src/lib/business-date.ts.
+  businessDate: string | null
 }
 
 type PropertyContextType = {

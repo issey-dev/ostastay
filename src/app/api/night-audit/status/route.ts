@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date";
 
 export const dynamic = 'force-dynamic';
 
@@ -16,16 +17,13 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
 
-    // 1. Get current System Date
-    let settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: ctx.enterpriseId }
-    });
-
-    if (!settings) {
-      settings = await prisma.enterpriseSettings.create({
-        data: { enterpriseId: ctx.enterpriseId }
-      });
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) {
+      return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
+    // The property's operational business date, and the day the audit rolls it to.
+    const businessDate = resolveBusinessDate(property);
+    const nextDay = nextBusinessDate(businessDate);
 
     // 2. Get past logs for this property — matches what /api/night-audit/run actually
     // writes to (PropertyNightAuditLog, not the older enterprise-wide NightAuditLog).
@@ -35,28 +33,37 @@ export async function GET(request: Request) {
       take: 10
     });
 
-    // 3. Look for pending departures (guests who should have checked out today but are still IN_HOUSE)
+    // Has EOD already been run for the current business date?
+    const alreadyRun = await prisma.propertyNightAuditLog.findFirst({
+      where: { propertyId, status: "COMPLETED", auditDate: { gte: businessDate, lt: nextDay } },
+    });
+
+    // 3. Pending departures — in-house guests due out on or before the business date.
     const pendingDepartures = await prisma.reservation.count({
       where: {
         propertyId,
         status: "IN_HOUSE",
-        checkOutDate: { lte: settings.systemDate }
+        checkOutDate: { lte: businessDate }
       }
     });
 
-    // 4. Look for pending arrivals (guests who should have arrived today but haven't)
+    // 4. Pending arrivals — reservations due in on or before the business date that
+    //    haven't checked in yet.
     const pendingArrivals = await prisma.reservation.count({
       where: {
         propertyId,
         status: "RESERVED",
-        checkInDate: { lte: settings.systemDate }
+        checkInDate: { lte: businessDate }
       }
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        systemDate: settings.systemDate,
+        businessDate,
+        // Kept for backward compatibility with any existing client field reads.
+        systemDate: businessDate,
+        alreadyRun: !!alreadyRun,
         pendingDepartures,
         pendingArrivals,
         logs

@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2 } from "lucide-react"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -13,6 +13,13 @@ import { FolioPanel } from "@/components/front-office/folio-panel"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
@@ -86,11 +93,81 @@ const getDepositTotal = (res: Reservation) => {
     .reduce((sum, p) => sum + (p.isRefund ? -p.amount : p.amount), 0) ?? 0
 }
 
+// Compact "what's on this booking" descriptors, rendered as subtle icon/text
+// chips in the list's Includes column. Only what applies shows; full detail
+// lives on the reservation view page. Each carries a `title` for hover context.
+type FlagTone = "muted" | "success" | "warning" | "info" | "destructive"
+type Flag = { key: string; title: string; text?: string; icon?: typeof Package; tone: FlagTone }
+
+const getReservationFlags = (res: Reservation): Flag[] => {
+  const flags: Flag[] = []
+  if (res.mealPlan && res.mealPlan !== "NONE") {
+    flags.push({ key: "meal", text: res.mealPlan, icon: Utensils, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
+  }
+  const pkgCount = res.allocations?.length ?? 0
+  if (pkgCount > 0) {
+    const codes = (res.allocations ?? []).map(a => a.allocation.code).join(", ")
+    flags.push({ key: "pkg", text: String(pkgCount), icon: Package, title: `${pkgCount} package/allocation${pkgCount > 1 ? "s" : ""}: ${codes}`, tone: "muted" })
+  }
+  const deposit = getDepositTotal(res)
+  if (res.status === "RESERVED" && deposit > 0.005) {
+    flags.push({ key: "deposit", icon: Wallet, title: `Deposit $${deposit.toFixed(2)} collected`, tone: "success" })
+  }
+  const acc = res.accompanyingGuests?.length ?? 0
+  if (acc > 0) {
+    flags.push({ key: "acc", text: `+${acc}`, icon: Users, title: `${acc} accompanying guest${acc > 1 ? "s" : ""}`, tone: "muted" })
+  }
+  if (res.travelAgent) {
+    flags.push({ key: "ta", icon: Building2, title: `Travel agent: ${res.travelAgent.companyName || res.travelAgent.firstName}`, tone: "muted" })
+  }
+  if (res.hasScheduledRoomMove) {
+    flags.push({ key: "move", icon: ArrowLeftRight, title: "Scheduled room move during the stay", tone: "warning" })
+  }
+  const tasks = getActiveTasks(res).length
+  if (tasks > 0) {
+    flags.push({ key: "task", text: String(tasks), icon: Bell, title: `${tasks} active housekeeping request${tasks > 1 ? "s" : ""}`, tone: "destructive" })
+  }
+  return flags
+}
+
+const FLAG_TONE: Record<FlagTone, string> = {
+  muted: "bg-muted text-muted-foreground ring-border",
+  success: "bg-success-muted text-success ring-success/20",
+  warning: "bg-warning-muted text-warning ring-warning/20",
+  info: "bg-info-muted text-info ring-info/20",
+  destructive: "bg-destructive-muted text-destructive ring-destructive/20",
+}
+
+function FlagStrip({ res, className = "" }: { res: Reservation; className?: string }) {
+  const flags = getReservationFlags(res)
+  if (flags.length === 0) return <span className="text-xs text-muted-foreground/60">—</span>
+  return (
+    <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+      {flags.map(f => {
+        const Icon = f.icon
+        return (
+          <span
+            key={f.key}
+            title={f.title}
+            className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${FLAG_TONE[f.tone]}`}
+          >
+            {Icon && <Icon className="h-3 w-3 shrink-0" />}
+            {f.text}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function ReservationsDashboard() {
   const { slug } = useParams<{ slug: string }>()
+  const router = useRouter()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
+
+  const viewUrl = (id: string) => `/e/${slug}/dashboard/reservations/${id}`
 
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
@@ -276,9 +353,13 @@ export default function ReservationsDashboard() {
     }
   }
 
-  const handleCheckOut = async (res: Reservation) => {
+  const handleCheckOut = async (res: Reservation, early = false) => {
     try {
-      const resp = await fetch(`/api/reservations/${res.id}/check-out`, { method: "POST" })
+      const resp = await fetch(`/api/reservations/${res.id}/check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ early }),
+      })
       const data = await resp.json()
       if (resp.ok) {
         const warning = data.creditLimitWarning
@@ -286,6 +367,10 @@ export default function ReservationsDashboard() {
           : ""
         setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
         fetchData()
+      } else if (data.earlyCheckoutRequired && !early) {
+        if (window.confirm(`${data.error}\n\nCheck out early anyway?`)) {
+          await handleCheckOut(res, true)
+        }
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
       }
@@ -299,71 +384,78 @@ export default function ReservationsDashboard() {
     setIsFolioPanelOpen(true)
   }
 
-  // Shared between the desktop table row and the mobile stacked card — same actions,
-  // same conditional logic, just laid out differently by the caller.
-  const renderActions = (res: Reservation) => (
-    <>
-      {res.status === 'RESERVED' && (
-        <Button variant="outline" size="icon" className="bg-success-muted text-success hover:bg-success-muted/70 border-success/30" onClick={() => handleCheckIn(res)} title="Check In">
-          <Key className="h-4 w-4" />
-        </Button>
-      )}
-      {res.status === 'RESERVED' && (
-        <Button variant="outline" size="icon" onClick={() => setDepositRes(res)} title="Collect Deposit">
-          <Wallet className="h-4 w-4" />
-        </Button>
-      )}
-      {res.status === 'IN_HOUSE' && (
-        <Button variant="outline" size="icon" onClick={() => handleCheckOut(res)} title="Check Out">
-          <LogOut className="h-4 w-4" />
-        </Button>
-      )}
-      {(res.status === 'IN_HOUSE' || res.status === 'CHECKED_OUT' || (res.status === 'RESERVED' && (res.folios?.length ?? 0) > 0)) && (
-        <Button variant="outline" size="icon" onClick={() => openFolio(res)} title="Folio">
-          <ReceiptText className="h-4 w-4" />
-        </Button>
-      )}
-      {(res.status === 'RESERVED' || res.status === 'IN_HOUSE') && (
-        <Button
-          variant="outline"
-          size="icon"
-          className={`relative ${
-            getActiveTasks(res).length > 0
-              ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 border-transparent"
-              : "bg-destructive-muted text-destructive hover:bg-destructive-muted/70 border-destructive/30"
-          }`}
-          onClick={() => handleRequestPrompt(res)}
-          title="Special Request"
-        >
-          <Bell className="h-4 w-4" />
-          {getActiveTasks(res).length > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" />
-            </span>
-          )}
-        </Button>
-      )}
-      {(res.status === 'RESERVED' || res.status === 'IN_HOUSE') && (
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => window.open(`/e/${slug}/dashboard/reservations/${res.id}/confirmation-letter`, '_blank')}
-          title="Confirmation Letter"
-        >
-          <FileText className="h-4 w-4" />
-        </Button>
-      )}
-      <Link href={`/e/${slug}/dashboard/reservations/${res.id}/edit`}>
-        <Button variant="outline" size="icon" title="Edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </Link>
-      <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(res)} title="Delete">
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </>
-  )
+  // One fixed-width action cluster shared by the table row and the mobile card:
+  // a single status-driven primary button plus a "⋯" overflow menu for the rest.
+  // Keeping this constant-width (regardless of status) is what stops the table
+  // columns from jumping around row to row.
+  const renderRowActions = (res: Reservation) => {
+    const hasFolio = res.status === "IN_HOUSE" || res.status === "CHECKED_OUT" || (res.folios?.length ?? 0) > 0
+    const canRequest = res.status === "RESERVED" || res.status === "IN_HOUSE"
+    const canLetter = res.status === "RESERVED" || res.status === "IN_HOUSE"
+    return (
+      <div className="flex items-center justify-end gap-1.5">
+        {res.status === "RESERVED" && (
+          <Button size="sm" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" variant="outline" onClick={() => handleCheckIn(res)}>
+            <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
+          </Button>
+        )}
+        {res.status === "IN_HOUSE" && (
+          <Button size="sm" className="h-8" variant="outline" onClick={() => handleCheckOut(res)}>
+            <LogOut className="h-3.5 w-3.5 mr-1.5" /> Check Out
+          </Button>
+        )}
+        {res.status === "CHECKED_OUT" && (
+          <Button size="sm" className="h-8" variant="outline" onClick={() => openFolio(res)}>
+            <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8 relative" title="More actions" />}>
+            <MoreHorizontal className="h-4 w-4" />
+            {canRequest && getActiveTasks(res).length > 0 && (
+              <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-destructive" />
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-48">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+              <FileText className="h-4 w-4 mr-2" /> View details
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {res.status === "RESERVED" && (
+              <DropdownMenuItem className="cursor-pointer" onClick={() => setDepositRes(res)}>
+                <Wallet className="h-4 w-4 mr-2" /> Collect deposit
+              </DropdownMenuItem>
+            )}
+            {hasFolio && res.status !== "CHECKED_OUT" && (
+              <DropdownMenuItem className="cursor-pointer" onClick={() => openFolio(res)}>
+                <ReceiptText className="h-4 w-4 mr-2" /> Folio
+              </DropdownMenuItem>
+            )}
+            {canRequest && (
+              <DropdownMenuItem className="cursor-pointer" onClick={() => handleRequestPrompt(res)}>
+                <Bell className="h-4 w-4 mr-2" /> Special request
+                {getActiveTasks(res).length > 0 && (
+                  <span className="ml-auto text-[10px] font-semibold text-destructive">{getActiveTasks(res).length}</span>
+                )}
+              </DropdownMenuItem>
+            )}
+            {canLetter && (
+              <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(`/e/${slug}/dashboard/reservations/${res.id}/confirmation-letter`, "_blank")}>
+                <FileText className="h-4 w-4 mr-2" /> Confirmation letter
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}/edit`)}>
+              <Pencil className="h-4 w-4 mr-2" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => handleDeletePrompt(res)}>
+              <Trash2 className="h-4 w-4 mr-2" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -429,31 +521,34 @@ export default function ReservationsDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Mobile: stacked cards instead of an 8-column horizontally-scrolled table */}
+          {/* Mobile: stacked cards */}
           <div className="md:hidden space-y-3">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
             ) : reservations.length === 0 ? (
-              <EmptyState icon={CalendarDays} title="No active reservations found" />
+              <EmptyState icon={CalendarDays} title="No reservations match your filters" />
             ) : (
               reservations.map((res) => {
                 const guestName = res.primaryGuest?.profileType === 'COMPANY' || res.primaryGuest?.profileType === 'TRAVEL_AGENT'
                   ? res.primaryGuest?.companyName
                   : `${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName || ''}`.trim()
                 const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
-                const primaryRoom = res.assignments?.[0]
+                const first = res.assignments?.[0]
+                const extraRooms = (res.assignments?.length ?? 0) > 1 ? (res.assignments!.length - 1) : 0
 
                 return (
-                  <div key={res.id} className="bg-card border border-border rounded-lg p-4 shadow-elevation-1">
+                  <div
+                    key={res.id}
+                    onClick={() => router.push(viewUrl(res.id))}
+                    className="bg-card border border-border rounded-lg p-4 shadow-elevation-1 cursor-pointer active:bg-muted/50"
+                  >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-medium text-foreground inline-flex items-center gap-1.5">
-                          {guestName}
+                      <div className="min-w-0">
+                        <div className={`font-medium text-foreground inline-flex items-center gap-1.5 ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
+                          <span className="truncate">{guestName}</span>
                           {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                         </div>
-                        <Link href={`/e/${slug}/dashboard/reservations/${res.id}`} className="text-xs font-mono text-muted-foreground mt-0.5 block hover:underline">
-                          {res.confirmationNo}
-                        </Link>
+                        <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
                       </div>
                       <StatusBadge
                         label={res.status.replace('_', ' ')}
@@ -462,21 +557,18 @@ export default function ReservationsDashboard() {
                       />
                     </div>
                     <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border">
-                      <span className="text-muted-foreground">
-                        {primaryRoom ? `Room ${primaryRoom.room?.roomNumber || 'TBA'} (${primaryRoom.roomType?.code})` : 'No Segments'}
+                      <span className="text-foreground">
+                        {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
+                        <span className="text-muted-foreground"> · {nights}n</span>
                       </span>
-                      <span className="text-muted-foreground">{nights} {nights === 1 ? 'night' : 'nights'}</span>
+                      <span className="text-muted-foreground">
+                        {first ? `${first.room?.roomNumber || 'TBA'} (${first.roomType?.code})` : 'No rooms'}
+                        {extraRooms > 0 && ` +${extraRooms}`}
+                      </span>
                     </div>
-                    <div className="text-sm text-foreground mt-1">
-                      {format(new Date(res.checkInDate), "dd-MMM-yy")} – {format(new Date(res.checkOutDate), "dd-MMM-yy")}
-                    </div>
-                    {res.status === 'RESERVED' && getDepositTotal(res) > 0.005 && (
-                      <div className="text-xs font-medium text-success mt-1">
-                        Deposit ${getDepositTotal(res).toFixed(2)} collected
-                      </div>
-                    )}
-                    <div className="flex justify-end gap-2 mt-3">
-                      {renderActions(res)}
+                    <div className="mt-2"><FlagStrip res={res} /></div>
+                    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                      {renderRowActions(res)}
                     </div>
                   </div>
                 )
@@ -484,135 +576,104 @@ export default function ReservationsDashboard() {
             )}
           </div>
 
-          {/* Tablet/desktop: full table */}
-          <Table className="hidden md:table">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Conf. #</TableHead>
-                <TableHead>Guest</TableHead>
-                <TableHead>Room / Type</TableHead>
-                <TableHead>Check-In</TableHead>
-                <TableHead>Check-Out</TableHead>
-                <TableHead>Nights</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                ))
-              ) : reservations.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="py-0">
-                  <EmptyState icon={CalendarDays} title="No active reservations found" />
-                </TableCell></TableRow>
-              ) : (
-                reservations.map((res) => {
-                  const guestName = res.primaryGuest?.profileType === 'COMPANY' || res.primaryGuest?.profileType === 'TRAVEL_AGENT'
-                    ? res.primaryGuest?.companyName
-                    : `${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName || ''}`.trim()
-                  
-                  const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
+          {/* Tablet/desktop: fixed-layout table — a stable column grid that never
+              reflows when a booking has more rooms or more flags. */}
+          <div className="hidden md:block">
+            <Table className="table-fixed w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[26%]">Guest</TableHead>
+                  <TableHead className="w-[19%]">Stay</TableHead>
+                  <TableHead className="w-[13%]">Room</TableHead>
+                  <TableHead className="w-[20%]">Includes</TableHead>
+                  <TableHead className="w-[10%]">Status</TableHead>
+                  <TableHead className="w-[150px] text-right pr-4">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                  ))
+                ) : reservations.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="py-0">
+                    <EmptyState icon={CalendarDays} title="No reservations match your filters" />
+                  </TableCell></TableRow>
+                ) : (
+                  reservations.map((res) => {
+                    const guestName = res.primaryGuest?.profileType === 'COMPANY' || res.primaryGuest?.profileType === 'TRAVEL_AGENT'
+                      ? res.primaryGuest?.companyName
+                      : `${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName || ''}`.trim()
+                    const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
+                    const first = res.assignments?.[0]
+                    const extraRooms = (res.assignments?.length ?? 0) > 1 ? (res.assignments!.length - 1) : 0
+                    const cancelled = res.status === 'CANCELLED'
 
-                  return (
-                    <TableRow key={res.id}>
-                      <TableCell className="font-mono font-bold">
-                        <Link href={`/e/${slug}/dashboard/reservations/${res.id}`} className="hover:underline">
-                          {res.confirmationNo}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium inline-flex items-center gap-1.5">
-                          {guestName}
-                          {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
-                        </div>
-                        {res.accompanyingGuests && res.accompanyingGuests.length > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            + {res.accompanyingGuests.length} Accompanying
+                    return (
+                      <TableRow
+                        key={res.id}
+                        onClick={() => router.push(viewUrl(res.id))}
+                        className="cursor-pointer"
+                      >
+                        {/* Guest + conf# */}
+                        <TableCell className="align-middle">
+                          <div className={`font-medium flex items-center gap-1.5 ${cancelled ? 'line-through opacity-70' : ''}`}>
+                            <span className="truncate">{guestName}</span>
+                            {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </div>
-                        )}
-                        {res.travelAgent && (
-                          <div className="text-xs font-semibold text-foreground mt-1 flex items-center">
-                            <Building2 className="w-3 h-3 mr-1" />
-                            {res.travelAgent.companyName || res.travelAgent.firstName}
+                          <div className="text-xs font-mono text-muted-foreground truncate">{res.confirmationNo}</div>
+                        </TableCell>
+
+                        {/* Stay */}
+                        <TableCell className="align-middle whitespace-nowrap">
+                          <div className="text-sm text-foreground">
+                            {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM yy")}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {res.assignments && res.assignments.length > 0 ? (
-                            res.assignments.map((assignment, index) => (
-                              <div key={index} className="flex flex-col border-b border-border pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold">{assignment.room?.roomNumber || 'TBA'}</span>
-                                  <span className="text-xs text-muted-foreground">({assignment.roomType?.code})</span>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {format(new Date(assignment.startDate), "dd-MMM")} - {format(new Date(assignment.endDate), "dd-MMM")}
+                          <div className="text-xs text-muted-foreground">{nights} {nights === 1 ? 'night' : 'nights'}</div>
+                        </TableCell>
+
+                        {/* Room summary — never stacks per segment */}
+                        <TableCell className="align-middle">
+                          {first ? (
+                            <div className="flex items-baseline gap-1.5 truncate">
+                              <span className="text-sm font-semibold">{first.room?.roomNumber || 'TBA'}</span>
+                              <span className="text-xs text-muted-foreground">{first.roomType?.code}</span>
+                              {extraRooms > 0 && (
+                                <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1 ring-1 ring-inset ring-border" title={`${res.assignments!.length} rooms on this booking`}>
+                                  +{extraRooms}
                                 </span>
-                              </div>
-                            ))
+                              )}
+                            </div>
                           ) : (
-                            <div className="text-sm text-muted-foreground">No Segments</div>
+                            <span className="text-sm text-muted-foreground">No rooms</span>
                           )}
-                          {res.mealPlan && res.mealPlan !== 'NONE' && (
-                            <span className="inline-flex items-center rounded-md bg-warning-muted px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/20 w-max mt-1">
-                              {res.mealPlan}
-                            </span>
-                          )}
-                          {(res.allocations ?? []).length > 0 && (
-                            <span className="inline-flex flex-wrap gap-1 mt-1">
-                              {(res.allocations ?? []).map(ra => (
-                                <span
-                                  key={ra.id}
-                                  title={`${ra.allocation.name} (${ra.source === "MANUAL" ? "add-on" : "via " + ra.source.toLowerCase().replace("_", " ")})`}
-                                  className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground ring-1 ring-inset ring-border w-max"
-                                >
-                                  {ra.allocation.code}
-                                </span>
-                              ))}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{format(new Date(res.checkInDate), "dd-MMM-yy")}</TableCell>
-                      <TableCell>{format(new Date(res.checkOutDate), "dd-MMM-yy")}</TableCell>
-                      <TableCell>{nights}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1 items-start">
+                        </TableCell>
+
+                        {/* Includes — subtle flag chips */}
+                        <TableCell className="align-middle">
+                          <FlagStrip res={res} />
+                        </TableCell>
+
+                        {/* Status */}
+                        <TableCell className="align-middle">
                           <StatusBadge
                             label={res.status.replace('_', ' ')}
                             status={res.status}
-                            className={res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}
+                            className={cancelled ? 'line-through opacity-70' : ''}
                           />
-                          {res.hasScheduledRoomMove && (
-                            <span
-                              className="inline-flex items-center rounded-md bg-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-warning ring-1 ring-inset ring-warning/20"
-                              title="This stay's segments assign a different physical room partway through — a scheduled room move."
-                            >
-                              Room Move
-                            </span>
-                          )}
-                          {res.status === 'RESERVED' && getDepositTotal(res) > 0.005 && (
-                            <span
-                              className="inline-flex items-center rounded-md bg-success-muted px-1.5 py-0.5 text-[10px] font-medium text-success ring-1 ring-inset ring-success/20"
-                              title="Deposit collected — will appear on the billing window at check-in."
-                            >
-                              Deposit ${getDepositTotal(res).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        {renderActions(res)}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
+                        </TableCell>
+
+                        {/* Actions — fixed width, click-through suppressed */}
+                        <TableCell className="align-middle text-right pr-4" onClick={(e) => e.stopPropagation()}>
+                          {renderRowActions(res)}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           {hasMore && !loading && (
             <div className="flex justify-center pt-4">

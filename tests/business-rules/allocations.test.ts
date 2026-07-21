@@ -221,15 +221,16 @@ describe("Allocations: pure helpers", () => {
   });
 
   it("isPostingNight gates arrival/departure/every-night correctly", () => {
-    const checkIn = new Date("2026-07-10T14:00:00");
-    const checkOut = new Date("2026-07-13T11:00:00");
+    // UTC-explicit literals — domain date comparisons are UTC-based (see allocations.ts).
+    const checkIn = new Date("2026-07-10T14:00:00Z");
+    const checkOut = new Date("2026-07-13T11:00:00Z");
     // Arrival night = the 10th only.
-    expect(isPostingNight("ARRIVAL_NIGHT", checkIn, checkOut, new Date("2026-07-10T23:00:00"))).toBe(true);
-    expect(isPostingNight("ARRIVAL_NIGHT", checkIn, checkOut, new Date("2026-07-11T23:00:00"))).toBe(false);
+    expect(isPostingNight("ARRIVAL_NIGHT", checkIn, checkOut, new Date("2026-07-10T23:00:00Z"))).toBe(true);
+    expect(isPostingNight("ARRIVAL_NIGHT", checkIn, checkOut, new Date("2026-07-11T23:00:00Z"))).toBe(false);
     // Departure night = the LAST night (12th, since checkout is the 13th).
-    expect(isPostingNight("DEPARTURE_NIGHT", checkIn, checkOut, new Date("2026-07-12T23:00:00"))).toBe(true);
-    expect(isPostingNight("DEPARTURE_NIGHT", checkIn, checkOut, new Date("2026-07-13T23:00:00"))).toBe(false);
-    expect(isPostingNight("EVERY_NIGHT", checkIn, checkOut, new Date("2026-07-11T23:00:00"))).toBe(true);
+    expect(isPostingNight("DEPARTURE_NIGHT", checkIn, checkOut, new Date("2026-07-12T23:00:00Z"))).toBe(true);
+    expect(isPostingNight("DEPARTURE_NIGHT", checkIn, checkOut, new Date("2026-07-13T23:00:00Z"))).toBe(false);
+    expect(isPostingNight("EVERY_NIGHT", checkIn, checkOut, new Date("2026-07-11T23:00:00Z"))).toBe(true);
   });
 
   it("allocationAmountForNight charges adults+children only and honours overrides and date ranges", () => {
