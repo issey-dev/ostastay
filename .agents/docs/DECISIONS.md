@@ -1276,3 +1276,237 @@ migrations, API routes, components, pages). Findings:
   one); `SystemCodeMultiSelect`'s fetch-once ref would get stuck if the same instance
   were reused with a changing `category` prop (both current call sites are static).
 - Full suite 230/230 passing, `tsc --noEmit` clean after all fixes.
+
+## Reservation booking dialog: Look-to-Book redesign (2026-07-21)
+
+Per direct app-owner request ("review the reservation creation flow... do your research
+on Opera Oracle Hospitality App how reservation module works and come up with a
+beautiful adjustment"). Modeled on OPERA Cloud's Look to Book Sales Screen (stay
+criteria → rate/availability grid → guest & booking details → Book Now), adapted to
+what this app already has. Design confirmed by the owner before building: the grid
+REPLACES the old room-type/rate-plan dropdowns (not offered alongside them), and
+Special Requests use a proper join table (owner chose this over a JSON column).
+
+- **New flow order** in the same single dialog (widened to 920px): "1 · Stay" (arrival/
+  departure/occupancy + Booking Source, which moved up because it gates negotiated
+  rates), "2 · Room & Rate" (the grid), "3 · Guest & Details", "4 · Allocations &
+  Add-ons", and an estimated-total footer (room + extra occupancy + allocations,
+  labeled est., excl. taxes).
+- **`GET /api/reservations/rate-availability`** powers the grid in one round trip:
+  per room type the minimum sellable-room count across every night of the window
+  (OPERA's "minimum stay availability"; pseudo types exempt/unlimited; supports
+  `excludeReservationId` so an edit doesn't count the reservation's own holds against
+  itself) and per rate plan × room type the total/avg-nightly price. Pricing mirrors
+  Night Audit's resolution chain EXACTLY (derived plan → parent entry + adjustment;
+  missing entry → locked Base plan fallback; extra-occupancy from the assigned/parent
+  plan's own entry only) so the quote can never disagree with what posts. One
+  deliberate difference: a fully-unpriced night is reported (cell shows "No rate")
+  instead of Night Audit's post-$0 behavior. 365-night query cap.
+- **Grid behavior**: rows = rate plans by priority, columns = room types with "N left"
+  / "Sold out {date}" headers; sold-out cells struck through and disabled; negotiated
+  plans appear only when the selected TA unlocks them (same RatePlanAgentAccess gating
+  as before, now controlling grid rows); clicking a cell fills the ACTIVE segment's
+  room type + rate plan together. Split stay preserved: each segment card is clickable
+  to become active, the grid re-quotes for that segment's own date range (OPERA Trip
+  Composer, simplified), and per-segment date pickers only appear when there's more
+  than one segment. Room number + flat override rate stay per-segment.
+- **Status dropdown removed from the dialog entirely** — a new booking is always
+  RESERVED and transitions go through Check-In/Check-Out/Cancel actions; the PUT
+  route's status field became optional (schema `z.string().optional()`) with the
+  change-rejection guard intact, and edit mode shows a read-only StatusBadge in the
+  header instead.
+- **Special Requests**: `ReservationSpecialRequest` join table (migration
+  `20260721084759_reservation_special_requests`; `code` stores the SPECIAL_REQUEST
+  SystemCode code string, same convention as Profile.vipLevel — this is the "will be
+  later linked with reservations" follow-through from the LOV category created
+  2026-07-20). Tappable chips in the dialog; validated server-side against active
+  codes (shared `validateSpecialRequestCodes` in src/lib/special-requests.ts); PUT
+  replaces the set only when the field is sent. Seeded five starter options.
+- Also removed dead `availableRooms` state (fetched via /api/rooms/available but never
+  read anywhere).
+- 9 new tests (`rate-availability.test.ts`: Base-fallback pricing, derived adjustment,
+  extra-occupancy parity with Night Audit, min-availability + excludeReservationId,
+  inverted-range rejection; `special-requests.test.ts`: create/dedupe, unknown+inactive
+  rejection, PUT replace-vs-omit semantics, status-optional PUT). Full suite 239/239,
+  `tsc --noEmit` clean. Live-verified in the browser: grid renders real prices for the
+  quoted range with availability counts, negotiated plan hidden without a TA, cell
+  click moves the selection and the footer recomputes (4 nights × $175 + HB
+  allocations = $860 est.), special requests round-trip via API confirmed (invalid
+  code 400s).
+
+## Booking dialog → dedicated pages, allocation calculation breakdown, full tax breakdown (2026-07-21)
+
+Three direct follow-ups on the Look-to-Book redesign above.
+
+- **Dialog → pages**: the create/edit form is no longer a modal — it's now
+  `/reservations/new` and `/reservations/[id]/edit`, both rendering a shared
+  `<BookingForm>` (`src/components/reservations/booking-form.tsx`). Reason: with more
+  room types the rate grid didn't have room to breathe inside a fixed-width dialog.
+  Added `GET /api/reservations/[id]` (didn't exist before — edit only had PUT/DELETE)
+  so the edit page can fetch its own data instead of relying on the list's in-memory
+  copy. The list page (`reservations/page.tsx`) shrank from ~1490 to ~590 lines —
+  "New Booking"/"Edit" are now plain links; every piece of form state, the grid effect,
+  and the allocation preview moved into `BookingForm`. Delete/Special-Request/Folio/
+  Notification stayed as dialogs on the list page — out of scope, still small and
+  contextual to a specific row.
+- **Layout**: two-column — the 4 numbered sections on the left, a sticky "Booking
+  Summary" sidebar on the right (stay recap, room/rate per segment, allocations,
+  taxes, grand total). This sidebar is the new home for both asks below.
+- **Allocation calculation breakdown** (`allocationStayBreakdown` in
+  `src/lib/allocations.ts`): walks the exact same rhythm/rate resolution as
+  `allocationAmountForNight`/`allocationStayTotal` night-by-night instead of collapsing
+  straight to a total, grouping consecutive nights that share a unit price into
+  segments (a mid-stay seasonal rate change produces two segments, not one wrong
+  average). Rendered per attached allocation as e.g. "1 adult × $10.00 = $10.00/night
+  × 2 nights (every night) = $20.00"; a rhythm-qualifying night with no rate configured
+  is called out separately ("N night(s) had no rate configured — not charged") instead
+  of silently vanishing into the total.
+- **Full tax breakdown**: the old footer only estimated a room+extras+allocations
+  total with "excl. taxes" — now backed by a genuine server-side dry-run,
+  `computeReservationQuote` (`src/lib/reservation-quote-server.ts`, exposed at
+  `POST /api/reservations/quote`), which projects the ENTIRE stay (not just tonight)
+  through the identical resolution chain Night Audit posts with: derived-plan
+  adjustment, locked Base-plan fallback, INCLUDE_IN_RATE carve-out before tax, each
+  charge code's own tax handling (`resolveChargeTax` — default Service Charge/GST
+  engine or a Custom Tax profile, per charge code), and flat Green Tax. Every
+  `TaxBreakdownLine` from every room/extra-occupancy/allocation charge is aggregated
+  by name across the whole stay, so the summary shows one "Service Charge (10%)" line
+  and one "GST (17%, compound)" line (or whatever a Custom Tax profile's own named
+  lines are) rather than one per charge instance — Green Tax is listed separately
+  since it never goes through the tax engine. Nothing is written; this is a pure read,
+  debounced off `assignments`/`adults`/`children`/`mealPlan`/`manualAllocationIds`.
+- 23 new tests (`allocationStayBreakdown`: single/multi-segment grouping, rhythm
+  gating, unpriced-night reporting; `computeReservationQuote`: Service Charge + GST
+  math against Night Audit's own formula, a Custom-Tax-profile allocation kept
+  separate from the room's default engine, Green Tax flat math, tax-inclusive price
+  back-out reconstructing the original gross, override-rate replacing the calendar
+  price, unpriced-night warning). Full suite 248/248, `tsc --noEmit` clean.
+  Live-verified: `/reservations/new` and `/reservations/[id]/edit` render as real
+  pages (no dialog in the DOM); picking BAR × Deluxe Beach Villa for Aug 1-3 showed
+  "Service Charge (10%) $18.64 / GST (17%, compound) $34.88 / Green Tax
+  (1×$12.00 × 2n) $24.00 / Grand Total $264.00"; switching to Bed & Breakfast showed
+  the Breakfast allocation's own line "1 adult × $10.00 = $10.00/night × 2 nights
+  (every night) = $20.00" while the grand total stayed $264.00 (the allocation's value
+  moved from the room line to its own line via the INCLUDE_IN_RATE carve-out, exactly
+  as designed) confirmed via direct API round-trip.
+
+## Reservations — date validation & occupancy override (2026-07-21)
+
+- **Departure cannot precede (or equal) arrival — hard validation, not just a rejection
+  after the fact.** Bug report was a screenshot showing Arrival 01 AUG 2026 next to
+  Departure 30 JUL 2026 with a "0 Nights" badge. Fixed with three layers in
+  `src/components/reservations/booking-form.tsx` and
+  `src/components/ui/date-picker.tsx`: (1) `DatePicker` gained a `minDate` prop that
+  hard-disables invalid days in the calendar itself via react-day-picker's
+  `disabled={{ before: minDate }}` — so an inverted range can't even be picked, not
+  merely flagged after selection; every "To"/Departure picker (top-level and per
+  split-stay segment) now passes `minDate = dayAfter(startDate)`. (2) Changing an
+  Arrival/segment-start date that would make the current end date invalid
+  auto-clears that end date rather than leaving a stale invalid value sitting in
+  state. (3) `handleSubmit` still guards
+  `form.assignments.some(a => a.endDate <= a.startDate)` as a final backstop. All
+  three layers live-verified together, including the "moving Arrival past an
+  already-set Departure auto-clears Departure" edge case.
+- **Occupancy: base vs. max are two different concerns, not one.** App owner's
+  verbatim ask: guests over a room type's *base* occupancy should incur an
+  extra-person charge (already handled by the existing quote engine — see the
+  Allocations entry above), but guests over *max* occupancy needed something new.
+  Asked the owner whether a different UX would be easier to understand than a
+  charge-based override; proceeded with the simplest option (a checkbox) rather than
+  waiting, since it was already the lowest-friction pattern available. Design:
+  max-occupancy is a hard physical/legal capacity limit — when `adults + children`
+  for a segment exceeds its room type's `maxOccupancy`, a destructive-styled banner
+  appears in Room & Rate naming the offending room type(s) and their max, with an "I
+  understand and want to book this anyway" checkbox
+  (`form.acknowledgeOverCapacity`). `handleSubmit` blocks (no toast side effects
+  beyond the validation notification) until it's checked; the ack auto-resets via a
+  `useEffect` keyed on total occupants + assigned room-type ids, so it can't be
+  checked once and silently carried through an unrelated later change. The Room &
+  Rate grid's column header also gained a small "Occ. {base}–{max}" hint per room
+  type so limits are visible before picking, and Section 1 (Stay) gained a one-line
+  explainer of the base-charge vs. max-override distinction. Live-verified
+  end-to-end: submission silently blocked with the checkbox unchecked, then a real
+  `POST /api/reservations → 201 Created` after checking it (test reservation
+  `VBR0000000006` deleted afterward). Full suite 248/248, `tsc --noEmit` clean.
+
+## Reservations — split-stay contiguity, scheduled room move, pax-capped accompanying guests, guest picker (2026-07-21)
+
+- **Split-stay segments must be back-to-back with no gaps.** App owner's rule,
+  verbatim: "segmentation always have to be consecutive dates i.e first segment from
+  1-2Aug then second segment must be from 2 onwards - there should not be any
+  breaks." Implemented as a hard *lock*, not just validation: in
+  `src/components/reservations/booking-form.tsx`, every segment after the first has
+  its "From" `DatePicker` rendered `disabled`, with a caption ("Locked to Segment
+  N's departure"). A reconciliation `useEffect` cascades forward whenever any
+  segment's dates change (edit/add/remove) — forcing `assignments[i].startDate =
+  assignments[i-1].endDate`, clearing a now-invalid `endDate` if needed, and
+  re-deriving the top-level `checkInDate`/`checkOutDate` from the chain's two
+  endpoints. `handleSubmit` keeps a matching backstop guard. Enforced server-side too
+  via the new `assignmentsAreContiguous()` helper
+  (`src/lib/reservation-assignments.ts`), called from both `POST /api/reservations`
+  and `PUT /api/reservations/[id]` — a client bypassing the UI still gets a 400.
+- **"Scheduled room move"**: when a split stay's segments assign different physical
+  rooms (owner: "if the room is different the reservation must be flagged with
+  having a 'scheduled room move'"), this is a *booking-time-planned* mid-stay room
+  change — distinct from the existing ad-hoc "Move Room" action
+  (`room-move-modal.tsx` / `[id]/room-move/route.ts`), which only ever acts "as of
+  today" and is unrelated to a reservation's own segment structure. No execution step
+  is needed for the scheduled case — the correct room is already baked into the
+  reservation's `RoomAssignment` rows from creation; this is purely a heads-up.
+  Design (chosen via `AskUserQuestion`, "badge + worklist" over badge-only or full
+  automation): added `Reservation.hasScheduledRoomMove` (migration
+  `20260721105555_add_reservation_scheduled_room_move`), computed at create/update
+  time via `detectScheduledRoomMove()` (same helper file, compares adjacent
+  segments' `roomId` after sorting by `startDate`) and stored so the Front Office
+  dashboard doesn't need to recompute it by joining every reservation's segments on
+  every load. Surfaced as: (1) a "Room Move" badge next to the status badge on the
+  Reservations list (`reservations/page.tsx`); (2) an in-form preview badge on the
+  affected segment card in the booking form (client-side mirror of the same
+  comparison, before save); (3) a new **"Room Moves Due Today"** tab on the Front
+  Office dashboard (`front-office/page.tsx`, sourced from
+  `/api/front-office/summary`) — for each in-house reservation with a segment
+  starting today, checks whether the immediately-preceding segment (same
+  reservation, `endDate === this startDate`) used a different room, and lists
+  guest/conf#/from-room/to-room/new-room-type. No "execute" action — informational
+  only, so staff can coordinate the physical move (luggage, keys, housekeeping).
+- **Accompanying guest cap = adults + children − 1.** Owner's ask: "cannot attach
+  accompanying guest more than defined no of pax." Clarified via `AskUserQuestion`
+  that "no of pax" means total occupants minus the primary guest's own slot (not
+  adults-only, not uncapped). `AccompanyingGuest` already existed
+  (`prisma/schema.prisma`) with no cap previously enforced anywhere. Enforced in the
+  booking form (hides the add-picker once the cap is hit, shows "X / Y pax" and a
+  "Max reached" explainer instead) and, as a hard stop, in both `POST
+  /api/reservations` and `PUT /api/reservations/[id]` (400 if
+  `accompanyingGuestIds.length` exceeds the cap) — a client bypassing the UI still
+  can't exceed it.
+- **Guest selection via search-and-quick-create modal, not the 50-row
+  `SearchableSelect`.** Owner's ask: "open a modal - user can search based on first
+  name, last name, email, address for existing profiles - if existing not there in
+  the same screen give option to quick create a profile and select them without
+  breaking the reservation creation flow." Built `GuestPickerModal`
+  (`src/components/reservations/guest-picker-modal.tsx`), reused for both Primary
+  Guest and Accompanying Guest (an open/close mode flag, not two components) —
+  debounced server-side search against `GET /api/profiles`, whose `search` `OR`
+  clause was extended to also match `ProfileCommunication.value` (email/phone) and
+  `ProfileAddress.fullAddress`, not just name fields. Quick-create is an inline
+  sub-form (First Name required — matches the Profile API's actual minimum; Last
+  Name/Email/Phone optional) that `POST`s `/api/profiles` and immediately selects the
+  new profile without navigating away. The Primary Guest's native-`required`-input
+  trick from the prior segment was dropped in favor of an explicit `handleSubmit`
+  guard (`if (!form.primaryGuestId) ...`) — simpler and avoids relying on
+  browser-native validation quirks.
+- All four changes live-verified: segment lock (Segment 2's "From" shown disabled
+  and captioned, locked to `05 AUG 2026`); guest picker (searched
+  "david.williams" by email → filtered to one match → selected → "Primary Guest:
+  David Williams"; quick-created "Quicktest Guest" → appeared via `GET
+  /api/profiles`, cap correctly prevented auto-attaching it as accompanying since
+  cap was 0); pax cap ("0 / 0 pax" + "Max reached" text with 1 adult, 0 children);
+  scheduled room move (`POST /api/reservations` with segments in Room 101 then 102
+  → `hasScheduledRoomMove: true` → "Room Move" badge rendered on the Reservations
+  list next to "RESERVED"). 9 new tests added
+  (`tests/business-rules/reservation-segments.test.ts`): pure-function contiguity/
+  room-move-detection cases, `POST` rejecting gapped segments, `POST` tagging
+  `hasScheduledRoomMove` true/false correctly, `POST` rejecting an over-cap
+  accompanying-guest list, and a `PUT` round-trip re-validating contiguity and
+  recomputing the flag. Full suite 257/257, `tsc --noEmit` clean. All test
+  reservations/profiles created during verification deleted afterward.
