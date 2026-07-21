@@ -108,6 +108,94 @@ export function allocationStayTotal(params: {
   return round2(total)
 }
 
+// A run of consecutive nights sharing the same per-adult/per-child unit price (prices
+// can change mid-stay via AllocationRate date ranges, or per-reservation overrides —
+// which never change mid-stay, so an override always yields exactly one segment).
+export type AllocationStaySegment = {
+  nights: number
+  adultPrice: number
+  childPrice: number
+  amountPerNight: number
+  subtotal: number
+}
+
+export type AllocationStayBreakdown = {
+  postingRhythm: string
+  totalNights: number
+  postingNights: number
+  // Rhythm-qualifying nights with no AllocationRate covering them and no override —
+  // silently unbilled, same as allocationAmountForNight's null case.
+  unpricedNights: number
+  segments: AllocationStaySegment[]
+  total: number
+}
+
+// Explains a stay total night-by-night instead of collapsing straight to one number —
+// the booking summary's "how was this calculated" line. Walks the exact same
+// rhythm/rate resolution as allocationAmountForNight/allocationStayTotal so the
+// explanation can never drift from the total those functions report.
+export function allocationStayBreakdown(params: {
+  allocation: AllocationLike
+  adults: number
+  children: number
+  checkInDate: Date
+  checkOutDate: Date
+  overrideAdultPrice?: number | null
+  overrideChildPrice?: number | null
+}): AllocationStayBreakdown {
+  const { allocation, adults, children, checkInDate, checkOutDate } = params
+  const night = dayStart(checkInDate)
+  const end = dayStart(checkOutDate)
+  const totalNights = Math.max(0, Math.round((end.getTime() - night.getTime()) / 86_400_000))
+
+  let postingNights = 0
+  let unpricedNights = 0
+  const segments: AllocationStaySegment[] = []
+  let current: { adultPrice: number; childPrice: number; amountPerNight: number; nights: number } | null = null
+
+  const flush = () => {
+    if (!current) return
+    segments.push({ ...current, subtotal: round2(current.amountPerNight * current.nights) })
+    current = null
+  }
+
+  while (night < end) {
+    if (isPostingNight(allocation.postingRhythm, checkInDate, checkOutDate, night)) {
+      const range = rateForDate(allocation.rates, night)
+      const adultPrice = params.overrideAdultPrice ?? range?.adultPrice
+      const childPrice = params.overrideChildPrice ?? range?.childPrice
+      if (adultPrice == null && childPrice == null) {
+        unpricedNights++
+        flush()
+      } else {
+        postingNights++
+        const ap = adultPrice ?? 0
+        const cp = childPrice ?? 0
+        const amountPerNight = round2(adults * ap + children * cp)
+        if (current && current.adultPrice === ap && current.childPrice === cp) {
+          current.nights++
+        } else {
+          flush()
+          current = { adultPrice: ap, childPrice: cp, amountPerNight, nights: 1 }
+        }
+      }
+    } else {
+      flush()
+    }
+    night.setDate(night.getDate() + 1)
+  }
+  flush()
+
+  return {
+    postingRhythm: allocation.postingRhythm,
+    totalNights,
+    postingNights,
+    unpricedNights,
+    segments,
+    total: round2(segments.reduce((sum, s) => sum + s.subtotal, 0)),
+  }
+}
+
 export type AllocationCalculationMode = "RATE_PLAN" | "MEAL_PLAN"
 
 // The attachment set a reservation should carry — exclusively driven by ONE side,

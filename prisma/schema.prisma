@@ -730,6 +730,13 @@ model Reservation {
   // not sourced from ReservationTrace (that's an operational task/message log, not
   // curated guest-facing text).
   remarks      String?
+  // Derived at create/edit time (see src/lib/reservation-assignments.ts) whenever two
+  // date-adjacent segments assign different physical rooms — i.e. the stay itself
+  // requires a mid-stay room change on a known future date, distinct from the ad-hoc
+  // RoomAssignment/room-move flow (RESERVATIONS/route.ts room-move) which only ever
+  // acts "as of today". Surfaced as a badge on the reservation and via the Front
+  // Office "Room Moves Due Today" worklist (front-office/summary route).
+  hasScheduledRoomMove Boolean @default(false)
 
   assignments        RoomAssignment[]
   folios             Folio[]
@@ -739,9 +746,24 @@ model Reservation {
   // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
   // written at create/edit, read by Night Audit. See ReservationAllocation.
   allocations        ReservationAllocation[]
+  specialRequests    ReservationSpecialRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Tag-style special requests picked at booking time from the SPECIAL_REQUEST SystemCode
+// LOV (Controls > Reservations > Reservation Dropdown Lists). `code` stores the
+// SystemCode code string — same convention as Profile.vipLevel/classification — so
+// renaming a request's display value in Controls never touches existing reservations.
+model ReservationSpecialRequest {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  code          String
+  createdAt     DateTime    @default(now())
+
+  @@unique([reservationId, code])
 }
 
 model Folio {

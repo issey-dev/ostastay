@@ -18,7 +18,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
-const { validateRateRanges, resolveLinkedAllocationIds, allocationAmountForNight, isPostingNight } =
+const { validateRateRanges, resolveLinkedAllocationIds, allocationAmountForNight, isPostingNight, allocationStayBreakdown } =
   await import("@/lib/allocations");
 const { materializeReservationAllocations } = await import("@/lib/allocations-server");
 
@@ -308,6 +308,73 @@ describe("Allocations: pure helpers", () => {
         mealPlanLinks: [],
       })
     ).toEqual([]);
+  });
+
+  it("allocationStayBreakdown groups nights sharing a unit price into one segment, per booking-summary display", () => {
+    const base = {
+      id: "x", code: "BF", name: "Breakfast", mode: "ADD_TO_RATE", postingRhythm: "EVERY_NIGHT",
+      rates: [{ adultPrice: 10, childPrice: 5, effectiveFrom: new Date("2026-01-01"), effectiveTo: null }],
+    };
+    const result = allocationStayBreakdown({
+      allocation: base, adults: 2, children: 1,
+      checkInDate: new Date("2026-07-10"), checkOutDate: new Date("2026-07-13"),
+    });
+    expect(result.totalNights).toBe(3);
+    expect(result.postingNights).toBe(3);
+    expect(result.unpricedNights).toBe(0);
+    expect(result.segments).toEqual([
+      { nights: 3, adultPrice: 10, childPrice: 5, amountPerNight: 25, subtotal: 75 },
+    ]);
+    expect(result.total).toBe(75);
+  });
+
+  it("allocationStayBreakdown splits into multiple segments when the rate changes mid-stay", () => {
+    const base = {
+      id: "x", code: "BF", name: "Breakfast", mode: "ADD_TO_RATE", postingRhythm: "EVERY_NIGHT",
+      rates: [
+        { adultPrice: 10, childPrice: 5, effectiveFrom: new Date("2026-07-01"), effectiveTo: new Date("2026-07-11") },
+        { adultPrice: 15, childPrice: 7, effectiveFrom: new Date("2026-07-12"), effectiveTo: null },
+      ],
+    };
+    const result = allocationStayBreakdown({
+      allocation: base, adults: 1, children: 0,
+      checkInDate: new Date("2026-07-10"), checkOutDate: new Date("2026-07-13"),
+    });
+    // Nights: 10 (rate A), 11 (rate A), 12 (rate B) — two segments.
+    expect(result.segments).toEqual([
+      { nights: 2, adultPrice: 10, childPrice: 5, amountPerNight: 10, subtotal: 20 },
+      { nights: 1, adultPrice: 15, childPrice: 7, amountPerNight: 15, subtotal: 15 },
+    ]);
+    expect(result.total).toBe(35);
+  });
+
+  it("allocationStayBreakdown honors postingRhythm (arrival/departure-only) and reports unpriced nights separately", () => {
+    const arrivalOnly = {
+      id: "x", code: "TRF", name: "Transfer", mode: "ADD_TO_RATE", postingRhythm: "ARRIVAL_NIGHT",
+      rates: [{ adultPrice: 20, childPrice: 10, effectiveFrom: new Date("2026-01-01"), effectiveTo: null }],
+    };
+    const result = allocationStayBreakdown({
+      allocation: arrivalOnly, adults: 2, children: 0,
+      checkInDate: new Date("2026-07-10"), checkOutDate: new Date("2026-07-13"),
+    });
+    expect(result.postingNights).toBe(1);
+    expect(result.segments).toEqual([{ nights: 1, adultPrice: 20, childPrice: 10, amountPerNight: 40, subtotal: 40 }]);
+    expect(result.total).toBe(40);
+
+    // A rhythm-qualifying night with no rate range covering it is counted as unpriced,
+    // not silently folded into a $0 segment.
+    const noRateYet = {
+      id: "y", code: "BF", name: "Breakfast", mode: "ADD_TO_RATE", postingRhythm: "EVERY_NIGHT",
+      rates: [{ adultPrice: 10, childPrice: 5, effectiveFrom: new Date("2026-08-01"), effectiveTo: null }],
+    };
+    const result2 = allocationStayBreakdown({
+      allocation: noRateYet, adults: 1, children: 0,
+      checkInDate: new Date("2026-07-10"), checkOutDate: new Date("2026-07-13"),
+    });
+    expect(result2.postingNights).toBe(0);
+    expect(result2.unpricedNights).toBe(3);
+    expect(result2.segments).toEqual([]);
+    expect(result2.total).toBe(0);
   });
 });
 

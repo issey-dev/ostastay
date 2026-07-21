@@ -339,6 +339,13 @@ async function main() {
     { category: "CLASSIFICATION", code: "VIP", value: "VIP", sortOrder: 1 },
     { category: "CLASSIFICATION", code: "REGULAR", value: "Regular", sortOrder: 2 },
     { category: "CLASSIFICATION", code: "BLACKLISTED", value: "Blacklisted", sortOrder: 3 },
+    // Reservation-level Special Requests (Controls > Reservations), selectable as
+    // chips on the booking dialog — see ReservationSpecialRequest.
+    { category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "High Floor", sortOrder: 1 },
+    { category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in", sortOrder: 2 },
+    { category: "SPECIAL_REQUEST", code: "LATE_CHECKOUT", value: "Late Checkout", sortOrder: 3 },
+    { category: "SPECIAL_REQUEST", code: "AIRPORT_PICKUP", value: "Airport Pickup", sortOrder: 4 },
+    { category: "SPECIAL_REQUEST", code: "BABY_COT", value: "Baby Cot", sortOrder: 5 },
   ];
   for (const sc of systemCodes) {
     await prisma.systemCode.upsert({

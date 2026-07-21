@@ -9,21 +9,14 @@ import { useProperty } from "@/components/providers/property-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { SearchableSelect } from "@/components/ui/searchable-select"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import { allocationStayTotal, type AllocationLike } from "@/lib/allocations"
 
 type Reservation = {
   id: string
@@ -36,6 +29,7 @@ type Reservation = {
   infants: number
   remarks: string | null
   mealPlan: string
+  hasScheduledRoomMove: boolean
   primaryGuestId: string
   primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string, vipLevel: string | null }
   travelAgentId: string | null
@@ -56,6 +50,7 @@ type Reservation = {
     ratePlan: { code: string, name: string }
     overrideRate: number | null
   }[]
+  specialRequests?: { id: string, code: string }[]
   allocations?: {
     id: string
     allocationId: string
@@ -75,17 +70,6 @@ type Reservation = {
   }[]
 }
 
-type AllocationOption = {
-  id: string
-  code: string
-  name: string
-  mode: string
-  postingRhythm: string
-  sellSeparate: boolean
-  isActive: boolean
-  rates: { adultPrice: number, childPrice: number, effectiveFrom: string, effectiveTo: string | null }[]
-}
-
 const getActiveTasks = (res: Reservation) => {
   return res.assignments?.flatMap(a => a.room?.housekeepingTasks || []).filter(t => t.status !== 'COMPLETED') || []
 }
@@ -95,13 +79,13 @@ export default function ReservationsDashboard() {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
-  
+
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
-  // Modals state
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  // Modals state — the booking create/edit form itself lives on its own page now
+  // (/reservations/new, /reservations/[id]/edit), not a dialog here.
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null)
@@ -109,87 +93,28 @@ export default function ReservationsDashboard() {
   const [requestText, setRequestText] = useState("")
   const [requestingRoomId, setRequestingRoomId] = useState("")
 
-  // Lookup data states
-  const [profiles, setProfiles] = useState<any[]>([])
-  const [roomTypes, setRoomTypes] = useState<any[]>([])
-  const [rooms, setRooms] = useState<any[]>([])
-  const [ratePlans, setRatePlans] = useState<any[]>([])
-  const [mealPlans, setMealPlans] = useState<any[]>([])
-  const [allocations, setAllocations] = useState<AllocationOption[]>([])
-  const [availableRooms, setAvailableRooms] = useState<any[]>([])
   const [housekeepingCodes, setHousekeepingCodes] = useState<any[]>([])
   const [autoAssigning, setAutoAssigning] = useState(false)
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
   const [isFolioPanelOpen, setIsFolioPanelOpen] = useState(false)
-  
+
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
-
-  // Form State
-  const [form, setForm] = useState({
-    primaryGuestId: "",
-    checkInDate: "",
-    checkOutDate: "",
-    adults: 1,
-    children: 0,
-    infants: 0,
-    remarks: "",
-    mealPlan: "NONE",
-    travelAgentId: "none",
-    status: "RESERVED",
-    accompanyingGuestIds: [] as string[],
-    manualAllocationIds: [] as string[],
-    assignments: [
-      {
-        roomTypeId: "",
-        roomId: "",
-        ratePlanId: "",
-        overrideRate: "",
-        startDate: "",
-        endDate: ""
-      }
-    ]
-  })
 
   const fetchData = async () => {
     if (!currentProperty) return
     setLoading(true)
     try {
-      const [resReq, profReq, rtReq, rpReq, rmReq, hkReq, mpReq, alReq] = await Promise.all([
+      const [resReq, hkReq] = await Promise.all([
         fetch(`/api/reservations?propertyId=${propertyId}`),
-        fetch(`/api/profiles?enterpriseId=${enterpriseId}`),
-        fetch(`/api/room-types?propertyId=${propertyId}`),
-        fetch(`/api/rate-plans?propertyId=${propertyId}`),
-        fetch(`/api/rooms?propertyId=${propertyId}`),
         fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`),
-        fetch(`/api/meal-plans?propertyId=${propertyId}`),
-        fetch(`/api/allocations?propertyId=${propertyId}`)
       ])
 
       const resData = await resReq.json()
       if (Array.isArray(resData)) setReservations(resData)
 
-      const profData = await profReq.json()
-      if (Array.isArray(profData)) setProfiles(profData)
-
-      const rtData = await rtReq.json()
-      if (Array.isArray(rtData)) setRoomTypes(rtData)
-
-      const rpData = await rpReq.json()
-      if (Array.isArray(rpData)) setRatePlans(rpData)
-
-      const rmData = await rmReq.json()
-      if (Array.isArray(rmData)) setRooms(rmData)
-
-      const mpData = await mpReq.json()
-      if (Array.isArray(mpData)) setMealPlans(mpData)
-
       const hkData = await hkReq.json()
       if (Array.isArray(hkData)) setHousekeepingCodes(hkData)
-
-      const alData = await alReq.json()
-      if (Array.isArray(alData)) setAllocations(alData)
-
     } catch (e) {
       console.error("Failed to load data", e)
     } finally {
@@ -202,139 +127,6 @@ export default function ReservationsDashboard() {
       fetchData()
     }
   }, [currentProperty])
-
-  useEffect(() => {
-    const primaryRoomTypeId = form.assignments[0]?.roomTypeId
-    if (form.checkInDate && form.checkOutDate && primaryRoomTypeId) {
-      const excludeParam = selectedRes?.id ? `&excludeReservationId=${selectedRes.id}` : ""
-      fetch(`/api/rooms/available?propertyId=${propertyId}&roomTypeId=${primaryRoomTypeId}&checkInDate=${form.checkInDate}&checkOutDate=${form.checkOutDate}${excludeParam}`)
-        .then(r => r.json())
-        .then(data => {
-          if (Array.isArray(data)) setAvailableRooms(data)
-        })
-        .catch(console.error)
-    } else {
-      setAvailableRooms([])
-    }
-  }, [form.checkInDate, form.checkOutDate, form.assignments, selectedRes?.id])
-
-  // ── Allocation preview (mirrors the server's materialization in
-  // src/lib/allocations-server.ts): exclusively RATE_PLAN (links on the assigned rate
-  // plan, parent fallback for a derived plan) or MEAL_PLAN (links on the selected
-  // meal plan) per the property's Allocation Calculation setting (Controls >
-  // Revenue) — never both. Totals come from the same shared math Night Audit posts
-  // with.
-  const selectedRatePlanForAlloc = ratePlans.find(rp => rp.id === form.assignments[0]?.ratePlanId)
-  const parentPlanForAlloc = selectedRatePlanForAlloc?.parentRatePlanId
-    ? ratePlans.find(rp => rp.id === selectedRatePlanForAlloc.parentRatePlanId)
-    : null
-  const ratePlanAllocLinks: Array<{ allocation: { id: string } }> =
-    (selectedRatePlanForAlloc?.allocationLinks?.length
-      ? selectedRatePlanForAlloc.allocationLinks
-      : parentPlanForAlloc?.allocationLinks) ?? []
-  const mealPlanAllocLinks: Array<{ allocation: { id: string } }> =
-    mealPlans.find(mp => mp.code === form.mealPlan)?.allocationLinks ?? []
-  const linksForMode = currentProperty?.allocationCalculationMode === "MEAL_PLAN" ? mealPlanAllocLinks : ratePlanAllocLinks
-  const autoAllocationIds = [
-    ...new Set(linksForMode.map(l => l.allocation.id)),
-  ].filter(id => allocations.some(a => a.id === id && a.isActive))
-
-  const stayDatesForAlloc = (() => {
-    const dates = form.assignments
-      .flatMap(a => [a.startDate, a.endDate])
-      .filter(Boolean)
-      .map(d => new Date(d).getTime())
-    if (dates.length < 2) return null
-    return { checkIn: new Date(Math.min(...dates)), checkOut: new Date(Math.max(...dates)) }
-  })()
-
-  const allocationPreviewTotal = (a: AllocationOption): number | null => {
-    if (!stayDatesForAlloc) return null
-    const like: AllocationLike = {
-      id: a.id,
-      code: a.code,
-      name: a.name,
-      mode: a.mode,
-      postingRhythm: a.postingRhythm,
-      rates: a.rates.map(r => ({
-        adultPrice: r.adultPrice,
-        childPrice: r.childPrice,
-        effectiveFrom: new Date(r.effectiveFrom),
-        effectiveTo: r.effectiveTo ? new Date(r.effectiveTo) : null,
-      })),
-    }
-    return allocationStayTotal({
-      allocation: like,
-      adults: form.adults,
-      children: form.children,
-      checkInDate: stayDatesForAlloc.checkIn,
-      checkOutDate: stayDatesForAlloc.checkOut,
-    })
-  }
-
-  const resetForm = () => {
-    setForm({
-      primaryGuestId: "",
-      checkInDate: "",
-      checkOutDate: "",
-      adults: 1,
-      children: 0,
-      infants: 0,
-      remarks: "",
-      mealPlan: "NONE",
-      travelAgentId: "none",
-      status: "RESERVED",
-      accompanyingGuestIds: [],
-      manualAllocationIds: [],
-      assignments: [
-        {
-          roomTypeId: "",
-          roomId: "",
-          ratePlanId: "",
-          overrideRate: "",
-          startDate: "",
-          endDate: ""
-        }
-      ]
-    })
-    setSelectedRes(null)
-  }
-
-  const handleEdit = (res: Reservation) => {
-    setSelectedRes(res)
-    setForm({
-      primaryGuestId: res.primaryGuestId,
-      checkInDate: res.checkInDate ? new Date(res.checkInDate).toISOString().split('T')[0] : "",
-      checkOutDate: res.checkOutDate ? new Date(res.checkOutDate).toISOString().split('T')[0] : "",
-      adults: res.adults,
-      children: res.children,
-      infants: res.infants || 0,
-      remarks: res.remarks || "",
-      mealPlan: res.mealPlan || "NONE",
-      travelAgentId: res.travelAgentId || "none",
-      status: res.status,
-      accompanyingGuestIds: res.accompanyingGuests?.map(ag => ag.profile.upid) || [],
-      manualAllocationIds: res.allocations?.filter(a => a.source === "MANUAL").map(a => a.allocationId) || [],
-      assignments: res.assignments && res.assignments.length > 0 ? res.assignments.map(a => ({
-        roomTypeId: a.roomTypeId,
-        roomId: a.roomId || "none",
-        ratePlanId: a.ratePlanId,
-        overrideRate: a.overrideRate?.toString() || "",
-        startDate: a.startDate ? new Date(a.startDate).toISOString().split('T')[0] : "",
-        endDate: a.endDate ? new Date(a.endDate).toISOString().split('T')[0] : ""
-      })) : [
-        {
-          roomTypeId: "",
-          roomId: "",
-          ratePlanId: "",
-          overrideRate: "",
-          startDate: "",
-          endDate: ""
-        }
-      ]
-    })
-    setIsDialogOpen(true)
-  }
 
   const handleDeletePrompt = (res: Reservation) => {
     setSelectedRes(res)
@@ -379,68 +171,6 @@ export default function ReservationsDashboard() {
         setNotification({ title: "Error", message: "Failed to send request.", isError: true })
       }
     } catch (e) {
-      setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleCreateOrUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      // Validate assignments
-      if (form.assignments.some(a => !a.roomTypeId || !a.ratePlanId || !a.startDate || !a.endDate)) {
-        setNotification({ title: "Validation Error", message: "All segments must have dates, room type, and rate plan.", isError: true })
-        setSubmitting(false)
-        return
-      }
-
-      // Compute min start and max end date for the overall reservation
-      const dates = form.assignments.flatMap(a => [new Date(a.startDate).getTime(), new Date(a.endDate).getTime()]);
-      const minDate = new Date(Math.min(...dates));
-      const maxDate = new Date(Math.max(...dates));
-
-      const payload = {
-        ...form,
-        propertyId,
-        checkInDate: minDate.toISOString(),
-        checkOutDate: maxDate.toISOString(),
-        travelAgentId: form.travelAgentId === "none" ? null : form.travelAgentId,
-        assignments: form.assignments.map(a => ({
-          roomTypeId: a.roomTypeId,
-          roomId: a.roomId === "none" ? null : a.roomId,
-          ratePlanId: a.ratePlanId,
-          overrideRate: a.overrideRate ? parseFloat(a.overrideRate) : null,
-          startDate: new Date(a.startDate).toISOString(),
-          endDate: new Date(a.endDate).toISOString()
-        }))
-      }
-      
-      const url = selectedRes ? `/api/reservations/${selectedRes.id}` : `/api/reservations`
-      const method = selectedRes ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-
-      if (res.ok) {
-        const body = await res.json()
-        setIsDialogOpen(false)
-        resetForm()
-        fetchData()
-        setNotification(
-          body.capacityWarning
-            ? { title: "Saved with a warning", message: `Reservation saved successfully. ${body.capacityWarning}.` }
-            : { title: "Success", message: "Reservation saved successfully." }
-        )
-      } else {
-        const err = await res.json()
-        setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
-      }
-    } catch (err) {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
@@ -515,8 +245,6 @@ export default function ReservationsDashboard() {
     setIsFolioPanelOpen(true)
   }
 
-  const isEditMode = !!selectedRes
-
   // Shared between the desktop table row and the mobile stacked card — same actions,
   // same conditional logic, just laid out differently by the caller.
   const renderActions = (res: Reservation) => (
@@ -567,9 +295,11 @@ export default function ReservationsDashboard() {
           <FileText className="h-4 w-4" />
         </Button>
       )}
-      <Button variant="outline" size="icon" onClick={() => handleEdit(res)} title="Edit">
-        <Pencil className="h-4 w-4" />
-      </Button>
+      <Link href={`/e/${slug}/dashboard/reservations/${res.id}/edit`}>
+        <Button variant="outline" size="icon" title="Edit">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </Link>
       <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(res)} title="Delete">
         <Trash2 className="h-4 w-4" />
       </Button>
@@ -595,447 +325,9 @@ export default function ReservationsDashboard() {
               <CalendarDays className="mr-2 h-4 w-4" /> Calendar View
             </Button>
           </Link>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open)
-            if (!open) resetForm()
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsDialogOpen(true)}><Plus className="mr-2 h-4 w-4" /> New Booking</Button>
-            </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-            <form onSubmit={handleCreateOrUpdate}>
-              <DialogHeader>
-                <DialogTitle>{isEditMode ? "Edit Booking" : "Create New Booking"}</DialogTitle>
-                <DialogDescription>
-                  {isEditMode ? "Modify details for this reservation." : "Enter booking details below."}
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="grid gap-6 py-4">
-                <div className="grid gap-2">
-                  <Label>Primary Guest <span className="text-destructive">*</span></Label>
-                  <SearchableSelect
-                    required
-                    value={form.primaryGuestId}
-                    onChange={(v) => setForm(p => ({ ...p, primaryGuestId: v }))}
-                    placeholder="Select Guest..."
-                    options={profiles.filter(p => p.profileType === 'GUEST').map(prof => {
-                      const name = `${prof.firstName} ${prof.lastName || ''}`.trim();
-                      return {
-                        value: prof.upid,
-                        label: name
-                      };
-                    })}
-                  />
-                </div>
-
-                <div className="grid gap-2 p-4 bg-muted border rounded-md">
-                  <Label>Accompanying Guests</Label>
-                  <div className="flex gap-2">
-                    <SearchableSelect
-                      value=""
-                      onChange={(v) => {
-                        if (v && !form.accompanyingGuestIds.includes(v) && v !== form.primaryGuestId) {
-                          setForm(p => ({ ...p, accompanyingGuestIds: [...p.accompanyingGuestIds, v] }))
-                        }
-                      }}
-                      placeholder="Add an accompanying guest..."
-                      options={profiles.filter(p => p.profileType === 'GUEST' && p.upid !== form.primaryGuestId && !form.accompanyingGuestIds.includes(p.upid)).map(prof => {
-                        const name = `${prof.firstName} ${prof.lastName || ''}`.trim();
-                        return {
-                          value: prof.upid,
-                          label: name
-                        };
-                      })}
-                    />
-                  </div>
-                  {form.accompanyingGuestIds.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-2">
-                      {form.accompanyingGuestIds.map(gid => {
-                        const prof = profiles.find(p => p.upid === gid)
-                        if (!prof) return null;
-                        const name = prof.profileType === 'COMPANY' || prof.profileType === 'TRAVEL_AGENT' 
-                          ? prof.companyName 
-                          : `${prof.firstName} ${prof.lastName || ''}`.trim();
-                        return (
-                          <div key={gid} className="flex justify-between items-center bg-card px-3 py-2 rounded border text-sm shadow-sm">
-                            <span className="inline-flex items-center gap-1.5">
-                              {name}
-                              {prof.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-destructive hover:text-destructive hover:bg-destructive-muted"
-                              onClick={() => setForm(p => ({ ...p, accompanyingGuestIds: p.accompanyingGuestIds.filter(id => id !== gid) }))}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" /> Remove
-                            </Button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid gap-2 p-4 bg-muted border rounded-md">
-                  <Label>Booking Source / Travel Agent (Optional)</Label>
-                  <SearchableSelect
-                    value={form.travelAgentId}
-                    onChange={(v) => setForm(p => ({ ...p, travelAgentId: v }))}
-                    placeholder="Select Travel Agent..."
-                    options={[
-                      { value: "none", label: "Direct Booking (None)" },
-                      ...profiles.filter(p => p.profileType === 'TRAVEL_AGENT' || p.profileType === 'COMPANY').map(prof => ({
-                        value: prof.upid,
-                        label: prof.companyName || `${prof.firstName} ${prof.lastName}`
-                      }))
-                    ]}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Status</Label>
-                    <Select value={form.status} onValueChange={(v) => setForm(p => ({ ...p, status: v ?? "" }))}>
-                      <SelectTrigger>
-                        <SelectValue>
-                          {(() => {
-                            const labels: Record<string, string> = {
-                              RESERVED: "Reserved",
-                              IN_HOUSE: "In House",
-                              CHECKED_OUT: "Checked Out",
-                              NO_SHOW: "No Show",
-                              CANCELLED: "Cancelled"
-                            }
-                            return labels[form.status] || form.status
-                          })()}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="RESERVED">Reserved</SelectItem>
-                        <SelectItem value="IN_HOUSE">In House</SelectItem>
-                        <SelectItem value="CHECKED_OUT">Checked Out</SelectItem>
-                        <SelectItem value="NO_SHOW">No Show</SelectItem>
-                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Meal Plan</Label>
-                    <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "NONE" }))}>
-                      <SelectTrigger>
-                        <SelectValue>
-                          {form.mealPlan === "NONE" ? "Room Only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NONE">Room Only</SelectItem>
-                        {mealPlans.filter(mp => mp.isActive).map(mp => (
-                          <SelectItem key={mp.id} value={mp.code}>{mp.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Adults</Label>
-                    <Input type="number" min="1" value={form.adults} onChange={e => setForm(p => ({ ...p, adults: parseInt(e.target.value) || 1 }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Children</Label>
-                    <Input type="number" min="0" value={form.children} onChange={e => setForm(p => ({ ...p, children: parseInt(e.target.value) || 0 }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Infants</Label>
-                    <Input type="number" min="0" value={form.infants} onChange={e => setForm(p => ({ ...p, infants: parseInt(e.target.value) || 0 }))} />
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Remarks</Label>
-                  <Textarea
-                    value={form.remarks}
-                    onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))}
-                    placeholder="e.g. Honeymoon — high floor requested"
-                    rows={2}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-4 mt-2">
-                  <h3 className="font-semibold text-lg border-b pb-2">Room Segments</h3>
-                  {(() => {
-                    // Negotiated Rate Plans are only selectable for the Company/Travel
-                    // Agent profile(s) they're linked to (see RatePlanAgentAccess) — a
-                    // negotiated plan is hidden here unless the booking's own Travel
-                    // Agent/Booking Source matches one of its linked profiles.
-                    const availableRatePlans = ratePlans.filter((rp) =>
-                      !rp.isNegotiated ||
-                      (form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId))
-                    )
-                    return form.assignments.map((assignment, index) => (
-                    <div key={index} className="flex flex-col gap-4 p-4 border rounded-md relative bg-muted shadow-sm">
-                      <div className="font-semibold text-sm text-foreground flex justify-between items-center">
-                        <span>Segment {index + 1}</span>
-                        {form.assignments.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive-muted hover:text-destructive" onClick={() => {
-                            const newAssignments = [...form.assignments];
-                            newAssignments.splice(index, 1);
-                            setForm(p => ({ ...p, assignments: newAssignments }));
-                          }}>
-                            <Trash2 className="h-3 w-3 mr-1" /> Remove
-                          </Button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Check-In Date <span className="text-destructive">*</span></Label>
-                          <DatePicker 
-                            value={assignment.startDate} 
-                            onChange={v => {
-                              const newAssignments = [...form.assignments];
-                              newAssignments[index].startDate = v;
-                              if (index === 0) setForm(p => ({ ...p, checkInDate: v }));
-                              setForm(p => ({ ...p, assignments: newAssignments }));
-                            }} 
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label className="flex items-center gap-2">
-                            Check-Out Date <span className="text-destructive">*</span>
-                            {assignment.startDate && assignment.endDate && (
-                              <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-none">
-                                {Math.max(0, Math.round((new Date(assignment.endDate).getTime() - new Date(assignment.startDate).getTime()) / (1000 * 3600 * 24)))} Nights
-                              </span>
-                            )}
-                          </Label>
-                          <DatePicker 
-                            value={assignment.endDate} 
-                            onChange={v => {
-                              const newAssignments = [...form.assignments];
-                              newAssignments[index].endDate = v;
-                              if (index === form.assignments.length - 1) setForm(p => ({ ...p, checkOutDate: v }));
-                              setForm(p => ({ ...p, assignments: newAssignments }));
-                            }} 
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Room Type <span className="text-destructive">*</span></Label>
-                          <Select required value={assignment.roomTypeId} onValueChange={(v) => {
-                            const newAssignments = [...form.assignments];
-                            newAssignments[index].roomTypeId = v ?? "";
-                            newAssignments[index].roomId = "none";
-                            setForm(p => ({ ...p, assignments: newAssignments }));
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Room Type">
-                                {(() => {
-                                  const rt = roomTypes.find(r => r.id === assignment.roomTypeId)
-                                  return rt ? `${rt.name} (${rt.code})` : undefined
-                                })()}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {roomTypes.map(rt => (
-                                <SelectItem key={rt.id} value={rt.id}>
-                                  {rt.name} ({rt.code})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Rate Plan <span className="text-destructive">*</span></Label>
-                          <Select required value={assignment.ratePlanId} onValueChange={(v) => {
-                            const newAssignments = [...form.assignments];
-                            newAssignments[index].ratePlanId = v ?? "";
-                            setForm(p => ({ ...p, assignments: newAssignments }));
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Rate Plan">
-                                {(() => {
-                                  const rp = ratePlans.find(r => r.id === assignment.ratePlanId)
-                                  return rp ? rp.name : undefined
-                                })()}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableRatePlans.map(rp => (
-                                <SelectItem key={rp.id} value={rp.id}>
-                                  {rp.name}{rp.isNegotiated ? " (Negotiated)" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Room Assignment</Label>
-                          <SearchableSelect
-                            value={assignment.roomId}
-                            onChange={(v) => {
-                              const newAssignments = [...form.assignments];
-                              newAssignments[index].roomId = v;
-                              setForm(p => ({ ...p, assignments: newAssignments }));
-                            }}
-                            placeholder="Unassigned"
-                            options={[
-                              { value: "none", label: "Unassigned" },
-                              ...rooms.filter(rm => rm.roomTypeId === assignment.roomTypeId).map(rm => ({
-                                value: rm.id,
-                                label: `Room ${rm.roomNumber}`
-                              }))
-                            ]}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Flat Override Rate</Label>
-                          <Input 
-                            type="number" 
-                            placeholder="Optional override" 
-                            value={assignment.overrideRate} 
-                            onChange={e => {
-                              const newAssignments = [...form.assignments];
-                              newAssignments[index].overrideRate = e.target.value;
-                              setForm(p => ({ ...p, assignments: newAssignments }));
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                  })()}
-                  <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => {
-                    const lastAssignment = form.assignments[form.assignments.length - 1];
-                    setForm(p => ({
-                      ...p,
-                      assignments: [...p.assignments, {
-                        roomTypeId: lastAssignment.roomTypeId || "",
-                        roomId: "none",
-                        ratePlanId: lastAssignment.ratePlanId || "",
-                        overrideRate: lastAssignment.overrideRate || "",
-                        startDate: lastAssignment.endDate || "",
-                        endDate: ""
-                      }]
-                    }));
-                  }}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Segment (Split Stay)
-                  </Button>
-                </div>
-
-                <div className="flex flex-col gap-3 mt-2">
-                  <h3 className="font-semibold text-lg border-b pb-2">Allocations & Add-ons</h3>
-
-                  {autoAllocationIds.length > 0 && (
-                    <div className="rounded-md border p-3 bg-muted/40">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">
-                        Included via rate plan / meal plan
-                      </p>
-                      <div className="flex flex-col gap-1.5">
-                        {autoAllocationIds.map(id => {
-                          const a = allocations.find(al => al.id === id)
-                          if (!a) return null
-                          const total = allocationPreviewTotal(a)
-                          return (
-                            <div key={id} className="flex items-center justify-between text-sm">
-                              <span>
-                                <span className="font-mono font-medium">{a.code}</span> — {a.name}
-                                <Badge variant="outline" className="ml-2 text-xs">
-                                  {a.mode === "INCLUDE_IN_RATE" ? "in rate" : "added to rate"}
-                                </Badge>
-                              </span>
-                              {total != null && <span className="font-mono text-muted-foreground">${total.toFixed(2)}</span>}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {(() => {
-                    // Only sell-separate allocations are offered as manual add-ons (an
-                    // allocation that's part of a rate/meal plan is auto-attached above).
-                    const addOnOptions = allocations.filter(
-                      a => a.isActive && a.sellSeparate && !autoAllocationIds.includes(a.id)
-                    )
-                    if (addOnOptions.length === 0) return (
-                      <p className="text-xs text-muted-foreground italic">
-                        No sell-separate add-ons available for this property.
-                      </p>
-                    )
-                    return (
-                      <div className="rounded-md border p-3">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">
-                          Add-ons (sold separately, posted nightly by Night Audit)
-                        </p>
-                        <div className="flex flex-col gap-1.5">
-                          {addOnOptions.map(a => {
-                            const total = allocationPreviewTotal(a)
-                            return (
-                              <label key={a.id} className="flex items-center justify-between cursor-pointer text-sm">
-                                <span className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={form.manualAllocationIds.includes(a.id)}
-                                    onCheckedChange={(checked) =>
-                                      setForm(p => ({
-                                        ...p,
-                                        manualAllocationIds: checked
-                                          ? [...p.manualAllocationIds, a.id]
-                                          : p.manualAllocationIds.filter(x => x !== a.id),
-                                      }))
-                                    }
-                                  />
-                                  <span>
-                                    <span className="font-mono font-medium">{a.code}</span> — {a.name}
-                                  </span>
-                                </span>
-                                {total != null && form.manualAllocationIds.includes(a.id) && (
-                                  <span className="font-mono text-muted-foreground">${total.toFixed(2)}</span>
-                                )}
-                              </label>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
-
-                  {(() => {
-                    if (!stayDatesForAlloc) return null
-                    const attached = [
-                      ...autoAllocationIds,
-                      ...form.manualAllocationIds.filter(id => !autoAllocationIds.includes(id)),
-                    ]
-                    const grand = attached.reduce((sum, id) => {
-                      const a = allocations.find(al => al.id === id)
-                      if (!a) return sum
-                      return sum + (allocationPreviewTotal(a) ?? 0)
-                    }, 0)
-                    if (attached.length === 0) return null
-                    return (
-                      <p className="text-sm text-right text-muted-foreground">
-                        Estimated allocations total for stay:{" "}
-                        <span className="font-mono font-semibold text-foreground">${grand.toFixed(2)}</span>
-                      </p>
-                    )
-                  })()}
-                </div>
-
-              </div>
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Booking"}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+          <Link href={`/e/${slug}/dashboard/reservations/new`}>
+            <Button><Plus className="mr-2 h-4 w-4" /> New Booking</Button>
+          </Link>
         </div>
       </div>
 
@@ -1187,11 +479,21 @@ export default function ReservationsDashboard() {
                       <TableCell>{format(new Date(res.checkOutDate), "dd-MMM-yy")}</TableCell>
                       <TableCell>{nights}</TableCell>
                       <TableCell>
-                        <StatusBadge
-                          label={res.status.replace('_', ' ')}
-                          status={res.status}
-                          className={res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}
-                        />
+                        <div className="flex flex-col gap-1 items-start">
+                          <StatusBadge
+                            label={res.status.replace('_', ' ')}
+                            status={res.status}
+                            className={res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}
+                          />
+                          {res.hasScheduledRoomMove && (
+                            <span
+                              className="inline-flex items-center rounded-md bg-warning-muted px-1.5 py-0.5 text-[10px] font-medium text-warning ring-1 ring-inset ring-warning/20"
+                              title="This stay's segments assign a different physical room partway through — a scheduled room move."
+                            >
+                              Room Move
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         {renderActions(res)}
