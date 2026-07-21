@@ -10,5 +10,5 @@ export default async function ControlsPage({ params }: { params: Promise<{ slug:
   const canViewControls = ctx.permissions.get("CONTROLS")?.canView ?? false
   if (!canViewControls) redirect(`/e/${slug}/dashboard`)
 
-  return <ControlsDashboard isInternal={ctx.isInternal} actorScope={ctx.scope} actorPropertyId={ctx.propertyId} />
+  return <ControlsDashboard actorScope={ctx.scope} actorPropertyId={ctx.propertyId} />
 }

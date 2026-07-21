@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, Trash2, Building2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Building2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -31,6 +31,7 @@ type Property = {
   name: string
   code: string
   status: string
+  rejectionReason?: string | null
   checkInTime: string
   checkOutTime: string
 }
@@ -51,6 +52,20 @@ export function PropertiesManager() {
         }
       })
       .finally(() => setLoading(false))
+  }
+
+  const [resubmitting, setResubmitting] = useState<string | null>(null)
+  const handleResubmit = async (propertyId: string) => {
+    setResubmitting(propertyId)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/resubmit`, { method: "POST" })
+      if (!res.ok) throw new Error("Failed to resubmit property")
+      fetchProperties()
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setResubmitting(null)
+    }
   }
 
   const handleDelete = async () => {
@@ -172,15 +187,38 @@ export function PropertiesManager() {
                     <TableCell className="text-sm font-medium px-6 py-4 text-foreground">{property.code}</TableCell>
                     <TableCell className="text-sm px-6 py-4 font-semibold text-foreground">{property.name}</TableCell>
                     <TableCell className="px-6 py-4">
-                      <StatusBadge label={property.status} status={property.status} dot className="shadow-sm" />
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />
+                        {property.status === "PENDING" && (
+                          <span className="text-xs text-muted-foreground">Awaiting Osta approval</span>
+                        )}
+                        {property.status === "REJECTED" && property.rejectionReason && (
+                          <span className="text-xs text-destructive max-w-xs">{property.rejectionReason}</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm px-6 py-4 text-muted-foreground">{property.checkInTime}</TableCell>
                     <TableCell className="text-sm px-6 py-4 text-muted-foreground">{property.checkOutTime}</TableCell>
                     <TableCell className="text-right px-6 py-4">
                       <div className="flex gap-2 transition-opacity" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        {property.status === "REJECTED" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-info"
+                            disabled={resubmitting === property.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleResubmit(property.id);
+                            }}
+                          >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            {resubmitting === property.id ? "Resubmitting..." : "Resubmit"}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-primary"
                           onClick={(e) => {
                             e.stopPropagation();

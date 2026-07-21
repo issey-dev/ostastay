@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { createSession } from "@/lib/auth";
 import { lockoutRemainingSeconds, recordLoginFailure, recordLoginSuccess } from "@/lib/login-rate-limit";
 import { logAuthActivity } from "@/lib/activity-log";
+import { getOstaEnterpriseId } from "@/lib/scope";
 
 const GENERIC_ERROR = "Incorrect enterprise code, email, or password.";
 
@@ -83,6 +84,8 @@ export async function POST(request: Request) {
       enterpriseId: user.enterpriseId,
     });
 
+    const isInternal = user.enterpriseId === (await getOstaEnterpriseId());
+
     return NextResponse.json({
       success: true,
       user: {
@@ -90,7 +93,8 @@ export async function POST(request: Request) {
         email: user.email,
         name: `${user.firstName} ${user.lastName}`
       },
-      enterpriseSlug: user.enterprise.slug
+      enterpriseSlug: user.enterprise.slug,
+      isInternal,
     });
 
   } catch (error) {

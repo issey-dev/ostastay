@@ -51,6 +51,9 @@ export async function POST(request: Request) {
         taxId: body.taxId,
         contactPhone: body.contactPhone,
         contactEmail: body.contactEmail,
+        // Hard gate: locked out of real use (see assertPropertyAccess in
+        // src/lib/scope.ts) until an Osta admin approves it from /osta/properties.
+        status: "PENDING",
       },
     });
 

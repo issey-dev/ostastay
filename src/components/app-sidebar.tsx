@@ -131,7 +131,9 @@ export async function AppSidebar() {
   const roleName = user?.role.name ?? "";
   const enterprisePrefix = enterprise ? `/e/${enterprise.slug}` : "";
 
-  const filteredItems = items.filter((item) => ctx.permissions.get(item.module)?.canView ?? false);
+  const filteredItems = items.filter(
+    (item) => (ctx.permissions.get(item.module)?.canView ?? false) && ctx.licensedModules.has(item.module)
+  );
 
   return (
     <Sidebar collapsible="icon">

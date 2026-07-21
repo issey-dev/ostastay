@@ -19,7 +19,11 @@ export async function GET(
 
     const enterprise = await prisma.enterprise.findUnique({
       where: { id },
-      include: { license: true },
+      include: {
+        license: true,
+        properties: { orderBy: { createdAt: "desc" } },
+        _count: { select: { users: true, properties: true } },
+      },
     });
     if (!enterprise) {
       return NextResponse.json({ error: "Enterprise not found" }, { status: 404 });

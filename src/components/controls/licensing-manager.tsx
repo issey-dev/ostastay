@@ -21,6 +21,7 @@ type EnterpriseRow = {
 
 type License = { tier: string; maxProperties: number; notes: string | null; propertyCount: number }
 type TierModuleRow = { tier: string; module: string; enabled: boolean }
+type EnterpriseModuleRow = { module: string; override: boolean | null }
 
 const TIERS = ["STANDARD", "PRO", "MAX"]
 
@@ -30,6 +31,7 @@ export function LicensingManager() {
   const [license, setLicense] = useState<License | null>(null)
   const [form, setForm] = useState({ tier: "STANDARD", maxProperties: "1", notes: "" })
   const [tierModules, setTierModules] = useState<TierModuleRow[]>([])
+  const [enterpriseModules, setEnterpriseModules] = useState<EnterpriseModuleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -65,13 +67,30 @@ export function LicensingManager() {
     if (res.ok) setTierModules(await res.json())
   }, [])
 
+  const fetchEnterpriseModules = useCallback(async (enterpriseId: string) => {
+    const res = await fetch(`/api/licenses/enterprise-modules?enterpriseId=${enterpriseId}`)
+    if (res.ok) setEnterpriseModules(await res.json())
+  }, [])
+
   useEffect(() => {
-    if (selectedId) fetchLicense(selectedId)
-  }, [selectedId, fetchLicense])
+    if (selectedId) {
+      fetchLicense(selectedId)
+      fetchEnterpriseModules(selectedId)
+    }
+  }, [selectedId, fetchLicense, fetchEnterpriseModules])
 
   useEffect(() => {
     if (form.tier) fetchTierModules(form.tier)
   }, [form.tier, fetchTierModules])
+
+  const setEnterpriseModuleOverride = async (module: string, enabled: boolean | null) => {
+    setEnterpriseModules((prev) => prev.map((m) => (m.module === module ? { ...m, override: enabled } : m)))
+    await fetch("/api/licenses/enterprise-modules", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enterpriseId: selectedId, module, enabled }),
+    })
+  }
 
   const handleSaveLicense = async () => {
     setSaving(true)
@@ -161,8 +180,9 @@ export function LicensingManager() {
             <CardHeader>
               <CardTitle className="text-lg">Module Access — {form.tier} tier</CardTitle>
               <CardDescription>
-                Scaffold only — every module currently defaults to enabled until Standard/Pro/Max feature tiers are finalized.
-                Changes here apply to <strong>every</strong> enterprise on the {form.tier} tier.
+                The tier-wide default every enterprise on {form.tier} falls back to unless it has its own override below.
+                Changes here apply to <strong>every</strong> enterprise on the {form.tier} tier, and are enforced live — a
+                disabled module is hidden from the sidebar and its API routes reject with 403.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -179,6 +199,55 @@ export function LicensingManager() {
                           <Badge variant="secondary" className="bg-muted text-muted-foreground">Disabled</Badge>
                         )}
                         <Switch checked={row?.enabled ?? true} onCheckedChange={(checked) => toggleTierModule(module, !!checked)} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Module Access — {selected.name} override</CardTitle>
+              <CardDescription>
+                Force a module on or off for this ONE enterprise, independent of its tier. CONTROLS and Activity Log are
+                never gated — a locked-out enterprise still needs a way to see Controls and its own audit trail.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
+                {MODULES.filter((m) => m !== "CONTROLS" && m !== "ACTIVITY_LOG").map((module) => {
+                  const row = enterpriseModules.find((m) => m.module === module)
+                  const override = row?.override ?? null
+                  return (
+                    <div key={module} className="flex items-center justify-between border-b pb-2">
+                      <span className="text-sm">{MODULE_LABELS[module]}</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button" size="sm"
+                          variant={override === null ? "secondary" : "outline"}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setEnterpriseModuleOverride(module, null)}
+                        >
+                          Tier default
+                        </Button>
+                        <Button
+                          type="button" size="sm"
+                          variant={override === true ? "default" : "outline"}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setEnterpriseModuleOverride(module, true)}
+                        >
+                          Force on
+                        </Button>
+                        <Button
+                          type="button" size="sm"
+                          variant={override === false ? "destructive" : "outline"}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setEnterpriseModuleOverride(module, false)}
+                        >
+                          Force off
+                        </Button>
                       </div>
                     </div>
                   )

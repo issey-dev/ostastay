@@ -31,6 +31,8 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   REVOKED: "neutral",
   ACTIVE: "success",
   INACTIVE: "neutral",
+  // Property approval lifecycle (PENDING already covered above)
+  REJECTED: "danger",
   // Group block lifecycle
   DEFINITE: "success",
   TENTATIVE: "warning",

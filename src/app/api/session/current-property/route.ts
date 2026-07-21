@@ -9,7 +9,7 @@ export async function GET() {
     const properties =
       ctx.scope === "PROPERTY"
         ? await prisma.property.findMany({ where: { id: ctx.propertyId ?? undefined } })
-        : await prisma.property.findMany({ where: { enterpriseId: ctx.enterpriseId }, orderBy: { createdAt: "asc" } });
+        : await prisma.property.findMany({ where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" }, orderBy: { createdAt: "asc" } });
 
     const currentPropertyId = await resolveCurrentPropertyId(ctx);
 

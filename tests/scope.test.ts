@@ -23,7 +23,7 @@ const {
   requireEnterpriseId,
   requirePropertyScope,
   requirePermission,
-  requireModuleLicensed,
+  assertPropertyAccess,
   mintSupportSession,
   clearSupportSession,
   UnauthorizedError,
@@ -160,15 +160,100 @@ describe("src/lib/scope.ts", () => {
     await destroySession();
   });
 
-  it("requireModuleLicensed fails open when no TierModuleAccess row exists (scaffold, not real enforcement)", async () => {
-    await expect(requireModuleLicensed(enterpriseAId, "POS")).resolves.toBeUndefined();
+  it("requirePermission enforces TierModuleAccess: disabling a module for a tier blocks even a role with full permission on it", async () => {
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    let ctx = await requireSession();
+    expect(() => requirePermission(ctx, "POS", "view")).not.toThrow();
+    await destroySession();
 
     await prisma.tierModuleAccess.upsert({
       where: { tier_module: { tier: "STANDARD", module: "POS" } },
       update: { enabled: false },
       create: { tier: "STANDARD", module: "POS", enabled: false },
     });
-    await expect(requireModuleLicensed(enterpriseAId, "POS")).rejects.toBeInstanceOf(ForbiddenError);
+
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    ctx = await requireSession();
+    expect(() => requirePermission(ctx, "POS", "view")).toThrow(ForbiddenError);
+    await destroySession();
+
+    // Reset so this doesn't leak into other STANDARD-tier assertions in this file.
+    await prisma.tierModuleAccess.update({ where: { tier_module: { tier: "STANDARD", module: "POS" } }, data: { enabled: true } });
+  });
+
+  it("requirePermission: an EnterpriseModuleAccess override takes precedence over the tier default, in either direction", async () => {
+    // Tier disables REVENUE; this enterprise gets an explicit override re-enabling it.
+    await prisma.tierModuleAccess.upsert({
+      where: { tier_module: { tier: "STANDARD", module: "REVENUE" } },
+      update: { enabled: false },
+      create: { tier: "STANDARD", module: "REVENUE", enabled: false },
+    });
+    await prisma.enterpriseModuleAccess.upsert({
+      where: { enterpriseId_module: { enterpriseId: enterpriseAId, module: "REVENUE" } },
+      update: { enabled: true },
+      create: { enterpriseId: enterpriseAId, module: "REVENUE", enabled: true },
+    });
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    let ctx = await requireSession();
+    expect(() => requirePermission(ctx, "REVENUE", "view")).not.toThrow();
+    await destroySession();
+
+    // Tier allows DEBTORS (no row = default enabled); this enterprise explicitly disables it.
+    await prisma.enterpriseModuleAccess.upsert({
+      where: { enterpriseId_module: { enterpriseId: enterpriseAId, module: "DEBTORS" } },
+      update: { enabled: false },
+      create: { enterpriseId: enterpriseAId, module: "DEBTORS", enabled: false },
+    });
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    ctx = await requireSession();
+    expect(() => requirePermission(ctx, "DEBTORS", "view")).toThrow(ForbiddenError);
+    await destroySession();
+
+    // Reset the GLOBAL tier row so it doesn't break every other STANDARD-tier
+    // enterprise in other test files that shares this same dev DB.
+    await prisma.tierModuleAccess.update({ where: { tier_module: { tier: "STANDARD", module: "REVENUE" } }, data: { enabled: true } });
+  });
+
+  it("requirePermission never gates CONTROLS or ACTIVITY_LOG, even disabled at the tier or enterprise level", async () => {
+    await prisma.tierModuleAccess.upsert({
+      where: { tier_module: { tier: "STANDARD", module: "CONTROLS" } },
+      update: { enabled: false },
+      create: { tier: "STANDARD", module: "CONTROLS", enabled: false },
+    });
+    await prisma.enterpriseModuleAccess.upsert({
+      where: { enterpriseId_module: { enterpriseId: enterpriseAId, module: "ACTIVITY_LOG" } },
+      update: { enabled: false },
+      create: { enterpriseId: enterpriseAId, module: "ACTIVITY_LOG", enabled: false },
+    });
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    const ctx = await requireSession();
+    expect(() => requirePermission(ctx, "CONTROLS", "view")).not.toThrow();
+    expect(() => requirePermission(ctx, "ACTIVITY_LOG", "view")).not.toThrow();
+    await destroySession();
+
+    // Reset the GLOBAL tier row — CONTROLS is exempt so this doesn't affect the
+    // assertions above, but leaving it disabled would still be a latent landmine for
+    // any other STANDARD-tier test that assumes CONTROLS defaults to enabled.
+    await prisma.tierModuleAccess.update({ where: { tier_module: { tier: "STANDARD", module: "CONTROLS" } }, data: { enabled: true } });
+  });
+
+  it("assertPropertyAccess hard-rejects a PENDING (not-yet-approved) property", async () => {
+    const pendingProperty = await prisma.property.create({
+      data: {
+        enterpriseId: enterpriseAId, name: "Pending Property", code: `PP-${Date.now()}`, legalName: "Pending LLC",
+        defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", status: "PENDING",
+      },
+    });
+    cookieJar.clear();
+    await createSession(adminAUserId);
+    const ctx = await requireSession();
+    await expect(assertPropertyAccess(ctx, pendingProperty.id)).rejects.toBeInstanceOf(ForbiddenError);
+    await destroySession();
   });
 
   it("support access: an Osta session with no grant stays scoped to Osta's own enterprise", async () => {

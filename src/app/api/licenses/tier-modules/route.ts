@@ -3,9 +3,10 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
-// Scaffold only — see src/lib/scope.ts's requireModuleLicensed(). This just lets the
-// Licensing tab display/edit the (currently mostly-empty) TierModuleAccess table; it is
-// not itself an enforcement point.
+// Lets the Licensing screen display/edit the TierModuleAccess table — the tier-wide
+// default every enterprise on that tier falls back to unless it has its own
+// EnterpriseModuleAccess override (see /api/licenses/enterprise-modules). Both feed
+// computeLicensedModules() in src/lib/scope.ts, which IS real enforcement now.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();

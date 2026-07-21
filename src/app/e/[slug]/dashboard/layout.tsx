@@ -26,6 +26,10 @@ export default async function DashboardLayout({
   const ctx = await requireSession().catch(() => null)
   if (!ctx) redirect("/login")
 
+  // Osta users belong in their own console, not the tenant shell — except while
+  // legitimately acting inside a tenant's enterprise via an approved SupportAccessGrant.
+  if (ctx.isInternal && !ctx.isActingAsSupport) redirect("/osta")
+
   // The URL's enterprise slug is a display/navigation convenience only — it is never the
   // security boundary (that's always the session, re-checked via requireSession() above
   // on every request regardless of URL). This keeps the slug in the address bar honest:

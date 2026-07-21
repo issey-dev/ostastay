@@ -14,7 +14,6 @@ import {
   Settings2,
   CalendarDays,
   Users,
-  KeyRound,
   ShieldCheck,
   Hash,
   ArrowLeft,
@@ -34,7 +33,6 @@ import { PaymentMethodsManager } from "@/components/settings/payment-methods-man
 import { PostingDefaultsManager } from "@/components/controls/posting-defaults-manager"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
-import { LicensingManager } from "@/components/controls/licensing-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
 import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
 import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
@@ -57,17 +55,18 @@ const SIDEBAR_TRIGGER_CLASS =
 // Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
 // Tabs are grouped to match the app's own operational modules (Front Desk, Inventory,
 // Finance, Client Relations, Reports, General, Reservations) plus the identity/admin
-// sections from Phase 1. `ostaOnly` sections (Licensing) only render for Osta/INTERNAL
-// sessions.
+// sections from Phase 1. Licensing has moved to the dedicated Osta console
+// (/osta/licensing) — Osta users never reach this tenant page at all now (see the
+// redirect in src/app/e/[slug]/dashboard/layout.tsx), so there's no longer an
+// Osta-only section to gate here.
 type ControlsSection = {
   key: string
   label: string
   icon: React.ComponentType<{ className?: string }>
-  ostaOnly?: boolean
   render: () => React.ReactNode
 }
 
-function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: string | null): ControlsSection[] {
+function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: string | null): ControlsSection[] {
   return [
     {
       key: "front-desk",
@@ -229,17 +228,6 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
       ),
     },
     {
-      key: "licensing",
-      label: "Licensing",
-      icon: KeyRound,
-      ostaOnly: true,
-      render: () => (
-        <ControlsCard title="Licensing" description="Control how many properties each enterprise may create and (eventually) which modules their plan tier includes.">
-          <LicensingManager />
-        </ControlsCard>
-      ),
-    },
-    {
       key: "support",
       label: "Support Access",
       icon: ShieldCheck,
@@ -248,7 +236,7 @@ function buildSections(isInternal: boolean, actorScope: "ENTERPRISE" | "PROPERTY
           title="Support Access"
           description="Osta support staff have no implicit access to your data — they must request it here, and you decide whether to approve it."
         >
-          <SupportAccessManager isInternal={isInternal} />
+          <SupportAccessManager isInternal={false} />
         </ControlsCard>
       ),
     },
@@ -278,17 +266,13 @@ function MobileSectionRow({
 }
 
 export function ControlsDashboard({
-  isInternal,
   actorScope,
   actorPropertyId,
 }: {
-  isInternal: boolean
   actorScope: "ENTERPRISE" | "PROPERTY"
   actorPropertyId: string | null
 }) {
-  const sections = buildSections(isInternal, actorScope, actorPropertyId).filter((s) => !s.ostaOnly || isInternal)
-  const primarySections = sections.filter((s) => !s.ostaOnly)
-  const internalSections = sections.filter((s) => s.ostaOnly)
+  const sections = buildSections(actorScope, actorPropertyId)
 
   const tier = useDeviceTier()
   const [activeKey, setActiveKey] = useState<string | undefined>(sections[0]?.key)
@@ -336,22 +320,10 @@ export function ControlsDashboard({
         <div className="flex flex-col gap-6">
           {header}
           <nav className="flex flex-col divide-y divide-border rounded-lg border border-border">
-            {primarySections.map((s) => (
+            {sections.map((s) => (
               <MobileSectionRow key={s.key} section={s} onSelect={selectMobileSection} />
             ))}
           </nav>
-          {internalSections.length > 0 && (
-            <div>
-              <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Osta Internal
-              </p>
-              <nav className="flex flex-col divide-y divide-border rounded-lg border border-border">
-                {internalSections.map((s) => (
-                  <MobileSectionRow key={s.key} section={s} onSelect={selectMobileSection} />
-                ))}
-              </nav>
-            </div>
-          )}
         </div>
       )
     }
@@ -387,25 +359,11 @@ export function ControlsDashboard({
         className="w-full items-start gap-8"
       >
         <TabsList variant="line" className="w-56 shrink-0 items-stretch justify-start rounded-none h-auto p-0">
-          {primarySections.map((s) => (
+          {sections.map((s) => (
             <TabsTrigger key={s.key} value={s.key} className={SIDEBAR_TRIGGER_CLASS}>
               <s.icon className="w-4 h-4 mr-2" /> {s.label}
             </TabsTrigger>
           ))}
-          {internalSections.length > 0 && (
-            <>
-              <div role="separator" className="mt-2 mb-1 border-t border-border px-3 pt-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Osta Internal
-                </span>
-              </div>
-              {internalSections.map((s) => (
-                <TabsTrigger key={s.key} value={s.key} className={SIDEBAR_TRIGGER_CLASS}>
-                  <s.icon className="w-4 h-4 mr-2" /> {s.label}
-                </TabsTrigger>
-              ))}
-            </>
-          )}
         </TabsList>
 
         {sections.map((s) => (

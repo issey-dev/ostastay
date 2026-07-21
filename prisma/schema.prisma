@@ -30,6 +30,7 @@ model Enterprise {
   systemCodes    SystemCode[]
   roomAttendants RoomAttendant[]
   license        EnterpriseLicense?
+  moduleAccessOverrides EnterpriseModuleAccess[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -48,8 +49,9 @@ model EnterpriseLicense {
 }
 
 // Scaffold only: seeded so STANDARD has every module enabled; PRO/MAX left empty until
-// the real feature split is decided. requireModuleLicensed() fails OPEN (allows) when no
-// row matches (tier, module) — this is NOT real enforcement yet, see src/lib/scope.ts.
+// the real feature split is decided. Falls back to true (enabled) when no row matches
+// (tier, module) — this is only the LAST resort in the fallback chain now that
+// EnterpriseModuleAccess exists; see computeLicensedModules() in src/lib/scope.ts.
 model TierModuleAccess {
   id      String  @id @default(uuid())
   tier    String
@@ -57,6 +59,23 @@ model TierModuleAccess {
   enabled Boolean @default(true)
 
   @@unique([tier, module])
+}
+
+// Real, enforced per-enterprise override — takes precedence over TierModuleAccess. A
+// row's absence means "no override, fall back to the tier default." Written/read only
+// by Osta's Licensing screen (Controls > per-enterprise "Module Access"); enforced in
+// requirePermission() via AuthContext.licensedModules (src/lib/scope.ts). CONTROLS and
+// ACTIVITY_LOG are never actually gated by this regardless of what's stored here — a
+// locked-out enterprise still needs to reach Controls and its own audit trail.
+model EnterpriseModuleAccess {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  module       String
+  enabled      Boolean    @default(true)
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([enterpriseId, module])
 }
 
 // A Role always belongs to a real Enterprise — system/default roles belong to the one
@@ -171,9 +190,14 @@ model User {
   supportGrantsRequested SupportAccessGrant[] @relation("GrantRequestedBy")
   supportGrantsApproved  SupportAccessGrant[] @relation("GrantApprovedBy")
   currencyExchangesCreated CurrencyExchange[] @relation("CurrencyExchangeCreatedBy")
+  propertiesReviewed     Property[]           @relation("PropertyReviewedBy")
 }
 
-// PropertyStatus: ACTIVE, INACTIVE
+// PropertyStatus: PENDING (newly created by a tenant, not yet reviewed — locked out of
+// real use, see assertPropertyAccess in src/lib/scope.ts) | ACTIVE (Osta-approved,
+// fully usable — also the default, so every property that predates this feature is
+// unaffected) | REJECTED (Osta declined; tenant can edit and resubmit, which flips it
+// back to PENDING). No SUSPENDED state yet — deferred until actually needed.
 model Property {
   id              String     @id @default(uuid())
   enterpriseId    String
@@ -186,6 +210,13 @@ model Property {
   checkInTime     String
   checkOutTime    String
   status          String     @default("ACTIVE")
+  // Set only when status transitions to ACTIVE or REJECTED via the Osta approval
+  // queue (src/app/api/osta/properties/[id]/approve|reject) — null while PENDING.
+  reviewedByUserId String?
+  reviewedBy       User?     @relation("PropertyReviewedBy", fields: [reviewedByUserId], references: [id])
+  reviewedAt       DateTime?
+  // Only meaningful when status is REJECTED — cleared on resubmit.
+  rejectionReason  String?
   logoUrl         String?
   taxId           String?
   contactPhone    String?

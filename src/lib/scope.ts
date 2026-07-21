@@ -34,6 +34,9 @@ export type AuthContext = {
   isInternal: boolean; // true when the user's home enterprise is Osta (type INTERNAL)
   isActingAsSupport: boolean;
   supportGrantId?: string;
+  // Modules actually enabled for ctx.enterpriseId right now — see computeLicensedModules().
+  // requirePermission() denies access to anything missing here regardless of role.
+  licensedModules: Set<Module>;
 };
 
 let ostaEnterpriseIdCache: string | null = null;
@@ -164,6 +167,34 @@ async function backfillMissingRolePermissions(
   return [...existing, ...newRows];
 }
 
+// CONTROLS and ACTIVITY_LOG are never actually gated by licensing — a locked-out
+// enterprise still needs to reach Controls (to understand why) and its own audit trail.
+const ALWAYS_LICENSED: ReadonlySet<Module> = new Set(["CONTROLS", "ACTIVITY_LOG"]);
+
+// Real, enforced per-enterprise module gating (replaces the old requireModuleLicensed,
+// which only checked TierModuleAccess and explicitly failed open/unused). Fallback
+// chain per module, most-specific wins: EnterpriseModuleAccess override > TierModuleAccess
+// tier default > enabled-by-default. Computed once per request in requireSession() and
+// stashed on ctx.licensedModules, so requirePermission() can check it synchronously with
+// no extra I/O at the call site.
+async function computeLicensedModules(enterpriseId: string): Promise<Set<Module>> {
+  const [overrides, license] = await Promise.all([
+    prisma.enterpriseModuleAccess.findMany({ where: { enterpriseId } }),
+    prisma.enterpriseLicense.findUnique({ where: { enterpriseId } }),
+  ]);
+  const tier = license?.tier ?? "STANDARD";
+  const tierRows = await prisma.tierModuleAccess.findMany({ where: { tier } });
+  const overrideMap = new Map(overrides.map((o) => [o.module, o.enabled]));
+  const tierMap = new Map(tierRows.map((r) => [r.module, r.enabled]));
+
+  const result = new Set<Module>();
+  for (const m of MODULES) {
+    const enabled = ALWAYS_LICENSED.has(m) ? true : overrideMap.get(m) ?? tierMap.get(m) ?? true;
+    if (enabled) result.add(m);
+  }
+  return result;
+}
+
 // The single entry point every route handler must call. Re-fetches the live User row
 // (role, enterpriseId, propertyId, isActive) on every request rather than trusting the
 // JWT, which carries identity only. If the user is an Osta/INTERNAL user with a live
@@ -227,6 +258,10 @@ export async function requireSession(): Promise<AuthContext> {
     }
   }
 
+  // Computed against the resolved (possibly support-grant-target) enterpriseId, so a
+  // support session correctly reflects the TARGET enterprise's own licensing, not Osta's.
+  const licensedModules = await computeLicensedModules(enterpriseId);
+
   return {
     userId: user.id,
     enterpriseId,
@@ -238,6 +273,7 @@ export async function requireSession(): Promise<AuthContext> {
     isInternal,
     isActingAsSupport,
     supportGrantId,
+    licensedModules,
   };
 }
 
@@ -270,11 +306,11 @@ export async function resolveCurrentPropertyId(ctx: AuthContext): Promise<string
   const cookiePropertyId = cookieStore.get(CURRENT_PROPERTY_COOKIE)?.value;
   if (cookiePropertyId) {
     const property = await prisma.property.findUnique({ where: { id: cookiePropertyId } });
-    if (property && property.enterpriseId === ctx.enterpriseId) return property.id;
+    if (property && property.enterpriseId === ctx.enterpriseId && property.status === "ACTIVE") return property.id;
   }
 
   const firstProperty = await prisma.property.findFirst({
-    where: { enterpriseId: ctx.enterpriseId },
+    where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
   });
   return firstProperty?.id ?? null;
@@ -285,7 +321,7 @@ export async function setCurrentPropertyId(ctx: AuthContext, propertyId: string)
     throw new ForbiddenError("Property-scoped users cannot switch properties");
   }
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
-  if (!property || property.enterpriseId !== ctx.enterpriseId) {
+  if (!property || property.enterpriseId !== ctx.enterpriseId || property.status !== "ACTIVE") {
     throw new ForbiddenError("Property not found");
   }
   const cookieStore = await cookies();
@@ -309,6 +345,13 @@ export async function assertPropertyAccess(ctx: AuthContext, propertyId: string)
     throw new ForbiddenError("Property not found");
   }
   requirePropertyScope(ctx, propertyId);
+  // Hard gate: a newly-created (PENDING) or Osta-declined (REJECTED) property is fully
+  // locked out of real use until approved — see .agents/docs/DECISIONS.md. Osta support
+  // acting on an approved SupportAccessGrant is exempted, so troubleshooting a pending
+  // property is still possible without needing a separate carve-out mechanism.
+  if (property.status !== "ACTIVE" && !ctx.isActingAsSupport) {
+    throw new ForbiddenError("This property is pending approval and is not yet active");
+  }
 }
 
 // Shared guard for every Profile child-resource route (communications, addresses,
@@ -324,6 +367,10 @@ export async function assertProfileAccess(ctx: AuthContext, upid: string) {
 }
 
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {
+  if (!ctx.licensedModules.has(module)) {
+    throw new ForbiddenError(`${module} is not enabled for this enterprise`);
+  }
+
   const perm = ctx.permissions.get(module);
   const allowed =
     !!perm &&
@@ -337,22 +384,6 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
 
   if (!allowed) {
     throw new ForbiddenError(`Missing ${action} permission on ${module}`);
-  }
-}
-
-// Scaffold only — fails OPEN (allows) when no TierModuleAccess row matches, since the
-// real Standard/Pro/Max feature split hasn't been defined yet. Do not treat a `true`
-// result here as proof the module is actually licensed; it just means nothing has
-// explicitly disabled it yet.
-export async function requireModuleLicensed(enterpriseId: string, module: Module): Promise<void> {
-  const license = await prisma.enterpriseLicense.findUnique({ where: { enterpriseId } });
-  const tier = license?.tier ?? "STANDARD";
-  const row = await prisma.tierModuleAccess.findUnique({
-    where: { tier_module: { tier, module } },
-  });
-  const enabled = row ? row.enabled : true;
-  if (!enabled) {
-    throw new ForbiddenError(`${module} is not included in the ${tier} plan`);
   }
 }
 

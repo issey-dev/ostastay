@@ -233,6 +233,33 @@ describe("Phase 3 tenant isolation: profiles, reservations, groups, tape-chart",
     expect(body.propertyId).toBe(propertyAId);
   });
 
+  it("POST /api/reservations 403s against a PENDING (not yet Osta-approved) property", async () => {
+    const ownEnterpriseId = (await prisma.property.findUniqueOrThrow({ where: { id: propertyAId } })).enterpriseId;
+    const pendingProperty = await prisma.property.create({
+      data: {
+        enterpriseId: ownEnterpriseId, name: "Pending Property", code: `P3-PENDING-${Date.now()}`, legalName: "Pending LLC",
+        defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", status: "PENDING",
+      },
+    });
+    const res = await asUser(adminAId, () =>
+      reservationsRoute.POST(
+        new Request("http://localhost/api/reservations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            propertyId: pendingProperty.id,
+            primaryGuestId: guestAId,
+            checkInDate: "2026-08-01",
+            checkOutDate: "2026-08-03",
+            roomTypeId: roomTypeAId,
+            ratePlanId: ratePlanAId,
+          }),
+        })
+      )
+    );
+    expect(res.status).toBe(403);
+  });
+
   it("GET /api/reservations 403s when propertyId belongs to a different enterprise", async () => {
     const res = await asUser(adminAId, () =>
       reservationsRoute.GET(new Request(`http://localhost/api/reservations?propertyId=${propertyBId}`))
