@@ -18,6 +18,9 @@ export async function GET() {
       currentPropertyId,
       isLocked: ctx.scope === "PROPERTY",
       enterpriseId: ctx.enterpriseId,
+      // The caller's own user id — lets per-user views (e.g. the housekeeping
+      // task sheet's "my rooms" default) know who "me" is without a new endpoint.
+      userId: ctx.userId,
     });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

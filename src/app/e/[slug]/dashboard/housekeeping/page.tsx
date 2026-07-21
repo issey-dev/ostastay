@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
 import { RoomStatusCard } from "@/components/housekeeping/room-status-card"
-import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users } from "lucide-react"
+import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,6 +15,7 @@ import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 
 export default function HousekeepingDashboard() {
+  const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -355,6 +358,12 @@ export default function HousekeepingDashboard() {
               Select All
             </Button>
           )}
+          <Link href={`/e/${slug}/dashboard/housekeeping/task-sheet`}>
+            <Button variant="outline" className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4" />
+              Task Sheets
+            </Button>
+          </Link>
           <Button onClick={() => fetchRooms()} variant="outline" className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Refresh
