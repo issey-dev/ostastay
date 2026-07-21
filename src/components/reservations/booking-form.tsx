@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Trash2, Star, ArrowLeft, Save, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
@@ -19,6 +21,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { allocationStayTotal, type AllocationLike } from "@/lib/allocations"
 import { GuestPickerModal, type GuestProfile } from "@/components/reservations/guest-picker-modal"
+import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
+import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
+import { BookingSummary, type Quote } from "@/components/reservations/booking-summary"
 
 type ReservationDetail = {
   id: string
@@ -57,41 +62,15 @@ type AllocationOption = {
   rates: { adultPrice: number, childPrice: number, effectiveFrom: string, effectiveTo: string | null }[]
 }
 
-type QuoteSegment = {
-  roomTypeId: string; ratePlanId: string; nights: number
-  roomBase: number; roomTax: number; roomServiceCharge: number
-  extraOccupancyBase: number; extraOccupancyTax: number; extraOccupancyServiceCharge: number
-  unpricedNights: number
-}
-type QuoteAllocationSegment = { nights: number; adultPrice: number; childPrice: number; amountPerNight: number; subtotal: number }
-type QuoteAllocation = {
-  allocationId: string; code: string; name: string; source: string; mode: string
-  base: number; tax: number; serviceCharge: number
-  breakdown: { postingRhythm: string; totalNights: number; postingNights: number; unpricedNights: number; segments: QuoteAllocationSegment[]; total: number }
-}
-type Quote = {
-  nights: number
-  pricesIncludeTaxes: boolean
-  segments: QuoteSegment[]
-  allocations: QuoteAllocation[]
-  taxLines: { name: string; ratePercent: number; calculateOn: string; amount: number }[]
-  greenTax: { enabled: boolean; adults: number; children: number; perAdultAmount: number; perChildAmount: number; nights: number; total: number }
-  totals: { roomBase: number; extraOccupancyBase: number; allocationsBase: number; taxTotal: number; greenTaxTotal: number; grandTotal: number }
-  warnings: string[]
-}
+const money = (n: number) => `$${n.toFixed(2)}`
 
-const PIPE = "×"
+const FieldError = ({ message }: { message?: string }) =>
+  message ? <p className="text-xs text-destructive font-medium">{message}</p> : null
 
-const RHYTHM_LABEL: Record<string, string> = {
-  EVERY_NIGHT: "every night",
-  ARRIVAL_NIGHT: "arrival night only",
-  DEPARTURE_NIGHT: "departure night only",
-}
-
-function money(n: number) {
-  return `$${n.toFixed(2)}`
-}
-
+// Rebuilt onto Zod + React Hook Form (APP STANDARD 001): the schema in
+// booking-form-schema.ts owns every form-shape rule with inline, real-time
+// errors; this component keeps the booking machinery (Look-to-Book grid,
+// server quote, segment chaining) reading from the watched values.
 export function BookingForm({ reservationId }: { reservationId?: string }) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
@@ -114,37 +93,21 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [specialRequestOptions, setSpecialRequestOptions] = useState<{ code: string; value: string }[]>([])
 
-  const [form, setForm] = useState({
-    primaryGuestId: "",
-    checkInDate: "",
-    checkOutDate: "",
-    adults: 1,
-    children: 0,
-    infants: 0,
-    remarks: "",
-    mealPlan: "NONE",
-    travelAgentId: "none",
-    accompanyingGuestIds: [] as string[],
-    manualAllocationIds: [] as string[],
-    specialRequestCodes: [] as string[],
-    // Explicit staff acknowledgement required whenever occupancy exceeds a selected
-    // room type's max occupancy — see capacityIssues below. Reset whenever adults/
-    // children/room types change, so an old acknowledgement can't silently cover a
-    // new, different overage.
-    acknowledgeOverCapacity: false,
-    assignments: [
-      { roomTypeId: "", roomId: "", ratePlanId: "", overrideRate: "", startDate: "", endDate: "" }
-    ]
+  const formCtl = useForm<BookingFormValues>({
+    resolver: zodResolver(bookingFormSchema) as Resolver<BookingFormValues>,
+    mode: "onChange",
+    defaultValues: emptyBookingValues(),
   })
+  // Watched values keep the derived machinery (grid, quote, previews) reactive
+  // exactly like the old useState did — `form` reads the same in the JSX below.
+  const form = formCtl.watch()
+  const { errors } = formCtl.formState
+  const setField = <K extends Path<BookingFormValues>>(name: K, value: PathValue<BookingFormValues, K>) =>
+    formCtl.setValue(name, value, { shouldValidate: true, shouldDirty: true })
 
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
   const [guestPickerOpen, setGuestPickerOpen] = useState<null | "primary" | "accompanying">(null)
-  const [gridData, setGridData] = useState<{
-    nights: number
-    roomTypes: { id: string; code: string; name: string; isPseudo: boolean; baseOccupancy: number; maxOccupancy: number; minAvailable: number | null; soldOutNights: string[] }[]
-    ratePlans: { id: string; code: string; name: string; isNegotiated: boolean; negotiatedForProfileIds: string[]; parentRatePlanId: string | null }[]
-    grid: Record<string, Record<string, { total: number; avgNightly: number; pricedNights: number; unpricedNights: number; extraOccupancyTotal: number } | null>>
-  } | null>(null)
+  const [gridData, setGridData] = useState<GridData | null>(null)
   const [gridLoading, setGridLoading] = useState(false)
 
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -180,7 +143,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       .then((res: ReservationDetail) => {
         setExistingStatus(res.status)
         setExistingConfirmationNo(res.confirmationNo)
-        setForm({
+        formCtl.reset({
           primaryGuestId: res.primaryGuestId,
           checkInDate: res.checkInDate ? new Date(res.checkInDate).toISOString().split('T')[0] : "",
           checkOutDate: res.checkOutDate ? new Date(res.checkOutDate).toISOString().split('T')[0] : "",
@@ -201,13 +164,21 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
             overrideRate: a.overrideRate?.toString() || "",
             startDate: a.startDate ? new Date(a.startDate).toISOString().split('T')[0] : "",
             endDate: a.endDate ? new Date(a.endDate).toISOString().split('T')[0] : "",
-          })) : [{ roomTypeId: "", roomId: "", ratePlanId: "", overrideRate: "", startDate: "", endDate: "" }],
+          })) : [emptySegment()],
         })
         setActiveSegmentIndex(0)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservationId])
+
+  const setAssignments = (assignments: SegmentValues[]) => setField("assignments", assignments)
+  const updateAssignment = (index: number, patch: Partial<SegmentValues>) => {
+    const next = [...formCtl.getValues("assignments")]
+    next[index] = { ...next[index], ...patch }
+    setAssignments(next)
+  }
 
   // ── Look-to-Book grid: quotes the ACTIVE segment's date range ─────────────
   const activeSegment = form.assignments[activeSegmentIndex] ?? form.assignments[0]
@@ -311,33 +282,31 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   const dayAfter = (d: string) => format(addDays(parseISO(d), 1), "yyyy-MM-dd")
 
   const setStayDate = (which: "in" | "out", v: string) => {
-    setForm(p => {
-      const assignments = [...p.assignments]
-      if (which === "in" && assignments.length > 0) {
-        assignments[0] = { ...assignments[0], startDate: v }
-        const stillValid = p.checkOutDate && v < p.checkOutDate
-        if (!stillValid) {
-          const last = assignments.length - 1
-          assignments[last] = { ...assignments[last], endDate: "" }
-        }
-        return { ...p, checkInDate: v, checkOutDate: stillValid ? p.checkOutDate : "", assignments }
-      }
-      if (which === "out" && assignments.length > 0) {
+    const assignments = [...formCtl.getValues("assignments")]
+    const checkOutDate = formCtl.getValues("checkOutDate")
+    if (which === "in" && assignments.length > 0) {
+      assignments[0] = { ...assignments[0], startDate: v }
+      const stillValid = checkOutDate && v < checkOutDate
+      if (!stillValid) {
         const last = assignments.length - 1
-        assignments[last] = { ...assignments[last], endDate: v }
-        return { ...p, checkOutDate: v, assignments }
+        assignments[last] = { ...assignments[last], endDate: "" }
       }
-      return p
-    })
+      setField("checkInDate", v)
+      setField("checkOutDate", stillValid ? checkOutDate : "")
+      setAssignments(assignments)
+      return
+    }
+    if (which === "out" && assignments.length > 0) {
+      const last = assignments.length - 1
+      assignments[last] = { ...assignments[last], endDate: v }
+      setField("checkOutDate", v)
+      setAssignments(assignments)
+    }
   }
 
   const selectGridCell = (roomTypeId: string, ratePlanId: string) => {
-    setForm(p => {
-      const assignments = [...p.assignments]
-      const i = Math.min(activeSegmentIndex, assignments.length - 1)
-      assignments[i] = { ...assignments[i], roomTypeId, ratePlanId, roomId: "none" }
-      return { ...p, assignments }
-    })
+    const i = Math.min(activeSegmentIndex, formCtl.getValues("assignments").length - 1)
+    updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
   }
 
   const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp =>
@@ -366,7 +335,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   const maxAccompanying = Math.max(0, form.adults + form.children - 1)
 
   useEffect(() => {
-    setForm(p => p.acknowledgeOverCapacity ? { ...p, acknowledgeOverCapacity: false } : p)
+    if (formCtl.getValues("acknowledgeOverCapacity")) setField("acknowledgeOverCapacity", false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalOccupants, JSON.stringify(form.assignments.map(a => a.roomTypeId))])
 
@@ -376,23 +345,24 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   // earlier segment's departure changes (edit, add, or remove a segment), and keeps
   // the top-level Arrival/Departure fields mirroring the chain's two endpoints.
   useEffect(() => {
-    setForm(p => {
-      let changed = false
-      const next = p.assignments.map((a, i) => {
-        if (i === 0) return a
-        const prevEnd = p.assignments[i - 1].endDate
-        if (prevEnd && a.startDate !== prevEnd) {
-          changed = true
-          const keepEnd = a.endDate && a.endDate > prevEnd
-          return { ...a, startDate: prevEnd, ...(keepEnd ? {} : { endDate: "" }) }
-        }
-        return a
-      })
-      const newCheckIn = next[0]?.startDate || ""
-      const newCheckOut = next[next.length - 1]?.endDate || ""
-      if (!changed && newCheckIn === p.checkInDate && newCheckOut === p.checkOutDate) return p
-      return { ...p, assignments: next, checkInDate: newCheckIn, checkOutDate: newCheckOut }
+    const current = formCtl.getValues("assignments")
+    let changed = false
+    const next = current.map((a, i) => {
+      if (i === 0) return a
+      const prevEnd = current[i - 1].endDate
+      if (prevEnd && a.startDate !== prevEnd) {
+        changed = true
+        const keepEnd = a.endDate && a.endDate > prevEnd
+        return { ...a, startDate: prevEnd, ...(keepEnd ? {} : { endDate: "" }) }
+      }
+      return a
     })
+    const newCheckIn = next[0]?.startDate || ""
+    const newCheckOut = next[next.length - 1]?.endDate || ""
+    if (!changed && newCheckIn === formCtl.getValues("checkInDate") && newCheckOut === formCtl.getValues("checkOutDate")) return
+    if (changed) setAssignments(next)
+    setField("checkInDate", newCheckIn)
+    setField("checkOutDate", newCheckOut)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(form.assignments.map(a => [a.startDate, a.endDate])), form.assignments.length])
 
@@ -407,58 +377,28 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
     return !!prev.roomId && prev.roomId !== "none" && !!curr.roomId && curr.roomId !== "none" && prev.roomId !== curr.roomId
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Zod owns every form-shape rule; only the max-occupancy acknowledgement (needs
+  // room-type lookup data) is checked here before building the payload.
+  const onValid = async (values: BookingFormValues) => {
+    if (uniqueCapacityIssues.length > 0 && !values.acknowledgeOverCapacity) {
+      setNotification({ title: "Occupancy Exceeds Maximum", message: "Check the override box in Room & Rate to confirm this booking anyway." })
+      return
+    }
     setSubmitting(true)
     try {
-      if (!form.primaryGuestId) {
-        setNotification({ title: "Validation Error", message: "Select a primary guest." })
-        setSubmitting(false)
-        return
-      }
-      if (form.assignments.some(a => !a.roomTypeId || !a.ratePlanId || !a.startDate || !a.endDate)) {
-        setNotification({ title: "Validation Error", message: "All segments must have dates, room type, and rate plan." })
-        setSubmitting(false)
-        return
-      }
-      // Defense in depth — the date pickers already refuse to select an invalid range,
-      // but guard again here in case of stale/edit-mode state.
-      if (form.assignments.some(a => a.endDate <= a.startDate)) {
-        setNotification({ title: "Validation Error", message: "Each segment's departure date must be after its arrival date." })
-        setSubmitting(false)
-        return
-      }
-      // Defense in depth — the "From" picker is already locked/disabled for every
-      // segment after the first, but guard again here in case of stale/edit-mode state.
-      if (form.assignments.some((a, i) => i > 0 && a.startDate !== form.assignments[i - 1].endDate)) {
-        setNotification({ title: "Validation Error", message: "Segments must run back-to-back with no gaps between stays." })
-        setSubmitting(false)
-        return
-      }
-      if (form.accompanyingGuestIds.length > maxAccompanying) {
-        setNotification({ title: "Validation Error", message: `Only ${maxAccompanying} accompanying guest(s) can be attached for ${form.adults} adult(s) and ${form.children} child(ren).` })
-        setSubmitting(false)
-        return
-      }
-      if (capacityIssues.length > 0 && !form.acknowledgeOverCapacity) {
-        setNotification({ title: "Occupancy Exceeds Maximum", message: "Check the override box in Room & Rate to confirm this booking anyway." })
-        setSubmitting(false)
-        return
-      }
-
-      const dates = form.assignments.flatMap(a => [new Date(a.startDate).getTime(), new Date(a.endDate).getTime()])
+      const dates = values.assignments.flatMap(a => [new Date(a.startDate).getTime(), new Date(a.endDate).getTime()])
       const minDate = new Date(Math.min(...dates))
       const maxDate = new Date(Math.max(...dates))
 
       const payload = {
-        ...form,
+        ...values,
         propertyId,
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
-        travelAgentId: form.travelAgentId === "none" ? null : form.travelAgentId,
-        assignments: form.assignments.map(a => ({
+        travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        assignments: values.assignments.map(a => ({
           roomTypeId: a.roomTypeId,
-          roomId: a.roomId === "none" ? null : a.roomId,
+          roomId: a.roomId && a.roomId !== "none" ? a.roomId : null,
           ratePlanId: a.ratePlanId,
           overrideRate: a.overrideRate ? parseFloat(a.overrideRate) : null,
           startDate: new Date(a.startDate).toISOString(),
@@ -480,7 +420,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         router.refresh()
       } else {
         const err = await res.json()
-        setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}` })
+        setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
         setSubmitting(false)
       }
     } catch (err) {
@@ -488,6 +428,14 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       setSubmitting(false)
     }
   }
+
+  const onInvalid = () => {
+    setNotification({ title: "Validation Error", message: "Fix the highlighted fields before saving." })
+  }
+
+  const segmentErrors = errors.assignments as
+    | (undefined | { roomTypeId?: { message?: string }; ratePlanId?: { message?: string }; startDate?: { message?: string }; endDate?: { message?: string }; overrideRate?: { message?: string } })[]
+    | undefined
 
   if (loading) {
     return (
@@ -499,7 +447,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
+    <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
       <div className="flex items-center gap-4">
         <Button type="button" variant="outline" size="icon" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>
           <ArrowLeft className="h-4 w-4" />
@@ -531,6 +479,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                 <div className="grid gap-2">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
                   <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} />
+                  <FieldError message={errors.checkInDate?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label className="flex items-center gap-2">
@@ -542,18 +491,20 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                     )}
                   </Label>
                   <DatePicker value={form.checkOutDate} onChange={v => setStayDate("out", v)} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
+                  <FieldError message={errors.checkOutDate?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Adults</Label>
-                  <Input type="number" min="1" value={form.adults} onChange={e => setForm(p => ({ ...p, adults: parseInt(e.target.value) || 1 }))} />
+                  <Input type="number" min="1" value={form.adults} onChange={e => setField("adults", parseInt(e.target.value) || 1)} />
+                  <FieldError message={errors.adults?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Children</Label>
-                  <Input type="number" min="0" value={form.children} onChange={e => setForm(p => ({ ...p, children: parseInt(e.target.value) || 0 }))} />
+                  <Input type="number" min="0" value={form.children} onChange={e => setField("children", parseInt(e.target.value) || 0)} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Infants</Label>
-                  <Input type="number" min="0" value={form.infants} onChange={e => setForm(p => ({ ...p, infants: parseInt(e.target.value) || 0 }))} />
+                  <Input type="number" min="0" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground -mt-2">
@@ -570,7 +521,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                 </Label>
                 <SearchableSelect
                   value={form.travelAgentId}
-                  onChange={(v) => setForm(p => ({ ...p, travelAgentId: v }))}
+                  onChange={(v) => setField("travelAgentId", v)}
                   placeholder="Select Travel Agent..."
                   options={[
                     { value: "none", label: "Direct Booking (None)" },
@@ -605,82 +556,20 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
               ) : gridLoading && !gridData ? (
                 <Skeleton className="h-36 rounded-md" />
               ) : gridData ? (
-                <div className="overflow-x-auto border rounded-md">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40">
-                        <th className="text-left font-medium text-muted-foreground px-3 py-2 w-44">Rate Plan</th>
-                        {gridData.roomTypes.map(rt => (
-                          <th key={rt.id} className="px-3 py-2 text-center font-medium">
-                            <div>{rt.name}</div>
-                            <div className="text-[10px] font-normal text-muted-foreground">
-                              Occ. {rt.baseOccupancy}–{rt.maxOccupancy}
-                            </div>
-                            <div className="text-[11px] font-normal">
-                              {rt.minAvailable === null ? (
-                                <span className="text-muted-foreground">unlimited</span>
-                              ) : rt.minAvailable <= 0 ? (
-                                <span className="text-destructive">Sold out{rt.soldOutNights[0] ? ` ${format(new Date(rt.soldOutNights[0]), "dd MMM")}` : ""}</span>
-                              ) : (
-                                <span className="text-info">{rt.minAvailable} left</span>
-                              )}
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleGridRatePlans.map(rp => (
-                        <tr key={rp.id} className="border-b last:border-b-0">
-                          <td className="px-3 py-2 text-muted-foreground">
-                            <span className="font-mono text-xs">{rp.code}</span>
-                            <span className="block text-xs">
-                              {rp.name}
-                              {rp.isNegotiated && <Badge variant="outline" className="ml-1.5 bg-warning-muted text-warning border-warning/30 text-[10px]">Negotiated</Badge>}
-                            </span>
-                          </td>
-                          {gridData.roomTypes.map(rt => {
-                            const cell = gridData.grid[rp.id]?.[rt.id]
-                            const soldOut = rt.minAvailable !== null && rt.minAvailable <= 0
-                            const active = form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]
-                            const selected = active?.roomTypeId === rt.id && active?.ratePlanId === rp.id
-                            return (
-                              <td key={rt.id} className="px-1.5 py-1.5 text-center">
-                                <button
-                                  type="button"
-                                  disabled={soldOut}
-                                  onClick={() => selectGridCell(rt.id, rp.id)}
-                                  className={`w-full rounded-md border px-2 py-2 font-medium transition-colors ${
-                                    soldOut
-                                      ? "border-border text-muted-foreground/50 line-through cursor-not-allowed"
-                                      : selected
-                                      ? "border-info bg-info-muted text-info"
-                                      : "border-border hover:border-foreground/40"
-                                  }`}
-                                >
-                                  {cell ? (
-                                    <>
-                                      ${cell.avgNightly.toFixed(2)}
-                                      {cell.unpricedNights > 0 && <span className="text-warning" title={`${cell.unpricedNights} night(s) have no rate configured`}>*</span>}
-                                    </>
-                                  ) : (
-                                    <span className="font-normal italic text-muted-foreground">No rate</span>
-                                  )}
-                                </button>
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <LookToBookGrid
+                  gridData={gridData}
+                  visibleRatePlans={visibleGridRatePlans}
+                  selectedRoomTypeId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.roomTypeId}
+                  selectedRatePlanId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.ratePlanId}
+                  onSelect={selectGridCell}
+                />
               ) : null}
 
               {form.assignments.map((assignment, index) => {
                 const rt = roomTypes.find(r => r.id === assignment.roomTypeId)
                 const rp = ratePlans.find(r => r.id === assignment.ratePlanId)
                 const isActive = index === Math.min(activeSegmentIndex, form.assignments.length - 1)
+                const segErr = segmentErrors?.[index]
                 return (
                   <div
                     key={index}
@@ -699,15 +588,18 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                       {form.assignments.length > 1 && (
                         <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive-muted hover:text-destructive" onClick={(e) => {
                           e.stopPropagation();
-                          const newAssignments = [...form.assignments];
+                          const newAssignments = [...formCtl.getValues("assignments")];
                           newAssignments.splice(index, 1);
                           setActiveSegmentIndex(i => Math.min(i, newAssignments.length - 1));
-                          setForm(p => ({ ...p, assignments: newAssignments }));
+                          setAssignments(newAssignments);
                         }}>
                           <Trash2 className="h-3 w-3 mr-1" /> Remove
                         </Button>
                       )}
                     </div>
+                    {(segErr?.roomTypeId?.message || segErr?.ratePlanId?.message) && (
+                      <FieldError message={segErr.roomTypeId?.message || segErr.ratePlanId?.message} />
+                    )}
                     {scheduledRoomMoveAt(index) && (
                       <span className="inline-flex w-max items-center gap-1.5 rounded-md bg-warning-muted px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/20">
                         Scheduled Room Move — different room than Segment {index}
@@ -722,14 +614,14 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                             disabled={index > 0}
                             onChange={v => {
                               if (index > 0) return; // locked — derived from the previous segment's departure
-                              const newAssignments = [...form.assignments];
                               // Same hard rule as the top-level Arrival/Departure: moving
                               // this segment's start past its own end clears the now-invalid end.
-                              const stillValid = newAssignments[index].endDate && v < newAssignments[index].endDate;
-                              newAssignments[index] = { ...newAssignments[index], startDate: v, ...(stillValid ? {} : { endDate: "" }) };
-                              setForm(p => ({ ...p, assignments: newAssignments }));
+                              const current = formCtl.getValues("assignments")[index];
+                              const stillValid = current.endDate && v < current.endDate;
+                              updateAssignment(index, { startDate: v, ...(stillValid ? {} : { endDate: "" }) });
                             }}
                           />
+                          <FieldError message={segErr?.startDate?.message} />
                           {index > 0 && (
                             <p className="text-[11px] text-muted-foreground">
                               Locked to Segment {index}&apos;s departure — no gaps allowed between segments.
@@ -749,11 +641,11 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                             value={assignment.endDate}
                             minDate={assignment.startDate ? dayAfter(assignment.startDate) : undefined}
                             onChange={v => {
-                              const newAssignments = [...form.assignments];
-                              newAssignments[index] = { ...newAssignments[index], endDate: v };
-                              setForm(p => ({ ...p, assignments: newAssignments, ...(index === form.assignments.length - 1 ? { checkOutDate: v } : {}) }));
+                              updateAssignment(index, { endDate: v });
+                              if (index === formCtl.getValues("assignments").length - 1) setField("checkOutDate", v);
                             }}
                           />
+                          <FieldError message={segErr?.endDate?.message} />
                         </div>
                       </div>
                     )}
@@ -762,11 +654,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                         <Label>Room Assignment</Label>
                         <SearchableSelect
                           value={assignment.roomId}
-                          onChange={(v) => {
-                            const newAssignments = [...form.assignments];
-                            newAssignments[index] = { ...newAssignments[index], roomId: v };
-                            setForm(p => ({ ...p, assignments: newAssignments }));
-                          }}
+                          onChange={(v) => updateAssignment(index, { roomId: v })}
                           placeholder="Unassigned"
                           options={[
                             { value: "none", label: "Unassigned" },
@@ -785,12 +673,9 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                           step="0.01"
                           placeholder="Optional override"
                           value={assignment.overrideRate}
-                          onChange={e => {
-                            const newAssignments = [...form.assignments];
-                            newAssignments[index] = { ...newAssignments[index], overrideRate: e.target.value };
-                            setForm(p => ({ ...p, assignments: newAssignments }));
-                          }}
+                          onChange={e => updateAssignment(index, { overrideRate: e.target.value })}
                         />
+                        <FieldError message={segErr?.overrideRate?.message} />
                       </div>
                     </div>
                   </div>
@@ -811,7 +696,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
                       checked={form.acknowledgeOverCapacity}
-                      onCheckedChange={(checked) => setForm(p => ({ ...p, acknowledgeOverCapacity: !!checked }))}
+                      onCheckedChange={(checked) => setField("acknowledgeOverCapacity", !!checked)}
                     />
                     I understand and want to book this anyway.
                   </label>
@@ -819,15 +704,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
               )}
 
               <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => {
-                const lastAssignment = form.assignments[form.assignments.length - 1];
-                setForm(p => ({
-                  ...p,
-                  assignments: [...p.assignments, {
-                    roomTypeId: "", roomId: "none", ratePlanId: "", overrideRate: "",
-                    startDate: lastAssignment.endDate || "", endDate: "",
-                  }]
-                }));
-                setActiveSegmentIndex(form.assignments.length);
+                const current = formCtl.getValues("assignments");
+                const lastAssignment = current[current.length - 1];
+                setAssignments([...current, { ...emptySegment(), startDate: lastAssignment.endDate || "" }]);
+                setActiveSegmentIndex(current.length);
               }}>
                 <Plus className="h-4 w-4 mr-2" /> Add Segment (Split Stay)
               </Button>
@@ -857,10 +737,11 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                       {form.primaryGuestId ? "Change" : "Select..."}
                     </Button>
                   </div>
+                  <FieldError message={errors.primaryGuestId?.message} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Meal Plan</Label>
-                  <Select value={form.mealPlan} onValueChange={(v) => setForm(p => ({ ...p, mealPlan: v ?? "NONE" }))}>
+                  <Select value={form.mealPlan} onValueChange={(v) => setField("mealPlan", v ?? "NONE")}>
                     <SelectTrigger>
                       <SelectValue>
                         {form.mealPlan === "NONE" ? "Room Only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
@@ -893,6 +774,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                     <Plus className="h-4 w-4 mr-2" /> Add an accompanying guest...
                   </Button>
                 )}
+                <FieldError message={errors.accompanyingGuestIds?.message} />
                 {form.accompanyingGuestIds.length > 0 && (
                   <div className="mt-2 flex flex-col gap-2">
                     {form.accompanyingGuestIds.map(gid => {
@@ -910,7 +792,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                           <Button
                             type="button" variant="ghost" size="sm"
                             className="h-6 px-2 text-destructive hover:text-destructive hover:bg-destructive-muted"
-                            onClick={() => setForm(p => ({ ...p, accompanyingGuestIds: p.accompanyingGuestIds.filter(id => id !== gid) }))}
+                            onClick={() => setField("accompanyingGuestIds", formCtl.getValues("accompanyingGuestIds").filter(id => id !== gid))}
                           >
                             <Trash2 className="h-3 w-3 mr-1" /> Remove
                           </Button>
@@ -930,12 +812,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                       return (
                         <button
                           type="button" key={opt.code}
-                          onClick={() => setForm(p => ({
-                            ...p,
-                            specialRequestCodes: selected
-                              ? p.specialRequestCodes.filter(c => c !== opt.code)
-                              : [...p.specialRequestCodes, opt.code],
-                          }))}
+                          onClick={() => {
+                            const current = formCtl.getValues("specialRequestCodes")
+                            setField("specialRequestCodes", selected ? current.filter(c => c !== opt.code) : [...current, opt.code])
+                          }}
                           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
                             selected
                               ? "border-info text-info bg-info-muted font-medium"
@@ -954,7 +834,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                 <Label>Remarks</Label>
                 <Textarea
                   value={form.remarks}
-                  onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))}
+                  onChange={e => setField("remarks", e.target.value)}
                   placeholder="e.g. Honeymoon — high floor requested"
                   rows={2}
                 />
@@ -1006,14 +886,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                             <span className="flex items-center gap-2">
                               <Checkbox
                                 checked={form.manualAllocationIds.includes(a.id)}
-                                onCheckedChange={(checked) =>
-                                  setForm(p => ({
-                                    ...p,
-                                    manualAllocationIds: checked
-                                      ? [...p.manualAllocationIds, a.id]
-                                      : p.manualAllocationIds.filter(x => x !== a.id),
-                                  }))
-                                }
+                                onCheckedChange={(checked) => {
+                                  const current = formCtl.getValues("manualAllocationIds")
+                                  setField("manualAllocationIds", checked ? [...current, a.id] : current.filter(x => x !== a.id))
+                                }}
                               />
                               <span><span className="font-mono font-medium">{a.code}</span> — {a.name}</span>
                             </span>
@@ -1033,100 +909,17 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
 
         {/* ── Sticky Booking Summary sidebar ──────────────────────────────── */}
         <div className="lg:sticky lg:top-4 flex flex-col gap-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Booking Summary</CardTitle></CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {form.checkInDate && form.checkOutDate && (
-                <div className="text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Stay</span><span>{format(new Date(form.checkInDate), "dd MMM")} – {format(new Date(form.checkOutDate), "dd MMM yyyy")}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Occupancy</span><span>{form.adults} adult{form.adults === 1 ? "" : "s"}{form.children > 0 ? `, ${form.children} child${form.children === 1 ? "" : "ren"}` : ""}{form.infants > 0 ? `, ${form.infants} infant${form.infants === 1 ? "" : "s"}` : ""}</span></div>
-                </div>
-              )}
-
-              {!quote ? (
-                <p className="text-xs text-muted-foreground italic">
-                  {quoteLoading ? "Calculating..." : "Pick a room & rate to see the estimated total."}
-                </p>
-              ) : (
-                <>
-                  <div className="flex flex-col gap-1.5 text-sm border-t pt-3">
-                    {quote.segments.map((seg, i) => {
-                      const rt = roomTypes.find(r => r.id === seg.roomTypeId)
-                      const rp = ratePlans.find(r => r.id === seg.ratePlanId)
-                      return (
-                        <div key={i} className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            {rt?.code ?? "Room"} · {rp?.code ?? "Rate"} × {seg.nights}n
-                            {seg.unpricedNights > 0 && <span className="text-warning" title={`${seg.unpricedNights} night(s) unpriced`}>*</span>}
-                          </span>
-                          <span className="font-mono">{money(seg.roomBase)}</span>
-                        </div>
-                      )
-                    })}
-                    {quote.totals.extraOccupancyBase > 0.005 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Extra occupancy</span>
-                        <span className="font-mono">{money(quote.totals.extraOccupancyBase)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {quote.allocations.length > 0 && (
-                    <div className="flex flex-col gap-2 text-sm border-t pt-3">
-                      <p className="text-xs font-medium text-muted-foreground">Allocations</p>
-                      {quote.allocations.map(a => (
-                        <div key={a.allocationId} className="flex flex-col gap-0.5">
-                          <div className="flex justify-between">
-                            <span><span className="font-mono text-xs">{a.code}</span> {a.name}</span>
-                            <span className="font-mono">{money(a.base)}</span>
-                          </div>
-                          {a.breakdown.segments.map((seg, i) => (
-                            <p key={i} className="text-[11px] text-muted-foreground pl-1">
-                              {form.adults} adult{form.adults === 1 ? "" : "s"} {PIPE} {money(seg.adultPrice)}
-                              {form.children > 0 && <> + {form.children} child{form.children === 1 ? "" : "ren"} {PIPE} {money(seg.childPrice)}</>}
-                              {" = "}{money(seg.amountPerNight)}/night {PIPE} {seg.nights} night{seg.nights === 1 ? "" : "s"} ({RHYTHM_LABEL[a.breakdown.postingRhythm] ?? a.breakdown.postingRhythm}) = {money(seg.subtotal)}
-                            </p>
-                          ))}
-                          {a.breakdown.unpricedNights > 0 && (
-                            <p className="text-[11px] text-warning pl-1">{a.breakdown.unpricedNights} qualifying night(s) had no rate configured — not charged.</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-1 text-sm border-t pt-3">
-                    <p className="text-xs font-medium text-muted-foreground">Taxes &amp; charges {quote.pricesIncludeTaxes && <span className="italic">(included in prices above)</span>}</p>
-                    {quote.taxLines.map(line => (
-                      <div key={line.name} className="flex justify-between">
-                        <span className="text-muted-foreground">{line.name} ({line.ratePercent}%{line.calculateOn === "COMPOUND" ? ", compound" : ""})</span>
-                        <span className="font-mono">{money(line.amount)}</span>
-                      </div>
-                    ))}
-                    {quote.greenTax.enabled && quote.greenTax.total > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Green Tax ({quote.greenTax.adults}×{money(quote.greenTax.perAdultAmount)}{quote.greenTax.children > 0 ? ` + ${quote.greenTax.children}×${money(quote.greenTax.perChildAmount)}` : ""} × {quote.greenTax.nights}n)
-                        </span>
-                        <span className="font-mono">{money(quote.greenTax.total)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between items-baseline border-t pt-3">
-                    <span className="font-semibold">Grand Total</span>
-                    <span className="font-mono font-bold text-lg">{money(quote.totals.grandTotal)}</span>
-                  </div>
-
-                  {quote.warnings.length > 0 && (
-                    <div className="text-[11px] text-warning flex flex-col gap-0.5 border-t pt-2">
-                      {quote.warnings.map((w, i) => <p key={i}>{w}</p>)}
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <BookingSummary
+            checkInDate={form.checkInDate}
+            checkOutDate={form.checkOutDate}
+            adults={form.adults}
+            children={form.children}
+            infants={form.infants}
+            quote={quote}
+            quoteLoading={quoteLoading}
+            roomTypes={roomTypes}
+            ratePlans={ratePlans}
+          />
 
           <div className="flex gap-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>Cancel</Button>
@@ -1147,11 +940,12 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         onSelect={(profile: GuestProfile) => {
           setProfiles(prev => prev.some(p => p.upid === profile.upid) ? prev : [profile, ...prev])
           if (guestPickerOpen === "primary") {
-            setForm(p => ({ ...p, primaryGuestId: profile.upid }))
+            setField("primaryGuestId", profile.upid)
           } else if (guestPickerOpen === "accompanying") {
-            setForm(p => (!p.accompanyingGuestIds.includes(profile.upid) && p.accompanyingGuestIds.length < maxAccompanying)
-              ? { ...p, accompanyingGuestIds: [...p.accompanyingGuestIds, profile.upid] }
-              : p)
+            const current = formCtl.getValues("accompanyingGuestIds")
+            if (!current.includes(profile.upid) && current.length < maxAccompanying) {
+              setField("accompanyingGuestIds", [...current, profile.upid])
+            }
           }
         }}
       />
