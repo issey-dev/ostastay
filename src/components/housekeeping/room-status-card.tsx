@@ -49,15 +49,17 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
   const cycleStatus = async () => {
     if (loading) return
     setLoading(true)
-    
-    // Simple cycle: DIRTY -> CLEAN -> INSPECTED -> DIRTY
+
+    // Simple cycle: DIRTY -> CLEAN -> INSPECTED -> DIRTY.
+    // An OUT_OF_ORDER room returns to service as DIRTY (needs a clean first);
+    // OUT_OF_SERVICE stays a deliberate admin state, untouched by the quick cycle.
     let newStatus = "DIRTY"
     if (room.status === "DIRTY") newStatus = "CLEAN"
     else if (room.status === "CLEAN") newStatus = "INSPECTED"
     else if (room.status === "INSPECTED") newStatus = "DIRTY"
-    
-    // Ignore if OUT_OF_ORDER for now via quick toggle
-    if (room.status !== "OUT_OF_ORDER") {
+    else if (room.status === "OUT_OF_ORDER") newStatus = "DIRTY"
+
+    if (room.status !== "OUT_OF_SERVICE") {
       await onStatusChange(room.id, newStatus)
     }
     setLoading(false)
@@ -144,6 +146,15 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
         {hasArrivalToday && (
           <div className="mt-2 text-[11px] font-bold bg-info-muted text-info px-2 py-1 rounded border border-info/30 text-center">
             Arrival today — prioritize
+          </div>
+        )}
+
+        {room.status === "OUT_OF_ORDER" && (room.oooReason || room.oooExpectedReturn) && (
+          <div className="mt-2 text-[11px] bg-destructive-muted text-destructive px-2 py-1 rounded border border-destructive/30">
+            {room.oooReason && <p className="font-semibold leading-snug">{room.oooReason}</p>}
+            {room.oooExpectedReturn && (
+              <p className="opacity-80 mt-0.5">Expected back {new Date(room.oooExpectedReturn).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</p>
+            )}
           </div>
         )}
 

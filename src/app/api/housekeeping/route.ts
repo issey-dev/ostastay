@@ -101,7 +101,7 @@ export async function PATCH(request: Request) {
     requirePermission(ctx, "HOUSEKEEPING", "update")
 
     const body = await request.json()
-    const { roomId, roomIds, status, assignedAttendantId } = body
+    const { roomId, roomIds, status, assignedAttendantId, oooReason, oooExpectedReturn } = body
 
     if (!roomId && (!roomIds || roomIds.length === 0)) {
       return NextResponse.json({ error: "roomId or roomIds are required" }, { status: 400 })
@@ -114,6 +114,17 @@ export async function PATCH(request: Request) {
 
     const dataToUpdate: any = {}
     if (status !== undefined) dataToUpdate.status = status
+    // OOO metadata rides along only while a room is going out of order/service;
+    // any return to a sellable status clears it so stale reasons can't linger.
+    if (status === "OUT_OF_ORDER" || status === "OUT_OF_SERVICE") {
+      if (oooReason !== undefined) dataToUpdate.oooReason = oooReason || null
+      if (oooExpectedReturn !== undefined) {
+        dataToUpdate.oooExpectedReturn = oooExpectedReturn ? new Date(oooExpectedReturn) : null
+      }
+    } else if (status !== undefined) {
+      dataToUpdate.oooReason = null
+      dataToUpdate.oooExpectedReturn = null
+    }
     if (assignedAttendantId !== undefined) {
       if (assignedAttendantId !== null) {
         const attendant = await prisma.user.findUnique({ where: { id: assignedAttendantId } })

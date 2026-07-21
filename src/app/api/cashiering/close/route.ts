@@ -32,7 +32,8 @@ export async function POST(request: Request) {
             paymentMethod: true
           }
         },
-        currencyExchanges: true
+        currencyExchanges: true,
+        paidOuts: true
       }
     });
 
@@ -43,7 +44,8 @@ export async function POST(request: Request) {
     // 2. Expected Cash = Opening Float + cash in − cash refunds, via the shared
     // shift-summary helper so history and close views can never disagree.
     const { byMethod } = summarizeShiftPayments(activeShift.payments);
-    const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments);
+    const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts);
+    const paidOutTotal = activeShift.paidOuts.reduce((sum, p) => sum + p.amount, 0);
     const discrepancy = closingDrop - expectedCash; // Negative = Short, Positive = Over
 
     // 3. Close the shift (Blind Drop calculation saved)
@@ -71,6 +73,7 @@ export async function POST(request: Request) {
         actualDrop: closingDrop,
         discrepancy,
         byMethod,
+        paidOutTotal,
         shift: closedShift
       }
     });

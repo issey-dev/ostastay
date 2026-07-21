@@ -232,6 +232,12 @@ model Property {
   // never shared across an enterprise's other properties.
   bannerColor     String?
 
+  // Per-property arrival gate (app-owner decision 2026-07-21): when on, a guest can
+  // only be checked into a room whose housekeeping status is INSPECTED — the
+  // supervisor-inspection workflow. Off (default) keeps the existing behavior
+  // (DIRTY warns, only OOO/OOS block).
+  requireInspectionOnCheckIn Boolean @default(false)
+
   // "Top level" inclusive/exclusive tax setting — applies to anything charged at this
   // property unless a future transaction-level override says otherwise (not built yet).
   // True: rates are tax-inclusive, so Green Tax/GST/Service Charge are reverse-calculated
@@ -392,6 +398,13 @@ model Room {
 
   roomNumber     String
   status         String            @default("CLEAN")
+
+  // Only meaningful while status is OUT_OF_ORDER (app-owner decision 2026-07-21:
+  // fields on Room, no separate dated history model). Cleared when the room
+  // returns to service. expectedReturn is informational — nothing auto-flips the
+  // room back on that date; a human (or a maintenance-ticket resolution) does.
+  oooReason         String?
+  oooExpectedReturn DateTime?
 
   assignedAttendantId String?
   assignedAttendant   User?        @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])
@@ -889,6 +902,20 @@ model CashierShift {
 
   payments Payment[]
   currencyExchanges CurrencyExchange[]
+  paidOuts CashierPaidOut[]
+}
+
+// A petty-cash disbursement from the drawer during a shift (florist COD, taxi
+// reimbursement, stamp money) — reduces the shift's expected cash at blind-drop
+// time. Deliberately not folio-linked: it's drawer bookkeeping, not guest billing.
+model CashierPaidOut {
+  id              String       @id @default(uuid())
+  shiftId         String
+  shift           CashierShift @relation(fields: [shiftId], references: [id])
+  amount          Float
+  reason          String
+  createdByUserId String
+  createdAt       DateTime     @default(now())
 }
 
 model Payment {

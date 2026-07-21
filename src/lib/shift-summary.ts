@@ -55,7 +55,12 @@ export function summarizeShiftPayments(payments: ShiftPayment[]) {
   };
 }
 
-export function expectedCashForShift(openingFloat: number, payments: ShiftPayment[]): number {
+export function expectedCashForShift(
+  openingFloat: number,
+  payments: ShiftPayment[],
+  paidOuts: { amount: number }[] = []
+): number {
   const { cashIn, cashOut } = summarizeShiftPayments(payments);
-  return openingFloat + cashIn - cashOut;
+  const paidOutTotal = paidOuts.reduce((sum, p) => sum + p.amount, 0);
+  return openingFloat + cashIn - cashOut - paidOutTotal;
 }

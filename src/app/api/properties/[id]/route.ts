@@ -46,6 +46,7 @@ export async function PUT(
         starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
         bannerColor: body.bannerColor,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
+        requireInspectionOnCheckIn: body.requireInspectionOnCheckIn !== undefined ? !!body.requireInspectionOnCheckIn : undefined,
         allocationCalculationMode: body.allocationCalculationMode,
       },
     })

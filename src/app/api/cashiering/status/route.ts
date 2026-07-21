@@ -27,6 +27,9 @@ export async function GET() {
         },
         currencyExchanges: {
           orderBy: { createdAt: "desc" }
+        },
+        paidOuts: {
+          orderBy: { createdAt: "desc" }
         }
       }
     });

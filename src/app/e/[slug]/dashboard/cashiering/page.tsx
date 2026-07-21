@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { useParams } from "next/navigation";
-import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History } from "lucide-react";
+import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History, HandCoins } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,39 @@ export default function CashieringPage() {
 
   // Closed-shift history
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
+
+  // Paid-out (petty cash) state
+  const [isPaidOutModalOpen, setIsPaidOutModalOpen] = useState(false);
+  const [isPayingOut, setIsPayingOut] = useState(false);
+  const [paidOutForm, setPaidOutForm] = useState({ amount: "", reason: "" });
+
+  const handleCreatePaidOut = async () => {
+    setError("");
+    const amount = parseFloat(paidOutForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !paidOutForm.reason.trim()) return;
+    setIsPayingOut(true);
+    try {
+      const res = await fetch("/api/cashiering/paid-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, reason: paidOutForm.reason.trim() }),
+      });
+      if (res.ok) {
+        setIsPaidOutModalOpen(false);
+        setPaidOutForm({ amount: "", reason: "" });
+        await fetchStatus();
+      } else {
+        const json = await res.json();
+        setError(json.error || "Failed to record the paid-out");
+        setIsPaidOutModalOpen(false);
+      }
+    } catch {
+      setError("Unexpected error recording the paid-out");
+      setIsPaidOutModalOpen(false);
+    } finally {
+      setIsPayingOut(false);
+    }
+  };
 
   // Currency Exchange State
   const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
@@ -358,6 +391,35 @@ export default function CashieringPage() {
             </CardContent>
           </Card>
 
+          <Card className="border-0 shadow-sm ring-1 ring-border">
+            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <HandCoins className="w-5 h-5 text-muted-foreground" />
+                Paid-Outs (Petty Cash)
+              </CardTitle>
+              <Button size="sm" onClick={() => setIsPaidOutModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> New Paid-Out
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(status.shift.paidOuts?.length ?? 0) === 0 ? (
+                <EmptyState icon={HandCoins} title="No paid-outs recorded this shift" />
+              ) : (
+                <div className="divide-y divide-border">
+                  {status.shift.paidOuts.map((po: any) => (
+                    <div key={po.id} className="p-4 flex items-center justify-between hover:bg-muted">
+                      <div>
+                        <p className="font-semibold text-foreground">{po.reason}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{format(parseISO(po.createdAt), "h:mm a")}</p>
+                      </div>
+                      <div className="font-bold font-mono text-destructive">−${po.amount.toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {activeByMethod.length > 0 && (
             <Card className="border-0 shadow-sm ring-1 ring-border">
               <CardHeader className="bg-muted border-b border-border">
@@ -439,6 +501,7 @@ export default function CashieringPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Float ${shift.openingFloat.toFixed(2)} · {shift.paymentCount} payment{shift.paymentCount === 1 ? "" : "s"}
                         {shift.exchangeCount > 0 && ` · ${shift.exchangeCount} exchange${shift.exchangeCount === 1 ? "" : "s"}`}
+                        {shift.paidOutTotal > 0 && ` · $${shift.paidOutTotal.toFixed(2)} paid out`}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
@@ -506,6 +569,54 @@ export default function CashieringPage() {
             >
               {isClosing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Submit Drop & Close Shift
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* NEW PAID-OUT MODAL */}
+      <Dialog open={isPaidOutModalOpen} onOpenChange={setIsPaidOutModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Paid-Out</DialogTitle>
+            <DialogDescription>
+              Cash disbursed from the drawer (COD deliveries, reimbursements, supplies). Reduces the expected cash at
+              shift close.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="pl-9"
+                  placeholder="0.00"
+                  value={paidOutForm.amount}
+                  onChange={(e) => setPaidOutForm((p) => ({ ...p, amount: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Input
+                placeholder="E.g. Taxi reimbursement for guest"
+                value={paidOutForm.reason}
+                onChange={(e) => setPaidOutForm((p) => ({ ...p, reason: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaidOutModalOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleCreatePaidOut}
+              disabled={isPayingOut || !paidOutForm.amount || !paidOutForm.reason.trim()}
+            >
+              {isPayingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Record Paid-Out
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -34,6 +34,15 @@ export async function PATCH(
       }
     });
 
+    // Same rule as the body-based PATCH: resolving a ticket brings an
+    // out-of-order room back to service as DIRTY (needs a clean before sale).
+    if (body.status === "RESOLVED" && existing.room.status === "OUT_OF_ORDER") {
+      await prisma.room.update({
+        where: { id: existing.roomId },
+        data: { status: "DIRTY", oooReason: null, oooExpectedReturn: null },
+      });
+    }
+
     await logActivity({
       ctx,
       module: "MAINTENANCE",

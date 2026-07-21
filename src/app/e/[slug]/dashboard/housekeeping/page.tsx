@@ -27,6 +27,13 @@ export default function HousekeepingDashboard() {
   const [maintenanceDesc, setMaintenanceDesc] = useState("")
   const [maintenanceType, setMaintenanceType] = useState("HVAC")
   const [maintenancePriority, setMaintenancePriority] = useState("MEDIUM")
+  const [maintenanceTakeOOO, setMaintenanceTakeOOO] = useState(false)
+  const [maintenanceReturnDate, setMaintenanceReturnDate] = useState("")
+
+  // Mark Out-of-Order dialog (bulk action)
+  const [showOOODialog, setShowOOODialog] = useState(false)
+  const [oooReason, setOooReason] = useState("")
+  const [oooReturnDate, setOooReturnDate] = useState("")
   const [editingTicket, setEditingTicket] = useState<any>(null)
 
   const [housekeepers, setHousekeepers] = useState<any[]>([])
@@ -212,7 +219,9 @@ export default function HousekeepingDashboard() {
           roomIds: selectedRooms,
           issueType: maintenanceType,
           description: maintenanceDesc,
-          priority: maintenancePriority
+          priority: maintenancePriority,
+          takeOutOfOrder: maintenanceTakeOOO,
+          expectedReturn: maintenanceTakeOOO && maintenanceReturnDate ? maintenanceReturnDate : null
         })
       })
       if (res.ok) {
@@ -254,7 +263,40 @@ export default function HousekeepingDashboard() {
     setShowMaintenanceDialog(false)
     setEditingTicket(null)
     setMaintenanceDesc("")
+    setMaintenanceTakeOOO(false)
+    setMaintenanceReturnDate("")
     setSelectedRooms([])
+  }
+
+  const handleMarkOOO = async () => {
+    if (selectedRooms.length === 0) return
+    setIsUpdatingBulk(true)
+    try {
+      const res = await fetch(`/api/housekeeping`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomIds: selectedRooms,
+          status: "OUT_OF_ORDER",
+          oooReason: oooReason || null,
+          oooExpectedReturn: oooReturnDate || null,
+        })
+      })
+      if (res.ok) {
+        setShowOOODialog(false)
+        setOooReason("")
+        setOooReturnDate("")
+        setSelectedRooms([])
+        fetchRooms(true)
+      } else {
+        const data = await res.json()
+        setNotification({ title: "Update Failed", message: data.error || "Failed to mark rooms out of order.", isError: true })
+      }
+    } catch (e) {
+      setNotification({ title: "Error", message: "An error occurred marking rooms out of order.", isError: true })
+    } finally {
+      setIsUpdatingBulk(false)
+    }
   }
 
   const handleEditMaintenance = (ticket: any) => {
@@ -440,6 +482,15 @@ export default function HousekeepingDashboard() {
             </Button>
             <Button
               disabled={isUpdatingBulk}
+              onClick={() => setShowOOODialog(true)}
+              variant="outline"
+              className="shadow-sm shrink-0"
+            >
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Mark OOO
+            </Button>
+            <Button
+              disabled={isUpdatingBulk}
               onClick={() => setShowAssignDialog(true)}
               variant="outline"
               className="shadow-sm shrink-0"
@@ -516,6 +567,32 @@ export default function HousekeepingDashboard() {
                 onChange={e => setMaintenanceDesc(e.target.value)}
               />
             </div>
+            {!editingTicket && (
+              <div className="space-y-3 rounded-md border border-border p-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={maintenanceTakeOOO}
+                    onChange={e => setMaintenanceTakeOOO(e.target.checked)}
+                  />
+                  Take room(s) out of order
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Removes the room(s) from sale until this ticket is resolved (they return as Dirty).
+                </p>
+                {maintenanceTakeOOO && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-foreground">Expected return date (optional)</label>
+                    <Input
+                      type="date"
+                      value={maintenanceReturnDate}
+                      onChange={e => setMaintenanceReturnDate(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter className="flex sm:justify-between w-full gap-2 sm:gap-0">
             {editingTicket ? (
@@ -572,6 +649,43 @@ export default function HousekeepingDashboard() {
             <Button variant="outline" onClick={() => setShowAssignDialog(false)}>Cancel</Button>
             <Button onClick={handleAssignSubmit} disabled={isUpdatingBulk}>
               {isUpdatingBulk ? "Saving..." : "Save Assignment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark Out-of-Order Dialog */}
+      <Dialog open={showOOODialog} onOpenChange={(open) => !open && setShowOOODialog(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark Out of Order</DialogTitle>
+            <DialogDescription>
+              Removes {selectedRooms.length} selected room(s) from sale — they won't be offered for new bookings or
+              check-ins until returned to service.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Reason</label>
+              <Input
+                placeholder="E.g. Water damage — awaiting repairs"
+                value={oooReason}
+                onChange={e => setOooReason(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Expected return date (optional)</label>
+              <Input
+                type="date"
+                value={oooReturnDate}
+                onChange={e => setOooReturnDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOOODialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleMarkOOO} disabled={isUpdatingBulk}>
+              {isUpdatingBulk ? "Saving..." : "Mark Out of Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

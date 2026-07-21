@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     requirePermission(ctx, "MAINTENANCE", "create")
 
     const body = await request.json()
-    const { roomIds, issueType, description, reportedBy, priority } = body
+    const { roomIds, issueType, description, reportedBy, priority, takeOutOfOrder, expectedReturn } = body
 
     if (!roomIds || !Array.isArray(roomIds) || roomIds.length === 0) {
       return NextResponse.json({ error: "An array of roomIds is required" }, { status: 400 })
@@ -46,6 +46,18 @@ export async function POST(request: Request) {
     const result = await prisma.roomMaintenance.createMany({
       data: dataToInsert
     })
+
+    // Optionally pull the reported rooms from inventory in the same action.
+    if (takeOutOfOrder) {
+      await prisma.room.updateMany({
+        where: { id: { in: rooms.map((r) => r.id) } },
+        data: {
+          status: "OUT_OF_ORDER",
+          oooReason: description,
+          oooExpectedReturn: expectedReturn ? new Date(expectedReturn) : null,
+        },
+      })
+    }
 
     await logActivity({
       ctx,

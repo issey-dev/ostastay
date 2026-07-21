@@ -21,6 +21,7 @@ export async function GET(request: Request) {
       include: {
         payments: { include: { paymentMethod: { select: { name: true, type: true } } } },
         currencyExchanges: { select: { id: true } },
+        paidOuts: { select: { amount: true } },
       },
       orderBy: { closedAt: "desc" },
       take,
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 
     const rows = shifts.map((shift) => {
       const { byMethod } = summarizeShiftPayments(shift.payments);
-      const expectedCash = expectedCashForShift(shift.openingFloat, shift.payments);
+      const expectedCash = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts);
       const discrepancy = shift.closingDrop != null ? shift.closingDrop - expectedCash : null;
       return {
         id: shift.id,
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
         discrepancy,
         paymentCount: shift.payments.length,
         exchangeCount: shift.currencyExchanges.length,
+        paidOutTotal: shift.paidOuts.reduce((sum, p) => sum + p.amount, 0),
         byMethod,
       };
     });

@@ -62,6 +62,19 @@ export async function POST(request: Request) {
       include: { room: true }
     });
 
+    // Optionally pull the room from inventory at report time — the ticket's
+    // description becomes the OOO reason; expectedReturn is informational.
+    if (body.takeOutOfOrder) {
+      await prisma.room.update({
+        where: { id: body.roomId },
+        data: {
+          status: "OUT_OF_ORDER",
+          oooReason: body.description,
+          oooExpectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null,
+        },
+      });
+    }
+
     await logActivity({
       ctx,
       module: "MAINTENANCE",
@@ -119,6 +132,15 @@ export async function PATCH(request: Request) {
       data: dataToUpdate,
       include: { room: true }
     });
+
+    // Resolving the ticket returns an out-of-order room to service — as DIRTY,
+    // not CLEAN (post-repair rooms need a housekeeping pass before sale).
+    if (status === "RESOLVED" && existing.room.status === "OUT_OF_ORDER") {
+      await prisma.room.update({
+        where: { id: existing.roomId },
+        data: { status: "DIRTY", oooReason: null, oooExpectedReturn: null },
+      });
+    }
 
     await logActivity({
       ctx,

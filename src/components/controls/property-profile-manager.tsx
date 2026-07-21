@@ -23,6 +23,7 @@ type PropertyDetail = {
   contactEmail: string | null
   starRating: number | null
   pricesIncludeTaxes: boolean
+  requireInspectionOnCheckIn: boolean
 }
 
 // Edits the CURRENT property's own profile directly (name, code, times, logo, contact
@@ -133,6 +134,21 @@ export function PropertyProfileManager() {
           id="pricesIncludeTaxes"
           checked={detail.pricesIncludeTaxes}
           onCheckedChange={(checked) => setDetail({ ...detail, pricesIncludeTaxes: !!checked })}
+        />
+      </div>
+
+      <div className="flex items-center justify-between rounded-md border border-border p-3">
+        <div>
+          <Label htmlFor="requireInspectionOnCheckIn">Require Inspected Room at Check-In</Label>
+          <p className="text-xs text-muted-foreground">
+            On: guests can only be checked into rooms housekeeping has marked Inspected — a supervisor must sign off
+            each room before an arrival. Off: a dirty room warns but doesn't block.
+          </p>
+        </div>
+        <Switch
+          id="requireInspectionOnCheckIn"
+          checked={detail.requireInspectionOnCheckIn}
+          onCheckedChange={(checked) => setDetail({ ...detail, requireInspectionOnCheckIn: !!checked })}
         />
       </div>
 

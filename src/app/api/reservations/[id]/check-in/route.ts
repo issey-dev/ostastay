@@ -42,13 +42,25 @@ export async function POST(
 
     // Room readiness: never check a guest into a room that's out of order/service.
     // A DIRTY room doesn't block (housekeeping status can lag reality and front desk
-    // may knowingly proceed) but the response carries a warning to surface.
+    // may knowingly proceed) but the response carries a warning to surface — unless
+    // the property has turned on the inspection gate, in which case anything short
+    // of INSPECTED blocks outright (supervisor sign-off required before arrival).
     const assignedRoom = activeAssignment.room;
     let roomWarning: string | undefined;
     if (assignedRoom) {
       if (assignedRoom.status === "OUT_OF_ORDER" || assignedRoom.status === "OUT_OF_SERVICE") {
         return NextResponse.json(
           { error: `Room ${assignedRoom.roomNumber} is ${assignedRoom.status === "OUT_OF_ORDER" ? "out of order" : "out of service"} — assign a different room before check-in.` },
+          { status: 400 }
+        );
+      }
+      const property = await prisma.property.findUnique({
+        where: { id: reservation.propertyId },
+        select: { requireInspectionOnCheckIn: true },
+      });
+      if (property?.requireInspectionOnCheckIn && assignedRoom.status !== "INSPECTED") {
+        return NextResponse.json(
+          { error: `Room ${assignedRoom.roomNumber} has not been inspected — this property requires an inspected room before check-in (status: ${assignedRoom.status.replace(/_/g, " ").toLowerCase()}).` },
           { status: 400 }
         );
       }
