@@ -8,12 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 
-const ISSUE_TYPES = [
-  { value: "GENERAL", label: "General" },
-  { value: "PLUMBING", label: "Plumbing" },
-  { value: "ELECTRICAL", label: "Electrical" },
-  { value: "HVAC", label: "HVAC / AC" },
-]
+import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
+
+const ISSUE_TYPES = MAINTENANCE_ISSUE_TYPES
 
 const PRIORITIES = {
   LOW: { label: "Low", color: "bg-muted text-foreground" },

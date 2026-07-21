@@ -72,10 +72,10 @@ export default function MaintenanceDashboard() {
 
   const handleStatusChange = async (ticketId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/maintenance`, {
+      const res = await fetch(`/api/maintenance/${ticketId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId, status: newStatus })
+        body: JSON.stringify({ status: newStatus })
       })
       if (res.ok) {
         setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t))
@@ -89,13 +89,13 @@ export default function MaintenanceDashboard() {
     try {
       const assignedToId = newAssignedToId === "UNASSIGNED" ? null : newAssignedToId;
       
-      const payload: any = { ticketId, assignedToId }
+      const payload: any = { assignedToId }
       // Automatically move to IN_PROGRESS if assigned (and not already resolved)
       if (assignedToId && currentStatus === "OPEN") {
         payload.status = "IN_PROGRESS"
       }
-      
-      const res = await fetch(`/api/maintenance`, {
+
+      const res = await fetch(`/api/maintenance/${ticketId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
+import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 
 export default function HousekeepingDashboard() {
   const { currentProperty } = useProperty()
@@ -183,11 +184,10 @@ export default function HousekeepingDashboard() {
       if (!maintenanceDesc) return
       setIsUpdatingBulk(true)
       try {
-        const res = await fetch(`/api/maintenance`, {
+        const res = await fetch(`/api/maintenance/${editingTicket.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ticketId: editingTicket.id,
             issueType: maintenanceType,
             description: maintenanceDesc,
             priority: maintenancePriority
@@ -242,7 +242,7 @@ export default function HousekeepingDashboard() {
     if (!editingTicket) return
     setIsUpdatingBulk(true)
     try {
-      const res = await fetch(`/api/maintenance?ticketId=${editingTicket.id}`, {
+      const res = await fetch(`/api/maintenance/${editingTicket.id}`, {
         method: "DELETE"
       })
       if (res.ok) {
@@ -539,10 +539,9 @@ export default function HousekeepingDashboard() {
                 value={maintenanceType}
                 onChange={e => setMaintenanceType(e.target.value)}
               >
-                <option value="HVAC">HVAC (A/C, Heating)</option>
-                <option value="PLUMBING">Plumbing (Leaks, Toilets)</option>
-                <option value="ELECTRICAL">Electrical (Lights, Power)</option>
-                <option value="GENERAL">General (Furniture, Paint)</option>
+                {MAINTENANCE_ISSUE_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
             </div>
             <div className="space-y-2">

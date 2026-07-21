@@ -382,57 +382,83 @@ describe("Phase 5 tenant isolation: housekeeping & maintenance", () => {
     expect(rows.every((r: any) => r.room.propertyId === propertyAId)).toBe(true);
   });
 
-  it("PATCH /api/maintenance 403s against a different enterprise's ticket", async () => {
+  // The body-based collection PATCH/DELETE were removed when the maintenance API
+  // was unified onto the RESTful [id] route — same isolation guarantees, new shape.
+  it("PATCH /api/maintenance/[id] (full fields) 403s against a different enterprise's ticket", async () => {
     const foreignTicket = await prisma.roomMaintenance.create({
       data: { roomId: roomBId, description: "Foreign ticket" },
     });
     const res = await asUser(adminAId, () =>
-      maintenanceRoute.PATCH(
-        new Request("http://localhost/api/maintenance", {
+      maintenanceIdRoute.PATCH(
+        new Request(`http://localhost/api/maintenance/${foreignTicket.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ticketId: foreignTicket.id, status: "RESOLVED" }),
-        })
+          body: JSON.stringify({ status: "RESOLVED", priority: "HIGH" }),
+        }),
+        { params: Promise.resolve({ id: foreignTicket.id }) }
       )
     );
     expect(res.status).toBe(403);
   });
 
-  it("PATCH /api/maintenance succeeds for the actor's own ticket", async () => {
+  it("PATCH /api/maintenance/[id] (full fields) succeeds for the actor's own ticket", async () => {
     const ticket = await prisma.roomMaintenance.create({
       data: { roomId: roomAId, description: "Squeaky door" },
     });
     const res = await asUser(adminAId, () =>
-      maintenanceRoute.PATCH(
-        new Request("http://localhost/api/maintenance", {
+      maintenanceIdRoute.PATCH(
+        new Request(`http://localhost/api/maintenance/${ticket.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ticketId: ticket.id, status: "RESOLVED" }),
-        })
+          body: JSON.stringify({ status: "RESOLVED", priority: "HIGH", description: "Squeaky door - fixed" }),
+        }),
+        { params: Promise.resolve({ id: ticket.id }) }
       )
     );
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.priority).toBe("HIGH");
+    expect(body.description).toBe("Squeaky door - fixed");
   });
 
-  it("DELETE /api/maintenance 403s against a different enterprise's ticket", async () => {
+  it("PATCH /api/maintenance/[id] rejects invalid status/priority with 400", async () => {
+    const ticket = await prisma.roomMaintenance.create({
+      data: { roomId: roomAId, description: "Validation target" },
+    });
+    const badStatus = await asUser(adminAId, () =>
+      maintenanceIdRoute.PATCH(
+        new Request(`http://localhost/api/maintenance/${ticket.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "DONE" }),
+        }),
+        { params: Promise.resolve({ id: ticket.id }) }
+      )
+    );
+    expect(badStatus.status).toBe(400);
+  });
+
+  it("DELETE /api/maintenance/[id] 403s against a different enterprise's ticket", async () => {
     const foreignTicket = await prisma.roomMaintenance.create({
       data: { roomId: roomBId, description: "Foreign ticket to delete" },
     });
     const res = await asUser(adminAId, () =>
-      maintenanceRoute.DELETE(
-        new Request(`http://localhost/api/maintenance?ticketId=${foreignTicket.id}`, { method: "DELETE" })
+      maintenanceIdRoute.DELETE(
+        new Request(`http://localhost/api/maintenance/${foreignTicket.id}`, { method: "DELETE" }),
+        { params: Promise.resolve({ id: foreignTicket.id }) }
       )
     );
     expect(res.status).toBe(403);
   });
 
-  it("DELETE /api/maintenance succeeds for the actor's own ticket", async () => {
+  it("DELETE /api/maintenance/[id] succeeds for the actor's own ticket", async () => {
     const ticket = await prisma.roomMaintenance.create({
       data: { roomId: roomAId, description: "To be deleted" },
     });
     const res = await asUser(adminAId, () =>
-      maintenanceRoute.DELETE(
-        new Request(`http://localhost/api/maintenance?ticketId=${ticket.id}`, { method: "DELETE" })
+      maintenanceIdRoute.DELETE(
+        new Request(`http://localhost/api/maintenance/${ticket.id}`, { method: "DELETE" }),
+        { params: Promise.resolve({ id: ticket.id }) }
       )
     );
     expect(res.status).toBe(200);

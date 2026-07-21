@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { isValidMaintenanceIssueType, isValidMaintenancePriority } from "@/lib/maintenance";
 
 export async function GET(request: Request) {
   try {
@@ -40,6 +41,12 @@ export async function POST(request: Request) {
 
     if (!body.roomId || !body.description) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (body.issueType !== undefined && !isValidMaintenanceIssueType(body.issueType)) {
+      return NextResponse.json({ error: "Invalid issue type" }, { status: 400 });
+    }
+    if (body.priority !== undefined && !isValidMaintenancePriority(body.priority)) {
+      return NextResponse.json({ error: "Invalid priority — expected LOW, MEDIUM, or HIGH" }, { status: 400 });
     }
 
     const room = await prisma.room.findUnique({ where: { id: body.roomId }, include: { roomType: true } });
@@ -91,110 +98,5 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
-  try {
-    const ctx = await requireSession();
-    requirePermission(ctx, "MAINTENANCE", "update");
-
-    const body = await request.json();
-    const { ticketId, status, priority, assignedToId, issueType, description } = body;
-
-    if (!ticketId) {
-      return NextResponse.json({ error: "ticketId is required" }, { status: 400 });
-    }
-
-    const existing = await prisma.roomMaintenance.findUnique({
-      where: { id: ticketId },
-      include: { room: true }
-    });
-    if (!existing) {
-      return NextResponse.json({ error: "Maintenance ticket not found" }, { status: 404 });
-    }
-    await assertPropertyAccess(ctx, existing.room.propertyId);
-
-    const dataToUpdate: any = {};
-    if (status) dataToUpdate.status = status;
-    if (priority) dataToUpdate.priority = priority;
-    if (assignedToId !== undefined) {
-      if (assignedToId !== null) {
-        const assignee = await prisma.user.findUnique({ where: { id: assignedToId } });
-        if (!assignee || assignee.enterpriseId !== ctx.enterpriseId) {
-          return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
-        }
-      }
-      dataToUpdate.assignedToId = assignedToId;
-    }
-    if (issueType) dataToUpdate.issueType = issueType;
-    if (description) dataToUpdate.description = description;
-
-    const updatedTicket = await prisma.roomMaintenance.update({
-      where: { id: ticketId },
-      data: dataToUpdate,
-      include: { room: true }
-    });
-
-    // Resolving the ticket returns an out-of-order room to service — as DIRTY,
-    // not CLEAN (post-repair rooms need a housekeeping pass before sale).
-    if (status === "RESOLVED" && existing.room.status === "OUT_OF_ORDER") {
-      await prisma.room.update({
-        where: { id: existing.roomId },
-        data: { status: "DIRTY", oooReason: null, oooExpectedReturn: null },
-      });
-    }
-
-    await logActivity({
-      ctx,
-      module: "MAINTENANCE",
-      action: "UPDATE",
-      entityType: "RoomMaintenance",
-      entityId: updatedTicket.id,
-      description: `Updated maintenance ticket for room ${updatedTicket.room.roomNumber}${status ? ` — status ${status}` : ""}`,
-    });
-
-    return NextResponse.json(updatedTicket);
-  } catch (error) {
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
-}
-
-export async function DELETE(request: Request) {
-  try {
-    const ctx = await requireSession();
-    requirePermission(ctx, "MAINTENANCE", "delete");
-
-    const { searchParams } = new URL(request.url);
-    const ticketId = searchParams.get("ticketId");
-
-    if (!ticketId) {
-      return NextResponse.json({ error: "ticketId is required" }, { status: 400 });
-    }
-
-    const existing = await prisma.roomMaintenance.findUnique({
-      where: { id: ticketId },
-      include: { room: true }
-    });
-    if (!existing) {
-      return NextResponse.json({ error: "Maintenance ticket not found" }, { status: 404 });
-    }
-    await assertPropertyAccess(ctx, existing.room.propertyId);
-
-    await prisma.roomMaintenance.delete({
-      where: { id: ticketId }
-    });
-
-    await logActivity({
-      ctx,
-      module: "MAINTENANCE",
-      action: "DELETE",
-      entityType: "RoomMaintenance",
-      entityId: ticketId,
-      description: `Deleted maintenance ticket for room ${existing.room.roomNumber} (${existing.issueType})`,
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
-}
+// PATCH and DELETE moved to the RESTful /api/maintenance/[id] route —
+// this collection route is GET (list) + POST (create) only.
