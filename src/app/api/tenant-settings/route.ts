@@ -93,6 +93,10 @@ export async function PATCH(request: Request) {
         resConfirmPrefix: body.resConfirmPrefix !== undefined ? body.resConfirmPrefix : undefined,
         resConfirmLength: body.resConfirmLength !== undefined ? parseInt(body.resConfirmLength) : undefined,
 
+        cashierDefaultFloat: body.cashierDefaultFloat !== undefined ? Math.max(0, parseFloat(body.cashierDefaultFloat) || 0) : undefined,
+        exchangeFromCurrency: body.exchangeFromCurrency !== undefined ? String(body.exchangeFromCurrency).toUpperCase().slice(0, 8) : undefined,
+        exchangeToCurrency: body.exchangeToCurrency !== undefined ? String(body.exchangeToCurrency).toUpperCase().slice(0, 8) : undefined,
+
         defaultAccommodationChargeCodeId: normalizeId(body.defaultAccommodationChargeCodeId),
         cityLedgerPaymentMethodId: normalizeId(body.cityLedgerPaymentMethodId),
         commissionChargeCodeId: normalizeId(body.commissionChargeCodeId),
@@ -138,6 +142,10 @@ export async function PATCH(request: Request) {
         enterpriseId,
         resConfirmPrefix: body.resConfirmPrefix || "",
         resConfirmLength: body.resConfirmLength ? parseInt(body.resConfirmLength) : 6,
+
+        cashierDefaultFloat: body.cashierDefaultFloat !== undefined ? Math.max(0, parseFloat(body.cashierDefaultFloat) || 0) : 300,
+        exchangeFromCurrency: body.exchangeFromCurrency ? String(body.exchangeFromCurrency).toUpperCase().slice(0, 8) : "USD",
+        exchangeToCurrency: body.exchangeToCurrency ? String(body.exchangeToCurrency).toUpperCase().slice(0, 8) : "MVR",
 
         defaultAccommodationChargeCodeId: body.defaultAccommodationChargeCodeId || null,
         cityLedgerPaymentMethodId: body.cityLedgerPaymentMethodId || null,

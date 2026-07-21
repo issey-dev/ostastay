@@ -20,9 +20,11 @@ export default function CashieringPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Open Shift State
+  // Open Shift State — default float and exchange currencies come from
+  // EnterpriseSettings (Controls > General > Cashiering Defaults), not hardcodes.
   const [openingFloat, setOpeningFloat] = useState("300.00");
   const [isOpening, setIsOpening] = useState(false);
+  const [defaults, setDefaults] = useState({ fromCurrency: "USD", toCurrency: "MVR" });
 
   // Close Shift (Blind Drop) State
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -117,6 +119,17 @@ export default function CashieringPage() {
 
   useEffect(() => {
     fetchStatus();
+    fetch("/api/tenant-settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setOpeningFloat((data.cashierDefaultFloat ?? 300).toFixed(2));
+        const fromCurrency = data.exchangeFromCurrency || "USD";
+        const toCurrency = data.exchangeToCurrency || "MVR";
+        setDefaults({ fromCurrency, toCurrency });
+        setExchangeForm((p) => ({ ...p, fromCurrency, toCurrency }));
+      })
+      .catch(console.error);
   }, []);
 
   const handleOpenShift = async () => {
@@ -180,7 +193,7 @@ export default function CashieringPage() {
       });
       if (res.ok) {
         setIsExchangeModalOpen(false);
-        setExchangeForm({ guestName: "", fromCurrency: "USD", toCurrency: "MVR", rate: "", amountFrom: "", amountTo: "" });
+        setExchangeForm({ guestName: "", fromCurrency: defaults.fromCurrency, toCurrency: defaults.toCurrency, rate: "", amountFrom: "", amountTo: "" });
         await fetchStatus();
       } else {
         const json = await res.json();

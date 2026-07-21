@@ -12,6 +12,9 @@ export function GeneralSettingsManager() {
   const [formData, setFormData] = useState({
     resConfirmPrefix: "",
     resConfirmLength: 6,
+    cashierDefaultFloat: 300,
+    exchangeFromCurrency: "USD",
+    exchangeToCurrency: "MVR",
   })
 
   useEffect(() => {
@@ -27,6 +30,9 @@ export function GeneralSettingsManager() {
         setFormData({
           resConfirmPrefix: data.resConfirmPrefix || "",
           resConfirmLength: data.resConfirmLength || 6,
+          cashierDefaultFloat: data.cashierDefaultFloat ?? 300,
+          exchangeFromCurrency: data.exchangeFromCurrency || "USD",
+          exchangeToCurrency: data.exchangeToCurrency || "MVR",
         })
       }
     } catch (e) {
@@ -96,7 +102,46 @@ export function GeneralSettingsManager() {
         </div>
       </div>
 
-
+      {/* Cashiering Defaults */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Cashiering Defaults</h3>
+          <p className="text-xs text-muted-foreground">
+            Pre-filled values on the Cashiering page — staff can always override per shift/transaction.
+          </p>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-3 bg-muted p-6 rounded-xl border border-border">
+          <div className="space-y-2">
+            <Label>Default Opening Float</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.cashierDefaultFloat}
+              onChange={e => setFormData(p => ({ ...p, cashierDefaultFloat: parseFloat(e.target.value) || 0 }))}
+            />
+            <p className="text-xs text-muted-foreground">Cash in drawer when opening a shift.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Exchange: From Currency</Label>
+            <Input
+              maxLength={8}
+              value={formData.exchangeFromCurrency}
+              onChange={e => setFormData(p => ({ ...p, exchangeFromCurrency: e.target.value.toUpperCase() }))}
+            />
+            <p className="text-xs text-muted-foreground">Currency guests usually hand over.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Exchange: To Currency</Label>
+            <Input
+              maxLength={8}
+              value={formData.exchangeToCurrency}
+              onChange={e => setFormData(p => ({ ...p, exchangeToCurrency: e.target.value.toUpperCase() }))}
+            />
+            <p className="text-xs text-muted-foreground">Currency usually paid out.</p>
+          </div>
+        </div>
+      </div>
 
       <div className="flex justify-end pt-4 border-t">
         <Button type="submit" disabled={saving} className="">

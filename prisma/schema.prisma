@@ -1062,6 +1062,13 @@ model EnterpriseSettings {
   resConfirmPrefix String @default("")
   resConfirmLength Int    @default(6)
 
+  // Cashiering defaults (Controls > General) — previously hardcoded in the
+  // cashiering page ($300 float, USD→MVR exchange). Defaults match those
+  // hardcodes so existing enterprises see no behavior change.
+  cashierDefaultFloat  Float  @default(300)
+  exchangeFromCurrency String @default("USD")
+  exchangeToCurrency   String @default("MVR")
+
   systemDate DateTime @default(now())
 
   // Posting & settlement defaults (see Controls > Finance). Plain nullable id pointers
