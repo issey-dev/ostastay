@@ -1624,3 +1624,36 @@ code was written (recorded here since they're not obvious from reading the code)
   property as a tenant, approve/reject/resubmit it as Osta, toggle a module override
   and confirm the sidebar item disappears, check `/osta/db-health` renders real
   numbers) before considering this fully done.
+
+## Alpha v4 owner decisions (2026-07-21)
+
+The five open decisions listed at the bottom of [ALPHA_V4_PLAN.md](ALPHA_V4_PLAN.md)
+were put to the app owner directly and answered as follows. These govern Phases 1-3
+of that plan — do not re-ask or reverse without a fresh instruction.
+
+- **Deposits are a real pre-arrival concept, not just a check-in payment step**
+  (owner's verbatim intent): *"There is Deposit option and also payment collection
+  once the guest is checked in (basically payment can be applied in any time of the
+  stay - can be checked out if the balance is zero whether settling to City Ledger
+  or Taking actual payment). Deposit collected will show on manage reservation and
+  will automatically transfer to the billing window upon check in."* Implications:
+  a deposit can be collected while the reservation is still `RESERVED` (which means
+  the folio must exist — or be creatable — before check-in), the deposit shows on
+  the manage-reservation surface, and at check-in it appears on the folio ("billing
+  window") automatically. Payments remain acceptable at any point during the stay;
+  the existing checkout rule stands (zero balance required, City Ledger folios
+  exempt via the debtor pipeline).
+- **INSPECTED gates arrivals via a per-property toggle**: new property setting;
+  when enabled, checking a guest into a room that isn't `INSPECTED` warns/blocks.
+  INSPECTED stops being cosmetic.
+- **Out-of-Order is modelled as fields on `Room`** (nullable `oooReason` +
+  `expectedReturnDate`), not a separate dated `RoomStatusBlock` history model.
+  Maintenance tickets can set a room OOO at creation and return it to DIRTY on
+  resolve. No history of past OOO periods in v1.
+- **The Availability Matrix is the one maintained tape chart** (the drag-drop
+  grid, `tape-chart-grid.tsx`). The read-only calendar view
+  (`reservations/calendar/page.tsx`) is to be retired once the matrix gains the
+  Phase 2 additions (click-empty-cell to book, bar context actions).
+- **Vacant Rooms KPI semantics confirmed as shipped in Phase 0**: headline number
+  = all unoccupied sellable rooms (excluding OOO/OOS), with a "clean & ready"
+  (CLEAN/INSPECTED) subcount underneath.

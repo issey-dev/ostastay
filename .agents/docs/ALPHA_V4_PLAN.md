@@ -213,14 +213,15 @@ Every phase keeps the established bar: Vitest coverage for new business rules
 (`tests/business-rules/`, `tests/tenant-isolation/`), `tsc --noEmit` clean, and a
 live browser verification pass before calling it done.
 
-Open decisions to get from the app owner before the relevant phase:
-1. Vacant-rooms KPI semantics (vacant vs. vacant-ready vs. both). (Phase 0.10)
-2. Deposit-at-check-in: plain payment posting, or a real deposit concept
-   (pre-arrival deposits on RESERVED bookings would need folio-before-check-in
-   handling)? (Phase 1)
-3. Should INSPECTED gate arrival check-ins (per-property toggle) or be dropped?
-   (Phase 3)
-4. OOO modelling: fields on `Room` vs. a dated `RoomStatusBlock` history model.
-   (Phase 3)
-5. Which tape chart survives (recommend the drag-drop Availability Matrix).
-   (Phase 2)
+Open decisions — **all five answered by the app owner 2026-07-21**, full wording
+in [DECISIONS.md](DECISIONS.md) "Alpha v4 owner decisions". Summary:
+1. Vacant-rooms KPI: keep Phase 0's shipped semantics (total vacant + ready
+   subcount). ✅
+2. Deposits: a **real pre-arrival deposit concept** — collectable while RESERVED,
+   visible on manage reservation, auto-transfers to the folio at check-in;
+   payments acceptable any time during the stay. (Phase 1 — the larger build.)
+3. INSPECTED **gates arrivals via a per-property toggle**. (Phase 3)
+4. OOO: **fields on `Room`** (`oooReason`, `expectedReturnDate`), no history
+   model. (Phase 3)
+5. **Availability Matrix survives**; calendar view retires after Phase 2's
+   additions land. (Phase 2)
