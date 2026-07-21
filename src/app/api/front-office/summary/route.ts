@@ -16,10 +16,12 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
 
-    // Determine the start and end of "Today" in the server timezone
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // "Today" uses UTC day boundaries: reservation dates are stored as UTC midnights
+    // (forms submit plain YYYY-MM-DD), and the arrival/departure PDFs already use the
+    // same convention — server-local boundaries here made the two disagree near midnight.
+    const isoDate = new Date().toISOString().split("T")[0];
+    const startOfToday = new Date(isoDate + "T00:00:00.000Z");
+    const endOfToday = new Date(isoDate + "T23:59:59.999Z");
 
     // 1. Arrivals Today
     const arrivals = await prisma.reservation.findMany({
@@ -88,21 +90,24 @@ export async function GET(request: Request) {
       });
     }
 
-    // 5. Vacant Rooms (Clean and not occupied)
-    // To do this simply: get all rooms, then filter out any room that is currently IN_HOUSE.
+    // 5. Vacant Rooms — every unoccupied room that isn't out of order/service.
+    // "Ready" narrows that to rooms housekeeping has cleared (CLEAN/INSPECTED);
+    // a DIRTY-but-unoccupied room is still vacant, just not sellable-right-now.
     const allRooms = await prisma.room.findMany({
-      where: { propertyId, status: "CLEAN" },
-      include: { roomType: true }
+      where: { propertyId, status: { notIn: ["OUT_OF_ORDER", "OUT_OF_SERVICE"] } },
+      select: { id: true, status: true }
     });
-    const occupiedRoomIds = inHouse.flatMap(r => r.assignments.map(a => a.roomId)).filter(Boolean);
-    const vacantRooms = allRooms.filter(r => !occupiedRoomIds.includes(r.id));
+    const occupiedRoomIds = new Set(inHouse.flatMap(r => r.assignments.map(a => a.roomId)).filter(Boolean));
+    const vacantRooms = allRooms.filter(r => !occupiedRoomIds.has(r.id));
+    const vacantReadyCount = vacantRooms.filter(r => r.status === "CLEAN" || r.status === "INSPECTED").length;
 
     return NextResponse.json({
       arrivals,
       departures,
       inHouse,
       roomMovesToday,
-      vacantRoomsCount: vacantRooms.length
+      vacantRoomsCount: vacantRooms.length,
+      vacantReadyCount
     });
 
   } catch (error) {

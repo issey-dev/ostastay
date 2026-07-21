@@ -45,9 +45,12 @@ export function TapeChartGrid() {
   const daysToShow = 14;
 
   const fetchData = async (start: Date) => {
+    if (!currentProperty?.id) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/reservations/tape-chart?startDate=${start.toISOString()}&days=${daysToShow}`);
+      const res = await fetch(
+        `/api/reservations/tape-chart?propertyId=${currentProperty.id}&startDate=${start.toISOString()}&days=${daysToShow}`
+      );
       const json = await res.json();
       if (json.success) {
         setRooms(json.data.rooms);
@@ -102,7 +105,7 @@ export function TapeChartGrid() {
 
   useEffect(() => {
     fetchData(startDate);
-  }, [startDate]);
+  }, [startDate, currentProperty?.id]);
 
   // Generate column dates
   const columns = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i));

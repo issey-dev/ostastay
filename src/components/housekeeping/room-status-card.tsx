@@ -126,11 +126,21 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
           </div>
         )}
 
-        {regularTasks?.length > 0 && (
-          <div className="mt-2 text-xs font-medium bg-warning-muted text-warning p-1.5 rounded text-center">
-            Task: {regularTasks[0].taskType.replace(/_/g, ' ')}
+        {regularTasks.map((task: any) => (
+          <div key={task.id} className="mt-2 text-xs font-medium bg-warning-muted text-warning p-1.5 rounded flex items-center justify-between gap-2">
+            <span title={task.notes || undefined}>Task: {task.taskType.replace(/_/g, ' ')}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (onCompleteTask) onCompleteTask(task.id)
+              }}
+              className="hover:bg-warning/20 rounded p-0.5 shrink-0 transition-colors"
+              title="Mark as completed"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </button>
           </div>
-        )}
+        ))}
 
         {specialRequests.map((req: any) => (
           <div key={req.id} className="mt-2 text-[11px] font-semibold bg-foreground text-background px-2 py-1.5 rounded border border-foreground/20 flex flex-col gap-1">

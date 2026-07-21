@@ -1,6 +1,26 @@
 # Consolidated TODO — as of 2026-07-18
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
+
+## Alpha v4 — Front Desk / Reservations / Housekeeping hardening (PLANNED 2026-07-21)
+
+Full plan in [ALPHA_V4_PLAN.md](ALPHA_V4_PLAN.md). A three-way audit of the three
+untouched operational modules found **11 confirmed bugs** (Phase 0 of that plan),
+the worst being: the Front Office page's Check-In/Check-Out buttons call the
+status-transition endpoint that the Alpha-3 state machine now rejects (primary
+front-desk workflow is dead); the Availability Matrix tape chart fetches without
+`propertyId` and always renders empty; the calendar view keys on a nonexistent
+`res.roomId` so every booking shows "Unassigned"; group detail links 404 and read
+wrong field names; departure-PDF balance math ignores voids/refunds/multi-folio.
+
+**Phase 0 completed 2026-07-21, same session** (see the plan doc's Phase 0 header
+for per-fix notes): 10 real bugs fixed, 1 false positive (send-confirmation was
+already wired). 271/271 suite passing, `tsc --noEmit` clean, API changes verified
+live via curl. Still open: a full UI click-through of the fixed Front Office
+check-in/check-out buttons and the two tape charts (Browser-pane/localhost sandbox
+issue blocked it again — same as the platform-admin session). Phases 1–4 not
+started; five owner decisions listed at the bottom of the plan doc are needed
+before Phases 1–3.
 > This file is the actionable list: what's left, what was deferred on purpose, and what
 > was found broken along the way but is out of scope for whoever finds it next to fix
 > without checking first. Keep this file current — when you close an item, move it to

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope';
+import { computeFolioBalance } from '@/lib/debtor-accounts';
 import { generateTablePdf } from '@/lib/pdfGenerator';
 import { format } from 'date-fns';
 
@@ -56,10 +57,11 @@ export async function GET(request: Request) {
     const headers = ['Guest', 'Confirmation #', 'Room Type', 'Room', 'Departure', 'Balance Due'];
     const rows = reservations.map(r => {
       const assignment = r.assignments[0];
-      const primaryFolio = r.folios[0];
-      const totalCharges = primaryFolio?.lineItems?.reduce((sum, li) => sum + (li.amount + (li.taxAmount ?? 0) + (li.serviceChargeAmount ?? 0)), 0) ?? 0;
-      const totalPayments = primaryFolio?.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-      const balance = (totalCharges - totalPayments).toFixed(2);
+      // Sum across ALL folios, excluding voided charges and netting refunds —
+      // the same math as the folio panel, via the shared helper.
+      const balance = r.folios
+        .reduce((sum, f) => sum + computeFolioBalance(f.lineItems, f.payments), 0)
+        .toFixed(2);
       return [
         `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
         r.confirmationNo,
@@ -69,6 +71,11 @@ export async function GET(request: Request) {
         `$${balance}`
       ];
     });
+
+    // The on-screen "Printable View" needs the same table as raw data, not a PDF.
+    if (url.searchParams.get('format') === 'json') {
+      return NextResponse.json({ headers, rows });
+    }
 
     const title = `Departure List – ${format(targetDate, 'PP')}`;
     const pdfBytes = await generateTablePdf(title, headers, rows);

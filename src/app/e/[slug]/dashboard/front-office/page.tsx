@@ -13,12 +13,14 @@ import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { useProperty } from "@/components/providers/property-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function FrontOfficeDashboard() {
   const { currentProperty } = useProperty()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -60,21 +62,47 @@ export default function FrontOfficeDashboard() {
     }
   }
 
-  const updateStatus = async (id: string, newStatus: string) => {
+  // Check-in/check-out go through their dedicated routes — the generic status
+  // endpoint is a guarded state machine that rejects IN_HOUSE/CHECKED_OUT directly.
+  const handleCheckIn = async (id: string) => {
     setActionLoading(id)
     try {
-      const res = await fetch(`/api/reservations/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus })
-      })
+      const res = await fetch(`/api/reservations/${id}/check-in`, { method: "POST" })
+      const data = await res.json()
       if (res.ok) {
-        await fetchSummary() // Refresh data
+        setNotification({
+          title: "Check-in Complete",
+          message: data.roomWarning
+            ? `Guest checked in. Warning: ${data.roomWarning}`
+            : "Guest has been successfully checked in.",
+        })
+        await fetchSummary()
       } else {
-        alert("Failed to update status. Does the reservation have a room assigned?")
+        setNotification({ title: "Check-in Failed", message: data.error || "Unknown error", isError: true })
       }
     } catch (e) {
-      console.error(e)
+      setNotification({ title: "Error", message: "An error occurred during check-in.", isError: true })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleCheckOut = async (id: string) => {
+    setActionLoading(id)
+    try {
+      const res = await fetch(`/api/reservations/${id}/check-out`, { method: "POST" })
+      const data = await res.json()
+      if (res.ok) {
+        const warning = data.creditLimitWarning
+          ? ` Note: this account is now over its credit limit ($${data.creditLimitWarning.balance.toFixed(2)} of $${data.creditLimitWarning.creditLimit.toFixed(2)}).`
+          : ""
+        setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
+        await fetchSummary()
+      } else {
+        setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch (e) {
+      setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     } finally {
       setActionLoading(null)
     }
@@ -164,6 +192,7 @@ export default function FrontOfficeDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{data?.vacantRoomsCount || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">{data?.vacantReadyCount ?? 0} clean &amp; ready</p>
           </CardContent>
         </Card>
       </div>
@@ -218,7 +247,7 @@ export default function FrontOfficeDashboard() {
                           size="sm"
                           className="flex-1"
                           disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
-                          onClick={() => updateStatus(res.id, "IN_HOUSE")}
+                          onClick={() => handleCheckIn(res.id)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-In"}
                         </Button>
@@ -269,7 +298,7 @@ export default function FrontOfficeDashboard() {
                           size="sm"
                           className="w-24"
                           disabled={actionLoading === res.id || !res.assignments?.[0]?.room}
-                          onClick={() => updateStatus(res.id, "IN_HOUSE")}
+                          onClick={() => handleCheckIn(res.id)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-In"}
                         </Button>
@@ -321,7 +350,7 @@ export default function FrontOfficeDashboard() {
                           size="sm"
                           className="flex-1"
                           disabled={actionLoading === res.id}
-                          onClick={() => updateStatus(res.id, "CHECKED_OUT")}
+                          onClick={() => handleCheckOut(res.id)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-Out"}
                         </Button>
@@ -369,7 +398,7 @@ export default function FrontOfficeDashboard() {
                           size="sm"
                           className="w-28"
                           disabled={actionLoading === res.id}
-                          onClick={() => updateStatus(res.id, "CHECKED_OUT")}
+                          onClick={() => handleCheckOut(res.id)}
                         >
                           {actionLoading === res.id ? "Processing..." : "Check-Out"}
                         </Button>
@@ -559,7 +588,21 @@ export default function FrontOfficeDashboard() {
         }}
       />
 
-      <RoomMoveModal 
+      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>
+              {notification?.title}
+            </DialogTitle>
+            <DialogDescription>{notification?.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setNotification(null)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <RoomMoveModal
         isOpen={isRoomMoveModalOpen}
         onClose={() => {
           setIsRoomMoveModalOpen(false)

@@ -59,6 +59,11 @@ export async function GET(request: Request) {
       ];
     });
 
+    // The on-screen "Printable View" needs the same table as raw data, not a PDF.
+    if (url.searchParams.get('format') === 'json') {
+      return NextResponse.json({ headers, rows });
+    }
+
     const title = `Arrival List – ${format(targetDate, 'PP')}`;
     const pdfBytes = await generateTablePdf(title, headers, rows);
 

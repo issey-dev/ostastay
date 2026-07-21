@@ -212,7 +212,12 @@ export default function ReservationsDashboard() {
       const resp = await fetch(`/api/reservations/${res.id}/check-in`, { method: "POST" })
       const data = await resp.json()
       if (resp.ok) {
-        setNotification({ title: "Check-in Complete", message: "Guest has been successfully checked in." })
+        setNotification({
+          title: "Check-in Complete",
+          message: data.roomWarning
+            ? `Guest checked in. Warning: ${data.roomWarning}`
+            : "Guest has been successfully checked in.",
+        })
         fetchData()
       } else {
         setNotification({ title: "Check-in Failed", message: data.error || "Unknown error", isError: true })

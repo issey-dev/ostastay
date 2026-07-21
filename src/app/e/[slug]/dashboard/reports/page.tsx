@@ -10,8 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 export default function ReportsPage() {
   const [date, setDate] = useState(new Date());
-  const [isArrivalLoading, setIsArrivalLoading] = useState(false);
-  const [isDepartureLoading, setIsDepartureLoading] = useState(false);
   const [printMode, setPrintMode] = useState<null | 'arrival' | 'departure'>(null);
 
   const isoDate = date.toISOString().split('T')[0];
@@ -47,7 +45,7 @@ export default function ReportsPage() {
             <CardDescription>Guests scheduled to check‑in today.</CardDescription>
           </CardHeader>
           <CardContent className="py-6 flex flex-col gap-4">
-            <Button onClick={() => openPdf('arrival')} disabled={isArrivalLoading} className="">
+            <Button onClick={() => openPdf('arrival')}>
               Generate PDF
             </Button>
             <Button variant="outline" onClick={() => openPrint('arrival')}>
@@ -63,7 +61,7 @@ export default function ReportsPage() {
             <CardDescription>Guests checking out today with balance due.</CardDescription>
           </CardHeader>
           <CardContent className="py-6 flex flex-col gap-4">
-            <Button onClick={() => openPdf('departure')} disabled={isDepartureLoading} className="">
+            <Button onClick={() => openPdf('departure')}>
               Generate PDF
             </Button>
             <Button variant="outline" onClick={() => openPrint('departure')}>
@@ -102,9 +100,7 @@ function PrintableReport({ type, date }: { type: 'arrival' | 'departure'; date: 
     const fetchData = async () => {
       setLoading(true);
       const iso = date.toISOString().split('T')[0];
-      const endpoint = `/api/reports/${type}-pdf?date=${iso}`;
-      // Instead of requesting PDF, we hit a lightweight JSON endpoint (we'll create it next).
-      const res = await fetch(endpoint.replace('.pdf', '-json'));
+      const res = await fetch(`/api/reports/${type}-pdf?date=${iso}&format=json`);
       if (res.ok) {
         const json = await res.json();
         setRows(json.rows);

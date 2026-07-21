@@ -19,6 +19,19 @@ type Reservation = {
   checkInDate: string
   checkOutDate: string
   primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string }
+  assignments?: { id: string, roomId: string | null, startDate: string, endDate: string }[]
+}
+
+// One rendered bar on the chart. A reservation produces one bar per room
+// assignment (split stays render as separate segments on their own room rows);
+// a reservation with no assignments yet renders a single unassigned bar.
+type ReservationBar = {
+  id: string
+  confirmationNo: string
+  status: string
+  checkInDate: string
+  checkOutDate: string
+  primaryGuest: Reservation["primaryGuest"]
   roomId: string | null
 }
 
@@ -81,18 +94,36 @@ export default function ReservationsCalendarPage() {
     })).filter(g => g.roomType && g.rooms.length > 0)
   }, [rooms, roomTypes])
 
-  // Filter and process reservations for the current window
+  // Expand reservations into per-assignment bars, filtered to the current window.
+  // Rooms live on RoomAssignment (a reservation has no roomId of its own), and a
+  // split stay legitimately occupies different rooms on different date ranges.
   const visibleReservations = useMemo(() => {
-    return reservations.filter(res => {
-      if (res.status === 'CANCELLED') return false
-      const ci = new Date(res.checkInDate)
-      const co = new Date(res.checkOutDate)
-      // Check if the reservation overlaps with the window
-      return ci < windowEnd && co > windowStart
+    const bars: ReservationBar[] = []
+    reservations.forEach(res => {
+      if (res.status === 'CANCELLED') return
+      const segments = res.assignments?.length
+        ? res.assignments.map(a => ({ id: a.id, roomId: a.roomId, start: a.startDate, end: a.endDate }))
+        : [{ id: res.id, roomId: null, start: res.checkInDate, end: res.checkOutDate }]
+      segments.forEach(seg => {
+        const ci = new Date(seg.start)
+        const co = new Date(seg.end)
+        if (ci < windowEnd && co > windowStart) {
+          bars.push({
+            id: seg.id,
+            confirmationNo: res.confirmationNo,
+            status: res.status,
+            checkInDate: seg.start,
+            checkOutDate: seg.end,
+            primaryGuest: res.primaryGuest,
+            roomId: seg.roomId,
+          })
+        }
+      })
     })
+    return bars
   }, [reservations, windowStart, windowEnd])
 
-  const renderReservationBar = (res: Reservation) => {
+  const renderReservationBar = (res: ReservationBar) => {
     const ci = startOfDay(new Date(res.checkInDate))
     const co = startOfDay(new Date(res.checkOutDate))
     
