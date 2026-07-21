@@ -16,11 +16,43 @@ wrong field names; departure-PDF balance math ignores voids/refunds/multi-folio.
 **Phase 0 completed 2026-07-21, same session** (see the plan doc's Phase 0 header
 for per-fix notes): 10 real bugs fixed, 1 false positive (send-confirmation was
 already wired). 271/271 suite passing, `tsc --noEmit` clean, API changes verified
-live via curl. Still open: a full UI click-through of the fixed Front Office
-check-in/check-out buttons and the two tape charts (Browser-pane/localhost sandbox
-issue blocked it again — same as the platform-admin session). Phases 1–4 not
-started; five owner decisions listed at the bottom of the plan doc are needed
-before Phases 1–3.
+live via curl.
+
+**Phases 1–4 executed 2026-07-21, same day, after the app owner answered all five
+design decisions** (recorded in DECISIONS.md "Alpha v4 owner decisions"). Four
+commits (one per phase); full suite grew 271 → 291, all passing, `tsc --noEmit`
+clean after each. Live verification: every changed page compile-checked 200 via
+authenticated curl against a real dev server, new endpoints exercised (shift
+history, summary vacant fields, list filters, paid-out guard, detail page +
+folios/traces include) — the Browser pane still can't reach localhost (same
+sandbox issue as the platform-admin session), so an in-browser click-through of
+the new dialogs (check-in, walk-in, deposit, OOO) remains recommended. Summary:
+- **P1** — pre-arrival deposit workflow (route + UI + auto-transfer to billing
+  window at check-in), Front Office check-in dialog (inline room assignment +
+  payment), No-Show action, guest search, walk-in booking dialog, cashiering
+  shift history + per-method breakdown + printable reconciliation.
+- **P2** — reservation detail page (reservations/[id]), server-side list
+  search/filters/pagination, editable group blocks (PUT with guards) + pickup
+  rate/meal choice, tape chart quick-book on empty cells + bar actions,
+  calendar view retired per owner decision.
+- **P3** — housekeeping task↔room-status coupling both directions, status enum
+  validation, board filters + refresh-on-focus + error dialogs, Due Out/
+  Stayover/Arrival-today priority chips, maintenance priority picker, kanban
+  refresh; fixed board GET showing checked-out guests as occupants and never
+  including the guest name it rendered.
+- **P4 (migration 20260721160000)** — Property.requireInspectionOnCheckIn
+  (INSPECTED gate at check-in + Controls toggle), Room.oooReason/
+  oooExpectedReturn (board Mark-OOO dialog, maintenance take-out-of-order +
+  auto-return-to-DIRTY on resolve), CashierPaidOut (petty cash, subtracted
+  from expected drawer cash).
+
+**Deliberately not done from the v4 plan (still open):**
+- BookingForm Zod+RHF rebuild (1,160 lines — large, riskiest item; do as its own
+  focused session).
+- Per-attendant task-sheet view (board attendant filter covers part of it).
+- Full maintenance API unification onto the RESTful routes (both conventions
+  still exist; validation/priority gaps were fixed).
+- Cashiering defaults (float 300, USD/MVR) still hardcoded, not settings.
 > This file is the actionable list: what's left, what was deferred on purpose, and what
 > was found broken along the way but is out of scope for whoever finds it next to fix
 > without checking first. Keep this file current — when you close an item, move it to

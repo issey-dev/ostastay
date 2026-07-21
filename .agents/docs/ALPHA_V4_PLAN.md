@@ -86,7 +86,7 @@ These are confirmed bugs, not improvements. Ordered by severity.
 11. **`send-confirmation` email endpoint is orphaned** — fully built + tested, no
     UI caller. Add an "Email" action beside the Confirmation Letter print action.
 
-## Phase 1 — Front Desk workflow completion ⬜
+## Phase 1 — Front Desk workflow completion ✅ (2026-07-21)
 
 The Front Office page becomes a place where a receptionist can run a whole shift
 without leaving it.
@@ -109,7 +109,7 @@ without leaving it.
   per-method breakdown on close. Defaults (float 300, USD/MVR) become settings,
   not hardcodes.
 
-## Phase 2 — Reservations robustness ⬜
+## Phase 2 — Reservations robustness ✅ (2026-07-21, except BookingForm rebuild)
 
 - **Reservation detail page** (`reservations/[id]/page.tsx`) — the module's biggest
   structural gap. One page showing: stay summary + status timeline, room
@@ -137,7 +137,7 @@ without leaving it.
   detail page), stay-extend/shorten via edge drag as a stretch goal. Retire or
   demote the read-only calendar view to avoid maintaining two charts.
 
-## Phase 3 — Housekeeping & Maintenance lifecycle ⬜
+## Phase 3 — Housekeeping & Maintenance lifecycle ✅ (2026-07-21, except attendant task sheets)
 
 - **Couple task completion ↔ room status** (today fully decoupled): completing a
   CHECKOUT/cleaning task offers/sets the room CLEAN; marking a room CLEAN
@@ -168,7 +168,7 @@ without leaving it.
   MEDIUM priority. Converge on the RESTful routes + one shared form component
   with a priority picker.
 
-## Phase 4 — Cross-cutting robustness (applies to all three modules) ⬜
+## Phase 4 — Cross-cutting robustness (applies to all three modules) 🚧 (folded into P1-P3 where touched)
 
 - **Zod on every API body** in these modules (today: manual `if (!body.x)` checks;
   `status`/`priority`/`taskType` accept arbitrary strings straight into the DB).
