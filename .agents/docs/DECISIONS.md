@@ -1510,3 +1510,117 @@ Three direct follow-ups on the Look-to-Book redesign above.
   accompanying-guest list, and a `PUT` round-trip re-validating contiguity and
   recomputing the flag. Full suite 257/257, `tsc --noEmit` clean. All test
   reservations/profiles created during verification deleted afterward.
+
+## Osta platform-admin console (2026-07-21)
+
+Owner's ask, verbatim: Osta is "a top Enterprise that manages all the Enterprises and
+sees the properties registered under them," not a PMS itself. Three concrete
+requirements: (1) a tenant can create as many properties as they want, but each one
+"has to approve it from admin side" before use; (2) Osta manages "licenses (add-ons)
+that can be enabled and disabled for that particular enterprise"; (3) Osta needs its
+own completely different UI/UX, plus DB health and performance visibility. A lot of
+adjacent plumbing already existed and was reused rather than duplicated:
+`Enterprise.type` INTERNAL/STANDARD + `ctx.isInternal`, a full `SupportAccessGrant`
+request/approve/deny/revoke/enter workflow, and an `EnterpriseLicense`/
+`TierModuleAccess` scaffold that was previously unenforced ("fails open... scaffold
+only, not real enforcement" per its own old comment).
+
+Three architecture-defining choices were confirmed via `AskUserQuestion` before any
+code was written (recorded here since they're not obvious from reading the code):
+
+- **Property approval is a hard gate**, not just an audit trail. A newly-created
+  property is written `status: "PENDING"` (`POST /api/properties`) and is fully
+  locked out of real use — `assertPropertyAccess()` in `src/lib/scope.ts` now rejects
+  (403) any non-`ACTIVE` property, and since that one function is the chokepoint
+  called by ~70+ existing routes (reservations, rooms, rate plans, ...), this single
+  edit propagates the gate everywhere with no per-route changes. The property
+  switcher (`resolveCurrentPropertyId`, `GET /api/session/current-property`) also
+  filters to `status: "ACTIVE"` so a pending property never becomes the "current"
+  one. **Existing properties are unaffected** — `status` keeps its `@default("ACTIVE")`,
+  so the hard gate only ever applies going forward to new tenant-created properties;
+  only `POST /api/properties` was changed to start writing `PENDING` instead of
+  relying on the default. Osta support acting inside an approved `SupportAccessGrant`
+  is exempted from the gate (`!ctx.isActingAsSupport`), so troubleshooting a still-
+  pending property is possible without a separate carve-out mechanism.
+  Property gained `reviewedByUserId`/`reviewedAt`/`rejectionReason` fields directly
+  (not a `SupportAccessGrant`-style side table) — this is a 1:1 lifecycle state of the
+  row itself, read on the same hot path as `status`, so a join table would force a
+  second query everywhere `assertPropertyAccess` runs today. A rejected property CAN
+  be resubmitted by the tenant (`POST /api/properties/[id]/resubmit`, only legal from
+  `REJECTED`, clears the reviewed fields and flips back to `PENDING`) — rejection
+  isn't a dead end.
+- **Module licensing is a per-enterprise override**, not just tier-based. New
+  `EnterpriseModuleAccess` model (`{enterpriseId, module, enabled}` unique on the
+  pair) sits ABOVE the existing `TierModuleAccess` in the fallback chain: an
+  enterprise's own override row wins if present, else the tier default, else enabled
+  by default (same fail-open-as-last-resort behavior as before, now genuinely the
+  last resort instead of the only rule). `CONTROLS` and `ACTIVITY_LOG` are
+  hardcoded-exempt from this in `computeLicensedModules()` — a locked-out enterprise
+  still needs to reach Controls (to understand why) and its own audit trail; the
+  Licensing UI doesn't even expose toggles for those two modules. This is now REAL
+  enforcement, not a scaffold: `AuthContext` gained a `licensedModules: Set<Module>`
+  computed once per request inside `requireSession()` (same place the existing
+  `backfillMissingRolePermissions` precomputation already runs), and
+  `requirePermission()` — the one function nearly every route already calls, kept
+  fully synchronous, no call-site changes anywhere — denies immediately if the
+  module isn't in that set, before even checking the role's own permission. The old
+  `requireModuleLicensed()` (confirmed unused everywhere) was deleted outright rather
+  than kept alongside.
+- **A genuinely separate console, not more Controls tabs.** Previously "Osta admin"
+  meant logging in and seeing two extra `ostaOnly`-gated tabs (Licensing, Support
+  Access) bolted onto the exact same `/e/{slug}/dashboard/controls` page every
+  tenant uses. That's now a real, separate route tree at `/osta/...` (sibling to
+  `/e/`, not nested under it — Osta's own enterprise `slug` was always an incidental
+  schema leftover, never a real design decision) with its own layout
+  (`src/app/osta/layout.tsx`, no `PropertyProvider`/property-switcher since Osta has
+  no operational property of its own) and sidebar (`OstaSidebar` — a small static
+  nav, deliberately NOT module/permission-filtered like the tenant `AppSidebar`,
+  since these aren't tenant RBAC modules). Login now returns `isInternal` from
+  `POST /api/auth/login` and the client branches straight to `/osta` instead of
+  `/e/{slug}/dashboard`; a defensive server-side redirect was also added to the
+  tenant dashboard layout (`if (ctx.isInternal && !ctx.isActingAsSupport)
+  redirect("/osta")`) so a direct URL visit can't land an Osta user in the tenant
+  shell. `LicensingManager` and `SupportAccessManager` moved to dedicated
+  `/osta/licensing` and `/osta/support-access` pages; the tenant Controls page kept
+  its own (non-Osta) "Support Access" tab, since a tenant admin still needs to
+  approve/deny incoming requests from their side — only Osta's duplicate rendering
+  of it and the `ostaOnly` bolt-on (`buildSections`'s filter, the "Osta Internal"
+  mobile/desktop separators) were removed.
+- **Approve/reject actions are logged into both trails.** `logActivity()` gained an
+  optional `targetEnterpriseId` — an Osta admin's action lands in Osta's own
+  activity trail by default (`ctx.enterpriseId`), which the tenant would never see;
+  passing the tenant's enterprise id writes a second copy into their own trail too,
+  so "your property was approved/rejected, by whom, why" is visible to the tenant
+  admin, not just to Osta internally.
+- **DB Health is real instrumentation, not just static counts** (the owner explicitly
+  chose "deeper performance metrics" over a basic read-only dashboard, understanding
+  the tradeoff). `src/lib/db.ts`'s `PrismaClient` now emits `query`/`error`/`warn`
+  log events into a bounded in-memory ring buffer (`src/lib/db-metrics.ts`, last
+  ~500 query events, grouped by normalized query text) — deliberately NOT a
+  persisted table, to avoid write-amplification from logging every single query.
+  This is called out explicitly in the `/osta/db-health` page's own UI copy: the
+  metrics reflect *this server instance only*, since its last restart — on a
+  multi-instance/serverless deployment it's not a global aggregate, and a real
+  historical-trend version (a persisted snapshot table + cron flush) is a deliberate
+  future increment, not attempted here. Baseline stats (row counts for a fixed list
+  of the heaviest tables, migration-status comparison of `prisma/migrations/` on
+  disk against the `_prisma_migrations` table via `$queryRaw` — no shelling out to
+  the CLI — and DB file size when `DATABASE_URL` is a local `file:` path, `null`
+  otherwise since prod may be a remote libSQL/Turso URL) round out the dashboard.
+- Live-verified via 10 new tests across two files
+  (`tests/tenant-isolation/property-approval.test.ts`: PENDING-on-create, cross-
+  enterprise approval queue gating, approve/reject/resubmit lifecycle, dual
+  activity-log writes; `tests/business-rules/module-licensing.test.ts`: override
+  GET/PATCH, the `enabled: null` reset-to-tier-default path, Osta-only gating) plus
+  the Phase A additions to `tests/scope.test.ts` (a `PENDING` property fails
+  `assertPropertyAccess`; an `EnterpriseModuleAccess` override wins over the tier
+  default in both directions; `CONTROLS`/`ACTIVITY_LOG` stay accessible even when
+  explicitly disabled at either level). Full suite 271/271, `tsc --noEmit` clean
+  throughout every phase. **Live browser verification could not be completed this
+  session** — the sandboxed Browser pane could not reach `localhost:3000` (external
+  sites loaded fine, and a direct `curl` from the same environment confirmed the dev
+  server itself was healthy and serving every route correctly), an environment
+  limitation distinct from the code itself. Recommend a manual UI pass (create a
+  property as a tenant, approve/reject/resubmit it as Osta, toggle a module override
+  and confirm the sidebar item disappears, check `/osta/db-health` renders real
+  numbers) before considering this fully done.

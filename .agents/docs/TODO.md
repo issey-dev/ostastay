@@ -82,6 +82,21 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
 
+- **2026-07-21** — **Osta platform-admin console**, per direct app-owner request. Full
+  account in [DECISIONS.md](DECISIONS.md) "Osta platform-admin console". Summary: a
+  hard-gated property-approval workflow (`Property.status` PENDING→ACTIVE/REJECTED,
+  enforced via `assertPropertyAccess`, resubmittable), a real per-enterprise module
+  override (`EnterpriseModuleAccess`, precedes the previously-unenforced
+  `TierModuleAccess` scaffold, now actually wired into `requirePermission` via a new
+  `AuthContext.licensedModules`), a genuinely separate `/osta/...` console (own
+  layout/sidebar/login-routing, Licensing and Support Access moved out of the tenant
+  Controls page), and a DB Health dashboard with real per-process query
+  instrumentation (in-memory ring buffer, not persisted — explicit v1 limitation).
+  271/271 suite passing, `tsc --noEmit` clean. **Live browser verification blocked
+  this session by a sandbox networking issue** (Browser pane couldn't reach
+  `localhost:3000`, confirmed via curl that the dev server itself was fine) — a
+  manual UI pass through the full property-approval and module-toggle flows is
+  recommended before considering this closed.
 - **2026-07-20** — **Profiles module redesign**, per direct app-owner request (Loyalty→VIP,
   multi-row Communications/Address/Identification, CRM section, consolidated Guest/Staff/
   Company/Corporate table, Stay History). Full design in

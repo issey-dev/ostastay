@@ -27,6 +27,58 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Seed data (internal only — removed before release)
+
+> **These accounts and scripts exist purely for internal development and demoing.**
+> Before a real release, all `scripts/seed/*` scripts and the credentials below will be
+> deleted — do not build any workflow that assumes they'll still exist in production.
+
+Two independent, idempotent seed scripts (safe to re-run any time, in either order):
+
+```bash
+npx tsx scripts/seed/seed-osta.ts             # the Osta platform-admin enterprise
+npx tsx scripts/seed/seed-veyo-beach-house.ts # a full demo tenant (wipes & rebuilds "Veyo" each run)
+```
+
+All seeded passwords are **`password123`**.
+
+### Logging in as Osta (platform admin)
+
+`scripts/seed/seed-osta.ts` creates the one `INTERNAL` enterprise every other enterprise
+is managed through — it never deletes anything (Osta's Role rows are referenced by
+every tenant's Users, so wiping it would break every tenant's login).
+
+- **Login**: [`/e/osta/login`](http://localhost:3000/e/osta/login) (or the generic
+  [`/login`](http://localhost:3000/login) with Enterprise Code `osta`)
+- **User**: `admin@osta.internal` (role `Admin` — full access)
+
+Signing in as an Osta user redirects straight to `/osta`, a completely separate
+console from the tenant dashboard:
+
+| Page | What it does |
+|---|---|
+| `/osta` | Overview — enterprise/pending-approval/support-grant counts |
+| `/osta/enterprises` | Every customer enterprise and its properties |
+| `/osta/properties` | Approve or reject newly-created properties — a property is locked out of real use until approved here |
+| `/osta/licensing` | Per-tier and per-enterprise module enable/disable, property limits |
+| `/osta/support-access` | Request/approve time-boxed access into a tenant's own data |
+| `/osta/db-health` | Row counts, migration status, and live query performance (this server instance only, since last restart) |
+
+### Logging in as the seeded Veyo tenant
+
+`scripts/seed/seed-veyo-beach-house.ts` builds a complete demo hotel — 4 room types,
+15 rooms, 2 outlets, a full chart of accounts, meal plans, 11 rate plans with 2 years
+of pricing, and 20 sample profiles — with **no reservations**, so it's a clean baseline
+to click around in. Re-running it wipes and rebuilds the whole "Veyo" enterprise from
+scratch.
+
+- **Login**: [`/e/veyo/login`](http://localhost:3000/e/veyo/login) (or the generic
+  [`/login`](http://localhost:3000/login) with Enterprise Code `veyo`)
+- **Users**:
+  - `admin@veyo.com` — role `Admin` (full access to the tenant dashboard)
+  - `frontdesk@veyo.com` — role `Front Desk`
+  - `housekeeping@veyo.com` — role `Housekeeping`
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
