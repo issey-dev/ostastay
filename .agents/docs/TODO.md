@@ -148,6 +148,18 @@ test files, confirming the 24 new tests plus all 300 pre-existing ones are green
 generated departures — verified idempotent (ran twice, no errors) and confirmed live via
 the API. `DECISIONS.md` got a dated summary entry.
 
+**Phase 7 completed 2026-07-22, later session** — a day/week/month Calendar view of the
+schedule, added after a UI-review discussion. Lives as a second tab ("Calendar", next to
+"Book") on the existing front-office Excursions page — `src/components/front-office/
+excursion-calendar.tsx` (new), color-coded by excursion type using the app's existing
+`--chart-1..5` theme tokens, click opens the same manifest panel the page already had.
+`GET /api/excursions/departures` gained optional `from`/`to` params (every status across
+an exact range, past included, for the calendar) while its no-params behavior — SCHEDULED
++ upcoming only, for the booking picker — is byte-for-byte unchanged; verified live both
+ways against real seed data, including a real leftover CANCELLED departure from earlier
+Phase 5 testing. One new regression test added; full suite after: **355/355 passing**
+(47 files).
+
 Nothing left in this plan — see [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md) for the
 complete phase-by-phase record if picking this up again later (e.g. the two explicitly-
 deferred v2 ideas noted there: complimentary excursions bundled into a rate plan, and a

@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 
-// Lists upcoming, bookable departures for a property — the data source for the
-// Excursions booking screen's departure picker. Capacity/minCapacity counts are
-// computed LIVE from non-cancelled bookings' headcounts rather than a stored counter
-// (same technique OutletAppointment already uses for its own soft-warning), so they
-// can never drift from reality.
+// Lists departures for a property. Default (no from/to): upcoming, bookable
+// SCHEDULED-only departures — the data source for the Excursions booking screen's
+// departure picker, unchanged from before. With from/to (the Excursions Calendar view):
+// every status within that exact date range, past or future, so cancelled departures
+// can be rendered dimmed rather than hidden. Capacity/minCapacity counts are computed
+// LIVE from non-cancelled bookings' headcounts rather than a stored counter (same
+// technique OutletAppointment already uses for its own soft-warning), so they can never
+// drift from reality.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
@@ -19,15 +22,24 @@ export async function GET(request: Request) {
     }
     await assertPropertyModuleAccess(ctx, propertyId, "EXCURSIONS");
 
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    const isRangeQuery = !!fromParam && !!toParam;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const departures = await prisma.excursionDeparture.findMany({
-      where: {
-        status: "SCHEDULED",
-        departureDate: { gte: today },
-        excursionType: { propertyId, isActive: true },
-      },
+      where: isRangeQuery
+        ? {
+            departureDate: { gte: new Date(fromParam), lte: new Date(toParam) },
+            excursionType: { propertyId, isActive: true },
+          }
+        : {
+            status: "SCHEDULED",
+            departureDate: { gte: today },
+            excursionType: { propertyId, isActive: true },
+          },
       include: {
         excursionType: {
           select: { id: true, code: true, name: true, pricingMode: true, cutoffHours: true },

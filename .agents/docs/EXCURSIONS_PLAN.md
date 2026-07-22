@@ -1,12 +1,13 @@
 # Master Plan v3 — Excursions Booking (sellable per-property add-on)
 
 > **Status legend**: ✅ done · 🚧 in progress · ⬜ not started
-> **Overall**: **All six phases ✅ done (2026-07-22)** — schema, `PropertyModuleAccess`
+> **Overall**: **All seven phases ✅ done (2026-07-22)** — schema, `PropertyModuleAccess`
 > add-on mechanism, RBAC module + permission split, Controls catalog management,
 > in-house and walk-in booking, manifest/cancellation/no-show, whole-departure
-> cancellation with auto-suggested replacement + one-click move, and finally automated
-> test coverage + seed data. See [TODO.md](TODO.md) for the detailed per-phase writeup
-> and [DECISIONS.md](DECISIONS.md) for the business-rule summary. Four real corrections
+> cancellation with auto-suggested replacement + one-click move, automated test coverage
+> + seed data, and finally a day/week/month Calendar view of the schedule. See
+> [TODO.md](TODO.md) for the detailed per-phase writeup and [DECISIONS.md](DECISIONS.md)
+> for the business-rule summary. Four real corrections
 > were made mid-build, every one found by live-testing against a real dev server rather
 > than by reasoning alone: catalog management ended up gated by `CONTROLS` not
 > `EXCURSIONS` (Phase 1); voiding a charge needed its own `CASHIERING` check (Phase 4);
@@ -483,6 +484,48 @@ model ExcursionBooking {
   (24/17/18, matching their different weekly frequencies) exist.
 - `DECISIONS.md` dated entry summarizing the business rules; `TODO.md` and this file's
   status flipped throughout as each phase actually finished, not batched at the end.
+
+### Phase 7 — Excursions Calendar view ✅
+Added after a separate design discussion post-launch: front office asked for a
+practical day/week/month view of the whole schedule, not just the flat "Upcoming
+Departures" list. Owner decisions from that session: calendar (day/week/month toggle),
+not a tape-chart matrix — the right shape for a handful of excursion types with specific
+departure times, not many resource-rows; lives as a second tab on the existing
+front-office Excursions page, not a separate Controls tool; clicking a departure opens
+the existing manifest panel (no new component); cancelled departures render
+dimmed/struck-through rather than being hidden; and browsing backward into past/
+completed dates is allowed, not upcoming-only.
+
+- `GET /api/excursions/departures` extended with optional `from`/`to` query params.
+  Absent (the booking page's picker): behavior is byte-for-byte unchanged — SCHEDULED
+  only, upcoming only. Present (the calendar): every status across the exact date range,
+  past included, so a cancelled departure can render dimmed instead of leaving an
+  unexplained gap. One route, no duplication, zero regression risk to the existing
+  picker — verified both paths live against real seed data (default query still excludes
+  a real CANCELLED departure and any past date; the range query correctly includes both).
+- `src/components/front-office/excursion-calendar.tsx` (new) — self-contained, fetches
+  its own data per visible range. Month/week/day share one date-fns-driven grid
+  (`startOfWeek`/`endOfWeek`/`startOfMonth`/`endOfMonth`/`eachDayOfInterval`, the same
+  pattern already proven in the Price Calendar page); each excursion type gets a stable
+  color from the app's existing `--chart-1..5` categorical theme tokens (assigned in
+  first-seen order, cycling if a property ever has more than 5 active types) — no new
+  colors invented, fully theme-aware light/dark for free. Mobile collapses the grid to a
+  simple chronological agenda list, the same instinct as the Reservations tape chart's
+  own mobile fallback.
+- Wired into the existing Excursions page as a `Tabs` "Book" / "Calendar" toggle (the
+  same `Tabs`/`TabsTrigger` pattern the POS page already uses for its own two-tab
+  layout) — the booking flow itself is untouched, just now one of two tabs. Clicking a
+  calendar chip reuses the page's already-rendered `ExcursionManifestPanel` via the same
+  `manifestDepartureId` state the "Upcoming Departures" sidebar list already drives.
+- New regression test in `tests/business-rules/excursions.test.ts`: asserts the default
+  query still excludes a cancelled and a past departure (the picker's contract must not
+  regress) while an explicit `from`/`to` range returns both, with the cancelled one's
+  `status` intact. Full suite after adding it: **355/355 passing** (47 files).
+- Verified live end to end against a real dev server: a real month-range query against
+  Veyo's seed data returned all three excursion types across the window; a real
+  already-`CANCELLED` departure (left over from earlier Phase 5 testing) correctly
+  appeared only in the ranged query, with its status intact, and was correctly absent
+  from the default query.
 
 ## Decisions confirmed (app owner, 2026-07-22 design session)
 

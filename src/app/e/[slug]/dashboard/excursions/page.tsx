@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { format } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
-import { CalendarClock, Search, UserRound, Receipt, ClipboardList } from "lucide-react"
+import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,8 +12,10 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { ExcursionManifestPanel } from "@/components/front-office/excursion-manifest-panel"
+import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
 
 type GuestResult = {
   reservationId: string
@@ -78,6 +80,7 @@ export default function ExcursionsPage() {
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const [manifestDepartureId, setManifestDepartureId] = useState<string | null>(null)
+  const [pageTab, setPageTab] = useState<"book" | "calendar">("book")
 
   const fetchDepartures = useCallback(() => {
     if (!currentProperty) return
@@ -222,6 +225,13 @@ export default function ExcursionsPage() {
         <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</p>
       </div>
 
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "calendar") ?? "book")}>
+        <TabsList>
+          <TabsTrigger value="book"><CalendarClock className="w-4 h-4 mr-2" /> Book</TabsTrigger>
+          <TabsTrigger value="calendar"><CalendarDays className="w-4 h-4 mr-2" /> Calendar</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="book" className="m-0">
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left: guest search / walk-in */}
         <div className="flex-1 space-y-6">
@@ -510,6 +520,16 @@ export default function ExcursionsPage() {
           )}
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="calendar" className="m-0">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            {currentProperty && (
+              <ExcursionCalendar propertyId={currentProperty.id} onSelectDeparture={(id) => setManifestDepartureId(id)} />
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <WalkInFolioPanel
         folioId={walkInFolioId}

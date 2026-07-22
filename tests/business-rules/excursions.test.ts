@@ -61,6 +61,7 @@ const typesRoute = await import("@/app/api/excursions/types/route");
 const schedulesRoute = await import("@/app/api/excursions/schedules/route");
 const generateRoute = await import("@/app/api/excursions/schedules/generate/route");
 const bookingsRoute = await import("@/app/api/excursions/bookings/route");
+const departuresRoute = await import("@/app/api/excursions/departures/route");
 const cancelBookingRoute = await import("@/app/api/excursions/bookings/[id]/cancel/route");
 const noShowRoute = await import("@/app/api/excursions/bookings/[id]/no-show/route");
 const cancelDepartureRoute = await import("@/app/api/excursions/departures/[id]/cancel/route");
@@ -572,5 +573,37 @@ describe("Excursions: business rules", () => {
     const secondBody = await second.json();
     expect(secondBody.created).toBe(0);
     expect(secondBody.skipped).toBe(firstBody.created);
+  });
+
+  it("GET departures: default stays upcoming+SCHEDULED only, but from/to returns every status across the exact range (Excursions Calendar)", async () => {
+    const rangeType = await prisma.excursionType.create({
+      data: { propertyId, code: `RNG-${uniq().slice(-6)}`, name: "Range Test Trip", chargeCodeId },
+    });
+    const pastDeparture = await makeDeparture(rangeType.id, -10);
+    const futureDeparture = await makeDeparture(rangeType.id, 10);
+    const cancelledDeparture = await makeDeparture(rangeType.id, 3);
+    await prisma.excursionDeparture.update({ where: { id: cancelledDeparture.id }, data: { status: "CANCELLED" } });
+
+    // Default (no from/to) must not regress the booking picker: SCHEDULED + upcoming only.
+    const defaultRes = await asUser(adminId, () =>
+      departuresRoute.GET(new Request(`http://localhost/api/excursions/departures?propertyId=${propertyId}`))
+    );
+    const defaultIds = (await defaultRes.json()).map((d: { id: string }) => d.id);
+    expect(defaultIds).toContain(futureDeparture.id);
+    expect(defaultIds).not.toContain(pastDeparture.id);
+    expect(defaultIds).not.toContain(cancelledDeparture.id);
+
+    // from/to (the calendar view): every status, past included, within the exact window.
+    const rangeRes = await asUser(adminId, () =>
+      departuresRoute.GET(
+        new Request(`http://localhost/api/excursions/departures?propertyId=${propertyId}&from=${dayStr(day(-11))}&to=${dayStr(day(11))}`)
+      )
+    );
+    const rangeBody: Array<{ id: string; status: string }> = await rangeRes.json();
+    const rangeIds = rangeBody.map((d) => d.id);
+    expect(rangeIds).toContain(pastDeparture.id);
+    expect(rangeIds).toContain(futureDeparture.id);
+    expect(rangeIds).toContain(cancelledDeparture.id);
+    expect(rangeBody.find((d) => d.id === cancelledDeparture.id)?.status).toBe("CANCELLED");
   });
 });
