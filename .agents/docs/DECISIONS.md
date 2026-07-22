@@ -1798,3 +1798,35 @@ first assignment of each new calendar year. Idempotent (an already-registered gu
 skipped). Written as `GuestRegistration` rows (unique per property+year+number and per
 reservation+profile). Distinct from the existing `REGISTRATION_NO` sequence, which is
 the reservation confirmation number ("Reservation No" in the Sequence Manager).
+
+### Reporting module — engine + Opera-style catalog (2026-07-22)
+
+Replaced the old two-report Daily Reports page with a registry-driven reporting
+engine. A report is one `ReportDef` in `src/lib/reports/` (`{ key, module, name,
+params, run() → ReportResult }`); the engine derives the parameter form, runs it
+per current property/business date, and renders to **PDF / Excel (.xlsx, via
+exceljs) / CSV** with property+enterprise branding. Endpoints: `/api/reports/
+catalog` (UI list), `/api/reports/options` (dynamic param option lists),
+`/api/reports/generate` (POST → file). UI: `dashboard/reports`.
+
+- **PDF renderer** (`render/pdf.ts`) rewritten — fixes the old pagination bug
+  (drew overflow rows onto the wrong page), repeats headers per page, right-aligns
+  numerics, supports grouping/subtotals/totals + landscape, and **sanitizes text to
+  WinAnsi** (standard fonts can't encode ★, smart quotes, non-Latin scripts).
+- **Phase 1 shipped:** the engine + Front Desk reports — Arrival, Departure (with
+  balances), In-House, Guest Event Calendar (birthdays/anniversaries over a stay
+  window), Outlet Calendar. Remaining phases (by module): Reservations, Revenue,
+  Financial, Housekeeping + extras (VIP in-house, room discrepancy, EOD ledgers as
+  ad-hoc, police/immigration list).
+- **Locked decisions for later phases** (app owner):
+  1. **Tax split → store per-tax at posting.** When building the Financial tax
+     reports, add a green-tax / GST / service-charge breakdown to `FolioLineItem`
+     (+ tax-calc), populated at posting. Applies to charges posted after the change.
+  2. **Add small schema fields when reached:** `Reservation.cancelledAt` +
+     `cancellationReason` + `noShowAt` (Cancellations/No-Show report);
+     `HousekeepingTask.startedAt` (Attendant time-on-task report).
+  3. **Financial ledger/flash reports → snapshot if the business date is closed
+     (reuse `EodReport`), else compute live.**
+- **Known data gaps** (from the feasibility survey): taxes currently lumped in
+  `FolioLineItem.taxAmount`; no cancellation timestamp/reason; no housekeeping
+  start-time/duration; `OutletAppointment` has no assigned-staff field.
