@@ -1,5 +1,5 @@
-import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History } from "lucide-react"
-import { requireSession, type Module } from "@/lib/scope"
+import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History, CalendarClock } from "lucide-react"
+import { requireSession, resolveCurrentPropertyId, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "./logout-button"
 import {
@@ -89,6 +89,12 @@ const items: { title: string; url: string; icon: typeof MonitorPlay; module: Mod
     module: "DEBTORS",
   },
   {
+    title: "Excursions",
+    url: "/dashboard/excursions",
+    icon: CalendarClock,
+    module: "EXCURSIONS",
+  },
+  {
     title: "Daily Reports",
     url: "/dashboard/reports",
     icon: CalendarDays,
@@ -131,9 +137,30 @@ export async function AppSidebar() {
   const roleName = user?.role.name ?? "";
   const enterprisePrefix = enterprise ? `/e/${enterprise.slug}` : "";
 
-  const filteredItems = items.filter(
-    (item) => (ctx.permissions.get(item.module)?.canView ?? false) && ctx.licensedModules.has(item.module)
-  );
+  // Modules sold as a per-property add-on (see PropertyModuleAccess) need an extra
+  // check beyond the usual role/enterprise-tier licensing below: the CURRENT property
+  // must actually have it enabled, not just the enterprise. Grows one entry at a time
+  // as new add-ons ship — see src/components/osta/property-module-access-manager.tsx's
+  // own ADD_ON_MODULES list, which must stay in sync with this one.
+  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS"]);
+  const currentPropertyId = await resolveCurrentPropertyId(ctx);
+  const enabledAddOns = currentPropertyId
+    ? new Set(
+        (
+          await prisma.propertyModuleAccess.findMany({
+            where: { propertyId: currentPropertyId, enabled: true },
+            select: { module: true },
+          })
+        ).map((r) => r.module)
+      )
+    : new Set<string>();
+
+  const filteredItems = items.filter((item) => {
+    const hasPermission = (ctx.permissions.get(item.module)?.canView ?? false) && ctx.licensedModules.has(item.module);
+    if (!hasPermission) return false;
+    if (ADD_ON_MODULES.has(item.module) && !enabledAddOns.has(item.module)) return false;
+    return true;
+  });
 
   return (
     <Sidebar collapsible="icon">

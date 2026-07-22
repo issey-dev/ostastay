@@ -25,6 +25,13 @@ export const MODULES = [
   // only canView matters. Deliberately granted to Admin/Manager only by default
   // (they get FULL automatically via their all-modules matrices below).
   "ACTIVITY_LOG",
+  // Excursions bookings (see .agents/docs/EXCURSIONS_PLAN.md) — kept in sync with
+  // src/lib/modules.ts's own MODULES array by hand (this file can't import from src/
+  // since prisma/ scripts run standalone via tsx). If these two lists ever drift,
+  // src/lib/scope.ts's backfillMissingRolePermissions() self-heals existing roles on
+  // their next login, but a brand-new enterprise seeded via ensureRoles() below would
+  // still miss the default here until both lists agree.
+  "EXCURSIONS",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];
@@ -63,6 +70,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     CASHIERING: EDIT_NO_DELETE,
     POS: EDIT_NO_DELETE,
     NIGHT_AUDIT: EDIT_NO_DELETE,
+    EXCURSIONS: EDIT_NO_DELETE,
   }),
 
   // Matches today's sidebar HOUSEKEEPING allow-list (Housekeeping, Maintenance only).

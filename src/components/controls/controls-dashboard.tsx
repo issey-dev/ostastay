@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Store,
   TrendingUp,
+  CalendarClock,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -41,6 +42,7 @@ import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 import { SequenceManager } from "@/components/controls/sequence-manager"
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 import { AllocationCalculationManager } from "@/components/controls/allocation-calculation-manager"
+import { ExcursionsManager } from "@/components/controls/excursions-manager"
 
 // Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
 // Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
@@ -115,6 +117,16 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
             <FacilityAmenitiesManager />
           </ControlsCard>
         </div>
+      ),
+    },
+    {
+      key: "excursions",
+      label: "Excursions",
+      icon: CalendarClock,
+      render: () => (
+        <ControlsCard title="Excursions" description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta.">
+          <ExcursionsManager />
+        </ControlsCard>
       ),
     },
     {

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -45,10 +46,14 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
             <p className="text-sm text-muted-foreground italic">No properties yet.</p>
           ) : (
             enterprise.properties.map((p) => (
-              <div key={p.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+              <Link
+                key={p.id}
+                href={`/osta/properties/${p.id}`}
+                className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0 hover:bg-muted/50 -mx-2 px-2 rounded-none"
+              >
                 <span className="text-sm font-medium">{p.name} <span className="text-muted-foreground font-mono text-xs">({p.code})</span></span>
                 <StatusBadge label={p.status} status={p.status} dot />
-              </div>
+              </Link>
             ))
           )}
         </CardContent>

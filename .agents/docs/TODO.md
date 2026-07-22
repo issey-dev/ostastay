@@ -1,6 +1,141 @@
-# Consolidated TODO — as of 2026-07-18
+# Consolidated TODO — as of 2026-07-22
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
+
+## Excursions Booking — sellable per-property add-on (ALL 6 PHASES DONE 2026-07-22)
+
+Full plan in [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md). Front-office-run scheduling and
+selling of hotel-run activities (Snorkelling Trip, Island Hopping, Night Fishing) to
+in-house and walk-in guests — the first real feature sold as a **per-property** add-on
+rather than per-enterprise.
+
+**Phase 1 completed 2026-07-22** (schema + Controls catalog management, no booking flow
+yet): `tsc --noEmit` clean, full production build clean, all new routes verified live
+via curl against a real dev server (see below) — no automated test suite yet, that's
+Phase 6.
+- **New generic mechanism**: `PropertyModuleAccess` (defaults OFF, unlike
+  `EnterpriseModuleAccess`'s default-ON) — the property-scoped sibling of the existing
+  enterprise-level module gating. `assertPropertyModuleAccess(ctx, propertyId, module)`
+  in `src/lib/scope.ts`, Osta-only toggle at `GET`/`PATCH /api/licenses/property-modules`
+  and a new `/osta/properties/[id]` detail page (linked from both the enterprise detail
+  page's property list and the property-approval queue — `/osta/properties/[id]` didn't
+  exist before this). Generic by design — `EXCURSIONS` is the first consumer, not a
+  special case.
+- **New RBAC module `EXCURSIONS`** (`src/lib/modules.ts` + `prisma/rbac-seed-data.ts`
+  defaults — the latter keeps its own duplicate `MODULES` list, see the comment there
+  for why and the self-heal fallback). Deliberately split into two permission gates,
+  corrected mid-build from the original plan draft: catalog/schedule management
+  (`ExcursionType`/`Rate`/`Schedule`) is gated by `CONTROLS` like every other catalog in
+  the app (RatePlan/Allocation/Outlet); `EXCURSIONS` itself is reserved for day-to-day
+  bookings (not built yet — Phase 2). **Every** Excursions route, catalog included,
+  additionally requires `assertPropertyModuleAccess` — verified live that disabling the
+  add-on 403s catalog access even for an Admin, and that a Front Desk user (has
+  `EXCURSIONS` but not `CONTROLS`) is correctly blocked from catalog routes.
+- **Schema** (migration `20260722053902_excursions_module`): `ExcursionType` (property-
+  scoped catalog, enterprise-wide `ChargeCode` link), `ExcursionRate` (dated,
+  adult/child/infant/flat — infant is a real priced tier here, unlike Allocations),
+  `ExcursionSchedule` (recurring template) + `ExcursionDeparture` (generated or hand-
+  added instance — the "hybrid" scheduling model), `ExcursionBooking` (schema only, no
+  routes yet — billing wired to Folio/FolioLineItem/Payment for Phase 2-3).
+- **Controls UI**: new "Excursions" tab (`src/components/controls/excursions-manager.tsx`
+  + nested `excursion-schedule-manager.tsx`) — catalog CRUD with dated rate rows (APP
+  STANDARD 001: Zod + RHF), a per-type schedule sub-dialog, and a "Generate Departures
+  through [date]" action — verified live idempotent (re-running the same generate call
+  produces `created: 0, skipped: 14`, never duplicates).
+- **Verified live** (real dev server, curl, both an Osta support-admin session and a
+  Veyo enterprise-admin session): add-on toggle on/off, catalog list/create/update
+  blocked correctly when the add-on is off, RBAC permission split (CONTROLS vs
+  EXCURSIONS) enforced correctly, delete-blocked-when-departures-exist guard, schedule
+  generation idempotency. Not yet verified: an actual in-browser click-through of the
+  Controls dialogs (curl-verified API + page-loads-200 only).
+
+**Phase 2 completed 2026-07-22, same session** (in-house booking flow): `tsc --noEmit`
+clean, full production build clean, verified live end to end against a real dev
+server — created a real test reservation, searched it by room number via the same
+endpoint POS uses, booked 2 adults + 1 child onto a generated departure, confirmed the
+price ($125 = 2×$50 + 1×$25), the tax split on the resulting `FolioLineItem`
+($97.13 + $18.16 + $9.71 = $125.00, correct for a tax-inclusive property), the live
+departure headcount updating immediately (0 → 3), and that both an Admin and a Front
+Desk user (has `EXCURSIONS` but not `CONTROLS`) can book. The "Excursions" sidebar item
+only appears once the add-on is enabled for the current property — confirmed by
+toggling it via the `/osta/properties/[id]` page built in Phase 1.
+- New: `src/app/api/excursions/departures/route.ts`,
+  `src/app/api/excursions/bookings/route.ts`,
+  `src/app/e/[slug]/dashboard/excursions/page.tsx`.
+- `src/components/app-sidebar.tsx` — sidebar filtering now additionally checks the
+  current property's `PropertyModuleAccess` for any module in a new `ADD_ON_MODULES`
+  set (today just `EXCURSIONS`) — must stay in sync with the same list maintained in
+  `src/components/osta/property-module-access-manager.tsx` (both have comments pointing
+  at each other).
+
+**Phase 3 completed 2026-07-22, same session** (walk-in flow): `tsc --noEmit` clean,
+full production build clean, verified live end to end — opened a walk-in folio, booked
+2 adults ($100, correctly tax-split), confirmed the booking surfaced in the new
+"open walk-in bills" list, took a full payment, closed the folio, confirmed it dropped
+off the list afterward. Also verified both misuse guards: passing both `reservationId`
+and `folioId` 400s, and passing a reservation's own folio as `folioId` 400s instead of
+silently accepting it.
+- `POST /api/excursions/bookings` extended to accept `folioId` as an alternative to
+  `reservationId` — identity for a walk-in booking is read off `Folio.walkInGuestName`/
+  `walkInGuestContact`, never re-entered.
+- New `GET /api/excursions/bookings` (open walk-in bookings for a property).
+- Pay-now/pay-later needed no new payment UI — the booking page opens the existing
+  `src/components/pos/walk-in-folio-panel.tsx` (already used by POS for the same job)
+  instead of building a second one.
+
+**Phase 4 completed 2026-07-22, same session** (manifest, cancellation, no-show):
+`tsc --noEmit` clean, full production build clean, every branch verified live against a
+real dev server — see EXCURSIONS_PLAN.md's Phase 4 entry for the full list (cancel
+voids the charge on an open folio, correctly can't touch a closed one; re-cancel and
+early no-show both 400; a real PDF generates; the cutoff override chain specifically
+tested with two different roles, not just read from code).
+- Real correction found mid-build: voiding a charge is gated by `CASHIERING`
+  (`/api/folios/[id]/line-items/[id]/void`), not by whichever module posted it —
+  cancellation now has two independent gates (cutoff window on `EXCURSIONS`, voiding on
+  `CASHIERING`) that degrade gracefully rather than block each other. Also: closed
+  folios can't be voided OR paid into (confirmed in both the void and payments routes),
+  so the original plan's "post an explicit refund Payment" idea for a paid walk-in
+  doesn't actually work in this app — corrected to an honest "handle refund manually"
+  message instead.
+- New: `GET /api/excursions/departures/[id]`, `GET .../manifest-pdf`,
+  `POST /api/excursions/bookings/[id]/cancel`, `POST .../no-show`,
+  `src/components/front-office/excursion-manifest-panel.tsx`.
+
+**Phase 5 completed 2026-07-22, same session** (whole-departure cancellation cascade +
+auto-suggest-replacement): `tsc --noEmit` clean, full production build clean. Unlike
+Phases 1-4, this one surfaced two **real bugs during live verification itself**, not
+just design corrections caught by reading code:
+1. The replacement-departure suggestion query filtered by date only; on this dev
+   environment's timezone it suggested a departure whose own boat had already left
+   earlier that same day. Fixed by comparing the real combined date+time
+   (`combineDepartureDateTime`) against `now`, not just the date.
+2. Nothing stopped the same already-moved booking from being moved a second time —
+   would have silently double-booked and double-charged a guest. Fixed with a new
+   `ExcursionBooking.movedToBookingId` field (migration
+   `20260722094214_excursion_booking_moved_to`), verified live: a repeat
+   `move-bookings` call on the same booking is now rejected with a clear reason.
+Both were caught only because verification actually drove the real cancel→suggest→move
+cycle against live data — worth keeping that standard for Phase 6's automated tests
+rather than relaxing to "tsc passes."
+- New: `POST /api/excursions/departures/[id]/cancel` (manager-only, `EXCURSIONS
+  delete`, no cutoff check — this is an operator decision, not the per-guest cutoff
+  rule), `POST .../move-bookings`. Manifest panel gained a "Cancel Departure" action
+  and a cascade-result summary card with a one-click "Move All" button.
+
+**Phase 6 completed 2026-07-22, same session** (tests, seed, docs) — the feature is now
+**fully built end to end**: `tests/tenant-isolation/excursions.test.ts` (10 tests) +
+`tests/business-rules/excursions.test.ts` (14 tests, 4 of them pure-function unit tests
+for `src/lib/excursions.ts`). Full suite run afterward: **324/324 passing** across 38
+test files, confirming the 24 new tests plus all 300 pre-existing ones are green.
+`scripts/seed/seed-veyo.ts` now seeds the add-on enabled + all three excursion types
+(Snorkelling Trip, Island Hopping, Night Fishing) with real schedules and ~60 days of
+generated departures — verified idempotent (ran twice, no errors) and confirmed live via
+the API. `DECISIONS.md` got a dated summary entry.
+
+Nothing left in this plan — see [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md) for the
+complete phase-by-phase record if picking this up again later (e.g. the two explicitly-
+deferred v2 ideas noted there: complimentary excursions bundled into a rate plan, and a
+guest-facing self-booking flow).
 
 ## Alpha v4 — Front Desk / Reservations / Housekeeping hardening (PLANNED 2026-07-21)
 

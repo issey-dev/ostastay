@@ -17,6 +17,13 @@ export const MODULES = [
   "REPORTS",
   "CONTROLS",
   "ACTIVITY_LOG",
+  // Booking/managing Excursions (see .agents/docs/EXCURSIONS_PLAN.md). Deliberately
+  // separate from FRONT_DESK — this is a per-property PAID ADD-ON (gated additionally
+  // by PropertyModuleAccess, not just this permission), so a property without it
+  // purchased shouldn't see the nav item regardless of role. Catalog/schedule
+  // management (ExcursionType/Rate/Schedule) is a Controls tab gated by CONTROLS, not
+  // this module — this module only covers day-to-day bookings.
+  "EXCURSIONS",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -38,4 +45,5 @@ export const MODULE_LABELS: Record<Module, string> = {
   REPORTS: "Daily Reports",
   CONTROLS: "Controls",
   ACTIVITY_LOG: "Activity Log",
+  EXCURSIONS: "Excursions",
 };

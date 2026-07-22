@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data";
+import { expandScheduleDates } from "../../src/lib/excursions";
 
 const prisma = new PrismaClient();
 
@@ -537,12 +538,139 @@ async function main() {
     }
   }
 
+  // 11. Excursions Booking add-on (see .agents/docs/EXCURSIONS_PLAN.md) — Osta-enabled
+  // for this property (defaults OFF everywhere else, same as a real customer would need
+  // it turned on via /osta/properties/[id]), a small chart of excursion types with
+  // dated pricing, one recurring schedule each, and departures generated ~60 days out —
+  // so the feature has real, clickable data immediately after seeding, not just an
+  // empty Controls tab.
+  await prisma.propertyModuleAccess.upsert({
+    where: { propertyId_module: { propertyId: property.id, module: "EXCURSIONS" } },
+    update: { enabled: true },
+    create: { propertyId: property.id, module: "EXCURSIONS", enabled: true },
+  });
+
+  const excursionChargeCodes: Array<{ code: string; description: string }> = [
+    { code: "70RV", description: "Snorkelling Trip Revenue" },
+    { code: "71RV", description: "Island Hopping Revenue" },
+    { code: "72RV", description: "Night Fishing Revenue" },
+  ];
+  const excursionChargeCodeByCode: Record<string, string> = {};
+  for (const cc of excursionChargeCodes) {
+    const created = await prisma.chargeCode.upsert({
+      where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
+      update: {},
+      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, category: "OTHERS" },
+    });
+    excursionChargeCodeByCode[cc.code] = created.id;
+  }
+
+  const excursionDefs: Array<{
+    code: string;
+    name: string;
+    description: string;
+    chargeCode: string;
+    cutoffHours: number;
+    adultPrice: number;
+    childPrice: number;
+    daysOfWeek: string;
+    departureTime: string;
+    meetingTime: string;
+    meetingPoint: string;
+    capacity: number;
+    minCapacity: number;
+  }> = [
+    {
+      code: "SNORK", name: "Snorkelling Trip", description: "Guided reef snorkelling excursion",
+      chargeCode: "70RV", cutoffHours: 24, adultPrice: 50, childPrice: 25,
+      daysOfWeek: "MON,WED,FRI", departureTime: "09:00", meetingTime: "08:45", meetingPoint: "Main Jetty",
+      capacity: 12, minCapacity: 4,
+    },
+    {
+      code: "ISLE", name: "Island Hopping", description: "Half-day tour of neighbouring islands",
+      chargeCode: "71RV", cutoffHours: 24, adultPrice: 75, childPrice: 35,
+      daysOfWeek: "TUE,SAT", departureTime: "10:00", meetingTime: "09:45", meetingPoint: "Main Jetty",
+      capacity: 16, minCapacity: 6,
+    },
+    {
+      // Shorter cutoff than the others — a same-evening trip, so a same-day booking
+      // shouldn't be blocked by a 24h window the way the daytime trips are.
+      code: "NFISH", name: "Night Fishing", description: "Traditional evening hand-line fishing trip",
+      chargeCode: "72RV", cutoffHours: 12, adultPrice: 60, childPrice: 30,
+      daysOfWeek: "THU,SAT", departureTime: "18:00", meetingTime: "17:45", meetingPoint: "Main Jetty",
+      capacity: 10, minCapacity: 4,
+    },
+  ];
+
+  for (const def of excursionDefs) {
+    const excursionType =
+      (await prisma.excursionType.findFirst({ where: { propertyId: property.id, code: def.code } })) ??
+      (await prisma.excursionType.create({
+        data: {
+          propertyId: property.id,
+          code: def.code,
+          name: def.name,
+          description: def.description,
+          chargeCodeId: excursionChargeCodeByCode[def.chargeCode],
+          cutoffHours: def.cutoffHours,
+          rates: { create: [{ adultPrice: def.adultPrice, childPrice: def.childPrice, infantPrice: 0, effectiveFrom: new Date("2020-01-01") }] },
+        },
+      }));
+
+    const schedule =
+      (await prisma.excursionSchedule.findFirst({ where: { excursionTypeId: excursionType.id } })) ??
+      (await prisma.excursionSchedule.create({
+        data: {
+          excursionTypeId: excursionType.id,
+          daysOfWeek: def.daysOfWeek,
+          departureTime: def.departureTime,
+          meetingTime: def.meetingTime,
+          meetingPoint: def.meetingPoint,
+          capacity: def.capacity,
+          minCapacity: def.minCapacity,
+        },
+      }));
+
+    // Same expansion logic the "Generate Departures" Controls action uses (see
+    // src/app/api/excursions/schedules/generate/route.ts), applied directly here —
+    // idempotent, so re-running this seed never duplicates an already-generated date.
+    const today = new Date();
+    const through = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const dates = expandScheduleDates(schedule.daysOfWeek, today, through);
+    for (const date of dates) {
+      const exists = await prisma.excursionDeparture.findUnique({
+        where: {
+          excursionTypeId_departureDate_departureTime: {
+            excursionTypeId: excursionType.id,
+            departureDate: date,
+            departureTime: schedule.departureTime,
+          },
+        },
+      });
+      if (!exists) {
+        await prisma.excursionDeparture.create({
+          data: {
+            excursionTypeId: excursionType.id,
+            scheduleId: schedule.id,
+            departureDate: date,
+            departureTime: schedule.departureTime,
+            meetingTime: schedule.meetingTime,
+            meetingPoint: schedule.meetingPoint,
+            capacity: schedule.capacity,
+            minCapacity: schedule.minCapacity,
+          },
+        });
+      }
+    }
+  }
+
   console.log("\nVeyo enterprise seeded successfully.");
   console.log(`Login URL slug: /e/${veyo.slug}/login`);
   console.log("Users (password: password123):");
   console.log("  admin@veyo.com (Admin)");
   console.log("  frontdesk@veyo.com (Front Desk)");
   console.log("  housekeeping@veyo.com (Housekeeping)");
+  console.log("Excursions add-on: enabled, with Snorkelling Trip / Island Hopping / Night Fishing seeded.");
 }
 
 main()
