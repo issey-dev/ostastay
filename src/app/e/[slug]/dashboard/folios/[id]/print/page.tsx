@@ -104,7 +104,8 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     .map((item: any) => ({
       date: format(parseISO(item.date), "dd-MMM-yy"),
       description: item.description,
-      reference: item.chargeCode?.code,
+      // The line's own Reference (operator-entered), falling back to the charge code.
+      reference: item.reference || item.chargeCode?.code,
       amount: item.amount + (item.serviceChargeAmount || 0) + item.taxAmount,
     }))
 

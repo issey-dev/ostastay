@@ -230,10 +230,15 @@ describe("Base Rate Plan: Night Audit fallback", () => {
     derivedFromAssigned?: { adjustmentType: string; adjustmentValue: number }; // makes the assigned plan derived from a third plan
   }) {
     const { adminId, enterpriseId } = await setupProperty(opts.slug);
+    // Pin the property business date to today's UTC midnight; PriceCalendar entries
+    // below use the same value so the Night Audit's UTC-business-date lookup matches.
+    const now = new Date();
+    const bizDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const property = await prisma.property.create({
       data: {
         enterpriseId, name: "P", code: `BRPF-${uniq()}`, legalName: "P LLC",
         defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+        businessDate: bizDate,
       },
     });
     const roomType = await prisma.roomType.create({
@@ -253,7 +258,7 @@ describe("Base Rate Plan: Night Audit fallback", () => {
       });
       if (opts.assignedPlanPrice != null) {
         await prisma.priceCalendar.create({
-          data: { ratePlanId: parent.id, roomTypeId: roomType.id, date: new Date(new Date().setHours(0, 0, 0, 0)), price: opts.assignedPlanPrice },
+          data: { ratePlanId: parent.id, roomTypeId: roomType.id, date: bizDate, price: opts.assignedPlanPrice },
         });
       }
       assignedPlan = await prisma.ratePlan.create({
@@ -270,14 +275,14 @@ describe("Base Rate Plan: Night Audit fallback", () => {
       });
       if (opts.assignedPlanPrice != null) {
         await prisma.priceCalendar.create({
-          data: { ratePlanId: assignedPlan.id, roomTypeId: roomType.id, date: new Date(new Date().setHours(0, 0, 0, 0)), price: opts.assignedPlanPrice },
+          data: { ratePlanId: assignedPlan.id, roomTypeId: roomType.id, date: bizDate, price: opts.assignedPlanPrice },
         });
       }
     }
 
     if (opts.basePlanPrice != null) {
       await prisma.priceCalendar.create({
-        data: { ratePlanId: base.id, roomTypeId: roomType.id, date: new Date(new Date().setHours(0, 0, 0, 0)), price: opts.basePlanPrice },
+        data: { ratePlanId: base.id, roomTypeId: roomType.id, date: bizDate, price: opts.basePlanPrice },
       });
     }
 

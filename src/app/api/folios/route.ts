@@ -16,6 +16,9 @@ const FOLIO_INCLUDE = {
   reservation: {
     include: {
       primaryGuest: true,
+      // The attached travel agent / corporate profile — a valid folio payee
+      // (bill-to-account) alongside the guest and sharers.
+      travelAgent: true,
       accompanyingGuests: { include: { profile: true } }
     }
   }

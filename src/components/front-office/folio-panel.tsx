@@ -32,7 +32,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   
   // Posting State
   const [postType, setPostType] = useState<"charge" | "payment">("charge")
-  const [chargeForm, setChargeForm] = useState({ chargeCodeId: "", amount: "", description: "" })
+  const [chargeForm, setChargeForm] = useState({ chargeCodeId: "", amount: "", description: "", reference: "" })
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
   
   // Multi-Folio State
@@ -145,17 +145,21 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     if (!activeFolioId) return
 
     try {
+      // Before check-in, a folio charge is only permitted as a deliberate
+      // pre-arrival (cancellation/no-show) fee.
+      const preArrivalFee = !!(activeFolio?.reservation && activeFolio.reservation.status !== "IN_HOUSE")
       const res = await fetch(`/api/folios/${activeFolioId}/line-items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(chargeForm)
+        body: JSON.stringify({ ...chargeForm, preArrivalFee })
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        setChargeForm({ chargeCodeId: "", amount: "", description: "" })
+        setChargeForm({ chargeCodeId: "", amount: "", description: "", reference: "" })
         fetchFolios()
-        setNotification({ title: "Success", message: "Charge posted successfully." })
+        setNotification({ title: "Success", message: data.description ? `Charge "${data.description}" posted.` : "Charge posted successfully." })
       } else {
-        setNotification({ title: "Error", message: "Failed to post charge.", isError: true })
+        setNotification({ title: "Error", message: data.error || "Failed to post charge.", isError: true })
       }
     } catch (e) {
       setNotification({ title: "Error", message: "Error posting charge.", isError: true })
@@ -167,18 +171,19 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     if (!activeFolioId) return
 
     try {
-      const shiftId = "mock-shift-id" 
+      // The server resolves the caller's own open cashier shift — no client shiftId.
       const res = await fetch(`/api/folios/${activeFolioId}/payments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...paymentForm, shiftId })
+        body: JSON.stringify(paymentForm)
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         setPaymentForm({ paymentMethodId: "", amount: "", referenceNumber: "" })
         fetchFolios()
         setNotification({ title: "Success", message: "Payment posted successfully." })
       } else {
-        setNotification({ title: "Error", message: "Failed to post payment.", isError: true })
+        setNotification({ title: "Error", message: data.error || "Failed to post payment.", isError: true })
       }
     } catch (e) {
       setNotification({ title: "Error", message: "Error posting payment.", isError: true })
@@ -555,10 +560,19 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     </TabsList>
                     
                     <TabsContent value="charge" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
+                      {activeFolio.reservation && activeFolio.reservation.status !== "IN_HOUSE" && (
+                        <div className="mb-4 text-xs rounded-md bg-warning-muted text-warning border border-warning/20 p-2.5">
+                          Guest not checked in — post a cancellation/no-show fee only. Deposits go through Post Payment.
+                        </div>
+                      )}
                       <form onSubmit={handlePostCharge} className="grid gap-5">
                         <div className="space-y-2">
                           <Label>Charge Code <span className="text-destructive">*</span></Label>
-                          <Select required value={chargeForm.chargeCodeId} onValueChange={v => setChargeForm(p => ({...p, chargeCodeId: v ?? ""}))}>
+                          <Select required value={chargeForm.chargeCodeId} onValueChange={v => {
+                            const c = chargeCodes.find(cc => cc.id === v)
+                            // Auto-fill the description from the code (operator can still edit).
+                            setChargeForm(p => ({ ...p, chargeCodeId: v ?? "", description: c ? c.description : p.description }))
+                          }}>
                             <SelectTrigger>
                               <SelectValue placeholder="Select Code">
                                 {chargeForm.chargeCodeId ? (
@@ -578,14 +592,20 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <Label>Amount <span className="text-destructive">*</span></Label>
                           <div className="relative">
                             <span className="absolute left-3 top-2 text-muted-foreground">$</span>
-                            <Input className="pl-7" required type="number" step="0.01" min="0.01" value={chargeForm.amount} onChange={e => setChargeForm(p => ({...p, amount: e.target.value}))} />
+                            <Input className="pl-7" required type="number" step="0.01" placeholder="Negative to reverse/adjust" value={chargeForm.amount} onChange={e => setChargeForm(p => ({...p, amount: e.target.value}))} />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label>Description <span className="text-destructive">*</span></Label>
-                          <Input required placeholder="e.g. Minibar, Room Service" value={chargeForm.description} onChange={e => setChargeForm(p => ({...p, description: e.target.value}))} />
+                          <Input required placeholder="Auto-filled from the charge code" value={chargeForm.description} onChange={e => setChargeForm(p => ({...p, description: e.target.value}))} />
                         </div>
-                        <Button type="submit" className="w-full mt-2" disabled={loading}>Post Charge to Folio {activeFolio.folioNumber}</Button>
+                        <div className="space-y-2">
+                          <Label>Reference</Label>
+                          <Input placeholder="Prints on the invoice (optional)" value={chargeForm.reference} onChange={e => setChargeForm(p => ({...p, reference: e.target.value}))} />
+                        </div>
+                        <Button type="submit" className="w-full mt-2" disabled={loading}>
+                          {activeFolio.reservation && activeFolio.reservation.status !== "IN_HOUSE" ? "Post Pre-arrival Fee" : `Post Charge to Folio ${activeFolio.folioNumber}`}
+                        </Button>
                       </form>
                     </TabsContent>
 
@@ -716,6 +736,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                       `Primary Guest (${activeFolio?.reservation?.primaryGuest?.firstName} ${activeFolio?.reservation?.primaryGuest?.lastName})`
                     ) : (
                       (() => {
+                        const ta = activeFolio?.reservation?.travelAgent;
+                        if (ta && ta.upid === selectedPayeeId) {
+                          return `Travel Agent / Company - ${ta.companyName || `${ta.firstName} ${ta.lastName ?? ""}`.trim()}`;
+                        }
                         const sharer = activeFolio?.reservation?.accompanyingGuests?.find((ag: any) => ag.profile.upid === selectedPayeeId);
                         if (sharer) {
                           return `Sharer - ${sharer.profile.firstName} ${sharer.profile.lastName}`;
@@ -730,6 +754,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 <SelectItem value="none">
                   Primary Guest ({activeFolio?.reservation?.primaryGuest?.firstName} {activeFolio?.reservation?.primaryGuest?.lastName})
                 </SelectItem>
+                {activeFolio?.reservation?.travelAgent && (
+                  <SelectItem value={activeFolio.reservation.travelAgent.upid}>
+                    Travel Agent / Company - {activeFolio.reservation.travelAgent.companyName || `${activeFolio.reservation.travelAgent.firstName} ${activeFolio.reservation.travelAgent.lastName ?? ""}`.trim()}
+                  </SelectItem>
+                )}
                 {activeFolio?.reservation?.accompanyingGuests?.map((ag: any) => (
                   <SelectItem key={ag.profile.upid} value={ag.profile.upid}>
                     Sharer - {ag.profile.firstName} {ag.profile.lastName}

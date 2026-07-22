@@ -256,7 +256,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         new Request(`http://localhost/api/folios/${thirdFolioId}/line-items`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 50, description: "Minibar" }),
+          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 50, description: "Minibar", preArrivalFee: true }),
         }),
         { params: Promise.resolve({ id: thirdFolioId }) }
       )
@@ -338,13 +338,14 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(del.status).toBe(200);
   });
 
-  it("rejects non-positive payment amounts and check-out dates not after check-in", async () => {
+  it("rejects zero payment amounts and check-out dates not after check-in", async () => {
+    // Negative amounts are now permitted (refunds/adjustments); only zero is rejected.
     const badPayment = await asUser(adminId, () =>
       paymentsRoute.POST(
         new Request(`http://localhost/api/folios/${thirdFolioId}/payments`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ paymentMethodId, amount: -50 }),
+          body: JSON.stringify({ paymentMethodId, amount: 0 }),
         }),
         { params: Promise.resolve({ id: thirdFolioId }) }
       )
@@ -367,7 +368,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         new Request(`http://localhost/api/folios/${folioId}/line-items`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 40, description: "Cancellation Fee" }),
+          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 40, description: "Cancellation Fee", preArrivalFee: true }),
         }),
         { params: Promise.resolve({ id: folioId }) }
       )

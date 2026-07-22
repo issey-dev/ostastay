@@ -14,12 +14,14 @@ export async function POST(
     const { id: folioId } = await params;
     const body = await request.json();
 
-    if (!body.paymentMethodId || !body.amount) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!body.paymentMethodId || body.amount === undefined || body.amount === null || body.amount === "") {
+      return NextResponse.json({ error: "Payment method and amount are required" }, { status: 400 });
     }
+    // Negative amounts are allowed — a refund can be recorded either as a positive
+    // amount with isRefund:true or as a negative amount. Reject only zero/non-numeric.
     const amount = Number(body.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
+    if (!Number.isFinite(amount) || amount === 0) {
+      return NextResponse.json({ error: "Amount must be a non-zero number" }, { status: 400 });
     }
 
     // Check if folio exists and is open
