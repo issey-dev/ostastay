@@ -4,11 +4,22 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
+const DEPOSIT_PURPOSES = ["DEPOSIT", "PRE_ARRIVAL_FEE", "CANCELLATION_FEE", "NO_SHOW_FEE"] as const;
+
 const depositSchema = z.object({
   paymentMethodId: z.string().min(1),
   amount: z.number().finite().positive(),
   referenceNumber: z.string().max(100).optional().nullable(),
+  // What this pre-arrival collection is, for identification. Defaults to DEPOSIT.
+  purpose: z.enum(DEPOSIT_PURPOSES).optional(),
 });
+
+const PURPOSE_LABEL: Record<string, string> = {
+  DEPOSIT: "deposit",
+  PRE_ARRIVAL_FEE: "pre-arrival fee",
+  CANCELLATION_FEE: "cancellation fee",
+  NO_SHOW_FEE: "no-show fee",
+};
 
 // Collect a deposit on a not-yet-arrived reservation. A deposit is an ordinary
 // Payment on the reservation's own folio #1 — the folio is created here if the
@@ -29,6 +40,7 @@ export async function POST(
       return NextResponse.json({ error: "Invalid deposit payload", details: parsed.error.flatten() }, { status: 400 });
     }
     const { paymentMethodId, amount, referenceNumber } = parsed.data;
+    const purpose = parsed.data.purpose ?? "DEPOSIT";
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -81,6 +93,7 @@ export async function POST(
           shiftId: shift.id,
           amount,
           referenceNumber: referenceNumber || null,
+          depositPurpose: purpose,
         },
         include: { paymentMethod: true },
       });
@@ -93,7 +106,7 @@ export async function POST(
       action: "DEPOSIT",
       entityType: "Payment",
       entityId: payment.id,
-      description: `Collected $${amount.toFixed(2)} deposit (${paymentMethod.name}) on ${reservation.confirmationNo}${referenceNumber ? ` ref ${referenceNumber}` : ""}`,
+      description: `Collected $${amount.toFixed(2)} ${PURPOSE_LABEL[purpose]} (${paymentMethod.name}) on ${reservation.confirmationNo}${referenceNumber ? ` ref ${referenceNumber}` : ""}`,
     });
 
     return NextResponse.json(payment, { status: 201 });

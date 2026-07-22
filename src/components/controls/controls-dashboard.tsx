@@ -31,6 +31,7 @@ import { TaxManager } from "@/components/controls/tax-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
 import { PostingDefaultsManager } from "@/components/controls/posting-defaults-manager"
+import { FeeRulesManager } from "@/components/controls/fee-rules-manager"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
@@ -133,6 +134,9 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
           </ControlsCard>
           <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, which City Ledger method settles debtor folios at checkout, and which charge code posts a Travel Agent commission credit.">
             <PostingDefaultsManager />
+          </ControlsCard>
+          <ControlsCard title="Deposit & Fee Rules" description="Per-property Deposit, Cancellation, and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
+            <FeeRulesManager />
           </ControlsCard>
         </div>
       ),

@@ -93,17 +93,17 @@ describe("Folio posting rules: check-in gate, negatives, description/reference",
     const reservedFolio = await mkReservationFolio("RESERVED");
     const blocked = await postCharge(reservedFolio, { chargeCodeId, amount: 25 });
     expect(blocked.status).toBe(400);
-    expect((await blocked.json()).error).toMatch(/check-in/i);
+    expect((await blocked.json()).error).toMatch(/checked in/i);
 
     const inHouseFolio = await mkReservationFolio("IN_HOUSE");
     const ok = await postCharge(inHouseFolio, { chargeCodeId, amount: 25 });
     expect(ok.status).toBe(201);
   });
 
-  it("allows a deliberate pre-arrival (cancellation/no-show) fee on a RESERVED folio", async () => {
+  it("does not allow a fee to be posted as a charge on a RESERVED folio (fees go through Deposits)", async () => {
     const reservedFolio = await mkReservationFolio("RESERVED");
-    const fee = await postCharge(reservedFolio, { chargeCodeId, amount: 40, description: "Cancellation fee", preArrivalFee: true });
-    expect(fee.status).toBe(201);
+    const fee = await postCharge(reservedFolio, { chargeCodeId, amount: 40, description: "Cancellation fee" });
+    expect(fee.status).toBe(400);
   });
 
   it("still accepts a deposit (payment) on a RESERVED folio", async () => {

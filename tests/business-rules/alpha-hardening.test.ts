@@ -26,6 +26,7 @@ const statusRoute = await import("@/app/api/reservations/[id]/status/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const lineItemsRoute = await import("@/app/api/folios/[id]/line-items/route");
 const paymentsRoute = await import("@/app/api/folios/[id]/payments/route");
+const checkInRoute = await import("@/app/api/reservations/[id]/check-in/route");
 const voidRoute = await import("@/app/api/folios/[id]/line-items/[itemId]/void/route");
 const groupPickupRoute = await import("@/app/api/groups/[id]/pickup/route");
 const loginRoute = await import("@/app/api/auth/login/route");
@@ -251,18 +252,12 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
   });
 
   it("blocks cancellation while non-void charges exist; void clears the way", async () => {
-    const post = await asUser(adminId, () =>
-      lineItemsRoute.POST(
-        new Request(`http://localhost/api/folios/${thirdFolioId}/line-items`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 50, description: "Minibar", preArrivalFee: true }),
-        }),
-        { params: Promise.resolve({ id: thirdFolioId }) }
-      )
-    );
-    expect(post.status).toBe(201);
-    const lineItem = await post.json();
+    // A charge on the folio (inserted directly — the posting route is check-in-gated
+    // now, but the cancellation/void guard being tested here is independent of how the
+    // line got there).
+    const lineItem = await prisma.folioLineItem.create({
+      data: { folioId: thirdFolioId, chargeCodeId: roomCodeId, date: new Date(), description: "Minibar", amount: 50, taxAmount: 0, serviceChargeAmount: 0 },
+    });
 
     const cancelBlocked = await patchStatus(thirdReservationId, "CANCELLED");
     expect(cancelBlocked.status).toBe(400);
@@ -357,43 +352,56 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect((await badDates.json()).error).toMatch(/after check-in/i);
   });
 
-  it("supports the cancellation-fee workflow: post fee → blocked → take payment → cancel", async () => {
-    const res = await bookVia({ checkInDate: "2026-11-01", checkOutDate: "2026-11-03" });
+  it("bills a checked-in guest: room-gated charge then payment both post", async () => {
+    // Charges are only billable after check-in now (pre-arrival money goes through
+    // Deposits). Book onto the single room on free dates, check in, then post.
+    const res = await bookVia({ roomId, checkInDate: "2026-12-01", checkOutDate: "2026-12-03" });
     expect(res.status).toBe(201);
     const body = await res.json();
     const folioId = body.folios[0].id;
 
-    const feeRes = await asUser(adminId, () =>
+    // Blocked while still RESERVED.
+    const early = await asUser(adminId, () =>
       lineItemsRoute.POST(
         new Request(`http://localhost/api/folios/${folioId}/line-items`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 40, description: "Cancellation Fee", preArrivalFee: true }),
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 40, description: "Minibar" }),
         }),
         { params: Promise.resolve({ id: folioId }) }
       )
     );
-    expect(feeRes.status).toBe(201);
-    const fee = await feeRes.json();
+    expect(early.status).toBe(400);
 
-    const blocked = await patchStatus(body.id, "CANCELLED");
-    expect(blocked.status).toBe(400); // fee unpaid — balance nonzero
+    const checkIn = await asUser(adminId, () =>
+      checkInRoute.POST(new Request(`http://localhost/api/reservations/${body.id}/check-in`, { method: "POST" }), {
+        params: Promise.resolve({ id: body.id }),
+      })
+    );
+    expect(checkIn.status).toBe(200);
+
+    const charge = await asUser(adminId, () =>
+      lineItemsRoute.POST(
+        new Request(`http://localhost/api/folios/${folioId}/line-items`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chargeCodeId: roomCodeId, amount: 40, description: "Minibar" }),
+        }),
+        { params: Promise.resolve({ id: folioId }) }
+      )
+    );
+    expect(charge.status).toBe(201);
+    const fee = await charge.json();
 
     const feeTotal = fee.amount + fee.taxAmount + (fee.serviceChargeAmount || 0);
     const payRes = await asUser(adminId, () =>
       paymentsRoute.POST(
         new Request(`http://localhost/api/folios/${folioId}/payments`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
+          method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ paymentMethodId, amount: feeTotal }),
         }),
         { params: Promise.resolve({ id: folioId }) }
       )
     );
     expect(payRes.status).toBe(201);
-
-    const cancelled = await patchStatus(body.id, "CANCELLED");
-    expect(cancelled.status).toBe(200); // balance nets to zero — fee kept, stay cancelled
   });
 
   it("enforces group block held-room count and cutoff date on pickup, with allocation parity", async () => {

@@ -279,6 +279,7 @@ model Property {
   folios       Folio[]
   currencyExchanges CurrencyExchange[]
   allocations  Allocation[]
+  feeRules     PropertyFeeRule[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles Profile[]
@@ -498,6 +499,7 @@ model ChargeCode {
   // deletes a rate plan.
   ratePlans          RatePlan[]
   routingRules       FolioRoutingRule[]
+  feeRules           PropertyFeeRule[]
 
   @@unique([enterpriseId, code])
 }
@@ -973,12 +975,42 @@ model Payment {
   referenceNumber String?
   isRefund        Boolean @default(false)
 
+  // What kind of money-in this is, for pre-arrival collections made through the
+  // Deposit module: DEPOSIT | PRE_ARRIVAL_FEE | CANCELLATION_FEE | NO_SHOW_FEE.
+  // Null for an ordinary in-stay folio payment. Purely a reporting/identification
+  // tag — the amount behaves like any other payment on the folio.
+  depositPurpose  String?
+
   // Assigned once, the first time a receipt is printed for this payment (via the
   // property's RECEIPT_NO PropertySequence) — never reallocated on reprint. Null
   // means no receipt has been printed yet.
   receiptNumber String?
 
   createdAt DateTime @default(now())
+}
+
+// Per-property fee rules (Controls > Fee Rules) that drive the Deposit module and
+// the Cancellation / No-Show fee triggers. One row per (property, ruleType):
+//   DEPOSIT      — the deposit to request pre-arrival (informational default).
+//   CANCELLATION — the fee when a reservation is cancelled.
+//   NO_SHOW      — the fee applied at Night Audit when a guest never arrives.
+// The amount is computed from `basis`: FLAT ($value), PERCENT (value% of the
+// projected stay total), FIRST_NIGHT (first night's room charge), or FULL_STAY
+// (the whole projected stay). CANCELLATION/NO_SHOW post their fee against
+// `chargeCode` so it reconciles on the folio against any held deposit.
+model PropertyFeeRule {
+  id           String     @id @default(uuid())
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleType     String     // DEPOSIT | CANCELLATION | NO_SHOW
+  basis        String     @default("FLAT") // FLAT | PERCENT | FIRST_NIGHT | FULL_STAY
+  value        Float      @default(0)
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
+  isActive     Boolean    @default(false)
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([propertyId, ruleType])
 }
 
 // A cashier-recorded currency exchange (guest-facing FX, common at resort front

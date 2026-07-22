@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
-  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, Package,
+  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, Package, XCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -76,6 +76,32 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   useEffect(() => {
     fetchReservation()
   }, [id])
+
+  const handleCancel = async () => {
+    if (!window.confirm("Cancel this reservation? If a cancellation-fee rule applies, the fee is retained against any deposit held.")) return
+    try {
+      const res = await fetch(`/api/reservations/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const f = data.cancellationFee
+        const feeMsg = f
+          ? ` Cancellation fee $${f.fee.toFixed(2)} applied.` +
+            (f.refundDue > 0.005 ? ` $${f.refundDue.toFixed(2)} deposit refund is due to the guest.` : "") +
+            (f.shortfall > 0.005 ? ` $${f.shortfall.toFixed(2)} shortfall to collect from the guest.` : "")
+          : ""
+        setNotification({ title: "Reservation Cancelled", message: `The reservation has been cancelled.${feeMsg}` })
+        fetchReservation()
+      } else {
+        setNotification({ title: "Cancel Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred cancelling the reservation.", isError: true })
+    }
+  }
 
   const handleCheckOut = async (early = false) => {
     if (early && !window.confirm("This guest isn't due out yet. Check them out early?")) return
@@ -178,7 +204,14 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 <Key className="w-4 h-4 mr-2" /> Check In
               </Button>
               <Button variant="outline" onClick={() => setIsDepositOpen(true)}>
-                <Wallet className="w-4 h-4 mr-2" /> Deposit
+                <Wallet className="w-4 h-4 mr-2" /> Deposit / Fee
+              </Button>
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive/40 hover:bg-destructive-muted hover:text-destructive"
+                onClick={handleCancel}
+              >
+                <XCircle className="w-4 h-4 mr-2" /> Cancel
               </Button>
             </>
           )}

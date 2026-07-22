@@ -40,14 +40,12 @@ export async function POST(
       return NextResponse.json({ error: "Cannot post charges to a closed folio" }, { status: 400 });
     }
     // Billing a reservation folio is only allowed once the guest is checked in.
-    // (Deposits before arrival go through the payments route, not charges.) The one
-    // exception is a deliberate pre-arrival fee — a cancellation or no-show fee is
-    // posted to a still-RESERVED/NO_SHOW booking — which the caller must opt into
-    // with preArrivalFee:true. Walk-in / outlet folios have no reservation and are
-    // always billable.
-    if (folio.reservation && folio.reservation.status !== "IN_HOUSE" && body.preArrivalFee !== true) {
+    // Pre-arrival money — deposits and pre-arrival / cancellation / no-show fees —
+    // is collected through the Deposit module, never posted as a charge here.
+    // Walk-in / outlet folios have no reservation and are always billable.
+    if (folio.reservation && folio.reservation.status !== "IN_HOUSE") {
       return NextResponse.json(
-        { error: "Charges can only be posted after check-in. (For a cancellation/no-show fee, use the pre-arrival fee action.)" },
+        { error: "Charges can only be posted after the guest is checked in." },
         { status: 400 }
       );
     }

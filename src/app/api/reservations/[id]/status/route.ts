@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { findTypeAvailabilityConflicts } from "@/lib/availability";
+import { getActiveFeeRule, computeReservationFee } from "@/lib/fee-rules";
+import { resolveBusinessDate } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
 // The reservation lifecycle is a guarded state machine, not a free-text field.
@@ -46,6 +48,7 @@ export async function PATCH(
     const existing = await prisma.reservation.findUnique({
       where: { id },
       include: {
+        property: { select: { businessDate: true } },
         assignments: true,
         folios: { include: { lineItems: true, payments: true } },
       },
@@ -70,35 +73,42 @@ export async function PATCH(
       );
     }
 
-    // Cancelling is only allowed once the folios net to ~zero, so cancellation can
-    // never silently orphan real money in either direction. This deliberately
-    // supports the cancellation-fee workflow with existing primitives: post a fee
-    // (e.g. a CXL charge code) via the Folio Panel, take payment for it, then cancel.
-    // An unrefunded deposit (negative balance) equally blocks until refunded.
-    // (NO_SHOW is deliberately not blocked the same way: a no-show with an unsettled
-    // folio is a real situation front office resolves afterwards, and its folio
-    // stays open and visible.)
+    // Cancellation fee handling. When an active per-property CANCELLATION rule
+    // applies, cancellation PROCEEDS and the computed fee is posted to the folio
+    // (retaining any held deposit against it) — the fee is a rule-driven system
+    // posting, not a manual billing charge. Otherwise cancellation keeps the
+    // zero-balance guard: it's only allowed once the folios net to ~zero, so it can
+    // never silently orphan real money. (NO_SHOW is never blocked this way.)
+    let cancellationRule: Awaited<ReturnType<typeof getActiveFeeRule>> = null;
+    let cancellationFee = 0;
     if (body.status === "CANCELLED") {
-      let charges = 0;
-      let payments = 0;
-      for (const f of existing.folios) {
-        for (const li of f.lineItems) {
-          if (!li.isVoid) charges += li.amount + li.taxAmount + (li.serviceChargeAmount || 0);
-        }
-        for (const p of f.payments) {
-          payments += p.isRefund ? -p.amount : p.amount;
-        }
+      cancellationRule = await getActiveFeeRule(existing.propertyId, "CANCELLATION");
+      if (cancellationRule && cancellationRule.chargeCodeId) {
+        cancellationFee = await computeReservationFee(cancellationRule, existing);
       }
-      const balance = charges - payments;
-      if (Math.abs(balance) > 0.01) {
-        return NextResponse.json(
-          {
-            error:
-              "Cannot cancel: this reservation's folio has an unsettled balance. Settle or void the charges (and refund any deposit) first.",
-            balance,
-          },
-          { status: 400 }
-        );
+      if (cancellationFee <= 0.005) {
+        // No applicable fee → require a net-zero folio before cancelling.
+        let charges = 0;
+        let payments = 0;
+        for (const f of existing.folios) {
+          for (const li of f.lineItems) {
+            if (!li.isVoid) charges += li.amount + li.taxAmount + (li.serviceChargeAmount || 0);
+          }
+          for (const p of f.payments) {
+            payments += p.isRefund ? -p.amount : p.amount;
+          }
+        }
+        const balance = charges - payments;
+        if (Math.abs(balance) > 0.01) {
+          return NextResponse.json(
+            {
+              error:
+                "Cannot cancel: this reservation's folio has an unsettled balance. Settle or void the charges (and refund any deposit) first.",
+              balance,
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -129,9 +139,30 @@ export async function PATCH(
         data: { status: body.status },
       });
 
-      // A cancelled reservation's (clean, checked above) folios are closed so they
-      // can't accumulate charges; reinstating reopens them.
+      // A cancelled reservation's folios are closed so they can't accumulate
+      // charges; reinstating reopens them. When a cancellation fee applies, post it
+      // (retaining any held deposit) before closing.
       if (body.status === "CANCELLED") {
+        if (cancellationRule?.chargeCodeId && cancellationFee > 0.005) {
+          let folio = existing.folios.find((f) => !f.isClosed) ?? existing.folios[0];
+          if (!folio) {
+            folio = await tx.folio.create({
+              data: { reservationId: id, propertyId: existing.propertyId, folioNumber: 1 },
+              include: { lineItems: true, payments: true },
+            });
+          }
+          await tx.folioLineItem.create({
+            data: {
+              folioId: folio.id,
+              chargeCodeId: cancellationRule.chargeCodeId,
+              date: resolveBusinessDate(existing.property),
+              description: "Cancellation fee",
+              amount: cancellationFee,
+              taxAmount: 0,
+              serviceChargeAmount: 0,
+            },
+          });
+        }
         await tx.folio.updateMany({
           where: { reservationId: id, isClosed: false },
           data: { isClosed: true },
@@ -146,16 +177,34 @@ export async function PATCH(
       return updated;
     });
 
+    // Reconciliation for a cancellation fee: the fee is now posted; net it against
+    // any deposit already held so the UI can prompt to collect a shortfall or
+    // refund a remainder.
+    let cancellationFeeInfo: { fee: number; depositHeld: number; refundDue: number; shortfall: number } | null = null;
+    if (body.status === "CANCELLED" && cancellationFee > 0.005) {
+      const depositHeld = existing.folios
+        .flatMap((f) => f.payments)
+        .reduce((s, p) => s + (p.isRefund ? -p.amount : p.amount), 0);
+      const net = cancellationFee - depositHeld;
+      cancellationFeeInfo = {
+        fee: cancellationFee,
+        depositHeld,
+        refundDue: Math.max(0, -net),
+        shortfall: Math.max(0, net),
+      };
+    }
+
     await logActivity({
       ctx,
       module: "RESERVATIONS",
       action: body.status,
       entityType: "Reservation",
       entityId: id,
-      description: `Reservation ${existing.confirmationNo}: ${existing.status} → ${body.status}`,
+      description: `Reservation ${existing.confirmationNo}: ${existing.status} → ${body.status}` +
+        (cancellationFeeInfo ? ` — cancellation fee $${cancellationFeeInfo.fee.toFixed(2)} posted` : ""),
     });
 
-    return NextResponse.json(updatedReservation);
+    return NextResponse.json({ ...updatedReservation, ...(cancellationFeeInfo ? { cancellationFee: cancellationFeeInfo } : {}) });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

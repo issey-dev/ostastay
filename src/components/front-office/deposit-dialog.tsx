@@ -15,14 +15,27 @@ type DepositDialogProps = {
   isOpen: boolean
   onClose: () => void
   onSaved: (message: string) => void
+  // Pre-select a purpose and amount (e.g. the "collect the cancellation fee" prompt).
+  defaultPurpose?: string
+  defaultAmount?: number
 }
 
-// Collect a pre-arrival deposit on a RESERVED booking. Posts to the dedicated
-// deposit route, which creates the folio if the stay hasn't opened one yet —
-// the money is then already on the billing window when the guest checks in.
-export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen, onClose, onSaved }: DepositDialogProps) {
+const PURPOSE_OPTIONS = [
+  { value: "DEPOSIT", label: "Deposit" },
+  { value: "PRE_ARRIVAL_FEE", label: "Pre-arrival fee" },
+  { value: "CANCELLATION_FEE", label: "Cancellation fee" },
+  { value: "NO_SHOW_FEE", label: "No-show fee" },
+]
+const PURPOSE_LABEL: Record<string, string> = Object.fromEntries(PURPOSE_OPTIONS.map((o) => [o.value, o.label]))
+
+// Collect pre-arrival money on a RESERVED booking — a plain deposit or a typed fee
+// (pre-arrival / cancellation / no-show). Posts to the deposit route, which creates
+// the folio if the stay hasn't opened one yet, so the money is already on the
+// billing window at check-in. Fees are collected here, never through billing.
+export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen, onClose, onSaved, defaultPurpose, defaultAmount }: DepositDialogProps) {
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([])
   const [paymentMethodId, setPaymentMethodId] = useState("")
+  const [purpose, setPurpose] = useState("DEPOSIT")
   const [amount, setAmount] = useState("")
   const [referenceNumber, setReferenceNumber] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -30,7 +43,8 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
 
   useEffect(() => {
     if (isOpen) {
-      setAmount("")
+      setPurpose(defaultPurpose ?? "DEPOSIT")
+      setAmount(defaultAmount != null ? String(defaultAmount) : "")
       setReferenceNumber("")
       setError(null)
       fetch(`/api/payment-methods`)
@@ -38,7 +52,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
         .then((data) => { if (Array.isArray(data)) setPaymentMethods(data.filter((m: any) => m.isActive !== false)) })
         .catch(console.error)
     }
-  }, [isOpen])
+  }, [isOpen, defaultPurpose, defaultAmount])
 
   const handleSubmit = async () => {
     if (!reservationId) return
@@ -56,14 +70,15 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
           paymentMethodId,
           amount: parsedAmount,
           referenceNumber: referenceNumber || null,
+          purpose,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         onClose()
-        onSaved(`$${parsedAmount.toFixed(2)} deposit collected${confirmationNo ? ` on ${confirmationNo}` : ""}.`)
+        onSaved(`$${parsedAmount.toFixed(2)} ${PURPOSE_LABEL[purpose].toLowerCase()} collected${confirmationNo ? ` on ${confirmationNo}` : ""}.`)
       } else {
-        setError(data.error || "Failed to collect deposit.")
+        setError(data.error || "Failed to collect payment.")
       }
     } catch {
       setError("An unexpected error occurred.")
@@ -76,13 +91,22 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Collect Deposit</DialogTitle>
+          <DialogTitle>Collect Deposit / Fee</DialogTitle>
           <DialogDescription>
-            {guestName ? `${guestName} — ` : ""}{confirmationNo || ""}. The deposit posts to the reservation's folio and
-            carries onto the billing window at check-in.
+            {guestName ? `${guestName} — ` : ""}{confirmationNo || ""}. Posts to the reservation's folio and carries onto
+            the billing window at check-in. Pre-arrival, cancellation, and no-show fees are collected here — not through billing.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <SearchableSelect
+              value={purpose}
+              onChange={(v: string) => setPurpose(v)}
+              placeholder="Select type..."
+              options={PURPOSE_OPTIONS}
+            />
+          </div>
           <div className="space-y-2">
             <Label>Payment Method</Label>
             <SearchableSelect
@@ -119,7 +143,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
           <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Collect Deposit
+            Collect {PURPOSE_LABEL[purpose]}
           </Button>
         </DialogFooter>
       </DialogContent>

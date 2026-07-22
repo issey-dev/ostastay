@@ -1695,3 +1695,36 @@ date → folio posting rules → routing → proforma). Owner decisions captured
   the same property (cross-reservation/room), not just the same reservation.
 - **Proforma = full projected cost of stay** (reuses `computeReservationQuote`),
   regardless of what's posted; the Tax Invoice remains actually-posted charges.
+
+## Deposit / Cancellation / No-Show fee rules + EOD guard (2026-07-22)
+
+App owner course-corrected the pre-arrival/cancellation/no-show fee handling: fees
+are collected through the **Deposit module (typed), never billing**, driven by
+per-property Rules. Plus a 12-hour EOD recency guard. Answers given in-session:
+
+- **Fees are Deposit-module money, not billing charges.** The `preArrivalFee`
+  billing bypass added earlier was removed — folio charges are strictly
+  check-in-gated again. The Deposit dialog/route gained a `purpose`
+  (`Payment.depositPurpose`): DEPOSIT | PRE_ARRIVAL_FEE | CANCELLATION_FEE |
+  NO_SHOW_FEE, so collected money is identifiable.
+- **Rules are per-property** (`PropertyFeeRule`, one row per (property, ruleType)
+  DEPOSIT/CANCELLATION/NO_SHOW), auto-computed from a `basis`: FLAT | PERCENT |
+  FIRST_NIGHT | FULL_STAY. PERCENT/FIRST_NIGHT/FULL_STAY reuse
+  `computeReservationQuote` (the same projection the Proforma and Night Audit use).
+  CANCELLATION/NO_SHOW rules carry a `chargeCodeId` (the fee posts against it);
+  DEPOSIT needs none. Configured in Controls > Finance > "Deposit & Fee Rules".
+- **Cancellation: cancel proceeds; retain the held deposit up to the fee.** When an
+  active CANCELLATION rule applies, cancelling posts the fee (a rule-driven system
+  posting, not manual billing) and proceeds regardless of balance; the response
+  returns `{ fee, depositHeld, refundDue, shortfall }` so front office refunds the
+  remainder or collects the shortfall. With no active rule, the pre-existing
+  zero-balance cancel guard still applies. A "Cancel" action was added to the
+  reservation detail page (there was none before — only hard Delete).
+- **No-show at Night Audit: retain from a held deposit, else flag as owed.** When
+  an active NO_SHOW rule applies, the fee posts to the no-show's open folio if one
+  exists (deposit was held); folio-less no-shows are returned in
+  `noShowFeesOwed` for front office to collect. Nothing is auto-refunded.
+- **EOD 12-hour recency guard**: running End-of-Day again within 12h of the last
+  successful run returns 409 `{ requiresConfirmation }`; proceeding needs
+  `{ confirmed, reason }` and logs a NIGHT_AUDIT/EOD_OVERRIDE activity row. Separate
+  from the same-business-date idempotency guard.

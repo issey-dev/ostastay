@@ -5,6 +5,7 @@ import { resolveChargeTax } from "@/lib/tax-calc"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
+import { getActiveFeeRule, computeReservationFee } from "@/lib/fee-rules"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -190,14 +191,27 @@ export async function POST(request: Request) {
     const chargeableReservations = activeReservations.filter((r) => r.checkOutDate > auditDate)
 
     // Arrivals that never checked in by audit time are marked NO_SHOW inside the
-    // transaction below — standard end-of-day processing. NO_SHOW releases their
-    // rooms back to sellable inventory (see src/lib/availability.ts); any deposit
-    // stays on their still-open folio for front office to resolve (refund or forfeit
-    // via a fee posting) — nothing financial happens automatically here.
+    // transaction below. If an active per-property NO_SHOW fee rule applies, the fee
+    // is retained from a held deposit (posted to the reservation's open folio);
+    // when there's no folio to retain from, the fee is flagged as owed in the
+    // results for front office to collect.
     const noShowCandidates = await prisma.reservation.findMany({
       where: { propertyId, status: "RESERVED", checkInDate: { lt: nextDay } },
-      select: { id: true, confirmationNo: true },
+      include: { assignments: true, folios: { include: { payments: true } } },
     })
+
+    const noShowRule = await getActiveFeeRule(propertyId, "NO_SHOW")
+    type NoShowFee = { confirmationNo: string; fee: number; folioId: string | null }
+    const noShowFees: NoShowFee[] = []
+    if (noShowRule && noShowRule.chargeCodeId) {
+      for (const r of noShowCandidates) {
+        const fee = await computeReservationFee(noShowRule, r)
+        if (fee > 0.005) {
+          const openFolio = r.folios.find((f) => !f.isClosed) ?? r.folios[0] ?? null
+          noShowFees.push({ confirmationNo: r.confirmationNo, fee, folioId: openFolio?.id ?? null })
+        }
+      }
+    }
 
     let totalRoomRevenue = 0
     let totalTaxPosted = 0
@@ -455,6 +469,25 @@ export async function POST(request: Request) {
             data: { status: "NO_SHOW" },
           })
         }
+        // No-show fees: post to the folio where one exists (retained from any held
+        // deposit); folio-less no-shows are flagged as owed in the response instead.
+        if (noShowRule?.chargeCodeId) {
+          for (const nf of noShowFees) {
+            if (nf.folioId) {
+              await tx.folioLineItem.create({
+                data: {
+                  folioId: nf.folioId,
+                  chargeCodeId: noShowRule.chargeCodeId,
+                  date: auditDate,
+                  description: "No-show fee",
+                  amount: nf.fee,
+                  taxAmount: 0,
+                  serviceChargeAmount: 0,
+                },
+              })
+            }
+          }
+        }
 
         // 3. Log the audit run — inside the same transaction, so a COMPLETED log row
         // exists if and only if every posting above landed.
@@ -519,6 +552,13 @@ export async function POST(request: Request) {
       noShowsProcessed: noShowCandidates.length,
       ...(noShowCandidates.length > 0 && {
         noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),
+      }),
+      ...(noShowFees.some((f) => f.folioId) && {
+        noShowFeesCharged: noShowFees.filter((f) => f.folioId).map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
+      }),
+      ...(noShowFees.some((f) => !f.folioId) && {
+        noShowFeesOwed: noShowFees.filter((f) => !f.folioId).map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
+        noShowFeesOwedWarning: `${noShowFees.filter((f) => !f.folioId).length} no-show${noShowFees.filter((f) => !f.folioId).length > 1 ? "s have" : " has"} a fee owed with no deposit on file — collect it from front office.`,
       }),
       ...(zeroRateConfirmationNos.length > 0 && {
         zeroRateWarning: `${zeroRateConfirmationNos.length} reservation${zeroRateConfirmationNos.length > 1 ? "s" : ""} posted a $0 room charge because no rate is configured for tonight — check the Price Calendar (including the Base plan's coverage).`,
