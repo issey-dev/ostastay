@@ -134,7 +134,7 @@ export default function ProfilesDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Profiles & CRM</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Client Relations</h2>
           <p className="text-muted-foreground">
             Manage your individual guests, travel agents, and corporate accounts here.
           </p>

@@ -121,7 +121,7 @@ export function PostingDefaultsManager() {
         />
         <p className="text-xs text-muted-foreground">
           The charge code a Travel Agent commission credit posts against when a City Ledger
-          folio settles to a debtor account at checkout (Profiles &gt; Negotiated Rates). Usually
+          folio settles to a debtor account at checkout (Client Relations &gt; Negotiated Rates). Usually
           categorized Non-Revenue (Charge Codes above) so it doesn&apos;t inflate room revenue
           reporting. Leave unset to disable commission posting entirely.
         </p>

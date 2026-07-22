@@ -27,7 +27,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   RESERVATIONS: "Reservations",
   GROUP_BLOCKS: "Group Blocks",
   TAPE_CHART: "Tape Chart",
-  PROFILES: "Profiles & CRM",
+  PROFILES: "Client Relations",
   HOUSEKEEPING: "Housekeeping",
   MAINTENANCE: "Maintenance",
   CASHIERING: "Cashiering",
