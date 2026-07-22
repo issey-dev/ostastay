@@ -2,7 +2,23 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Excursions Booking — sellable per-property add-on (ALL 6 PHASES DONE 2026-07-22)
+## Spa Booking — sellable per-property add-on (PLANNED 2026-07-22, not started)
+
+Full plan in [SPA_PLAN.md](SPA_PLAN.md). Front-office/spa-reception scheduling and
+selling of spa treatments (therapist + treatment room, in-house and walk-in guests) —
+the second feature built on the `PropertyModuleAccess` mechanism after Excursions.
+Codebase review (Excursions architecture, folio/financial integration, RBAC/tenant-
+isolation) completed and the full schema/RBAC/availability/pricing/UI plan written and
+self-corrected during review (an initial concurrency-strategy assumption — "SQLite
+serializes everything" — was checked against `src/lib/db.ts`/`schema.prisma` and found
+unverified, replaced with an explicit in-process mutex; see the plan's §7/§21). **Six
+open decisions need the app owner's sign-off before Phase 0 starts** (SPA_PLAN.md §22):
+catalog permissions under `CONTROLS` vs. a new `SPA_CONTROLS` module, couple-treatment
+scope, `AT_COMPLETION` charge-timing scope, therapist-absence/room-closure phase
+priority, therapist-schedule permission gating, and in-house guest identity
+(live-join vs. snapshot). No code written yet.
+
+## Excursions Booking — sellable per-property add-on (ALL 7 PHASES DONE 2026-07-22)
 
 Full plan in [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md). Front-office-run scheduling and
 selling of hotel-run activities (Snorkelling Trip, Island Hopping, Night Fishing) to
