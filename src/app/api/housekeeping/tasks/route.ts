@@ -80,7 +80,9 @@ export async function PATCH(request: Request) {
       where: { id: taskId },
       data: {
         status,
-        completedAt: status === "COMPLETED" ? new Date() : null
+        completedAt: status === "COMPLETED" ? new Date() : null,
+        // Stamp the start once, so time-on-task can be measured at completion.
+        ...(status === "IN_PROGRESS" && !existing.startedAt ? { startedAt: new Date() } : {}),
       }
     })
 

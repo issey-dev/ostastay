@@ -1,9 +1,18 @@
 import type { ReportDef } from "@/lib/reports/types";
 import { FRONT_DESK_REPORTS } from "@/lib/reports/defs/front-desk";
 import { RESERVATION_REPORTS } from "@/lib/reports/defs/reservations";
+import { REVENUE_REPORTS } from "@/lib/reports/defs/revenue";
+import { FINANCIAL_REPORTS } from "@/lib/reports/defs/financial";
+import { HOUSEKEEPING_REPORTS } from "@/lib/reports/defs/housekeeping";
 
 // Every report in the system. Add a module's defs array here to register it.
-export const REPORTS: ReportDef[] = [...FRONT_DESK_REPORTS, ...RESERVATION_REPORTS];
+export const REPORTS: ReportDef[] = [
+  ...FRONT_DESK_REPORTS,
+  ...RESERVATION_REPORTS,
+  ...REVENUE_REPORTS,
+  ...FINANCIAL_REPORTS,
+  ...HOUSEKEEPING_REPORTS,
+];
 
 export function getReport(key: string): ReportDef | null {
   return REPORTS.find((r) => r.key === key) ?? null;

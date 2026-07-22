@@ -1830,3 +1830,24 @@ catalog` (UI list), `/api/reports/options` (dynamic param option lists),
 - **Known data gaps** (from the feasibility survey): taxes currently lumped in
   `FolioLineItem.taxAmount`; no cancellation timestamp/reason; no housekeeping
   start-time/duration; `OutletAppointment` has no assigned-staff field.
+
+### Reporting module — Phases 2–5 complete (2026-07-22)
+
+All five report modules are now live (16 reports): Front Desk (5), Reservations
+(5), Revenue (3 — History & Forecast, Nationality Statistics, Profile Production),
+Financial (6 — Transaction Journal, Cashier Summary, Outlet Sales, Folio Tax,
+Green Tax by registration no, GST), Housekeeping (2 — Special Requests, Attendant).
+
+- **Tax-split decision, revised.** The earlier "store per-tax at posting" decision
+  was based on the assumption GST and Green Tax were lumped in `taxAmount`. On
+  inspecting `tax-calc.ts` + the Night Audit posting, that's not the case:
+  `serviceChargeAmount` is its own column, `taxAmount` is GST (default engine),
+  and Green Tax is its own `GTX`-coded line (`taxAmount` 0). The split already
+  exists in stored data, so the Folio Tax / GST / Green Tax reports compute from
+  existing fields — **no schema/posting change was needed.** Caveat: a Custom Tax
+  profile lumps its own lines into `taxAmount`, so for non-default charge codes the
+  "GST" column is really "profile tax". Fine for the standard Maldives setup.
+- **HousekeepingTask.startedAt added** (migration 20260722220000), set on the first
+  IN_PROGRESS transition, powering the Attendant report's time-on-task.
+- Green Tax report carries the per-room adult/child levy on the primary
+  registration (× nights); accompanying registrations show 0 to avoid double count.

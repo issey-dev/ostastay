@@ -1353,6 +1353,9 @@ model HousekeepingTask {
   assignedTo     RoomAttendant? @relation(fields: [assignedToId], references: [id])
   priority       String   @default("NORMAL") // LOW, NORMAL, HIGH
   notes          String?
+  // Set the first time the task moves to IN_PROGRESS — with completedAt this gives
+  // the attendant's time-on-task for the Housekeeping Attendant report.
+  startedAt      DateTime?
   completedAt    DateTime?
   scheduledDate  DateTime @default(now())
 
