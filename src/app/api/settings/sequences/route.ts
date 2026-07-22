@@ -7,7 +7,7 @@ import { logActivity } from "@/lib/activity-log"
 // Just the plain integer counter itself — no prefix/format handling here (that's
 // EnterpriseSettings.resConfirmPrefix's job for confirmation numbers elsewhere). These
 // four are sequential numbers only, never alphanumeric.
-const SEQUENCE_TYPES = ["REGISTRATION_NO", "PROFORMA_FOLIO", "TAX_INVOICE", "RECEIPT_NO"] as const
+const SEQUENCE_TYPES = ["REGISTRATION_NO", "PROFORMA_FOLIO", "TAX_INVOICE", "RECEIPT_NO", "GUEST_REG_NO"] as const
 
 const putSchema = z.object({
   propertyId: z.string().uuid(),
@@ -51,10 +51,14 @@ export async function PUT(request: Request) {
     const data = putSchema.parse(json)
     await assertPropertyAccess(ctx, data.propertyId)
 
+    // The guest registration number is year-scoped (resets each 1 Jan). Stamp the
+    // current year when it's set manually so the next EOD assignment respects the
+    // value instead of treating a null year as "new year → reset to 0".
+    const resetYear = data.sequenceType === "GUEST_REG_NO" ? new Date().getUTCFullYear() : undefined
     const updated = await prisma.propertySequence.upsert({
       where: { propertyId_sequenceType: { propertyId: data.propertyId, sequenceType: data.sequenceType } },
-      update: { currentValue: data.currentValue },
-      create: { propertyId: data.propertyId, sequenceType: data.sequenceType, currentValue: data.currentValue },
+      update: { currentValue: data.currentValue, ...(resetYear !== undefined ? { resetYear } : {}) },
+      create: { propertyId: data.propertyId, sequenceType: data.sequenceType, currentValue: data.currentValue, resetYear },
     })
 
     await logActivity({

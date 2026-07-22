@@ -73,10 +73,11 @@ export async function POST(
     // callers (e.g. the front-desk check-in dialog) can post a payment immediately
     // after check-in without a second fetch.
     const folioId = await prisma.$transaction(async (tx) => {
-      // Update Reservation Status
+      // Update Reservation Status. checkedInAt records the actual arrival time —
+      // it orders guest Registration No assignment at EOD (check-in date then time).
       await tx.reservation.update({
         where: { id },
-        data: { status: "IN_HOUSE" }
+        data: { status: "IN_HOUSE", checkedInAt: new Date() }
       });
 
       // Create Folio if it doesn't exist — a pre-arrival deposit may already have

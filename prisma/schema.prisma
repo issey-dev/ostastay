@@ -272,6 +272,7 @@ model Property {
   eodSessionsInvalidAt DateTime?
 
   eodRuns      EodRun[]
+  guestRegistrations GuestRegistration[]
 
   buildings    Building[]
   facilities   Facility[]
@@ -590,6 +591,7 @@ model Profile {
   travelAgentReservations  Reservation[]       @relation("TravelAgent")
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]             @relation("PayeeProfile")
+  guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
   negotiatedRateAccess     RatePlanAgentAccess[]
@@ -781,6 +783,9 @@ model Reservation {
 
   checkInDate  DateTime
   checkOutDate DateTime
+  // Actual arrival timestamp, set when the guest is checked in (status → IN_HOUSE).
+  // Used to order guest Registration No assignment at EOD (check-in date then time).
+  checkedInAt  DateTime?
   adults       Int      @default(1)
   children     Int      @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)
@@ -813,6 +818,7 @@ model Reservation {
   allocations        ReservationAllocation[]
   specialRequests    ReservationSpecialRequest[]
   routingRules       FolioRoutingRule[]
+  guestRegistrations GuestRegistration[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1385,12 +1391,13 @@ model EodRun {
   startedAt       DateTime @default(now())
 
   // Per-step completion timestamps — null means "not done yet" (drives resume).
-  departuresAt DateTime?
-  cashierAt    DateTime?
-  postAt       DateTime?
-  reportsAt    DateTime?
-  finalizedAt  DateTime?
-  completedAt  DateTime?
+  departuresAt   DateTime?
+  cashierAt      DateTime?
+  postAt         DateTime?
+  registrationAt DateTime?
+  reportsAt      DateTime?
+  finalizedAt    DateTime?
+  completedAt    DateTime?
 
   @@unique([propertyId, businessDate])
 }
@@ -1405,11 +1412,38 @@ model PropertySequence {
   id           String   @id @default(uuid())
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  sequenceType String   // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO
+  sequenceType String   // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO | GUEST_REG_NO
   currentValue Int      @default(0)
+  // For year-scoped sequences (GUEST_REG_NO, the Green Tax guest registration
+  // number): the calendar year currentValue belongs to. On the first allocation of
+  // a new year the counter resets to 0 (reset every 1st January). Null for plain
+  // never-resetting sequences.
+  resetYear    Int?
   updatedAt    DateTime @updatedAt
 
   @@unique([propertyId, sequenceType])
+}
+
+// The per-guest Registration Number assigned at End-of-Day to every guest who
+// arrived on the business date (primary + accompanying), for the Green Tax return.
+// Rooms of a pseudo room type (which covers day-use) are excluded. Numbered in
+// arrival order (check-in date then time) and reset annually.
+model GuestRegistration {
+  id             String      @id @default(uuid())
+  propertyId     String
+  property       Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservationId  String
+  reservation    Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  profileId      String
+  profile        Profile     @relation(fields: [profileId], references: [upid], onDelete: Cascade)
+  registrationNo Int
+  year           Int
+  isPrimary      Boolean     @default(false)
+  businessDate   DateTime
+  createdAt      DateTime    @default(now())
+
+  @@unique([propertyId, year, registrationNo])
+  @@unique([reservationId, profileId])
 }
 
 // Append-only user activity trail — one row per mutating action (views are

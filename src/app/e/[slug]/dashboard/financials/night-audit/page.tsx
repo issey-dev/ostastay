@@ -264,6 +264,19 @@ export default function EndOfDayPage() {
         </div>
       )
     }
+    if (key === "registration") {
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Assigns each guest who arrived today a sequential Green Tax registration number (primary and accompanying guests; day-use/pseudo rooms excluded).
+          </p>
+          <Button disabled={busy === "registration"} onClick={() => runStep("registration")}>
+            {busy === "registration" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Assign registration numbers
+          </Button>
+        </div>
+      )
+    }
     if (key === "reports") {
       return (
         <div className="space-y-3">

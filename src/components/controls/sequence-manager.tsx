@@ -18,10 +18,11 @@ type PropertyOption = { id: string; name: string }
 type Sequence = { sequenceType: string; currentValue: number; updatedAt: string | null }
 
 const SEQUENCE_LABELS: Record<string, string> = {
-  REGISTRATION_NO: "Registration No",
+  REGISTRATION_NO: "Reservation No (confirmation)",
   PROFORMA_FOLIO: "Proforma Folio",
   TAX_INVOICE: "Tax Invoice",
   RECEIPT_NO: "Receipt No",
+  GUEST_REG_NO: "Guest Registration No (Green Tax, resets yearly)",
 }
 const SEQUENCE_TYPES = Object.keys(SEQUENCE_LABELS)
 

@@ -8,6 +8,7 @@ export const EOD_STEPS = [
   { key: "departures", column: "departuresAt", label: "Resolve departures", detail: "Force check-out or extend guests due out today." },
   { key: "cashier", column: "cashierAt", label: "Close cashiers", detail: "Force-close any open cashier shift for this property." },
   { key: "post", column: "postAt", label: "Post room & tax", detail: "Post nightly room charges, extra occupancy, packages, and Green Tax." },
+  { key: "registration", column: "registrationAt", label: "Registration numbers", detail: "Assign each arriving guest a Green Tax registration number (day-use/pseudo rooms excluded)." },
   { key: "reports", column: "reportsAt", label: "Generate reports", detail: "Snapshot the day's Trial Balance, ledgers, Cashier Summary, and Manager Flash." },
   { key: "finalize", column: "finalizedAt", label: "Roll & close", detail: "Roll the business date forward and sign property staff out." },
 ] as const;

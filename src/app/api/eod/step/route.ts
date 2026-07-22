@@ -4,6 +4,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { resolveBusinessDate } from "@/lib/business-date";
 import { expectedCashForShift } from "@/lib/shift-summary";
 import { startEodRun, getActiveEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
+import { assignRegistrationNumbers } from "@/lib/guest-registration";
 import { logActivity } from "@/lib/activity-log";
 import * as nightAuditRunRoute from "@/app/api/night-audit/run/route";
 
@@ -90,6 +91,14 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: runData.error || "Posting failed.", posting: runData }, { status: runResp.status });
         }
         await completeEodStep(run.id, "post");
+      }
+    } else if (step === "registration") {
+      if (!isStepDone(run, "registration")) {
+        // Number the day's arriving guests (uses the run's business date, which is
+        // stable even though the post step already rolled the property's date).
+        const result = await assignRegistrationNumbers(propertyId, run.businessDate);
+        await completeEodStep(run.id, "registration");
+        stepResult = { registration: result };
       }
     } else if (step === "reports") {
       // Phase 2 wires the six snapshot reports here. For now, mark the step done.

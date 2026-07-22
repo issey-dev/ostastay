@@ -93,7 +93,7 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
     expect(res.status).toBe(200);
     const s = await res.json();
     expect(new Date(s.businessDate).getTime()).toBe(BIZ.getTime());
-    expect(s.steps).toHaveLength(5);
+    expect(s.steps).toHaveLength(6);
     expect(s.steps.every((x: any) => !x.done)).toBe(true);
     expect(s.pendingDepartures.some((d: any) => d.id === dueOutId)).toBe(true);
     expect(s.openShifts.length).toBe(1);
@@ -143,6 +143,7 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
   });
 
   it("reports + finalize complete the run and set the force-logout watermark", async () => {
+    expect((await step("registration")).status).toBe(200);
     expect((await step("reports")).status).toBe(200);
     const fin = await step("finalize");
     expect(fin.status).toBe(200);
