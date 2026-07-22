@@ -273,6 +273,7 @@ model Property {
 
   eodRuns      EodRun[]
   guestRegistrations GuestRegistration[]
+  eodReports   EodReport[]
 
   buildings    Building[]
   facilities   Facility[]
@@ -1444,6 +1445,23 @@ model GuestRegistration {
 
   @@unique([propertyId, year, registrationNo])
   @@unique([reservationId, profileId])
+}
+
+// An immutable per-business-date report snapshot generated during EOD's reports
+// step — the six regulatory/management reports, each stored as a JSON blob so a
+// closed date's figures never change afterward. reportType is one of
+// TRIAL_BALANCE | GUEST_LEDGER | AR_LEDGER | DEPOSIT_LEDGER | CASHIER_SUMMARY |
+// MANAGER_FLASH.
+model EodReport {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  businessDate DateTime
+  reportType   String
+  data         String
+  generatedAt  DateTime @default(now())
+
+  @@unique([propertyId, businessDate, reportType])
 }
 
 // Append-only user activity trail — one row per mutating action (views are

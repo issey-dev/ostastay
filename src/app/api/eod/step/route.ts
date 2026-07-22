@@ -5,6 +5,7 @@ import { resolveBusinessDate } from "@/lib/business-date";
 import { expectedCashForShift } from "@/lib/shift-summary";
 import { startEodRun, getActiveEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
 import { assignRegistrationNumbers } from "@/lib/guest-registration";
+import { snapshotEodReports } from "@/lib/eod-reports";
 import { logActivity } from "@/lib/activity-log";
 import * as nightAuditRunRoute from "@/app/api/night-audit/run/route";
 
@@ -101,9 +102,12 @@ export async function POST(request: Request) {
         stepResult = { registration: result };
       }
     } else if (step === "reports") {
-      // Phase 2 wires the six snapshot reports here. For now, mark the step done.
       if (!isStepDone(run, "reports")) {
+        // Freeze the six regulatory/management reports for the closed business date.
+        // Uses the run's business date (the post step already rolled the property's).
+        await snapshotEodReports(propertyId, run.businessDate);
         await completeEodStep(run.id, "reports");
+        stepResult = { reports: { generated: true } };
       }
     } else if (step === "finalize") {
       if (!isStepDone(run, "finalize")) {

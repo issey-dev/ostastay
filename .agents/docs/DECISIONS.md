@@ -1750,8 +1750,11 @@ reports snapshotted per date; force-logout is PROPERTY-scoped only.
      same-business-date idempotency IS the double-post guard); posts room/tax/
      packages/Green Tax, marks no-shows, rolls the business date. A 409-already-run
      is treated as done. The EodRun.postAt guard prevents re-posting on resume.
-  4. **Reports** — Phase 2 (snapshot the six reports); currently a no-op step.
-  5. **Finalize** — sets `Property.eodSessionsInvalidAt` (force-logout watermark) and
+  4. **Registration** — assigns each arriving guest a Green Tax registration number
+     (see the Registration No entry below).
+  5. **Reports** — snapshots the six reports for the closed date (see the EOD Reports
+     entry below).
+  6. **Finalize** — sets `Property.eodSessionsInvalidAt` (force-logout watermark) and
      marks the run COMPLETED.
 - **Force-logout** — stateless JWTs, so `requireSession` (scope.ts) rejects a
   PROPERTY-scoped user whose token `iat` predates their property's
@@ -1759,6 +1762,39 @@ reports snapshotted per date; force-logout is PROPERTY-scoped only.
 - **UI** — the Night Audit page is now the EOD wizard: business-date OPEN/CLOSED
   badge, an animated vertical stepper, per-step panels (departures resolution list,
   cashier close, post, reports, finalize), and resume.
-- **Not yet done (Phase 2):** the six snapshot reports (Trial Balance, Guest Ledger,
-  AR Ledger, Deposit Ledger, Cashier Summary, Manager Flash) wired into the reports
-  step + a per-date archive viewer.
+### EOD Reports — the six per-date snapshots (2026-07-22)
+
+The reports step freezes six reports as immutable `EodReport` JSON blobs, one row per
+(property, businessDate, reportType). Generation lib: `src/lib/eod-reports.ts`
+(`generateEodReports` computes, `snapshotEodReports` persists). Read via
+`GET /api/eod/reports` (no `date` → the list of snapshotted dates; `&date=YYYY-MM-DD`
+→ the six parsed reports). Archive viewer + print at
+`financials/night-audit/reports`.
+
+- **The six:** Trial Balance (day's charge debits by category + payment credits by
+  method + closing Guest/AR/Deposit ledger positions), Guest Ledger (open in-house
+  non-debtor folio balances), AR Ledger (finalized debtor invoices with a balance),
+  Deposit Ledger (money held on RESERVED/CONFIRMED reservations), Cashier Summary
+  (the day's collections grouped by cashier then method), Manager Flash (occupancy %,
+  ADR, RevPAR, revenue by category, arrivals/departures/no-shows/in-house).
+- **Date semantics:** FLOW figures (postings, collections) — charges filter on
+  `FolioLineItem.date ∈ [D, D+1)` (business-date stamped, accurate); payments have no
+  business date so they filter on `createdAt ∈ [D, D+1)` (accurate for daily-EOD
+  cadence — noted in the lib header if that assumption ever needs revisiting).
+  POSITION figures (ledger balances) are the live folio state at snapshot time, which
+  is exactly "as of close" of D. Occupancy excludes pseudo/day-use room types and
+  counts the night D (checkInDate ≤ D < checkOutDate, IN_HOUSE).
+- **Idempotency:** `snapshotEodReports` upserts, so a manual regenerate overwrites
+  rather than duplicating; the reports step's own guard normally prevents re-running.
+
+### Registration No — Green Tax guest numbering (2026-07-22)
+
+New EOD step (`assignRegistrationNumbers`, `src/lib/guest-registration.ts`) that gives
+every arriving guest — primary and accompanying — a sequential Green Tax registration
+number for the government report. Order: check-in date then check-in time
+(`Reservation.checkedInAt`, set at check-in). Pseudo/day-use room types are excluded.
+The `GUEST_REG_NO` PropertySequence is year-scoped (`resetYear`) and resets on the
+first assignment of each new calendar year. Idempotent (an already-registered guest is
+skipped). Written as `GuestRegistration` rows (unique per property+year+number and per
+reservation+profile). Distinct from the existing `REGISTRATION_NO` sequence, which is
+the reservation confirmation number ("Reservation No" in the Sequence Manager).

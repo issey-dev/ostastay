@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight, FileText } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
 import { format } from "date-fns"
 
 type StepState = { key: string; label: string; detail: string; done: boolean; at: string | null }
@@ -127,6 +128,10 @@ export default function EndOfDayPage() {
           <h2 className="text-3xl font-bold tracking-tight">End of Day</h2>
           <p className="text-muted-foreground">Close the business date step by step. The date stays open until every step is done.</p>
         </div>
+        <div className="flex items-center gap-3">
+        <Link href="night-audit/reports" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <FileText className="w-4 h-4 mr-2" /> Report archive
+        </Link>
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <CalendarClock className="w-5 h-5 text-muted-foreground" />
           <div className="text-sm">
@@ -135,6 +140,7 @@ export default function EndOfDayPage() {
               <span className={`font-medium ${allDone ? "text-success" : "text-warning"}`}>{allDone ? "CLOSED" : "OPEN"}</span>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -280,11 +286,16 @@ export default function EndOfDayPage() {
     if (key === "reports") {
       return (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Snapshot the day's reports (Trial Balance, ledgers, Cashier Summary, Manager Flash).</p>
-          <Button disabled={busy === "reports"} onClick={() => runStep("reports")}>
-            {busy === "reports" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            Generate reports
-          </Button>
+          <p className="text-sm text-muted-foreground">Freezes the six reports for this date (Trial Balance, Guest / AR / Deposit Ledgers, Cashier Summary, Manager Flash) as an immutable snapshot you can view and print from the archive.</p>
+          <div className="flex items-center gap-2">
+            <Button disabled={busy === "reports"} onClick={() => runStep("reports")}>
+              {busy === "reports" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Generate reports
+            </Button>
+            <Link href="night-audit/reports" className={buttonVariants({ variant: "outline" })}>
+              <FileText className="w-4 h-4 mr-2" /> View archive
+            </Link>
+          </div>
         </div>
       )
     }
