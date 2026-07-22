@@ -1657,3 +1657,41 @@ of that plan — do not re-ask or reverse without a fresh instruction.
 - **Vacant Rooms KPI semantics confirmed as shipped in Phase 0**: headline number
   = all unoccupied sellable rooms (excluding OOO/OOS), with a "clean & ready"
   (CLEAN/INSPECTED) subcount underneath.
+
+## Business date + folio rework (2026-07-22)
+
+Reservation-detail review feedback, implemented across four commits (business
+date → folio posting rules → routing → proforma). Owner decisions captured:
+
+- **Business date is per-property** (`Property.businessDate`), the operational
+  "today" for check-in/out gating, arrivals/departures, and every posting/revenue
+  date. `EnterpriseSettings.systemDate` stays the real server/wall-clock date.
+  Business date rolls forward ONLY when Night Audit (EOD) runs — manual for now;
+  a future Auto-EOD will roll it off the server date. Because EOD rolls the date,
+  running it twice advances two days (each run = one business day); the
+  one-COMPLETED-run-per-business-date guard still prevents same-date double-posts.
+  All domain date-only comparisons are UTC (reservation dates + business date are
+  UTC midnights) — `src/lib/allocations.ts` was switched from local to UTC to match.
+- **Checkout is due-or-overdue** (business date ≥ checkout date); leaving earlier
+  is an explicit **Early Check-Out** (`{ early: true }`, server-enforced via
+  `earlyCheckoutRequired`). The reservation detail shows Check Out vs Early
+  Check-Out from the property business date.
+- **Folio charge posting is gated to checked-in** guests. Deposits (payments)
+  pre-arrival are unaffected; a deliberate **cancellation/no-show fee** is the one
+  exception (`preArrivalFee: true`) — the folio panel exposes the charge form as a
+  labelled pre-arrival fee when the guest isn't in-house. Walk-in/outlet folios
+  are always billable.
+- **Negative amounts** are allowed on charges and payments (adjustments/refunds);
+  only zero/non-numeric is rejected.
+- **Folio payee** can be the attached travel agent / corporate profile (not just
+  guest + sharers).
+- **Line Description auto-fills from the charge code**; a new
+  `FolioLineItem.reference` free-text field prints in the invoice Reference column
+  (was the charge code).
+- **Routing Instructions** (`FolioRoutingRule`): standing per-reservation rules —
+  charge code(s) → a target folio window or another in-house room's folio. Applied
+  by Night Audit and manual posting; creating a rule also moves already-posted
+  matching charges (apply-now). Manual "Move to Folio" now allows any open folio at
+  the same property (cross-reservation/room), not just the same reservation.
+- **Proforma = full projected cost of stay** (reuses `computeReservationQuote`),
+  regardless of what's posted; the Tax Invoice remains actually-posted charges.
