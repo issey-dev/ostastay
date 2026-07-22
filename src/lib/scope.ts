@@ -215,6 +215,21 @@ export async function requireSession(): Promise<AuthContext> {
     throw new UnauthorizedError("Session invalid or account disabled");
   }
 
+  // End-of-Day force-logout: a PROPERTY-scoped user whose token was issued before
+  // their property's EOD-invalidation watermark is signed out (must re-login) so
+  // they can't keep posting while the business date rolls. Enterprise-scoped users
+  // are unaffected. `iat` is in seconds.
+  if (user.scope === "PROPERTY" && user.propertyId) {
+    const prop = await prisma.property.findUnique({
+      where: { id: user.propertyId },
+      select: { eodSessionsInvalidAt: true },
+    });
+    const iatMs = typeof session?.iat === "number" ? session.iat * 1000 : null;
+    if (prop?.eodSessionsInvalidAt && iatMs !== null && iatMs < prop.eodSessionsInvalidAt.getTime()) {
+      throw new UnauthorizedError("Signed out for End-of-Day processing — please sign in again.");
+    }
+  }
+
   const ostaEnterpriseId = await getOstaEnterpriseId();
   const isInternal = user.enterpriseId === ostaEnterpriseId;
 

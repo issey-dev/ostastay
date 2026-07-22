@@ -264,6 +264,15 @@ model Property {
   // (see src/lib/business-date.ts). A future Auto-EOD will roll this off systemDate.
   businessDate DateTime?
 
+  // Force-logout watermark for End-of-Day: set to "now" when EOD finalizes.
+  // requireSession() (src/lib/scope.ts) rejects any PROPERTY-scoped user of this
+  // property whose token was issued before it — forcing a re-login so property staff
+  // can't keep posting while the business date rolls. Enterprise-scoped users are
+  // unaffected. Null = no forced logout pending.
+  eodSessionsInvalidAt DateTime?
+
+  eodRuns      EodRun[]
+
   buildings    Building[]
   facilities   Facility[]
   roomTypes    RoomType[]
@@ -1357,6 +1366,33 @@ model PropertyNightAuditLog {
   totalPostings  Int
 
   status         String   @default("COMPLETED")
+}
+
+// A step-by-step End-of-Day run for one property's business date. The business date
+// is OPEN until an EodRun for it reaches COMPLETED; a partially-run EOD leaves the
+// date OPEN and is resumed from the first step whose timestamp is still null. One
+// run per (property, businessDate). Steps, in order: departures resolved → cashiers
+// closed → charges posted (delegates to the Night Audit run route, whose
+// same-date idempotency is the double-post guard) → reports snapshotted → finalized
+// (business date rolled + property sessions invalidated).
+model EodRun {
+  id              String   @id @default(uuid())
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  businessDate    DateTime
+  status          String   @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  startedByUserId String
+  startedAt       DateTime @default(now())
+
+  // Per-step completion timestamps — null means "not done yet" (drives resume).
+  departuresAt DateTime?
+  cashierAt    DateTime?
+  postAt       DateTime?
+  reportsAt    DateTime?
+  finalizedAt  DateTime?
+  completedAt  DateTime?
+
+  @@unique([propertyId, businessDate])
 }
 
 // Tracks the current sequential counter for a numbered document type — Registration No,

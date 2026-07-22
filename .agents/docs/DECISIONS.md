@@ -1728,3 +1728,37 @@ per-property Rules. Plus a 12-hour EOD recency guard. Answers given in-session:
   successful run returns 409 `{ requiresConfirmation }`; proceeding needs
   `{ confirmed, reason }` and logs a NIGHT_AUDIT/EOD_OVERRIDE activity row. Separate
   from the same-business-date idempotency guard.
+
+## End-of-Day redesign — resumable step wizard (2026-07-22)
+
+App owner redesigned EOD from a single atomic run into a step-by-step, resumable
+wizard with an OPEN/CLOSED business date. Answers given in-session: resumable step
+wizard; departures must be resolved (force check-out or extend) before posting;
+reports snapshotted per date; force-logout is PROPERTY-scoped only.
+
+- **EodRun model** — one per (property, businessDate), status IN_PROGRESS/COMPLETED,
+  with a completion timestamp per step (departures/cashier/post/reports/finalize).
+  The business date is OPEN until its run reaches COMPLETED; a partial run is resumed
+  from the first null-timestamp step. Engine + step metadata in `src/lib/eod.ts`.
+- **Steps** (`POST /api/eod/step`, status via `GET /api/eod/status`):
+  1. **Departures** — blocks while any in-house guest is due out (checkout ≤ business
+     date); each is force-checked-out (existing check-out route) or extended
+     (`POST /api/eod/extend-stay`).
+  2. **Cashier** — force-closes every open shift for the property's PROPERTY-scoped
+     staff, recording the drop as the expected cash (zero discrepancy).
+  3. **Post** — delegates to the existing Night Audit run route (its
+     same-business-date idempotency IS the double-post guard); posts room/tax/
+     packages/Green Tax, marks no-shows, rolls the business date. A 409-already-run
+     is treated as done. The EodRun.postAt guard prevents re-posting on resume.
+  4. **Reports** — Phase 2 (snapshot the six reports); currently a no-op step.
+  5. **Finalize** — sets `Property.eodSessionsInvalidAt` (force-logout watermark) and
+     marks the run COMPLETED.
+- **Force-logout** — stateless JWTs, so `requireSession` (scope.ts) rejects a
+  PROPERTY-scoped user whose token `iat` predates their property's
+  eodSessionsInvalidAt, forcing a re-login. Enterprise-scoped users are unaffected.
+- **UI** — the Night Audit page is now the EOD wizard: business-date OPEN/CLOSED
+  badge, an animated vertical stepper, per-step panels (departures resolution list,
+  cashier close, post, reports, finalize), and resume.
+- **Not yet done (Phase 2):** the six snapshot reports (Trial Balance, Guest Ledger,
+  AR Ledger, Deposit Ledger, Cashier Summary, Manager Flash) wired into the reports
+  step + a per-date archive viewer.
