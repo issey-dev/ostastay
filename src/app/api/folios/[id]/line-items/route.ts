@@ -4,6 +4,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { resolveChargeTax } from "@/lib/tax-calc";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { resolveRoutingTargetFolioId } from "@/lib/folio-routing";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
@@ -84,10 +85,15 @@ export async function POST(
       ? await resolveRoutingTargetFolioId(folio.reservationId, body.chargeCodeId, folioId)
       : folioId;
 
+    // Attribute this posting to the caller's open cashier drawer for the folio's
+    // property (auto-opening one if needed), so it shows up in their shift summary.
+    const shift = await ensureOpenShift(ctx, folio.propertyId);
+
     const lineItem = await prisma.folioLineItem.create({
       data: {
         folioId: targetFolioId,
         chargeCodeId: body.chargeCodeId,
+        shiftId: shift.id,
         date: resolveBusinessDate(folio.property),
         description,
         reference,

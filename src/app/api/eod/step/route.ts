@@ -48,17 +48,14 @@ export async function POST(request: Request) {
       }
     } else if (step === "cashier") {
       if (!isStepDone(run, "cashier")) {
-        // Force-close every open shift for this property's staff, recording the drop as
-        // the expected cash (zero discrepancy) — there's no physical count at EOD.
-        const propertyUserIds = new Set(
-          (await prisma.user.findMany({ where: { propertyId, scope: "PROPERTY" }, select: { id: true } })).map((u) => u.id)
-        );
-        const openShifts = (
-          await prisma.cashierShift.findMany({
-            where: { closedAt: null },
-            include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true },
-          })
-        ).filter((s) => propertyUserIds.has(s.userId));
+        // Force-close every open shift for this property, recording the drop as the
+        // expected cash (zero discrepancy) — there's no physical count at EOD. Shifts
+        // are property-scoped now, so this covers any user (property- or enterprise-
+        // scoped) who has a drawer open on this property.
+        const openShifts = await prisma.cashierShift.findMany({
+          where: { propertyId, closedAt: null },
+          include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true },
+        });
 
         for (const shift of openShifts) {
           const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts);

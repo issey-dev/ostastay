@@ -39,14 +39,11 @@ export async function GET(request: Request) {
       where: { propertyId, status: "RESERVED", checkInDate: { lte: businessDate } },
     });
 
-    // Open cashier shifts for this property's staff — force-closed in the cashier step.
-    // CashierShift.userId is a bare string (no relation), so filter by property staff
-    // ids manually.
-    const propertyUserIds = new Set(
-      (await prisma.user.findMany({ where: { propertyId, scope: "PROPERTY" }, select: { id: true } })).map((u) => u.id)
-    );
-    const openShifts = (await prisma.cashierShift.findMany({ where: { closedAt: null }, orderBy: { openedAt: "asc" } }))
-      .filter((s) => propertyUserIds.has(s.userId));
+    // Open cashier shifts for this property — force-closed in the cashier step.
+    const openShifts = await prisma.cashierShift.findMany({
+      where: { propertyId, closedAt: null },
+      orderBy: { openedAt: "asc" },
+    });
 
     return NextResponse.json({
       businessDate,

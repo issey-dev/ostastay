@@ -133,10 +133,28 @@ export async function PATCH(
       }
     }
 
+    // Stamp the lifecycle timestamps so the Cancellations & No-Shows report can
+    // filter by when it happened / show the reason; clear them on reinstate.
+    const now = new Date();
+    const statusData: Record<string, unknown> = { status: body.status };
+    if (body.status === "CANCELLED") {
+      statusData.cancelledAt = now;
+      statusData.cancellationReason =
+        typeof body.reason === "string" && body.reason.trim() ? body.reason.trim()
+        : typeof body.cancellationReason === "string" && body.cancellationReason.trim() ? body.cancellationReason.trim()
+        : null;
+    } else if (body.status === "NO_SHOW") {
+      statusData.noShowAt = now;
+    } else if (body.status === "RESERVED") {
+      statusData.cancelledAt = null;
+      statusData.cancellationReason = null;
+      statusData.noShowAt = null;
+    }
+
     const updatedReservation = await prisma.$transaction(async (tx) => {
       const updated = await tx.reservation.update({
         where: { id },
-        data: { status: body.status },
+        data: statusData,
       });
 
       // A cancelled reservation's folios are closed so they can't accumulate

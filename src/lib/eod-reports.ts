@@ -8,10 +8,11 @@ import { summarizeShiftPayments, type MethodBreakdownRow } from "@/lib/shift-sum
 // EodReport so a closed date's figures are frozen and never recomputed.
 //
 // Date semantics — two different kinds of figure live in these reports:
-//   • FLOW figures (the day's postings and collections) filter by transaction
-//     date. Charges are stamped with the business date (FolioLineItem.date), so
-//     they filter on [D, D+1). Payments carry no business date, so they filter on
-//     createdAt within [D, D+1) — accurate for the normal daily-EOD cadence.
+//   • FLOW figures (the day's postings and collections). Charges are stamped with
+//     the business date (FolioLineItem.date), so they filter on [D, D+1). Payments
+//     are anchored via their cashier shift, which carries the property + business
+//     date it was opened under — so collections are exactly the day's, per property,
+//     even if wall-clock time has drifted from the business date.
 //   • POSITION figures (ledger balances) are the live folio state at snapshot
 //     time, which is exactly "as of the close" of date D.
 
@@ -194,9 +195,13 @@ export async function generateEodReports(propertyId: string, businessDate: Date)
     .sort((a, b) => b.total - a.total);
   const chargesTotal = round2(chargeCategories.reduce((s, r) => s + r.total, 0));
 
-  // ── The day's payments (createdAt window), for Cashier Summary + Trial Balance credits ──
+  // ── The day's payments, for Cashier Summary + Trial Balance credits ──
+  // Anchored on the cashier shifts belonging to this (property, business date): a
+  // payment carries a shift, and a shift is stamped with the property + business
+  // date it was opened under, so this captures exactly the day's collections
+  // regardless of wall-clock drift.
   const dayPayments = await prisma.payment.findMany({
-    where: { folio: { propertyId }, createdAt: { gte: day, lt: dayEnd } },
+    where: { shift: { propertyId, businessDate: day } },
     include: { paymentMethod: { select: { name: true, type: true } }, shift: { select: { userId: true } } },
   });
   const shiftUserIds = Array.from(new Set(dayPayments.map((p) => p.shift?.userId).filter(Boolean))) as string[];

@@ -72,6 +72,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       fetchLookupData()
       fetchInHouseFolios()
       setSelectedLineItemIds([])
+      // Opening a billing screen auto-opens the cashier's drawer for this property,
+      // even before anything is posted (front-desk "begin my shift" behavior).
+      fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
     }
   }, [isOpen, reservationId])
 

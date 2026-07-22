@@ -274,6 +274,7 @@ model Property {
   eodRuns      EodRun[]
   guestRegistrations GuestRegistration[]
   eodReports   EodReport[]
+  cashierShifts CashierShift[]
 
   buildings    Building[]
   facilities   Facility[]
@@ -796,6 +797,14 @@ model Reservation {
   infants      Int      @default(0)
   mealPlan     String   @default("NONE")
   status       String   @default("RESERVED")
+  // Set when the reservation is cancelled (status → CANCELLED): the moment and the
+  // operator-supplied reason. Drives the Cancellations & No-Shows report so it can
+  // be filtered by "cancelled on date X" rather than a proxy timestamp.
+  cancelledAt        DateTime?
+  cancellationReason String?
+  // Set when the reservation is marked a no-show (status → NO_SHOW), by Night Audit
+  // for un-arrived bookings or manually. The business date the no-show was recorded.
+  noShowAt           DateTime?
   // Free-text front-desk note surfaced on the guest Confirmation Letter (e.g. "Honeymoon
   // — high floor requested") — deliberately a single field on the reservation itself,
   // not sourced from ReservationTrace (that's an operational task/message log, not
@@ -912,6 +921,12 @@ model FolioLineItem {
   // attribution on room reassignment doesn't need to delete billing history.
   roomAssignmentId String?
   roomAssignment   RoomAssignment? @relation(fields: [roomAssignmentId], references: [id], onDelete: SetNull)
+  // The cashier shift this charge was posted during, if a front-desk user posted it
+  // while holding an open shift on the folio's property. Null for Night Audit and
+  // other system postings. SetNull on delete — losing the attribution never deletes
+  // billing history. Drives the per-shift "postings by charge code" summary.
+  shiftId      String?
+  shift        CashierShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   date         DateTime
   // The line's own descriptive text — auto-filled from the charge code's
   // description at posting time, editable by the operator.
@@ -950,11 +965,22 @@ model FolioRoutingRule {
   @@unique([reservationId, chargeCodeId])
 }
 
+// A front-desk cashier's drawer session, scoped to (userId, propertyId): a user
+// working two properties keeps a separate drawer per property. Auto-opened the
+// first time the user touches a billing screen for a property (0 float), closed
+// either manually at end of shift or force-closed by that property's Night Audit.
+// businessDate is the property's operational date at open time — it anchors the
+// shift to a business day so the EOD Cashier Summary can group by (property, date)
+// even if wall-clock time drifts from the business date.
 model CashierShift {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id])
   userId       String
+  // Nullable for pre-migration rows; every shift opened after this migration has one.
+  propertyId   String?
+  property     Property?  @relation(fields: [propertyId], references: [id])
+  businessDate DateTime?
   openedAt     DateTime  @default(now())
   closedAt     DateTime?
   openingFloat Float     @default(0.0)
@@ -963,6 +989,13 @@ model CashierShift {
   payments Payment[]
   currencyExchanges CurrencyExchange[]
   paidOuts CashierPaidOut[]
+  // Charges posted by this cashier during the shift — set on manual/front-desk
+  // postings so the shift can show "what I posted, by charge code". Night Audit and
+  // other system postings leave shiftId null and never count toward a cashier's shift.
+  lineItems FolioLineItem[]
+
+  @@index([propertyId])
+  @@index([userId])
 }
 
 // A petty-cash disbursement from the drawer during a shift (florist COD, taxi

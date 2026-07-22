@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
 
@@ -16,16 +16,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid closing drop amount" }, { status: 400 });
     }
 
-    const enterpriseId = ctx.enterpriseId;
     const userId = ctx.userId;
 
-    // 1. Fetch their active shift
+    // 1. Fetch their active shift for the property they're working
+    const propertyId = await resolveCurrentPropertyId(ctx);
     const activeShift = await prisma.cashierShift.findFirst({
       where: {
-        enterpriseId,
         userId,
+        ...(propertyId ? { propertyId } : {}),
         closedAt: null
       },
+      orderBy: { openedAt: "desc" },
       include: {
         payments: {
           include: {

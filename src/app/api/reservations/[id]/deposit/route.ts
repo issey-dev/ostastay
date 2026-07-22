@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 const DEPOSIT_PURPOSES = ["DEPOSIT", "PRE_ARRIVAL_FEE", "CANCELLATION_FEE", "NO_SHOW_FEE"] as const;
@@ -63,16 +64,9 @@ export async function POST(
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
 
-    // Same shift discipline as the folio payments route: always the caller's own
-    // open shift, auto-opened at 0 float if needed — never a client-supplied id.
-    let shift = await prisma.cashierShift.findFirst({
-      where: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, closedAt: null },
-    });
-    if (!shift) {
-      shift = await prisma.cashierShift.create({
-        data: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, openingFloat: 0 },
-      });
-    }
+    // Same shift discipline as the folio payments route: the caller's own open drawer
+    // for this reservation's property, auto-opened at 0 float if needed.
+    const shift = await ensureOpenShift(ctx, reservation.propertyId);
 
     const { payment } = await prisma.$transaction(async (tx) => {
       let folio = reservation.folios.find((f) => !f.isClosed) ?? null;

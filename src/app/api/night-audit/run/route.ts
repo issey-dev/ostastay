@@ -466,7 +466,7 @@ export async function POST(request: Request) {
         if (noShowCandidates.length > 0) {
           await tx.reservation.updateMany({
             where: { id: { in: noShowCandidates.map((r) => r.id) } },
-            data: { status: "NO_SHOW" },
+            data: { status: "NO_SHOW", noShowAt: auditDate },
           })
         }
         // No-show fees: post to the folio where one exists (retained from any held

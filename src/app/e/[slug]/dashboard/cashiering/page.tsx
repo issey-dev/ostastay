@@ -347,18 +347,42 @@ export default function CashieringPage() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Starting Float</p>
-                  <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
+                {status.shift.openingFloat === 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium text-muted-foreground">Opening Float</p>
+                    <p className="text-xs text-muted-foreground">Shift was auto-opened. Set your starting cash:</p>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Input type="number" step="0.01" className="pl-9 w-40 font-bold" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} />
+                      </div>
+                      <Button variant="outline" onClick={handleOpenShift} disabled={isOpening}>
+                        {isOpening ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set float"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Starting Float</p>
+                    <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
+                  </div>
+                )}
+                <div className="flex items-end gap-6">
+                  {status.summary && (
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-muted-foreground">Expected Cash</p>
+                      <p className="text-2xl font-bold font-mono text-foreground">${status.summary.expectedCash.toFixed(2)}</p>
+                    </div>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    className="w-full sm:w-auto"
+                    onClick={() => setIsCloseModalOpen(true)}
+                  >
+                    <Lock className="w-4 h-4 mr-2" /> Close Shift (Blind Drop)
+                  </Button>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  className="w-full sm:w-auto"
-                  onClick={() => setIsCloseModalOpen(true)}
-                >
-                  <Lock className="w-4 h-4 mr-2" /> Close Shift (Blind Drop)
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -433,13 +457,39 @@ export default function CashieringPage() {
             </CardContent>
           </Card>
 
+          {(status.summary?.postingsByChargeCode?.length ?? 0) > 0 && (
+            <Card className="border-0 shadow-sm ring-1 ring-border">
+              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-muted-foreground" />
+                  Postings by Charge Code
+                </CardTitle>
+                <span className="text-sm font-mono font-semibold text-foreground">${status.summary.chargesTotal.toFixed(2)}</span>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {status.summary.postingsByChargeCode.map((row: any) => (
+                    <div key={row.code} className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{row.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{row.code} · {row.count} posting{row.count === 1 ? "" : "s"}</p>
+                      </div>
+                      <span className="font-mono font-bold text-foreground">${row.total.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeByMethod.length > 0 && (
             <Card className="border-0 shadow-sm ring-1 ring-border">
-              <CardHeader className="bg-muted border-b border-border">
+              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-muted-foreground" />
-                  Takings by Payment Method
+                  Payment Summary
                 </CardTitle>
+                {status.summary && <span className="text-sm font-mono font-semibold text-foreground">${status.summary.paymentsNet.toFixed(2)}</span>}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border">

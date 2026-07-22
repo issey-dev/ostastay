@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
+import { resolveBusinessDate } from "@/lib/business-date";
+import { findOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
@@ -18,17 +20,27 @@ export async function POST(request: Request) {
     const enterpriseId = ctx.enterpriseId;
     const userId = ctx.userId;
 
-    // 1. Double check they don't already have an active shift
-    const existingShift = await prisma.cashierShift.findFirst({
-      where: {
-        enterpriseId,
-        userId,
-        closedAt: null
-      }
-    });
+    // A shift belongs to (user, property) — resolve the property the caller is working.
+    const propertyId = await resolveCurrentPropertyId(ctx);
+    if (!propertyId) {
+      return NextResponse.json({ error: "No property selected for this cashier session." }, { status: 400 });
+    }
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    const businessDate = property ? resolveBusinessDate(property) : null;
 
+    // 1. Reuse an auto-opened (0-float) shift for this property if one exists — record
+    //    the real opening float on it; otherwise block a genuine second open shift.
+    const existingShift = await findOpenShift(userId, propertyId);
     if (existingShift) {
-      return NextResponse.json({ error: "You already have an active shift. Please close it first." }, { status: 400 });
+      if (existingShift.openingFloat === 0 && openingFloat > 0) {
+        const updated = await prisma.cashierShift.update({
+          where: { id: existingShift.id },
+          data: { openingFloat },
+        });
+        await logActivity({ ctx, module: "CASHIERING", action: "SHIFT_OPEN", entityType: "CashierShift", entityId: updated.id, description: `Set opening float $${openingFloat.toFixed(2)}` });
+        return NextResponse.json({ success: true, data: updated });
+      }
+      return NextResponse.json({ error: "You already have an active shift for this property. Please close it first." }, { status: 400 });
     }
 
     // 2. Open new shift
@@ -36,6 +48,8 @@ export async function POST(request: Request) {
       data: {
         enterpriseId,
         userId,
+        propertyId,
+        businessDate,
         openingFloat: openingFloat
       }
     });

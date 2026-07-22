@@ -52,6 +52,9 @@ export default function POSDashboard() {
           if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive))
         })
         .catch(console.error)
+      // POS is a billing screen — opening it auto-opens the cashier's drawer for the
+      // current property, even before anything is posted.
+      fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
     }
   }, [currentProperty])
 

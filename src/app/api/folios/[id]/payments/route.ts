@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
@@ -45,16 +46,9 @@ export async function POST(
     }
 
     // The client no longer picks a shift explicitly — payments always post against the
-    // caller's own currently-open cashier shift, auto-opening one (0 float) if they
-    // don't have one yet, rather than trusting a client-supplied shiftId.
-    let shift = await prisma.cashierShift.findFirst({
-      where: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, closedAt: null }
-    });
-    if (!shift) {
-      shift = await prisma.cashierShift.create({
-        data: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, openingFloat: 0 }
-      });
-    }
+    // caller's own currently-open cashier shift for the folio's property, auto-opening
+    // one (0 float) if they don't have one yet, rather than trusting a client shiftId.
+    const shift = await ensureOpenShift(ctx, folio.propertyId);
 
     const payment = await prisma.payment.create({
       data: {

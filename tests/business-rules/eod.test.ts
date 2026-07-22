@@ -61,7 +61,7 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
     adminId = admin.id;
     const cashier = await prisma.user.create({ data: { enterpriseId, email: `ew-cash-${uniq()}@test.local`, passwordHash, firstName: "Cash", lastName: "EW", roleId: roleIds["Cashier"], scope: "PROPERTY", propertyId } });
     cashierUserId = cashier.id;
-    await prisma.cashierShift.create({ data: { enterpriseId, userId: cashier.id, openingFloat: 300 } });
+    await prisma.cashierShift.create({ data: { enterpriseId, userId: cashier.id, propertyId, businessDate: BIZ, openingFloat: 300 } });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Eod", lastName: "Guest" } });
 
     // Chargeable in-house stay (checks out after the business date).

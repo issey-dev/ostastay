@@ -40,7 +40,7 @@ describe("EOD report snapshots", () => {
     cashMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } })).id;
     const cashier = await prisma.user.create({ data: { enterpriseId, email: `er-cash-${uniq()}@test.local`, passwordHash: "x", firstName: "Cash", lastName: "Ier", roleId: roleIds["Cashier"], scope: "PROPERTY", propertyId } });
     cashierUserId = cashier.id;
-    shiftId = (await prisma.cashierShift.create({ data: { enterpriseId, userId: cashier.id, openingFloat: 100 } })).id;
+    shiftId = (await prisma.cashierShift.create({ data: { enterpriseId, userId: cashier.id, propertyId, businessDate: BIZ, openingFloat: 100 } })).id;
     guestId = (await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Gina", lastName: "Guest" } })).upid;
     taId = (await prisma.profile.create({ data: { enterpriseId, profileType: "TRAVEL_AGENT", firstName: "ACME Travel", companyName: "ACME Travel" } })).upid;
 
