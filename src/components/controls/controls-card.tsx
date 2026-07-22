@@ -2,15 +2,14 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { useProperty } from "@/components/providers/property-provider"
 
 // The single reusable "settings section" wrapper — every Controls tab should render its
 // content inside one or more of these instead of hand-rolling Card/CardHeader/CardTitle/
 // CardDescription/CardContent each time, so every section looks and behaves identically.
-// The header's left edge is accented with the active property's own banner color (the
-// same value PropertyBannerBar renders at the top of the page) so a long page of
-// stacked sections is easier to scan — omitted entirely when the property has no
-// banner color set ("None").
+// Header and body share one continuous surface (no shaded band / divider) — separation is
+// carried by the card's own elevation + spacing. The subtle per-property accent on the
+// card's left edge is applied globally by PropertyAccentScope (see the dashboard layout),
+// so every card across the app picks it up, not just Controls.
 export function ControlsCard({
   title,
   description,
@@ -22,19 +21,13 @@ export function ControlsCard({
   children: React.ReactNode
   className?: string
 }) {
-  const { currentProperty } = useProperty()
-  const accentColor = currentProperty?.bannerColor
-
   return (
     <Card className={cn(className)}>
-      <CardHeader
-        className={cn("bg-muted/50 border-b border-border pb-4", accentColor && "border-l-4")}
-        style={accentColor ? { borderLeftColor: accentColor } : undefined}
-      >
+      <CardHeader className="pb-0">
         <CardTitle className="text-lg">{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
-      <CardContent className="p-6">{children}</CardContent>
+      <CardContent className="p-6 pt-4">{children}</CardContent>
     </Card>
   )
 }

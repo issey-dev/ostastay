@@ -21,7 +21,7 @@ export function ControlsSectionHeader({
   action?: React.ReactNode
 }) {
   return (
-    <div className={cn("flex flex-row items-start gap-4 -mx-6 px-6 pb-4 mb-6 border-b border-border", title ? "justify-between" : "justify-end")}>
+    <div className={cn("flex flex-row items-start gap-4 -mx-6 px-6 pb-4 mb-6 border-b border-border/50", title ? "justify-between" : "justify-end")}>
       {title && (
         <div>
           <h3 className="text-lg font-medium text-foreground">{title}</h3>

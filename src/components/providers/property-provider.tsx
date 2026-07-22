@@ -6,6 +6,7 @@ type Property = {
   id: string
   enterpriseId: string
   name: string
+  logoUrl: string | null
   bannerColor: string | null
   // "RATE_PLAN" or "MEAL_PLAN" — which side drives automatic Allocation attachment
   // on a reservation (Controls > Revenue). See src/lib/allocations.ts.

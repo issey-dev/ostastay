@@ -323,7 +323,7 @@ export function ControlsDashboard({
       return (
         <div className="flex flex-col gap-6">
           {header}
-          <nav className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          <nav className="flex flex-col divide-y divide-border/50 rounded-lg bg-card overflow-hidden shadow-elevation-1 ring-1 ring-foreground/5">
             {sections.map((s) => (
               <MobileSectionRow key={s.key} section={s} onSelect={selectMobileSection} />
             ))}

@@ -74,10 +74,21 @@
   body {
     @apply bg-background text-foreground;
   }
-  
+
   html {
     @apply font-sans;
   }
+}
+
+/* Subtle per-property brand accent, applied app-wide via the injected --property-accent
+   variable (see PropertyAccentScope in the dashboard layout). Every content Card picks
+   up a thin colored left edge so the property's brand is quietly present on every page,
+   not just the top banner line and Controls. The variable is only set when the property
+   has chosen a banner color, so with no color set nothing is accented (monochromatic).
+   Dialogs/popovers portal outside the scope and intentionally never inherit it.
+   Revert this whole iteration by deleting this block + PropertyAccentScope. */
+.property-accent-scope [data-slot="card"] {
+  border-left: 2px solid var(--property-accent);
 }
 
 /* Respect the OS-level reduced-motion preference globally — collapses every

@@ -310,3 +310,58 @@
   that calls it. This same pattern exists elsewhere in the app (e.g. the other agent's
   confirmation-letter page) and was left alone — out of scope for this pass, not fixed
   system-wide.
+
+## 2026-07-22
+
+- **Neutral dark theme.** Dark mode was tinted blue (Slate ramp). Swapped every `.dark`
+  surface/border/text token in `src/app/theme.css` to Tailwind's Neutral ramp (true
+  grays) at the same lightness steps — `--background #0A0A0A`, `--card #171717`,
+  `--secondary/muted/accent #262626`, `--border/input #404040`, `--muted-foreground
+  #A3A3A3`, sidebar equivalents. Semantic status hues (success/warning/info/destructive)
+  left intentional. Also fixed `--sidebar-primary-foreground` (`#fff` → `#171717`) which
+  was unreadable on the now-light dark-mode primary.
+
+- **Border→shadow / consistent-card iteration** (user-requested, explicitly revertible).
+  Reduce visible border/divider usage in favor of the existing elevation+ring pattern,
+  and remove the "different bg colors" look on cards:
+  - **ControlsCard** (`controls/controls-card.tsx`): dropped the `bg-muted/50 border-b`
+    header band + divider so header and body share one continuous card surface;
+    separation now carried by spacing + the card's own `shadow-elevation-1`. Removed its
+    bespoke per-property left-accent logic — now handled globally (see accent item).
+  - **Card / Dialog footers** (`ui/card.tsx`, `ui/dialog.tsx`): removed the
+    `border-t bg-muted/50` gray footer band (same disliked pattern); footers now blend
+    with padding only.
+  - **Header logo** (`ui/dashboard-header.tsx`): removed `border border-border` →
+    `shadow-elevation-1`.
+  - **Controls mobile nav** (`controls-dashboard.tsx`): `border` box → `bg-card
+    shadow-elevation-1 ring-1 ring-foreground/5`; divider softened to `border-border/50`.
+  - **Section header divider** (`controls-section-header.tsx`): `border-border` →
+    `border-border/50`.
+  - Deliberately left alone this pass: table row borders (functional separators in dense
+    tables) and form-input borders (functional affordance). Feature pages still carry
+    ~500 border usages across 70+ files — a mechanical sweep deferred as follow-up since
+    this iteration may be reverted.
+
+- **Subtle brand accent app-wide.** Previously only the top `PropertyBannerBar` line and
+  Controls cards used the property's banner color. Added `PropertyAccentScope`
+  (`providers/property-accent-scope.tsx`) which injects the active property's
+  `bannerColor` as a single `--property-accent` CSS var on the dashboard content wrapper
+  (client-side, reacts live to the property switcher). A single global rule in
+  `globals.css` (`.property-accent-scope [data-slot="card"] { border-left: 2px solid
+  var(--property-accent) }`) gives every content Card a thin colored left edge, so the
+  brand is quietly present on every page. Only active when a banner color is set
+  (monochromatic otherwise); dialogs/popovers portal outside the scope and never inherit
+  it. Whole thing reverts by deleting the CSS block + the wrapper. NOTE: currently hits
+  *every* card in the content area (incl. nested/stat cards) — if that reads as too busy,
+  narrow the selector to top-level section cards or drop opacity.
+
+- **Animation timing.** Standardized the shared `Card` hover-lift from `duration-300` to
+  `duration-200` to match the sidebar/inventory hover family (`ui/card.tsx`). Overlays
+  (dialog/popover/dropdown/select/alert-dialog) were already uniform at `duration-100`;
+  the housekeeping floating-bar `duration-300` is an entrance (slow tier), left as-is.
+
+  Verified: all changed files compile on a fresh dev server with zero errors; `eslint`
+  adds zero new violations (the one `dialog.tsx:21` error pre-exists this change). Live
+  browser screenshot verification was not possible — the Browser pane renderer was
+  frozen this session (screenshots timed out, inline style mutations didn't take effect),
+  an environment issue, not a code one.

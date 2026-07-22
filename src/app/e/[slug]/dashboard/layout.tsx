@@ -3,8 +3,9 @@ import { ShieldAlert } from "lucide-react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { PropertySwitcher } from "@/components/ui/property-switcher"
+import { HeaderBrand, HeaderBusinessDate } from "@/components/ui/dashboard-header"
 import { PropertyProvider } from "@/components/providers/property-provider"
+import { PropertyAccentScope } from "@/components/providers/property-accent-scope"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
@@ -64,12 +65,9 @@ export default async function DashboardLayout({
             {/* Glassmorphism Header */}
             <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
-              <div>
-                <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight">OstaStay</h1>
-                {enterprise && <p className="text-xs text-muted-foreground leading-tight">{enterprise.name}</p>}
-              </div>
-              <PropertySwitcher />
-              <div className="ml-auto">
+              <HeaderBrand enterpriseName={enterprise?.name ?? ""} />
+              <div className="ml-auto flex items-center gap-4">
+                <HeaderBusinessDate />
                 <ThemeToggle />
               </div>
             </header>
@@ -77,9 +75,11 @@ export default async function DashboardLayout({
 
           {/* Floating Main Content Area */}
           <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
-            <div className="max-w-7xl mx-auto w-full print:max-w-none">
-              {children}
-            </div>
+            <PropertyAccentScope>
+              <div className="max-w-7xl mx-auto w-full print:max-w-none">
+                {children}
+              </div>
+            </PropertyAccentScope>
           </div>
         </main>
       </SidebarProvider>
