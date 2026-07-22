@@ -53,6 +53,16 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // billed to an account finalize automatically at checkout, no mid-stay transfer here)
   const [settlementSaving, setSettlementSaving] = useState(false)
 
+  // Routing Instructions State — standing rules that auto-route charge codes to
+  // another folio window or another in-house room's folio.
+  const [isRoutingOpen, setIsRoutingOpen] = useState(false)
+  const [routingRules, setRoutingRules] = useState<any[]>([])
+  const [routingCodeIds, setRoutingCodeIds] = useState<string[]>([])
+  const [routingTargetFolioId, setRoutingTargetFolioId] = useState("")
+  const [routingSaving, setRoutingSaving] = useState(false)
+  // Other in-house reservations' folios at this property — cross-room routing/move targets.
+  const [inHouseFolios, setInHouseFolios] = useState<{ id: string; label: string }[]>([])
+
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
 
@@ -60,9 +70,39 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     if (isOpen && reservationId) {
       fetchFolios()
       fetchLookupData()
+      fetchInHouseFolios()
       setSelectedLineItemIds([])
     }
   }, [isOpen, reservationId])
+
+  const fetchRoutingRules = async () => {
+    if (!reservationId) return
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/routing-rules`)
+      if (res.ok) setRoutingRules(await res.json())
+    } catch (e) { console.error(e) }
+  }
+
+  // In-house reservations (excluding this one) → their folios, as cross-room targets.
+  const fetchInHouseFolios = async () => {
+    if (!propertyId) return
+    try {
+      const res = await fetch(`/api/reservations?propertyId=${propertyId}&status=IN_HOUSE&take=100`)
+      const data = await res.json()
+      if (!Array.isArray(data)) return
+      const opts: { id: string; label: string }[] = []
+      for (const r of data) {
+        if (r.id === reservationId) continue
+        const room = r.assignments?.[0]?.room?.roomNumber || "TBA"
+        const guest = `${r.primaryGuest?.firstName ?? ""} ${r.primaryGuest?.lastName ?? ""}`.trim()
+        for (const f of r.folios ?? []) {
+          if (f.isClosed) continue
+          opts.push({ id: f.id, label: `Room ${room} · ${guest} · Folio #${f.folioNumber}` })
+        }
+      }
+      setInHouseFolios(opts)
+    } catch (e) { console.error(e) }
+  }
 
   const fetchFolios = async () => {
     setLoading(true)
@@ -190,6 +230,53 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     }
   }
 
+  const openRouting = () => {
+    setRoutingCodeIds([])
+    setRoutingTargetFolioId("")
+    fetchRoutingRules()
+    setIsRoutingOpen(true)
+  }
+
+  const handleSaveRouting = async () => {
+    if (routingCodeIds.length === 0 || !routingTargetFolioId) return
+    setRoutingSaving(true)
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/routing-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chargeCodeIds: routingCodeIds, targetFolioId: routingTargetFolioId }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setRoutingCodeIds([])
+        setRoutingTargetFolioId("")
+        fetchRoutingRules()
+        fetchFolios()
+        setNotification({ title: "Routing Saved", message: `Charges will auto-route.${data.movedCount ? ` ${data.movedCount} existing charge(s) moved.` : ""}` })
+      } else {
+        setNotification({ title: "Error", message: data.error || "Failed to save routing.", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "Error saving routing.", isError: true })
+    } finally {
+      setRoutingSaving(false)
+    }
+  }
+
+  const handleDeleteRouting = async (ruleId: string) => {
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/routing-rules?ruleId=${ruleId}`, { method: "DELETE" })
+      if (res.ok) fetchRoutingRules()
+    } catch (e) { console.error(e) }
+  }
+
+  // Folio targets for routing / moving: other windows on THIS reservation + other
+  // in-house rooms' folios.
+  const targetFolioOptions = () => {
+    const sameRes = folios.filter((f: any) => f.id !== activeFolioId).map((f: any) => ({ id: f.id, label: `This reservation · Folio #${f.folioNumber}` }))
+    return [...sameRes, ...inHouseFolios]
+  }
+
   const handleMoveCharges = async () => {
     if (!targetFolioId || selectedLineItemIds.length === 0) return
 
@@ -202,6 +289,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
           targetFolioId
         })
       })
+      const data = await res.json().catch(() => ({}))
 
       if (res.ok) {
         setIsMoveDialogOpen(false)
@@ -210,7 +298,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         fetchFolios()
         setNotification({ title: "Charges Moved", message: "Successfully moved charges to the selected folio." })
       } else {
-        setNotification({ title: "Error", message: "Failed to move charges.", isError: true })
+        setNotification({ title: "Error", message: data.error || "Failed to move charges.", isError: true })
       }
     } catch (e) {
       setNotification({ title: "Error", message: "Error moving charges.", isError: true })
@@ -418,6 +506,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           className="h-9 shadow-sm border-border ml-2"
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={openRouting}
+                          className="h-9 shadow-sm border-border ml-2"
+                        >
+                          <ArrowRightLeft className="w-4 h-4 mr-2" /> Routing
                         </Button>
                         {activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
                           <Button 
@@ -697,22 +793,89 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 <SelectValue placeholder="Select destination folio" />
               </SelectTrigger>
               <SelectContent>
-                {folios.filter((f: any) => f.id !== activeFolioId).map((f: any) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    Folio {f.folioNumber}
-                  </SelectItem>
+                {targetFolioOptions().map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {folios.length === 1 && (
+            {targetFolioOptions().length === 0 && (
               <p className="text-sm text-warning mt-2">
-                Please create a new Folio first using the "Add Folio" button before moving charges.
+                Add another folio window (Add Folio) or check in another room to move charges.
               </p>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsMoveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleMoveCharges} disabled={!targetFolioId || folios.length === 1}>Move Charges</Button>
+            <Button onClick={handleMoveCharges} disabled={!targetFolioId}>Move Charges</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Routing Instructions Dialog */}
+      <Dialog open={isRoutingOpen} onOpenChange={setIsRoutingOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Routing Instructions</DialogTitle>
+            <DialogDescription>
+              Auto-route selected charge codes to another folio window or another in-house room. Existing matching
+              charges move immediately; future postings (incl. Night Audit) follow the rule.
+            </DialogDescription>
+          </DialogHeader>
+
+          {routingRules.length > 0 && (
+            <div className="space-y-1.5 border border-border rounded-md p-2 max-h-40 overflow-y-auto">
+              <p className="text-xs font-medium text-muted-foreground">Active rules</p>
+              {routingRules.map((r: any) => {
+                const t = r.targetFolio
+                const room = t?.reservation?.assignments?.[0]?.room?.roomNumber
+                const target = t?.reservationId === reservationId ? `Folio #${t.folioNumber}` : `Room ${room ?? "?"} · Folio #${t?.folioNumber}`
+                return (
+                  <div key={r.id} className="flex items-center justify-between text-sm">
+                    <span><span className="font-mono">{r.chargeCode.code}</span> → {target}</span>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-destructive" onClick={() => handleDeleteRouting(r.id)}>Remove</Button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label>Charge codes to route</Label>
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto border border-border rounded-md p-2">
+                {chargeCodes.map((c) => {
+                  const on = routingCodeIds.includes(c.id)
+                  return (
+                    <button
+                      type="button" key={c.id}
+                      onClick={() => setRoutingCodeIds((prev) => on ? prev.filter((x) => x !== c.id) : [...prev, c.id])}
+                      className={`text-xs rounded-md px-2 py-1 border transition-colors ${on ? "bg-info-muted text-info border-info/40 font-medium" : "border-border text-muted-foreground hover:border-foreground/40"}`}
+                    >
+                      {c.code}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Route to</Label>
+              <Select value={routingTargetFolioId} onValueChange={(v) => setRoutingTargetFolioId(v ?? "")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select target folio / room" />
+                </SelectTrigger>
+                <SelectContent>
+                  {targetFolioOptions().map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRoutingOpen(false)}>Close</Button>
+            <Button onClick={handleSaveRouting} disabled={routingSaving || routingCodeIds.length === 0 || !routingTargetFolioId}>
+              {routingSaving ? "Saving..." : "Save Routing"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

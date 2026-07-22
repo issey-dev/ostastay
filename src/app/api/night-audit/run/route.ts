@@ -168,6 +168,25 @@ export async function POST(request: Request) {
     // behavior) but called out in the response.
     const zeroRateConfirmationNos: string[] = []
 
+    // Standing routing rules for the reservations being audited — pre-fetched once so
+    // the posting loop can redirect a charge by code without a per-line DB read.
+    // Keyed `${reservationId}:${chargeCodeId}` → target folio id (skipping closed targets).
+    const chargeableIds = chargeableReservations.map((r) => r.id)
+    const routingRuleRows = chargeableIds.length > 0
+      ? await prisma.folioRoutingRule.findMany({
+          where: { reservationId: { in: chargeableIds } },
+          include: { targetFolio: { select: { id: true, isClosed: true } } },
+        })
+      : []
+    const routingMap = new Map<string, string>()
+    for (const rule of routingRuleRows) {
+      if (rule.targetFolio && !rule.targetFolio.isClosed) {
+        routingMap.set(`${rule.reservationId}:${rule.chargeCodeId}`, rule.targetFolioId)
+      }
+    }
+    const routeTo = (reservationId: string, chargeCodeId: string, defaultFolioId: string) =>
+      routingMap.get(`${reservationId}:${chargeCodeId}`) ?? defaultFolioId
+
     // 2. Post every reservation's nightly charges and write the audit log in ONE
     // transaction — a failure anywhere rolls back every posting, so the ledger can
     // never be left half-audited. (Reads stay outside for speed; writes are cheap.)
@@ -273,7 +292,7 @@ export async function POST(request: Request) {
 
           await tx.folioLineItem.create({
             data: {
-              folioId: targetFolioId,
+              folioId: routeTo(res.id, roomCode.id, targetFolioId),
               chargeCodeId: roomCode.id,
               roomAssignmentId: activeAssignment.id,
               amount: baseAmount,
@@ -311,7 +330,7 @@ export async function POST(request: Request) {
 
             await tx.folioLineItem.create({
               data: {
-                folioId: targetFolioId,
+                folioId: routeTo(res.id, roomCode.id, targetFolioId),
                 chargeCodeId: roomCode.id,
                 roomAssignmentId: activeAssignment.id,
                 amount: extraOccupancy.baseAmount,
@@ -348,7 +367,7 @@ export async function POST(request: Request) {
 
             await tx.folioLineItem.create({
               data: {
-                folioId: targetFolioId,
+                folioId: routeTo(res.id, alloc.chargeCodeId, targetFolioId),
                 chargeCodeId: alloc.chargeCodeId,
                 amount: allocTax.baseAmount,
                 taxAmount: allocTax.taxAmount,
@@ -371,7 +390,7 @@ export async function POST(request: Request) {
             if (greenTaxAmount > 0) {
               await tx.folioLineItem.create({
                 data: {
-                  folioId: targetFolioId,
+                  folioId: routeTo(res.id, gtxCode.id, targetFolioId),
                   chargeCodeId: gtxCode.id,
                   amount: greenTaxAmount,
                   taxAmount: 0,

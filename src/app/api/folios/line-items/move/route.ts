@@ -24,28 +24,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Target folio not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, targetFolio.propertyId);
-
-    // Walk-in/outlet folios have no reservation to group charges under — moving charges
-    // to or from one isn't a meaningful concept here (a walk-in's whole point is being
-    // closed out on the spot), so it's rejected outright rather than falling through to
-    // a reservationId comparison that would be meaningless (or, for two walk-ins,
-    // wrongly permissive — null !== null is false).
-    if (!targetFolio.reservationId) {
-      return NextResponse.json({ error: "Cannot move charges to a walk-in folio" }, { status: 400 });
+    if (targetFolio.isClosed) {
+      return NextResponse.json({ error: "Cannot move charges to a closed folio" }, { status: 400 });
     }
 
-    // Every line item must belong to a folio under the *same reservation* as the
-    // target — moving a charge across guests/reservations, not just across an
-    // enterprise boundary, would be a real billing bug, not just a tenant-scope one.
+    // Charges can be moved to any open folio at the SAME property — another window on
+    // the same reservation, or another in-house room's folio (front-desk "bill this to
+    // that room"). Moving ACROSS properties is still a real billing bug, so every
+    // source line item's folio must share the target's property.
     const lineItems = await prisma.folioLineItem.findMany({
       where: { id: { in: lineItemIds } },
       include: { folio: true }
     });
     if (
       lineItems.length !== lineItemIds.length ||
-      lineItems.some((li) => li.folio.reservationId !== targetFolio.reservationId)
+      lineItems.some((li) => li.folio.propertyId !== targetFolio.propertyId)
     ) {
-      return NextResponse.json({ error: "One or more line items do not belong to this reservation" }, { status: 400 });
+      return NextResponse.json({ error: "One or more charges are not at this property" }, { status: 400 });
     }
 
     // Move the line items
