@@ -1,7 +1,7 @@
 import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History } from "lucide-react"
 import { requireSession, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
-import { LogoutButton } from "./logout-button"
+import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
 import {
   Sidebar,
   SidebarContent,
@@ -41,7 +41,7 @@ const items: { title: string; url: string; icon: typeof MonitorPlay; module: Mod
     module: "NIGHT_AUDIT",
   },
   {
-    title: "Profiles & CRM",
+    title: "Client Relations",
     url: "/dashboard/profiles",
     icon: Users,
     module: "PROFILES",
@@ -121,7 +121,7 @@ export async function AppSidebar() {
   const [user, enterprise] = await Promise.all([
     prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { firstName: true, lastName: true, role: { select: { name: true } } },
+      select: { firstName: true, lastName: true, email: true, role: { select: { name: true } } },
     }),
     // ctx.enterpriseId is the EFFECTIVE enterprise (the support-acting-as target when
     // relevant) — links must point there, not the user's own home enterprise.
@@ -156,17 +156,7 @@ export async function AppSidebar() {
       </SidebarContent>
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton>
-                <div className="flex flex-col items-start px-2 py-1">
-                  <span className="text-sm font-semibold truncate w-full">{name}</span>
-                  <span className="text-xs text-muted-foreground truncate w-full">{roleName}</span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          <SidebarMenuItem className="mt-2">
-             <LogoutButton />
-          </SidebarMenuItem>
+          <SidebarUserMenu name={name} roleName={roleName} email={user?.email} />
         </SidebarMenu>
       </div>
     </Sidebar>
