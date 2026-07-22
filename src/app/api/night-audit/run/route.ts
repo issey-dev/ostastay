@@ -12,7 +12,10 @@ export async function POST(request: Request) {
     const ctx = await requireSession()
     requirePermission(ctx, "NIGHT_AUDIT", "create")
 
-    const { propertyId } = await request.json()
+    const body = await request.json()
+    const propertyId = body.propertyId
+    const confirmed = body.confirmed === true
+    const overrideReason = typeof body.reason === "string" ? body.reason.trim() : ""
 
     if (!propertyId) {
       return NextResponse.json({ error: "Property ID required" }, { status: 400 })
@@ -46,6 +49,44 @@ export async function POST(request: Request) {
         auditDate: { gte: auditDate, lt: nextDay },
       },
     })
+    // Recency guard: EOD normally runs once a day. Running it again within 12 hours
+    // of the last successful run advances the business date a second time (a common
+    // accidental double-run), so it requires an explicit confirmation + a logged
+    // reason. Distinct from the same-business-date idempotency guard above.
+    const lastCompleted = await prisma.propertyNightAuditLog.findFirst({
+      where: { propertyId, status: "COMPLETED" },
+      orderBy: { executedAt: "desc" },
+    })
+    if (lastCompleted) {
+      const hoursSince = (Date.now() - lastCompleted.executedAt.getTime()) / 3_600_000
+      if (hoursSince < 12) {
+        if (!confirmed) {
+          return NextResponse.json(
+            {
+              error: `End-of-Day was last run ${hoursSince < 1 ? `${Math.round(hoursSince * 60)} minutes` : `${hoursSince.toFixed(1)} hours`} ago. Running it again will advance the business date another day.`,
+              requiresConfirmation: true,
+              lastRunAt: lastCompleted.executedAt,
+              hoursSince: Math.round(hoursSince * 10) / 10,
+            },
+            { status: 409 }
+          )
+        }
+        if (!overrideReason) {
+          return NextResponse.json({ error: "A reason is required to run End-of-Day again within 12 hours." }, { status: 400 })
+        }
+        // Log the deliberate override up front so the reason is on the trail even if
+        // the run itself later fails.
+        await logActivity({
+          ctx,
+          module: "NIGHT_AUDIT",
+          action: "EOD_OVERRIDE",
+          entityType: "Property",
+          entityId: propertyId,
+          description: `Ran End-of-Day again ${hoursSince.toFixed(1)}h after the last run — reason: "${overrideReason}"`,
+        })
+      }
+    }
+
     if (alreadyRun) {
       return NextResponse.json(
         { error: `Night audit has already been run for ${auditDate.toISOString().slice(0, 10)}.`, log: alreadyRun },

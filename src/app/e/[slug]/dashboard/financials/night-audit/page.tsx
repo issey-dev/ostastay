@@ -5,11 +5,19 @@ import { useProperty } from "@/components/providers/property-provider"
 import { MoonStar, AlertTriangle, CheckCircle2, PlayCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function NightAuditDashboard() {
   const { currentProperty } = useProperty()
   const [running, setRunning] = useState(false)
   const [auditResult, setAuditResult] = useState<any>(null)
+
+  // 12-hour recency override prompt (running EOD again too soon)
+  const [overridePrompt, setOverridePrompt] = useState<string | null>(null)
+  const [overrideAgree, setOverrideAgree] = useState(false)
+  const [overrideReason, setOverrideReason] = useState("")
 
   // Dummy checks for the UI
   const [checks, setChecks] = useState({
@@ -33,24 +41,26 @@ export default function NightAuditDashboard() {
 
   const canRunAudit = !checks.loading && checks.pendingArrivals === 0 && checks.pendingDepartures === 0
 
-  const handleRunAudit = async () => {
-    if (!confirm("Are you sure you want to run the Night Audit? This will post room and tax charges to all in-house guests.")) return
-    
+  const doRun = async (confirmed: boolean, reason?: string) => {
     setRunning(true)
     setAuditResult(null)
-
     try {
       const res = await fetch('/api/night-audit/run', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: currentProperty?.id, executedBy: "Admin User" })
+        body: JSON.stringify({ propertyId: currentProperty?.id, confirmed, reason })
       })
-
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
         setAuditResult(data.log)
+        setOverridePrompt(null)
+      } else if (res.status === 409 && data.requiresConfirmation) {
+        // EOD was run within the last 12 hours — require an explicit acknowledgement + reason.
+        setOverrideAgree(false)
+        setOverrideReason("")
+        setOverridePrompt(data.error)
       } else {
-        alert("Failed to run Night Audit")
+        alert(data.error || "Failed to run Night Audit")
       }
     } catch (e) {
       console.error(e)
@@ -58,6 +68,11 @@ export default function NightAuditDashboard() {
     } finally {
       setRunning(false)
     }
+  }
+
+  const handleRunAudit = async () => {
+    if (!confirm("Run End-of-Day? This posts room and tax charges to all in-house guests and rolls the business date forward one day.")) return
+    doRun(false)
   }
 
   return (
@@ -160,6 +175,49 @@ export default function NightAuditDashboard() {
           </div>
         </div>
       )}
+
+      {/* 12-hour recency override — running EOD again too soon */}
+      <Dialog open={!!overridePrompt} onOpenChange={(o) => { if (!o) setOverridePrompt(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="w-5 h-5" /> Run End-of-Day again?
+            </DialogTitle>
+            <DialogDescription>{overridePrompt}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4"
+                checked={overrideAgree}
+                onChange={(e) => setOverrideAgree(e.target.checked)}
+              />
+              <span>I understand this advances the business date another day, and I want to proceed.</span>
+            </label>
+            <div className="space-y-1.5">
+              <Label>Reason <span className="text-destructive">*</span></Label>
+              <Textarea
+                rows={3}
+                placeholder="Why is End-of-Day being run again within 12 hours?"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverridePrompt(null)} disabled={running}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={!overrideAgree || !overrideReason.trim() || running}
+              onClick={() => doRun(true, overrideReason.trim())}
+            >
+              {running ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Proceed with End-of-Day
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )
