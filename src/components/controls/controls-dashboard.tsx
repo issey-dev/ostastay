@@ -21,6 +21,7 @@ import {
   Store,
   TrendingUp,
   CalendarClock,
+  Sparkles,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -43,6 +44,10 @@ import { SequenceManager } from "@/components/controls/sequence-manager"
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 import { AllocationCalculationManager } from "@/components/controls/allocation-calculation-manager"
 import { ExcursionsManager } from "@/components/controls/excursions-manager"
+import { SpaCatalogManager } from "@/components/controls/spa-manager"
+import { SpaTherapistsManager } from "@/components/controls/spa-therapists-manager"
+import { SpaRoomsManager } from "@/components/controls/spa-rooms-manager"
+import { SpaSettingsForm } from "@/components/controls/spa-settings-form"
 
 // Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
 // Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
@@ -127,6 +132,27 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
         <ControlsCard title="Excursions" description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta.">
           <ExcursionsManager />
         </ControlsCard>
+      ),
+    },
+    {
+      key: "spa",
+      label: "Spa",
+      icon: Sparkles,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Treatment Catalog" description="Categories, treatments, and pricing sold to guests from the Spa scheduler. Requires the Spa add-on, enabled per property by Osta.">
+            <SpaCatalogManager />
+          </ControlsCard>
+          <ControlsCard title="Therapists" description="Schedulable therapists — treatment qualifications, weekly working hours, and day-off/leave exceptions. A PMS login is optional.">
+            <SpaTherapistsManager />
+          </ControlsCard>
+          <ControlsCard title="Treatment Rooms" description="Rooms available for spa treatments, including couple-capable rooms and maintenance/cleaning closures.">
+            <SpaRoomsManager />
+          </ControlsCard>
+          <ControlsCard title="Spa Settings" description="Operating hours, booking defaults, charge timing, and cancellation/no-show policy for this property.">
+            <SpaSettingsForm />
+          </ControlsCard>
+        </div>
       ),
     },
     {
