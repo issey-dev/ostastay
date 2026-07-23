@@ -47,17 +47,29 @@ export async function GET(request: Request) {
         },
         folios: {
           where: { isClosed: false }
+        },
+        accompanyingGuests: {
+          include: { profile: true }
         }
       }
     })
 
-    // Format for the frontend
+    // Format for the frontend. accompanyingGuests surfaces a room's OTHER named
+    // guests (a real Profile via AccompanyingGuest, not just a headcount) — added so
+    // multi-participant bookings (Spa couple's treatments, etc.) can offer "also in
+    // this room" picks instead of only ever finding the primary guest again on a
+    // second search.
     const results = reservations.map(res => ({
       reservationId: res.id,
       guestName: `${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName}`,
       roomNumber: res.assignments?.[0]?.room?.roomNumber || "Unassigned",
       status: res.status,
-      folioId: res.folios?.[0]?.id
+      folioId: res.folios?.[0]?.id,
+      profileId: res.primaryGuest?.upid,
+      accompanyingGuests: res.accompanyingGuests.map(ag => ({
+        upid: ag.profile.upid,
+        guestName: `${ag.profile.firstName} ${ag.profile.lastName ?? ""}`.trim(),
+      })),
     }))
 
     return NextResponse.json(results)

@@ -1090,3 +1090,98 @@ rework if needed:**
 5. Therapist schedules/availability exceptions gated under `CONTROLS` for v1 (§3's
    nuance note) — could move to `SPA update` later without a schema change, just a
    permission-check line in the route.
+
+---
+
+## Addendum — Therapist requests, gender preference, and the room-search gap (2026-07-23)
+
+Built from a separate design discussion (comparing this module against how Book4Time/
+SpaSoft/Zenoti handle therapist assignment) — **not** part of the Phase 0-8 sequence
+above, since it enhances the already-built Phase 2/3 booking flow rather than
+continuing toward Phase 4's calendar UI. Owner decisions from that session: gender
+preference is a **hard filter**, not a sort tie-break; a couple-in-one-room's search
+gap gets **both** an auto-suggest fix and a shared-endpoint fix; therapist choice
+happens **before** date/time (not after); and preference memory ships now, not deferred.
+
+- **Two new participant-level fields** on `SpaAppointmentParticipant`:
+  `requestedTherapistId` (a specific named ask) and `requestedGender` (a hard filter,
+  only consulted when no specific name is given) — kept deliberately separate from the
+  existing `therapistId` (the RESOLVED assignment), so a booking can distinguish "the
+  guest asked for Maria and got her" from "auto-assigned, happened to be Maria." That
+  distinction is what makes the preference write-back honest (see below) — without it,
+  every auto-assigned visit would look identical to a deliberate request.
+- **`SpaGuestTherapistPreference`** (new model, `{profileId, propertyId, therapistId}`,
+  unique per guest-per-property) — deliberately NOT a field on the generic `Profile`
+  model (the existing `ProfilePreference` is free-text/untyped; this needs a real FK to
+  join against `SpaTherapist`'s qualification/active/bookable state). Written
+  automatically after a successful booking, only when `requestedTherapistId` was set
+  AND matches the final `therapistId` — never from a gender-only or plain auto-assigned
+  visit. Read via the new therapists-for-treatment endpoint below, which pins it in the
+  UI with a ★.
+- **`src/lib/spa-availability.ts` generalized**: `getAvailableTherapists` gained
+  `requiredTherapistId`/`requiredGender` filters (applied inside the same qualified-
+  therapist query, not a post-filter); `autoAssignTherapists` changed from a flat
+  `partySize: number` to `requirements: TherapistRequirement[]` — one entry per
+  participant, each assigned against its OWN constraint in order (so a couple where one
+  guest requests a specific person and the other has no preference resolves correctly,
+  never bleeding one constraint into the other). `isSlotFeasible` defaults
+  `requirements` to an all-empty array when omitted, so every pre-existing caller's
+  behavior is byte-for-byte unchanged.
+- **`GET /api/spa/appointments/availability` gained two things**: an optional
+  `requirements` param (JSON-encoded, re-validated against the exact same engine the
+  booking route uses — never a client-side approximation), and a `from`/`to` mode
+  (alongside the original single-`date` mode) that returns which days in a range have
+  *any* feasible slot at all, for the DatePicker's `availableDates` restriction — the
+  same mechanism the Excursions Calendar (Phase 7 there) already introduced, reused
+  here rather than inventing a second convention. **Performance note, found by actually
+  timing it**: the first cut of the range mode computed the FULL per-slot grid for
+  every day before checking `.some(available)`, which was measurably slow across a
+  60-day horizon (a real regression test timed out at the default 5s). Fixed with
+  `isDayFeasible`, a short-circuiting sibling of the single-day slot loop that stops at
+  the first feasible slot instead of always scanning the whole day — cut the same test
+  from timing out to ~2s.
+- **New `GET /api/spa/treatments/[id]/therapists`** — qualified therapists for one
+  treatment (not availability-filtered; no date/time is known yet in the therapist-
+  first flow), with an optional `profileId` to flag that guest's remembered preference.
+  Distinct from the existing `GET /api/spa/therapists` (every therapist at the
+  property, for Controls management, no treatment/qualification filter at all).
+- **The room-search gap**: `GET /api/pos/search` (shared by POS/Excursions/Spa) only
+  ever surfaced a reservation's primary guest, never `AccompanyingGuest` rows, even
+  though those already link to a real `Profile`. Extended its response with
+  `accompanyingGuests` (and a `profileId` on the primary result, needed for the
+  preference lookup above — a real gap in the original response, not a new addition,
+  since nothing had ever needed the primary guest's own id before). The booking page
+  now offers a companion sharing the SAME reservation as a one-click "Also in Room N"
+  pick for participant 2+, instead of the second search returning the identical single
+  row. **A real schema limit surfaced here**: `SpaAppointmentParticipant` has exactly
+  one `reservationId` per row, resolved for display via `reservation.primaryGuest` — a
+  second participant pointing at the SAME reservationId as participant 1 would display
+  as the SAME primary guest's name, not the companion's. Rather than a schema change,
+  a same-reservation companion is booked through the existing free-text
+  `walkInGuestName` path instead (their real name still shows correctly, just not
+  linked to a Profile for this booking) — sidesteps the display bug entirely and
+  matches what a companion "not on any reservation" already did.
+- **UI**: therapist-first ordering on the Spa booking page — each participant gets a
+  gender pill toggle (Any/Female/Male, the same small toggle-button widget already used
+  for Guest/Walk-in mode and the Excursions Calendar's Day/Week/Month switch) plus a
+  "request someone specific" `Select` (populated from the new endpoint, preferred
+  guesses starred), BEFORE the date picker. A summary row above the price display shows
+  each participant's actual request (not a guaranteed final assignment for gender/any
+  asks — only a specific-name request is knowable client-side before booking) so front
+  desk isn't surprised.
+- Verified live against the real dev server and Veyo's seed data (not just `tsc`/tests):
+  the new therapists-for-treatment endpoint returned the real seeded qualification list
+  with the correct ★-preferred flag; a date-range query with a gender filter returned
+  correctly across a real multi-day window; a real walk-in booking with an explicit
+  `therapistId` request succeeded end-to-end (folio charge posted, correct room/
+  therapist assigned) with no errors in the server log.
+- 5 new tests added to `tests/business-rules/spa-booking.test.ts` (20 total in that
+  file now): the gender hard-filter (including that a second, different-gender request
+  at the same slot still succeeds, and a third exhausts supply correctly), a specific-
+  therapist request succeeding and then being correctly rejected — not silently
+  reassigned — once that person is busy, the preference write-back (and its explicit
+  non-write on a gender-only/auto-assigned visit), the from/to range mode against a
+  real weekday-only schedule, and `/api/pos/search`'s new `accompanyingGuests` field.
+  Full suite after adding these: **375/375 passing** (48 test files; the one other
+  failure occasionally seen is a pre-existing, unrelated timing flake in
+  `price-calendar-bulk.test.ts`, confirmed by re-running it alone).

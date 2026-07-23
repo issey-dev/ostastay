@@ -60,6 +60,9 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
 const appointmentsRoute = await import("@/app/api/spa/appointments/route");
+const availabilityRoute = await import("@/app/api/spa/appointments/availability/route");
+const therapistsForTreatmentRoute = await import("@/app/api/spa/treatments/[id]/therapists/route");
+const posSearchRoute = await import("@/app/api/pos/search/route");
 const walkInFolioRoute = await import("@/app/api/folios/walk-in/route");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -480,5 +483,260 @@ describe("Spa booking: business rules", () => {
     );
     const list2 = await listRes2.json();
     expect(list2.some((a: { id: string }) => a.id === appt.id)).toBe(false);
+  });
+
+  it("rejects booking a date that has already passed", async () => {
+    // Regression test for a real bug found via live-testing: nothing previously
+    // stopped a calendar date before the property's business date from being
+    // booked, confirmed, and charged. yesterday() is UTC-explicit for the same
+    // reason `day()` above is.
+    const { reservationId } = await makeReservation();
+    const now = new Date();
+    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(yesterday), startTime: "09:00",
+        participants: [{ reservationId }],
+      })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/already passed/i);
+  });
+
+  it("a gender request is a hard filter, not a sort preference", async () => {
+    const genderTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Gender-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 60, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    const female = await prisma.spaTherapist.create({ data: { propertyId, displayName: `Female-${uniq()}`, gender: "FEMALE" } });
+    const male = await prisma.spaTherapist.create({ data: { propertyId, displayName: `Male-${uniq()}`, gender: "MALE" } });
+    await prisma.spaTherapistTreatment.createMany({
+      data: [
+        { therapistId: female.id, treatmentId: genderTreatment.id, qualified: true },
+        { therapistId: male.id, treatmentId: genderTreatment.id, qualified: true },
+      ],
+    });
+    await prisma.spaTherapistSchedule.createMany({
+      data: Array.from({ length: 7 }, (_, dow) => [
+        { therapistId: female.id, dayOfWeek: dow, startTime: "08:00", endTime: "20:00", effectiveFrom: new Date(2020, 0, 1) },
+        { therapistId: male.id, dayOfWeek: dow, startTime: "08:00", endTime: "20:00", effectiveFrom: new Date(2020, 0, 1) },
+      ]).flat(),
+    });
+    // Dedicated rooms so this test's 3rd, expected-to-fail booking fails on the
+    // THERAPIST constraint being tested, not because room supply ran out first.
+    for (let i = 0; i < 3; i++) {
+      const room = await prisma.spaRoom.create({ data: { propertyId, name: `Gender Room ${i}-${uniq()}`, capacity: 1 } });
+      await prisma.spaTreatmentRoom.create({ data: { treatmentId: genderTreatment.id, roomId: room.id } });
+    }
+
+    const g1 = await makeReservation();
+    const res1 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: genderTreatment.id, appointmentDate: dayStr(day(20)), startTime: "09:00",
+        participants: [{ reservationId: g1.reservationId, requestedGender: "FEMALE" }],
+      })
+    );
+    expect(res1.status).toBe(201);
+    const appt1 = await res1.json();
+    expect(appt1.participants[0].therapistId).toBe(female.id);
+    expect(appt1.participants[0].requestedGender).toBe("FEMALE");
+
+    // Books out the male therapist at the exact same slot with a different request —
+    // proves the filter actually scopes the candidate pool per request, not just
+    // ranking within a shared pool.
+    const g2 = await makeReservation();
+    const res2 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: genderTreatment.id, appointmentDate: dayStr(day(20)), startTime: "09:00",
+        participants: [{ reservationId: g2.reservationId, requestedGender: "MALE" }],
+      })
+    );
+    expect(res2.status).toBe(201);
+    const appt2 = await res2.json();
+    expect(appt2.participants[0].therapistId).toBe(male.id);
+
+    // The only female is now busy — a third female request at the same slot must be
+    // rejected, never silently handed the (free) male therapist instead.
+    const g3 = await makeReservation();
+    const res3 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: genderTreatment.id, appointmentDate: dayStr(day(20)), startTime: "09:00",
+        participants: [{ reservationId: g3.reservationId, requestedGender: "FEMALE" }],
+      })
+    );
+    expect(res3.status).toBe(400);
+    const body3 = await res3.json();
+    expect(body3.error).toMatch(/no therapist/i);
+  });
+
+  it("a specific therapist request succeeds when free and is rejected — never silently reassigned — when unavailable", async () => {
+    const namedTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Named-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 70, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    await prisma.spaTherapistTreatment.createMany({
+      data: [
+        { therapistId: therapistAId, treatmentId: namedTreatment.id, qualified: true },
+        { therapistId: therapistBId, treatmentId: namedTreatment.id, qualified: true },
+      ],
+    });
+    await prisma.spaTreatmentRoom.createMany({
+      data: [{ treatmentId: namedTreatment.id, roomId }, { treatmentId: namedTreatment.id, roomId: coupleRoomId }],
+    });
+
+    const g1 = await makeReservation();
+    const res1 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: namedTreatment.id, appointmentDate: dayStr(day(21)), startTime: "09:00",
+        participants: [{ reservationId: g1.reservationId, therapistId: therapistAId }],
+      })
+    );
+    expect(res1.status).toBe(201);
+    const appt1 = await res1.json();
+    expect(appt1.participants[0].therapistId).toBe(therapistAId);
+    expect(appt1.participants[0].requestedTherapist?.id).toBe(therapistAId);
+
+    const g2 = await makeReservation();
+    const res2 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: namedTreatment.id, appointmentDate: dayStr(day(21)), startTime: "09:00",
+        participants: [{ reservationId: g2.reservationId, therapistId: therapistAId }],
+      })
+    );
+    expect(res2.status).toBe(400);
+    const body2 = await res2.json();
+    expect(body2.error).toMatch(/not available/i);
+  });
+
+  it("remembers a guest's explicitly-requested therapist and surfaces it as preferred next time — but not from a gender-only or plain auto-assigned visit", async () => {
+    const prefTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Pref-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 65, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    await prisma.spaTherapistTreatment.createMany({
+      data: [
+        { therapistId: therapistAId, treatmentId: prefTreatment.id, qualified: true },
+        { therapistId: therapistBId, treatmentId: prefTreatment.id, qualified: true },
+      ],
+    });
+    await prisma.spaTreatmentRoom.createMany({
+      data: [{ treatmentId: prefTreatment.id, roomId }, { treatmentId: prefTreatment.id, roomId: coupleRoomId }],
+    });
+
+    const guest = await makeReservation();
+    const reservation = await prisma.reservation.findUniqueOrThrow({ where: { id: guest.reservationId } });
+    const profileId = reservation.primaryGuestId;
+
+    const before = await asUser(adminId, () =>
+      therapistsForTreatmentRoute.GET(
+        new Request(`http://localhost/api/spa/treatments/${prefTreatment.id}/therapists?propertyId=${propertyId}&profileId=${profileId}`),
+        { params: Promise.resolve({ id: prefTreatment.id }) }
+      )
+    );
+    const beforeList: { id: string; isPreferredForGuest: boolean }[] = await before.json();
+    expect(beforeList.every((t) => !t.isPreferredForGuest)).toBe(true);
+
+    const bookRes = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: prefTreatment.id, appointmentDate: dayStr(day(22)), startTime: "09:00",
+        participants: [{ reservationId: guest.reservationId, therapistId: therapistAId }],
+      })
+    );
+    expect(bookRes.status).toBe(201);
+
+    const pref = await prisma.spaGuestTherapistPreference.findUnique({
+      where: { profileId_propertyId: { profileId, propertyId } },
+    });
+    expect(pref?.therapistId).toBe(therapistAId);
+
+    const after = await asUser(adminId, () =>
+      therapistsForTreatmentRoute.GET(
+        new Request(`http://localhost/api/spa/treatments/${prefTreatment.id}/therapists?propertyId=${propertyId}&profileId=${profileId}`),
+        { params: Promise.resolve({ id: prefTreatment.id }) }
+      )
+    );
+    const afterList: { id: string; isPreferredForGuest: boolean }[] = await after.json();
+    expect(afterList.find((t) => t.id === therapistAId)?.isPreferredForGuest).toBe(true);
+
+    // A second, different guest booking the same treatment with only a gender ask
+    // (no specific name) must NOT get a remembered preference written.
+    const genderOnlyGuest = await makeReservation();
+    const genderOnlyReservation = await prisma.reservation.findUniqueOrThrow({ where: { id: genderOnlyGuest.reservationId } });
+    await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: prefTreatment.id, appointmentDate: dayStr(day(23)), startTime: "09:00",
+        participants: [{ reservationId: genderOnlyGuest.reservationId }],
+      })
+    );
+    const noPref = await prisma.spaGuestTherapistPreference.findUnique({
+      where: { profileId_propertyId: { profileId: genderOnlyReservation.primaryGuestId, propertyId } },
+    });
+    expect(noPref).toBeNull();
+  });
+
+  it("GET .../availability with from/to reflects per-participant requirements, not just 'is anyone free'", async () => {
+    const rangeTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Range-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 55, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    const weekdayOnly = await prisma.spaTherapist.create({ data: { propertyId, displayName: `Weekday-${uniq()}` } });
+    await prisma.spaTherapistTreatment.create({ data: { therapistId: weekdayOnly.id, treatmentId: rangeTreatment.id, qualified: true } });
+    await prisma.spaTreatmentRoom.create({ data: { treatmentId: rangeTreatment.id, roomId } });
+    await prisma.spaTherapistSchedule.createMany({
+      data: [1, 2, 3, 4, 5].map((dow) => ({
+        therapistId: weekdayOnly.id, dayOfWeek: dow, startTime: "08:00", endTime: "20:00", effectiveFrom: new Date(2020, 0, 1),
+      })),
+    });
+
+    const from = dayStr(day(0));
+    const to = dayStr(day(13));
+    const requirements = encodeURIComponent(JSON.stringify([{ requestedTherapistId: weekdayOnly.id }]));
+    const res = await asUser(adminId, () =>
+      availabilityRoute.GET(
+        new Request(
+          `http://localhost/api/spa/appointments/availability?propertyId=${propertyId}&treatmentId=${rangeTreatment.id}&partySize=1&from=${from}&to=${to}&requirements=${requirements}`
+        )
+      )
+    );
+    expect(res.status).toBe(200);
+    const body: { days: { date: string; available: boolean }[] } = await res.json();
+    expect(body.days.length).toBeGreaterThan(7);
+    for (const d of body.days) {
+      const dow = new Date(`${d.date}T00:00:00Z`).getUTCDay();
+      expect(d.available).toBe(dow >= 1 && dow <= 5);
+    }
+  });
+
+  it("GET /api/pos/search surfaces a reservation's accompanying guests, not just the primary", async () => {
+    const primaryLastName = `Primary-${uniq()}`;
+    const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Search", lastName: primaryLastName } });
+    const companion = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Companion", lastName: `Comp-${uniq()}` } });
+    const reservation = await prisma.reservation.create({
+      data: {
+        propertyId, primaryGuestId: guest.upid, confirmationNo: `SPA-SEARCH-${uniq()}`,
+        checkInDate: day(-1), checkOutDate: day(10), status: "IN_HOUSE",
+        folios: { create: [{ propertyId, folioNumber: 1 }] },
+        accompanyingGuests: { create: [{ profileId: companion.upid }] },
+      },
+    });
+
+    const res = await asUser(adminId, () =>
+      posSearchRoute.GET(new Request(`http://localhost/api/pos/search?propertyId=${propertyId}&query=${encodeURIComponent(primaryLastName)}`))
+    );
+    expect(res.status).toBe(200);
+    const results: { reservationId: string; profileId: string; accompanyingGuests: { upid: string; guestName: string }[] }[] = await res.json();
+    const match = results.find((r) => r.reservationId === reservation.id);
+    expect(match).toBeTruthy();
+    expect(match!.profileId).toBe(guest.upid);
+    expect(match!.accompanyingGuests).toEqual([{ upid: companion.upid, guestName: `Companion ${companion.lastName}` }]);
   });
 });

@@ -53,6 +53,22 @@ build clean, full suite 369/369 passing. Still not live-browser-tested — the d
 environment's every-`/api/*`-route-redirects-to-`/login` issue (see the Phase 1 commit
 message) is unrelated to Spa and still needs someone to look at it.
 
+**Addendum completed 2026-07-23, later session** (outside the Phase 0-8 sequence —
+see `SPA_PLAN.md`'s own addendum section for the full write-up): therapist requests
+(a hard gender filter, or a specific named ask) and preference memory, chosen
+BEFORE date/time rather than after; and a fix for a real gap where searching a room
+with a couple in it only ever surfaced the primary guest, never their companion.
+Two new `SpaAppointmentParticipant` fields plus a new `SpaGuestTherapistPreference`
+model; `spa-availability.ts`'s engine generalized to per-participant constraints
+instead of a flat party size; the availability route gained a `from`/`to` days-in-
+range mode (same mechanism as the Excursions Calendar) — caught and fixed a real
+performance issue here live (the first cut scanned every time slot for every day
+instead of stopping at the first feasible one, which timed out a real test at the
+default 5s). Live-verified successfully against a real dev server this time (login,
+booking, and the new endpoints all worked with no server-log errors) — the earlier
+Phase 1 login-redirect issue noted above did not reproduce. 5 new tests (20 total in
+`spa-booking.test.ts`); full suite **375/375 passing** (48 files).
+
 Still ahead: the tape-chart calendar UI (Phase 4), the rest of the appointment
 lifecycle — check-in/start/complete/cancel/no-show (Phase 5),
 therapist-absence/room-closure reassignment (Phase 6), reports (Phase 7), and the full

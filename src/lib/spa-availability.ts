@@ -157,14 +157,23 @@ export async function getAvailableRooms(params: {
     .sort((a, b) => (a.preferred === b.preferred ? a.id.localeCompare(b.id) : a.preferred ? -1 : 1));
 }
 
-export type TherapistCandidate = { id: string; displayName: string; preferred: boolean; workload: number };
+export type TherapistCandidate = { id: string; displayName: string; gender: string | null; preferred: boolean; workload: number };
+
+// One participant slot's therapist ask — at most one of these is meaningful at a time
+// (a specific-name request makes a gender filter moot, enforced by the caller, not
+// here). Both undefined/null means "any qualified therapist," today's original
+// behavior.
+export type TherapistRequirement = { requestedTherapistId?: string | null; requestedGender?: string | null };
 
 // Candidate therapists for ONE participant slot of a treatment, on a given date/time —
 // qualified, working, not on an exception, and not already occupied by another
 // blocking appointment. `excludeTherapistIds` lets a multi-participant booking exclude
 // therapists already picked for an earlier participant slot in the SAME booking
 // attempt, so two participants on one new appointment can never land on the same
-// therapist (SPA_PLAN.md §7).
+// therapist (SPA_PLAN.md §7). `requiredTherapistId`/`requiredGender` narrow the
+// candidate pool to a guest's explicit request — see SPA_PLAN.md's therapist-request
+// addendum; an unsatisfiable request (e.g. the named therapist is off that day) simply
+// returns an empty list, same as any other infeasible slot.
 export async function getAvailableTherapists(params: {
   propertyId: string;
   treatmentId: string;
@@ -173,16 +182,30 @@ export async function getAvailableTherapists(params: {
   blockedUntilTime: string;
   excludeTherapistIds?: string[];
   excludeAppointmentId?: string;
+  requiredTherapistId?: string | null;
+  requiredGender?: string | null;
 }): Promise<TherapistCandidate[]> {
-  const { propertyId, treatmentId, date, blockedFromTime, blockedUntilTime, excludeTherapistIds = [], excludeAppointmentId } = params;
+  const {
+    propertyId, treatmentId, date, blockedFromTime, blockedUntilTime,
+    excludeTherapistIds = [], excludeAppointmentId, requiredTherapistId, requiredGender,
+  } = params;
+
+  // The requested therapist is already claimed by an earlier participant in this same
+  // booking attempt — infeasible, and NOT the same thing as "requiredTherapistId isn't
+  // qualified" (that also returns [] below, via the query itself finding no rows).
+  if (requiredTherapistId && excludeTherapistIds.includes(requiredTherapistId)) return [];
 
   const qualified = await prisma.spaTherapistTreatment.findMany({
     where: {
       treatmentId,
       qualified: true,
-      therapist: { propertyId, isActive: true, bookable: true, id: { notIn: excludeTherapistIds } },
+      therapist: {
+        propertyId, isActive: true, bookable: true,
+        id: requiredTherapistId ? requiredTherapistId : { notIn: excludeTherapistIds },
+        ...(requiredGender ? { gender: requiredGender } : {}),
+      },
     },
-    select: { preferred: true, therapist: { select: { id: true, displayName: true } } },
+    select: { preferred: true, therapist: { select: { id: true, displayName: true, gender: true } } },
   });
   if (qualified.length === 0) return [];
 
@@ -246,6 +269,7 @@ export async function getAvailableTherapists(params: {
     .map((q) => ({
       id: q.therapist.id,
       displayName: q.therapist.displayName,
+      gender: q.therapist.gender,
       preferred: q.preferred,
       workload: workloadByTherapist.get(q.therapist.id) ?? 0,
     }))
@@ -274,18 +298,29 @@ export async function autoAssignRoom(params: {
   return candidates[0]?.id ?? null;
 }
 
+// `requirements` is one entry per participant (its length IS the party size) — each
+// slot is assigned against its OWN constraint, not a shared undifferentiated pool, so a
+// couple's booking where one guest requests "Maria" and the other has no preference (or
+// a gender filter) resolves correctly instead of the two constraints bleeding together.
+// Omitting requirements (or passing an all-empty array of the right length) reproduces
+// today's original "any qualified therapist" behavior exactly.
 export async function autoAssignTherapists(params: {
   propertyId: string;
   treatmentId: string;
   date: Date;
   blockedFromTime: string;
   blockedUntilTime: string;
-  partySize: number;
+  requirements: TherapistRequirement[];
 }): Promise<string[] | null> {
-  const { partySize, ...rest } = params;
+  const { requirements, ...rest } = params;
   const assigned: string[] = [];
-  for (let i = 0; i < partySize; i++) {
-    const candidates = await getAvailableTherapists({ ...rest, excludeTherapistIds: assigned });
+  for (const req of requirements) {
+    const candidates = await getAvailableTherapists({
+      ...rest,
+      excludeTherapistIds: assigned,
+      requiredTherapistId: req.requestedTherapistId,
+      requiredGender: req.requestedGender,
+    });
     if (candidates.length === 0) return null;
     assigned.push(candidates[0].id);
   }
@@ -296,6 +331,8 @@ export async function autoAssignTherapists(params: {
 // candidates for the whole party — the cheap feasibility check the slot-picker grid
 // uses (SPA_PLAN.md §7's availability calculation). Booking itself always re-derives
 // (and locks) the actual assignment separately; this never allocates anything.
+// `requirements` defaults to `partySize` unconstrained slots when omitted, so existing
+// callers that only care about "is anyone free" don't need to change.
 export async function isSlotFeasible(params: {
   propertyId: string;
   treatmentId: string;
@@ -303,9 +340,11 @@ export async function isSlotFeasible(params: {
   date: Date;
   blockedFromTime: string;
   blockedUntilTime: string;
+  requirements?: TherapistRequirement[];
 }): Promise<boolean> {
   const rooms = await getAvailableRooms(params);
   if (rooms.length === 0) return false;
-  const therapists = await autoAssignTherapists(params);
+  const requirements = params.requirements ?? Array.from({ length: params.partySize }, () => ({}));
+  const therapists = await autoAssignTherapists({ ...params, requirements });
   return therapists !== null;
 }

@@ -308,6 +308,7 @@ model Property {
   spaRooms               SpaRoom[]
   spaAppointments        SpaAppointment[]
   spaSettings            SpaSettings?
+  spaGuestTherapistPreferences SpaGuestTherapistPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -612,6 +613,7 @@ model Profile {
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
   negotiatedRateAccess     RatePlanAgentAccess[]
+  spaTherapistPreferences  SpaGuestTherapistPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1977,12 +1979,16 @@ model SpaTherapist {
   bookable     Boolean  @default(true)
   displayOrder Int      @default(0)
 
-  skills                 SpaTherapistTreatment[]
-  schedules              SpaTherapistSchedule[]
-  exceptions             SpaTherapistAvailabilityException[]
+  skills     SpaTherapistTreatment[]
+  schedules  SpaTherapistSchedule[]
+  exceptions SpaTherapistAvailabilityException[]
   // A therapist is assigned per participant, not per appointment — see
   // SpaAppointmentParticipant.therapistId. No direct appointments[] relation here.
-  participantAssignments SpaAppointmentParticipant[]
+  // Split into resolved-assignment vs. explicit-request, mirroring the two fields on
+  // SpaAppointmentParticipant itself.
+  assignedParticipants  SpaAppointmentParticipant[] @relation("AssignedTherapist")
+  requestedByAppointments SpaAppointmentParticipant[] @relation("RequestedTherapist")
+  guestPreferences      SpaGuestTherapistPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2189,9 +2195,21 @@ model SpaAppointmentParticipant {
   walkInGuestContact String?
 
   // Nullable so a booking can be saved before therapist assignment when
-  // SpaSettings.requireTherapistAtBooking is false.
+  // SpaSettings.requireTherapistAtBooking is false. This is the RESOLVED assignment
+  // (auto-picked or the honored request below) — always the source of truth for who's
+  // actually doing the treatment.
   therapistId String?
-  therapist   SpaTherapist? @relation(fields: [therapistId], references: [id])
+  therapist   SpaTherapist? @relation("AssignedTherapist", fields: [therapistId], references: [id])
+
+  // What the guest actually ASKED for, kept separate from therapistId so booking never
+  // conflates "auto-assigned" with "deliberately requested" — that distinction is what
+  // lets a completed booking's therapistId feed back into
+  // SpaGuestTherapistPreference ONLY when it reflects a genuine request, not every
+  // auto-assigned visit. At most one of these two is set (mutually exclusive: a
+  // specific-name request makes a gender filter moot).
+  requestedTherapistId String?
+  requestedTherapist   SpaTherapist? @relation("RequestedTherapist", fields: [requestedTherapistId], references: [id])
+  requestedGender      String? // MALE | FEMALE — a hard filter, not a sort preference (see SPA_PLAN.md addendum)
 
   // Per-participant operational notes (pressure preference, etc.) — same restricted-
   // notes-only caveat as SpaAppointment.internalNotes.
@@ -2202,4 +2220,23 @@ model SpaAppointmentParticipant {
 
   @@index([therapistId])
   @@index([appointmentId])
+}
+
+// A guest's remembered therapist at ONE property — deliberately not on the generic
+// Profile model (ProfilePreference is free-text and untyped; this needs a real FK so
+// it can be joined against SpaTherapist's qualification/active/bookable state, not just
+// displayed). Scoped per-property since a guest visiting two resorts could reasonably
+// prefer different people at each. Written automatically whenever a booking honors an
+// explicit requestedTherapistId (see the appointments route) — no separate admin step.
+model SpaGuestTherapistPreference {
+  id          String       @id @default(uuid())
+  profileId   String
+  profile     Profile      @relation(fields: [profileId], references: [upid], onDelete: Cascade)
+  propertyId  String
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  therapistId String
+  therapist   SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([profileId, propertyId])
 }

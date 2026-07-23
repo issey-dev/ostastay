@@ -15,6 +15,7 @@ const includeShape = {
     include: {
       reservation: { include: { primaryGuest: true, assignments: { include: { room: true } } } },
       therapist: { select: { id: true, displayName: true } },
+      requestedTherapist: { select: { id: true, displayName: true } },
     },
   },
 };
@@ -95,7 +96,12 @@ export async function POST(request: Request) {
       folioId?: string;
       walkInGuestName?: string;
       walkInGuestContact?: string;
+      // A specific requested therapist (existing field, unchanged meaning: "book this
+      // exact person or fail") — validated against real candidates below either way.
       therapistId?: string;
+      // Hard gender filter, only consulted when therapistId is absent — a named
+      // request already implies a specific person, a gender filter would be moot.
+      requestedGender?: string;
       notes?: string;
     }[] = Array.isArray(body.participants) ? body.participants : [];
 
@@ -146,6 +152,16 @@ export async function POST(request: Request) {
     const date = new Date(appointmentDate);
     if (isNaN(date.getTime())) {
       return NextResponse.json({ error: "Invalid appointmentDate" }, { status: 400 });
+    }
+    // Found via live-testing: nothing previously stopped a calendar date before the
+    // property's business date from being booked at all — a stray UI click (or a
+    // direct API call) could confirm and charge an appointment for a date that had
+    // already passed, with no rejection anywhere in the stack. Date-only guard, not
+    // time-of-day — a same-day booking whose slot has already elapsed today is a
+    // separate, more granular check the availability engine doesn't do yet either
+    // (see SPA_PLAN.md §21's existing note on this class of gap).
+    if (dayStart(date) < dayStart(resolveBusinessDate(treatment.property))) {
+      return NextResponse.json({ error: "Cannot book an appointment for a date that has already passed" }, { status: 400 });
     }
 
     const rate = rateForDate(treatment.rates, date);
@@ -251,10 +267,13 @@ export async function POST(request: Request) {
         walkInGuestName: string | null;
         walkInGuestContact: string | null;
         therapistId: string | null;
+        requestedTherapistId: string | null;
+        requestedGender: string | null;
         notes: string | null;
       }[] = [];
       for (let i = 0; i < participantsInput.length; i++) {
         const p = participantsInput[i];
+        const requestedGender = p.therapistId ? null : p.requestedGender || null;
         const candidates = await getAvailableTherapists({
           propertyId,
           treatmentId,
@@ -262,6 +281,8 @@ export async function POST(request: Request) {
           blockedFromTime,
           blockedUntilTime,
           excludeTherapistIds: assignedTherapistIds,
+          requiredTherapistId: p.therapistId,
+          requiredGender: requestedGender,
         });
         let therapistId: string | null = null;
         if (p.therapistId) {
@@ -273,7 +294,8 @@ export async function POST(request: Request) {
           therapistId = candidates[0]?.id ?? null;
         }
         if (!therapistId && requireTherapistAtBooking) {
-          return { error: `No therapist is available for participant ${i + 1}` };
+          const reason = requestedGender ? ` (${requestedGender.toLowerCase()} requested)` : "";
+          return { error: `No therapist is available for participant ${i + 1}${reason}` };
         }
         if (therapistId) assignedTherapistIds.push(therapistId);
 
@@ -287,6 +309,8 @@ export async function POST(request: Request) {
           walkInGuestName: walkIn?.walkInGuestName ?? null,
           walkInGuestContact: walkIn?.walkInGuestContact ?? null,
           therapistId,
+          requestedTherapistId: p.therapistId ?? null,
+          requestedGender,
           notes: p.notes || null,
         });
       }
@@ -352,6 +376,8 @@ export async function POST(request: Request) {
                 walkInGuestName: p.walkInGuestName,
                 walkInGuestContact: p.walkInGuestContact,
                 therapistId: p.therapistId,
+                requestedTherapistId: p.requestedTherapistId,
+                requestedGender: p.requestedGender,
                 notes: p.notes,
               })),
             },
@@ -365,6 +391,26 @@ export async function POST(request: Request) {
 
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    // Remember the request for next time — ONLY when it reflects a genuine, honored
+    // ask (requestedTherapistId set and it's exactly who got assigned), never for a
+    // gender filter or a plain auto-assign. Walk-in participants have no Profile to
+    // attach a preference to, so this only ever applies to reservation-linked guests.
+    // Best-effort: a failure here shouldn't undo an otherwise-successful booking.
+    for (const p of result.appointment.participants) {
+      if (p.reservationId && p.requestedTherapistId && p.requestedTherapistId === p.therapistId) {
+        const profileId = p.reservation?.primaryGuest?.upid;
+        if (profileId) {
+          await prisma.spaGuestTherapistPreference
+            .upsert({
+              where: { profileId_propertyId: { profileId, propertyId } },
+              update: { therapistId: p.requestedTherapistId },
+              create: { profileId, propertyId, therapistId: p.requestedTherapistId },
+            })
+            .catch(() => {});
+        }
+      }
     }
 
     await logActivity({

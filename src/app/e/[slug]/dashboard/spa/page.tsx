@@ -19,6 +19,8 @@ type GuestResult = {
   roomNumber: string
   status: string
   folioId: string | null
+  profileId: string
+  accompanyingGuests: { upid: string; guestName: string }[]
 }
 
 // Participant 1 (the billing anchor) is either an in-house reservation or the
@@ -26,10 +28,35 @@ type GuestResult = {
 // treatment's companion) is either another reservation or a plain name — never
 // billed separately, so a companion never needs a folio of their own (SPA_PLAN.md
 // §4 / the appointments route's own header comment).
+//
+// A companion sharing the SAME reservation as participant 1 (the couple-in-one-room
+// case) is deliberately represented as "walkin_companion" (free text), not a second
+// "reservation" entry pointing at the same reservationId — SpaAppointmentParticipant
+// only has one reservation relation per row, resolved via `reservation.primaryGuest`,
+// so a second participant referencing that same reservationId would display as the
+// SAME primary guest's name, not the actual companion. Free text sidesteps that
+// display bug entirely; the real name still shows correctly, it just isn't linked to
+// a Profile for this booking.
 type ParticipantValue =
-  | { kind: "reservation"; reservationId: string; guestName: string; roomNumber: string }
+  | { kind: "reservation"; reservationId: string; guestName: string; roomNumber: string; profileId: string; accompanyingGuests: { upid: string; guestName: string }[] }
   | { kind: "walkin_primary"; folioId: string; guestName: string }
   | { kind: "walkin_companion"; guestName: string }
+
+type GenderChoice = "ANY" | "FEMALE" | "MALE"
+
+// One booking slot's guest identity PLUS its own therapist ask — the two are bundled
+// together (not parallel arrays) so every place that touches a participant only has
+// one thing to read/update. specificTherapistId and genderChoice are mutually
+// exclusive by construction (see setSlotGender/setSlotTherapist below): picking one
+// always clears the other, since a named request makes a gender filter moot.
+type ParticipantSlot = {
+  value: ParticipantValue | null
+  genderChoice: GenderChoice
+  specificTherapistId: string // "" = none
+}
+const emptySlot = (): ParticipantSlot => ({ value: null, genderChoice: "ANY", specificTherapistId: "" })
+
+type QualifiedTherapist = { id: string; displayName: string; gender: string | null; preferred: boolean; isPreferredForGuest: boolean }
 
 type Treatment = {
   id: string
@@ -65,9 +92,15 @@ type AppointmentListItem = {
 // (identical query shape to /api/pos/search, same as Excursions). Walk-in: open a
 // bare walk-in folio first (/api/folios/walk-in, same as POS/Excursions), then book
 // against it — pay-now/pay-later/close is handled entirely by reusing
-// WalkInFolioPanel rather than building a second payment UI. Auto-assignment only in
-// this UI — manual therapist/room picking is supported by the API but not yet
-// exposed here (a deliberate scope cut, not a booking-engine limitation).
+// WalkInFolioPanel rather than building a second payment UI.
+//
+// Therapist-first booking: each participant can carry its own request (a specific
+// qualified therapist, or a hard gender filter) BEFORE a date is even picked — the
+// date picker itself only lights up days where every participant's own request (or
+// lack of one) is actually satisfiable, via GET .../availability's from/to mode. A
+// guest's last deliberately-requested therapist at this property is remembered
+// (SpaGuestTherapistPreference) and pre-selected next time, written back only when a
+// specific-name request was actually honored (see the appointments route).
 export default function SpaPage() {
   const { currentProperty } = useProperty()
 
@@ -79,7 +112,8 @@ export default function SpaPage() {
   const availableTreatments = treatments.filter((t) => (mode === "guest" ? t.allowInHouseGuest : t.allowWalkIn))
 
   const [partySize, setPartySize] = useState(1)
-  const [participants, setParticipants] = useState<(ParticipantValue | null)[]>([null])
+  const [participants, setParticipants] = useState<ParticipantSlot[]>([emptySlot()])
+  const [participantTherapistOptions, setParticipantTherapistOptions] = useState<QualifiedTherapist[][]>([])
   const [activeSlot, setActiveSlot] = useState<number | null>(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [guests, setGuests] = useState<GuestResult[]>([])
@@ -92,6 +126,7 @@ export default function SpaPage() {
   const [openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
 
   const [selectedDate, setSelectedDate] = useState("")
+  const [availableDates, setAvailableDates] = useState<string[]>([])
   const [slots, setSlots] = useState<SlotAvailability[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedStartTime, setSelectedStartTime] = useState("")
@@ -136,7 +171,7 @@ export default function SpaPage() {
 
   const resetParticipants = (size: number) => {
     setPartySize(size)
-    setParticipants(Array(size).fill(null))
+    setParticipants(Array.from({ length: size }, emptySlot))
     setActiveSlot(0)
     setSelectedStartTime("")
     setSlots([])
@@ -158,9 +193,84 @@ export default function SpaPage() {
     resetParticipants(parseInt(value ?? "1"))
   }
 
-  // Fetch server-computed slots whenever treatment/date/partySize changes — never
-  // trust a client-cached list (SPA_PLAN.md §7). The booking submit re-validates the
-  // exact same way server-side regardless.
+  // A stable primitive key for "which guest is in which slot" — used (instead of the
+  // participants array itself) as an effect dependency below, so picking a gender/
+  // specific-therapist choice doesn't re-trigger the qualified-therapist-list fetch,
+  // only an actual identity change does.
+  const participantProfileKey = participants.map((p) => (p.value?.kind === "reservation" ? p.value.profileId : "")).join("|")
+
+  // Qualified therapists for the current treatment, fetched per participant slot so
+  // each guest's OWN remembered preference (if any) surfaces independently — a couple
+  // can have two different "usually requested" therapists pinned at once.
+  useEffect(() => {
+    if (!currentProperty || !selectedTreatmentId) {
+      setParticipantTherapistOptions([])
+      return
+    }
+    let cancelled = false
+    Promise.all(
+      participants.map((slot) => {
+        const profileId = slot.value?.kind === "reservation" ? slot.value.profileId : undefined
+        const qs = new URLSearchParams({ propertyId: currentProperty.id, ...(profileId ? { profileId } : {}) })
+        return fetch(`/api/spa/treatments/${selectedTreatmentId}/therapists?${qs.toString()}`).then((r) => (r.ok ? r.json() : []))
+      })
+    ).then((lists: QualifiedTherapist[][]) => {
+      if (cancelled) return
+      setParticipantTherapistOptions(lists)
+      setParticipants((prev) =>
+        prev.map((slot, i) => {
+          const preferred = lists[i]?.find((t) => t.isPreferredForGuest)
+          if (preferred && slot.genderChoice === "ANY" && !slot.specificTherapistId) {
+            return { ...slot, specificTherapistId: preferred.id }
+          }
+          return slot
+        })
+      )
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProperty, selectedTreatmentId, partySize, participantProfileKey])
+
+  // Every participant's current ask, serialized once for reuse as both an effect
+  // dependency (stable primitive, won't re-fire from an unrelated re-render) and the
+  // literal query param sent to the availability route.
+  const requirementsKey = JSON.stringify(
+    participants.map((p) =>
+      p.specificTherapistId ? { requestedTherapistId: p.specificTherapistId } : p.genderChoice !== "ANY" ? { requestedGender: p.genderChoice } : {}
+    )
+  )
+
+  // Which days (of the next ~60) are actually bookable given everyone's current
+  // therapist ask — feeds the DatePicker's availableDates so a day nobody-matching
+  // works simply grays out, instead of the guest picking it and hitting a dead end.
+  useEffect(() => {
+    if (!currentProperty || !selectedTreatmentId) {
+      setAvailableDates([])
+      return
+    }
+    const from = new Date()
+    const to = new Date()
+    to.setDate(to.getDate() + 60)
+    const qs = new URLSearchParams({
+      propertyId: currentProperty.id,
+      treatmentId: selectedTreatmentId,
+      partySize: String(partySize),
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+      requirements: requirementsKey,
+    })
+    fetch(`/api/spa/appointments/availability?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.days)) {
+          setAvailableDates(data.days.filter((d: { available: boolean }) => d.available).map((d: { date: string }) => d.date))
+        }
+      })
+  }, [currentProperty, selectedTreatmentId, partySize, requirementsKey])
+
+  // Fetch server-computed slots whenever treatment/date/partySize/requirements change —
+  // never trust a client-cached list (SPA_PLAN.md §7). The booking submit re-validates
+  // the exact same way server-side regardless.
   useEffect(() => {
     if (!currentProperty || !selectedTreatmentId || !selectedDate) {
       setSlots([])
@@ -169,7 +279,14 @@ export default function SpaPage() {
     }
     setLoadingSlots(true)
     setSelectedStartTime("")
-    fetch(`/api/spa/appointments/availability?propertyId=${currentProperty.id}&treatmentId=${selectedTreatmentId}&date=${selectedDate}&partySize=${partySize}`)
+    const qs = new URLSearchParams({
+      propertyId: currentProperty.id,
+      treatmentId: selectedTreatmentId,
+      date: selectedDate,
+      partySize: String(partySize),
+      requirements: requirementsKey,
+    })
+    fetch(`/api/spa/appointments/availability?${qs.toString()}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data.slots)) setSlots(data.slots)
@@ -177,7 +294,7 @@ export default function SpaPage() {
         setCurrency(data.currency || "")
       })
       .finally(() => setLoadingSlots(false))
-  }, [currentProperty, selectedTreatmentId, selectedDate, partySize])
+  }, [currentProperty, selectedTreatmentId, selectedDate, partySize, requirementsKey])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -193,20 +310,35 @@ export default function SpaPage() {
   }
 
   const setSlot = (index: number, value: ParticipantValue | null) => {
-    setParticipants((prev) => {
-      const next = [...prev]
-      next[index] = value
-      return next
-    })
+    setParticipants((prev) => prev.map((slot, i) => (i === index ? { value, genderChoice: "ANY", specificTherapistId: "" } : slot)))
+  }
+
+  const setSlotGender = (index: number, choice: GenderChoice) => {
+    setParticipants((prev) => prev.map((slot, i) => (i === index ? { ...slot, genderChoice: choice, specificTherapistId: "" } : slot)))
+  }
+
+  const setSlotTherapist = (index: number, therapistId: string) => {
+    setParticipants((prev) => prev.map((slot, i) => (i === index ? { ...slot, specificTherapistId: therapistId, genderChoice: "ANY" } : slot)))
   }
 
   const selectGuestForSlot = (guest: GuestResult) => {
     if (activeSlot === null) return
-    setSlot(activeSlot, { kind: "reservation", reservationId: guest.reservationId, guestName: guest.guestName, roomNumber: guest.roomNumber })
+    setSlot(activeSlot, {
+      kind: "reservation",
+      reservationId: guest.reservationId,
+      guestName: guest.guestName,
+      roomNumber: guest.roomNumber,
+      profileId: guest.profileId,
+      accompanyingGuests: guest.accompanyingGuests,
+    })
     setSearchQuery("")
     setGuests([])
-    const nextEmpty = participants.findIndex((p, i) => i !== activeSlot && !p)
+    const nextEmpty = participants.findIndex((p, i) => i !== activeSlot && !p.value)
     setActiveSlot(nextEmpty >= 0 ? nextEmpty : null)
+  }
+
+  const selectCompanionForSlot = (index: number, companion: { upid: string; guestName: string }) => {
+    setSlot(index, { kind: "walkin_companion", guestName: companion.guestName })
   }
 
   const clearSlot = (index: number) => {
@@ -239,7 +371,7 @@ export default function SpaPage() {
 
   const canBook =
     participants.length === partySize &&
-    participants.every((p) => !!p) &&
+    participants.every((p) => !!p.value) &&
     !!selectedStartTime &&
     (mode === "guest" || !!walkInFolioId)
 
@@ -249,10 +381,16 @@ export default function SpaPage() {
     setBooking(true)
     setFeedback(null)
     try {
-      const payloadParticipants = participants.map((p) => {
-        if (p!.kind === "reservation") return { reservationId: p.reservationId }
-        if (p!.kind === "walkin_primary") return { folioId: p.folioId }
-        return { walkInGuestName: p!.guestName }
+      const payloadParticipants = participants.map((slot) => {
+        const v = slot.value!
+        const identity =
+          v.kind === "reservation" ? { reservationId: v.reservationId } : v.kind === "walkin_primary" ? { folioId: v.folioId } : { walkInGuestName: v.guestName }
+        const therapistAsk = slot.specificTherapistId
+          ? { therapistId: slot.specificTherapistId }
+          : slot.genderChoice !== "ANY"
+            ? { requestedGender: slot.genderChoice }
+            : {}
+        return { ...identity, ...therapistAsk }
       })
       const res = await fetch("/api/spa/appointments", {
         method: "POST",
@@ -286,6 +424,8 @@ export default function SpaPage() {
       setTimeout(() => setFeedback(null), 5000)
     }
   }
+
+  const primaryReservation = participants[0]?.value?.kind === "reservation" ? participants[0].value : null
 
   return (
     <div className="space-y-6 pb-24 md:pb-0">
@@ -392,59 +532,111 @@ export default function SpaPage() {
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
                 <Users className="w-5 h-5 text-primary" /> Guest{partySize > 1 ? "s" : ""}
               </h3>
-              <div className="space-y-2 mb-4">
-                {participants.map((p, i) => {
-                  // Participant 1 is always resolved above (reservation search or the
-                  // walk-in folio just opened) — only companions (index > 0) get an
-                  // inline name field here, guest mode via search, walk-in mode as
-                  // plain text (no folio needed for a non-billed companion).
-                  if (i === 0) {
-                    if (mode === "walkin") {
-                      return (
-                        <div key={i} className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-3 mb-4">
+                {participants.map((slot, i) => {
+                  const usedCompanionNames = new Set(
+                    participants.filter((s, si) => si !== i && s.value?.kind === "walkin_companion").map((s) => (s.value as { guestName: string }).guestName)
+                  )
+                  const companionOptions = i > 0 && primaryReservation
+                    ? primaryReservation.accompanyingGuests.filter((c) => !usedCompanionNames.has(c.guestName))
+                    : []
+
+                  return (
+                    <div key={i} className="space-y-2">
+                      {i === 0 && mode === "walkin" ? (
+                        <div className="flex items-center justify-between rounded-lg border p-3">
                           {walkInFolioId ? (
                             <p className="text-sm text-foreground">{walkInForm.name} <span className="text-muted-foreground">(walk-in)</span></p>
                           ) : (
                             <p className="text-sm text-muted-foreground">Start a walk-in bill above first</p>
                           )}
                         </div>
-                      )
-                    }
-                    // guest mode, participant 1 falls through to the search UI below
-                  }
-
-                  if (mode === "walkin" && i > 0) {
-                    return (
-                      <div key={i} className="flex items-center gap-2">
+                      ) : mode === "walkin" && i > 0 ? (
                         <Input
                           placeholder={`Guest ${i + 1} name`}
-                          value={p?.kind === "walkin_companion" ? p.guestName : ""}
+                          value={slot.value?.kind === "walkin_companion" ? slot.value.guestName : ""}
                           onChange={(e) => setSlot(i, e.target.value ? { kind: "walkin_companion", guestName: e.target.value } : null)}
                         />
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <div key={i} className="flex items-center justify-between rounded-lg border p-3">
-                      {p && (p.kind === "reservation") ? (
-                        <>
+                      ) : slot.value?.kind === "reservation" ? (
+                        <div className="flex items-center justify-between rounded-lg border p-3">
                           <div>
-                            <p className="font-medium text-sm text-foreground">{p.guestName}</p>
-                            <p className="text-xs text-muted-foreground">Room {p.roomNumber}</p>
+                            <p className="font-medium text-sm text-foreground">{slot.value.guestName}</p>
+                            <p className="text-xs text-muted-foreground">Room {slot.value.roomNumber}</p>
                           </div>
                           <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
                             <X className="w-4 h-4" />
                           </Button>
-                        </>
+                        </div>
+                      ) : slot.value?.kind === "walkin_companion" ? (
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                          <p className="font-medium text-sm text-foreground">
+                            {slot.value.guestName} <span className="text-muted-foreground text-xs">(companion)</span>
+                          </p>
+                          <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          className={`w-full text-left text-sm ${activeSlot === i ? "text-primary font-medium" : "text-muted-foreground"}`}
-                          onClick={() => setActiveSlot(i)}
-                        >
-                          {partySize > 1 ? `Guest ${i + 1} — click to search` : "Search for a guest..."}
-                        </button>
+                        <>
+                          {companionOptions.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Also in Room {primaryReservation!.roomNumber}:</span>
+                              {companionOptions.map((c) => (
+                                <Button key={c.upid} type="button" size="sm" variant="outline" onClick={() => selectCompanionForSlot(i, c)}>
+                                  + {c.guestName}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className={`w-full text-left text-sm rounded-lg border p-3 ${activeSlot === i ? "text-primary font-medium border-primary" : "text-muted-foreground"}`}
+                            onClick={() => setActiveSlot(i)}
+                          >
+                            {partySize > 1 ? `Guest ${i + 1} — click to search` : "Search for a guest..."}
+                          </button>
+                        </>
+                      )}
+
+                      {slot.value && (
+                        <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
+                          <Label className="text-xs text-muted-foreground">Therapist</Label>
+                          <div className="flex items-center gap-3">
+                            <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                              {(["ANY", "FEMALE", "MALE"] as const).map((g) => (
+                                <button
+                                  key={g}
+                                  type="button"
+                                  disabled={!!slot.specificTherapistId}
+                                  className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    slot.genderChoice === g && !slot.specificTherapistId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                                  }`}
+                                  onClick={() => setSlotGender(i, g)}
+                                >
+                                  {g === "ANY" ? "Any" : g === "FEMALE" ? "Female" : "Male"}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {(participantTherapistOptions[i]?.length ?? 0) > 0 && (
+                            <Select value={slot.specificTherapistId} onValueChange={(v) => setSlotTherapist(i, v ?? "")}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue>
+                                  {slot.specificTherapistId
+                                    ? participantTherapistOptions[i]?.find((t) => t.id === slot.specificTherapistId)?.displayName
+                                    : "Or request someone specific..."}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {participantTherapistOptions[i]?.map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.isPreferredForGuest ? `★ ${t.displayName} — usually requested` : t.displayName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
                       )}
                     </div>
                   )
@@ -494,7 +686,13 @@ export default function SpaPage() {
               <div className="space-y-4">
                 <div className="space-y-2 max-w-[240px]">
                   <Label>Date</Label>
-                  <DatePicker value={selectedDate} onChange={setSelectedDate} placeholder="Choose date..." />
+                  <DatePicker
+                    value={selectedDate}
+                    onChange={setSelectedDate}
+                    placeholder="Choose date..."
+                    minDate={new Date().toISOString().slice(0, 10)}
+                    availableDates={availableDates}
+                  />
                 </div>
 
                 {selectedDate && (
@@ -523,6 +721,23 @@ export default function SpaPage() {
                       ))}
                     </div>
                   )
+                )}
+
+                {selectedStartTime && (
+                  <div className="rounded-lg bg-muted p-3 space-y-1.5">
+                    {participants.map((slot, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Guest {i + 1}</span>
+                        <span className="font-medium text-foreground">
+                          {slot.specificTherapistId
+                            ? participantTherapistOptions[i]?.find((t) => t.id === slot.specificTherapistId)?.displayName ?? "Requested therapist"
+                            : slot.genderChoice !== "ANY"
+                              ? `${slot.genderChoice === "FEMALE" ? "Female" : "Male"} therapist`
+                              : "Any available"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
 
                 {price !== null && (
