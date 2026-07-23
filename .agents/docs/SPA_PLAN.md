@@ -1,7 +1,19 @@
 # Spa Booking Add-on — Review & Implementation Plan
 
 > **Status legend**: ✅ done · 🚧 in progress · ⬜ not started
-> **Overall**: **🚧 Phase 2 done, Phase 3 next (2026-07-23).** Phase 0 (module
+> **Overall**: **🚧 Phase 3 done, Phase 4 next (2026-07-23).** Phase 3 (walk-in
+> booking) extends `POST /api/spa/appointments` to accept `folioId` (an already-open
+> walk-in folio, opened via the existing `POST /api/folios/walk-in`) as the billing
+> anchor's alternative to `reservationId`, exactly like Excursions' own Phase 3 —
+> plus, since companions on a couple/group treatment are never billed separately,
+> they can be a plain `walkInGuestName` with no folio at all. `GET
+> /api/spa/appointments?openWalkIns=true` lists still-open walk-in-billed
+> appointments (the "pay later" retrieval, same reasoning as Excursions'). The
+> front-office page gained the Guest/Walk-in mode toggle and `WalkInFolioPanel`
+> integration, reused with zero new payment UI. 5 new tests (14 total in
+> `spa-booking.test.ts`) cover the walk-in booking itself, the closed-folio-folio-
+> smuggling guard, a closed-folio rejection, a walk-in-primary + plain-name-companion
+> couple booking, and the open-walk-ins listing. Phase 0 (module
 > registration + schema) and Phase 1 (Controls catalog: treatments, therapists, rooms,
 > settings) are complete. Phase 2 (availability engine + in-house booking) is
 > complete: `src/lib/spa-availability.ts` (candidate rooms/therapists, deterministic
@@ -13,8 +25,8 @@
 > posting, therapist double-book rejection, room double-book rejection, couple
 > treatment distinct-therapist assignment, and — the one the request called out as
 > most critical — a genuine concurrent-request race test asserting exactly one of two
-> simultaneous bookings for the same only-available therapist succeeds). Walk-in
-> booking, the tape-chart UI, and the rest of the appointment lifecycle
+> simultaneous bookings for the same only-available therapist succeeds). The
+> tape-chart UI and the rest of the appointment lifecycle
 > (check-in/complete/cancel/no-show) are still ahead — see §16.
 >
 > **Two real bugs found and fixed during Phase 2 build** (both by re-reading the

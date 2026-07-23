@@ -60,6 +60,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
 const appointmentsRoute = await import("@/app/api/spa/appointments/route");
+const walkInFolioRoute = await import("@/app/api/folios/walk-in/route");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -85,6 +86,15 @@ const dayStr = (d: Date) => d.toISOString().slice(0, 10);
 const bookAppointment = (payload: Record<string, unknown>) =>
   appointmentsRoute.POST(
     new Request("http://localhost/api/spa/appointments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+
+const openWalkInFolio = (payload: Record<string, unknown>) =>
+  walkInFolioRoute.POST(
+    new Request("http://localhost/api/folios/walk-in", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -363,5 +373,112 @@ describe("Spa booking: business rules", () => {
     } finally {
       await destroySession();
     }
+  });
+
+  it("books a walk-in appointment against an already-open walk-in folio, and posts the charge there", async () => {
+    const folioRes = await asUser(adminId, () =>
+      openWalkInFolio({ propertyId, walkInGuestName: "Priya Walk-in", walkInGuestContact: "555-0100" })
+    );
+    expect(folioRes.status).toBe(201);
+    const folio = await folioRes.json();
+
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(day(8)), startTime: "09:00",
+        participants: [{ folioId: folio.id }],
+      })
+    );
+    expect(res.status).toBe(201);
+    const appt = await res.json();
+    expect(appt.folioId).toBe(folio.id);
+    expect(appt.participants[0].walkInGuestName).toBe("Priya Walk-in");
+    expect(appt.participants[0].reservationId).toBeNull();
+
+    const lineItem = await prisma.folioLineItem.findUnique({ where: { id: appt.folioLineItemId } });
+    expect(lineItem?.folioId).toBe(folio.id);
+  });
+
+  it("rejects smuggling a reservation's own folio in as a walk-in folioId", async () => {
+    const { folioId } = await makeReservation();
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(day(9)), startTime: "09:00",
+        participants: [{ folioId }],
+      })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/use reservationId instead/i);
+  });
+
+  it("rejects booking against an already-closed walk-in folio", async () => {
+    const folioRes = await asUser(adminId, () =>
+      openWalkInFolio({ propertyId, walkInGuestName: "Closed Bill Guest" })
+    );
+    const folio = await folioRes.json();
+    await prisma.folio.update({ where: { id: folio.id }, data: { isClosed: true } });
+
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(day(9)), startTime: "10:00",
+        participants: [{ folioId: folio.id }],
+      })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/already closed/i);
+  });
+
+  it("a couple treatment can bill a walk-in primary with a plain-name companion (no folio needed for the companion)", async () => {
+    const folioRes = await asUser(adminId, () =>
+      openWalkInFolio({ propertyId, walkInGuestName: "Walk-in Primary" })
+    );
+    const folio = await folioRes.json();
+
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: coupleTreatmentId, appointmentDate: dayStr(day(10)), startTime: "11:00",
+        participants: [{ folioId: folio.id }, { walkInGuestName: "Walk-in Companion" }],
+      })
+    );
+    expect(res.status).toBe(201);
+    const appt = await res.json();
+    expect(appt.participants).toHaveLength(2);
+    expect(appt.participants[0].walkInGuestName).toBe("Walk-in Primary");
+    expect(appt.participants[1].walkInGuestName).toBe("Walk-in Companion");
+    expect(appt.folioId).toBe(folio.id);
+    // Only one charge posted for the whole appointment — the companion never gets
+    // their own folio or line item.
+    const lineItems = await prisma.folioLineItem.findMany({ where: { folioId: folio.id } });
+    expect(lineItems).toHaveLength(1);
+  });
+
+  it("lists still-open walk-in-billed appointments via openWalkIns=true", async () => {
+    const folioRes = await asUser(adminId, () =>
+      openWalkInFolio({ propertyId, walkInGuestName: "Listed Walk-in" })
+    );
+    const folio = await folioRes.json();
+    const bookingRes = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(day(11)), startTime: "09:00",
+        participants: [{ folioId: folio.id }],
+      })
+    );
+    const appt = await bookingRes.json();
+
+    const listRes = await asUser(adminId, () =>
+      appointmentsRoute.GET(new Request(`http://localhost/api/spa/appointments?propertyId=${propertyId}&openWalkIns=true`))
+    );
+    expect(listRes.status).toBe(200);
+    const list = await listRes.json();
+    expect(list.some((a: { id: string }) => a.id === appt.id)).toBe(true);
+
+    // Closing the folio removes it from the open list.
+    await prisma.folio.update({ where: { id: folio.id }, data: { isClosed: true } });
+    const listRes2 = await asUser(adminId, () =>
+      appointmentsRoute.GET(new Request(`http://localhost/api/spa/appointments?propertyId=${propertyId}&openWalkIns=true`))
+    );
+    const list2 = await listRes2.json();
+    expect(list2.some((a: { id: string }) => a.id === appt.id)).toBe(false);
   });
 });

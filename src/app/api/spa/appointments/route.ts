@@ -21,6 +21,10 @@ const includeShape = {
 
 // Lists a property's appointments for one date — the booking page's "today's
 // schedule" list. The full tape-chart grid is Phase 4; this is a plain list for now.
+// With `openWalkIns=true` instead of `date`: every still-open walk-in-billed
+// appointment regardless of date — the "pay later" retrieval path, same reasoning as
+// GET /api/excursions/bookings (nothing else in the app has a browsable list of open
+// walk-in folios; SpaAppointment.folioId makes this possible here too).
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
@@ -28,12 +32,29 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
-    const dateParam = searchParams.get("date");
-    if (!propertyId || !dateParam) {
-      return NextResponse.json({ error: "propertyId and date are required" }, { status: 400 });
+    if (!propertyId) {
+      return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
     }
     await assertPropertyModuleAccess(ctx, propertyId, "SPA");
 
+    if (searchParams.get("openWalkIns") === "true") {
+      const appointments = await prisma.spaAppointment.findMany({
+        where: {
+          propertyId,
+          appointmentStatus: { notIn: ["CANCELLED"] },
+          folio: { isClosed: false },
+          participants: { some: { participantIndex: 1, walkInGuestName: { not: null } } },
+        },
+        include: includeShape,
+        orderBy: [{ createdAt: "desc" }],
+      });
+      return NextResponse.json(appointments);
+    }
+
+    const dateParam = searchParams.get("date");
+    if (!dateParam) {
+      return NextResponse.json({ error: "date (or openWalkIns=true) is required" }, { status: 400 });
+    }
     const date = new Date(dateParam);
     if (isNaN(date.getTime())) {
       return NextResponse.json({ error: "Invalid date" }, { status: 400 });
@@ -51,11 +72,17 @@ export async function GET(request: Request) {
   }
 }
 
-// Books a treatment for one or more in-house guests sharing one room and one time
-// window, each with their own therapist (SPA_PLAN.md §3 row 7 / §7). Walk-in support
-// (folioId instead of reservationId, per participant) is Phase 3 — every participant
-// must be an in-house reservationId for now, matching how Excursions' own booking
-// route was in-house-only in its Phase 2.
+// Books a treatment for one or more guests sharing one room and one time window, each
+// with their own therapist (SPA_PLAN.md §3 row 7 / §7). Billing is always
+// single-folio, resolved from participant 1 (SPA_PLAN.md §4):
+//   - reservationId  -> the guest's own open room folio (in-house).
+//   - folioId        -> an already-open walk-in folio (opened first via the existing
+//                        POST /api/folios/walk-in, same as Excursions' Phase 3) — only
+//                        valid for participant 1, since that's the only participant
+//                        billing ever looks at.
+// Any OTHER participant (a couple/group treatment's companions) can be either
+// reservationId (another in-house guest) or a plain walkInGuestName/Contact with no
+// folio at all — they're not billed separately, so they don't need one.
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
@@ -63,9 +90,14 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { propertyId, treatmentId, appointmentDate, startTime, roomId: requestedRoomId, notes } = body;
-    const participantsInput: { reservationId?: string; therapistId?: string; notes?: string }[] = Array.isArray(body.participants)
-      ? body.participants
-      : [];
+    const participantsInput: {
+      reservationId?: string;
+      folioId?: string;
+      walkInGuestName?: string;
+      walkInGuestContact?: string;
+      therapistId?: string;
+      notes?: string;
+    }[] = Array.isArray(body.participants) ? body.participants : [];
 
     if (!propertyId || !treatmentId || !appointmentDate || !startTime) {
       return NextResponse.json({ error: "propertyId, treatmentId, appointmentDate, and startTime are required" }, { status: 400 });
@@ -73,9 +105,17 @@ export async function POST(request: Request) {
     if (participantsInput.length === 0) {
       return NextResponse.json({ error: "At least one participant is required" }, { status: 400 });
     }
-    for (const p of participantsInput) {
-      if (!p.reservationId) {
-        return NextResponse.json({ error: "Each participant currently requires reservationId (walk-in booking isn't available yet)" }, { status: 400 });
+    for (let i = 0; i < participantsInput.length; i++) {
+      const p = participantsInput[i];
+      const identityCount = [p.reservationId, p.folioId, p.walkInGuestName].filter(Boolean).length;
+      if (identityCount !== 1) {
+        return NextResponse.json({ error: `Participant ${i + 1} needs exactly one of reservationId, folioId, or walkInGuestName` }, { status: 400 });
+      }
+      if (p.folioId && i > 0) {
+        return NextResponse.json({ error: "Only the first participant can be billed to a walk-in folio (folioId)" }, { status: 400 });
+      }
+      if (p.walkInGuestName && i === 0) {
+        return NextResponse.json({ error: "The first participant must be an in-house reservation or an already-open walk-in folio (folioId) — plain walk-in name isn't billable yet" }, { status: 400 });
       }
     }
 
@@ -91,8 +131,12 @@ export async function POST(request: Request) {
     if (!treatment.isActive) {
       return NextResponse.json({ error: "This treatment is not currently active" }, { status: 400 });
     }
-    if (!treatment.allowInHouseGuest) {
+    const primary = participantsInput[0];
+    if (primary.reservationId && !treatment.allowInHouseGuest) {
       return NextResponse.json({ error: "This treatment cannot be booked for in-house guests" }, { status: 400 });
+    }
+    if (primary.folioId && !treatment.allowWalkIn) {
+      return NextResponse.json({ error: "This treatment cannot be booked for walk-in guests" }, { status: 400 });
     }
     const partySize = participantsInput.length;
     if (partySize > treatment.maxParticipants) {
@@ -114,13 +158,16 @@ export async function POST(request: Request) {
     const blockedUntilTime = addMinutesToTime(treatmentEndTime, treatment.cleanupBufferMinutes);
     const blockedFromTime = addMinutesToTime(startTime, -treatment.preparationBufferMinutes);
 
-    // Resolve every in-house reservation up front (outside the lock — read-only,
-    // doesn't touch shared spa resources) and validate they belong to this property.
-    const reservationIds = participantsInput.map((p) => p.reservationId!);
-    const reservations = await prisma.reservation.findMany({
-      where: { id: { in: reservationIds } },
-      include: { folios: { where: { isClosed: false } }, primaryGuest: true },
-    });
+    // Resolve every in-house reservation referenced by ANY participant up front
+    // (read-only, doesn't touch shared spa resources) and validate each belongs to
+    // this property.
+    const reservationIds = participantsInput.map((p) => p.reservationId).filter((id): id is string => !!id);
+    const reservations = reservationIds.length
+      ? await prisma.reservation.findMany({
+          where: { id: { in: reservationIds } },
+          include: { folios: { where: { isClosed: false } }, primaryGuest: true },
+        })
+      : [];
     const reservationById = new Map(reservations.map((r) => [r.id, r]));
     for (const id of reservationIds) {
       const r = reservationById.get(id);
@@ -128,10 +175,35 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Reservation not found at this property" }, { status: 404 });
       }
     }
-    const billingReservation = reservationById.get(reservationIds[0])!;
-    const billingFolio = billingReservation.folios[0];
-    if (!billingFolio) {
-      return NextResponse.json({ error: "The primary guest has no open folio to bill this appointment to" }, { status: 400 });
+
+    // Resolve the billing folio from participant 1 — either their own open room
+    // folio, or an already-open walk-in folio (never a reservation's own folio
+    // smuggled in through folioId, same guard Excursions' booking route uses).
+    let billingFolioId: string;
+    let billingGuestLabel: string;
+    let primaryWalkInIdentity: { walkInGuestName: string; walkInGuestContact: string | null } | null = null;
+    if (primary.reservationId) {
+      const reservation = reservationById.get(primary.reservationId)!;
+      const folio = reservation.folios[0];
+      if (!folio) {
+        return NextResponse.json({ error: "The primary guest has no open folio to bill this appointment to" }, { status: 400 });
+      }
+      billingFolioId = folio.id;
+      billingGuestLabel = `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName ?? ""}`.trim();
+    } else {
+      const folio = await prisma.folio.findUnique({ where: { id: primary.folioId! } });
+      if (!folio || folio.propertyId !== propertyId) {
+        return NextResponse.json({ error: "Folio not found at this property" }, { status: 404 });
+      }
+      if (folio.reservationId) {
+        return NextResponse.json({ error: "This folio belongs to a reservation — use reservationId instead" }, { status: 400 });
+      }
+      if (folio.isClosed) {
+        return NextResponse.json({ error: "This walk-in bill is already closed" }, { status: 400 });
+      }
+      billingFolioId = folio.id;
+      billingGuestLabel = folio.walkInGuestName || "Walk-in guest";
+      primaryWalkInIdentity = { walkInGuestName: folio.walkInGuestName ?? "Walk-in guest", walkInGuestContact: folio.walkInGuestContact };
     }
 
     const settings = await prisma.spaSettings.findUnique({ where: { propertyId } });
@@ -174,8 +246,15 @@ export async function POST(request: Request) {
       // Resolve a therapist per participant, in order, excluding therapists already
       // assigned earlier in this same request.
       const assignedTherapistIds: string[] = [];
-      const resolvedParticipants: { reservationId: string; therapistId: string | null; notes: string | null }[] = [];
-      for (const p of participantsInput) {
+      const resolvedParticipants: {
+        reservationId: string | null;
+        walkInGuestName: string | null;
+        walkInGuestContact: string | null;
+        therapistId: string | null;
+        notes: string | null;
+      }[] = [];
+      for (let i = 0; i < participantsInput.length; i++) {
+        const p = participantsInput[i];
         const candidates = await getAvailableTherapists({
           propertyId,
           treatmentId,
@@ -187,17 +266,29 @@ export async function POST(request: Request) {
         let therapistId: string | null = null;
         if (p.therapistId) {
           if (!candidates.some((c) => c.id === p.therapistId)) {
-            return { error: `The requested therapist is not available for participant ${resolvedParticipants.length + 1}` };
+            return { error: `The requested therapist is not available for participant ${i + 1}` };
           }
           therapistId = p.therapistId;
         } else if (allowAutoAssignment) {
           therapistId = candidates[0]?.id ?? null;
         }
         if (!therapistId && requireTherapistAtBooking) {
-          return { error: `No therapist is available for participant ${resolvedParticipants.length + 1}` };
+          return { error: `No therapist is available for participant ${i + 1}` };
         }
         if (therapistId) assignedTherapistIds.push(therapistId);
-        resolvedParticipants.push({ reservationId: p.reservationId!, therapistId, notes: p.notes || null });
+
+        // Identity: participant 1 either resolves to its own reservation, or (if
+        // billed via folioId) the identity snapshotted off that walk-in folio above.
+        // Every other participant is either another reservation or a plain
+        // walk-in name/contact typed at booking time — see the file header.
+        const walkIn = i === 0 ? primaryWalkInIdentity : p.walkInGuestName ? { walkInGuestName: p.walkInGuestName, walkInGuestContact: p.walkInGuestContact ?? null } : null;
+        resolvedParticipants.push({
+          reservationId: p.reservationId ?? null,
+          walkInGuestName: walkIn?.walkInGuestName ?? null,
+          walkInGuestContact: walkIn?.walkInGuestContact ?? null,
+          therapistId,
+          notes: p.notes || null,
+        });
       }
 
       // Charge/folio (AT_BOOKING only — AT_COMPLETION defers posting to the
@@ -218,7 +309,7 @@ export async function POST(request: Request) {
           });
           const lineItem = await tx.folioLineItem.create({
             data: {
-              folioId: billingFolio.id,
+              folioId: billingFolioId,
               chargeCodeId: treatment.chargeCodeId,
               amount: baseAmount,
               taxAmount,
@@ -227,7 +318,7 @@ export async function POST(request: Request) {
               date: resolveBusinessDate(treatment.property),
             },
           });
-          folioId = billingFolio.id;
+          folioId = billingFolioId;
           folioLineItemId = lineItem.id;
           paymentStatus = "POSTED_TO_FOLIO";
         }
@@ -258,6 +349,8 @@ export async function POST(request: Request) {
               create: resolvedParticipants.map((p, i) => ({
                 participantIndex: i + 1,
                 reservationId: p.reservationId,
+                walkInGuestName: p.walkInGuestName,
+                walkInGuestContact: p.walkInGuestContact,
                 therapistId: p.therapistId,
                 notes: p.notes,
               })),
@@ -274,14 +367,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    const guestLabel = `${billingReservation.primaryGuest.firstName} ${billingReservation.primaryGuest.lastName ?? ""}`.trim();
     await logActivity({
       ctx,
       module: "SPA",
       action: "CREATE",
       entityType: "SpaAppointment",
       entityId: result.appointment.id,
-      description: `Booked ${treatment.name} for ${guestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}`,
+      description: `Booked ${treatment.name} for ${billingGuestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}`,
     });
 
     return NextResponse.json(result.appointment, { status: 201 });

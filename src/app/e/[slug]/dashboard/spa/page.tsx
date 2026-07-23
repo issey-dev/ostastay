@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Sparkles, Clock, Users, X } from "lucide-react"
+import { Sparkles, Clock, Users, X, Receipt, UserRound, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 
 type GuestResult = {
   reservationId: string
@@ -20,7 +21,15 @@ type GuestResult = {
   folioId: string | null
 }
 
-type ParticipantSlot = GuestResult | null
+// Participant 1 (the billing anchor) is either an in-house reservation or the
+// already-open walk-in folio; any additional participant (a couple/group
+// treatment's companion) is either another reservation or a plain name — never
+// billed separately, so a companion never needs a folio of their own (SPA_PLAN.md
+// §4 / the appointments route's own header comment).
+type ParticipantValue =
+  | { kind: "reservation"; reservationId: string; guestName: string; roomNumber: string }
+  | { kind: "walkin_primary"; folioId: string; guestName: string }
+  | { kind: "walkin_companion"; guestName: string }
 
 type Treatment = {
   id: string
@@ -29,6 +38,7 @@ type Treatment = {
   defaultDurationMinutes: number
   maxParticipants: number
   allowInHouseGuest: boolean
+  allowWalkIn: boolean
   isActive: boolean
 }
 
@@ -41,32 +51,45 @@ type AppointmentListItem = {
   appointmentStatus: string
   paymentStatus: string
   partySize: number
+  folioId: string | null
   treatment: { id: string; name: string }
   room: { id: string; name: string } | null
   participants: {
     reservation: { primaryGuest: { firstName: string; lastName: string | null }; assignments: { room: { roomNumber: string } }[] } | null
+    walkInGuestName: string | null
     therapist: { id: string; displayName: string } | null
   }[]
 }
 
-// Front Office's Spa booking screen — in-house guests only for now (walk-in is
-// Phase 3, matching how Excursions' own booking page was in-house-only in its
-// Phase 2). Auto-assignment only in this first UI pass — manual therapist/room
-// picking is supported by the API already but not yet exposed here; that's a
-// deliberate UI scope cut for Phase 2, not a limitation of the booking engine.
+// Front Office's Spa booking screen. In-house: search a guest by room number
+// (identical query shape to /api/pos/search, same as Excursions). Walk-in: open a
+// bare walk-in folio first (/api/folios/walk-in, same as POS/Excursions), then book
+// against it — pay-now/pay-later/close is handled entirely by reusing
+// WalkInFolioPanel rather than building a second payment UI. Auto-assignment only in
+// this UI — manual therapist/room picking is supported by the API but not yet
+// exposed here (a deliberate scope cut, not a booking-engine limitation).
 export default function SpaPage() {
   const { currentProperty } = useProperty()
+
+  const [mode, setMode] = useState<"guest" | "walkin">("guest")
 
   const [treatments, setTreatments] = useState<Treatment[]>([])
   const [selectedTreatmentId, setSelectedTreatmentId] = useState("")
   const selectedTreatment = treatments.find((t) => t.id === selectedTreatmentId) ?? null
+  const availableTreatments = treatments.filter((t) => (mode === "guest" ? t.allowInHouseGuest : t.allowWalkIn))
 
   const [partySize, setPartySize] = useState(1)
-  const [participants, setParticipants] = useState<ParticipantSlot[]>([null])
+  const [participants, setParticipants] = useState<(ParticipantValue | null)[]>([null])
   const [activeSlot, setActiveSlot] = useState<number | null>(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [guests, setGuests] = useState<GuestResult[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
+
+  const [walkInForm, setWalkInForm] = useState({ name: "", contact: "" })
+  const [startingWalkIn, setStartingWalkIn] = useState(false)
+  const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
+  const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
+  const [openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
 
   const [selectedDate, setSelectedDate] = useState("")
   const [slots, setSlots] = useState<SlotAvailability[]>([])
@@ -86,9 +109,7 @@ export default function SpaPage() {
     if (!currentProperty) return
     fetch(`/api/spa/treatments?propertyId=${currentProperty.id}`)
       .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setTreatments(data.filter((t: Treatment) => t.isActive && t.allowInHouseGuest))
-      })
+      .then((data) => { if (Array.isArray(data)) setTreatments(data.filter((t: Treatment) => t.isActive)) })
   }, [currentProperty])
 
   const fetchTodaysAppointments = useCallback(() => {
@@ -103,26 +124,38 @@ export default function SpaPage() {
 
   useEffect(() => { fetchTodaysAppointments() }, [fetchTodaysAppointments])
 
-  // Reset party-size-dependent state whenever the treatment changes.
-  const handleTreatmentChange = (value: string | null) => {
-    setSelectedTreatmentId(value ?? "")
-    setPartySize(1)
-    setParticipants([null])
+  const fetchOpenWalkIns = useCallback(() => {
+    if (!currentProperty) return
+    fetch(`/api/spa/appointments?propertyId=${currentProperty.id}&openWalkIns=true`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setOpenWalkIns(data) })
+      .catch(console.error)
+  }, [currentProperty])
+
+  useEffect(() => { fetchOpenWalkIns() }, [fetchOpenWalkIns])
+
+  const resetParticipants = (size: number) => {
+    setPartySize(size)
+    setParticipants(Array(size).fill(null))
     setActiveSlot(0)
     setSelectedStartTime("")
     setSlots([])
   }
 
+  const handleModeChange = (next: "guest" | "walkin") => {
+    setMode(next)
+    setSelectedTreatmentId("")
+    setWalkInFolioId(null)
+    resetParticipants(1)
+  }
+
+  const handleTreatmentChange = (value: string | null) => {
+    setSelectedTreatmentId(value ?? "")
+    resetParticipants(1)
+  }
+
   const handlePartySizeChange = (value: string | null) => {
-    const size = parseInt(value ?? "1")
-    setPartySize(size)
-    setParticipants((prev) => {
-      const next = [...prev]
-      while (next.length < size) next.push(null)
-      return next.slice(0, size)
-    })
-    setSelectedStartTime("")
-    setSlots([])
+    resetParticipants(parseInt(value ?? "1"))
   }
 
   // Fetch server-computed slots whenever treatment/date/partySize changes — never
@@ -159,30 +192,56 @@ export default function SpaPage() {
     }
   }
 
-  const selectGuestForSlot = (guest: GuestResult) => {
-    if (activeSlot === null) return
+  const setSlot = (index: number, value: ParticipantValue | null) => {
     setParticipants((prev) => {
       const next = [...prev]
-      next[activeSlot] = guest
+      next[index] = value
       return next
     })
+  }
+
+  const selectGuestForSlot = (guest: GuestResult) => {
+    if (activeSlot === null) return
+    setSlot(activeSlot, { kind: "reservation", reservationId: guest.reservationId, guestName: guest.guestName, roomNumber: guest.roomNumber })
     setSearchQuery("")
     setGuests([])
-    // Advance to the next empty slot, if any.
     const nextEmpty = participants.findIndex((p, i) => i !== activeSlot && !p)
     setActiveSlot(nextEmpty >= 0 ? nextEmpty : null)
   }
 
   const clearSlot = (index: number) => {
-    setParticipants((prev) => {
-      const next = [...prev]
-      next[index] = null
-      return next
-    })
+    setSlot(index, null)
     setActiveSlot(index)
   }
 
-  const canBook = participants.length === partySize && participants.every((p) => !!p) && !!selectedStartTime
+  const handleStartWalkIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentProperty || !walkInForm.name) return
+    setStartingWalkIn(true)
+    try {
+      const res = await fetch(`/api/folios/walk-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId: currentProperty.id, walkInGuestName: walkInForm.name, walkInGuestContact: walkInForm.contact }),
+      })
+      if (res.ok) {
+        const folio = await res.json()
+        setWalkInFolioId(folio.id)
+        setSlot(0, { kind: "walkin_primary", folioId: folio.id, guestName: walkInForm.name })
+      } else {
+        const err = await res.json()
+        setFeedback({ message: err.error || "Failed to start walk-in bill", type: "error" })
+      }
+    } finally {
+      setStartingWalkIn(false)
+    }
+  }
+
+  const canBook =
+    participants.length === partySize &&
+    participants.every((p) => !!p) &&
+    !!selectedStartTime &&
+    (mode === "guest" || !!walkInFolioId)
 
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -190,6 +249,11 @@ export default function SpaPage() {
     setBooking(true)
     setFeedback(null)
     try {
+      const payloadParticipants = participants.map((p) => {
+        if (p!.kind === "reservation") return { reservationId: p.reservationId }
+        if (p!.kind === "walkin_primary") return { folioId: p.folioId }
+        return { walkInGuestName: p!.guestName }
+      })
       const res = await fetch("/api/spa/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,17 +262,19 @@ export default function SpaPage() {
           treatmentId: selectedTreatmentId,
           appointmentDate: selectedDate,
           startTime: selectedStartTime,
-          participants: participants.map((p) => ({ reservationId: p!.reservationId })),
+          participants: payloadParticipants,
           notes: notes || undefined,
         }),
       })
       if (res.ok) {
         setFeedback({ message: `Booked ${selectedTreatment.name} at ${selectedStartTime}.`, type: "success" })
-        setParticipants(Array(partySize).fill(null))
-        setActiveSlot(0)
-        setSelectedStartTime("")
+        resetParticipants(partySize)
         setNotes("")
         fetchTodaysAppointments()
+        if (mode === "walkin") {
+          fetchOpenWalkIns()
+          setIsWalkInPanelOpen(true) // let staff take payment or leave the bill open right away
+        }
       } else {
         const err = await res.json().catch(() => null)
         setFeedback({ message: err?.error || "Failed to book appointment", type: "error" })
@@ -225,12 +291,68 @@ export default function SpaPage() {
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Spa</h2>
-        <p className="text-muted-foreground">Search for in-house guests, choose a treatment and time, then confirm the appointment.</p>
+        <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book a treatment.</p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left: booking form */}
         <div className="flex-1 space-y-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                {mode === "guest" ? <Search className="w-5 h-5 text-primary" /> : <UserRound className="w-5 h-5 text-primary" />}
+                {mode === "guest" ? "Find Guest" : "Walk-in Guest"}
+              </h3>
+              <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                <button
+                  type="button"
+                  className={`px-3 py-1.5 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  onClick={() => handleModeChange("guest")}
+                >
+                  Guest
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 py-1.5 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  onClick={() => handleModeChange("walkin")}
+                >
+                  Walk-in
+                </button>
+              </div>
+            </div>
+
+            {mode === "walkin" && (
+              walkInFolioId ? (
+                <div className="flex items-center justify-between bg-muted rounded-lg p-4">
+                  <div>
+                    <p className="font-bold text-foreground">{walkInForm.name}</p>
+                    <p className="text-sm text-muted-foreground">Walk-in bill open</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setIsWalkInPanelOpen(true)}>
+                    <Receipt className="w-4 h-4 mr-2" /> View / Close Bill
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleStartWalkIn} className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="Guest name"
+                    required
+                    value={walkInForm.name}
+                    onChange={(e) => setWalkInForm((p) => ({ ...p, name: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Phone / email (optional)"
+                    value={walkInForm.contact}
+                    onChange={(e) => setWalkInForm((p) => ({ ...p, contact: e.target.value }))}
+                  />
+                  <Button type="submit" className="col-span-2" disabled={startingWalkIn || !walkInForm.name}>
+                    {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
+                  </Button>
+                </form>
+              )
+            )}
+          </div>
+
           <div className="bg-card rounded-xl shadow-sm border border-border p-6">
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
               <Sparkles className="w-5 h-5 text-primary" /> Treatment
@@ -238,12 +360,12 @@ export default function SpaPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Treatment</Label>
-                <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange}>
+                <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange} disabled={mode === "walkin" && !walkInFolioId}>
                   <SelectTrigger className="w-full">
                     <SelectValue>{selectedTreatment ? selectedTreatment.name : "Choose treatment..."}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {treatments.map((t) => (
+                    {availableTreatments.map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name} ({t.defaultDurationMinutes} min)</SelectItem>
                     ))}
                   </SelectContent>
@@ -271,32 +393,65 @@ export default function SpaPage() {
                 <Users className="w-5 h-5 text-primary" /> Guest{partySize > 1 ? "s" : ""}
               </h3>
               <div className="space-y-2 mb-4">
-                {participants.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg border p-3">
-                    {p ? (
-                      <>
-                        <div>
-                          <p className="font-medium text-sm text-foreground">{p.guestName}</p>
-                          <p className="text-xs text-muted-foreground">Room {p.roomNumber}</p>
+                {participants.map((p, i) => {
+                  // Participant 1 is always resolved above (reservation search or the
+                  // walk-in folio just opened) — only companions (index > 0) get an
+                  // inline name field here, guest mode via search, walk-in mode as
+                  // plain text (no folio needed for a non-billed companion).
+                  if (i === 0) {
+                    if (mode === "walkin") {
+                      return (
+                        <div key={i} className="flex items-center justify-between rounded-lg border p-3">
+                          {walkInFolioId ? (
+                            <p className="text-sm text-foreground">{walkInForm.name} <span className="text-muted-foreground">(walk-in)</span></p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">Start a walk-in bill above first</p>
+                          )}
                         </div>
-                        <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className={`w-full text-left text-sm ${activeSlot === i ? "text-primary font-medium" : "text-muted-foreground"}`}
-                        onClick={() => setActiveSlot(i)}
-                      >
-                        {partySize > 1 ? `Guest ${i + 1} — click to search` : "Search for a guest..."}
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      )
+                    }
+                    // guest mode, participant 1 falls through to the search UI below
+                  }
+
+                  if (mode === "walkin" && i > 0) {
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          placeholder={`Guest ${i + 1} name`}
+                          value={p?.kind === "walkin_companion" ? p.guestName : ""}
+                          onChange={(e) => setSlot(i, e.target.value ? { kind: "walkin_companion", guestName: e.target.value } : null)}
+                        />
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={i} className="flex items-center justify-between rounded-lg border p-3">
+                      {p && (p.kind === "reservation") ? (
+                        <>
+                          <div>
+                            <p className="font-medium text-sm text-foreground">{p.guestName}</p>
+                            <p className="text-xs text-muted-foreground">Room {p.roomNumber}</p>
+                          </div>
+                          <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`w-full text-left text-sm ${activeSlot === i ? "text-primary font-medium" : "text-muted-foreground"}`}
+                          onClick={() => setActiveSlot(i)}
+                        >
+                          {partySize > 1 ? `Guest ${i + 1} — click to search` : "Search for a guest..."}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
-              {activeSlot !== null && (
+              {mode === "guest" && activeSlot !== null && (
                 <>
                   <form onSubmit={handleSearch} className="flex gap-3">
                     <Input
@@ -402,39 +557,78 @@ export default function SpaPage() {
           )}
         </div>
 
-        {/* Right: today's schedule */}
+        {/* Right: today's schedule + open walk-in bills */}
         <div className="w-full md:w-80 space-y-6">
-          <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
-            <Clock className="w-5 h-5 text-primary" /> {selectedDate ? "Schedule" : "Today's Schedule"}
-          </h3>
-          {!loadingAppointments && todaysAppointments.length === 0 ? (
-            <EmptyState icon={Sparkles} title="No appointments" description="Nothing booked for this date yet." />
-          ) : (
-            <div className="space-y-3">
-              {todaysAppointments.map((a) => (
-                <div key={a.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-sm text-foreground">{a.treatment.name}</p>
-                    <StatusBadge label={a.appointmentStatus} status={a.appointmentStatus} />
+          <div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
+              <Clock className="w-5 h-5 text-primary" /> {selectedDate ? "Schedule" : "Today's Schedule"}
+            </h3>
+            {!loadingAppointments && todaysAppointments.length === 0 ? (
+              <EmptyState icon={Sparkles} title="No appointments" description="Nothing booked for this date yet." />
+            ) : (
+              <div className="space-y-3">
+                {todaysAppointments.map((a) => (
+                  <div key={a.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-sm text-foreground">{a.treatment.name}</p>
+                      <StatusBadge label={a.appointmentStatus} status={a.appointmentStatus} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{a.startTime}–{a.treatmentEndTime} · {a.room?.name ?? "No room"}</p>
+                    <div className="mt-2 space-y-1">
+                      {a.participants.map((p, i) => (
+                        <p key={i} className="text-xs text-foreground">
+                          {p.reservation
+                            ? `${p.reservation.primaryGuest.firstName} ${p.reservation.primaryGuest.lastName ?? ""}`.trim()
+                            : p.walkInGuestName ?? "Guest"}
+                          {p.therapist && <span className="text-muted-foreground"> — {p.therapist.displayName}</span>}
+                        </p>
+                      ))}
+                    </div>
+                    <div className="mt-1">
+                      <Badge variant="outline" className="text-[10px]">{a.paymentStatus.replace(/_/g, " ")}</Badge>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{a.startTime}–{a.treatmentEndTime} · {a.room?.name ?? "No room"}</p>
-                  <div className="mt-2 space-y-1">
-                    {a.participants.map((p, i) => (
-                      <p key={i} className="text-xs text-foreground">
-                        {p.reservation ? `${p.reservation.primaryGuest.firstName} ${p.reservation.primaryGuest.lastName ?? ""}`.trim() : "Guest"}
-                        {p.therapist && <span className="text-muted-foreground"> — {p.therapist.displayName}</span>}
-                      </p>
-                    ))}
-                  </div>
-                  <div className="mt-1">
-                    <Badge variant="outline" className="text-[10px]">{a.paymentStatus.replace(/_/g, " ")}</Badge>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {openWalkIns.length > 0 && (
+            <div>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
+                <Receipt className="w-5 h-5 text-primary" /> Open Walk-in Bills
+              </h3>
+              <div className="space-y-2">
+                {openWalkIns.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className="w-full text-left bg-card p-3 rounded-lg shadow-sm border border-border hover:bg-muted transition-colors"
+                    onClick={() => { setWalkInFolioId(a.folioId); setIsWalkInPanelOpen(true) }}
+                  >
+                    <p className="font-bold text-sm text-foreground">{a.participants[0]?.walkInGuestName ?? "Walk-in guest"}</p>
+                    <p className="text-xs text-muted-foreground">{a.treatment.name} · {a.startTime}</p>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      <WalkInFolioPanel
+        folioId={walkInFolioId}
+        isOpen={isWalkInPanelOpen}
+        onClose={() => setIsWalkInPanelOpen(false)}
+        onClosed={() => {
+          setIsWalkInPanelOpen(false)
+          setWalkInFolioId(null)
+          setWalkInForm({ name: "", contact: "" })
+          setMode("guest")
+          resetParticipants(1)
+          fetchOpenWalkIns()
+        }}
+      />
     </div>
   )
 }

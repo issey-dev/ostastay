@@ -2,7 +2,7 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Spa Booking — sellable per-property add-on (Phases 0-2 done 2026-07-23, Phase 3 next)
+## Spa Booking — sellable per-property add-on (Phases 0-3 done 2026-07-23, Phase 4 next)
 
 Full plan in [SPA_PLAN.md](SPA_PLAN.md). Front-office/spa-reception scheduling and
 selling of spa treatments (therapist + treatment room, in-house and walk-in guests) —
@@ -33,18 +33,28 @@ that fallback tier); and the availability engine only extended the blocked windo
 *end* (cleanup buffer), never its *start* (preparation buffer), silently making
 `preparationBufferMinutes` block nothing at all (fixed with a derived
 `blockedFromTime` used consistently on both sides of every overlap check).
-`tests/business-rules/spa-booking.test.ts` (9 tests) covers pure-helper math, a real
-end-to-end booking with actual folio/tax posting, therapist and room double-book
-rejection, couple-treatment distinct-therapist assignment, and — the concurrency
-guarantee the original request called out as critical — a genuine concurrent-request
-race test asserting exactly one of two simultaneous bookings for the same
-only-available therapist succeeds. `tsc --noEmit` clean, production build clean, full
-suite 364/364 passing. Not yet live-browser-tested — the dev environment currently has
-every `/api/*` route redirecting to `/login` (see the Phase 1 commit message), a
-pre-existing issue unrelated to Spa that still needs someone to look at it.
+**Phase 3** (walk-in booking) — complete: `POST /api/spa/appointments` now accepts
+`folioId` (an already-open walk-in folio from the existing `POST /api/folios/walk-in`)
+as participant 1's alternative to `reservationId`, exactly matching Excursions' own
+Phase 3 split. Companions on a couple/group treatment (never billed separately) can
+be a plain `walkInGuestName` with no folio at all. `GET
+/api/spa/appointments?openWalkIns=true` lists still-open walk-in-billed appointments
+for "pay later" retrieval. The front-office page gained the Guest/Walk-in mode
+toggle, reusing `WalkInFolioPanel` with zero new payment UI, same as Excursions.
 
-Still ahead: walk-in booking (Phase 3), the tape-chart calendar UI (Phase 4), the rest
-of the appointment lifecycle — check-in/start/complete/cancel/no-show (Phase 5),
+`tests/business-rules/spa-booking.test.ts` is now 14 tests: the original 9 from
+Phase 2 (pure-helper math, a real end-to-end booking with actual folio/tax posting,
+therapist and room double-book rejection, couple-treatment distinct-therapist
+assignment, and the concurrency race test) plus 5 new ones for Phase 3 (walk-in
+booking + real folio posting, the closed-folio-smuggling guard, a closed-folio
+rejection, a walk-in-primary + plain-name-companion couple booking with exactly one
+folio line item, and the open-walk-ins listing). `tsc --noEmit` clean, production
+build clean, full suite 369/369 passing. Still not live-browser-tested — the dev
+environment's every-`/api/*`-route-redirects-to-`/login` issue (see the Phase 1 commit
+message) is unrelated to Spa and still needs someone to look at it.
+
+Still ahead: the tape-chart calendar UI (Phase 4), the rest of the appointment
+lifecycle — check-in/start/complete/cancel/no-show (Phase 5),
 therapist-absence/room-closure reassignment (Phase 6), reports (Phase 7), and the full
 tenant-isolation test suite + seed data (Phase 8).
 
