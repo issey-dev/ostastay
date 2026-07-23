@@ -2,21 +2,51 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Spa Booking — sellable per-property add-on (PLANNED 2026-07-22, not started)
+## Spa Booking — sellable per-property add-on (Phases 0-2 done 2026-07-23, Phase 3 next)
 
 Full plan in [SPA_PLAN.md](SPA_PLAN.md). Front-office/spa-reception scheduling and
 selling of spa treatments (therapist + treatment room, in-house and walk-in guests) —
 the second feature built on the `PropertyModuleAccess` mechanism after Excursions.
-Codebase review (Excursions architecture, folio/financial integration, RBAC/tenant-
-isolation) completed and the full schema/RBAC/availability/pricing/UI plan written and
-self-corrected during review (an initial concurrency-strategy assumption — "SQLite
-serializes everything" — was checked against `src/lib/db.ts`/`schema.prisma` and found
-unverified, replaced with an explicit in-process mutex; see the plan's §7/§21). **Six
-open decisions need the app owner's sign-off before Phase 0 starts** (SPA_PLAN.md §22):
-catalog permissions under `CONTROLS` vs. a new `SPA_CONTROLS` module, couple-treatment
-scope, `AT_COMPLETION` charge-timing scope, therapist-absence/room-closure phase
-priority, therapist-schedule permission gating, and in-house guest identity
-(live-join vs. snapshot). No code written yet.
+Owner decisions on the plan's open forks confirmed 2026-07-23 (`SPA_PLAN.md` status
+header): catalog permissions under `CONTROLS`, and — deviating from the plan's own
+Option B recommendation — **full multi-resource couple/group treatment support in v1**
+(`SpaAppointment` + `SpaAppointmentParticipant`, each guest independently assigned
+their own therapist while sharing one room/time/folio charge).
+
+**Phase 0** (schema + module registration) and **Phase 1** (Controls catalog:
+treatments/rates, therapists with skills/schedule/exceptions, rooms with
+compatibility/closures, `SpaSettings`) — both complete, same `CONTROLS`-gated /
+`assertPropertyModuleAccess`-gated pattern as Excursions throughout.
+
+**Phase 2** (availability engine + in-house booking) — complete:
+`src/lib/spa-availability.ts` (qualified/available room and therapist candidates,
+deterministic auto-assignment, hard overlap-blocking), `src/lib/spa-resource-lock.ts`
+(the in-process mutex `SPA_PLAN.md` §7 settled on after its "SQLite serializes
+everything" assumption didn't hold up), `POST/GET /api/spa/appointments` (+ `[id]`,
++ `availability`), and the front-office booking page at `/e/[slug]/dashboard/spa`
+(auto-assignment only in this first UI pass — manual therapist/room picking is
+supported by the API but not yet exposed in the UI). Two real bugs found and fixed
+while building this phase (not by live-testing, by re-reading the plan against the
+actually-committed schema): the room "roomType fallback" referenced a
+`SpaTreatment.roomType` field that was never added to the schema (fixed by dropping
+that fallback tier); and the availability engine only extended the blocked window's
+*end* (cleanup buffer), never its *start* (preparation buffer), silently making
+`preparationBufferMinutes` block nothing at all (fixed with a derived
+`blockedFromTime` used consistently on both sides of every overlap check).
+`tests/business-rules/spa-booking.test.ts` (9 tests) covers pure-helper math, a real
+end-to-end booking with actual folio/tax posting, therapist and room double-book
+rejection, couple-treatment distinct-therapist assignment, and — the concurrency
+guarantee the original request called out as critical — a genuine concurrent-request
+race test asserting exactly one of two simultaneous bookings for the same
+only-available therapist succeeds. `tsc --noEmit` clean, production build clean, full
+suite 364/364 passing. Not yet live-browser-tested — the dev environment currently has
+every `/api/*` route redirecting to `/login` (see the Phase 1 commit message), a
+pre-existing issue unrelated to Spa that still needs someone to look at it.
+
+Still ahead: walk-in booking (Phase 3), the tape-chart calendar UI (Phase 4), the rest
+of the appointment lifecycle — check-in/start/complete/cancel/no-show (Phase 5),
+therapist-absence/room-closure reassignment (Phase 6), reports (Phase 7), and the full
+tenant-isolation test suite + seed data (Phase 8).
 
 ## Excursions Booking — sellable per-property add-on (ALL 7 PHASES DONE 2026-07-22)
 

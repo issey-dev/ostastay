@@ -1,0 +1,367 @@
+import { describe, it, expect, beforeAll, vi } from "vitest";
+import bcrypt from "bcryptjs";
+import { addMinutesToTime, computeAppointmentTotal, rateForDate, validateRateRanges } from "@/lib/spa";
+
+// --- Pure-function unit tests (no DB, no session) ---
+
+describe("spa: pure helpers", () => {
+  it("addMinutesToTime adds (and subtracts) minutes with zero-padding", () => {
+    expect(addMinutesToTime("09:00", 90)).toBe("10:30");
+    expect(addMinutesToTime("09:05", -10)).toBe("08:55");
+  });
+
+  it("computeAppointmentTotal: PER_PERSON multiplies by party size, FLAT ignores it", () => {
+    expect(computeAppointmentTotal({ price: 40 }, "PER_PERSON", 2)).toBe(80);
+    expect(computeAppointmentTotal({ price: 150 }, "FLAT", 2)).toBe(150);
+  });
+
+  it("rateForDate picks the row covering the date, preferring none over a stale range", () => {
+    const rates = [
+      { effectiveFrom: new Date(2020, 0, 1), effectiveTo: new Date(2025, 11, 31), price: 10 },
+      { effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, price: 20 },
+    ];
+    expect(rateForDate(rates, new Date(2026, 6, 22))?.price).toBe(20);
+    expect(rateForDate(rates, new Date(2019, 0, 1))).toBeNull();
+  });
+
+  it("validateRateRanges rejects overlap and accepts adjacent ranges", () => {
+    expect(
+      validateRateRanges([
+        { effectiveFrom: new Date(2026, 0, 1), effectiveTo: new Date(2026, 5, 30) },
+        { effectiveFrom: new Date(2026, 5, 1), effectiveTo: null },
+      ])
+    ).not.toBeNull();
+    expect(
+      validateRateRanges([
+        { effectiveFrom: new Date(2026, 0, 1), effectiveTo: new Date(2026, 5, 30) },
+        { effectiveFrom: new Date(2026, 6, 1), effectiveTo: null },
+      ])
+    ).toBeNull();
+  });
+});
+
+// --- Route-level integration tests ---
+
+const cookieJar = new Map<string, string>();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => (cookieJar.has(name) ? { value: cookieJar.get(name)! } : undefined),
+    set: (name: string, value: string) => {
+      cookieJar.set(name, value);
+    },
+    delete: (name: string) => {
+      cookieJar.delete(name);
+    },
+  }),
+}));
+
+const { prisma } = await import("@/lib/db");
+const { createSession, destroySession } = await import("@/lib/auth");
+const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
+const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const appointmentsRoute = await import("@/app/api/spa/appointments/route");
+
+async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  cookieJar.clear();
+  await createSession(userId);
+  try {
+    return await fn();
+  } finally {
+    await destroySession();
+  }
+}
+
+const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// UTC-explicit on purpose — a local-midnight construction (setHours(0,0,0,0)) would
+// land on the wrong calendar day once serialized through toISOString() on a
+// non-UTC test machine, the same timezone bug class EXCURSIONS_PLAN.md's Phase 5
+// already documented hitting once for real on this exact codebase.
+const day = (offsetDays: number) => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offsetDays));
+};
+const dayStr = (d: Date) => d.toISOString().slice(0, 10);
+
+const bookAppointment = (payload: Record<string, unknown>) =>
+  appointmentsRoute.POST(
+    new Request("http://localhost/api/spa/appointments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+
+describe("Spa booking: business rules", () => {
+  let ostaAdminId: string;
+  let enterpriseId: string;
+  let propertyId: string;
+  let adminId: string;
+  let chargeCodeId: string;
+  let categoryId: string;
+  let treatmentId: string;
+  let coupleTreatmentId: string;
+  let therapistAId: string;
+  let therapistBId: string;
+  let roomId: string;
+  let coupleRoomId: string;
+
+  const makeReservation = async () => {
+    const guest = await prisma.profile.create({
+      data: { enterpriseId, profileType: "GUEST", firstName: "Spa", lastName: `Guest-${uniq()}` },
+    });
+    const reservation = await prisma.reservation.create({
+      data: {
+        propertyId, primaryGuestId: guest.upid, confirmationNo: `SPA-${uniq()}`,
+        checkInDate: day(-1), checkOutDate: day(30), status: "IN_HOUSE",
+        folios: { create: [{ propertyId, folioNumber: 1 }] },
+      },
+      include: { folios: true },
+    });
+    return { reservationId: reservation.id, folioId: reservation.folios[0].id };
+  };
+
+  beforeAll(async () => {
+    const osta = await prisma.enterprise.upsert({
+      where: { slug: "test-osta" },
+      update: {},
+      create: { name: "Osta", slug: "test-osta", type: "INTERNAL" },
+    });
+    const roleIds = await ensureRoles(prisma, osta.id, SYSTEM_ROLE_DEFS, true);
+    const passwordHash = await bcrypt.hash("password123", 10);
+
+    const ostaAdmin = await prisma.user.create({
+      data: {
+        enterpriseId: osta.id, email: `spa-br-osta-${uniq()}@test.local`, passwordHash,
+        firstName: "Osta", lastName: "Admin", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+      },
+    });
+    ostaAdminId = ostaAdmin.id;
+
+    const enterprise = await prisma.enterprise.create({
+      data: { name: "Spa BR", slug: `test-spa-br-${uniq()}`, type: "STANDARD" },
+    });
+    enterpriseId = enterprise.id;
+
+    const property = await prisma.property.create({
+      data: {
+        enterpriseId, name: "BR Property", code: `SBR-${uniq()}`, legalName: "BR LLC",
+        defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+      },
+    });
+    propertyId = property.id;
+
+    await asUser(ostaAdminId, () =>
+      propertyModulesRoute.PATCH(
+        new Request("http://localhost/api/licenses/property-modules", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ propertyId, module: "SPA", enabled: true }),
+        })
+      )
+    );
+
+    const chargeCode = await prisma.chargeCode.create({ data: { enterpriseId, code: "SPA", description: "Spa Charge" } });
+    chargeCodeId = chargeCode.id;
+
+    const admin = await prisma.user.create({
+      data: {
+        enterpriseId, email: `spa-br-admin-${uniq()}@test.local`, passwordHash,
+        firstName: "Admin", lastName: "BR", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+      },
+    });
+    adminId = admin.id;
+
+    const category = await prisma.spaTreatmentCategory.create({ data: { propertyId, name: "Massage" } });
+    categoryId = category.id;
+
+    const treatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: "Swedish Massage", defaultDurationMinutes: 60,
+        preparationBufferMinutes: 10, cleanupBufferMinutes: 15, chargeCodeId,
+        rates: { create: [{ price: 80, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    treatmentId = treatment.id;
+
+    const coupleTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: "Couple Massage", defaultDurationMinutes: 60,
+        cleanupBufferMinutes: 15, chargeCodeId, maxParticipants: 2, pricingMode: "FLAT",
+        rates: { create: [{ price: 150, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    coupleTreatmentId = coupleTreatment.id;
+
+    const therapistA = await prisma.spaTherapist.create({ data: { propertyId, displayName: "Therapist A" } });
+    therapistAId = therapistA.id;
+    const therapistB = await prisma.spaTherapist.create({ data: { propertyId, displayName: "Therapist B" } });
+    therapistBId = therapistB.id;
+
+    await prisma.spaTherapistTreatment.createMany({
+      data: [
+        { therapistId: therapistAId, treatmentId, qualified: true },
+        { therapistId: therapistBId, treatmentId, qualified: true },
+        { therapistId: therapistAId, treatmentId: coupleTreatmentId, qualified: true },
+        { therapistId: therapistBId, treatmentId: coupleTreatmentId, qualified: true },
+      ],
+    });
+
+    // Both therapists work every day, 08:00-20:00, effective from well in the past.
+    await prisma.spaTherapistSchedule.createMany({
+      data: Array.from({ length: 7 }, (_, dow) => [
+        { therapistId: therapistAId, dayOfWeek: dow, startTime: "08:00", endTime: "20:00", effectiveFrom: new Date(2020, 0, 1) },
+        { therapistId: therapistBId, dayOfWeek: dow, startTime: "08:00", endTime: "20:00", effectiveFrom: new Date(2020, 0, 1) },
+      ]).flat(),
+    });
+
+    const room = await prisma.spaRoom.create({ data: { propertyId, name: "Room 1", capacity: 1 } });
+    roomId = room.id;
+    const coupleRoom = await prisma.spaRoom.create({ data: { propertyId, name: "Couple Room", capacity: 2 } });
+    coupleRoomId = coupleRoom.id;
+  });
+
+  it("books an in-house appointment, auto-assigns therapist+room, and posts a folio charge", async () => {
+    const { reservationId, folioId } = await makeReservation();
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId, appointmentDate: dayStr(day(3)), startTime: "10:00",
+        participants: [{ reservationId }],
+      })
+    );
+    expect(res.status).toBe(201);
+    const appt = await res.json();
+    expect(appt.roomId).toBeTruthy();
+    expect(appt.participants).toHaveLength(1);
+    expect(appt.participants[0].therapistId).toBeTruthy();
+    expect(appt.priceSnapshot).toBe(80);
+    expect(appt.paymentStatus).toBe("POSTED_TO_FOLIO");
+    expect(appt.folioLineItemId).toBeTruthy();
+
+    const lineItem = await prisma.folioLineItem.findUnique({ where: { id: appt.folioLineItemId } });
+    expect(lineItem?.folioId).toBe(folioId);
+    expect(lineItem?.amount).toBeCloseTo(80, 2);
+  });
+
+  it("rejects a second booking when the only qualified therapist is already booked over the requested time", async () => {
+    const soloTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Solo-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 50, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    await prisma.spaTherapistTreatment.create({ data: { therapistId: therapistAId, treatmentId: soloTreatment.id, qualified: true } });
+
+    const first = await makeReservation();
+    const res1 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: soloTreatment.id, appointmentDate: dayStr(day(4)), startTime: "11:00",
+        participants: [{ reservationId: first.reservationId, therapistId: therapistAId }],
+      })
+    );
+    expect(res1.status).toBe(201);
+
+    const second = await makeReservation();
+    const res2 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: soloTreatment.id, appointmentDate: dayStr(day(4)), startTime: "11:30",
+        participants: [{ reservationId: second.reservationId }],
+      })
+    );
+    expect(res2.status).toBe(400);
+    const body2 = await res2.json();
+    expect(body2.error).toMatch(/no therapist/i);
+  });
+
+  it("rejects a second booking when the only compatible room is already booked over the requested time", async () => {
+    const soloRoomTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `SoloRoom-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 50, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    await prisma.spaTherapistTreatment.createMany({
+      data: [
+        { therapistId: therapistAId, treatmentId: soloRoomTreatment.id, qualified: true },
+        { therapistId: therapistBId, treatmentId: soloRoomTreatment.id, qualified: true },
+      ],
+    });
+    await prisma.spaTreatmentRoom.create({ data: { treatmentId: soloRoomTreatment.id, roomId } });
+
+    const first = await makeReservation();
+    const res1 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: soloRoomTreatment.id, appointmentDate: dayStr(day(5)), startTime: "13:00",
+        participants: [{ reservationId: first.reservationId }],
+      })
+    );
+    expect(res1.status).toBe(201);
+
+    const second = await makeReservation();
+    const res2 = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: soloRoomTreatment.id, appointmentDate: dayStr(day(5)), startTime: "13:30",
+        participants: [{ reservationId: second.reservationId }],
+      })
+    );
+    expect(res2.status).toBe(400);
+    const body2 = await res2.json();
+    expect(body2.error).toMatch(/no room/i);
+  });
+
+  it("a couple treatment assigns two distinct therapists sharing one couple-capable room, priced flat", async () => {
+    const first = await makeReservation();
+    const second = await makeReservation();
+    const res = await asUser(adminId, () =>
+      bookAppointment({
+        propertyId, treatmentId: coupleTreatmentId, appointmentDate: dayStr(day(6)), startTime: "10:00",
+        participants: [{ reservationId: first.reservationId }, { reservationId: second.reservationId }],
+      })
+    );
+    expect(res.status).toBe(201);
+    const appt = await res.json();
+    expect(appt.partySize).toBe(2);
+    expect(appt.roomId).toBe(coupleRoomId);
+    const therapistIds = appt.participants.map((p: { therapistId: string }) => p.therapistId);
+    expect(new Set(therapistIds).size).toBe(2);
+    expect(appt.priceSnapshot).toBe(150);
+  });
+
+  it("concurrency: two simultaneous bookings for the same only-available therapist — exactly one succeeds", async () => {
+    const raceTreatment = await prisma.spaTreatment.create({
+      data: {
+        propertyId, categoryId, name: `Race-${uniq()}`, defaultDurationMinutes: 60, cleanupBufferMinutes: 0,
+        chargeCodeId, rates: { create: [{ price: 50, effectiveFrom: new Date(2020, 0, 1) }] },
+      },
+    });
+    await prisma.spaTherapistTreatment.create({ data: { therapistId: therapistAId, treatmentId: raceTreatment.id, qualified: true } });
+
+    const [a, b] = await Promise.all([makeReservation(), makeReservation()]);
+
+    // Both requests share one already-established session (a single already-logged-in
+    // staff member submitting from two browser tabs) — the test harness's asUser()
+    // helper clears/re-sets a shared cookie jar per call and isn't safe to run two of
+    // concurrently, but the resource-lock guarantee under test lives entirely in the
+    // route/business-logic layer below the auth check, not in the auth mock itself.
+    cookieJar.clear();
+    await createSession(adminId);
+    try {
+      const [res1, res2] = await Promise.all([
+        bookAppointment({
+          propertyId, treatmentId: raceTreatment.id, appointmentDate: dayStr(day(7)), startTime: "15:00",
+          participants: [{ reservationId: a.reservationId }],
+        }),
+        bookAppointment({
+          propertyId, treatmentId: raceTreatment.id, appointmentDate: dayStr(day(7)), startTime: "15:00",
+          participants: [{ reservationId: b.reservationId }],
+        }),
+      ]);
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 400]);
+
+      const created = await prisma.spaAppointment.findMany({ where: { treatmentId: raceTreatment.id, appointmentDate: day(7) } });
+      expect(created).toHaveLength(1);
+    } finally {
+      await destroySession();
+    }
+  });
+});

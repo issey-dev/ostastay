@@ -1,7 +1,41 @@
 # Spa Booking Add-on — Review & Implementation Plan
 
 > **Status legend**: ✅ done · 🚧 in progress · ⬜ not started
-> **Overall**: **🚧 Phase 0 starting (2026-07-23).** This document is the output of a
+> **Overall**: **🚧 Phase 2 done, Phase 3 next (2026-07-23).** Phase 0 (module
+> registration + schema) and Phase 1 (Controls catalog: treatments, therapists, rooms,
+> settings) are complete. Phase 2 (availability engine + in-house booking) is
+> complete: `src/lib/spa-availability.ts` (candidate rooms/therapists, deterministic
+> auto-assignment, prep/cleanup-buffer-aware overlap blocking — a real gap was found
+> and fixed mid-phase, see below), `src/lib/spa-resource-lock.ts` (the in-process
+> mutex from §7), `POST/GET /api/spa/appointments` (+ `[id]`, + `availability`), and
+> the front-office booking page at `/e/[slug]/dashboard/spa`. Covered by
+> `tests/business-rules/spa-booking.test.ts` (9 tests: happy path with real folio
+> posting, therapist double-book rejection, room double-book rejection, couple
+> treatment distinct-therapist assignment, and — the one the request called out as
+> most critical — a genuine concurrent-request race test asserting exactly one of two
+> simultaneous bookings for the same only-available therapist succeeds). Walk-in
+> booking, the tape-chart UI, and the rest of the appointment lifecycle
+> (check-in/complete/cancel/no-show) are still ahead — see §16.
+>
+> **Two real bugs found and fixed during Phase 2 build** (both by re-reading the
+> plan against the actual committed schema/code, not by live-testing — worth noting
+> since the project's own convention is that live-testing usually catches these):
+> 1. `getAvailableRooms`'s "roomType fallback" referenced `SpaTreatment.roomType`,
+>    a field that was never added to the schema (only `SpaRoom.roomType` exists,
+>    a room-side display label). Fixed by dropping that fallback tier — no
+>    compatibility configured now falls straight through to every bookable room at
+>    the property, one tier simpler than §7's original text described.
+> 2. The availability engine only extended the blocked window's *end* (cleanup
+>    buffer) via `blockedUntilTime`, never its *start* (preparation buffer) — meaning
+>    `preparationBufferMinutes` was captured on the schema but never actually blocked
+>    anything, contradicting the request's explicit "the buffer should block the
+>    resource even if it is not shown as guest treatment time." Fixed by deriving an
+>    effective `blockedFromTime` (`startTime` minus the treatment's own prep buffer)
+>    for every overlap check, on both the requested slot and every existing
+>    appointment being checked against (using that appointment's own snapshotted
+>    prep buffer).
+>
+> This document is the output of a
 > codebase review + design pass (2026-07-22), following the same shape as
 > [`EXCURSIONS_PLAN.md`](EXCURSIONS_PLAN.md) (context → architecture decisions → schema
 > → phases → confirmed decisions). The concurrency strategy in §7 was corrected
