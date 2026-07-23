@@ -32,6 +32,9 @@ export const MODULES = [
   // their next login, but a brand-new enterprise seeded via ensureRoles() below would
   // still miss the default here until both lists agree.
   "EXCURSIONS",
+  // Spa bookings (see .agents/docs/SPA_PLAN.md) — same add-on shape and same
+  // hand-sync caveat as EXCURSIONS above.
+  "SPA",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];
@@ -71,6 +74,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     POS: EDIT_NO_DELETE,
     NIGHT_AUDIT: EDIT_NO_DELETE,
     EXCURSIONS: EDIT_NO_DELETE,
+    SPA: EDIT_NO_DELETE,
   }),
 
   // Matches today's sidebar HOUSEKEEPING allow-list (Housekeeping, Maintenance only).

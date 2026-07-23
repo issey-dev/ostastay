@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History, CalendarClock } from "lucide-react"
+import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History, CalendarClock, Sparkles } from "lucide-react"
 import { requireSession, resolveCurrentPropertyId, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
@@ -95,6 +95,12 @@ const items: { title: string; url: string; icon: typeof MonitorPlay; module: Mod
     module: "EXCURSIONS",
   },
   {
+    title: "Spa",
+    url: "/dashboard/spa",
+    icon: Sparkles,
+    module: "SPA",
+  },
+  {
     title: "Daily Reports",
     url: "/dashboard/reports",
     icon: CalendarDays,
@@ -142,7 +148,7 @@ export async function AppSidebar() {
   // must actually have it enabled, not just the enterprise. Grows one entry at a time
   // as new add-ons ship — see src/components/osta/property-module-access-manager.tsx's
   // own ADD_ON_MODULES list, which must stay in sync with this one.
-  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS"]);
+  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA"]);
   const currentPropertyId = await resolveCurrentPropertyId(ctx);
   const enabledAddOns = currentPropertyId
     ? new Set(

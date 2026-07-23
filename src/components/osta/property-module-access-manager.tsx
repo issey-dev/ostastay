@@ -11,9 +11,10 @@ type PropertyModuleRow = { module: string; enabled: boolean }
 // Modules that are never sold as a per-property add-on — core operational modules a
 // property already gets through its enterprise's own RBAC/licensing, plus the two that
 // are never gated at all (see the ALWAYS_LICENSED set in src/lib/scope.ts). Only
-// modules genuinely built as opt-in add-ons (today: EXCURSIONS) belong here — this list
-// grows one entry at a time as new add-ons ship, never by removing the exclusion.
-const ADD_ON_MODULES = MODULES.filter((m) => m === "EXCURSIONS")
+// modules genuinely built as opt-in add-ons (today: EXCURSIONS, SPA) belong here —
+// this list grows one entry at a time as new add-ons ship, never by removing the
+// exclusion.
+const ADD_ON_MODULES = MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA")
 
 // The property-scoped sibling of LicensingManager's enterprise-module-override card —
 // see /api/licenses/property-modules. Simpler than the enterprise version: there is no
