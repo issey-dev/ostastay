@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { resolveChargeTax } from "@/lib/tax-calc";
+import { resolveBusinessDate } from "@/lib/business-date";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
 
@@ -50,6 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "No price is configured for the replacement departure's date" }, { status: 400 });
     }
     const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: excursionType.property.enterpriseId } });
+    // Re-posted charges follow the same discipline as every other charge route:
+    // business-date stamped and attributed to the caller's open cashier drawer.
+    const shift = await ensureOpenShift(ctx, excursionType.propertyId);
 
     const moved: Array<{ bookingId: string; newBookingId: string }> = [];
     const failed: Array<{ bookingId: string; reason: string }> = [];
@@ -121,11 +126,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           data: {
             folioId: folioIdToCharge,
             chargeCodeId: excursionType.chargeCodeId,
+            shiftId: shift.id,
             amount: baseAmount,
             taxAmount,
             serviceChargeAmount,
             description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
-            date: new Date(),
+            date: resolveBusinessDate(excursionType.property),
           },
         });
         const created = await tx.excursionBooking.create({

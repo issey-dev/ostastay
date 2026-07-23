@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { resolveChargeTax } from "@/lib/tax-calc";
+import { resolveBusinessDate } from "@/lib/business-date";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
 
@@ -163,16 +165,22 @@ export async function POST(request: Request) {
 
     // Single transaction: the FolioLineItem and the ExcursionBooking referencing it are
     // created together, so a booking never exists without its charge (or vice versa).
+    // Same posting discipline as every other charge route: stamp the property's
+    // business date (not wall clock) and attribute the posting to the caller's open
+    // cashier drawer so it shows in their shift summary.
+    const shift = await ensureOpenShift(ctx, excursionType.propertyId);
+
     const booking = await prisma.$transaction(async (tx) => {
       const lineItem = await tx.folioLineItem.create({
         data: {
           folioId: folioIdToCharge,
           chargeCodeId: excursionType.chargeCodeId,
+          shiftId: shift.id,
           amount: baseAmount,
           taxAmount,
           serviceChargeAmount,
           description: `${excursionType.name} — ${headcountLabel} (${departure.departureDate.toISOString().slice(0, 10)} ${departure.departureTime})`,
-          date: new Date(),
+          date: resolveBusinessDate(excursionType.property),
         },
       });
 
