@@ -295,6 +295,11 @@ model Property {
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles Profile[]
+  // Per-property add-on gates (see PropertyModuleAccess) and the Excursions catalog/
+  // bookings sold through one, if purchased.
+  moduleAccessOverrides PropertyModuleAccess[]
+  excursionTypes        ExcursionType[]
+  excursionBookings     ExcursionBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -512,6 +517,7 @@ model ChargeCode {
   ratePlans          RatePlan[]
   routingRules       FolioRoutingRule[]
   feeRules           PropertyFeeRule[]
+  excursionTypes     ExcursionType[]
 
   @@unique([enterpriseId, code])
 }
@@ -829,6 +835,7 @@ model Reservation {
   specialRequests    ReservationSpecialRequest[]
   routingRules       FolioRoutingRule[]
   guestRegistrations GuestRegistration[]
+  excursionBookings  ExcursionBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -898,6 +905,7 @@ model Folio {
   // Standing routing rules that redirect charges of a given code INTO this folio
   // (this folio is the target). See FolioRoutingRule.
   routingTargetRules FolioRoutingRule[] @relation("RoutingTargetFolio")
+  excursionBookings ExcursionBooking[]
 
   @@index([propertyId])
 }
@@ -941,6 +949,9 @@ model FolioLineItem {
   isVoid       Boolean    @default(false)
 
   createdAt DateTime @default(now())
+
+  // Back-reference from ExcursionBooking.folioLineItemId (1:1, optional).
+  excursionBooking ExcursionBooking?
 }
 
 // A standing "routing instruction": charges of a given ChargeCode on a source
@@ -1036,6 +1047,10 @@ model Payment {
   receiptNumber String?
 
   createdAt DateTime @default(now())
+
+  // Excursion bookings refunded by this payment (see ExcursionBooking.refundPaymentId)
+  // — never automatic, always an explicit staff action.
+  refundedExcursionBookings ExcursionBooking[]
 }
 
 // Per-property fee rules (Controls > Fee Rules) that drive the Deposit module and
@@ -1663,4 +1678,191 @@ model ReservationAllocation {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, allocationId])
+}
+
+// ---------------------------------------------------------------------------
+// Excursions Booking add-on — see .agents/docs/EXCURSIONS_PLAN.md for the full
+// design and the rationale behind every decision below.
+// ---------------------------------------------------------------------------
+
+// Generic per-property add-on gate — the property-scoped sibling of
+// EnterpriseModuleAccess. EXCURSIONS is the first real consumer, but this table is
+// intentionally generic so any future add-on reuses it without a new migration.
+model PropertyModuleAccess {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  module     String
+  // Defaults false (opt-in add-on) — the opposite default of EnterpriseModuleAccess,
+  // which defaults true because it's an override that force-disables an otherwise-
+  // enabled module. A missing row here means "not purchased," which is every
+  // property's starting state.
+  enabled    Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([propertyId, module])
+}
+
+// Property-scoped catalog entry for a bookable activity (Snorkelling Trip, Island
+// Hopping, Night Fishing...) — same scoping convention as RatePlan/Allocation/Outlet:
+// the offering differs per property, but the linked ChargeCode stays enterprise-wide.
+model ExcursionType {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code         String   // SNORK, ISLE, NFISH...
+  name         String   // "Snorkelling Trip"
+  description  String?
+  chargeCodeId String
+  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  // PER_PERSON: headcount x the active ExcursionRate. FLAT: ExcursionRate.flatPrice
+  // regardless of headcount (e.g. a private charter).
+  pricingMode  String   @default("PER_PERSON")
+  // Hours before a departure's start time a booking can still be freely cancelled —
+  // see ExcursionBooking below. Past this window, cancelling requires the "delete"
+  // action on EXCURSIONS (manager override), not a hard block.
+  cutoffHours  Int      @default(24)
+  isActive     Boolean  @default(true)
+
+  rates      ExcursionRate[]
+  schedules  ExcursionSchedule[]
+  departures ExcursionDeparture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
+}
+
+// Dated pricing, same shape and non-overlapping-range rule as AllocationRate — the row
+// covering the booking date wins. Unlike Allocations, infants get a real price tier
+// here rather than always being free, per app-owner decision.
+model ExcursionRate {
+  id              String        @id @default(uuid())
+  excursionTypeId String
+  excursionType   ExcursionType @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
+  adultPrice      Float         @default(0)
+  childPrice      Float         @default(0)
+  infantPrice     Float         @default(0)
+  // Only meaningful under pricingMode = FLAT; left null under PER_PERSON.
+  flatPrice       Float?
+  effectiveFrom   DateTime
+  effectiveTo     DateTime? // null = open-ended; ranges must not overlap (API-validated)
+}
+
+// The recurring half of the "hybrid" scheduling model (see EXCURSIONS_PLAN.md) — a
+// template that a Controls "generate departures" action expands into ExcursionDeparture
+// rows. Editing a template never retroactively touches already-generated departures.
+model ExcursionSchedule {
+  id              String        @id @default(uuid())
+  excursionTypeId String
+  excursionType   ExcursionType @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
+  daysOfWeek      String   // comma-separated day codes, e.g. "MON,WED,FRI"
+  departureTime   String   // "09:00" — when the trip actually leaves
+  meetingTime     String?  // "08:45" — when guests must be ready; distinct from departureTime
+  meetingPoint    String?  // "Main Jetty"
+  capacity        Int
+  // Soft "at risk of not running" flag only, mirrored onto each generated
+  // ExcursionDeparture — never blocks or auto-cancels anything.
+  minCapacity     Int?
+  isActive        Boolean  @default(true)
+
+  departures ExcursionDeparture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One bookable instance — either generated from a schedule or added ad hoc (the manual
+// half of "hybrid"). Capacity/meeting fields are copied from the schedule at
+// generation time but are independently editable per instance afterward.
+model ExcursionDeparture {
+  id              String        @id @default(uuid())
+  excursionTypeId String
+  excursionType   ExcursionType @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
+  // Null when hand-added rather than generated from a template. A regenerate run never
+  // overwrites an existing departure for a date it already has one, generated or not.
+  scheduleId String?
+  schedule   ExcursionSchedule? @relation(fields: [scheduleId], references: [id])
+
+  departureDate DateTime // date only; time-of-day kept separate below
+  departureTime String
+  meetingTime   String?
+  meetingPoint  String?
+  capacity      Int
+  minCapacity   Int?
+
+  status String  @default("SCHEDULED") // SCHEDULED | CANCELLED | COMPLETED
+  notes  String?
+
+  bookings ExcursionBooking[] @relation("DepartureBookings")
+  // Bookings that exist because THIS departure was cancelled (e.g. weather) and the
+  // guest was moved to a replacement — see ExcursionBooking.movedFromDepartureId.
+  movedBookingsAway ExcursionBooking[] @relation("MovedFromDeparture")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([excursionTypeId, departureDate, departureTime])
+}
+
+// The actual sale. Guest identity is XOR (reservationId OR walk-in name/contact),
+// validated in the API route not the DB — same convention as OutletAppointment.
+// Billing always flows through the existing Folio/FolioLineItem/Payment machinery
+// rather than a parallel payment path — see EXCURSIONS_PLAN.md "Billing".
+model ExcursionBooking {
+  id          String             @id @default(uuid())
+  departureId String
+  departure   ExcursionDeparture @relation("DepartureBookings", fields: [departureId], references: [id])
+  // Denormalized from departure -> excursionType -> property so every route can scope
+  // by propertyId directly (assertPropertyAccess) without a multi-hop join — same
+  // reasoning as Folio.propertyId.
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  reservationId      String?
+  reservation        Reservation? @relation(fields: [reservationId], references: [id])
+  walkInGuestName    String?
+  walkInGuestContact String?
+
+  adultCount  Int   @default(1)
+  childCount  Int   @default(0)
+  infantCount Int   @default(0)
+  // Snapshotted at booking time from the active ExcursionRate x headcount (or
+  // flatPrice) — never recomputed later even if the rate changes afterward.
+  totalAmount Float
+
+  status String @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
+
+  // folioId is always set — either the guest's existing open room folio (in-house) or
+  // a fresh walk-in folio created for this booking (walk-in). folioLineItemId is set
+  // once the charge is actually posted.
+  folioId         String
+  folio           Folio          @relation(fields: [folioId], references: [id])
+  folioLineItemId String?        @unique
+  folioLineItem   FolioLineItem? @relation(fields: [folioLineItemId], references: [id])
+  // Set only if cancelling this booking triggers an explicit refund Payment — never
+  // automatic (matches how nothing else in this app auto-refunds either).
+  refundPaymentId String?
+  refundPayment   Payment? @relation(fields: [refundPaymentId], references: [id])
+
+  notes              String?
+  bookedByUserId     String
+  cancelledAt        DateTime?
+  cancellationReason String?
+  // Set when this booking exists because its original departure was cancelled and the
+  // guest was moved to a replacement — points at the ORIGINAL departure, not the
+  // current one, so the manifest history stays honest about what actually happened.
+  movedFromDepartureId String?
+  movedFromDeparture   ExcursionDeparture? @relation("MovedFromDeparture", fields: [movedFromDepartureId], references: [id])
+  // Set on the OLD (cancelled) booking once it has been moved to a replacement —
+  // the reverse of movedFromDepartureId, plain id with no relation (same convention
+  // as bookedByUserId). Without this, the same already-moved booking could be
+  // "moved" again, creating a duplicate booking for the same guest.
+  movedToBookingId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departureId])
 }

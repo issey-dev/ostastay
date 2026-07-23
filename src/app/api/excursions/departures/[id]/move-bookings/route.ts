@@ -1,0 +1,172 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
+import { resolveChargeTax } from "@/lib/tax-calc";
+import { rateForDate, computeBookingTotal } from "@/lib/excursions";
+import { logActivity } from "@/lib/activity-log";
+
+// Moves a batch of already-cancelled bookings (from a departure cancelled via
+// .../departures/[id]/cancel) onto a replacement departure of the SAME excursion type.
+// Each move creates a brand-new ExcursionBooking (with movedFromDepartureId pointing at
+// the original departure) and a fresh FolioLineItem priced for the new date — it never
+// mutates the cancelled booking, so the manifest history stays honest about what
+// actually happened. Re-derives "is this booking actually movable" itself rather than
+// trusting the client's list, since a booking whose charge was never voided (closed
+// folio, or the actor lacked cashiering access at cancel time) would be double-charged
+// if moved.
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "EXCURSIONS", "create");
+
+    const { id: sourceDepartureId } = await params;
+    const body = await request.json();
+    const targetDepartureId = body.targetDepartureId;
+    const bookingIds: string[] = Array.isArray(body.bookingIds) ? body.bookingIds : [];
+    if (!targetDepartureId || bookingIds.length === 0) {
+      return NextResponse.json({ error: "targetDepartureId and at least one bookingId are required" }, { status: 400 });
+    }
+
+    const targetDeparture = await prisma.excursionDeparture.findUnique({
+      where: { id: targetDepartureId },
+      include: {
+        excursionType: {
+          include: { rates: true, chargeCode: { include: { taxProfile: { include: { rates: true } } } }, property: true },
+        },
+      },
+    });
+    if (!targetDeparture) {
+      return NextResponse.json({ error: "Replacement departure not found" }, { status: 404 });
+    }
+    const { excursionType } = targetDeparture;
+    await assertPropertyModuleAccess(ctx, excursionType.propertyId, "EXCURSIONS");
+
+    if (targetDeparture.status !== "SCHEDULED") {
+      return NextResponse.json({ error: "The replacement departure is no longer taking bookings" }, { status: 400 });
+    }
+
+    const rate = rateForDate(excursionType.rates, targetDeparture.departureDate);
+    if (!rate) {
+      return NextResponse.json({ error: "No price is configured for the replacement departure's date" }, { status: 400 });
+    }
+    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: excursionType.property.enterpriseId } });
+
+    const moved: Array<{ bookingId: string; newBookingId: string }> = [];
+    const failed: Array<{ bookingId: string; reason: string }> = [];
+
+    for (const bookingId of bookingIds) {
+      const original = await prisma.excursionBooking.findUnique({
+        where: { id: bookingId },
+        include: { folioLineItem: true, reservation: { include: { folios: { where: { isClosed: false } } } } },
+      });
+
+      if (!original || original.departureId !== sourceDepartureId) {
+        failed.push({ bookingId, reason: "Booking not found on the source departure" });
+        continue;
+      }
+      if (original.status !== "CANCELLED") {
+        failed.push({ bookingId, reason: "Booking is not cancelled" });
+        continue;
+      }
+      if (original.movedToBookingId) {
+        failed.push({ bookingId, reason: "This booking has already been moved to a replacement departure" });
+        continue;
+      }
+      // Movable = no charge was ever posted, or the charge was successfully voided —
+      // re-derived here rather than trusted from the request.
+      if (original.folioLineItemId && !original.folioLineItem?.isVoid) {
+        failed.push({ bookingId, reason: "This booking's charge was never voided — moving it would double-charge the guest" });
+        continue;
+      }
+
+      let folioIdToCharge: string;
+      if (original.reservationId) {
+        const openFolio = original.reservation?.folios[0];
+        if (!openFolio) {
+          failed.push({ bookingId, reason: "The guest's reservation no longer has an open folio" });
+          continue;
+        }
+        folioIdToCharge = openFolio.id;
+      } else {
+        const folio = await prisma.folio.findUnique({ where: { id: original.folioId } });
+        if (!folio || folio.isClosed) {
+          failed.push({ bookingId, reason: "The walk-in bill is no longer open" });
+          continue;
+        }
+        folioIdToCharge = folio.id;
+      }
+
+      const totalAmount = computeBookingTotal(rate, excursionType.pricingMode, {
+        adultCount: original.adultCount,
+        childCount: original.childCount,
+        infantCount: original.infantCount,
+      });
+      const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+        chargeCode: excursionType.chargeCode,
+        inputAmount: totalAmount,
+        settings,
+        pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
+      });
+
+      const headcountLabel = [
+        original.adultCount ? `${original.adultCount} adult${original.adultCount === 1 ? "" : "s"}` : null,
+        original.childCount ? `${original.childCount} child${original.childCount === 1 ? "" : "ren"}` : null,
+        original.infantCount ? `${original.infantCount} infant${original.infantCount === 1 ? "" : "s"}` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const newBooking = await prisma.$transaction(async (tx) => {
+        const lineItem = await tx.folioLineItem.create({
+          data: {
+            folioId: folioIdToCharge,
+            chargeCodeId: excursionType.chargeCodeId,
+            amount: baseAmount,
+            taxAmount,
+            serviceChargeAmount,
+            description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
+            date: new Date(),
+          },
+        });
+        const created = await tx.excursionBooking.create({
+          data: {
+            departureId: targetDepartureId,
+            propertyId: excursionType.propertyId,
+            reservationId: original.reservationId,
+            walkInGuestName: original.walkInGuestName,
+            walkInGuestContact: original.walkInGuestContact,
+            adultCount: original.adultCount,
+            childCount: original.childCount,
+            infantCount: original.infantCount,
+            totalAmount,
+            folioId: folioIdToCharge,
+            folioLineItemId: lineItem.id,
+            bookedByUserId: ctx.userId,
+            notes: original.notes,
+            movedFromDepartureId: sourceDepartureId,
+          },
+        });
+        // Marks the OLD booking as spent so it can never be moved again (see the
+        // movedToBookingId check above) — done in the same transaction as creating
+        // its replacement so the two never diverge.
+        await tx.excursionBooking.update({ where: { id: original.id }, data: { movedToBookingId: created.id } });
+        return created;
+      });
+
+      moved.push({ bookingId, newBookingId: newBooking.id });
+    }
+
+    await logActivity({
+      ctx,
+      module: "EXCURSIONS",
+      action: "CREATE",
+      entityType: "ExcursionBooking",
+      description: `Moved ${moved.length} booking(s) from a cancelled departure to "${excursionType.name}" (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime})${failed.length ? `, ${failed.length} failed` : ""}`,
+    });
+
+    return NextResponse.json({ success: true, moved, failed });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -105,7 +106,12 @@ export function PropertyApprovalQueue() {
                       {p.reviewedBy && ` · reviewed by ${p.reviewedBy.firstName} ${p.reviewedBy.lastName}`}
                     </CardDescription>
                   </div>
-                  <StatusBadge label={p.status} status={p.status} dot />
+                  <div className="flex items-center gap-3">
+                    <StatusBadge label={p.status} status={p.status} dot />
+                    <Link href={`/osta/properties/${p.id}`} className="text-sm text-muted-foreground hover:underline">
+                      Manage
+                    </Link>
+                  </div>
                 </div>
               </CardHeader>
               {p.status === "REJECTED" && p.rejectionReason && (

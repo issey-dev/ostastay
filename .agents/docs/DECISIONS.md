@@ -1851,3 +1851,38 @@ Green Tax by registration no, GST), Housekeeping (2 — Special Requests, Attend
   IN_PROGRESS transition, powering the Attendant report's time-on-task.
 - Green Tax report carries the per-room adult/child levy on the primary
   registration (× nights); accompanying registrations show 0 to avoid double count.
+
+## Excursions Booking (2026-07-22)
+
+Full design in [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md) (all six phases now done); the
+owner decisions behind it are recorded there too. Logged here only because they're the
+kind of business rule someone would otherwise have to rediscover by reading routes:
+
+- **Sold as a per-property add-on, not per-enterprise** — the first feature in the app
+  gated this way. Defaults **off** for every property; only Osta toggles it
+  (`/osta/properties/[id]`), never the enterprise's own admin. This introduced a new
+  generic mechanism, `PropertyModuleAccess`, reusable by any future add-on.
+- **Catalog management (`ExcursionType`/`Rate`/`Schedule`) is gated by `CONTROLS`, not
+  `EXCURSIONS`** — corrected mid-build from an earlier draft that conflated the two.
+  Matches every other catalog in the app (`RatePlan`, `Allocation`, `Outlet`): editing
+  the catalog is a Controls-level action; `EXCURSIONS` itself only ever means
+  day-to-day bookings.
+- **Cancelling a booking's *charge* requires `CASHIERING`, not `EXCURSIONS`** — found by
+  reading the existing void-charge route rather than assumed. A booking can always be
+  cancelled by anyone with `EXCURSIONS update`/`delete` (per the cutoff rule below); if
+  the actor also has `CASHIERING update` the charge is voided, otherwise it's left in
+  place with a note for cashiering staff. Two independent gates, not one.
+- **Cutoff window is a per-guest rule, whole-departure cancellation is not** — the
+  `cutoffHours` / manager-override split only applies to cancelling one booking.
+  Cancelling an entire departure (e.g. weather) is manager-only (`EXCURSIONS delete`)
+  regardless of how close the departure is — it's an operator decision affecting other
+  people's bookings without their consent, not a timing rule.
+- **A closed folio can never be voided or paid into** (confirmed in both the void and
+  payments routes) — so a paid-and-closed walk-in booking's cancellation can cancel the
+  booking record but explicitly cannot touch the money; refunding it is a manual,
+  outside-the-system action. Same rule blocks "moving" that booking to a replacement
+  departure (would double-charge the guest), surfaced as an explicit "needs manual
+  handling" item rather than silently skipped.
+- **Infant is a real priced tier for Excursions** (adult/child/infant), unlike
+  Allocations where infants are always free — a deliberate difference between the two
+  systems, not an oversight.

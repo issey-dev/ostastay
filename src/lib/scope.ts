@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { MODULES, type Module, type Action } from "@/lib/modules";
+import { MODULES, MODULE_LABELS, type Module, type Action } from "@/lib/modules";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
 export { MODULES, type Module, type Action };
@@ -379,6 +379,25 @@ export async function assertProfileAccess(ctx: AuthContext, upid: string) {
     throw new ForbiddenError("Profile not found");
   }
   return profile;
+}
+
+// The property-scoped sibling of the enterprise-level `licensedModules` check above —
+// for a module sold as a per-property add-on (see PropertyModuleAccess in schema.prisma
+// and .agents/docs/EXCURSIONS_PLAN.md), a role permission alone isn't enough: the
+// specific property must also have actually purchased/been granted the add-on. Callers
+// use this ALONGSIDE requirePermission(), never instead of it — this checks "is the
+// add-on turned on for this property," requirePermission() checks "is this user allowed
+// to use it." Always call assertPropertyAccess() (or this, which does it internally)
+// before this, since a property that isn't even in the caller's enterprise should 403
+// with "Property not found," not a module-access message that leaks its existence.
+export async function assertPropertyModuleAccess(ctx: AuthContext, propertyId: string, module: Module): Promise<void> {
+  await assertPropertyAccess(ctx, propertyId);
+  const access = await prisma.propertyModuleAccess.findUnique({
+    where: { propertyId_module: { propertyId, module } },
+  });
+  if (!access?.enabled) {
+    throw new ForbiddenError(`${MODULE_LABELS[module] ?? module} is not enabled for this property`);
+  }
 }
 
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {
