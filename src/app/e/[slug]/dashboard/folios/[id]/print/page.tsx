@@ -23,7 +23,9 @@ import {
 export default function PrintInvoicePage({ params }: { params: Promise<{ id: string; slug: string }> }) {
   const { id } = use(params)
   const searchParams = useSearchParams()
-  const documentTypeParam: "tax" | "proforma" = searchParams.get("type") === "proforma" ? "proforma" : "tax"
+  const typeParam = searchParams.get("type")
+  const documentTypeParam: "tax" | "proforma" | "interim" =
+    typeParam === "proforma" ? "proforma" : typeParam === "interim" ? "interim" : "tax"
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -95,9 +97,10 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const fontClassName = resolvePrintFontClass(settings.invoiceFontFamily)
 
   const isTax = documentType === "tax"
-  const documentNumber = isTax ? folio.taxInvoiceNumber : folio.proformaInvoiceNumber
-  const title = isTax ? "Tax Invoice" : "Proforma Invoice"
-  const disclaimer = isTax ? undefined : "This is not a tax invoice."
+  const isInterim = documentType === "interim"
+  const documentNumber = isTax ? folio.taxInvoiceNumber : isInterim ? null : folio.proformaInvoiceNumber
+  const title = isTax ? "Tax Invoice" : isInterim ? "Interim Bill" : "Proforma Invoice"
+  const disclaimer = isTax ? undefined : isInterim ? "Interim statement of charges posted so far — not a tax invoice." : "This is not a tax invoice."
 
   const chargeRows: PrintTransactionRow[] = folio.lineItems
     .filter((item: any) => !item.isVoid)
@@ -153,7 +156,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
         title={title}
         disclaimer={disclaimer}
         metaRows={[
-          { label: isTax ? "Invoice No" : "Proforma No", value: documentNumber || "—" },
+          { label: isTax ? "Invoice No" : isInterim ? "Statement" : "Proforma No", value: documentNumber || "—" },
           ...(reservation ? [{ label: "Confirmation No", value: reservation.confirmationNo }] : []),
           { label: "Date", value: format(new Date(), "dd-MMM-yy") },
           { label: "Folio No", value: String(folio.folioNumber) },

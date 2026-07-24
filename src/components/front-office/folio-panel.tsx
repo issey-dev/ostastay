@@ -513,6 +513,15 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=interim`, '_blank')}
+                          className="h-9 shadow-sm border-border ml-2"
+                          title="Information statement of charges posted so far — not a tax invoice"
+                        >
+                          <Printer className="w-4 h-4 mr-2" /> Interim Bill
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={openRouting}
                           className="h-9 shadow-sm border-border ml-2"
                         >

@@ -434,9 +434,14 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
        guest-payable stays reverse on any date. Nothing financial is deleted.
      - UI: "Reverse Check-in" button (IN_HOUSE group) + "Reverse Check-out" button
        (CHECKED_OUT) on the reservation detail page, with confirm/reason prompts.
-  2. **Interim bill** (read-only, posted-so-far) + **Advance bill** (posts remaining nights,
-     user-chosen count ≤ remaining, revenue on the posting date; early-departure variant
-     auto-moves checkout date). New sequence types + generators + print + UI.
+  2. **Interim bill** — ✅ DONE (2026-07-24). `type=interim` on the folio invoice-data route
+     + print page: the actually-posted charges/payments so far, mid-stay, labelled "Interim
+     Bill", NOT numbered and NO ledger change (distinct from Proforma's full projection).
+     "Interim Bill" print button on the folio panel.
+     **Advance bill** — STILL TODO (the complex half): posts remaining nights (Rate +
+     Transport + Extra Allocations), user-chosen count ≤ remaining nights, revenue on the
+     posting date; early-departure variant auto-moves the checkout date. Needs a posting
+     route (partial on-demand night-audit), a nights picker UI, and print.
   3. **Force-settle at checkout + checkout settlement document.**
   4. **Linked-profile folios** (company/agent/sharer across reservations).
 - **(superseded) Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/

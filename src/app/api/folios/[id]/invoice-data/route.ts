@@ -53,7 +53,12 @@ export async function GET(
     const { id } = await params;
 
     const url = new URL(request.url);
-    const documentType: "tax" | "proforma" = url.searchParams.get("type") === "proforma" ? "proforma" : "tax";
+    // "interim" is a mid-stay information bill — the actually-posted lines + payments so
+    // far (like the tax invoice) but NOT a legal document: it allocates no number and
+    // makes no ledger change. "proforma" is the full projected estimate; "tax" is final.
+    const typeParam = url.searchParams.get("type");
+    const documentType: "tax" | "proforma" | "interim" =
+      typeParam === "proforma" ? "proforma" : typeParam === "interim" ? "interim" : "tax";
 
     // 1. Fetch Folio details with relations
     let folio = await prisma.folio.findUnique({
@@ -68,9 +73,10 @@ export async function GET(
 
     // Assign a document number the first time this document type is generated for this
     // folio, via the property's Sequence Manager counter — reprints reuse the stored
-    // number instead of allocating a new one.
+    // number instead of allocating a new one. The Interim bill is informational and never
+    // numbered.
     const existingNumber = documentType === "tax" ? folio.taxInvoiceNumber : folio.proformaInvoiceNumber;
-    if (!existingNumber) {
+    if (documentType !== "interim" && !existingNumber) {
       const sequenceType = documentType === "tax" ? "TAX_INVOICE" : "PROFORMA_FOLIO";
       const nextValue = await allocateSequenceNumber(folio.propertyId, sequenceType);
       const prefix = documentType === "tax" ? "INV" : "PRO";
