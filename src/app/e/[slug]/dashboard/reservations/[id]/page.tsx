@@ -290,6 +290,15 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
 
   const guest = reservation.primaryGuest
   const guestName = profileName(guest)
+  // Green Tax registration numbers, assigned per arriving guest at EOD (Night Audit).
+  // Keyed by profile so each guest shows their own number; absent until EOD runs.
+  const registrations = new Map<string, { registrationNo: number; year: number }>(
+    (reservation.guestRegistrations ?? []).map((r: any) => [r.profileId, { registrationNo: r.registrationNo, year: r.year }])
+  )
+  const regLabel = (profileId?: string) => {
+    const r = profileId ? registrations.get(profileId) : undefined
+    return r ? `Reg #${r.registrationNo}/${r.year}` : null
+  }
   const nights = Math.max(
     1,
     Math.round((new Date(reservation.checkOutDate).getTime() - new Date(reservation.checkInDate).getTime()) / 86_400_000)
@@ -474,6 +483,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </span>
             )}
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Lead</Badge>
+            {regLabel(guest?.upid) && (
+              <span className="text-[10px] font-mono text-muted-foreground" title="Green Tax registration number (assigned at End of Day)">
+                {regLabel(guest?.upid)}
+              </span>
+            )}
           </div>
 
           {/* Accompanying guests — smaller */}
@@ -492,6 +506,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                     <UserRound className="w-3 h-3 text-muted-foreground" />
                     {profileName(ag.profile)}
                     {isVip(ag.profile) && <Star className="w-3 h-3 text-warning fill-current" />}
+                    {regLabel(ag.profile?.upid) && (
+                      <span className="font-mono text-muted-foreground/80" title="Green Tax registration number (assigned at End of Day)">
+                        {regLabel(ag.profile?.upid)}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </div>

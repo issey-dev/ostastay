@@ -36,6 +36,9 @@ const RESERVATION_DETAIL_INCLUDE = {
   },
   specialRequests: true,
   transports: true,
+  // Green Tax registration numbers assigned at EOD (Night Audit) — one per arriving guest
+  // (primary + accompanying), surfaced per-guest on the detail screen.
+  guestRegistrations: { select: { profileId: true, registrationNo: true, year: true, isPrimary: true } },
   // For the reservation detail page: folio balances and the trace log, slimmed to
   // what the summary cards actually render.
   folios: {
