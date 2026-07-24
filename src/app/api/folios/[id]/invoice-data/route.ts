@@ -4,6 +4,7 @@ import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
+import { resolveChargeTax } from "@/lib/tax-calc";
 
 const INVOICE_INCLUDE = {
   lineItems: {
@@ -37,7 +38,8 @@ const INVOICE_INCLUDE = {
         orderBy: {
           startDate: 'asc' as const
         }
-      }
+      },
+      transports: true
     }
   }
 };
@@ -203,6 +205,31 @@ export async function GET(
         });
         if (quote.greenTax.enabled && quote.greenTax.total > 0.005) {
           proformaLines.push(line({ description: "Green Tax", code: "GTX", amount: quote.greenTax.total, date: reservation.checkInDate }));
+        }
+
+        // Hotel-booked transport — projected exactly like Daily Details so the proforma
+        // reflects the pickup/dropoff charge that Night Audit will post on its date.
+        const legs = (reservation.transports ?? []).filter(
+          (t) => t.chargeToGuest && t.chargeAmount != null && t.chargeAmount > 0 && t.chargeCodeId
+        );
+        if (legs.length > 0) {
+          const codeIds = [...new Set(legs.map((t) => t.chargeCodeId!).filter(Boolean))];
+          const codes = await prisma.chargeCode.findMany({
+            where: { id: { in: codeIds }, enterpriseId },
+            include: { taxProfile: { include: { rates: true } } },
+          });
+          const codeMap = new Map(codes.map((c) => [c.id, c]));
+          for (const leg of legs) {
+            const code = codeMap.get(leg.chargeCodeId!);
+            if (!code) continue;
+            const t = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes: folio.property.pricesIncludeTaxes });
+            const dir = leg.direction === "PICKUP" ? "Pickup" : "Dropoff";
+            const realizeDate = leg.transportTime ?? leg.carrierTime ?? (leg.direction === "PICKUP" ? reservation.checkInDate : reservation.checkOutDate);
+            proformaLines.push(line({
+              description: `Transport – ${dir}${leg.transportType ? ` (${leg.transportType})` : ""}`,
+              code: code.code, amount: t.baseAmount, tax: t.taxAmount, sc: t.serviceChargeAmount, date: realizeDate,
+            }));
+          }
         }
 
         // A proforma is an estimate — show the full projected charges with nothing
