@@ -1886,3 +1886,35 @@ kind of business rule someone would otherwise have to rediscover by reading rout
 - **Infant is a real priced tier for Excursions** (adult/child/infant), unlike
   Allocations where infants are always free — a deliberate difference between the two
   systems, not an oversight.
+
+## Billing module — owner rules (2026-07-24)
+
+Requested as a full billing build; being delivered as reviewable increments. Owner's
+verbal rules (capture verbatim intent — several have edge cases):
+
+- **Billing lifecycle:** charging/billing opens only **after check-in** and is frozen
+  **after check-out**. Corrections after checkout are done via **reverse check-out** (and
+  **reverse check-in**), not by editing closed folios. (Post-after-checkin + freeze already
+  enforced today; reverse routes are the new part.)
+- **Interim Bill** = read-only "information invoice" of **currently-posted** charges +
+  payments, generated mid-stay. No posting, no ledger change (distinct from Proforma,
+  which is the full *projected* estimate).
+- **Advance Bill** = guest wants to **settle everything before checkout** → it **POSTS**
+  the remaining charges in one go so they can pay upfront. Rules:
+  - User chooses **how many nights** to advance-post, **max = remaining nights**.
+  - If night audit hasn't run yet on arrival day, it can post Rate + Transport + Extra
+    Allocations for the chosen nights **on one date**.
+  - If 2 of 4 nights already passed, advance bill offers only the **remaining** nights.
+  - **Early Departure:** advance bill may charge the full amount, OR skip charging and do
+    an early departure — **if early departure is done, the check-out date auto-changes to
+    that date.**
+  - **Revenue recognition = the date a line is actually posted on** (always). Critical for
+    accurate revenue/ADR. So advance-posted lines book to the settlement date, not spread.
+- **Reverse check-out:** **always allowed**. But:
+  - **Direct-bill** folios can be reversed **only on the same date as the check-out date**.
+  - **Guest payments** may be reversed on other dates too — but **never delete a
+    transaction** (reversals/negatives only; financial history is preserved).
+  - Reversal must undo: status → IN_HOUSE, reopen folios, revert room + housekeeping,
+    reverse the debtor transfer and the auto-posted TA commission (as reversing entries,
+    not deletions).
+- **Reverse check-in:** undo IN_HOUSE → RESERVED (guarded so it can't strand posted money).

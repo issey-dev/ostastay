@@ -364,7 +364,18 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   the trace text every time until the trace is marked complete (for high-attention tasks).
   Needs: `ReservationTrace.alertOnOpen Boolean` (migration), trace-panel checkbox, and a
   popup on the reservation page for unresolved alert traces.
-- **Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/
+- **Billing module — building as increments (owner approved "all of them", 2026-07-24).**
+  Rules captured in DECISIONS.md "Billing module — owner rules". Sequence:
+  1. **Reverse check-in / reverse check-out** (in progress). Always allowed; direct-bill
+     reversal only on the checkout date; payment reversals any date but never delete
+     (reversing entries). Undo status, reopen folios, revert room+housekeeping, reverse
+     debtor transfer + TA commission. Both statuses are terminal in the status route today.
+  2. **Interim bill** (read-only, posted-so-far) + **Advance bill** (posts remaining nights,
+     user-chosen count ≤ remaining, revenue on the posting date; early-departure variant
+     auto-moves checkout date). New sequence types + generators + print + UI.
+  3. **Force-settle at checkout + checkout settlement document.**
+  4. **Linked-profile folios** (company/agent/sharer across reservations).
+- **(superseded) Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/
   charging opens only after check-in and is frozen after check-out (corrections via a
   future **reverse check-in / reverse check-out**); Generate **Proforma**, **Interim Bill**
   (information invoice), **Advance Bill** (post everything due in one go); post normal
