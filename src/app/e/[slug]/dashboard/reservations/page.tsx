@@ -334,24 +334,10 @@ export default function ReservationsDashboard() {
     }
   }
 
-  const handleCheckIn = async (res: Reservation) => {
-    try {
-      const resp = await fetch(`/api/reservations/${res.id}/check-in`, { method: "POST" })
-      const data = await resp.json()
-      if (resp.ok) {
-        setNotification({
-          title: "Check-in Complete",
-          message: data.roomWarning
-            ? `Guest checked in. Warning: ${data.roomWarning}`
-            : "Guest has been successfully checked in.",
-        })
-        fetchData()
-      } else {
-        setNotification({ title: "Check-in Failed", message: data.error || "Unknown error", isError: true })
-      }
-    } catch (e) {
-      setNotification({ title: "Error", message: "An error occurred during check-in.", isError: true })
-    }
+  // Check-in runs a procedure (Room → Identification → Registration Card → Confirm) on the
+  // reservation screen; the list button opens that wizard rather than a bare POST.
+  const handleCheckIn = (res: Reservation) => {
+    router.push(`${viewUrl(res.id)}?checkin=1`)
   }
 
   const handleCheckOut = async (res: Reservation, early = false) => {

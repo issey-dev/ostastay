@@ -1995,3 +1995,30 @@ guest can NEVER check out with an open balance — that's the whole point.
   posted charges + payments + zero balance) is the settlement document printed at checkout; no
   separate doc type was added. A distinct "Settlement Receipt" would be a quick add (mirroring
   the Interim bill) if the owner wants one — flag before building.
+
+## Check-in procedure (wizard) + Registration Card stationary (2026-07-24)
+
+Owner requested a guided check-in procedure and a printable registration card.
+
+- **Check-in is now a wizard** (`src/components/front-office/check-in-wizard.tsx`), opened
+  from every check-in entry point (reservation detail, reservations list via `?checkin=1`,
+  front-office board). Steps:
+  1. **Room** — a room must be assigned to proceed (REQUIRED; mirrors the server readiness
+     gates: OOO/OOS blocked, DIRTY warns). Assigns the arrival (earliest) segment.
+  2. **Identification** — per guest, one by one (lead + each accompanying). Shows existing
+     DOB / Nationality / ID on file for a returning guest to CONFIRM; flags an **expired** ID;
+     inline quick-entry (DOB + Nationality via `PATCH /api/profiles/[upid]`; ID docs via the
+     reused `IdentificationManager`). **Not enforced** — a warning, skippable.
+  3. **Registration Card** — per guest: print + a "printed/signed collected" checkbox. **Not
+     blocking** (the signature is physical/off-system). Shown only when the stationary is
+     enabled. Skipped entirely if `registrationCardEnabled` is off.
+  4. **Confirm** — summary (+ incomplete-ID / expired-ID warnings) + optional payment →
+     the existing `POST check-in` (+ reassign if the room changed, + payment via the returned
+     folioId). The old single-screen `CheckInDialog` was removed.
+- **Registration Card stationary** — themed like the Confirmation Letter (shared print shell),
+  one card per guest (`?guest=<upid>`), system pre-fills known fields and leaves the rest as
+  blank writable lines, with a Terms block + Guest/Front-Office signatures. Configurable in
+  Controls > Stationaries (new tab): enable toggle + welcome message + Terms, stored on
+  `EnterpriseSettings` (`registrationCard*`).
+- Added a partial `PATCH /api/profiles/[upid]` (DOB/Nationality only) since PUT is a
+  full-scalar replace; `IdentificationManager` gained an optional `onChange` callback.

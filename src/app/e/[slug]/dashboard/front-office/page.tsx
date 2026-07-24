@@ -15,7 +15,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { CheckInDialog } from "@/components/front-office/check-in-dialog"
+import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog"
 
 export default function FrontOfficeDashboard() {
@@ -71,7 +71,7 @@ export default function FrontOfficeDashboard() {
 
   // Check-out goes through its dedicated route — the generic status endpoint is a
   // guarded state machine that rejects CHECKED_OUT directly. Check-in opens the
-  // CheckInDialog (room assignment + optional payment) instead of a bare POST.
+  // CheckInWizard (Room → Identification → Registration Card → Confirm) instead of a bare POST.
   const handleCheckOut = async (id: string, early = false) => {
     setActionLoading(id)
     try {
@@ -683,8 +683,8 @@ export default function FrontOfficeDashboard() {
         </DialogContent>
       </Dialog>
 
-      <CheckInDialog
-        reservation={checkInRes}
+      <CheckInWizard
+        reservationId={checkInRes?.id ?? null}
         propertyId={propertyId ?? ""}
         isOpen={!!checkInRes}
         onClose={() => setCheckInRes(null)}

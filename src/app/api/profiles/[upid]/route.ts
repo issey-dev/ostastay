@@ -116,6 +116,43 @@ export async function PUT(
   }
 }
 
+// Partial scalar update — touches ONLY the fields present in the body (unlike PUT, which
+// is a full-scalar replace). Used by the check-in Identification step to fill in a guest's
+// Date of Birth / Nationality without needing the whole profile payload.
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ upid: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "update");
+
+    const { upid } = await params;
+    const existing = await assertProfileAccess(upid, ctx.enterpriseId);
+    if (!existing) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const data: { dateOfBirth?: Date | null; nationality?: string | null } = {};
+    if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+    if (body.nationality !== undefined) data.nationality = body.nationality || null;
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(existing);
+    }
+
+    const updated = await prisma.profile.update({ where: { upid }, data, include: PROFILE_CHILD_INCLUDE });
+    await logActivity({
+      ctx, module: "PROFILES", action: "UPDATE", entityType: "Profile", entityId: upid,
+      description: `Updated ${Object.keys(data).join(", ")} for ${updated.companyName || `${updated.firstName} ${updated.lastName ?? ""}`.trim()}`,
+    });
+    return NextResponse.json(updated);
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ upid: string }> }

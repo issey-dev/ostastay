@@ -24,7 +24,7 @@ const emptyForm = { documentType: "", documentNumber: "", issuingCountry: "", ex
 // Multiple per profile, one may be marked primary — see
 // .agents/docs/PROFILES_REDESIGN_PLAN.md "Identification". Upgraded off the old
 // destructive single-document replace-all onto real per-row CRUD.
-export function IdentificationManager({ upid }: { upid: string }) {
+export function IdentificationManager({ upid, onChange }: { upid: string; onChange?: () => void }) {
   const [rows, setRows] = useState<ProfileDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(emptyForm)
@@ -59,6 +59,7 @@ export function IdentificationManager({ upid }: { upid: string }) {
         setForm(emptyForm)
         setAdding(false)
         fetchRows()
+        onChange?.()
       } else {
         const body = await res.json().catch(() => null)
         setError(body?.error || "Failed to add")
@@ -80,6 +81,7 @@ export function IdentificationManager({ upid }: { upid: string }) {
   const handleDelete = async (id: string) => {
     await fetch(`/api/profiles/${upid}/documents/${id}`, { method: "DELETE" })
     fetchRows()
+    onChange?.()
   }
 
   return (

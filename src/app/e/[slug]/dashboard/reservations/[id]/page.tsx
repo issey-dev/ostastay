@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef, use } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
 import {
@@ -18,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
-import { CheckInDialog } from "@/components/front-office/check-in-dialog"
+import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { useProperty } from "@/components/providers/property-provider"
@@ -80,6 +81,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   // "Alert on open" traces pop once each time the reservation is opened, until resolved.
   const [showAlerts, setShowAlerts] = useState(false)
   const alertShownRef = useRef(false)
+  // Arriving from the reservations list "Check In" (?checkin=1) auto-opens the wizard once.
+  const searchParams = useSearchParams()
+  const checkinAutoOpened = useRef(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [reversing, setReversing] = useState(false)
   const [advancing, setAdvancing] = useState(false)
@@ -121,6 +125,14 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       }
     }
   }, [reservation])
+
+  useEffect(() => {
+    if (checkinAutoOpened.current || !reservation) return
+    if (searchParams.get("checkin") === "1" && canCheckIn(reservation.status, reservation.checkInDate, currentProperty?.businessDate)) {
+      checkinAutoOpened.current = true
+      setIsCheckInOpen(true)
+    }
+  }, [searchParams, reservation, currentProperty])
 
   useEffect(() => {
     fetchReservation()
@@ -958,8 +970,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         checkInDate={new Date(reservation.checkInDate).toISOString().split("T")[0]}
         checkOutDate={new Date(reservation.checkOutDate).toISOString().split("T")[0]}
       />
-      <CheckInDialog
-        reservation={isCheckInOpen ? reservation : null}
+      <CheckInWizard
+        reservationId={isCheckInOpen ? id : null}
         propertyId={reservation.propertyId}
         isOpen={isCheckInOpen}
         onClose={() => setIsCheckInOpen(false)}
