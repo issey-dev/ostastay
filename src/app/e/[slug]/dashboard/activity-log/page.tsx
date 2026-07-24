@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/ui/empty-state"
-import { History, Search } from "lucide-react"
+import { History, Search } from "@/components/icons"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
 type LogEntry = {

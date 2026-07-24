@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight, FileText } from "lucide-react"
+import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight, FileText } from "@/components/icons"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"

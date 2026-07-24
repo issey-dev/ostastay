@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, Clock, Wrench, ConciergeBell, CheckCircle2, Circle, Trash2, Plus, X } from "lucide-react"
+import { MessageSquare, Clock, Wrench, ConciergeBell, CheckCircle2, Circle, Trash2, Plus, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

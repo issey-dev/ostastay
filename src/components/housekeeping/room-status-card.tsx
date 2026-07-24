@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { BedDouble, CheckCircle2, AlertTriangle, Users, Brush, Wrench, Bell } from "lucide-react"
+import { BedDouble, CheckCircle2, AlertTriangle, Users, Brush, Wrench, Bell } from "@/components/icons"
 import { statusMutedClasses } from "@/lib/status-tone"
 
 type RoomStatusCardProps = {

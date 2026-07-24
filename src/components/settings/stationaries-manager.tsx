@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Save, RefreshCw, Palette, Type, Receipt, FileText, FileStack, Mail } from "lucide-react"
+import { Save, RefreshCw, Palette, Type, Receipt, FileText, FileStack, Mail } from "@/components/icons"
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
 
 const FONT_STYLES: Record<string, string> = {

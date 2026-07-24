@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { CalendarClock, Plus, CheckCircle2, XCircle, UserX } from "lucide-react"
+import { CalendarClock, Plus, CheckCircle2, XCircle, UserX } from "@/components/icons"
 
 type ChargeCodeOption = { id: string; code: string; description: string }
 

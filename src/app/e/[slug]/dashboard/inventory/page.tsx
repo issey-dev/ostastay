@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckSquare, X, Check, Wrench } from "lucide-react"
+import { CheckSquare, X, Check, Wrench } from "@/components/icons"
 import { WorkOrderManager } from "@/components/housekeeping/work-order-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 import { statusMutedClasses, toneMutedClasses, toneSolidClasses, type StatusTone } from "@/lib/status-tone"

@@ -20,7 +20,7 @@ import {
   Store,
   TrendingUp,
   Compass,
-} from "lucide-react"
+} from "@/components/icons"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
 import { PropertiesManager } from "@/components/settings/properties-manager"

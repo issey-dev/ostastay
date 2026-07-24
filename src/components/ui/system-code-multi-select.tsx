@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Check } from "lucide-react"
+import { Check } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
 type SystemCode = {

@@ -1,6 +1,6 @@
 "use client"
 
-import { LogOut } from "lucide-react"
+import { LogOut } from "@/components/icons"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 
 export function LogoutButton() {

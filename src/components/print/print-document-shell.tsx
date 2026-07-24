@@ -1,6 +1,6 @@
 "use client"
 
-import { Printer, ArrowLeft } from "lucide-react"
+import { Printer, ArrowLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
 // Shared chrome for every printable document (Invoice, Payment Receipt, Currency

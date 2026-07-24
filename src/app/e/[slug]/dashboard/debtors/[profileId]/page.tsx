@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react"
 import Link from "next/link"
-import { ArrowLeft, Printer, Loader2, AlertTriangle, CreditCard } from "lucide-react"
+import { ArrowLeft, Printer, Loader2, AlertTriangle, CreditCard } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"

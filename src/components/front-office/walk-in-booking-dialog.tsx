@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { addDays, format, startOfDay } from "date-fns"
 import type { DateRange } from "react-day-picker"
-import { Loader2, UserPlus } from "lucide-react"
+import { Loader2, UserPlus } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"

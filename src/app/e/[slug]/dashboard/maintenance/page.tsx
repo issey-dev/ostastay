@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"

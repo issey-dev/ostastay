@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react"
 import ProfileForm from "@/components/profiles/ProfileForm"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
-import { UserX } from "lucide-react"
+import { UserX } from "@/components/icons"
 
 export default function EditProfilePage({ params }: { params: Promise<{ upid: string }> }) {
   const { upid } = use(params)

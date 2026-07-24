@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react"
 import { format, parseISO } from "date-fns"
-import { Mail } from "lucide-react"
+import { Mail } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
 import { totalOutstanding } from "@/lib/debtor-aging"

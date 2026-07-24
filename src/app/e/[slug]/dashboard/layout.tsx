@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { ShieldAlert } from "lucide-react"
+import { ShieldAlert } from "@/components/icons"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { Save } from "lucide-react"
+import { Save } from "@/components/icons"
 
 type SettingsForm = {
   resConfirmPrefix: string

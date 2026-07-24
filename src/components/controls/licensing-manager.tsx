@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { KeyRound, Building2 } from "lucide-react"
+import { KeyRound, Building2 } from "@/components/icons"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
 type EnterpriseRow = {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, use } from "react"
-import { Printer, ArrowLeft, Loader2, Mail } from "lucide-react"
+import { Printer, ArrowLeft, Loader2, Mail } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
 import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/confirmation-letter"

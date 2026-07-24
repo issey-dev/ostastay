@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { BarChart3, TrendingUp, Percent, DollarSign, BedDouble, Calendar as CalendarIcon } from "lucide-react"
+import { BarChart3, TrendingUp, Percent, DollarSign, BedDouble, Calendar as CalendarIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
 export function FlashReport() {

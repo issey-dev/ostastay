@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Plus, Trash2, Pencil, X } from "lucide-react"
+import { Plus, Trash2, Pencil, X } from "@/components/icons"
 import { DAYS_OF_WEEK } from "@/lib/excursions"
 import type { ExcursionTypeDto, ExcursionScheduleDto } from "@/components/controls/excursions-manager"
 

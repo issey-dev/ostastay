@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { Plus } from "@/components/icons"
 
 export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSaved: () => void }) {
   const { currentProperty } = useProperty()

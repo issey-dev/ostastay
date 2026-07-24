@@ -1,6 +1,6 @@
 "use client"
 
-import { Moon, Sun } from "lucide-react"
+import { Moon, Sun } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { useDarkMode } from "@/components/providers/dark-mode-provider"
 

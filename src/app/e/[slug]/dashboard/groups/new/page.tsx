@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter, useParams } from "next/navigation"
-import { Save, ArrowLeft } from "lucide-react"
+import { Save, ArrowLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

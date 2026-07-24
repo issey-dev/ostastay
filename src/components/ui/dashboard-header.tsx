@@ -1,7 +1,7 @@
 "use client"
 
 import { useProperty } from "@/components/providers/property-provider"
-import { Building2, CalendarClock } from "lucide-react"
+import { Building2, CalendarClock } from "@/components/icons"
 
 // The header brand block: the active property's logo + name, with the enterprise
 // name beneath. Property data is client-side (PropertyProvider) so it updates on a

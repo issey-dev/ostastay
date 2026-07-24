@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarCheck, UtensilsCrossed } from "lucide-react"
+import { CalendarCheck, UtensilsCrossed } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
 
 // Per-property, top-level switch for which side drives automatic Allocation

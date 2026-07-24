@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks } from "lucide-react"
+import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"

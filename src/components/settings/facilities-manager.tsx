@@ -5,7 +5,7 @@ import { RoomTypeManager } from "@/components/inventory/room-type-manager"
 import { RoomManager } from "@/components/inventory/room-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { BedDouble, Building2, Map, Plus } from "lucide-react"
+import { BedDouble, Building2, Map, Plus } from "@/components/icons"
 
 // "Table + Nav + Button" card (Settings.dc.html): the tab nav sits on the left and the
 // primary Add action on the right of a single header row, its label following the active

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Save } from "lucide-react"
+import { Save } from "@/components/icons"
 
 type FeeRule = {
   ruleType: "DEPOSIT" | "CANCELLATION" | "NO_SHOW"

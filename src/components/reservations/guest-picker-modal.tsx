@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Star, Search, UserPlus, Loader2 } from "lucide-react"
+import { Star, Search, UserPlus, Loader2 } from "@/components/icons"
 
 export type GuestProfile = {
   upid: string

@@ -18,7 +18,7 @@ import {
   isSameMonth,
   isToday,
 } from "date-fns"
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react"
+import { ChevronLeft, ChevronRight, MapPin } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { useIsMobile } from "@/hooks/use-mobile"
 

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { Loader2 } from "lucide-react"
+import { Loader2 } from "@/components/icons"
 
 type DepositDialogProps = {
   reservationId: string | null

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { format } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
-import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "lucide-react"
+import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

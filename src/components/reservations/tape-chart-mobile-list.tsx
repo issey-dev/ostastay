@@ -1,7 +1,7 @@
 "use client"
 
 import { format, parseISO, addDays } from "date-fns"
-import { DoorOpen, User } from "lucide-react"
+import { DoorOpen, User } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"

@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2 } from "lucide-react"
+import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"

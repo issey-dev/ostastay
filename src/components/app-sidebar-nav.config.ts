@@ -16,7 +16,7 @@ import {
   UsersRound,
   Wallet,
   Wrench,
-} from "lucide-react"
+} from "@/components/icons"
 import type { Module } from "@/lib/scope"
 
 // Deliberately NOT a "use client" module, even though only the client nav renders it:

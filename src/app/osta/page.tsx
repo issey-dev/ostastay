@@ -1,4 +1,4 @@
-import { Building2, ClipboardCheck, ShieldCheck } from "lucide-react"
+import { Building2, ClipboardCheck, ShieldCheck } from "@/components/icons"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { prisma } from "@/lib/db"
 

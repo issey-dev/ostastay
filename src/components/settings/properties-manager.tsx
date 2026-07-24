@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, Trash2, Building2, RotateCcw } from "lucide-react"
+import { Plus, Pencil, Trash2, Building2, RotateCcw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { Skeleton } from "@/components/ui/skeleton"

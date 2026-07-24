@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { FileText, FileSpreadsheet, FileType, Loader2, AlertTriangle } from "lucide-react"
+import { FileText, FileSpreadsheet, FileType, Loader2, AlertTriangle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"

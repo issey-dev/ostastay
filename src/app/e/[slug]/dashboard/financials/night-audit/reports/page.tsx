@@ -5,7 +5,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { Printer, FileText, ArrowLeft } from "lucide-react"
+import { Printer, FileText, ArrowLeft } from "@/components/icons"
 import Link from "next/link"
 import { format } from "date-fns"
 

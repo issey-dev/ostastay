@@ -1,8 +1,10 @@
-import type { LucideIcon } from "lucide-react"
+import type { ComponentType } from "react"
 import { cn } from "@/lib/utils"
 
+// Accepts any icon component (lucide or the mx-icons two-tone adapter in @/components/icons).
 type EmptyStateProps = {
-  icon?: LucideIcon
+  icon?: ComponentType<{ className?: string }>
+
   title: string
   description?: string
   action?: React.ReactNode

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Printer, XCircle, UserX, CloudRain, ArrowRightCircle } from "lucide-react"
+import { Printer, XCircle, UserX, CloudRain, ArrowRightCircle } from "@/components/icons"
 
 type ManifestBooking = {
   id: string

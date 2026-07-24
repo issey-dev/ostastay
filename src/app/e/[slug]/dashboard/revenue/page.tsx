@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "lucide-react"
+import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

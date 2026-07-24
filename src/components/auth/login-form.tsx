@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { KeyRound, Hotel } from "lucide-react"
+import { KeyRound, Hotel } from "@/components/icons"
 
 // Shared by the generic /login (asks for an Enterprise Code) and each enterprise's own
 // dedicated /e/{slug}/login (the code is baked in from the URL, hidden from the form).

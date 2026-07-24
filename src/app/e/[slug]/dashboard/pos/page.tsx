@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, CalendarClock } from "lucide-react"
+import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, CalendarClock } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

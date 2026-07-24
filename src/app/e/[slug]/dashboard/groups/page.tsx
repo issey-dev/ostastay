@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
-import { Users, Plus, Calendar as CalendarIcon, UserCheck } from "lucide-react"
+import { Users, Plus, Calendar as CalendarIcon, UserCheck } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"

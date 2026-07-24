@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Ban, Loader2 } from "lucide-react"
+import { Check, Ban, Loader2 } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
 import { THEME_COLOR_NAMES, THEME_COLOR_PRESETS } from "@/lib/themePresets"
 import { cn } from "@/lib/utils"

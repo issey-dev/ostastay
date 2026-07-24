@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, ChevronsUpDown, Loader2, LogOut } from "lucide-react"
+import { Check, ChevronsUpDown, Loader2, LogOut } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
