@@ -3,17 +3,27 @@ import { prisma } from "@/lib/db";
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
-const CONFIRMATION_LETTER_INCLUDE = {
-  primaryGuest: { include: { communications: true } },
-  accompanyingGuests: { include: { profile: { include: { communications: true } } } },
-  assignments: { include: { roomType: true }, orderBy: { startDate: "asc" as const } },
+// Data for the printable Registration Card (one card per guest). A registration card needs
+// far more guest identity than the confirmation letter — full profile, communications,
+// address, and identification documents — plus the assigned room, rate, and travel agent.
+const PROFILE_INCLUDE = {
+  communications: true,
+  addresses: true,
+  documents: { orderBy: { isPrimary: "desc" as const } },
+} as const;
+
+const REGISTRATION_CARD_INCLUDE = {
+  primaryGuest: { include: PROFILE_INCLUDE },
+  accompanyingGuests: { include: { profile: { include: PROFILE_INCLUDE } } },
+  travelAgent: true,
+  assignments: {
+    include: { roomType: true, room: true, ratePlan: true },
+    orderBy: { startDate: "asc" as const },
+  },
   property: true,
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "RESERVATIONS", "view");
@@ -21,7 +31,7 @@ export async function GET(
     const { id } = await params;
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      include: CONFIRMATION_LETTER_INCLUDE,
+      include: REGISTRATION_CARD_INCLUDE,
     });
     if (!reservation) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });

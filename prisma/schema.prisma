@@ -1329,6 +1329,15 @@ model EnterpriseSettings {
   // when null.
   confirmationLetterMessage String?
 
+  // Registration Card stationary (printed + signed by the guest at check-in — see
+  // src/app/e/[slug]/dashboard/reservations/[id]/registration-card/page.tsx). Configured
+  // in Controls > Stationaries. `registrationCardEnabled` gates the check-in wizard step;
+  // the message is an optional welcome/intro line; the terms are the T&C block printed
+  // above the signature line (falls back to generic wording in code when null).
+  registrationCardEnabled Boolean @default(true)
+  registrationCardMessage String?
+  registrationCardTerms   String?
+
   // Maldives Green Tax Settings — charged per person per night, split by age band;
   // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
   greenTaxEnabled     Boolean @default(true)

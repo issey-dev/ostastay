@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Save, RefreshCw, Palette, Type, Receipt, FileText, FileStack, Mail } from "@/components/icons"
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
@@ -48,6 +49,9 @@ export function StationariesManager() {
     invoicePaymentIban: "",
     invoicePaymentBankInfo: "",
     confirmationLetterMessage: "",
+    registrationCardEnabled: true,
+    registrationCardMessage: "",
+    registrationCardTerms: "",
   })
 
   const fetchSettings = async () => {
@@ -73,6 +77,9 @@ export function StationariesManager() {
           invoicePaymentIban: data.invoicePaymentIban || "",
           invoicePaymentBankInfo: data.invoicePaymentBankInfo || "",
           confirmationLetterMessage: data.confirmationLetterMessage || "",
+          registrationCardEnabled: data.registrationCardEnabled ?? true,
+          registrationCardMessage: data.registrationCardMessage || "",
+          registrationCardTerms: data.registrationCardTerms || "",
         })
       }
     } catch (e) {
@@ -121,10 +128,11 @@ export function StationariesManager() {
       {/* Editor Form */}
       <form onSubmit={handleSave} className="lg:col-span-3 space-y-5">
         <Tabs defaultValue="branding" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="branding"><Palette className="w-4 h-4 mr-1.5" /> Branding</TabsTrigger>
             <TabsTrigger value="financial"><Receipt className="w-4 h-4 mr-1.5" /> Financial Docs</TabsTrigger>
             <TabsTrigger value="letter"><Mail className="w-4 h-4 mr-1.5" /> Confirmation Letter</TabsTrigger>
+            <TabsTrigger value="regcard"><FileStack className="w-4 h-4 mr-1.5" /> Registration Card</TabsTrigger>
           </TabsList>
 
           {/* -------- Branding: shared by every document -------- */}
@@ -313,6 +321,40 @@ export function StationariesManager() {
               />
             </div>
           </TabsContent>
+
+          {/* -------- Registration Card: check-in stationary -------- */}
+          <TabsContent value="regcard" className="space-y-5 mt-5">
+            <p className="text-xs text-muted-foreground">
+              Printed and signed by the guest at check-in (one card per guest). When enabled, the check-in procedure includes a Registration Card step.
+            </p>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label>Registration Card step</Label>
+                <p className="text-xs text-muted-foreground">Prompt to print &amp; collect a signed card during check-in.</p>
+              </div>
+              <Switch
+                checked={formData.registrationCardEnabled}
+                onCheckedChange={v => setFormData(p => ({ ...p, registrationCardEnabled: !!v }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Welcome / Intro Message</Label>
+              <Input
+                value={formData.registrationCardMessage}
+                onChange={e => setFormData(p => ({ ...p, registrationCardMessage: e.target.value }))}
+                placeholder="Welcome — please review, complete, and sign below."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Terms &amp; Conditions</Label>
+              <Textarea
+                rows={8}
+                value={formData.registrationCardTerms}
+                onChange={e => setFormData(p => ({ ...p, registrationCardTerms: e.target.value }))}
+                placeholder="Printed above the signature line. Leave blank to use the default wording."
+              />
+            </div>
+          </TabsContent>
         </Tabs>
 
         <div className="flex justify-end pt-4 border-t gap-2">
@@ -369,6 +411,9 @@ type FormData = {
   invoicePaymentIban: string
   invoicePaymentBankInfo: string
   confirmationLetterMessage: string
+  registrationCardEnabled: boolean
+  registrationCardMessage: string
+  registrationCardTerms: string
 }
 
 function PreviewLogo({ formData, brandName }: { formData: FormData; brandName: string }) {

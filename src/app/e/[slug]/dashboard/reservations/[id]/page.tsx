@@ -437,12 +437,20 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             </Button>
           )}
           {(reservation.status === "RESERVED" || reservation.status === "IN_HOUSE") && (
-            <Button
-              variant="outline"
-              onClick={() => window.open(`/e/${slug}/dashboard/reservations/${id}/confirmation-letter`, "_blank")}
-            >
-              <FileText className="w-4 h-4 mr-2" /> Letter
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => window.open(`/e/${slug}/dashboard/reservations/${id}/confirmation-letter`, "_blank")}
+              >
+                <FileText className="w-4 h-4 mr-2" /> Letter
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.open(`/e/${slug}/dashboard/reservations/${id}/registration-card`, "_blank")}
+              >
+                <ReceiptText className="w-4 h-4 mr-2" /> Reg Card
+              </Button>
+            </>
           )}
           <Link href={`/e/${slug}/dashboard/reservations/${id}/edit`}>
             <Button variant="outline">
