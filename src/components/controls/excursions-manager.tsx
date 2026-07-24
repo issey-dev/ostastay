@@ -6,8 +6,9 @@ import { useForm, useFieldArray } from "react-hook-form"
 import * as z from "zod"
 import { Plus, Pencil, Trash2, X, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
+import { ControlsCard } from "@/components/controls/controls-card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -129,7 +130,7 @@ const emptyValues: ExcursionTypeFormValues = {
   rates: [{ adultPrice: "0", childPrice: "0", infantPrice: "0", flatPrice: "", effectiveFrom: "", effectiveTo: "" }],
 }
 
-export function ExcursionsManager() {
+export function ExcursionsManager({ title, description }: { title: string; description?: string }) {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
 
@@ -258,23 +259,20 @@ export function ExcursionsManager() {
     return <span className="font-mono text-sm">A ${row.adultPrice} / C ${row.childPrice} / I ${row.infantPrice}</span>
   }
 
+  // First-column (Code) sorting, asc<->desc.
+  const { sorted: sortedTypes, sort } = useTableSort(types, { code: (t) => t.code }, "code")
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> New Excursion
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Excursions</CardTitle>
-          <CardDescription>
-            Bookable activities (Snorkelling Trip, Island Hopping, Night Fishing...) sold from Front Office to
-            in-house and walk-in guests. Requires the Excursions add-on to be enabled for this property.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <ControlsCard
+        title={title}
+        description={description}
+        action={
+          <Button onClick={openCreate} className="shadow-sm">
+            <Plus className="mr-2 h-4 w-4" /> New Excursion
+          </Button>
+        }
+      >
           {serverError && !isDialogOpen && (
             <p className="text-sm text-destructive mb-3">{serverError}</p>
           )}
@@ -290,10 +288,11 @@ export function ExcursionsManager() {
               description="Create your first excursion — e.g. SNORK — Snorkelling Trip, adult $50 / child $25."
             />
           ) : (
+            <div className="-mx-6 -mb-6 border-t border-border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Code</TableHead>
+                  <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Charge Code</TableHead>
                   <TableHead>Pricing</TableHead>
@@ -304,7 +303,7 @@ export function ExcursionsManager() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {types.map((t) => (
+                {sortedTypes.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell className="font-mono font-bold text-info">{t.code}</TableCell>
                     <TableCell className="font-medium">{t.name}</TableCell>
@@ -341,9 +340,9 @@ export function ExcursionsManager() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
-        </CardContent>
-      </Card>
+      </ControlsCard>
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

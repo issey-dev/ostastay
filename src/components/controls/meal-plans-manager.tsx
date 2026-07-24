@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
+import { ControlsCard } from "@/components/controls/controls-card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -28,7 +30,7 @@ type AllocationOption = { id: string; code: string; name: string; mode: string; 
 // meal plan is done via a Derived Rate Plan (e.g. "BAR-BB" derived from "BAR"), not
 // here; this list just populates the Reservation form's selector and tags a stay
 // for kitchen/back-office visibility.
-export function MealPlansManager() {
+export function MealPlansManager({ title, description }: { title: string; description?: string }) {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
 
@@ -108,20 +110,24 @@ export function MealPlansManager() {
     }
   }
 
+  // First-column (Code) sorting, asc<->desc.
+  const { sorted: sortedMealPlans, sort } = useTableSort(mealPlans, { code: (mp) => mp.code }, "code")
+
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex justify-between items-center mb-3">
-          <h4 className="text-sm font-semibold text-foreground">Meal Plans</h4>
-          <Button size="sm" onClick={() => openDialog()}>
-            <Plus className="w-4 h-4 mr-2" /> Add Meal Plan
-          </Button>
-        </div>
-        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+    <ControlsCard
+      title={title}
+      description={description}
+      action={
+        <Button size="sm" onClick={() => openDialog()}>
+          <Plus className="w-4 h-4 mr-2" /> Add Meal Plan
+        </Button>
+      }
+    >
+      <div className="-mx-6 -mb-6 border-t border-border">
           <Table>
             <TableHeader className="bg-muted">
               <TableRow>
-                <TableHead>Code</TableHead>
+                <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -137,7 +143,7 @@ export function MealPlansManager() {
                   <EmptyState icon={UtensilsCrossed} title="No meal plans configured" description="Add one (e.g. Bed & Breakfast) so it can be selected on a reservation." />
                 </TableCell></TableRow>
               ) : (
-                mealPlans.map(mp => (
+                sortedMealPlans.map(mp => (
                   <TableRow key={mp.id}>
                     <TableCell className="font-mono font-semibold">{mp.code}</TableCell>
                     <TableCell className="font-medium">
@@ -170,7 +176,6 @@ export function MealPlansManager() {
               )}
             </TableBody>
           </Table>
-        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -227,6 +232,6 @@ export function MealPlansManager() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </ControlsCard>
   )
 }

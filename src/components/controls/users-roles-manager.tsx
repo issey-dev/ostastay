@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
+import { ControlsCard } from "@/components/controls/controls-card"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, KeyRound } from "lucide-react"
+import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield } from "lucide-react"
 import { RolePermissionMatrix, emptyPermissionMatrix, type PermissionMatrix } from "./role-permission-matrix"
 import { MODULES } from "@/lib/modules"
 import type { StatusTone } from "@/lib/status-tone"
@@ -260,6 +262,13 @@ export function UsersRolesManager({
     }
   }
 
+  // First-column (Name) sorting for the users table, asc<->desc.
+  const { sorted: sortedUsers, sort } = useTableSort(
+    users,
+    { name: (u) => `${u.firstName} ${u.lastName}` },
+    "name"
+  )
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -270,35 +279,34 @@ export function UsersRolesManager({
   }
 
   return (
-    <div className="space-y-8">
-      {/* ---- Users ---- */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-medium flex items-center gap-2"><Users className="w-4 h-4" /> Staff Accounts</h3>
-            <p className="text-sm text-muted-foreground">Manage user accounts, roles, and work-location assignment</p>
-          </div>
-          <Button onClick={openNewUserDialog} className="">
+    <div className="space-y-6">
+      {/* ---- Users (own card) ---- */}
+      <ControlsCard
+        title="Staff Accounts"
+        description="Manage user accounts, roles, and work-location assignment."
+        action={
+          <Button onClick={openNewUserDialog}>
             <Plus className="w-4 h-4 mr-2" /> Add Team Member
           </Button>
-        </div>
-
-        <div className="border rounded-md">
+        }
+      >
+        {/* Bleed the table to the card edges (like every other Controls table). */}
+        <div className="-mx-6 -mb-6 border-t border-border">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead>Name</TableHead>
+                <SortableTableHead columnKey="name" sort={sort} className="px-6">Name</SortableTableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Access</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right px-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
+              {sortedUsers.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
+                  <TableCell className="font-medium px-6">{user.firstName} {user.lastName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <StatusBadge label={user.role.name} tone={getRoleTone(user.role.name)} />
@@ -315,7 +323,7 @@ export function UsersRolesManager({
                       <span className="flex items-center text-muted-foreground text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-6">
                     <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
                       <Edit className="w-4 h-4 text-muted-foreground" />
                     </Button>
@@ -335,20 +343,18 @@ export function UsersRolesManager({
             </TableBody>
           </Table>
         </div>
-      </div>
+      </ControlsCard>
 
-      {/* ---- Roles ---- */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-medium flex items-center gap-2"><KeyRound className="w-4 h-4" /> Roles &amp; Permissions</h3>
-            <p className="text-sm text-muted-foreground">Per-module view / create / update / delete access. System roles are shared and read-only.</p>
-          </div>
-          <Button onClick={openNewRoleDialog} variant="outline">
+      {/* ---- Roles & Permissions (own card) ---- */}
+      <ControlsCard
+        title="Roles & Permissions"
+        description="Per-module view / create / update / delete access. System roles are shared and read-only."
+        action={
+          <Button onClick={openNewRoleDialog}>
             <Plus className="w-4 h-4 mr-2" /> New Role
           </Button>
-        </div>
-
+        }
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
             <Card key={role.id}>
@@ -374,7 +380,7 @@ export function UsersRolesManager({
             </Card>
           ))}
         </div>
-      </div>
+      </ControlsCard>
 
       {/* ---- User delete confirm ---- */}
       <Dialog open={!!userToDelete} onOpenChange={(open) => { if (!open) { setUserToDelete(null); setDeleteErrorMsg(null) } }}>

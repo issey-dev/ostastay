@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDeviceTier } from "@/hooks/use-mobile"
 import {
-  MonitorPlay,
   Boxes,
   Wallet,
   Contact,
@@ -20,7 +19,7 @@ import {
   ChevronRight,
   Store,
   TrendingUp,
-  CalendarClock,
+  Compass,
 } from "lucide-react"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -54,14 +53,21 @@ import { ExcursionsManager } from "@/components/controls/excursions-manager"
 const SIDEBAR_TRIGGER_CLASS =
   "data-active:text-primary dark:data-active:text-primary rounded-md px-3 py-2 font-medium text-muted-foreground"
 
-// Config-array-driven sections, mirroring app-sidebar.tsx's `items` pattern — add a new
-// Controls section here rather than hand-adding another TabsTrigger/TabsContent pair.
-// Tabs are grouped to match the app's own operational modules (Front Desk, Inventory,
-// Finance, Client Relations, Reports, General, Reservations) plus the identity/admin
-// sections from Phase 1. Licensing has moved to the dedicated Osta console
-// (/osta/licensing) — Osta users never reach this tenant page at all now (see the
-// redirect in src/app/e/[slug]/dashboard/layout.tsx), so there's no longer an
-// Osta-only section to gate here.
+// Config-array-driven sections, mirroring app-sidebar-nav.tsx's `NAV_GROUPS` pattern —
+// add a new Controls section here rather than hand-adding another TabsTrigger/
+// TabsContent pair.
+//
+// Order follows how a property is actually set up, from the ground up: the property
+// itself (General) -> what you sell (Inventory) -> how it's booked (Reservations,
+// Client Relations) -> what it's worth (Revenue, Finance) -> ancillary revenue
+// (Outlets, Excursions) -> output and numbering (Reports, Sequences) -> who may touch
+// any of it (Users & Roles, Support Access). The first section is also the landing
+// tab, so it deliberately opens on something with real content.
+//
+// Licensing has moved to the dedicated Osta console (/osta/licensing) — Osta users
+// never reach this tenant page at all now (see the redirect in
+// src/app/e/[slug]/dashboard/layout.tsx), so there's no longer an Osta-only section
+// to gate here.
 type ControlsSection = {
   key: string
   label: string
@@ -72,15 +78,18 @@ type ControlsSection = {
 function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: string | null): ControlsSection[] {
   return [
     {
-      key: "front-desk",
-      label: "Front Desk",
-      icon: MonitorPlay,
+      key: "general",
+      label: "General",
+      icon: Settings2,
       render: () => (
-        <ControlsCard title="Front Desk" description="No Front Desk-specific configuration exists yet.">
-          <p className="text-sm text-muted-foreground">
-            Nothing to configure here today — this tab is reserved for future front-desk-specific settings.
-          </p>
-        </ControlsCard>
+        <div className="space-y-6">
+          <ControlsCard title="Property Information" description="This property's own profile. Which enterprise it belongs to cannot be changed here.">
+            <PropertyProfileManager />
+          </ControlsCard>
+          <ControlsCard title="Appearance" description="Choose this property's own banner accent, shown at the top of every page.">
+            <PropertyBannerColorManager />
+          </ControlsCard>
+        </div>
       ),
     },
     {
@@ -89,9 +98,10 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       icon: Boxes,
       render: () => (
         <div className="space-y-6">
-          <ControlsCard title="Properties" description="Manage all properties, buildings, and facilities across your enterprise.">
-            <PropertiesManager />
-          </ControlsCard>
+          <PropertiesManager
+            title="Properties"
+            description="Manage all properties, buildings, and facilities across your enterprise."
+          />
           <ControlsCard title="Property Architecture" description="Manage your global buildings, floors, and room types.">
             <FacilitiesManager />
           </ControlsCard>
@@ -100,6 +110,72 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
           </ControlsCard>
           <ControlsCard title="Room Features" description="Bed Type, View, and Amenity options offered when configuring a Room Type.">
             <DropdownsManager categories={ROOM_FEATURE_LOV_CATEGORIES} />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    {
+      key: "reservations",
+      label: "Reservations",
+      icon: CalendarDays,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
+            <GeneralSettingsManager />
+          </ControlsCard>
+          <ControlsCard title="Reservation Dropdown Lists" description="Special Requests and other reservation-level lists.">
+            <DropdownsManager categories={RESERVATION_LOV_CATEGORIES} />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    {
+      key: "client-relations",
+      label: "Client Relations",
+      icon: Contact,
+      render: () => (
+        <ControlsCard title="Profile Dropdown Lists" description="Manage dynamic dropdown options used on guest/company/travel-agent profiles — genders, titles, nationalities, dietary requirements, and more.">
+          <DropdownsManager categories={PROFILE_LOV_CATEGORIES} />
+        </ControlsCard>
+      ),
+    },
+    {
+      key: "revenue",
+      label: "Revenue",
+      icon: TrendingUp,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Allocation Calculation" description="Which side drives automatic Allocation attachment on a reservation — Meal Plan or Rate Plan. Per-property; changing this only affects reservations created or edited afterward, not existing bookings.">
+            <AllocationCalculationManager />
+          </ControlsCard>
+          <MealPlansManager
+            title="Meal Plans"
+            description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments."
+          />
+        </div>
+      ),
+    },
+    {
+      key: "finance",
+      label: "Finance",
+      icon: Wallet,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Tax" description="Configure Maldives Tax (Green Tax, GST, Service Charge) and any Custom Tax profiles.">
+            <TaxManager />
+          </ControlsCard>
+          <ControlsCard title="Charge Codes" description="System-wide transaction codes, grouped by category for reporting — used by Night Audit and Cashiering.">
+            <ChargeCodesManager />
+          </ControlsCard>
+          <PaymentMethodsManager
+            title="Payment Methods"
+            description="Configure accepted payment methods like Cash, Credit Cards, Bank Transfers, or City Ledger."
+          />
+          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, which City Ledger method settles debtor folios at checkout, and which charge code posts a Travel Agent commission credit.">
+            <PostingDefaultsManager />
+          </ControlsCard>
+          <ControlsCard title="Deposit & Fee Rules" description="Per-property Deposit, Cancellation, and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
+            <FeeRulesManager />
           </ControlsCard>
         </div>
       ),
@@ -122,60 +198,12 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
     {
       key: "excursions",
       label: "Excursions",
-      icon: CalendarClock,
+      icon: Compass,
       render: () => (
-        <ControlsCard title="Excursions" description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta.">
-          <ExcursionsManager />
-        </ControlsCard>
-      ),
-    },
-    {
-      key: "finance",
-      label: "Finance",
-      icon: Wallet,
-      render: () => (
-        <div className="space-y-6">
-          <ControlsCard title="Tax" description="Configure Maldives Tax (Green Tax, GST, Service Charge) and any Custom Tax profiles.">
-            <TaxManager />
-          </ControlsCard>
-          <ControlsCard title="Charge Codes" description="System-wide transaction codes, grouped by category for reporting — used by Night Audit and Cashiering.">
-            <ChargeCodesManager />
-          </ControlsCard>
-          <ControlsCard title="Payment Methods" description="Configure accepted payment methods like Cash, Credit Cards, Bank Transfers, or City Ledger.">
-            <PaymentMethodsManager />
-          </ControlsCard>
-          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, which City Ledger method settles debtor folios at checkout, and which charge code posts a Travel Agent commission credit.">
-            <PostingDefaultsManager />
-          </ControlsCard>
-          <ControlsCard title="Deposit & Fee Rules" description="Per-property Deposit, Cancellation, and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
-            <FeeRulesManager />
-          </ControlsCard>
-        </div>
-      ),
-    },
-    {
-      key: "revenue",
-      label: "Revenue",
-      icon: TrendingUp,
-      render: () => (
-        <div className="space-y-6">
-          <ControlsCard title="Allocation Calculation" description="Which side drives automatic Allocation attachment on a reservation — Meal Plan or Rate Plan. Per-property; changing this only affects reservations created or edited afterward, not existing bookings.">
-            <AllocationCalculationManager />
-          </ControlsCard>
-          <ControlsCard title="Meal Plans" description="Meal plan codes offered on a reservation (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments.">
-            <MealPlansManager />
-          </ControlsCard>
-        </div>
-      ),
-    },
-    {
-      key: "client-relations",
-      label: "Client Relations",
-      icon: Contact,
-      render: () => (
-        <ControlsCard title="Profile Dropdown Lists" description="Manage dynamic dropdown options used on guest/company/travel-agent profiles — genders, titles, nationalities, dietary requirements, and more.">
-          <DropdownsManager categories={PROFILE_LOV_CATEGORIES} />
-        </ControlsCard>
+        <ExcursionsManager
+          title="Excursions"
+          description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta."
+        />
       ),
     },
     {
@@ -186,36 +214,6 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
         <div className="space-y-6">
           <ControlsCard title="SMTP / SFTP" description="Outgoing email and file-transfer connection settings.">
             <SmtpSftpManager />
-          </ControlsCard>
-        </div>
-      ),
-    },
-    {
-      key: "general",
-      label: "General",
-      icon: Settings2,
-      render: () => (
-        <div className="space-y-6">
-          <ControlsCard title="Property Information" description="This property's own profile. Which enterprise it belongs to cannot be changed here.">
-            <PropertyProfileManager />
-          </ControlsCard>
-          <ControlsCard title="Appearance" description="Choose this property's own banner accent, shown at the top of every page.">
-            <PropertyBannerColorManager />
-          </ControlsCard>
-        </div>
-      ),
-    },
-    {
-      key: "reservations",
-      label: "Reservations",
-      icon: CalendarDays,
-      render: () => (
-        <div className="space-y-6">
-          <ControlsCard title="Booking Codes & Defaults" description="Confirmation-number formatting used by normal and block reservations.">
-            <GeneralSettingsManager />
-          </ControlsCard>
-          <ControlsCard title="Reservation Dropdown Lists" description="Special Requests and other reservation-level lists.">
-            <DropdownsManager categories={RESERVATION_LOV_CATEGORIES} />
           </ControlsCard>
         </div>
       ),
@@ -238,9 +236,7 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       label: "Users & Roles",
       icon: Users,
       render: () => (
-        <ControlsCard title="Users & Roles" description="Manage staff accounts, work-location assignment, and per-module role permissions.">
-          <UsersRolesManager actorScope={actorScope} actorPropertyId={actorPropertyId} />
-        </ControlsCard>
+        <UsersRolesManager actorScope={actorScope} actorPropertyId={actorPropertyId} />
       ),
     },
     {

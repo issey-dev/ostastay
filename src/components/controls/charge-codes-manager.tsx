@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import { ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -134,6 +135,8 @@ export function ChargeCodesManager() {
   }
 
   const filteredCodes = categoryFilter === "ALL" ? chargeCodes : chargeCodes.filter(cc => cc.category === categoryFilter)
+  // First-column (Code) sorting, asc<->desc — applied after the category filter.
+  const { sorted: sortedCodes, sort } = useTableSort(filteredCodes, { code: (cc) => cc.code }, "code")
 
   if (loading) {
     return <div className="py-12 text-center text-muted-foreground">Loading charge codes...</div>
@@ -264,7 +267,7 @@ export function ChargeCodesManager() {
         <Table>
           <TableHeader className="bg-muted/80">
             <TableRow>
-              <TableHead>Code</TableHead>
+              <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
               <TableHead>Description</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Tax</TableHead>
@@ -272,7 +275,7 @@ export function ChargeCodesManager() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCodes.map(cc => (
+            {sortedCodes.map(cc => (
               <TableRow key={cc.id} className="hover:bg-muted/50">
                 <TableCell className="font-mono font-medium text-foreground">{cc.code}</TableCell>
                 <TableCell>{cc.description}</TableCell>

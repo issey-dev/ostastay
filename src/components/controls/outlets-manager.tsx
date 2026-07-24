@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import { ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -154,6 +155,9 @@ export function OutletsManager() {
       console.error(e)
     }
   }
+
+  // First-column (Name) sorting, asc<->desc.
+  const { sorted: sortedOutlets, sort } = useTableSort(outlets, { name: (o) => o.name }, "name")
 
   return (
     <div className="w-full space-y-4">
@@ -305,7 +309,7 @@ export function OutletsManager() {
           <Table>
             <TableHeader className="bg-muted/80">
               <TableRow>
-                <TableHead>Name</TableHead>
+                <SortableTableHead columnKey="name" sort={sort}>Name</SortableTableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Tax Override</TableHead>
                 <TableHead>Charge Codes</TableHead>
@@ -314,7 +318,7 @@ export function OutletsManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {outlets.map((o) => (
+              {sortedOutlets.map((o) => (
                 <TableRow key={o.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{o.name}</TableCell>
                   <TableCell><Badge variant="outline" className="font-normal">{OUTLET_TYPE_LABELS[o.outletType] || o.outletType}</Badge></TableCell>

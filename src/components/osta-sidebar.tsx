@@ -44,7 +44,7 @@ export async function OstaSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton render={<a href={item.url} />}>
+                  <SidebarMenuButton tooltip={item.title} render={<a href={item.url} />}>
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
                   </SidebarMenuButton>

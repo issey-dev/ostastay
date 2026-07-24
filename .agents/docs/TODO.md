@@ -289,6 +289,21 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   an explicit tier→module mapping decision from the app owner first.
 - ~~A new RBAC module isn't retroactively granted to existing enterprises' System
   roles~~ — **fixed 2026-07-19**, see "Recently completed" below.
+- **Dev-only console error on every page load: "Encountered a script tag while rendering
+  React component"** — from the anti-FOUC theme script in `src/app/layout.tsx`. Noise,
+  not a bug: the script is emitted into the streamed HTML and does run before first
+  paint. `next/script` with `strategy="beforeInteractive"` was tried on 2026-07-23 and
+  does **not** silence it. The real fix is to delete the script and drive the theme from
+  a cookie read server-side in the root layout (`cookies().get('theme-mode')` →
+  `<html className="dark">`), migrating `DarkModeProvider`'s persistence from
+  localStorage to a cookie. Not done: it opts every route into dynamic rendering, which
+  needs an owner call, and it's cosmetic in dev only.
+- **`/dashboard/inventory` is an orphan route** — it's the fallback landing page for any
+  role without FRONT_DESK `canView` (see the redirect in
+  `src/app/e/[slug]/dashboard/page.tsx`), but it has no sidebar entry, so a Housekeeping
+  user lands on a rooms/work-order page they can't navigate back to. Noticed during the
+  2026-07-23 sidebar regrouping; left alone because it isn't clear whether the page is
+  still wanted or whether those roles should just land on `/dashboard/housekeeping`.
 - **~25 files sitting uncommitted in the working tree** as of the Phase 4 commit,
   touched by what looks like a concurrent design-system pass this agent session did not
   make and deliberately did not stage/commit: `src/app/theme.css`,
@@ -304,6 +319,54 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   session, or someone else's. Do not assume, and do not discard.
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
+
+- **2026-07-23 (follow-up)** — **Card-variant consistency pass + auto-open bugfix.** Fixed a
+  bug where navigating to Controls > Inventory auto-opened the Create Room Type dialog: the
+  addSignal effect used a `firstRun` flag that StrictMode's double-invoke consumed, opening the
+  dialog on the second invoke. Now compares the signal value (RoomTypeManager, RoomManager).
+  Added an `action` slot to `ControlsCard` (renders top-right via the app's `CardAction`), and
+  moved the primary Add button INTO the card header for the four cards that had it orphaned on
+  its own row / in a duplicate-title inner card: Properties, Meal Plans, Payment Methods,
+  Excursions (each now renders its own ControlsCard; dashboard passes title/description as props
+  and no longer double-wraps). Tax/Charge Codes/Outlets already had their Add on a nav/filter row
+  (the "Table + Nav + Button" variant) and were left as-is. Sorting also added to the Users &
+  Roles users table. Sequence Manager left unsorted (fixed canonical reference list) — see the
+  Dropdowns exemption note.
+- **2026-07-23** — **Settings card variants + first-column table sorting (Settings.dc.html
+  design import).** New reusable `src/components/controls/use-table-sort.tsx` (a
+  `useTableSort` hook + `SortableTableHead` cell): two-state asc↔desc sort, first column
+  is the sort column, opens sorted ascending, app-token styled + dark-mode-safe. Wired
+  into every standard Controls table: Properties, Room Types, Buildings/Floors/Rooms,
+  Tax, Charge Codes, Meal Plans, Excursions, Outlets, Payment Methods, Amenities. Also
+  adopted the mockup's card-variant interactions (adapted to app tokens, not the
+  mockup's sharp-corner/black-button skin — owner chose "adapt to app tokens"):
+  hover-reveal row actions (dim to 60%, full on row hover/focus), and for Property
+  Architecture the tab-nav + Add button now share one row — the Add lives in
+  `FacilitiesManager` and signals the mounted child (`RoomTypeManager`/`RoomManager`)
+  to open its own dialog via an `addSignal` counter (firstRun-guarded so tab switches
+  never auto-open). Booking Codes (`GeneralSettingsManager`) footer replaced its
+  blocking `alert()` with an inline dirty/saved hint (hint left, Save right).
+  **Deliberate exceptions:** the Dropdowns options table is NOT sortable — its row order
+  IS the data (defines dropdown display order via the reorder arrows), so sorting would
+  misrepresent it. Owner chose asc↔desc-only (no "unsorted" third state), so the
+  mockup's "clear sort to reorder" gating doesn't apply.
+- **2026-07-23** — **Controls > General > Appearance picker redesign (Appearance
+  Picker.dc.html):** live banner preview with hover-preview-without-commit, left-aligned
+  swatch tiles, hex revealed on hover/select, in `property-banner-color-manager.tsx`.
+- **2026-07-23** — **Sidebar + Controls navigation regrouping (v5 fine-tuning).** The
+  app sidebar's flat 17-item list is now five workflow groups (Operations / Services /
+  Finance / Reports / Setup), rendered by a new client component
+  `src/components/app-sidebar-nav.tsx`; `app-sidebar.tsx` stays the server-side
+  authority on module visibility and passes down only the allowed modules. Along with
+  it: active-route highlighting (longest-prefix match, so `/reservations/tape-chart`
+  lights Tape Chart and not Reservations), collapsed-mode tooltips (also added to the
+  Osta console sidebar), `next/link` client navigation instead of full-reload `<a>`,
+  and unique icons per entry (previously `Users` and `CalendarDays` were each used by
+  three items — indistinguishable when collapsed to icons). Controls sections were
+  reordered ground-up (General → Inventory → Reservations → Client Relations → Revenue
+  → Finance → Outlets → Excursions → Reports → Sequences → Users & Roles → Support
+  Access) and the empty "Front Desk" placeholder tab was removed — it was the first
+  tab, so Controls used to open on a page that said there was nothing to configure.
 
 - **2026-07-21** — **Osta platform-admin console**, per direct app-owner request. Full
   account in [DECISIONS.md](DECISIONS.md) "Osta platform-admin console". Summary: a

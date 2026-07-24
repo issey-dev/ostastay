@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Plus, Pencil, Trash2, BedDouble } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,18 @@ type RoomType = {
   features: RoomFeature[]
 }
 
-export function RoomTypeManager({ propertyId }: { propertyId: string }) {
+// addSignal/hideAddButton: when embedded in FacilitiesManager, the Add button lives in
+// the shared tab row (see facilities-manager.tsx). This manager then hides its own
+// header button and opens its Add dialog when the parent bumps addSignal.
+export function RoomTypeManager({
+  propertyId,
+  addSignal,
+  hideAddButton = false,
+}: {
+  propertyId: string
+  addSignal?: number
+  hideAddButton?: boolean
+}) {
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -167,17 +179,40 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
     setIsDeleteDialogOpen(true)
   }
 
+  // Open the Add dialog when FacilitiesManager's shared Add button is clicked. We compare
+  // the signal's VALUE against the last-seen one rather than using a "first run" flag: a
+  // flag gets consumed by React StrictMode's double-invoke of effects on mount, which
+  // then opens the dialog on the second invoke (the bug this replaces). Comparing values
+  // is idempotent — the signal doesn't change between the double-invokes, so mount and
+  // tab-switch never open anything; only an actual Add click (which increments it) does.
+  const lastAddSignal = useRef(addSignal)
+  useEffect(() => {
+    if (addSignal === lastAddSignal.current) return
+    lastAddSignal.current = addSignal
+    resetForm()
+    setIsDialogOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSignal])
+
+  // First-column (Code) sorting, asc<->desc.
+  const { sorted: sortedRoomTypes, sort } = useTableSort(roomTypes, { code: (rt) => rt.code }, "code")
+
   return (
     <div className="mt-6">
-      <ControlsSectionHeader
-        action={
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open)
-          if (!open) resetForm()
-        }}>
-          <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> Add Room Type
-          </Button>
+      {!hideAddButton && (
+        <ControlsSectionHeader
+          action={
+            <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
+              <Plus className="mr-2 h-4 w-4" /> Add Room Type
+            </Button>
+          }
+        />
+      )}
+
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open)
+        if (!open) resetForm()
+      }}>
           <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -286,8 +321,6 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
             </form>
           </DialogContent>
         </Dialog>
-        }
-      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -311,7 +344,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="border-border">
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Code</TableHead>
+              <SortableTableHead columnKey="code" sort={sort} className="px-6 py-4">Code</SortableTableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
               <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
@@ -330,8 +363,8 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                 </TableCell>
               </TableRow>
             ) : (
-              roomTypes.map((rt) => (
-                <TableRow key={rt.id} className="hover:bg-muted/40">
+              sortedRoomTypes.map((rt) => (
+                <TableRow key={rt.id} className="group hover:bg-muted/40">
                   <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
                   <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
                   <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons ({rt.baseOccupancy} base)</TableCell>
@@ -350,7 +383,7 @@ export function RoomTypeManager({ propertyId }: { propertyId: string }) {
                     </div>
                   </TableCell>
                   <TableCell className="px-6 py-4 text-right">
-                    <div className="flex gap-2 transition-opacity" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                    <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                       <Button
                         variant="ghost"
                         size="sm"

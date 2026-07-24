@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 
 type Facility = { id: string; name: string; description: string | null }
 type PropertyOption = { id: string; name: string }
@@ -58,6 +59,9 @@ export function FacilityAmenitiesManager() {
     fetchFacilities()
   }
 
+  // First-column (Name) sorting, asc<->desc.
+  const { sorted: sortedFacilities, sort } = useTableSort(facilities, { name: (f) => f.name }, "name")
+
   return (
     <div className="space-y-4">
       <div className="space-y-2 max-w-xs">
@@ -90,7 +94,7 @@ export function FacilityAmenitiesManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <SortableTableHead columnKey="name" sort={sort}>Name</SortableTableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -101,7 +105,7 @@ export function FacilityAmenitiesManager() {
               ) : facilities.length === 0 ? (
                 <TableRow><TableCell colSpan={3} className="text-center">No facilities configured.</TableCell></TableRow>
               ) : (
-                facilities.map((f) => (
+                sortedFacilities.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.name}</TableCell>
                     <TableCell>{f.description || "—"}</TableCell>

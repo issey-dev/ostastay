@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
+import { ControlsCard } from "@/components/controls/controls-card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -20,7 +22,7 @@ type PaymentMethod = {
   isActive: boolean
 }
 
-export function PaymentMethodsManager() {
+export function PaymentMethodsManager({ title, description }: { title: string; description?: string }) {
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -103,19 +105,24 @@ export function PaymentMethodsManager() {
     }
   }
 
+  // First-column (Name) sorting, asc<->desc.
+  const { sorted: sortedMethods, sort } = useTableSort(methods, { name: (m) => m.name }, "name")
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-end items-center">
-        <Button onClick={() => handleOpenDialog()} className="">
+    <ControlsCard
+      title={title}
+      description={description}
+      action={
+        <Button onClick={() => handleOpenDialog()}>
           <Plus className="w-4 h-4 mr-2" /> Add Method
         </Button>
-      </div>
-
-      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+      }
+    >
+      <div className="-mx-6 -mb-6 border-t border-border">
         <Table>
           <TableHeader className="bg-muted">
             <TableRow>
-              <TableHead>Name</TableHead>
+              <SortableTableHead columnKey="name" sort={sort}>Name</SortableTableHead>
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -131,7 +138,7 @@ export function PaymentMethodsManager() {
                 <EmptyState icon={CreditCard} title="No payment methods configured" />
               </TableCell></TableRow>
             ) : (
-              methods.map(method => (
+              sortedMethods.map(method => (
                 <TableRow key={method.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center">
@@ -203,6 +210,6 @@ export function PaymentMethodsManager() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </ControlsCard>
   )
 }

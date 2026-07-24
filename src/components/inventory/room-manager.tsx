@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Plus, Building2, Map, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 
-export function RoomManager({ propertyId, view }: { propertyId: string; view: "buildings" | "floors" | "rooms" }) {
+// addSignal/hideAddButton: when embedded in FacilitiesManager the Add button lives in
+// the shared tab row. This manager hides its own per-view Add button and opens the
+// dialog for the currently-shown `view` when the parent bumps addSignal.
+export function RoomManager({
+  propertyId,
+  view,
+  addSignal,
+  hideAddButton = false,
+}: {
+  propertyId: string
+  view: "buildings" | "floors" | "rooms"
+  addSignal?: number
+  hideAddButton?: boolean
+}) {
   const [buildings, setBuildings] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
@@ -260,20 +274,44 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
   const { options: featureOptions } = useRoomFeatureOptions()
   const featureLabel = (f: RoomFeature) => featureOptions.find(o => o.category === f.category && o.code === f.code)?.value || f.code
 
+  // Open this view's Add dialog when FacilitiesManager's shared Add button fires. Compare
+  // the signal's VALUE against the last-seen one rather than a "first run" flag — a flag
+  // is consumed by React StrictMode's double-invoke of mount effects and then opens the
+  // dialog on the second invoke (the bug this replaces). Value comparison is idempotent,
+  // so mount and tab-switch never open anything; only an actual Add click does.
+  const lastAddSignal = useRef(addSignal)
+  useEffect(() => {
+    if (addSignal === lastAddSignal.current) return
+    lastAddSignal.current = addSignal
+    if (view === "buildings") { resetBuildingForm(); setIsBuildingDialogOpen(true) }
+    else if (view === "floors") { resetFloorForm(); setIsFloorDialogOpen(true) }
+    else { resetRoomForm(); setIsRoomDialogOpen(true) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSignal])
+
+  // First-column sorting per view (asc<->desc): buildings/floors by name, rooms by number.
+  const { sorted: sortedBuildings, sort: buildingSort } = useTableSort(buildings, { name: (b) => b.name }, "name")
+  const { sorted: sortedFloors, sort: floorSort } = useTableSort(allFloors, { name: (f) => f.name }, "name")
+  const { sorted: sortedRooms, sort: roomSort } = useTableSort(rooms, { roomNumber: (r) => r.roomNumber }, "roomNumber")
+
   return (
     <div className="mt-6">
     {view === "buildings" && (
       <>
       {/* Buildings Table */}
-      <ControlsSectionHeader
-        action={
-        <Dialog open={isBuildingDialogOpen} onOpenChange={(open) => {
-            setIsBuildingDialogOpen(open)
-            if (!open) resetBuildingForm()
-          }}>
+      {!hideAddButton && (
+        <ControlsSectionHeader
+          action={
             <Button onClick={() => setIsBuildingDialogOpen(true)} className="shadow-sm">
               <Building2 className="mr-2 h-4 w-4" /> Add Building
             </Button>
+          }
+        />
+      )}
+      <Dialog open={isBuildingDialogOpen} onOpenChange={(open) => {
+          setIsBuildingDialogOpen(open)
+          if (!open) resetBuildingForm()
+        }}>
             <DialogContent>
               <form onSubmit={handleCreateBuilding}>
                 <DialogHeader><DialogTitle>{isBuildingEditMode ? "Edit Building" : "Add Building"}</DialogTitle></DialogHeader>
@@ -288,8 +326,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
-        }
-      />
 
       {/* Delete Building Dialog */}
       <Dialog open={isBuildingDeleteDialogOpen} onOpenChange={setIsBuildingDeleteDialogOpen}>
@@ -311,7 +347,7 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Building Name</TableHead>
+                <SortableTableHead columnKey="name" sort={buildingSort} className="px-6 py-4">Building Name</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -325,11 +361,11 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
                   <EmptyState icon={Building2} title="No buildings configured" />
                 </TableCell></TableRow>
               ) : (
-                buildings.map((building) => (
-                  <TableRow key={building.id} className="hover:bg-muted/40">
+                sortedBuildings.map((building) => (
+                  <TableRow key={building.id} className="group hover:bg-muted/40">
                     <TableCell className="px-6 py-3 font-semibold text-foreground">{building.name}</TableCell>
                     <TableCell className="px-6 py-3 text-right">
-                      <div className="flex justify-end gap-2 transition-opacity">
+                      <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                         <Button variant="ghost" size="sm" className="text-primary" onClick={() => openBuildingEdit(building)}>
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </Button>
@@ -350,15 +386,19 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
     {view === "floors" && (
       <>
       {/* Floors Table */}
-      <ControlsSectionHeader
-        action={
-        <Dialog open={isFloorDialogOpen} onOpenChange={(open) => {
-            setIsFloorDialogOpen(open)
-            if (!open) resetFloorForm()
-          }}>
+      {!hideAddButton && (
+        <ControlsSectionHeader
+          action={
             <Button onClick={() => setIsFloorDialogOpen(true)} className="shadow-sm">
               <Map className="mr-2 h-4 w-4" /> Add Floor
             </Button>
+          }
+        />
+      )}
+      <Dialog open={isFloorDialogOpen} onOpenChange={(open) => {
+          setIsFloorDialogOpen(open)
+          if (!open) resetFloorForm()
+        }}>
             <DialogContent>
               <form onSubmit={handleCreateFloor}>
                 <DialogHeader><DialogTitle>{isFloorEditMode ? "Edit Floor" : "Add Floor"}</DialogTitle></DialogHeader>
@@ -388,8 +428,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
-        }
-      />
 
       {/* Delete Floor Dialog */}
       <Dialog open={isFloorDeleteDialogOpen} onOpenChange={setIsFloorDeleteDialogOpen}>
@@ -411,7 +449,7 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Floor Name</TableHead>
+                <SortableTableHead columnKey="name" sort={floorSort} className="px-6 py-4">Floor Name</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Building</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>
@@ -426,14 +464,14 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
                   <EmptyState icon={Map} title="No floors configured" />
                 </TableCell></TableRow>
               ) : (
-                allFloors.map((floor) => (
-                  <TableRow key={floor.id} className="hover:bg-muted/40">
+                sortedFloors.map((floor) => (
+                  <TableRow key={floor.id} className="group hover:bg-muted/40">
                     <TableCell className="px-6 py-3 font-semibold text-foreground">{floor.name}</TableCell>
                     <TableCell className="px-6 py-3 text-muted-foreground">
                       {buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
                     </TableCell>
                     <TableCell className="px-6 py-3 text-right">
-                      <div className="flex justify-end gap-2 transition-opacity">
+                      <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                         <Button variant="ghost" size="sm" className="text-primary" onClick={() => openFloorEdit(floor)}>
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </Button>
@@ -453,15 +491,19 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
 
     {view === "rooms" && (
       <>
-      <ControlsSectionHeader
-        action={
-        <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
-            setIsRoomDialogOpen(open)
-            if (!open) resetRoomForm()
-          }}>
+      {!hideAddButton && (
+        <ControlsSectionHeader
+          action={
             <Button onClick={() => setIsRoomDialogOpen(true)} className="shadow-sm">
               <Plus className="mr-2 h-4 w-4" /> Add Room
             </Button>
+          }
+        />
+      )}
+      <Dialog open={isRoomDialogOpen} onOpenChange={(open) => {
+          setIsRoomDialogOpen(open)
+          if (!open) resetRoomForm()
+        }}>
             <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
               <form onSubmit={handleCreateRoom}>
                 <DialogHeader><DialogTitle>{isRoomEditMode ? "Edit Room" : "Create Room"}</DialogTitle></DialogHeader>
@@ -560,8 +602,6 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
               </form>
             </DialogContent>
           </Dialog>
-        }
-      />
 
       {/* Delete Room Dialog */}
       <Dialog open={isRoomDeleteDialogOpen} onOpenChange={setIsRoomDeleteDialogOpen}>
@@ -583,7 +623,7 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Room</TableHead>
+                <SortableTableHead columnKey="roomNumber" sort={roomSort} className="px-6 py-4">Room</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Floor</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Room Type</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Status</TableHead>
@@ -606,8 +646,8 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
                   </TableCell>
                 </TableRow>
               ) : (
-                rooms.map((room) => (
-                  <TableRow key={room.id} className="hover:bg-muted/40">
+                sortedRooms.map((room) => (
+                  <TableRow key={room.id} className="group hover:bg-muted/40">
                     <TableCell className="px-6 py-4 font-bold text-foreground">{room.roomNumber}</TableCell>
                     <TableCell className="px-6 py-4 text-muted-foreground">{room.floor?.name || "—"}</TableCell>
                     <TableCell className="px-6 py-4 text-muted-foreground">
@@ -620,10 +660,10 @@ export function RoomManager({ propertyId, view }: { propertyId: string; view: "b
                       <StatusBadge label={room.status.replace(/_/g, ' ')} status={room.status} />
                     </TableCell>
                     <TableCell className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                      <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-primary"
                           onClick={() => openRoomEdit(room)}
                         >

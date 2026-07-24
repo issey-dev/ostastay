@@ -1,124 +1,11 @@
-import { Building2, CalendarDays, Calculator, Users, BarChart3, Settings, LogOut, Wallet, MonitorPlay, User as UserIcon, ClipboardList, Store, Wrench, Landmark, FileStack, History, CalendarClock } from "lucide-react"
 import { requireSession, resolveCurrentPropertyId, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-
-// Menu items logically grouped by module. `module` drives visibility via the session's
-// RolePermission.canView for that module — see the filter below.
-const items: { title: string; url: string; icon: typeof MonitorPlay; module: Module }[] = [
-  {
-    title: "Front Desk",
-    url: "/dashboard/front-office",
-    icon: MonitorPlay,
-    module: "FRONT_DESK",
-  },
-  {
-    title: "Housekeeping",
-    url: "/dashboard/housekeeping",
-    icon: ClipboardList,
-    module: "HOUSEKEEPING",
-  },
-  {
-    title: "Maintenance",
-    url: "/dashboard/maintenance",
-    icon: Wrench,
-    module: "MAINTENANCE",
-  },
-  {
-    title: "Night Audit",
-    url: "/dashboard/financials/night-audit",
-    icon: Calculator,
-    module: "NIGHT_AUDIT",
-  },
-  {
-    title: "Client Relations",
-    url: "/dashboard/profiles",
-    icon: Users,
-    module: "PROFILES",
-  },
-  {
-    title: "Revenue",
-    url: "/dashboard/revenue",
-    icon: BarChart3,
-    module: "REVENUE",
-  },
-  {
-    title: "Reservations",
-    url: "/dashboard/reservations",
-    icon: CalendarDays,
-    module: "RESERVATIONS",
-  },
-  {
-    title: "Group Blocks",
-    url: "/dashboard/groups",
-    icon: Users,
-    module: "GROUP_BLOCKS",
-  },
-  {
-    title: "Tape Chart",
-    url: "/dashboard/reservations/tape-chart",
-    icon: CalendarDays,
-    module: "TAPE_CHART",
-  },
-  {
-    title: "Cashiering",
-    url: "/dashboard/cashiering",
-    icon: Wallet,
-    module: "CASHIERING",
-  },
-  {
-    title: "Point of Sale",
-    url: "/dashboard/pos",
-    icon: Store,
-    module: "POS",
-  },
-  {
-    title: "Debtors",
-    url: "/dashboard/debtors",
-    icon: Landmark,
-    module: "DEBTORS",
-  },
-  {
-    title: "Excursions",
-    url: "/dashboard/excursions",
-    icon: CalendarClock,
-    module: "EXCURSIONS",
-  },
-  {
-    title: "Daily Reports",
-    url: "/dashboard/reports",
-    icon: CalendarDays,
-    module: "REPORTS",
-  },
-  {
-    title: "Stationaries",
-    url: "/dashboard/stationaries",
-    icon: FileStack,
-    module: "CONTROLS",
-  },
-  {
-    title: "Controls",
-    url: "/dashboard/controls",
-    icon: Settings,
-    module: "CONTROLS",
-  },
-  {
-    title: "Activity Log",
-    url: "/dashboard/activity-log",
-    icon: History,
-    module: "ACTIVITY_LOG",
-  },
-]
+import { AppSidebarNav } from "@/components/app-sidebar-nav"
+// NAV_MODULES comes from the neutral config module, not from the "use client" nav —
+// a server component reading a value out of a client module gets a reference proxy.
+import { NAV_MODULES } from "@/components/app-sidebar-nav.config"
+import { Sidebar, SidebarContent, SidebarMenu } from "@/components/ui/sidebar"
 
 export async function AppSidebar() {
   const ctx = await requireSession().catch(() => null);
@@ -155,31 +42,21 @@ export async function AppSidebar() {
       )
     : new Set<string>();
 
-  const filteredItems = items.filter((item) => {
-    const hasPermission = (ctx.permissions.get(item.module)?.canView ?? false) && ctx.licensedModules.has(item.module);
+  // Menu ordering/grouping and the active-route highlight live in AppSidebarNav (a
+  // client component — it needs usePathname). This stays the sole authority on
+  // *visibility*: only the modules that survive the permission/licensing/add-on
+  // checks below are ever sent to the client.
+  const allowedModules = NAV_MODULES.filter((module) => {
+    const hasPermission = (ctx.permissions.get(module)?.canView ?? false) && ctx.licensedModules.has(module);
     if (!hasPermission) return false;
-    if (ADD_ON_MODULES.has(item.module) && !enabledAddOns.has(item.module)) return false;
+    if (ADD_ON_MODULES.has(module) && !enabledAddOns.has(module)) return false;
     return true;
   });
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>OstaStay</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {filteredItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton render={<a href={`${enterprisePrefix}${item.url}`} />}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <AppSidebarNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} />
       </SidebarContent>
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>

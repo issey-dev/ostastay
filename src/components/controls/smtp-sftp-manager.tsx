@@ -85,7 +85,7 @@ export function SmtpSftpManager() {
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SMTP (Outgoing Email)</h3>
         <p className="text-xs text-muted-foreground">Used to send guest Confirmation Letters. Configure these before using the "Email to Guest" button on a reservation's Confirmation Letter.</p>
-        <div className="grid gap-4 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Host</Label>
             <Input placeholder="smtp.example.com" value={form.smtpHost} onChange={(e) => setForm({ ...form, smtpHost: e.target.value })} />
@@ -113,10 +113,10 @@ export function SmtpSftpManager() {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 border-t border-border pt-8">
         <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SFTP (File Transfer)</h3>
         <p className="text-xs text-muted-foreground">Not yet wired to any actual transfer — saved for when a file-export feature is built.</p>
-        <div className="grid gap-4 sm:grid-cols-2 bg-muted p-6 rounded-xl border border-border">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Host</Label>
             <Input placeholder="sftp.example.com" value={form.sftpHost} onChange={(e) => setForm({ ...form, sftpHost: e.target.value })} />

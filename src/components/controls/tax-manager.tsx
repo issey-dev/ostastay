@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -177,6 +178,9 @@ export function TaxManager() {
     }
   }
 
+  // First-column (Profile Name) sorting, asc<->desc.
+  const { sorted: sortedTaxProfiles, sort } = useTableSort(taxProfiles, { name: (tp) => tp.name }, "name")
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -313,7 +317,7 @@ export function TaxManager() {
                 <ShieldAlert className="w-4 h-4 text-success" /> Maldives Green Tax (MIRA Compliance)
               </h3>
 
-              <div className="grid gap-6 bg-muted p-6 rounded-xl border border-border">
+              <div className="grid gap-6">
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -385,7 +389,7 @@ export function TaxManager() {
                 <ShieldAlert className="w-4 h-4 text-success" /> Maldives GST & Service Charge (MIRA Compliance)
               </h3>
 
-              <div className="grid gap-6 bg-muted p-6 rounded-xl border border-border">
+              <div className="grid gap-6">
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -470,14 +474,14 @@ export function TaxManager() {
           <Table>
             <TableHeader className="bg-muted/80">
               <TableRow>
-                <TableHead>Profile Name</TableHead>
+                <SortableTableHead columnKey="name" sort={sort}>Profile Name</SortableTableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Tax Lines</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {taxProfiles.map(tp => {
+              {sortedTaxProfiles.map(tp => {
                 const lines = [...(tp.rates || [])].sort((a: any, b: any) => a.order - b.order)
                 return (
                   <TableRow key={tp.id} className="hover:bg-muted/50">

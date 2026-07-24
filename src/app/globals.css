@@ -81,14 +81,40 @@
 }
 
 /* Subtle per-property brand accent, applied app-wide via the injected --property-accent
-   variable (see PropertyAccentScope in the dashboard layout). Every content Card picks
-   up a thin colored left edge so the property's brand is quietly present on every page,
-   not just the top banner line and Controls. The variable is only set when the property
-   has chosen a banner color, so with no color set nothing is accented (monochromatic).
-   Dialogs/popovers portal outside the scope and intentionally never inherit it.
-   Revert this whole iteration by deleting this block + PropertyAccentScope. */
-.property-accent-scope [data-slot="card"] {
-  border-left: 2px solid var(--property-accent);
+   variable (see PropertyAccentScope in the dashboard layout). The accent hugs the card's
+   HEADER only — a short colored edge beside the title/description, not a full-height rail
+   down the whole card — so the brand stays a quiet touch rather than a heavy border (it
+   mirrors the page-header treatment on the Stationaries page). The variable is only set
+   when the property has chosen a banner color, so with no color set nothing is accented
+   (monochromatic). Dialogs/popovers portal outside the scope and never inherit it.
+
+   Uses an inset box-shadow rather than border-left so it adds no width: a real left
+   border would push the header's content 2px right of the body/table below it, leaving
+   the title misaligned with the rows. Cards with no header show no accent (intended —
+   the accent is a header ornament). Revert by deleting this block + PropertyAccentScope. */
+.property-accent-scope
+  [data-slot="card"]:not([data-slot="card"] [data-slot="card"])
+  > [data-slot="card-header"] {
+  box-shadow: inset 2px 0 0 0 var(--property-accent);
+}
+
+/* The active sidebar item, tinted with the same per-property accent as the card edge
+   above — a very low-alpha wash, not a filled pill. The class is only applied when the
+   property has actually chosen a banner color (AppSidebarNav sets --property-accent
+   inline alongside it); with no color set the class is absent and SidebarMenuButton's
+   own neutral `data-active:bg-sidebar-accent` shows through unchanged.
+
+   The class name is doubled deliberately: this needs to out-specify Tailwind's
+   `data-active:bg-sidebar-accent` utility, which is also (0,2,0) and would otherwise win
+   or lose on source order alone. Dark mode gets a slightly stronger mix — the same alpha
+   reads noticeably fainter against #171717 than against white.
+   Revert by deleting this block + the accent lines in AppSidebarNav. */
+.sidebar-item-accent.sidebar-item-accent[data-active] {
+  background-color: color-mix(in oklab, var(--property-accent) 12%, transparent);
+}
+
+.dark .sidebar-item-accent.sidebar-item-accent[data-active] {
+  background-color: color-mix(in oklab, var(--property-accent) 20%, transparent);
 }
 
 /* Respect the OS-level reduced-motion preference globally — collapses every
