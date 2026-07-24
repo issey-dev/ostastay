@@ -123,10 +123,12 @@ export async function POST(
     // 4. Perform check-out in transaction
     const commissionsPosted: { folioId: string; amount: number; agentName: string }[] = [];
     await prisma.$transaction(async (tx) => {
-      // Update Reservation Status
+      // Update Reservation Status. checkedOutAt records the actual departure time — its
+      // calendar date is the checkout's business day, which reverse-check-out uses to
+      // gate same-day-only reversal of a finalized City-Ledger (debtor) invoice.
       await tx.reservation.update({
         where: { id },
-        data: { status: "CHECKED_OUT" }
+        data: { status: "CHECKED_OUT", checkedOutAt: new Date() }
       });
 
       // Update Room Status to DIRTY and queue the checkout clean so the room shows up

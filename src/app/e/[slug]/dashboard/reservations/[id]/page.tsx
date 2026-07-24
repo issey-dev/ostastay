@@ -5,7 +5,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
-  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info, Bell,
+  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info, Bell, RotateCcw,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -80,6 +80,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [showAlerts, setShowAlerts] = useState(false)
   const alertShownRef = useRef(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [reversing, setReversing] = useState(false)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
 
   const fetchReservation = async () => {
@@ -180,6 +181,52 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     } finally {
       setCheckingOut(false)
+    }
+  }
+
+  const handleReverseCheckIn = async () => {
+    if (!window.confirm("Reverse this check-in and put the guest back to Reserved?")) return
+    setReversing(true)
+    try {
+      const res = await fetch(`/api/reservations/${id}/reverse-check-in`, { method: "POST" })
+      const data = await res.json()
+      if (res.ok) {
+        setNotification({ title: "Check-in Reversed", message: "The reservation is back to Reserved." })
+        fetchReservation()
+      } else {
+        setNotification({ title: "Reverse Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred reversing the check-in.", isError: true })
+    } finally {
+      setReversing(false)
+    }
+  }
+
+  const handleReverseCheckOut = async () => {
+    const reason = window.prompt("Reverse this check-out and return the guest to In-House?\n\nOptional reason (recorded on the reservation):", "")
+    if (reason === null) return
+    setReversing(true)
+    try {
+      const res = await fetch(`/api/reservations/${id}/reverse-check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const extra = data.debtorInvoicesReversed > 0
+          ? ` ${data.debtorInvoicesReversed} debtor invoice(s) un-finalized${data.voidedCommissions > 0 ? `, ${data.voidedCommissions} commission credit(s) voided` : ""}.`
+          : ""
+        setNotification({ title: "Check-out Reversed", message: `The guest is back In-House.${extra}` })
+        fetchReservation()
+      } else {
+        setNotification({ title: "Reverse Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred reversing the check-out.", isError: true })
+    } finally {
+      setReversing(false)
     }
   }
 
@@ -308,9 +355,27 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>
                   <ArrowLeftRight className="w-4 h-4 mr-2" /> Move Room
                 </Button>
+                <Button
+                  variant="outline"
+                  className="text-muted-foreground"
+                  onClick={handleReverseCheckIn}
+                  disabled={reversing}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" /> {reversing ? "Reversing..." : "Reverse Check-in"}
+                </Button>
               </>
             )
           })()}
+          {reservation.status === "CHECKED_OUT" && (
+            <Button
+              variant="outline"
+              className="text-warning border-warning/40 hover:bg-warning-muted hover:text-warning"
+              onClick={handleReverseCheckOut}
+              disabled={reversing}
+            >
+              <RotateCcw className="w-4 h-4 mr-2" /> {reversing ? "Reversing..." : "Reverse Check-out"}
+            </Button>
+          )}
           {(reservation.status === "RESERVED" || reservation.status === "IN_HOUSE") && (
             <Button
               variant="outline"

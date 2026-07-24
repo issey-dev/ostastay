@@ -805,6 +805,11 @@ model Reservation {
   // Actual arrival timestamp, set when the guest is checked in (status → IN_HOUSE).
   // Used to order guest Registration No assignment at EOD (check-in date then time).
   checkedInAt          DateTime?
+  // Actual departure timestamp, set at check-out (status → CHECKED_OUT) and cleared when
+  // a check-out is reversed. Its calendar date is treated as the checkout's business day,
+  // which gates the same-day-only reversal of any City-Ledger (debtor) invoice finalized
+  // at checkout — see api/reservations/[id]/reverse-check-out/route.ts.
+  checkedOutAt         DateTime?
   adults               Int       @default(1)
   children             Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)

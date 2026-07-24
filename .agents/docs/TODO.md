@@ -422,10 +422,18 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
   popup on the reservation page for unresolved alert traces.
 - **Billing module — building as increments (owner approved "all of them", 2026-07-24).**
   Rules captured in DECISIONS.md "Billing module — owner rules". Sequence:
-  1. **Reverse check-in / reverse check-out** (in progress). Always allowed; direct-bill
-     reversal only on the checkout date; payment reversals any date but never delete
-     (reversing entries). Undo status, reopen folios, revert room+housekeeping, reverse
-     debtor transfer + TA commission. Both statuses are terminal in the status route today.
+  1. **Reverse check-in / reverse check-out** — ✅ DONE (2026-07-24).
+     - `reverse-check-in/route.ts`: IN_HOUSE → RESERVED, clears `checkedInAt`; blocked once
+       any non-void charge is posted (void it first). Pre-arrival deposits don't block.
+     - `reverse-check-out/route.ts`: CHECKED_OUT → IN_HOUSE, clears `checkedOutAt`; reopens
+       folios, un-finalizes debtor invoices (`isDebtorAccount`/`payeeProfileId`), VOIDs the
+       TA commission credit (never deleted), deletes the pending CHECKOUT housekeeping task
+       and reverts room DIRTY→CLEAN, writes a FRONT_DESK trace + activity log.
+     - Debtor (City-Ledger) reversal gated to the **same business day** as checkout, via the
+       new `Reservation.checkedOutAt` field (migration `..._add_reservation_checked_out_at`);
+       guest-payable stays reverse on any date. Nothing financial is deleted.
+     - UI: "Reverse Check-in" button (IN_HOUSE group) + "Reverse Check-out" button
+       (CHECKED_OUT) on the reservation detail page, with confirm/reason prompts.
   2. **Interim bill** (read-only, posted-so-far) + **Advance bill** (posts remaining nights,
      user-chosen count ≤ remaining, revenue on the posting date; early-departure variant
      auto-moves checkout date). New sequence types + generators + print + UI.
