@@ -17,19 +17,19 @@ model Enterprise {
   type      String   @default("STANDARD")
   createdAt DateTime @default(now())
 
-  properties     Property[]
-  taxProfiles    TaxProfile[]
-  chargeCodes    ChargeCode[]
-  paymentMethods PaymentMethod[]
-  profiles       Profile[]
-  cashierShifts  CashierShift[]
-  settings       EnterpriseSettings?
-  users          User[]
-  roles          Role[]
-  nightAuditLogs NightAuditLog[]
-  systemCodes    SystemCode[]
-  roomAttendants RoomAttendant[]
-  license        EnterpriseLicense?
+  properties            Property[]
+  taxProfiles           TaxProfile[]
+  chargeCodes           ChargeCode[]
+  paymentMethods        PaymentMethod[]
+  profiles              Profile[]
+  cashierShifts         CashierShift[]
+  settings              EnterpriseSettings?
+  users                 User[]
+  roles                 Role[]
+  nightAuditLogs        NightAuditLog[]
+  systemCodes           SystemCode[]
+  roomAttendants        RoomAttendant[]
+  license               EnterpriseLicense?
   moduleAccessOverrides EnterpriseModuleAccess[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
@@ -122,9 +122,9 @@ model SupportAccessGrant {
   enterprise   Enterprise @relation("GrantTarget", fields: [enterpriseId], references: [id], onDelete: Cascade)
 
   requestedByUserId String
-  requestedBy       User   @relation("GrantRequestedBy", fields: [requestedByUserId], references: [id])
+  requestedBy       User    @relation("GrantRequestedBy", fields: [requestedByUserId], references: [id])
   approvedByUserId  String?
-  approvedBy        User?  @relation("GrantApprovedBy", fields: [approvedByUserId], references: [id])
+  approvedBy        User?   @relation("GrantApprovedBy", fields: [approvedByUserId], references: [id])
 
   status      String    @default("PENDING")
   reason      String?
@@ -138,9 +138,9 @@ model SystemCode {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  category     String     // e.g., "GENDER", "TITLE", "DIETARY_REQ"
-  code         String     // e.g., "M", "F", "VEGAN"
-  value        String     // The display label
+  category     String // e.g., "GENDER", "TITLE", "DIETARY_REQ"
+  code         String // e.g., "M", "F", "VEGAN"
+  value        String // The display label
   sortOrder    Int        @default(0)
   isActive     Boolean    @default(true)
 
@@ -184,13 +184,13 @@ model User {
   updatedAt DateTime @updatedAt
 
   roomAttendant       RoomAttendant?
-  assignedRooms       Room[]              @relation("RoomAssignedAttendant")
-  assignedMaintenance RoomMaintenance[]   @relation("MaintenanceAssignedTo")
+  assignedRooms       Room[]            @relation("RoomAssignedAttendant")
+  assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
 
-  supportGrantsRequested SupportAccessGrant[] @relation("GrantRequestedBy")
-  supportGrantsApproved  SupportAccessGrant[] @relation("GrantApprovedBy")
-  currencyExchangesCreated CurrencyExchange[] @relation("CurrencyExchangeCreatedBy")
-  propertiesReviewed     Property[]           @relation("PropertyReviewedBy")
+  supportGrantsRequested   SupportAccessGrant[] @relation("GrantRequestedBy")
+  supportGrantsApproved    SupportAccessGrant[] @relation("GrantApprovedBy")
+  currencyExchangesCreated CurrencyExchange[]   @relation("CurrencyExchangeCreatedBy")
+  propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
 }
 
 // PropertyStatus: PENDING (newly created by a tenant, not yet reviewed — locked out of
@@ -199,38 +199,38 @@ model User {
 // unaffected) | REJECTED (Osta declined; tenant can edit and resubmit, which flips it
 // back to PENDING). No SUSPENDED state yet — deferred until actually needed.
 model Property {
-  id              String     @id @default(uuid())
-  enterpriseId    String
-  enterprise      Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  name            String
-  code            String     @unique
-  legalName       String
-  defaultCurrency String
-  timeZone        String
-  checkInTime     String
-  checkOutTime    String
-  status          String     @default("ACTIVE")
+  id               String     @id @default(uuid())
+  enterpriseId     String
+  enterprise       Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name             String
+  code             String     @unique
+  legalName        String
+  defaultCurrency  String
+  timeZone         String
+  checkInTime      String
+  checkOutTime     String
+  status           String     @default("ACTIVE")
   // Set only when status transitions to ACTIVE or REJECTED via the Osta approval
   // queue (src/app/api/osta/properties/[id]/approve|reject) — null while PENDING.
   reviewedByUserId String?
-  reviewedBy       User?     @relation("PropertyReviewedBy", fields: [reviewedByUserId], references: [id])
+  reviewedBy       User?      @relation("PropertyReviewedBy", fields: [reviewedByUserId], references: [id])
   reviewedAt       DateTime?
   // Only meaningful when status is REJECTED — cleared on resubmit.
   rejectionReason  String?
-  logoUrl         String?
-  taxId           String?
-  contactPhone    String?
-  contactEmail    String?
-  latitude        Float?
-  longitude       Float?
-  starRating      Int?
+  logoUrl          String?
+  taxId            String?
+  contactPhone     String?
+  contactEmail     String?
+  latitude         Float?
+  longitude        Float?
+  starRating       Int?
 
   // The property's own accent — a thin line shown at the top of every page while this
   // property is the active one (see src/components/ui/property-banner-bar.tsx). Null
   // means no custom accent (monochromatic default). A raw hex, not a preset name, so a
   // future free-form color picker doesn't need a schema change. Distinct per property,
   // never shared across an enterprise's other properties.
-  bannerColor     String?
+  bannerColor String?
 
   // Per-property arrival gate (app-owner decision 2026-07-21): when on, a guest can
   // only be checked into a room whose housekeeping status is INSPECTED — the
@@ -271,35 +271,44 @@ model Property {
   // unaffected. Null = no forced logout pending.
   eodSessionsInvalidAt DateTime?
 
-  eodRuns      EodRun[]
+  eodRuns            EodRun[]
   guestRegistrations GuestRegistration[]
-  eodReports   EodReport[]
+  eodReports    EodReport[]
   cashierShifts CashierShift[]
 
-  buildings    Building[]
-  facilities   Facility[]
-  roomTypes    RoomType[]
-  rooms        Room[]
-  ratePlans    RatePlan[]
-  mealPlans    MealPlan[]
-  reservations Reservation[]
-  groupBlocks  GroupBlock[]
-  nightAudits  PropertyNightAuditLog[]
-  workLocationUsers User[] @relation("UserWorkLocation")
-  sequences    PropertySequence[]
-  outlets      Outlet[]
-  folios       Folio[]
-  currencyExchanges CurrencyExchange[]
-  allocations  Allocation[]
-  feeRules     PropertyFeeRule[]
+  buildings              Building[]
+  facilities             Facility[]
+  roomTypes              RoomType[]
+  rooms                  Room[]
+  ratePlans              RatePlan[]
+  mealPlans              MealPlan[]
+  reservations           Reservation[]
+  groupBlocks            GroupBlock[]
+  nightAudits            PropertyNightAuditLog[]
+  workLocationUsers      User[]                  @relation("UserWorkLocation")
+  sequences              PropertySequence[]
+  outlets                Outlet[]
+  folios                 Folio[]
+  currencyExchanges      CurrencyExchange[]
+  allocations            Allocation[]
+  feeRules               PropertyFeeRule[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
-  originatingProfiles Profile[]
+  originatingProfiles    Profile[]
   // Per-property add-on gates (see PropertyModuleAccess) and the Excursions catalog/
   // bookings sold through one, if purchased.
-  moduleAccessOverrides PropertyModuleAccess[]
-  excursionTypes        ExcursionType[]
-  excursionBookings     ExcursionBooking[]
+  moduleAccessOverrides  PropertyModuleAccess[]
+  excursionTypes         ExcursionType[]
+  excursionBookings      ExcursionBooking[]
+  // Spa Booking add-on (see SPA_PLAN.md) — same per-property add-on shape as
+  // Excursions above, gated through the same moduleAccessOverrides.
+  spaTreatmentCategories SpaTreatmentCategory[]
+  spaTreatments          SpaTreatment[]
+  spaTherapists          SpaTherapist[]
+  spaRooms               SpaRoom[]
+  spaAppointments        SpaAppointment[]
+  spaSettings            SpaSettings?
+  spaGuestTherapistPreferences SpaGuestTherapistPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,12 +341,12 @@ model Facility {
 }
 
 model RoomType {
-  id           String   @id @default(uuid())
-  propertyId   String
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  name         String
-  code         String
-  maxOccupancy Int
+  id            String   @id @default(uuid())
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name          String
+  code          String
+  maxOccupancy  Int
   // Adults included before an extra-adult surcharge applies at Night Audit — e.g. 2
   // for standard double occupancy. Editable per room type since a Family Suite's base
   // occupancy differs from a Standard Room's. Children always incur PriceCalendar's
@@ -345,7 +354,7 @@ model RoomType {
   // how Green Tax already treats children as a flat per-child charge with no baseline
   // exemption).
   baseOccupancy Int      @default(2)
-  description  String?
+  description   String?
 
   // Deactivating a room type blocks any *new* reservation from being assigned to it and
   // cascades every one of its Room rows to status OUT_OF_SERVICE — but never deletes
@@ -358,7 +367,7 @@ model RoomType {
   // buffer). Rooms created under one skip Building/Floor assignment entirely (see
   // Room.floorId) since they have no physical location — distinct from a real,
   // sellable, physically-cleaned room type.
-  isPseudo Boolean @default(false)
+  isPseudo            Boolean @default(false)
   // Controls whether Housekeeping/Maintenance features (task assignment, status
   // workflows) are offered at all for rooms of this type. Off by default makes no
   // sense for real rooms, so this defaults to true; a pseudo room type is the main
@@ -372,7 +381,7 @@ model RoomType {
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
   // since all three are "pick any number of codes from a category" in the same shape.
-  features RoomTypeFeature[]
+  features       RoomTypeFeature[]
 }
 
 model RoomTypeFeature {
@@ -423,8 +432,8 @@ model Room {
   floorId    String?
   floor      Floor?   @relation(fields: [floorId], references: [id])
 
-  roomNumber     String
-  status         String            @default("CLEAN")
+  roomNumber String
+  status     String @default("CLEAN")
 
   // Only meaningful while status is OUT_OF_ORDER (app-owner decision 2026-07-21:
   // fields on Room, no separate dated history model). Cleared when the room
@@ -434,23 +443,23 @@ model Room {
   oooExpectedReturn DateTime?
 
   assignedAttendantId String?
-  assignedAttendant   User?        @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])
+  assignedAttendant   User?   @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])
 
-  maintenance    RoomMaintenance[]
-  RoomAssignment RoomAssignment[]
+  maintenance       RoomMaintenance[]
+  RoomAssignment    RoomAssignment[]
   housekeepingTasks HousekeepingTask[]
   // Additive on top of whatever the assigned RoomType.features already grants — e.g. a
   // specific room within a Deluxe Ocean View type that also happens to have a Balcony
   // not shared by every Deluxe Ocean View room.
-  features RoomFeature[]
+  features          RoomFeature[]
 
   @@unique([propertyId, roomNumber])
 }
 
 model RoomFeature {
-  id     String @id @default(uuid())
-  roomId String
-  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  roomId   String
+  room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
   category String // BED_TYPE | ROOM_VIEW | ROOM_AMENITY — matches SystemCode.category
   code     String
 
@@ -489,20 +498,20 @@ model TaxRate {
 }
 
 model ChargeCode {
-  id           String     @id @default(uuid())
-  enterpriseId String
-  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  code         String
-  description  String
+  id            String      @id @default(uuid())
+  enterpriseId  String
+  enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  code          String
+  description   String
   // Grouping for reporting only — ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX |
   // SYSTEM. (PAYMENT was removed — payment types are Payment Methods, not charge codes.)
-  category     String     @default("OTHERS")
+  category      String      @default("OTHERS")
   // Whether this charge code applies the enterprise's own Maldives Tax config (Green
   // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
   // taxProfileId is only ever set when useDefaultTax is false.
-  useDefaultTax Boolean   @default(true)
-  taxProfileId String?
-  taxProfile   TaxProfile? @relation(fields: [taxProfileId], references: [id])
+  useDefaultTax Boolean     @default(true)
+  taxProfileId  String?
+  taxProfile    TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
   folioLineItems     FolioLineItem[]
   // The "shared pool" an Outlet curates from — a charge code is never owned by one
@@ -518,6 +527,7 @@ model ChargeCode {
   routingRules       FolioRoutingRule[]
   feeRules           PropertyFeeRule[]
   excursionTypes     ExcursionType[]
+  spaTreatments      SpaTreatment[]
 
   @@unique([enterpriseId, code])
 }
@@ -529,7 +539,7 @@ model PaymentMethod {
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   name         String
   type         String // Replaces PaymentType
-  isActive     Boolean @default(true)
+  isActive     Boolean    @default(true)
 
   payments Payment[]
 }
@@ -543,13 +553,13 @@ model Profile {
   upid              String     @id @default(uuid())
   enterpriseId      String
   enterprise        Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  profileType       String    @default("GUEST")
+  profileType       String     @default("GUEST")
   title             String?
   firstName         String
   middleName        String?
   lastName          String?
   companyName       String?
-  classification    String    @default("REGULAR")
+  classification    String     @default("REGULAR")
   photoUrl          String?
   dateOfBirth       DateTime?
   // Distinct from ProfileAddress.country / ProfileDocument.issuingCountry — a single
@@ -559,28 +569,28 @@ model Profile {
   // Replaces the old free-text loyaltyTier — SystemCode category VIP_LEVEL,
   // configurable via Controls > Dropdowns Manager.
   vipLevel          String?
-  preferredLanguage String    @default("en")
+  preferredLanguage String     @default("en")
   iataNumber        String?
   commissionRate    Float?
-  greenTaxExempt    Boolean   @default(false)
+  greenTaxExempt    Boolean    @default(false)
   gender            String?
   membershipNumber  String?
-  marketingOptIn    Boolean   @default(false)
-  isIncognito       Boolean   @default(false)
-  arNumber          String?   @unique
+  marketingOptIn    Boolean    @default(false)
+  isIncognito       Boolean    @default(false)
+  arNumber          String?    @unique
   creditLimit       Float?
   // Formally activates arNumber/creditLimit as a live Accounts Receivable account —
   // see the Debtors module (src/app/e/[slug]/dashboard/debtors/). Only meaningful for
   // COMPANY/TRAVEL_AGENT profiles, but not enforced at the DB level (profileType is a
   // free string, not an enum).
-  isCreditAccount   Boolean   @default(false)
+  isCreditAccount   Boolean    @default(false)
   // Enterprise/chain-wide stay totals (Profile has no propertyId — these accumulate
   // across every property). "Visits to Property" (singular, current property) is
   // NOT stored here — it's computed live from Reservation at read time, since a
   // per-property count can't live on an enterprise-scoped model. See stay-history route.
-  totalStays        Int       @default(0)
-  totalNights       Int       @default(0)
-  totalRevenue      Float     @default(0.0)
+  totalStays        Int        @default(0)
+  totalNights       Int        @default(0)
+  totalRevenue      Float      @default(0.0)
   lastStayDate      DateTime?
 
   // Set once at creation from the active property context, never changed afterward —
@@ -596,13 +606,14 @@ model Profile {
   notes                    ProfileNote[]
   documents                ProfileDocument[]
   reservations             Reservation[]
-  travelAgentReservations  Reservation[]       @relation("TravelAgent")
+  travelAgentReservations  Reservation[]          @relation("TravelAgent")
   accompanyingReservations AccompanyingGuest[]
-  foliosAsPayee            Folio[]             @relation("PayeeProfile")
+  foliosAsPayee            Folio[]                @relation("PayeeProfile")
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
   negotiatedRateAccess     RatePlanAgentAccess[]
+  spaTherapistPreferences  SpaGuestTherapistPreference[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -614,7 +625,7 @@ model ProfileCommunication {
   id        String   @id @default(uuid())
   upid      String
   profile   Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
-  type      String   // EMAIL | MOBILE | SOCIAL
+  type      String // EMAIL | MOBILE | SOCIAL
   value     String
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -627,7 +638,7 @@ model ProfileAddress {
   id            String   @id @default(uuid())
   upid          String
   profile       Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
-  type          String   // HOME | BUSINESS | BILLING
+  type          String // HOME | BUSINESS | BILLING
   fullAddress   String
   city          String?
   stateProvince String?
@@ -687,20 +698,20 @@ model ProfileNote {
 }
 
 model RatePlan {
-  id           String   @id @default(uuid())
-  propertyId   String
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  code         String
-  name         String
-  description  String?
-  priority     Int      @default(0)
-  isNegotiated Boolean  @default(false)
+  id              String   @id @default(uuid())
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  description     String?
+  priority        Int      @default(0)
+  isNegotiated    Boolean  @default(false)
   // Classification flags for zero/nominal-rate stays — comp'd rooms (VIPs, media,
   // familiarization trips) and internal staff/owner use. Pure labels for now, same
   // starting point isNegotiated had before its Negotiated Rates follow-up; no posting
   // or reporting behavior is tied to them yet.
-  isComplimentary Boolean @default(false)
-  isHouseUse      Boolean @default(false)
+  isComplimentary Boolean  @default(false)
+  isHouseUse      Boolean  @default(false)
 
   // The charge code this plan's nightly room charge posts against at Night Audit —
   // usually the property's main Accommodation code. Null means "use the enterprise
@@ -731,17 +742,17 @@ model RatePlan {
   // itself be derived) — enforced in the API, not the DB, to keep resolution a single
   // hop. onDelete: SetNull rather than Cascade so deleting a parent doesn't cascade-
   // delete every plan derived from it — it just orphans them back to independent.
-  parentRatePlanId String?
-  parentRatePlan   RatePlan?  @relation("DerivedRatePlans", fields: [parentRatePlanId], references: [id], onDelete: SetNull)
-  derivedRatePlans RatePlan[] @relation("DerivedRatePlans")
+  parentRatePlanId       String?
+  parentRatePlan         RatePlan?  @relation("DerivedRatePlans", fields: [parentRatePlanId], references: [id], onDelete: SetNull)
+  derivedRatePlans       RatePlan[] @relation("DerivedRatePlans")
   // "PERCENT" | "FLAT" — null when this plan is not derived from another.
   derivedAdjustmentType  String?
   // For PERCENT: e.g. 10 means parent price + 10%, -10 means parent price - 10%.
   // For FLAT: e.g. 20 means parent price + $20, -20 means parent price - $20.
   derivedAdjustmentValue Float?
 
-  calendars      PriceCalendar[]
-  RoomAssignment RoomAssignment[]
+  calendars       PriceCalendar[]
+  RoomAssignment  RoomAssignment[]
   // Which Allocations this plan carries as a package (see Allocation.mode for whether
   // each is carved out of or added on top of the room rate). A derived plan with no
   // links of its own inherits its parent's — see src/lib/allocations.ts.
@@ -751,19 +762,19 @@ model RatePlan {
   // "negotiated but not yet restricted to anyone," which the reservation form treats
   // as unselectable until at least one profile is linked, same as any other negotiated
   // plan with a non-matching travel agent.
-  agentAccess RatePlanAgentAccess[]
+  agentAccess     RatePlanAgentAccess[]
 
   @@unique([propertyId, code])
 }
 
 model PriceCalendar {
-  id         String   @id @default(uuid())
-  ratePlanId String
-  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
-  roomTypeId String
-  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
-  date       DateTime
-  price      Float
+  id              String   @id @default(uuid())
+  ratePlanId      String
+  ratePlan        RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  roomTypeId      String
+  roomType        RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  price           Float
   // Optional per-night surcharge for occupants beyond RoomType.baseOccupancy (adults)
   // or any child (children) on this date — null means no surcharge; there is no
   // further fallback for these (unlike `price`, which falls back to the property's
@@ -789,13 +800,13 @@ model Reservation {
   groupBlockId String?
   groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
 
-  checkInDate  DateTime
-  checkOutDate DateTime
+  checkInDate          DateTime
+  checkOutDate         DateTime
   // Actual arrival timestamp, set when the guest is checked in (status → IN_HOUSE).
   // Used to order guest Registration No assignment at EOD (check-in date then time).
-  checkedInAt  DateTime?
-  adults       Int      @default(1)
-  children     Int      @default(0)
+  checkedInAt          DateTime?
+  adults               Int       @default(1)
+  children             Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)
   // — tracked as its own occupancy bucket rather than inferred from `children`, since
   // Reservation carries only headcounts, not individual guest birthdates. Infants are
@@ -815,28 +826,32 @@ model Reservation {
   // — high floor requested") — deliberately a single field on the reservation itself,
   // not sourced from ReservationTrace (that's an operational task/message log, not
   // curated guest-facing text).
-  remarks      String?
+  remarks              String?
   // Derived at create/edit time (see src/lib/reservation-assignments.ts) whenever two
   // date-adjacent segments assign different physical rooms — i.e. the stay itself
   // requires a mid-stay room change on a known future date, distinct from the ad-hoc
   // RoomAssignment/room-move flow (RESERVATIONS/route.ts room-move) which only ever
   // acts "as of today". Surfaced as a badge on the reservation and via the Front
   // Office "Room Moves Due Today" worklist (front-office/summary route).
-  hasScheduledRoomMove Boolean @default(false)
+  hasScheduledRoomMove Boolean   @default(false)
 
-  assignments        RoomAssignment[]
-  folios             Folio[]
-  traces             ReservationTrace[]
-  accompanyingGuests AccompanyingGuest[]
-  outletAppointments OutletAppointment[]
+  assignments                  RoomAssignment[]
+  folios                       Folio[]
+  traces                       ReservationTrace[]
+  accompanyingGuests           AccompanyingGuest[]
+  outletAppointments           OutletAppointment[]
   // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
   // written at create/edit, read by Night Audit. See ReservationAllocation.
-  allocations        ReservationAllocation[]
-  specialRequests    ReservationSpecialRequest[]
-  routingRules       FolioRoutingRule[]
-  guestRegistrations GuestRegistration[]
-  excursionBookings  ExcursionBooking[]
-  transports         ReservationTransport[]
+  allocations                  ReservationAllocation[]
+  specialRequests              ReservationSpecialRequest[]
+  routingRules                 FolioRoutingRule[]
+  guestRegistrations           GuestRegistration[]
+  excursionBookings            ExcursionBooking[]
+  transports                   ReservationTransport[]
+  // A reservation can be the guest identity behind a Spa appointment participant —
+  // see SpaAppointmentParticipant.reservationId (not SpaAppointment directly, since
+  // guest identity is per-participant under the multi-resource design).
+  spaAppointmentParticipations SpaAppointmentParticipant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -918,7 +933,7 @@ model Folio {
   walkInGuestContact String?
 
   payeeProfileId String?
-  payeeProfile   Profile?   @relation("PayeeProfile", fields: [payeeProfileId], references: [upid])
+  payeeProfile   Profile? @relation("PayeeProfile", fields: [payeeProfileId], references: [upid])
 
   groupBlockId String?
   groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
@@ -930,27 +945,28 @@ model Folio {
   taxInvoiceNumber      String?
   proformaInvoiceNumber String?
 
-  lineItems FolioLineItem[]
-  payments  Payment[]
+  lineItems          FolioLineItem[]
+  payments           Payment[]
   // Standing routing rules that redirect charges of a given code INTO this folio
   // (this folio is the target). See FolioRoutingRule.
   routingTargetRules FolioRoutingRule[] @relation("RoutingTargetFolio")
-  excursionBookings ExcursionBooking[]
+  excursionBookings  ExcursionBooking[]
+  spaAppointments    SpaAppointment[]
 
   @@index([propertyId])
 }
 
 model FolioLineItem {
-  id           String     @id @default(uuid())
-  folioId      String
-  folio        Folio      @relation(fields: [folioId], references: [id], onDelete: Cascade)
-  chargeCodeId String
-  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  id                  String          @id @default(uuid())
+  folioId             String
+  folio               Folio           @relation(fields: [folioId], references: [id], onDelete: Cascade)
+  chargeCodeId        String
+  chargeCode          ChargeCode      @relation(fields: [chargeCodeId], references: [id])
   // Which Outlet this charge was posted through, if any — null for ordinary front-desk/
   // room charges. Lets revenue be attributed per outlet without changing how tax or the
   // charge code itself works.
-  outletId     String?
-  outlet       Outlet?    @relation(fields: [outletId], references: [id])
+  outletId            String?
+  outlet              Outlet?         @relation(fields: [outletId], references: [id])
   // Which RoomAssignment (segment) this line came from — set on the Nightly Room
   // Charge and Extra Occupancy Charge lines posted by Night Audit, null for every
   // other charge type. Lets checkout attribute room revenue back to the specific rate
@@ -963,25 +979,27 @@ model FolioLineItem {
   // while holding an open shift on the folio's property. Null for Night Audit and
   // other system postings. SetNull on delete — losing the attribution never deletes
   // billing history. Drives the per-shift "postings by charge code" summary.
-  shiftId      String?
-  shift        CashierShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
-  date         DateTime
+  shiftId String?
+  shift   CashierShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  date    DateTime
   // The line's own descriptive text — auto-filled from the charge code's
   // description at posting time, editable by the operator.
-  description  String
+  description         String
   // Free-text reference printed in the invoice's Reference column (folio/PMS
   // ref, external doc number, "per agreement 2026-04", etc.). Distinct from
   // description; null falls back to the charge code on the printed document.
-  reference    String?
-  amount       Float
-  taxAmount    Float      @default(0.0)
-  serviceChargeAmount Float @default(0.0)
-  isVoid       Boolean    @default(false)
+  reference           String?
+  amount              Float
+  taxAmount           Float           @default(0.0)
+  serviceChargeAmount Float           @default(0.0)
+  isVoid              Boolean         @default(false)
 
   createdAt DateTime @default(now())
 
   // Back-reference from ExcursionBooking.folioLineItemId (1:1, optional).
   excursionBooking ExcursionBooking?
+  // Back-reference from SpaAppointment.folioLineItemId (1:1, optional).
+  spaAppointment   SpaAppointment?
 }
 
 // A standing "routing instruction": charges of a given ChargeCode on a source
@@ -1024,10 +1042,10 @@ model CashierShift {
   businessDate DateTime?
   openedAt     DateTime  @default(now())
   closedAt     DateTime?
-  openingFloat Float     @default(0.0)
+  openingFloat Float      @default(0.0)
   closingDrop  Float?
 
-  payments Payment[]
+  payments          Payment[]
   currencyExchanges CurrencyExchange[]
   paidOuts CashierPaidOut[]
   // Charges posted by this cashier during the shift — set on manual/front-desk
@@ -1069,7 +1087,7 @@ model Payment {
   // Deposit module: DEPOSIT | PRE_ARRIVAL_FEE | CANCELLATION_FEE | NO_SHOW_FEE.
   // Null for an ordinary in-stay folio payment. Purely a reporting/identification
   // tag — the amount behaves like any other payment on the folio.
-  depositPurpose  String?
+  depositPurpose String?
 
   // Assigned once, the first time a receipt is printed for this payment (via the
   // property's RECEIPT_NO PropertySequence) — never reallocated on reprint. Null
@@ -1081,6 +1099,9 @@ model Payment {
   // Excursion bookings refunded by this payment (see ExcursionBooking.refundPaymentId)
   // — never automatic, always an explicit staff action.
   refundedExcursionBookings ExcursionBooking[]
+  // Spa appointments refunded by this payment (see SpaAppointment.refundPaymentId) —
+  // same "never automatic" convention.
+  refundedSpaAppointments   SpaAppointment[]
 }
 
 // Per-property fee rules (Controls > Fee Rules) that drive the Deposit module and
@@ -1093,16 +1114,16 @@ model Payment {
 // (the whole projected stay). CANCELLATION/NO_SHOW post their fee against
 // `chargeCode` so it reconciles on the folio against any held deposit.
 model PropertyFeeRule {
-  id           String     @id @default(uuid())
+  id           String      @id @default(uuid())
   propertyId   String
-  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  ruleType     String     // DEPOSIT | CANCELLATION | NO_SHOW
-  basis        String     @default("FLAT") // FLAT | PERCENT | FIRST_NIGHT | FULL_STAY
-  value        Float      @default(0)
+  property     Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleType     String // DEPOSIT | CANCELLATION | NO_SHOW
+  basis        String      @default("FLAT") // FLAT | PERCENT | FIRST_NIGHT | FULL_STAY
+  value        Float       @default(0)
   chargeCodeId String?
   chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
-  isActive     Boolean    @default(false)
-  updatedAt    DateTime   @updatedAt
+  isActive     Boolean     @default(false)
+  updatedAt    DateTime    @updatedAt
 
   @@unique([propertyId, ruleType])
 }
@@ -1112,9 +1133,9 @@ model PropertyFeeRule {
 // Property (for branding/reporting) and tied to the cashier's CashierShift, mirroring
 // how Payment is tied to a shift.
 model CurrencyExchange {
-  id         String   @id @default(uuid())
+  id         String       @id @default(uuid())
   propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   shiftId    String
   shift      CashierShift @relation(fields: [shiftId], references: [id])
 
@@ -1212,7 +1233,7 @@ model OutletAppointment {
   walkInGuestContact String?
 
   notes  String?
-  status String @default("SCHEDULED")
+  status String  @default("SCHEDULED")
 
   createdByUserId String
 
@@ -1256,8 +1277,8 @@ model EnterpriseSettings {
   // Custom Invoice Settings
   invoiceBrandName    String?
   invoiceLogoUrl      String?
-  invoiceBrandColor   String?  @default("#4f46e5")
-  invoiceFontFamily   String?  @default("Geist")
+  invoiceBrandColor   String? @default("#4f46e5")
+  invoiceFontFamily   String? @default("Geist")
   invoiceTaxId        String?
   invoicePhone        String?
   invoiceEmail        String?
@@ -1283,29 +1304,29 @@ model EnterpriseSettings {
 
   // Maldives Green Tax Settings — charged per person per night, split by age band;
   // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
-  greenTaxEnabled     Boolean  @default(true)
-  greenTaxAdultAmount Float    @default(12.00)
-  greenTaxChildAmount Float    @default(6.00)
-  greenTaxExemptAge   Int      @default(2)
+  greenTaxEnabled     Boolean @default(true)
+  greenTaxAdultAmount Float   @default(12.00)
+  greenTaxChildAmount Float   @default(6.00)
+  greenTaxExemptAge   Int     @default(2)
 
   // Maldives GST (formerly "TGST") and Service Charge Settings. Calculation order is
   // fixed: Service Charge is a percentage of the base amount, then GST is a percentage
   // of (base + Service Charge) — e.g. on a $100 base: SVC 10% = $10, GST 17% of $110 =
   // $18.70. Not yet wired into any actual charge-posting logic (Night Audit/Folios).
-  tgstEnabled          Boolean  @default(true)
-  tgstRate             Float    @default(17.00)
-  serviceChargeEnabled Boolean  @default(true)
-  serviceChargeRate    Float    @default(10.00)
+  tgstEnabled          Boolean @default(true)
+  tgstRate             Float   @default(17.00)
+  serviceChargeEnabled Boolean @default(true)
+  serviceChargeRate    Float   @default(10.00)
 
   // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
   // NOTE: stored as plain text; do not build real email/file-transfer sending on top of
   // this without first adding proper secret encryption at rest.
-  smtpHost     String?
-  smtpPort     Int?
-  smtpUsername String?
-  smtpPassword String?
+  smtpHost        String?
+  smtpPort        Int?
+  smtpUsername    String?
+  smtpPassword    String?
   smtpFromAddress String?
-  smtpUseTls   Boolean @default(true)
+  smtpUseTls      Boolean @default(true)
 
   sftpHost       String?
   sftpPort       Int?
@@ -1347,9 +1368,9 @@ model RoomMaintenance {
   priority    String @default("MEDIUM")
   status      String @default("OPEN")
 
-  reportedBy String?
+  reportedBy   String?
   assignedToId String?
-  assignedTo   User? @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
+  assignedTo   User?   @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1392,20 +1413,20 @@ model RoomAssignment {
 
 // HousekeepingTaskStatus: PENDING, IN_PROGRESS, COMPLETED
 model HousekeepingTask {
-  id             String   @id @default(uuid())
-  roomId         String
-  room           Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  taskType       String   @default("FULL_SERVICE") // FULL_SERVICE, LIGHT_TOUCH, CHECKOUT
-  status         String   @default("PENDING")
-  assignedToId   String?
-  assignedTo     RoomAttendant? @relation(fields: [assignedToId], references: [id])
-  priority       String   @default("NORMAL") // LOW, NORMAL, HIGH
-  notes          String?
+  id           String   @id @default(uuid())
+  roomId       String
+  room         Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  taskType     String   @default("FULL_SERVICE") // FULL_SERVICE, LIGHT_TOUCH, CHECKOUT
+  status       String   @default("PENDING")
+  assignedToId String?
+  assignedTo   RoomAttendant? @relation(fields: [assignedToId], references: [id])
+  priority     String   @default("NORMAL") // LOW, NORMAL, HIGH
+  notes        String?
   // Set the first time the task moves to IN_PROGRESS — with completedAt this gives
   // the attendant's time-on-task for the Housekeeping Attendant report.
-  startedAt      DateTime?
-  completedAt    DateTime?
-  scheduledDate  DateTime @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  scheduledDate DateTime @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1415,8 +1436,8 @@ model RoomAttendant {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  userId       String @unique
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   zone         String? // e.g. "Floor 1"
 
   tasks HousekeepingTask[]
@@ -1424,39 +1445,39 @@ model RoomAttendant {
 
 // GroupStatus: TENTATIVE, DEFINITE, CANCELLED
 model GroupBlock {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   propertyId     String
-  property       Property @relation(fields: [propertyId], references: [id])
-  code           String   @unique
+  property       Property  @relation(fields: [propertyId], references: [id])
+  code           String    @unique
   name           String
   startDate      DateTime
   endDate        DateTime
   cutoffDate     DateTime?
-  totalRoomsHeld Int      @default(0)
-  status         String   @default("TENTATIVE")
+  totalRoomsHeld Int       @default(0)
+  status         String    @default("TENTATIVE")
 
-  reservations   Reservation[]
-  masterFolios   Folio[]
+  reservations Reservation[]
+  masterFolios Folio[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model PropertyNightAuditLog {
-  id             String   @id @default(uuid())
-  propertyId     String
-  property       Property @relation(fields: [propertyId], references: [id])
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
 
-  auditDate      DateTime
-  executedAt     DateTime @default(now())
-  executedBy     String?
+  auditDate  DateTime
+  executedAt DateTime @default(now())
+  executedBy String?
 
-  roomsOccupied  Int
-  roomRevenue    Float
-  taxPosted      Float
-  totalPostings  Int
+  roomsOccupied Int
+  roomRevenue   Float
+  taxPosted     Float
+  totalPostings Int
 
-  status         String   @default("COMPLETED")
+  status String @default("COMPLETED")
 }
 
 // A step-by-step End-of-Day run for one property's business date. The business date
@@ -1497,7 +1518,7 @@ model PropertySequence {
   id           String   @id @default(uuid())
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  sequenceType String   // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO | GUEST_REG_NO
+  sequenceType String // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO | GUEST_REG_NO
   currentValue Int      @default(0)
   // For year-scoped sequences (GUEST_REG_NO, the Green Tax guest registration
   // number): the calendar year currentValue belongs to. On the first allocation of
@@ -1563,13 +1584,13 @@ model UserActivityLog {
   // True when the action was performed by an Osta support user acting under an
   // approved SupportAccessGrant — support actions must be distinguishable in the
   // target enterprise's own trail.
-  isSupport Boolean @default(false)
-  module    String // RBAC module name, or "AUTH" for login/logout events
-  action    String // CREATE | UPDATE | DELETE | LOGIN | LOGIN_FAILED | LOGOUT | CHECK_IN | CHECK_OUT | VOID | RUN | ...
-  entityType String?
-  entityId   String?
-  description String
-  metadata    String? // JSON blob for structured detail (amounts, old→new values...)
+  isSupport    Boolean @default(false)
+  module       String // RBAC module name, or "AUTH" for login/logout events
+  action       String // CREATE | UPDATE | DELETE | LOGIN | LOGIN_FAILED | LOGOUT | CHECK_IN | CHECK_OUT | VOID | RUN | ...
+  entityType   String?
+  entityId     String?
+  description  String
+  metadata     String? // JSON blob for structured detail (amounts, old→new values...)
 
   createdAt DateTime @default(now())
 
@@ -1584,33 +1605,33 @@ model UserActivityLog {
 // Property-scoped like RatePlan/MealPlan (offerings and prices differ per property);
 // the ChargeCode it posts under stays enterprise-wide, same split as Outlets use.
 model Allocation {
-  id           String     @id @default(uuid())
-  propertyId   String
-  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  code         String     // BF, LN, DN, TRF-SB, SPA-60...
-  name         String     // "Breakfast", "Speedboat Transfer"
+  id            String     @id @default(uuid())
+  propertyId    String
+  property      Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code          String // BF, LN, DN, TRF-SB, SPA-60...
+  name          String // "Breakfast", "Speedboat Transfer"
   // Grouping for filtering/reporting only — FNB | TRANSFER | SPA | EXCURSION | OTHER.
   // Plain string, same convention as ChargeCode.category / Outlet.outletType.
-  type         String     @default("OTHER")
-  chargeCodeId String
-  chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
+  type          String     @default("OTHER")
+  chargeCodeId  String
+  chargeCode    ChargeCode @relation(fields: [chargeCodeId], references: [id])
   // When during the stay Night Audit posts this — EVERY_NIGHT | ARRIVAL_NIGHT |
   // DEPARTURE_NIGHT (departure = the stay's last night; no audit runs for a guest on
   // their checkout date itself).
-  postingRhythm String @default("EVERY_NIGHT")
+  postingRhythm String     @default("EVERY_NIGHT")
   // How this allocation behaves *when it is part of a rate plan* — INCLUDE_IN_RATE |
   // ADD_TO_RATE (owner-confirmed, defined per allocation item/code, never per link):
   // INCLUDE_IN_RATE — its value is carved OUT of the room line at posting (room line
   //   reduced, folio total unchanged — pure revenue attribution to this allocation's
   //   charge code).
   // ADD_TO_RATE — posts on top of the room rate as its own line.
-  mode String @default("ADD_TO_RATE")
+  mode          String     @default("ADD_TO_RATE")
   // Independent of `mode` (owner-confirmed): whether this allocation can *also* be
   // attached manually to a reservation on its own, whether or not it's part of any
   // rate/meal plan. Turning this on doesn't change how it posts when it IS in a rate —
   // it just additionally exposes it in the reservation Add-ons picker.
-  sellSeparate Boolean @default(false)
-  isActive     Boolean @default(true)
+  sellSeparate  Boolean    @default(false)
+  isActive      Boolean    @default(true)
 
   rates                  AllocationRate[]
   ratePlanLinks          RatePlanAllocation[]
@@ -1660,11 +1681,11 @@ model RatePlanAllocation {
 // Managed from the Profile side (Negotiated Rates section on a Company/Travel Agent
 // profile) — see /api/profiles/[upid]/negotiated-rates.
 model RatePlanAgentAccess {
-  id         String   @id @default(uuid())
-  ratePlanId String
-  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
-  upid       String
-  profile    Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  ratePlanId     String
+  ratePlan       RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  upid           String
+  profile        Profile  @relation(fields: [upid], references: [upid], onDelete: Cascade)
   // Optional per-rate-plan commission % owed to this agent — null means no commission
   // for this specific plan. Calculated at checkout (see reservations/[id]/check-out/
   // route.ts) once the folio actually settles to this agent's City Ledger account, and
@@ -1702,7 +1723,7 @@ model ReservationAllocation {
   reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   allocationId  String
   allocation    Allocation  @relation(fields: [allocationId], references: [id])
-  source        String      // RATE_PLAN | MEAL_PLAN | MANUAL
+  source        String // RATE_PLAN | MEAL_PLAN | MANUAL
 
   // Nullable per-reservation negotiated price overrides; null = use AllocationRate.
   overrideAdultPrice Float?
@@ -1740,22 +1761,22 @@ model PropertyModuleAccess {
 // Hopping, Night Fishing...) — same scoping convention as RatePlan/Allocation/Outlet:
 // the offering differs per property, but the linked ChargeCode stays enterprise-wide.
 model ExcursionType {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   propertyId   String
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  code         String   // SNORK, ISLE, NFISH...
-  name         String   // "Snorkelling Trip"
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code         String // SNORK, ISLE, NFISH...
+  name         String // "Snorkelling Trip"
   description  String?
   chargeCodeId String
   chargeCode   ChargeCode @relation(fields: [chargeCodeId], references: [id])
   // PER_PERSON: headcount x the active ExcursionRate. FLAT: ExcursionRate.flatPrice
   // regardless of headcount (e.g. a private charter).
-  pricingMode  String   @default("PER_PERSON")
+  pricingMode  String     @default("PER_PERSON")
   // Hours before a departure's start time a booking can still be freely cancelled —
   // see ExcursionBooking below. Past this window, cancelling requires the "delete"
   // action on EXCURSIONS (manager override), not a hard block.
-  cutoffHours  Int      @default(24)
-  isActive     Boolean  @default(true)
+  cutoffHours  Int        @default(24)
+  isActive     Boolean    @default(true)
 
   rates      ExcursionRate[]
   schedules  ExcursionSchedule[]
@@ -1790,15 +1811,15 @@ model ExcursionSchedule {
   id              String        @id @default(uuid())
   excursionTypeId String
   excursionType   ExcursionType @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
-  daysOfWeek      String   // comma-separated day codes, e.g. "MON,WED,FRI"
-  departureTime   String   // "09:00" — when the trip actually leaves
-  meetingTime     String?  // "08:45" — when guests must be ready; distinct from departureTime
-  meetingPoint    String?  // "Main Jetty"
+  daysOfWeek      String // comma-separated day codes, e.g. "MON,WED,FRI"
+  departureTime   String // "09:00" — when the trip actually leaves
+  meetingTime     String? // "08:45" — when guests must be ready; distinct from departureTime
+  meetingPoint    String? // "Main Jetty"
   capacity        Int
   // Soft "at risk of not running" flag only, mirrored onto each generated
   // ExcursionDeparture — never blocks or auto-cancels anything.
   minCapacity     Int?
-  isActive        Boolean  @default(true)
+  isActive        Boolean       @default(true)
 
   departures ExcursionDeparture[]
 
@@ -1810,13 +1831,13 @@ model ExcursionSchedule {
 // half of "hybrid"). Capacity/meeting fields are copied from the schedule at
 // generation time but are independently editable per instance afterward.
 model ExcursionDeparture {
-  id              String        @id @default(uuid())
+  id              String             @id @default(uuid())
   excursionTypeId String
-  excursionType   ExcursionType @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
+  excursionType   ExcursionType      @relation(fields: [excursionTypeId], references: [id], onDelete: Cascade)
   // Null when hand-added rather than generated from a template. A regenerate run never
   // overwrites an existing departure for a date it already has one, generated or not.
-  scheduleId String?
-  schedule   ExcursionSchedule? @relation(fields: [scheduleId], references: [id])
+  scheduleId      String?
+  schedule        ExcursionSchedule? @relation(fields: [scheduleId], references: [id])
 
   departureDate DateTime // date only; time-of-day kept separate below
   departureTime String
@@ -1828,7 +1849,7 @@ model ExcursionDeparture {
   status String  @default("SCHEDULED") // SCHEDULED | CANCELLED | COMPLETED
   notes  String?
 
-  bookings ExcursionBooking[] @relation("DepartureBookings")
+  bookings          ExcursionBooking[] @relation("DepartureBookings")
   // Bookings that exist because THIS departure was cancelled (e.g. weather) and the
   // guest was moved to a replacement — see ExcursionBooking.movedFromDepartureId.
   movedBookingsAway ExcursionBooking[] @relation("MovedFromDeparture")
@@ -1850,8 +1871,8 @@ model ExcursionBooking {
   // Denormalized from departure -> excursionType -> property so every route can scope
   // by propertyId directly (assertPropertyAccess) without a multi-hop join — same
   // reasoning as Folio.propertyId.
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id])
+  propertyId  String
+  property    Property           @relation(fields: [propertyId], references: [id])
 
   reservationId      String?
   reservation        Reservation? @relation(fields: [reservationId], references: [id])
@@ -1877,12 +1898,12 @@ model ExcursionBooking {
   // Set only if cancelling this booking triggers an explicit refund Payment — never
   // automatic (matches how nothing else in this app auto-refunds either).
   refundPaymentId String?
-  refundPayment   Payment? @relation(fields: [refundPaymentId], references: [id])
+  refundPayment   Payment?       @relation(fields: [refundPaymentId], references: [id])
 
-  notes              String?
-  bookedByUserId     String
-  cancelledAt        DateTime?
-  cancellationReason String?
+  notes                String?
+  bookedByUserId       String
+  cancelledAt          DateTime?
+  cancellationReason   String?
   // Set when this booking exists because its original departure was cancelled and the
   // guest was moved to a replacement — points at the ORIGINAL departure, not the
   // current one, so the manifest history stays honest about what actually happened.
@@ -1892,10 +1913,363 @@ model ExcursionBooking {
   // the reverse of movedFromDepartureId, plain id with no relation (same convention
   // as bookedByUserId). Without this, the same already-moved booking could be
   // "moved" again, creating a duplicate booking for the same guest.
-  movedToBookingId String? @unique
+  movedToBookingId     String?             @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([departureId])
+}
+
+// ---------------------------------------------------------------------------
+// Spa Booking add-on — see .agents/docs/SPA_PLAN.md for the full design and the
+// rationale behind every decision below. Second consumer of PropertyModuleAccess
+// (the generic mechanism Excursions introduced above) — reused as-is, no schema
+// changes to that model.
+// ---------------------------------------------------------------------------
+
+model SpaTreatmentCategory {
+  id           String         @id @default(uuid())
+  propertyId   String
+  property     Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  displayOrder Int            @default(0)
+  isActive     Boolean        @default(true)
+  treatments   SpaTreatment[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([propertyId, name])
+}
+
+model SpaTreatment {
+  id                       String               @id @default(uuid())
+  propertyId               String
+  property                 Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  categoryId               String
+  category                 SpaTreatmentCategory @relation(fields: [categoryId], references: [id])
+  name                     String
+  shortName                String?
+  description              String?
+  defaultDurationMinutes   Int
+  preparationBufferMinutes Int                  @default(0)
+  cleanupBufferMinutes     Int                  @default(0)
+  chargeCodeId             String
+  chargeCode               ChargeCode           @relation(fields: [chargeCodeId], references: [id])
+  // Every v1 treatment requires exactly one therapist per participant + one shared
+  // room — the confirmed business rule. No requiresTherapist/requiresRoom flags:
+  // they'd be unused branching for a hypothetical treatment type that doesn't exist
+  // yet.
+  // How many guests can share one SpaAppointment (SPA_PLAN.md §3 row 7, Option A) —
+  // 1 = standard individual treatment (default), >1 = bookable as a couple/group
+  // session, each participant getting their own therapist within one shared room +
+  // time window.
+  maxParticipants          Int                  @default(1)
+  // PER_PERSON: rate.price x SpaAppointment.partySize. FLAT: rate.price regardless
+  // of partySize (a genuine package price, e.g. "Couple Massage"). Same shape as
+  // ExcursionType.pricingMode.
+  pricingMode              String               @default("PER_PERSON")
+  allowWalkIn              Boolean              @default(true)
+  allowInHouseGuest        Boolean              @default(true)
+  displayOrder             Int                  @default(0)
+  isActive                 Boolean              @default(true)
+
+  rates           SpaTreatmentRate[]
+  therapistSkills SpaTherapistTreatment[]
+  compatibleRooms SpaTreatmentRoom[]
+  appointments    SpaAppointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Dated pricing — same shape and non-overlapping-range rule as ExcursionRate/
+// AllocationRate. No per-rate currency field: the property's single default
+// currency is implicit, matching every other rate model in this app.
+model SpaTreatmentRate {
+  id            String       @id @default(uuid())
+  treatmentId   String
+  treatment     SpaTreatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  price         Float
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = open-ended; ranges validated non-overlapping in-app
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model SpaTherapist {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  employeeId   String? // optional link to an existing employee/user record; plain id, no FK requirement to a login
+  displayName  String
+  gender       String?
+  phone        String?
+  email        String?
+  isActive     Boolean  @default(true)
+  bookable     Boolean  @default(true)
+  displayOrder Int      @default(0)
+
+  skills     SpaTherapistTreatment[]
+  schedules  SpaTherapistSchedule[]
+  exceptions SpaTherapistAvailabilityException[]
+  // A therapist is assigned per participant, not per appointment — see
+  // SpaAppointmentParticipant.therapistId. No direct appointments[] relation here.
+  // Split into resolved-assignment vs. explicit-request, mirroring the two fields on
+  // SpaAppointmentParticipant itself.
+  assignedParticipants  SpaAppointmentParticipant[] @relation("AssignedTherapist")
+  requestedByAppointments SpaAppointmentParticipant[] @relation("RequestedTherapist")
+  guestPreferences      SpaGuestTherapistPreference[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SpaTherapistTreatment {
+  id                    String       @id @default(uuid())
+  therapistId           String
+  therapist             SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  treatmentId           String
+  treatment             SpaTreatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  qualified             Boolean      @default(true)
+  preferred             Boolean      @default(false)
+  customDurationMinutes Int?
+  notes                 String?
+
+  @@unique([therapistId, treatmentId])
+}
+
+model SpaRoom {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String
+  code         String?
+  description  String?
+  capacity     Int      @default(1) // must be >= the appointment's partySize to be a candidate room
+  roomType     String? // free-text coarse filter, e.g. "MASSAGE" | "SALON" | "OUTDOOR"
+  isActive     Boolean  @default(true)
+  bookable     Boolean  @default(true)
+  displayOrder Int      @default(0)
+
+  compatibleTreatments SpaTreatmentRoom[]
+  exceptions           SpaRoomAvailabilityException[]
+  appointments         SpaAppointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SpaTreatmentRoom {
+  id          String       @id @default(uuid())
+  treatmentId String
+  treatment   SpaTreatment @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  roomId      String
+  room        SpaRoom      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  preferred   Boolean      @default(false)
+
+  @@unique([treatmentId, roomId])
+}
+
+model SpaTherapistSchedule {
+  id            String       @id @default(uuid())
+  therapistId   String
+  therapist     SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  dayOfWeek     Int // 0-6
+  startTime     String // "HH:MM", same string convention as ExcursionSchedule.departureTime
+  endTime       String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  isActive      Boolean      @default(true)
+}
+
+model SpaTherapistAvailabilityException {
+  id            String       @id @default(uuid())
+  therapistId   String
+  therapist     SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  date          DateTime
+  startTime     String? // null + exceptionType UNAVAILABLE = whole day off
+  endTime       String?
+  exceptionType String // DAY_OFF | LEAVE | TRAINING | SICK | EXTENDED_HOURS | UNAVAILABLE
+  reason        String?
+  createdAt     DateTime     @default(now())
+}
+
+model SpaRoomAvailabilityException {
+  id            String   @id @default(uuid())
+  roomId        String
+  room          SpaRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date          DateTime
+  startTime     String?
+  endTime       String?
+  exceptionType String // MAINTENANCE | CLEANING | RENOVATION | PRIVATE_EVENT | UNAVAILABLE
+  reason        String?
+  createdAt     DateTime @default(now())
+}
+
+model SpaSettings {
+  propertyId String   @id
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  defaultOpeningTime              String  @default("09:00")
+  defaultClosingTime              String  @default("18:00")
+  slotIntervalMinutes             Int     @default(15)
+  defaultPreparationBufferMinutes Int     @default(0)
+  defaultCleanupBufferMinutes     Int     @default(15)
+  allowTentativeAppointments      Boolean @default(true)
+  tentativeHoldMinutes            Int     @default(20)
+  requireTherapistAtBooking       Boolean @default(true)
+  requireRoomAtBooking            Boolean @default(true)
+  allowAutoAssignment             Boolean @default(true)
+  chargeTiming                    String  @default("AT_BOOKING") // AT_BOOKING | AT_COMPLETION
+  cancellationCutoffHours         Int     @default(4)
+  lateCancellationChargeType      String  @default("NONE") // NONE | FULL | PERCENTAGE | FIXED
+  lateCancellationChargeValue     Float?
+  noShowChargeType                String  @default("NONE")
+  noShowChargeValue               Float?
+  noShowGraceMinutes              Int     @default(15)
+  requireCancellationReason       Boolean @default(true)
+  requireRescheduleReason         Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+}
+
+// The parent booking record — one shared room, one shared time window, one folio
+// charge. Multi-guest support (SPA_PLAN.md §3 row 7, Option A) lives one level down,
+// in SpaAppointmentParticipant: each guest gets their own therapist, but there is
+// exactly one SpaAppointment per booked session, not one per guest. No
+// appointmentNumber field, matching ExcursionBooking exactly (identified by id).
+model SpaAppointment {
+  id                               String       @id @default(uuid())
+  propertyId                       String // denormalized, same reasoning as ExcursionBooking.propertyId
+  property                         Property     @relation(fields: [propertyId], references: [id])
+  treatmentId                      String
+  treatment                        SpaTreatment @relation(fields: [treatmentId], references: [id])
+  treatmentNameSnapshot            String
+  durationMinutesSnapshot          Int
+  preparationBufferMinutesSnapshot Int
+  cleanupBufferMinutesSnapshot     Int
+  // Number of guests sharing this appointment, 1..treatment.maxParticipants at
+  // booking time — must equal participants.length.
+  partySize                        Int          @default(1)
+  // Total price for the WHOLE appointment (all participants), computed and locked at
+  // booking time, ALWAYS — regardless of chargeTiming. chargeTiming only controls
+  // WHEN the FolioLineItem is created, never WHEN the price is determined. No
+  // split-billing across participants in v1.
+  priceSnapshot                    Float
+  currencySnapshot                 String
+
+  appointmentDate  DateTime // date-only component
+  startTime        String // "HH:MM"
+  treatmentEndTime String // startTime + durationMinutesSnapshot
+  blockedUntilTime String // treatmentEndTime + cleanupBufferMinutesSnapshot — the real resource-hold end
+
+  // The one shared room for the whole party (capacity must be >= partySize).
+  // Nullable so a booking can be saved before room assignment when
+  // SpaSettings.requireRoomAtBooking is false.
+  roomId String?
+  room   SpaRoom? @relation(fields: [roomId], references: [id])
+
+  appointmentStatus String @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
+  paymentStatus     String @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
+  source            String @default("FRONT_DESK")
+
+  // Billing is single-folio — resolved from the participantIndex: 1 participant's
+  // guest identity, regardless of partySize.
+  folioId         String?
+  folio           Folio?         @relation(fields: [folioId], references: [id])
+  folioLineItemId String?        @unique
+  folioLineItem   FolioLineItem? @relation(fields: [folioLineItemId], references: [id])
+  refundPaymentId String?
+  refundPayment   Payment?       @relation(fields: [refundPaymentId], references: [id])
+
+  participants SpaAppointmentParticipant[]
+
+  notes                  String?
+  internalNotes          String? // operational notes only — no medical-record storage in v1
+  cancellationReasonCode String?
+  cancellationNotes      String?
+
+  bookedByUserId     String
+  cancelledByUserId  String?
+  completedByUserId  String?
+  checkedInAt        DateTime?
+  treatmentStartedAt DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  noShowAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, appointmentDate])
+  @@index([roomId, appointmentDate])
+}
+
+// One row per guest within a SpaAppointment — where the actual "multi-resource"
+// part of Option A lives: each participant is independently qualified, independently
+// checked for availability, and independently assigned a therapist. participantIndex
+// 1 is always the billing anchor (see SpaAppointment.folioId above); it has no other
+// ordering meaning beyond "1 is primary."
+model SpaAppointmentParticipant {
+  id               String         @id @default(uuid())
+  appointmentId    String
+  appointment      SpaAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  participantIndex Int            @default(1)
+
+  // XOR guest identity, validated in-route — same convention as
+  // ExcursionBooking/OutletAppointment. guestType (IN_HOUSE|WALK_IN) is derived from
+  // which of these is set, not stored separately.
+  reservationId      String?
+  reservation        Reservation? @relation(fields: [reservationId], references: [id])
+  walkInGuestName    String?
+  walkInGuestContact String?
+
+  // Nullable so a booking can be saved before therapist assignment when
+  // SpaSettings.requireTherapistAtBooking is false. This is the RESOLVED assignment
+  // (auto-picked or the honored request below) — always the source of truth for who's
+  // actually doing the treatment.
+  therapistId String?
+  therapist   SpaTherapist? @relation("AssignedTherapist", fields: [therapistId], references: [id])
+
+  // What the guest actually ASKED for, kept separate from therapistId so booking never
+  // conflates "auto-assigned" with "deliberately requested" — that distinction is what
+  // lets a completed booking's therapistId feed back into
+  // SpaGuestTherapistPreference ONLY when it reflects a genuine request, not every
+  // auto-assigned visit. At most one of these two is set (mutually exclusive: a
+  // specific-name request makes a gender filter moot).
+  requestedTherapistId String?
+  requestedTherapist   SpaTherapist? @relation("RequestedTherapist", fields: [requestedTherapistId], references: [id])
+  requestedGender      String? // MALE | FEMALE — a hard filter, not a sort preference (see SPA_PLAN.md addendum)
+
+  // Per-participant operational notes (pressure preference, etc.) — same restricted-
+  // notes-only caveat as SpaAppointment.internalNotes.
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([therapistId])
+  @@index([appointmentId])
+}
+
+// A guest's remembered therapist at ONE property — deliberately not on the generic
+// Profile model (ProfilePreference is free-text and untyped; this needs a real FK so
+// it can be joined against SpaTherapist's qualification/active/bookable state, not just
+// displayed). Scoped per-property since a guest visiting two resorts could reasonably
+// prefer different people at each. Written automatically whenever a booking honors an
+// explicit requestedTherapistId (see the appointments route) — no separate admin step.
+model SpaGuestTherapistPreference {
+  id          String       @id @default(uuid())
+  profileId   String
+  profile     Profile      @relation(fields: [profileId], references: [upid], onDelete: Cascade)
+  propertyId  String
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  therapistId String
+  therapist   SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([profileId, propertyId])
 }

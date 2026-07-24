@@ -664,6 +664,154 @@ async function main() {
     }
   }
 
+  // 12. Spa Booking add-on (see .agents/docs/SPA_PLAN.md) — Osta-enabled for this
+  // property, a catalog across three categories, three therapists with distinct
+  // skill sets and working hours, and three rooms (including one couple-capable
+  // room) — so the booking flow (guest search -> treatment -> date/time ->
+  // auto-assign) has real, varied data to exercise immediately after seeding. No
+  // sample SpaAppointment rows are seeded, matching how the Excursions section above
+  // only seeds catalog data (types/schedules/departures) and leaves actual bookings
+  // to be created by walking through the real booking flow, rather than
+  // hand-fabricating FolioLineItem/Payment state for fake historical transactions.
+  await prisma.propertyModuleAccess.upsert({
+    where: { propertyId_module: { propertyId: property.id, module: "SPA" } },
+    update: { enabled: true },
+    create: { propertyId: property.id, module: "SPA", enabled: true },
+  });
+
+  const spaChargeCodes: Array<{ code: string; description: string }> = [
+    { code: "SPA", description: "Spa Massage Revenue" },
+    { code: "SPA-FAC", description: "Spa Facial Revenue" },
+    { code: "SPA-CPL", description: "Spa Couple Treatment Revenue" },
+  ];
+  const spaChargeCodeByCode: Record<string, string> = {};
+  for (const cc of spaChargeCodes) {
+    const created = await prisma.chargeCode.upsert({
+      where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
+      update: {},
+      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, category: "OTHERS" },
+    });
+    spaChargeCodeByCode[cc.code] = created.id;
+  }
+
+  const spaCategoryDefs: Array<{ name: string; description: string }> = [
+    { name: "Massage", description: "Relaxing and therapeutic massages" },
+    { name: "Facial", description: "Facial treatments and skincare" },
+    { name: "Couple Treatments", description: "Treatments for two guests together" },
+  ];
+  const spaCategoryByName: Record<string, string> = {};
+  for (const def of spaCategoryDefs) {
+    const category =
+      (await prisma.spaTreatmentCategory.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
+      (await prisma.spaTreatmentCategory.create({
+        data: { propertyId: property.id, name: def.name, description: def.description },
+      }));
+    spaCategoryByName[def.name] = category.id;
+  }
+
+  // Deliberately varied working hours per therapist (not all 09-18) — realistic, and
+  // gives the availability engine genuine differences to resolve rather than three
+  // identical schedules that would never expose a scheduling edge case.
+  const spaTherapistDefs: Array<{ name: string; gender: string; phone: string; startTime: string; endTime: string }> = [
+    { name: "Aisha Rahman", gender: "FEMALE", phone: "555-0110", startTime: "08:00", endTime: "20:00" },
+    { name: "Fatima Ali", gender: "FEMALE", phone: "555-0111", startTime: "09:00", endTime: "18:00" },
+    { name: "Noor Hassan", gender: "MALE", phone: "555-0112", startTime: "10:00", endTime: "19:00" },
+  ];
+  const spaTherapistByName: Record<string, string> = {};
+  for (const def of spaTherapistDefs) {
+    const therapist =
+      (await prisma.spaTherapist.findFirst({ where: { propertyId: property.id, displayName: def.name } })) ??
+      (await prisma.spaTherapist.create({
+        data: { propertyId: property.id, displayName: def.name, gender: def.gender, phone: def.phone },
+      }));
+    spaTherapistByName[def.name] = therapist.id;
+
+    const hasSchedule = await prisma.spaTherapistSchedule.findFirst({ where: { therapistId: therapist.id } });
+    if (!hasSchedule) {
+      await prisma.spaTherapistSchedule.createMany({
+        data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+          therapistId: therapist.id,
+          dayOfWeek,
+          startTime: def.startTime,
+          endTime: def.endTime,
+          effectiveFrom: new Date("2020-01-01"),
+        })),
+      });
+    }
+  }
+
+  const spaRoomDefs: Array<{ name: string; capacity: number }> = [
+    { name: "Treatment Room 1", capacity: 1 },
+    { name: "Treatment Room 2", capacity: 1 },
+    { name: "Couple Treatment Room", capacity: 2 },
+  ];
+  const spaRoomByName: Record<string, string> = {};
+  for (const def of spaRoomDefs) {
+    const room =
+      (await prisma.spaRoom.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
+      (await prisma.spaRoom.create({ data: { propertyId: property.id, name: def.name, capacity: def.capacity } }));
+    spaRoomByName[def.name] = room.id;
+  }
+
+  // Deliberately uneven qualification (not every therapist does everything) so the
+  // booking engine's candidate-narrowing and auto-assignment are actually exercised
+  // rather than trivially satisfied by any therapist. The first name in each list is
+  // marked `preferred`.
+  const spaTreatmentDefs: Array<{
+    name: string; category: string; duration: number; prep: number; cleanup: number;
+    chargeCode: string; price: number; maxParticipants?: number; pricingMode?: string;
+    therapists: string[];
+  }> = [
+    { name: "Swedish Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "SPA", price: 80, therapists: ["Aisha Rahman", "Noor Hassan"] },
+    { name: "Deep Tissue Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "SPA", price: 90, therapists: ["Aisha Rahman"] },
+    { name: "Balinese Massage", category: "Massage", duration: 90, prep: 10, cleanup: 15, chargeCode: "SPA", price: 120, therapists: ["Fatima Ali"] },
+    { name: "Foot Massage", category: "Massage", duration: 30, prep: 5, cleanup: 10, chargeCode: "SPA", price: 40, therapists: ["Fatima Ali", "Aisha Rahman"] },
+    { name: "Facial Treatment", category: "Facial", duration: 45, prep: 10, cleanup: 15, chargeCode: "SPA-FAC", price: 70, therapists: ["Noor Hassan"] },
+    {
+      name: "Couple Massage", category: "Couple Treatments", duration: 60, prep: 10, cleanup: 20,
+      chargeCode: "SPA-CPL", price: 180, maxParticipants: 2, pricingMode: "FLAT",
+      therapists: ["Aisha Rahman", "Fatima Ali"],
+    },
+  ];
+
+  for (const def of spaTreatmentDefs) {
+    const treatment =
+      (await prisma.spaTreatment.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
+      (await prisma.spaTreatment.create({
+        data: {
+          propertyId: property.id,
+          categoryId: spaCategoryByName[def.category],
+          name: def.name,
+          defaultDurationMinutes: def.duration,
+          preparationBufferMinutes: def.prep,
+          cleanupBufferMinutes: def.cleanup,
+          chargeCodeId: spaChargeCodeByCode[def.chargeCode],
+          maxParticipants: def.maxParticipants ?? 1,
+          pricingMode: def.pricingMode ?? "PER_PERSON",
+          rates: { create: [{ price: def.price, effectiveFrom: new Date("2020-01-01") }] },
+        },
+      }));
+
+    for (const therapistName of def.therapists) {
+      const therapistId = spaTherapistByName[therapistName];
+      const existingSkill = await prisma.spaTherapistTreatment.findUnique({
+        where: { therapistId_treatmentId: { therapistId, treatmentId: treatment.id } },
+      });
+      if (!existingSkill) {
+        await prisma.spaTherapistTreatment.create({
+          data: { therapistId, treatmentId: treatment.id, qualified: true, preferred: def.therapists[0] === therapistName },
+        });
+      }
+    }
+  }
+
+  const spaSettingsExisting = await prisma.spaSettings.findUnique({ where: { propertyId: property.id } });
+  if (!spaSettingsExisting) {
+    await prisma.spaSettings.create({
+      data: { propertyId: property.id, defaultOpeningTime: "09:00", defaultClosingTime: "19:00" },
+    });
+  }
+
   console.log("\nVeyo enterprise seeded successfully.");
   console.log(`Login URL slug: /e/${veyo.slug}/login`);
   console.log("Users (password: password123):");
@@ -671,6 +819,7 @@ async function main() {
   console.log("  frontdesk@veyo.com (Front Desk)");
   console.log("  housekeeping@veyo.com (Housekeeping)");
   console.log("Excursions add-on: enabled, with Snorkelling Trip / Island Hopping / Night Fishing seeded.");
+  console.log("Spa add-on: enabled, with 6 treatments across 3 categories, 3 therapists, and 3 rooms (incl. a couple room) seeded.");
 }
 
 main()

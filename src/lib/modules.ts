@@ -24,6 +24,12 @@ export const MODULES = [
   // management (ExcursionType/Rate/Schedule) is a Controls tab gated by CONTROLS, not
   // this module — this module only covers day-to-day bookings.
   "EXCURSIONS",
+  // Booking/managing Spa appointments (see .agents/docs/SPA_PLAN.md). Same shape as
+  // EXCURSIONS above — a per-property PAID ADD-ON gated additionally by
+  // PropertyModuleAccess, catalog/setup (treatments/rates/therapists/rooms/schedules)
+  // is a Controls tab gated by CONTROLS, this module only covers day-to-day
+  // appointment booking/check-in/completion.
+  "SPA",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -46,4 +52,5 @@ export const MODULE_LABELS: Record<Module, string> = {
   CONTROLS: "Controls",
   ACTIVITY_LOG: "Activity Log",
   EXCURSIONS: "Excursions",
+  SPA: "Spa",
 };

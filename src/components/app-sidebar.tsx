@@ -29,7 +29,7 @@ export async function AppSidebar() {
   // must actually have it enabled, not just the enterprise. Grows one entry at a time
   // as new add-ons ship — see src/components/osta/property-module-access-manager.tsx's
   // own ADD_ON_MODULES list, which must stay in sync with this one.
-  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS"]);
+  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA"]);
   const currentPropertyId = await resolveCurrentPropertyId(ctx);
   const enabledAddOns = currentPropertyId
     ? new Set(

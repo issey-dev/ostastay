@@ -114,14 +114,14 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             <p className="text-sm text-muted-foreground">Loading...</p>
           ) : (
             <>
-              <div className="bg-card p-4 rounded-xl border shadow-sm flex justify-between items-center">
+              <div className="bg-card p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Balance</p>
                   <p className={`text-3xl font-bold ${balance > 0 ? "text-destructive" : balance < 0 ? "text-success" : "text-foreground"}`}>
                     ${balance.toFixed(2)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => window.open(`/e/${slug}/dashboard/folios/${folioId}/print?type=tax`, "_blank")}>
                     <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                   </Button>

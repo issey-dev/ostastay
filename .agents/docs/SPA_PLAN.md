@@ -1,15 +1,77 @@
 # Spa Booking Add-on — Review & Implementation Plan
 
 > **Status legend**: ✅ done · 🚧 in progress · ⬜ not started
-> **Overall**: **⬜ Not started — plan only, pending approval.** This document is the
-> output of a codebase review + design pass (2026-07-22), following the same shape as
+> **Overall**: **🚧 Phase 3 done, Phase 4 next (2026-07-23).** Phase 3 (walk-in
+> booking) extends `POST /api/spa/appointments` to accept `folioId` (an already-open
+> walk-in folio, opened via the existing `POST /api/folios/walk-in`) as the billing
+> anchor's alternative to `reservationId`, exactly like Excursions' own Phase 3 —
+> plus, since companions on a couple/group treatment are never billed separately,
+> they can be a plain `walkInGuestName` with no folio at all. `GET
+> /api/spa/appointments?openWalkIns=true` lists still-open walk-in-billed
+> appointments (the "pay later" retrieval, same reasoning as Excursions'). The
+> front-office page gained the Guest/Walk-in mode toggle and `WalkInFolioPanel`
+> integration, reused with zero new payment UI. 5 new tests (14 total in
+> `spa-booking.test.ts`) cover the walk-in booking itself, the closed-folio-folio-
+> smuggling guard, a closed-folio rejection, a walk-in-primary + plain-name-companion
+> couple booking, and the open-walk-ins listing. Phase 0 (module
+> registration + schema) and Phase 1 (Controls catalog: treatments, therapists, rooms,
+> settings) are complete. Phase 2 (availability engine + in-house booking) is
+> complete: `src/lib/spa-availability.ts` (candidate rooms/therapists, deterministic
+> auto-assignment, prep/cleanup-buffer-aware overlap blocking — a real gap was found
+> and fixed mid-phase, see below), `src/lib/spa-resource-lock.ts` (the in-process
+> mutex from §7), `POST/GET /api/spa/appointments` (+ `[id]`, + `availability`), and
+> the front-office booking page at `/e/[slug]/dashboard/spa`. Covered by
+> `tests/business-rules/spa-booking.test.ts` (9 tests: happy path with real folio
+> posting, therapist double-book rejection, room double-book rejection, couple
+> treatment distinct-therapist assignment, and — the one the request called out as
+> most critical — a genuine concurrent-request race test asserting exactly one of two
+> simultaneous bookings for the same only-available therapist succeeds). The
+> tape-chart UI and the rest of the appointment lifecycle
+> (check-in/complete/cancel/no-show) are still ahead — see §16.
+>
+> **Two real bugs found and fixed during Phase 2 build** (both by re-reading the
+> plan against the actual committed schema/code, not by live-testing — worth noting
+> since the project's own convention is that live-testing usually catches these):
+> 1. `getAvailableRooms`'s "roomType fallback" referenced `SpaTreatment.roomType`,
+>    a field that was never added to the schema (only `SpaRoom.roomType` exists,
+>    a room-side display label). Fixed by dropping that fallback tier — no
+>    compatibility configured now falls straight through to every bookable room at
+>    the property, one tier simpler than §7's original text described.
+> 2. The availability engine only extended the blocked window's *end* (cleanup
+>    buffer) via `blockedUntilTime`, never its *start* (preparation buffer) — meaning
+>    `preparationBufferMinutes` was captured on the schema but never actually blocked
+>    anything, contradicting the request's explicit "the buffer should block the
+>    resource even if it is not shown as guest treatment time." Fixed by deriving an
+>    effective `blockedFromTime` (`startTime` minus the treatment's own prep buffer)
+>    for every overlap check, on both the requested slot and every existing
+>    appointment being checked against (using that appointment's own snapshotted
+>    prep buffer).
+>
+> This document is the output of a
+> codebase review + design pass (2026-07-22), following the same shape as
 > [`EXCURSIONS_PLAN.md`](EXCURSIONS_PLAN.md) (context → architecture decisions → schema
-> → phases → confirmed decisions). No code has been written. Six open decisions in §22
-> need explicit sign-off before Phase 0 starts. The concurrency strategy in §7 was
-> corrected mid-review after an unverified assumption ("SQLite serializes everything")
-> was checked against the actual `schema.prisma`/`src/lib/db.ts` config and found
-> unsubstantiated — replaced with a concrete in-process mutex. See §21 for the full
-> list of risks and trade-offs surfaced during review.
+> → phases → confirmed decisions). The concurrency strategy in §7 was corrected
+> mid-review after an unverified assumption ("SQLite serializes everything") was
+> checked against the actual `schema.prisma`/`src/lib/db.ts` config and found
+> unsubstantiated — replaced with a concrete in-process mutex.
+>
+> **Owner decisions confirmed 2026-07-23** (§22, superseding the plan's own
+> recommendation where noted):
+> 1. Catalog/setup permissions gated under `CONTROLS` (matches the plan's
+>    recommendation).
+> 2. Couple/group treatments: **Option A — full multi-resource support in v1**,
+>    *not* the plan's original Option B recommendation. This changed the
+>    `SpaAppointment` schema materially — see §3 row 7 and §4, both rewritten
+>    2026-07-23 to a parent/child `SpaAppointment` + `SpaAppointmentParticipant`
+>    design (multiple guests, each with their own therapist, sharing one room and one
+>    folio charge) rather than the originally-planned `linkedAppointmentId` pairing
+>    workaround.
+> 3. In-house guest identity: live-join via `reservationId` (matches the plan's
+>    recommendation) — now stored per-participant, see §4.
+>
+> Remaining three open items (charge-timing scope, Phase 6 priority, therapist-schedule
+> permission gating) are unchanged from §22 — proceeding with the plan's own
+> recommendation on each, revisit later without schema rework.
 
 ## Context
 
@@ -157,8 +219,8 @@ cross-property-same-enterprise 403, add-on-off-by-default 403, and Osta-only-tog
 | 4 | Cashiering | Independent `CASHIERING update`/`create` check for voids/refunds, degrading gracefully (cancel succeeds, charge flagged unresolved) rather than blocking | Copies Excursions' Phase-4 correction exactly |
 | 5 | **Therapist/room double-booking** | **Hard block**, not the soft-warning-only model Excursions uses for seat capacity | The original request explicitly requires this, and it's the right call architecturally too: an excursion seat is a soft capacity limit, but a therapist or room is a single physical resource — two guests literally cannot occupy it at once. This is an intentional, justified deviation from Excursions' philosophy, not an inconsistency. |
 | 6 | **Property timezone** | **Do not invent a property-timezone system for v1.** Mirror the app's existing (imperfect) server-local-time convention, add a `combineAppointmentDateTime()` helper mirroring `combineDepartureDateTime()`, and add explicit regression tests for same-day/past-time comparisons | The original request assumes timezone handling already exists; it does not, anywhere in this app. Building a real property-timezone system is a cross-cutting change far beyond Spa's scope and would make Spa inconsistent with every other date/time computation in the codebase (business date, Excursions, reservations). Flagged as a real platform gap worth a separate initiative, not something Spa should solve alone. |
-| 7 | **Couple treatments** | **Option B (phase two)** — v1 ships one primary guest + one therapist + one room per `SpaAppointment`. A lightweight `linkedAppointmentId` (self-relation, nullable) lets staff book two ordinary appointments as a visibly-linked pair (same start time, same couple room, separate therapists) without a multi-resource schema. **One of the pair is the pricing "primary"** — it alone carries `folioId`/`folioLineItemId` and the full snapshot; the "secondary" appointment has `priceSnapshot: 0` and no folio linkage, so a couple treatment is charged exactly once, never twice | No multi-resource booking pattern exists anywhere in this codebase to build on (Excursions/OutletAppointment are both single-resource). Full Option A (arbitrary N participants/therapists per appointment) is a materially bigger schema and UI lift for a "small hotel spa" v1. `linkedAppointmentId` gets the common case (two people, two therapists, one room) working now without foreclosing a real `SpaAppointmentResource` child table later. |
-| 7b | **In-house guest identity: snapshot vs. live join** | **Live-join via `reservationId`, no `guestNameSnapshot`/`roomNumberSnapshot` fields** — matches `ExcursionBooking` exactly | The original request's draft schema listed snapshot fields for guest name/room number; `ExcursionBooking` deliberately has neither and instead live-joins the reservation, so the tape chart always reflects the guest's *current* room (useful after a room move). Trade-off: if a reservation is later deleted, the historical appointment loses its friendly guest label. **Flagging as a real fork from the request's draft, not an oversight** — the alternative (snapshot at booking, like walk-ins already do) is one field-set away if preferred. |
+| 7 | **Couple/group treatments** | **Option A, confirmed by the app owner 2026-07-23** — full multi-resource support in v1. One `SpaAppointment` (shared room, shared time window, one folio charge) has N `SpaAppointmentParticipant` child rows, each with its own guest identity (XOR reservation/walk-in) and its own assigned therapist. `SpaTreatment.maxParticipants` (default 1) caps how many guests a given treatment allows sharing one appointment. **Billing stays single-folio**: the participant with `participantIndex: 1` is the billing anchor whose reservation/walk-in identity resolves the folio — the same "one purchase, one folio, covers multiple people" precedent `ExcursionBooking` already established with its `adultCount/childCount/infantCount` on one booking, just generalized to independent per-guest therapist assignment. No split-billing across participants in v1 (nothing else in this app splits one purchase across multiple folios either). | No multi-resource booking pattern exists anywhere in this codebase to build on (Excursions/OutletAppointment are both single-resource) — this is genuinely new ground for the app, not an adaptation of an existing pattern. Scoped deliberately to keep it buildable: one shared room/time-window per appointment (no mixed-duration group sessions), one folio charge (no split billing), each participant's *therapist* assignment is independent (the actual "multi-resource" part) — this is the smallest schema that's honestly "Option A" rather than a relabeled Option B. |
+| 7b | **In-house guest identity: snapshot vs. live join** — confirmed 2026-07-23: live-join | **Live-join via `reservationId` on each `SpaAppointmentParticipant`, no `guestNameSnapshot`/`roomNumberSnapshot` fields** — matches `ExcursionBooking` exactly | The original request's draft schema listed snapshot fields for guest name/room number; `ExcursionBooking` deliberately has neither and instead live-joins the reservation, so the tape chart always reflects the guest's *current* room (useful after a room move). Trade-off, accepted: if a reservation is later deleted, the historical appointment loses its friendly guest label. |
 | 8 | Charge timing | v1 supports **both** `AT_BOOKING` (default) and `AT_COMPLETION`, controlled by `SpaSettings.chargeTiming` | This is called out as a confirmed operational preference in the original request, not a nice-to-have — but it's the single biggest complexity add in this plan (see §21 Risks). `AT_BOOKING` mirrors Excursions exactly (appointment + FolioLineItem created together in one transaction); `AT_COMPLETION` creates the appointment with `folioId: null`/`paymentStatus: NOT_POSTED` and posts the charge as part of the "Complete" transition. |
 | 9 | Packages / memberships / notifications | **Deferred**, schema left extensible (see §16, §14) | Explicitly optional/future in the original request; no existing notification-channel abstraction was found in this codebase during review (only a PDF-generation utility, `generateTablePdf`), so v1 ships a printable confirmation only, same as Excursions' manifest-pdf. |
 | 10 | Resource compatibility | Direct `SpaTreatmentRoom` join (treatment ↔ specific room, `preferred` flag), plus an optional `roomType` string on `SpaRoom` for coarser filtering | Matches the original request's suggestion; avoids inventing a full RoomType taxonomy for spa (unlike the hotel's own `RoomType`, which is unrelated) |
@@ -207,11 +269,19 @@ model SpaTreatment {
   cleanupBufferMinutes      Int      @default(0)
   chargeCodeId              String
   chargeCode                ChargeCode @relation(fields: [chargeCodeId], references: [id])
-  // Every v1 treatment requires exactly one therapist + one room — the confirmed
-  // business rule. No requiresTherapist/requiresRoom flags: they'd be unused
-  // branching for a hypothetical treatment type that doesn't exist yet — adding them
-  // back later is a one-line migration if a real need shows up.
-  isCoupleTreatment         Boolean  @default(false)       // needs a room with capacity >= 2; booked as a linked primary/secondary pair (§3.7), not a single multi-resource row
+  // Every v1 treatment requires exactly one therapist per participant + one shared
+  // room — the confirmed business rule. No requiresTherapist/requiresRoom flags:
+  // they'd be unused branching for a hypothetical treatment type that doesn't exist
+  // yet — adding them back later is a one-line migration if a real need shows up.
+  // How many guests can share one SpaAppointment (§3 row 7, Option A, confirmed
+  // 2026-07-23) — 1 = standard individual treatment (unchanged default), >1 = the
+  // treatment can be booked as a couple/group session, each participant getting
+  // their own therapist within one shared room + time window.
+  maxParticipants           Int      @default(1)
+  // PER_PERSON: rate.price x SpaAppointment.partySize. FLAT: rate.price regardless
+  // of partySize (a genuine package price for e.g. "Couple Massage"). Same shape as
+  // ExcursionType.pricingMode.
+  pricingMode               String   @default("PER_PERSON")
   allowWalkIn               Boolean  @default(true)
   allowInHouseGuest         Boolean  @default(true)
   displayOrder              Int      @default(0)
@@ -251,7 +321,9 @@ model SpaTherapist {
   skills        SpaTherapistTreatment[]
   schedules     SpaTherapistSchedule[]
   exceptions    SpaTherapistAvailabilityException[]
-  appointments  SpaAppointment[]
+  // Note: no direct appointments[] back-relation — a therapist is assigned per
+  // participant now (see SpaAppointmentParticipant.therapistId), not per appointment.
+  participantAssignments SpaAppointmentParticipant[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -276,7 +348,7 @@ model SpaRoom {
   name          String
   code          String?
   description   String?
-  capacity      Int      @default(1) // 2 = couple-capable
+  capacity      Int      @default(1) // must be >= the appointment's partySize to be a candidate room
   roomType      String?  // free-text coarse filter, e.g. "MASSAGE" | "SALON" | "OUTDOOR"
   isActive      Boolean  @default(true)
   bookable      Boolean  @default(true)
@@ -359,46 +431,50 @@ model SpaSettings {
   updatedAt                     DateTime @updatedAt
 }
 
+// The parent booking record — one shared room, one shared time window, one folio
+// charge. Multi-guest support (§3 row 7, Option A) lives one level down, in
+// SpaAppointmentParticipant: each guest gets their own therapist, but there is
+// exactly one SpaAppointment per booked session, not one per guest. No
+// appointmentNumber field, matching ExcursionBooking exactly (identified by id;
+// nothing else in this app's add-on modules mints a human-readable booking number).
 model SpaAppointment {
   id                    String   @id @default(uuid())
   propertyId            String   // denormalized, same reasoning as ExcursionBooking.propertyId
   property              Property @relation(fields: [propertyId], references: [id])
-  appointmentNumber      Int     // per-property sequence via allocateSequenceNumber(), same as confirmation numbers
   treatmentId           String
   treatment             SpaTreatment @relation(fields: [treatmentId], references: [id])
   treatmentNameSnapshot String
   durationMinutesSnapshot Int
   preparationBufferMinutesSnapshot Int
   cleanupBufferMinutesSnapshot     Int
-  // Computed and locked at booking time, ALWAYS — regardless of chargeTiming. A later
-  // rate/tax-profile edit, or a deferred AT_COMPLETION posting, must never recompute
-  // this; chargeTiming only controls WHEN the FolioLineItem is created, never WHEN
-  // the price is determined. (0 on a couple-treatment "secondary" appointment — see
-  // §3.7 — since the primary carries the real charge.)
+  // Number of guests sharing this appointment, 1..treatment.maxParticipants at
+  // booking time — must equal participants.length.
+  partySize             Int      @default(1)
+  // Total price for the WHOLE appointment (all participants), computed and locked
+  // at booking time, ALWAYS — regardless of chargeTiming. A later rate/tax-profile
+  // edit, or a deferred AT_COMPLETION posting, must never recompute this;
+  // chargeTiming only controls WHEN the FolioLineItem is created, never WHEN the
+  // price is determined. No split-billing across participants in v1 — see §3 row 7.
   priceSnapshot         Float
   currencySnapshot      String
-
-  // XOR guest identity, validated in-route — same convention as ExcursionBooking/OutletAppointment
-  reservationId         String?
-  reservation           Reservation? @relation(fields: [reservationId], references: [id])
-  walkInGuestName       String?
-  walkInGuestContact    String?
 
   appointmentDate       DateTime  // date-only component
   startTime             String    // "HH:MM"
   treatmentEndTime      String    // startTime + durationMinutesSnapshot
   blockedUntilTime      String    // treatmentEndTime + cleanupBufferMinutesSnapshot — the real resource-hold end
 
-  therapistId           String?
-  therapist             SpaTherapist? @relation(fields: [therapistId], references: [id])
+  // The one shared room for the whole party (capacity must be >= partySize).
+  // Nullable so a booking can be saved before room assignment when
+  // SpaSettings.requireRoomAtBooking is false.
   roomId                String?
   room                  SpaRoom? @relation(fields: [roomId], references: [id])
 
   appointmentStatus     String   @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
   paymentStatus         String   @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
-  guestType             String   // IN_HOUSE | WALK_IN
   source                String   @default("FRONT_DESK")
 
+  // Billing is single-folio (§3 row 7) — resolved from the participantIndex: 1
+  // participant's guest identity, regardless of partySize.
   folioId               String?
   folio                 Folio? @relation(fields: [folioId], references: [id])
   folioLineItemId       String? @unique
@@ -406,13 +482,7 @@ model SpaAppointment {
   refundPaymentId       String?
   refundPayment         Payment? @relation(fields: [refundPaymentId], references: [id])
 
-  // Couple-treatment pairing (§3.7) — a real self-relation, not a bare scalar id.
-  // isPrimaryForLink distinguishes which side carries the charge (see priceSnapshot
-  // comment above): exactly one of a linked pair has isPrimaryForLink: true.
-  linkedAppointmentId   String?          @unique
-  linkedAppointment     SpaAppointment?  @relation("SpaAppointmentLink", fields: [linkedAppointmentId], references: [id])
-  linkedFrom            SpaAppointment?  @relation("SpaAppointmentLink")
-  isPrimaryForLink       Boolean?
+  participants           SpaAppointmentParticipant[]
 
   notes                 String?
   internalNotes          String? // operational notes only — no medical-record storage in v1, see §21
@@ -432,21 +502,62 @@ model SpaAppointment {
   updatedAt             DateTime @updatedAt
 
   @@index([propertyId, appointmentDate])
-  @@index([therapistId, appointmentDate])
   @@index([roomId, appointmentDate])
-  @@unique([propertyId, appointmentNumber])
+}
+
+// One row per guest within a SpaAppointment. This is where the actual "multi-
+// resource" part of Option A lives: each participant is independently qualified,
+// independently checked for availability, and independently assigned a therapist —
+// two participants on the same appointment can never end up with the same
+// therapist (they're needed in the same room at the same time). participantIndex 1
+// is always the billing anchor (see SpaAppointment.folioId above); participantIndex
+// has no other ordering meaning beyond "1 is primary."
+model SpaAppointmentParticipant {
+  id              String         @id @default(uuid())
+  appointmentId   String
+  appointment     SpaAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  participantIndex Int           @default(1)
+
+  // XOR guest identity, validated in-route — same convention as
+  // ExcursionBooking/OutletAppointment. guestType (IN_HOUSE|WALK_IN) is derived from
+  // which of these is set, not stored separately — one source of truth.
+  reservationId      String?
+  reservation        Reservation? @relation(fields: [reservationId], references: [id])
+  walkInGuestName    String?
+  walkInGuestContact String?
+
+  // Nullable so a booking can be saved before therapist assignment when
+  // SpaSettings.requireTherapistAtBooking is false.
+  therapistId     String?
+  therapist       SpaTherapist?  @relation(fields: [therapistId], references: [id])
+
+  // Per-participant operational notes (pressure preference, etc.) — same restricted-
+  // notes-only caveat as SpaAppointment.internalNotes, see §21.
+  notes           String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([therapistId])
+  @@index([appointmentId])
 }
 ```
 
 Existing models gain only back-relation lists (`Property.spaTreatmentCategories` /
 `.spaAppointments` / etc., `ChargeCode.spaTreatments`, `Folio.spaAppointments`,
-`FolioLineItem.spaAppointment`, `Reservation.spaAppointments`,
+`FolioLineItem.spaAppointment`, `Reservation.spaAppointmentParticipations`,
 `Payment.refundedSpaAppointments`) — same mechanical pattern as Excursions' additions.
 
-**Overlap query** used for both therapist and room hard-blocking (§7):
-`existing.startTime < requested.blockedUntilTime AND existing.blockedUntilTime >
-requested.startTime`, restricted to `appointmentStatus IN (CONFIRMED, CHECKED_IN,
-IN_TREATMENT)` plus `TENTATIVE` rows younger than `tentativeHoldMinutes`.
+**Overlap queries** used for hard-blocking (§7), run inside the booking transaction:
+- **Room**: `existing.roomId = requested.roomId AND existing.startTime <
+  requested.blockedUntilTime AND existing.blockedUntilTime > requested.startTime`,
+  restricted to `SpaAppointment.appointmentStatus IN (CONFIRMED, CHECKED_IN,
+  IN_TREATMENT)` plus `TENTATIVE` rows younger than `tentativeHoldMinutes`.
+- **Therapist**: same time-window predicate, but joined through
+  `SpaAppointmentParticipant.therapistId = requested.therapistId` up to its parent
+  `SpaAppointment` for the date/time/status filter — checked independently per
+  participant being assigned, so two participants on the same new appointment can
+  never be assigned the same therapist even before either is persisted.
 
 ---
 
@@ -490,24 +601,35 @@ cleanup is still nominally underway.
 ## 7. Therapist/room availability & concurrency
 
 **Availability calculation** (server-computed at slot-picker time, and **re-validated
-identically** at save time — never trust a client-cached slot list):
-1. Candidate therapists = `SpaTherapistTreatment.qualified = true` for the treatment.
-2. Candidate rooms = `SpaTreatmentRoom` compatible rooms (or `roomType` match if no
-   explicit mapping rows exist for that treatment), filtered to `capacity >= 2` when
-   `treatment.isCoupleTreatment`.
-3. Subtract therapists/rooms with a `SpaTherapistAvailabilityException` /
-   `SpaRoomAvailabilityException` covering the slot.
-4. Restrict to therapist working hours (`SpaTherapistSchedule` for that day-of-week,
-   respecting `effectiveFrom/To`).
-5. Subtract any therapist/room with an overlapping blocking `SpaAppointment` (§4's
-   overlap query).
-6. Remaining pairs = valid slots.
+identically** at save time — never trust a client-cached slot list). Room and therapist
+availability are computed separately, since a room is shared by the whole party but
+each participant needs their own therapist:
 
-**Auto-assignment rule** (deterministic, not random): qualified → available for the
-full `blockedUntilTime` window → prefers `SpaTherapistTreatment.preferred = true` →
-lowest appointment count that day (workload balancing) → stable tie-break by
-`therapist.id`. Same ordering logic applied independently to room selection (preferred
-compatible room first, then any compatible).
+*Room candidates* (one per appointment, regardless of `partySize`):
+1. `SpaTreatmentRoom` compatible rooms (or `roomType` match if no explicit mapping
+   rows exist for that treatment), filtered to `capacity >= partySize`.
+2. Subtract rooms with a `SpaRoomAvailabilityException` covering the slot.
+3. Subtract rooms with an overlapping blocking `SpaAppointment` (§4's room overlap
+   query).
+
+*Therapist candidates* (computed independently per participant slot, 1..`partySize`):
+1. `SpaTherapistTreatment.qualified = true` for the treatment.
+2. Subtract therapists with a `SpaTherapistAvailabilityException` covering the slot.
+3. Restrict to therapist working hours (`SpaTherapistSchedule` for that day-of-week,
+   respecting `effectiveFrom/To`).
+4. Subtract any therapist with an overlapping blocking `SpaAppointment` via
+   `SpaAppointmentParticipant` (§4's therapist overlap query) — **and** subtract
+   whichever therapists have already been picked for an earlier participant slot
+   *within this same booking attempt*, so two participants on one new appointment can
+   never land on the same therapist.
+
+**Auto-assignment rule** (deterministic, not random): for the room — available for the
+full `blockedUntilTime` window → prefers a `SpaTreatmentRoom.preferred = true` match →
+stable tie-break by `room.id`. For each participant's therapist, assigned in
+`participantIndex` order (1 first) so each later pick already excludes earlier picks:
+qualified → available for the full `blockedUntilTime` window → prefers
+`SpaTherapistTreatment.preferred = true` → lowest appointment-participant count that
+day (workload balancing) → stable tie-break by `therapist.id`.
 
 **Concurrency strategy — corrected during review.** An earlier draft of this plan
 asserted "SQLite serializes writes, so a `$transaction` alone is race-safe" as if it
@@ -525,11 +647,14 @@ Corrected approach, in order of preference:
    Node.js process (no evidence anywhere in this codebase of horizontal scaling or a
    multi-instance deployment), add a small in-process keyed async mutex (e.g. a
    `Map<string, Promise>` keyed by `` `${propertyId}:therapist:${therapistId}` `` /
-   `` `${propertyId}:room:${roomId}` ``) that the booking/reschedule route acquires
-   *before* opening the `$transaction` and releases after it commits. This makes the
-   overlap-check → insert sequence provably atomic at the JS level regardless of what
-   the SQLite connection pool does underneath, costs nothing at this app's scale, and
-   doesn't require a new external dependency (a ~20-line utility).
+   `` `${propertyId}:room:${roomId}` ``) that the booking/reschedule route acquires —
+   for a multi-participant booking, **all** locks (one room key + one key per
+   assigned therapist) are acquired together before the `$transaction` opens and
+   released together after it settles, so a partial lock set is never held — and
+   releases after it commits. This makes the overlap-check → insert sequence provably
+   atomic at the JS level regardless of what the SQLite connection pool does
+   underneath, costs nothing at this app's scale, and doesn't require a new external
+   dependency (a ~20-line utility).
 3. **This is explicitly a single-process answer.** If the app ever runs multiple
    instances against a shared database, an in-process mutex stops being sufficient and
    this needs revisiting with real row-level locking or a unique-constraint-based
@@ -576,12 +701,12 @@ inconsistency — worth doing correctly from the start rather than copying a kno
   **Walk-in identity gap, and how it's resolved**: Excursions always reads walk-in
   identity off the folio (`Folio.walkInGuestName`) because it always creates the
   folio at booking time. `AT_COMPLETION` cannot assume a folio exists yet at booking,
-  so `SpaAppointment.walkInGuestName`/`walkInGuestContact` are captured directly on
-  the appointment record at booking time instead (already present in the schema
-  regardless of timing mode). The "Complete" action then either finds the guest's
-  already-open folio (in-house) or opens a new walk-in folio using the appointment's
-  own captured identity (walk-in), and posts the `FolioLineItem` using the
-  already-locked snapshot, in the same transaction as the `COMPLETED` status flip.
+  so `SpaAppointmentParticipant.walkInGuestName`/`walkInGuestContact` (on the
+  `participantIndex: 1` row — the billing anchor, see §4) are captured directly at
+  booking time instead. The "Complete" action then either finds that guest's
+  already-open folio (in-house) or opens a new walk-in folio using the captured
+  identity (walk-in), and posts the `FolioLineItem` using the already-locked
+  snapshot, in the same transaction as the `COMPLETED` status flip.
 - Walk-in pay-now/pay-later: identical to Excursions once a folio exists —
   `WalkInFolioPanel` handles it with zero new payment UI.
 - In-house: posts to the reservation's existing open folio, respecting the same
@@ -926,14 +1051,16 @@ confirm the module blocks new bookings while preserving history.
   single largest scope/complexity add in this plan and the first thing to cut if the
   timeline is tight (fall back to `AT_BOOKING`-only, ship `AT_COMPLETION` as a fast
   follow).
-- **Couple treatments are Option B** (§3.7) — the `linkedAppointmentId` workaround
-  covers the realistic small-hotel case (two guests, two therapists, one couple room)
-  but is not a true multi-resource model; a hotel wanting 3+ person treatments would
-  need the deferred `SpaAppointmentResource` design.
-- **Catalog permission grouping under `CONTROLS` rather than a new `SPA_CONTROLS`**
-  (§3.2) is a direct deviation from the request's named module — flagged explicitly for
-  sign-off since it's the one place this plan overrides an explicit name in the
-  original request in favor of matching existing convention.
+- **Couple/group treatments are genuinely Option A now** (§3 row 7, confirmed
+  2026-07-23) — `SpaAppointmentParticipant` is new ground for this codebase (no
+  existing multi-resource booking pattern to lean on), so it carries more
+  implementation and testing risk than the rest of this plan, which is largely
+  "do what Excursions already did." Scoped narrowly (one room, one time window, one
+  folio charge, independent per-participant therapists only) specifically to keep
+  that risk bounded — a request for split billing or mixed-duration group sessions
+  would need real rework, not a field addition.
+- **Catalog permission grouping under `CONTROLS`** (§3.2) was confirmed matching
+  Excursions' convention rather than the original request's `SPA_CONTROLS` wording.
 - **Sensitive guest notes** (allergies, medical, pregnancy) use only the existing
   restricted operational-notes field (`internalNotes`) — no new permission tier or
   data-retention policy was found in this codebase to build a real sensitive-profile
@@ -942,26 +1069,119 @@ confirm the module blocks new bookings while preserving history.
 
 ---
 
-## 22. Open decisions for explicit sign-off before Phase 0 starts
+## 22. Open decisions
 
-1. Catalog permission under `CONTROLS` (matches Excursions) vs. a dedicated
-   `SPA_CONTROLS` module (matches the original request's literal wording) — recommend
-   `CONTROLS`.
-2. Couple treatments: Option B lightweight `linkedAppointmentId` pairing for v1 vs.
-   investing in full multi-resource `SpaAppointmentResource` now — recommend Option B.
-3. `AT_COMPLETION` charge timing in v1 scope vs. deferred to fast-follow (recommend
-   keeping in scope per the confirmed preference, but noting it as the first cut
-   candidate under time pressure).
-4. Phase 6 (therapist absence/room closure reassignment + exception queue) as
-   required-for-v1 vs. fast-follow — recommend required, given how central "a
-   therapist calls in sick" is to real small-spa operations, but flagging it as
-   negotiable.
-5. Therapist schedules/availability exceptions gated under `CONTROLS` (simplicity, no
-   precedent either way) vs. under `SPA update` (lets front-desk/spa-reception record
-   same-day therapist absence without full Controls access) — recommend `CONTROLS`
-   for v1 but this is genuinely unsettled, see §3's nuance note.
-6. In-house guest identity on `SpaAppointment`: live-join via `reservationId` only
-   (matches `ExcursionBooking`, no snapshot fields) vs. snapshotting
-   `guestNameSnapshot`/`roomNumberSnapshot` at booking time (matches the original
-   request's draft schema) — recommend live-join for consistency with the direct
-   precedent, but noting the original draft explicitly wanted snapshots.
+**Resolved 2026-07-23** (see the status header at the top of this doc):
+1. ✅ Catalog permission under `CONTROLS` — confirmed, matches Excursions.
+2. ✅ Couple/group treatments — **Option A, full multi-resource in v1** (overrides
+   this plan's own Option B recommendation) — `SpaAppointment` +
+   `SpaAppointmentParticipant`, see §3 row 7 and §4.
+6. ✅ In-house guest identity — confirmed live-join via `reservationId`, now stored
+   per-participant (§4).
+
+**Still open, proceeding with the plan's recommendation, revisit without schema
+rework if needed:**
+3. `AT_COMPLETION` charge timing is in v1 scope per the confirmed operational
+   preference — first thing to cut under time pressure if needed (fall back to
+   `AT_BOOKING`-only).
+4. Phase 6 (therapist absence/room closure reassignment + exception queue) is
+   treated as required-for-v1 — safely deferrable to a fast-follow if timeline is
+   tight.
+5. Therapist schedules/availability exceptions gated under `CONTROLS` for v1 (§3's
+   nuance note) — could move to `SPA update` later without a schema change, just a
+   permission-check line in the route.
+
+---
+
+## Addendum — Therapist requests, gender preference, and the room-search gap (2026-07-23)
+
+Built from a separate design discussion (comparing this module against how Book4Time/
+SpaSoft/Zenoti handle therapist assignment) — **not** part of the Phase 0-8 sequence
+above, since it enhances the already-built Phase 2/3 booking flow rather than
+continuing toward Phase 4's calendar UI. Owner decisions from that session: gender
+preference is a **hard filter**, not a sort tie-break; a couple-in-one-room's search
+gap gets **both** an auto-suggest fix and a shared-endpoint fix; therapist choice
+happens **before** date/time (not after); and preference memory ships now, not deferred.
+
+- **Two new participant-level fields** on `SpaAppointmentParticipant`:
+  `requestedTherapistId` (a specific named ask) and `requestedGender` (a hard filter,
+  only consulted when no specific name is given) — kept deliberately separate from the
+  existing `therapistId` (the RESOLVED assignment), so a booking can distinguish "the
+  guest asked for Maria and got her" from "auto-assigned, happened to be Maria." That
+  distinction is what makes the preference write-back honest (see below) — without it,
+  every auto-assigned visit would look identical to a deliberate request.
+- **`SpaGuestTherapistPreference`** (new model, `{profileId, propertyId, therapistId}`,
+  unique per guest-per-property) — deliberately NOT a field on the generic `Profile`
+  model (the existing `ProfilePreference` is free-text/untyped; this needs a real FK to
+  join against `SpaTherapist`'s qualification/active/bookable state). Written
+  automatically after a successful booking, only when `requestedTherapistId` was set
+  AND matches the final `therapistId` — never from a gender-only or plain auto-assigned
+  visit. Read via the new therapists-for-treatment endpoint below, which pins it in the
+  UI with a ★.
+- **`src/lib/spa-availability.ts` generalized**: `getAvailableTherapists` gained
+  `requiredTherapistId`/`requiredGender` filters (applied inside the same qualified-
+  therapist query, not a post-filter); `autoAssignTherapists` changed from a flat
+  `partySize: number` to `requirements: TherapistRequirement[]` — one entry per
+  participant, each assigned against its OWN constraint in order (so a couple where one
+  guest requests a specific person and the other has no preference resolves correctly,
+  never bleeding one constraint into the other). `isSlotFeasible` defaults
+  `requirements` to an all-empty array when omitted, so every pre-existing caller's
+  behavior is byte-for-byte unchanged.
+- **`GET /api/spa/appointments/availability` gained two things**: an optional
+  `requirements` param (JSON-encoded, re-validated against the exact same engine the
+  booking route uses — never a client-side approximation), and a `from`/`to` mode
+  (alongside the original single-`date` mode) that returns which days in a range have
+  *any* feasible slot at all, for the DatePicker's `availableDates` restriction — the
+  same mechanism the Excursions Calendar (Phase 7 there) already introduced, reused
+  here rather than inventing a second convention. **Performance note, found by actually
+  timing it**: the first cut of the range mode computed the FULL per-slot grid for
+  every day before checking `.some(available)`, which was measurably slow across a
+  60-day horizon (a real regression test timed out at the default 5s). Fixed with
+  `isDayFeasible`, a short-circuiting sibling of the single-day slot loop that stops at
+  the first feasible slot instead of always scanning the whole day — cut the same test
+  from timing out to ~2s.
+- **New `GET /api/spa/treatments/[id]/therapists`** — qualified therapists for one
+  treatment (not availability-filtered; no date/time is known yet in the therapist-
+  first flow), with an optional `profileId` to flag that guest's remembered preference.
+  Distinct from the existing `GET /api/spa/therapists` (every therapist at the
+  property, for Controls management, no treatment/qualification filter at all).
+- **The room-search gap**: `GET /api/pos/search` (shared by POS/Excursions/Spa) only
+  ever surfaced a reservation's primary guest, never `AccompanyingGuest` rows, even
+  though those already link to a real `Profile`. Extended its response with
+  `accompanyingGuests` (and a `profileId` on the primary result, needed for the
+  preference lookup above — a real gap in the original response, not a new addition,
+  since nothing had ever needed the primary guest's own id before). The booking page
+  now offers a companion sharing the SAME reservation as a one-click "Also in Room N"
+  pick for participant 2+, instead of the second search returning the identical single
+  row. **A real schema limit surfaced here**: `SpaAppointmentParticipant` has exactly
+  one `reservationId` per row, resolved for display via `reservation.primaryGuest` — a
+  second participant pointing at the SAME reservationId as participant 1 would display
+  as the SAME primary guest's name, not the companion's. Rather than a schema change,
+  a same-reservation companion is booked through the existing free-text
+  `walkInGuestName` path instead (their real name still shows correctly, just not
+  linked to a Profile for this booking) — sidesteps the display bug entirely and
+  matches what a companion "not on any reservation" already did.
+- **UI**: therapist-first ordering on the Spa booking page — each participant gets a
+  gender pill toggle (Any/Female/Male, the same small toggle-button widget already used
+  for Guest/Walk-in mode and the Excursions Calendar's Day/Week/Month switch) plus a
+  "request someone specific" `Select` (populated from the new endpoint, preferred
+  guesses starred), BEFORE the date picker. A summary row above the price display shows
+  each participant's actual request (not a guaranteed final assignment for gender/any
+  asks — only a specific-name request is knowable client-side before booking) so front
+  desk isn't surprised.
+- Verified live against the real dev server and Veyo's seed data (not just `tsc`/tests):
+  the new therapists-for-treatment endpoint returned the real seeded qualification list
+  with the correct ★-preferred flag; a date-range query with a gender filter returned
+  correctly across a real multi-day window; a real walk-in booking with an explicit
+  `therapistId` request succeeded end-to-end (folio charge posted, correct room/
+  therapist assigned) with no errors in the server log.
+- 5 new tests added to `tests/business-rules/spa-booking.test.ts` (20 total in that
+  file now): the gender hard-filter (including that a second, different-gender request
+  at the same slot still succeeds, and a third exhausts supply correctly), a specific-
+  therapist request succeeding and then being correctly rejected — not silently
+  reassigned — once that person is busy, the preference write-back (and its explicit
+  non-write on a gender-only/auto-assigned visit), the from/to range mode against a
+  real weekday-only schedule, and `/api/pos/search`'s new `accompanyingGuests` field.
+  Full suite after adding these: **375/375 passing** (48 test files; the one other
+  failure occasionally seen is a pre-existing, unrelated timing flake in
+  `price-calendar-bulk.test.ts`, confirmed by re-running it alone).

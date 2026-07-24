@@ -11,6 +11,7 @@ import {
   Landmark,
   LayoutGrid,
   Settings,
+  Sparkles,
   Store,
   TrendingUp,
   UsersRound,
@@ -61,6 +62,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, module: "MAINTENANCE" },
       { title: "Point of Sale", url: "/dashboard/pos", icon: Store, module: "POS" },
       { title: "Excursions", url: "/dashboard/excursions", icon: Compass, module: "EXCURSIONS" },
+      { title: "Spa", url: "/dashboard/spa", icon: Sparkles, module: "SPA" },
     ],
   },
   {
