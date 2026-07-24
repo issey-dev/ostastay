@@ -244,10 +244,12 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     if (routingCodeIds.length === 0 || !routingTargetFolioId) return
     setRoutingSaving(true)
     try {
+      const target = await resolveTargetFolioId(routingTargetFolioId)
+      if (!target) { setRoutingSaving(false); return }
       const res = await fetch(`/api/reservations/${reservationId}/routing-rules`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chargeCodeIds: routingCodeIds, targetFolioId: routingTargetFolioId }),
+        body: JSON.stringify({ chargeCodeIds: routingCodeIds, targetFolioId: target }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -273,23 +275,63 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     } catch (e) { console.error(e) }
   }
 
-  // Folio targets for routing / moving: other windows on THIS reservation + other
-  // in-house rooms' folios.
+  const profName = (p: any) => p ? (p.companyName || `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "Unnamed") : ""
+
+  // A folio's bill-to owner: an assigned payee (a sharing guest, or the travel agent /
+  // corporate), else the lead guest (the default folio #1). Used to label routing /
+  // transfer targets by NAME rather than a bare folio number.
+  const folioOwnerLabel = (f: any) => {
+    if (f.payeeProfile) return profName(f.payeeProfile)
+    const lead = f.reservation?.primaryGuest
+    return lead ? profName(lead) : `Folio #${f.folioNumber}`
+  }
+
+  const linkedTravelAgent = () => folios[0]?.reservation?.travelAgent ?? null
+
+  // Folio targets for routing / moving: named windows on THIS reservation (lead guest,
+  // sharers, the TA), plus other in-house rooms' folios. When the reservation has a linked
+  // travel agent with no folio of their own yet, offer a one-click "new TA folio" target.
   const targetFolioOptions = () => {
-    const sameRes = folios.filter((f: any) => f.id !== activeFolioId).map((f: any) => ({ id: f.id, label: `This reservation · Folio #${f.folioNumber}` }))
-    return [...sameRes, ...inHouseFolios]
+    const sameRes = folios
+      .filter((f: any) => f.id !== activeFolioId)
+      .map((f: any) => ({ id: f.id, label: `${folioOwnerLabel(f)} · Folio #${f.folioNumber}` }))
+    const ta = linkedTravelAgent()
+    const taHasFolio = ta && folios.some((f: any) => f.payeeProfileId === ta.upid)
+    const taOption = ta && !taHasFolio ? [{ id: `__ta__:${ta.upid}`, label: `${profName(ta)} · Travel Agent (new folio)` }] : []
+    return [...sameRes, ...taOption, ...inHouseFolios]
+  }
+
+  // A routing/move target may be the synthetic "new TA folio" option — create it first
+  // (a City-Ledger folio owned by the travel agent) and return the real folio id.
+  const resolveTargetFolioId = async (rawId: string): Promise<string | null> => {
+    if (!rawId.startsWith("__ta__:")) return rawId
+    const upid = rawId.slice("__ta__:".length)
+    const res = await fetch(`/api/folios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reservationId, payeeProfileId: upid, settlementMethod: "CITY_LEDGER" }),
+    })
+    if (!res.ok) {
+      setNotification({ title: "Error", message: "Failed to open the Travel Agent folio.", isError: true })
+      return null
+    }
+    const folio = await res.json()
+    await fetchFolios()
+    return folio.id
   }
 
   const handleMoveCharges = async () => {
     if (!targetFolioId || selectedLineItemIds.length === 0) return
 
     try {
+      const target = await resolveTargetFolioId(targetFolioId)
+      if (!target) return
       const res = await fetch(`/api/folios/line-items/move`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lineItemIds: selectedLineItemIds,
-          targetFolioId
+          targetFolioId: target
         })
       })
       const data = await res.json().catch(() => ({}))
@@ -799,10 +841,12 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label>Target Folio</Label>
+            <Label>Transfer to</Label>
             <Select value={targetFolioId} onValueChange={(v) => setTargetFolioId(v ?? "")}>
               <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Select destination folio" />
+                <SelectValue placeholder="Select guest, travel agent, or another room">
+                  {targetFolioOptions().find((o) => o.id === targetFolioId)?.label}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {targetFolioOptions().map((opt) => (
@@ -873,7 +917,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
               <Label>Route to</Label>
               <Select value={routingTargetFolioId} onValueChange={(v) => setRoutingTargetFolioId(v ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select target folio / room" />
+                  <SelectValue placeholder="Select guest or travel agent">
+                    {targetFolioOptions().find((o) => o.id === routingTargetFolioId)?.label}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {targetFolioOptions().map((opt) => (

@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     requirePermission(ctx, "CASHIERING", "create");
 
     const body = await request.json();
-    const { reservationId } = body;
+    const { reservationId, payeeProfileId } = body;
 
     if (!reservationId) {
       return NextResponse.json({ error: "Missing reservationId" }, { status: 400 });
@@ -83,6 +83,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
+
+    // Optional bill-to owner (a sharer, or the travel agent / corporate) + settlement
+    // method — used to open a dedicated bill-to folio, e.g. the TA's City-Ledger window
+    // that certain charges route to. The payee must belong to this enterprise.
+    if (payeeProfileId) {
+      const payee = await prisma.profile.findUnique({ where: { upid: payeeProfileId } });
+      if (!payee || payee.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Payee profile not found" }, { status: 404 });
+      }
+    }
+    const settlementMethod = body.settlementMethod === "CITY_LEDGER" ? "CITY_LEDGER"
+      : body.settlementMethod === "DIRECT" ? "DIRECT" : undefined;
 
     // Determine the next folio number
     const existingFolios = await prisma.folio.findMany({
@@ -97,7 +109,9 @@ export async function POST(request: Request) {
       data: {
         reservationId,
         propertyId: reservation.propertyId,
-        folioNumber: nextFolioNumber
+        folioNumber: nextFolioNumber,
+        ...(payeeProfileId ? { payeeProfileId } : {}),
+        ...(settlementMethod ? { settlementMethod } : {}),
       },
       include: FOLIO_INCLUDE
     });

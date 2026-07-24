@@ -459,7 +459,18 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
        mechanism.
      - **Settlement document** = the existing Tax Invoice (no separate doc added; a distinct
        Settlement Receipt is a quick follow-up if wanted).
-  4. **Linked-profile folios** (company/agent/sharer across reservations).
+  4. **Linked-profile folios / charge routing & transfer** — ✅ DONE (2026-07-24). Owner
+     scoped this as the existing routing feature + naming + charge transfer (NOT a new
+     cross-reservation master-folio model):
+     - Folio **routing "Route to"** targets are now labelled by **owner name** (lead guest,
+       sharer payee, travel agent) instead of "Folio #N", and the linked **Travel Agent /
+       Corporate** is a one-click routing target — picking it opens a City-Ledger folio owned
+       by the TA and routes the selected charge codes there (so charges split guest vs TA).
+     - **Transfer charges** to a different in-house reservation's folio already existed
+       (`/api/folios/line-items/move` + the Move/Transfer dialog); its target picker now uses
+       the same owner-named options.
+     - `/api/folios` POST now accepts an optional `payeeProfileId` + `settlementMethod` to open
+       a bill-to folio (used for the TA folio).
 - **(superseded) Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/
   charging opens only after check-in and is frozen after check-out (corrections via a
   future **reverse check-in / reverse check-out**); Generate **Proforma**, **Interim Bill**
