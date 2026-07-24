@@ -320,6 +320,62 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
 
+- **2026-07-24** — **Reservation detail screen redesign + Transport feature.** Reworked
+  `src/app/e/[slug]/dashboard/reservations/[id]/page.tsx`: Guest is now the first section
+  (lead guest clickable → profile, VIP badge/level, nationality flag+name, pax w/ icon;
+  accompanying guests smaller w/ their own VIP star), then Reservation Detail (dates,
+  nights, rate plan code(s), projected rate total, room type(s)), Transport, Billing,
+  Deposits & Fees at-a-glance (from `Payment.depositPurpose`), Traces (button). Allocations
+  card removed. **Daily Details modal** = day-by-day grid (Rate · Room Type · Room · Pax ·
+  Room Charge · Allocation · Taxes · Total) via new `GET /api/reservations/[id]/daily-breakdown`,
+  which reuses `computeReservationQuote` (now emits a per-night `days[]`) so it can't diverge
+  from Night Audit — it's a projection of planned charges, not actual posted rows.
+  **Transport** = new `ReservationTransport` table (one PICKUP + one DROPOFF row; migration
+  `20260724122730_add_reservation_transport`): transportType (SystemCode `TRANSPORT_TYPE`),
+  flightNumber, scheduledAt, reference, chargeAmount + chargeToGuest, chargedLineItemId.
+  Upsert via `PUT /api/reservations/[id]/transport`. Editor fields per owner spec: Carrier
+  Code (flight no.), Carrier Time, Transport Type, Transport No., Transport Time, Transport
+  Remarks; when "booked by hotel" is on, a selectable **charge code** + amount.
+  **Revenue realization = Night Audit, not a manual button.** The hotel-booked charge posts
+  during `night-audit/run` on the leg's realization date (transportTime → carrierTime →
+  check-in for pickup / check-out for dropoff), alongside Room & Tax, catching up if a day
+  was missed; `ReservationTransport.chargedLineItemId` guards against double-posting. (The
+  earlier on-demand `/transport/[direction]/charge` route was removed.)
+  UI: `src/components/front-office/reservation-transport.tsx`.
+  **Config prerequisites for the owner:** (1) add Transport Type values in Controls ›
+  Reservations › "Transport Type" dropdown (empty by default); (2) hotel-booked charging
+  needs a ChargeCode with category `TRANSPORTATION` (Controls › Finance › Charge Codes) — the
+  editor's charge-code picker is empty until one exists.
+  **Daily Details TZ fix:** the day→assignment match now uses the quote's per-night
+  `assignmentIndex` (not a date string), fixing the first night showing a blank room
+  type/number in non-UTC timezones. Not visually verified (login wall).
+- **2026-07-24 (transport/daily-details refinements)** — (1) transport editor charge-code
+  Select now shows the code label, not the raw UUID; (2) **transport time must fall within
+  the stay** and carrier time not after check-out — enforced client-side (input min/max +
+  save guard) AND server-side in `PUT /transport`; (3) **Daily Details now folds in
+  transport charges** on their realization date (new "Other" column; a synthetic row if the
+  date has no room night) and gained an **info (ⓘ) drill-down** = categorised summary
+  (Room · Allocation · Other · Taxes + grand total) built in the daily-breakdown endpoint;
+  added `Info` to the icon adapter.
+
+## Reservation / Billing — requested, NOT yet built (owner 2026-07-24)
+
+- **Traces "alert on open"** — a checkbox on a trace; if set, opening the reservation pops
+  the trace text every time until the trace is marked complete (for high-attention tasks).
+  Needs: `ReservationTrace.alertOnOpen Boolean` (migration), trace-panel checkbox, and a
+  popup on the reservation page for unresolved alert traces.
+- **Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/
+  charging opens only after check-in and is frozen after check-out (corrections via a
+  future **reverse check-in / reverse check-out**); Generate **Proforma**, **Interim Bill**
+  (information invoice), **Advance Bill** (post everything due in one go); post normal
+  charges; record payments; multiple folios; **folios for linked profiles** (share / company
+  / agent); **Tax Invoice + checkout settlement**; checkout blocks & force-settles a non-zero
+  window. Much of the folio/payments/tax-invoice/checkout-settlement path already exists
+  (`folio-panel.tsx`, deposit/checkout routes) — needs an audit of what's present vs. the
+  gaps (Proforma/Interim/Advance generators, linked-profile folios, reverse check-in/out,
+  forced-settlement gate) before building. **Proforma must include projected transport**
+  (same as Daily Details) — tie into this pass.
+
 - **2026-07-23 (follow-up)** — **Card-variant consistency pass + auto-open bugfix.** Fixed a
   bug where navigating to Controls > Inventory auto-opened the Create Room Type dialog: the
   addSignal effect used a `firstRun` flag that StrictMode's double-invoke consumed, opening the

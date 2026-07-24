@@ -242,6 +242,44 @@ export async function POST(request: Request) {
     const routeTo = (reservationId: string, chargeCodeId: string, defaultFolioId: string) =>
       routingMap.get(`${reservationId}:${chargeCodeId}`) ?? defaultFolioId
 
+    // Transport charges due for realization. Hotel-booked, priced, charge-coded legs not
+    // yet posted, whose realization date — transport time → carrier time → check-in
+    // (pickup) / check-out (dropoff) — falls on or before the audit date. Posted in the
+    // same pass as Room & Tax so transport revenue books on its own date (and catches up
+    // if a day was missed); chargedLineItemId prevents any double-charge.
+    const dayMsUTC = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+    const transportCandidates = await prisma.reservationTransport.findMany({
+      where: {
+        reservation: { propertyId },
+        chargeToGuest: true,
+        chargedLineItemId: null,
+        chargeAmount: { gt: 0 },
+        chargeCodeId: { not: null },
+      },
+      include: {
+        reservation: {
+          select: {
+            id: true,
+            checkInDate: true,
+            checkOutDate: true,
+            folios: { where: { isClosed: false }, orderBy: { folioNumber: "asc" }, select: { id: true } },
+          },
+        },
+      },
+    })
+    const dueTransport = transportCandidates.filter((leg) => {
+      const t = leg.transportTime ?? leg.carrierTime ?? (leg.direction === "PICKUP" ? leg.reservation.checkInDate : leg.reservation.checkOutDate)
+      return dayMsUTC(t) < dayMsUTC(nextDay)
+    })
+    const transportCodeIds = [...new Set(dueTransport.map((l) => l.chargeCodeId).filter((x): x is string => !!x))]
+    const transportCodeMap = new Map(
+      (transportCodeIds.length
+        ? await prisma.chargeCode.findMany({ where: { id: { in: transportCodeIds }, enterpriseId: property.enterpriseId }, include: taxInclude })
+        : []
+      ).map((c) => [c.id, c])
+    )
+    let transportChargesPosted = 0
+
     // 2. Post every reservation's nightly charges and write the audit log in ONE
     // transaction — a failure anywhere rolls back every posting, so the ledger can
     // never be left half-audited. (Reads stay outside for speed; writes are cheap.)
@@ -461,6 +499,34 @@ export async function POST(request: Request) {
           }
         }
 
+        // 2b-bis. Post transport charges due for realization (see dueTransport above) —
+        // hotel-booked pickup/dropoff, on its own date, alongside room & tax. Posts to the
+        // reservation's open folio; chargedLineItemId is stamped so it can't double-post.
+        for (const leg of dueTransport) {
+          const folio = leg.reservation.folios[0]
+          if (!folio) continue // no open folio to bill (e.g. already checked out) — skipped
+          const code = leg.chargeCodeId ? transportCodeMap.get(leg.chargeCodeId) : null
+          if (!code) continue
+          const tx2 = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes })
+          const dirLabel = leg.direction === "PICKUP" ? "Pickup" : "Dropoff"
+          const li = await tx.folioLineItem.create({
+            data: {
+              folioId: folio.id,
+              chargeCodeId: code.id,
+              amount: tx2.baseAmount,
+              taxAmount: tx2.taxAmount,
+              serviceChargeAmount: tx2.serviceChargeAmount,
+              description: `Transport – ${dirLabel}${leg.transportType ? ` (${leg.transportType})` : ""}`,
+              reference: leg.transportNo ?? leg.carrierCode ?? null,
+              date: today,
+            },
+          })
+          await tx.reservationTransport.update({ where: { id: leg.id }, data: { chargedLineItemId: li.id } })
+          totalTaxPosted += tx2.taxAmount + tx2.serviceChargeAmount
+          totalPostings += 1
+          transportChargesPosted += 1
+        }
+
         // 2c. Mark tonight's never-arrived reservations NO_SHOW — same transaction,
         // so a rolled-back audit doesn't leave half-processed no-shows either.
         if (noShowCandidates.length > 0) {
@@ -550,6 +616,7 @@ export async function POST(request: Request) {
       success: true,
       log,
       noShowsProcessed: noShowCandidates.length,
+      ...(transportChargesPosted > 0 && { transportChargesPosted }),
       ...(noShowCandidates.length > 0 && {
         noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),
       }),

@@ -836,9 +836,39 @@ model Reservation {
   routingRules       FolioRoutingRule[]
   guestRegistrations GuestRegistration[]
   excursionBookings  ExcursionBooking[]
+  transports         ReservationTransport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Pickup/Dropoff transport for a reservation — one row per direction (arrival pickup,
+// departure dropoff). transportType is a SystemCode `TRANSPORT_TYPE` code (Speedboat,
+// Taxi, …), configurable in Controls. When the hotel books it, `chargeAmount` +
+// `chargeToGuest` drive a one-off charge posted to the guest folio via a TRANSPORTATION
+// charge code; `chargedLineItemId` is stamped once posted so it can't be double-charged.
+model ReservationTransport {
+  id            String   @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  direction     String    // PICKUP | DROPOFF
+  transportType String?   // SystemCode TRANSPORT_TYPE code (Speedboat / Taxi / …)
+  carrierCode   String?   // Carrier Code (flight no.)
+  carrierTime   DateTime? // Carrier Time (flight time)
+  transportNo   String?   // Transport No.
+  transportTime DateTime? // Transport Time
+  remarks       String?   // Transport Remarks
+  // When the hotel books it: chargeCodeId (selectable) + chargeAmount are posted to the
+  // guest folio; chargedLineItemId is stamped once posted so it can't be double-charged.
+  chargeToGuest Boolean  @default(false)
+  chargeCodeId  String?
+  chargeAmount  Float?
+  chargedLineItemId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reservationId, direction])
 }
 
 // Tag-style special requests picked at booking time from the SPECIAL_REQUEST SystemCode

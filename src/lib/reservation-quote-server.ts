@@ -61,11 +61,29 @@ export type ReservationQuoteTaxLine = {
   amount: number;
 };
 
+// One row per night for the reservation "Daily Details" grid. Reconciles to the quote
+// totals: sum(roomCharge) = roomBase+extraOccupancyBase, sum(allocationCharge) =
+// allocationsBase, sum(taxes) = taxTotal+greenTaxTotal, sum(total) = grandTotal.
+export type ReservationQuoteDay = {
+  date: string; // yyyy-mm-dd (the night's calendar date)
+  assignmentIndex: number | null; // index into the input `assignments` covering this night
+  roomTypeId: string | null;
+  ratePlanId: string | null;
+  rate: number; // the night's room rate before tax/carve-out
+  adults: number;
+  children: number;
+  roomCharge: number; // room base + extra-occupancy base
+  allocationCharge: number; // allocation base for the night
+  taxes: number; // GST + service charge + green tax for the night
+  total: number; // roomCharge + allocationCharge + taxes
+};
+
 export type ReservationQuote = {
   nights: number;
   pricesIncludeTaxes: boolean;
   segments: ReservationQuoteSegment[];
   allocations: ReservationQuoteAllocation[];
+  days: ReservationQuoteDay[];
   taxLines: ReservationQuoteTaxLine[];
   greenTax: {
     enabled: boolean;
@@ -250,9 +268,18 @@ export async function computeReservationQuote(
   const greenTaxAdultAmount = settings?.greenTaxAdultAmount ?? 0;
   const greenTaxChildAmount = settings?.greenTaxChildAmount ?? 0;
 
+  // Per-night rows for the Daily Details grid — populated as the same loop runs.
+  const days: ReservationQuoteDay[] = [];
+
   for (let nightMs = overallStart; nightMs < overallEnd; nightMs += DAY_MS) {
     const segIndex = assignments.findIndex((a) => dayStartMs(a.startDate) <= nightMs && dayStartMs(a.endDate) > nightMs);
     const assignment = segIndex >= 0 ? assignments[segIndex] : undefined;
+
+    // This night's figures, captured alongside the running accumulators for the grid.
+    let nightRate = 0;
+    let nRoomBase = 0, nRoomTax = 0, nRoomSC = 0;
+    let nExtraBase = 0, nExtraTax = 0, nExtraSC = 0;
+    let nAllocBase = 0, nAllocTax = 0, nAllocSC = 0;
 
     // Tonight's allocation amounts — computed first so INCLUDE_IN_RATE ones can be
     // carved out of the room line, exactly like Night Audit.
@@ -298,8 +325,11 @@ export async function computeReservationQuote(
           inputAmount = price;
         }
 
+        nightRate = inputAmount ?? 0;
+
         const roomInputAfterCarveOut = Math.max(0, inputAmount - includeInRateGross);
         const roomTaxResult = resolveChargeTax({ chargeCode: roomCode, inputAmount: roomInputAfterCarveOut, settings, pricesIncludeTaxes });
+        nRoomBase = roomTaxResult.baseAmount; nRoomTax = roomTaxResult.taxAmount; nRoomSC = roomTaxResult.serviceChargeAmount;
         segmentAccum[segIndex].roomBase = round2(segmentAccum[segIndex].roomBase + roomTaxResult.baseAmount);
         segmentAccum[segIndex].roomTax = round2(segmentAccum[segIndex].roomTax + roomTaxResult.taxAmount);
         segmentAccum[segIndex].roomServiceCharge = round2(segmentAccum[segIndex].roomServiceCharge + roomTaxResult.serviceChargeAmount);
@@ -309,6 +339,7 @@ export async function computeReservationQuote(
         const extraOccupancyInput = extraAdults * (entry?.extraAdultPrice ?? 0) + children * (entry?.extraChildPrice ?? 0);
         if (extraOccupancyInput > 0) {
           const extraTaxResult = resolveChargeTax({ chargeCode: roomCode, inputAmount: extraOccupancyInput, settings, pricesIncludeTaxes });
+          nExtraBase = extraTaxResult.baseAmount; nExtraTax = extraTaxResult.taxAmount; nExtraSC = extraTaxResult.serviceChargeAmount;
           segmentAccum[segIndex].extraOccupancyBase = round2(segmentAccum[segIndex].extraOccupancyBase + extraTaxResult.baseAmount);
           segmentAccum[segIndex].extraOccupancyTax = round2(segmentAccum[segIndex].extraOccupancyTax + extraTaxResult.taxAmount);
           segmentAccum[segIndex].extraOccupancyServiceCharge = round2(segmentAccum[segIndex].extraOccupancyServiceCharge + extraTaxResult.serviceChargeAmount);
@@ -323,6 +354,7 @@ export async function computeReservationQuote(
       const alloc = allocationById.get(allocationId);
       if (!alloc) continue;
       const allocTax = resolveChargeTax({ chargeCode: alloc.chargeCode, inputAmount: amount, settings, pricesIncludeTaxes });
+      nAllocBase += allocTax.baseAmount; nAllocTax += allocTax.taxAmount; nAllocSC += allocTax.serviceChargeAmount;
       const accum = allocationAccum.get(allocationId)!;
       accum.base = round2(accum.base + allocTax.baseAmount);
       accum.tax = round2(accum.tax + allocTax.taxAmount);
@@ -331,9 +363,28 @@ export async function computeReservationQuote(
       void chargeCodeId;
     }
 
+    const nGreenTax = greenTaxEnabled ? adults * greenTaxAdultAmount + children * greenTaxChildAmount : 0;
     if (greenTaxEnabled) {
-      greenTaxTotal = round2(greenTaxTotal + adults * greenTaxAdultAmount + children * greenTaxChildAmount);
+      greenTaxTotal = round2(greenTaxTotal + nGreenTax);
     }
+
+    const nTaxes = nRoomTax + nRoomSC + nExtraTax + nExtraSC + nAllocTax + nAllocSC + nGreenTax;
+    const nRoomCharge = nRoomBase + nExtraBase;
+    // Date from the night's LOCAL calendar components (nightMs is a local-midnight key),
+    // not toISOString() which would shift it a day in a non-UTC timezone.
+    const pad = (n: number) => String(n).padStart(2, "0");
+    days.push({
+      date: `${night.getFullYear()}-${pad(night.getMonth() + 1)}-${pad(night.getDate())}`,
+      assignmentIndex: segIndex >= 0 ? segIndex : null,
+      roomTypeId: assignment?.roomTypeId ?? null,
+      ratePlanId: assignment?.ratePlanId ?? null,
+      rate: round2(nightRate),
+      adults, children,
+      roomCharge: round2(nRoomCharge),
+      allocationCharge: round2(nAllocBase),
+      taxes: round2(nTaxes),
+      total: round2(nRoomCharge + nAllocBase + nTaxes),
+    });
   }
 
   const segmentsOut: ReservationQuoteSegment[] = assignments.map((a, i) => ({
@@ -382,6 +433,7 @@ export async function computeReservationQuote(
     pricesIncludeTaxes,
     segments: segmentsOut,
     allocations: allocationsOut,
+    days,
     taxLines,
     greenTax: {
       enabled: greenTaxEnabled,

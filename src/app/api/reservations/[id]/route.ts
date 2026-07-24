@@ -35,12 +35,22 @@ const RESERVATION_DETAIL_INCLUDE = {
     },
   },
   specialRequests: true,
+  transports: true,
   // For the reservation detail page: folio balances and the trace log, slimmed to
   // what the summary cards actually render.
   folios: {
     include: {
       lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
-      payments: { select: { amount: true, isRefund: true } },
+      // depositPurpose/reference/method/date so collected deposits & fees can be shown
+      // at a glance on the reservation screen (not just from the Deposit dialog).
+      payments: {
+        select: {
+          id: true, amount: true, isRefund: true, depositPurpose: true,
+          referenceNumber: true, createdAt: true,
+          paymentMethod: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" as const },
+      },
     },
   },
   traces: { orderBy: { createdAt: "desc" as const } },

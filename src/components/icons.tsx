@@ -49,6 +49,7 @@ import {
   EyeTwotone,
   Forbidden2Twotone,
   Grid2Twotone,
+  InfoCircleTwotone,
   HashtagTwotone,
   KeyTwotone,
   LayerTwotone,
@@ -171,6 +172,7 @@ export const FileText = twotone(DocumentTextTwotone)
 export const FileType = twotone(DocumentTextTwotone)
 export const HandCoins = twotone(CoinTwotone)
 export const Hash = twotone(HashtagTwotone)
+export const Info = twotone(InfoCircleTwotone)
 export const History = twotone(ClockTwotone)
 export const Hotel = twotone(Building3Twotone)
 export const Key = twotone(KeyTwotone)

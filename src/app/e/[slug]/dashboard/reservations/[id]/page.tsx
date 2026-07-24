@@ -2,11 +2,10 @@
 
 import { useEffect, useState, use } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
-  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, Package, XCircle,
+  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,10 +20,29 @@ import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { CheckInDialog } from "@/components/front-office/check-in-dialog"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
+import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { useProperty } from "@/components/providers/property-provider"
 
 // Property business date (UTC midnight ms) vs a reservation date, both date-only.
 const dayMs = (d?: string | null) => (d ? Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), new Date(d).getUTCDate()) : NaN)
+const money = (n: number) => `$${n.toFixed(2)}`
+
+// A country flag emoji from a 2-letter ISO code — nationality is a free-form SystemCode,
+// so only ISO-2 codes produce a flag; anything else just shows the name (per the agreed
+// "flag & name, name-only fallback" behaviour).
+function flagEmoji(code?: string | null) {
+  if (!code) return null
+  const cc = code.trim().toUpperCase()
+  if (!/^[A-Z]{2}$/.test(cc)) return null
+  return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
+}
+
+const DEPOSIT_PURPOSE_LABEL: Record<string, string> = {
+  DEPOSIT: "Deposit",
+  PRE_ARRIVAL_FEE: "Pre-Arrival Fee",
+  CANCELLATION_FEE: "Cancellation Fee",
+  NO_SHOW_FEE: "No-Show Fee",
+}
 
 const folioBalance = (folio: any) => {
   const charges = (folio.lineItems ?? []).reduce(
@@ -38,14 +56,16 @@ const folioBalance = (folio: any) => {
   return { charges, payments, balance: charges - payments }
 }
 
-// The one place a whole stay is visible at once: status, segments, money,
-// packages, traces, and every action — previously scattered across the list
-// page's row buttons and the Front Office tabs.
+const isEntity = (g: any) => g?.profileType === "COMPANY" || g?.profileType === "TRAVEL_AGENT"
+const profileName = (g: any) => (isEntity(g) ? g?.companyName : `${g?.firstName ?? ""} ${g?.lastName ?? ""}`.trim())
+const isVip = (g: any) => g?.classification === "VIP" || !!g?.vipLevel
+
 export default function ReservationDetailPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params)
-  const router = useRouter()
   const { currentProperty } = useProperty()
   const [reservation, setReservation] = useState<any>(null)
+  const [breakdown, setBreakdown] = useState<any>(null)
+  const [nationalityMap, setNationalityMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -54,6 +74,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isRoomMoveOpen, setIsRoomMoveOpen] = useState(false)
   const [isCheckInOpen, setIsCheckInOpen] = useState(false)
   const [isDepositOpen, setIsDepositOpen] = useState(false)
+  const [isDailyOpen, setIsDailyOpen] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
 
@@ -73,8 +95,25 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     }
   }
 
+  const fetchBreakdown = async () => {
+    try {
+      const res = await fetch(`/api/reservations/${id}/daily-breakdown`)
+      if (res.ok) setBreakdown(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   useEffect(() => {
     fetchReservation()
+    fetchBreakdown()
+    // Resolve nationality codes → display names once (for the guest flag + name).
+    fetch(`/api/settings/system-codes?category=NATIONALITY`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        if (Array.isArray(rows)) setNationalityMap(Object.fromEntries(rows.map((c) => [c.code, c.value])))
+      })
+      .catch(() => {})
   }, [id])
 
   const handleCancel = async () => {
@@ -153,10 +192,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   }
 
   const guest = reservation.primaryGuest
-  const guestName =
-    guest?.profileType === "COMPANY" || guest?.profileType === "TRAVEL_AGENT"
-      ? guest?.companyName
-      : `${guest?.firstName ?? ""} ${guest?.lastName ?? ""}`.trim()
+  const guestName = profileName(guest)
   const nights = Math.max(
     1,
     Math.round((new Date(reservation.checkOutDate).getTime() - new Date(reservation.checkInDate).getTime()) / 86_400_000)
@@ -171,6 +207,30 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   )
   const openTraces = (reservation.traces ?? []).filter((t: any) => !t.isResolved)
 
+  // Distinct rate plans across all segments.
+  const ratePlans: { code?: string; name?: string }[] = []
+  for (const a of reservation.assignments ?? []) {
+    if (a.ratePlan && !ratePlans.some((r) => r.code === a.ratePlan.code)) {
+      ratePlans.push({ code: a.ratePlan.code, name: a.ratePlan.name })
+    }
+  }
+  // Distinct room types across all segments.
+  const roomTypeNames = [...new Set((reservation.assignments ?? []).map((a: any) => a.roomType?.name).filter(Boolean))]
+
+  const paxLabel =
+    `${reservation.adults} adult${reservation.adults === 1 ? "" : "s"}` +
+    (reservation.children > 0 ? `, ${reservation.children} child${reservation.children === 1 ? "" : "ren"}` : "") +
+    (reservation.infants > 0 ? `, ${reservation.infants} infant${reservation.infants === 1 ? "" : "s"}` : "")
+
+  // Collected deposits & fees across every folio (Payment rows carrying a depositPurpose).
+  const depositRows: any[] = (reservation.folios ?? []).flatMap((f: any) =>
+    (f.payments ?? []).filter((p: any) => p.depositPurpose).map((p: any) => ({ ...p, folioNumber: f.folioNumber }))
+  )
+  const depositsHeld = depositRows.reduce((s: number, p: any) => s + (p.isRefund ? -p.amount : p.amount), 0)
+
+  const nationalityLabel = guest?.nationality ? nationalityMap[guest.nationality] ?? guest.nationality : null
+  const nationalityFlag = flagEmoji(guest?.nationality)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -183,10 +243,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </Link>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl font-bold tracking-tight inline-flex items-center gap-2">
-                {guestName}
-                {guest?.vipLevel && <Star className="h-5 w-5 text-warning fill-none" />}
-              </h1>
+              <h1 className="text-2xl font-bold tracking-tight">{guestName}</h1>
               <StatusBadge
                 label={reservation.status.replace("_", " ")}
                 status={reservation.status}
@@ -203,9 +260,6 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               <Button onClick={() => setIsCheckInOpen(true)}>
                 <Key className="w-4 h-4 mr-2" /> Check In
               </Button>
-              <Button variant="outline" onClick={() => setIsDepositOpen(true)}>
-                <Wallet className="w-4 h-4 mr-2" /> Deposit / Fee
-              </Button>
               <Button
                 variant="outline"
                 className="text-destructive border-destructive/40 hover:bg-destructive-muted hover:text-destructive"
@@ -216,8 +270,6 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             </>
           )}
           {reservation.status === "IN_HOUSE" && (() => {
-            // Due out when the property's business date has reached the checkout date.
-            // Before that, checkout is an explicit "early check-out" (server-enforced).
             const bd = dayMs(currentProperty?.businessDate)
             const co = dayMs(reservation.checkOutDate)
             const dueOut = !Number.isNaN(bd) && !Number.isNaN(co) ? bd >= co : true
@@ -243,19 +295,6 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </>
             )
           })()}
-          {(reservation.folios?.length ?? 0) > 0 && (
-            <Button variant="outline" onClick={() => setIsFolioOpen(true)}>
-              <ReceiptText className="w-4 h-4 mr-2" /> Folio
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setIsTraceOpen(true)} className="relative">
-            <MessageSquare className="w-4 h-4 mr-2" /> Traces
-            {openTraces.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
-                {openTraces.length}
-              </span>
-            )}
-          </Button>
           {(reservation.status === "RESERVED" || reservation.status === "IN_HOUSE") && (
             <Button
               variant="outline"
@@ -272,16 +311,86 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </div>
       </div>
 
+      {/* 1. Guest — the first thing shown */}
+      <Card className="shadow-elevation-1">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="w-5 h-5 text-muted-foreground" /> Guest
+            <span className="ml-auto inline-flex items-center gap-1.5 text-sm font-normal text-muted-foreground">
+              <UserRound className="w-4 h-4" /> {paxLabel}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          {/* Lead guest */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Link
+              href={`/e/${slug}/dashboard/profiles/${guest?.upid}`}
+              className="text-lg font-semibold text-foreground hover:underline inline-flex items-center gap-2"
+            >
+              {guestName}
+            </Link>
+            {isVip(guest) && (
+              <Badge variant="outline" className="bg-warning-muted text-warning border-warning/40 gap-1">
+                <Star className="w-3 h-3 fill-current" /> VIP{guest?.vipLevel ? ` · ${guest.vipLevel}` : ""}
+              </Badge>
+            )}
+            {nationalityLabel && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                {nationalityFlag && <span className="text-base leading-none">{nationalityFlag}</span>}
+                {nationalityLabel}
+              </span>
+            )}
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Lead</Badge>
+          </div>
+
+          {/* Accompanying guests — smaller */}
+          {(reservation.accompanyingGuests?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-muted-foreground text-xs mb-1.5">
+                Accompanying · {reservation.accompanyingGuests.length}
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {reservation.accompanyingGuests.map((ag: any) => (
+                  <Link
+                    key={ag.profile.upid}
+                    href={`/e/${slug}/dashboard/profiles/${ag.profile.upid}`}
+                    className="text-xs text-foreground/80 hover:underline inline-flex items-center gap-1.5"
+                  >
+                    <UserRound className="w-3 h-3 text-muted-foreground" />
+                    {profileName(ag.profile)}
+                    {isVip(ag.profile) && <Star className="w-3 h-3 text-warning fill-current" />}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {reservation.travelAgent && (
+            <div className="pt-1 border-t border-border/50">
+              <p className="text-muted-foreground text-xs mb-0.5">Travel Agent / Company</p>
+              <p className="font-medium inline-flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                {profileName(reservation.travelAgent)}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Stay */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="pb-3">
+        {/* 2. Reservation detail */}
+        <Card className="shadow-elevation-1 lg:col-span-2">
+          <CardHeader className="pb-3 flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-muted-foreground" /> Stay
+              <CalendarDays className="w-5 h-5 text-muted-foreground" /> Reservation Detail
             </CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setIsDailyOpen(true)}>
+              <ReceiptText className="w-4 h-4 mr-2" /> Daily Details
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-3">
+          <CardContent className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <p className="text-muted-foreground text-xs">Check-In</p>
                 <p className="font-semibold">{format(new Date(reservation.checkInDate), "EEE, dd-MMM-yy")}</p>
@@ -295,12 +404,40 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 <p className="font-semibold">{nights}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Occupancy</p>
-                <p className="font-semibold">
-                  {reservation.adults} adult{reservation.adults === 1 ? "" : "s"}
-                  {reservation.children > 0 && `, ${reservation.children} child${reservation.children === 1 ? "" : "ren"}`}
-                  {reservation.infants > 0 && `, ${reservation.infants} infant${reservation.infants === 1 ? "" : "s"}`}
+                <p className="text-muted-foreground text-xs">Rate Total</p>
+                <p className="font-semibold font-mono">
+                  {breakdown?.totals ? money(breakdown.totals.grandTotal) : <span className="text-muted-foreground">—</span>}
                 </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Rate Plan{ratePlans.length > 1 ? "s" : ""}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ratePlans.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    ratePlans.map((rp) => (
+                      <Badge key={rp.code} variant="outline" className="font-mono">
+                        {rp.code}{rp.name ? ` · ${rp.name}` : ""}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1 flex items-center gap-1.5">
+                  <BedDouble className="w-3.5 h-3.5" /> Room Type{roomTypeNames.length > 1 ? "s" : ""}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {roomTypeNames.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    roomTypeNames.map((n: any) => (
+                      <Badge key={n} variant="outline">{n}</Badge>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
             {reservation.mealPlan && reservation.mealPlan !== "NONE" && (
@@ -328,43 +465,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardContent>
         </Card>
 
-        {/* Guests */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="w-5 h-5 text-muted-foreground" /> Guests
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="text-muted-foreground text-xs">Primary Guest</p>
-              <Link href={`/e/${slug}/dashboard/profiles/${guest?.upid}`} className="font-semibold hover:underline">
-                {guestName}
-              </Link>
-            </div>
-            {(reservation.accompanyingGuests?.length ?? 0) > 0 && (
-              <div>
-                <p className="text-muted-foreground text-xs mb-1">Accompanying</p>
-                <div className="space-y-1">
-                  {reservation.accompanyingGuests.map((ag: any) => (
-                    <p key={ag.profile.upid}>{ag.profile.firstName} {ag.profile.lastName}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-            {reservation.travelAgent && (
-              <div>
-                <p className="text-muted-foreground text-xs">Travel Agent / Company</p>
-                <p className="font-semibold flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" />
-                  {reservation.travelAgent.companyName || `${reservation.travelAgent.firstName} ${reservation.travelAgent.lastName ?? ""}`}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Room segments */}
+        {/* Room assignments */}
         <Card className="shadow-elevation-1 lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -401,7 +502,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                     </TableCell>
                     <TableCell className="text-sm">{a.ratePlan?.code} — {a.ratePlan?.name}</TableCell>
                     <TableCell className="text-right pr-6 font-mono text-sm">
-                      {a.overrideRate != null ? `$${a.overrideRate.toFixed(2)}` : "—"}
+                      {a.overrideRate != null ? money(a.overrideRate) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -410,7 +511,21 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardContent>
         </Card>
 
-        {/* Financials */}
+        {/* 3. Transport */}
+        <ReservationTransport
+          reservationId={id}
+          propertyId={reservation.propertyId}
+          checkInDate={reservation.checkInDate}
+          checkOutDate={reservation.checkOutDate}
+          transports={reservation.transports ?? []}
+          onChanged={() => {
+            fetchReservation()
+            fetchBreakdown()
+          }}
+          onNotify={setNotification}
+        />
+
+        {/* 4. Billing */}
         <Card className="shadow-elevation-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -435,11 +550,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                           )}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          ${t.charges.toFixed(2)} charges · ${t.payments.toFixed(2)} paid
+                          {money(t.charges)} charges · {money(t.payments)} paid
                         </p>
                       </div>
                       <span className={`font-mono font-bold ${Math.abs(t.balance) < 0.005 ? "text-success" : "text-foreground"}`}>
-                        ${t.balance.toFixed(2)}
+                        {money(t.balance)}
                       </span>
                     </div>
                   )
@@ -447,7 +562,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 <div className="flex items-center justify-between pt-2 border-t border-border">
                   <span className="font-semibold">Total Balance</span>
                   <span className={`font-mono font-bold text-lg ${Math.abs(totals.balance) < 0.005 ? "text-success" : "text-foreground"}`}>
-                    ${totals.balance.toFixed(2)}
+                    {money(totals.balance)}
                   </span>
                 </div>
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setIsFolioOpen(true)}>
@@ -458,44 +573,68 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardContent>
         </Card>
 
-        {/* Allocations + Traces */}
+        {/* Deposits & Fees + Traces */}
         <div className="space-y-6">
+          {/* Deposits & Fees at a glance */}
           <Card className="shadow-elevation-1">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="w-5 h-5 text-muted-foreground" /> Allocations
+                <Wallet className="w-5 h-5 text-muted-foreground" /> Deposits &amp; Fees
               </CardTitle>
+              {reservation.status === "RESERVED" && (
+                <Button variant="outline" size="sm" onClick={() => setIsDepositOpen(true)}>Add</Button>
+              )}
             </CardHeader>
-            <CardContent className="text-sm">
-              {(reservation.allocations?.length ?? 0) === 0 ? (
-                <p className="text-muted-foreground">No allocations attached.</p>
+            <CardContent className="text-sm space-y-2">
+              {depositRows.length === 0 ? (
+                <p className="text-muted-foreground">No deposits or fees collected.</p>
               ) : (
-                <div className="space-y-1.5">
-                  {reservation.allocations.map((ra: any) => (
-                    <div key={ra.id} className="flex items-center justify-between">
-                      <span className="font-medium">{ra.allocation.code} — {ra.allocation.name}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {ra.source === "MANUAL" ? "Add-on" : `via ${ra.source.toLowerCase().replace("_", " ")}`}
-                      </Badge>
+                <>
+                  {depositRows.map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {DEPOSIT_PURPOSE_LABEL[p.depositPurpose] ?? p.depositPurpose}
+                          {p.isRefund && <Badge variant="outline" className="ml-2 text-[10px]">Refund</Badge>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {p.paymentMethod?.name ?? "—"}
+                          {p.referenceNumber ? ` · ${p.referenceNumber}` : ""} · {format(new Date(p.createdAt), "dd-MMM")}
+                        </p>
+                      </div>
+                      <span className={`font-mono font-medium ${p.isRefund ? "text-destructive" : "text-foreground"}`}>
+                        {p.isRefund ? "-" : ""}{money(p.amount)}
+                      </span>
                     </div>
                   ))}
-                </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="font-semibold">Held</span>
+                    <span className="font-mono font-bold">{money(depositsHeld)}</span>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
 
+          {/* Traces */}
           <Card className="shadow-elevation-1">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-muted-foreground" /> Traces
+                {openTraces.length > 0 && (
+                  <Badge variant="outline" className="bg-destructive-muted text-destructive border-destructive/30 text-[10px]">
+                    {openTraces.length} open
+                  </Badge>
+                )}
               </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setIsTraceOpen(true)}>Open</Button>
             </CardHeader>
             <CardContent className="text-sm">
               {(reservation.traces?.length ?? 0) === 0 ? (
                 <p className="text-muted-foreground">No traces logged.</p>
               ) : (
                 <div className="space-y-2">
-                  {reservation.traces.slice(0, 5).map((t: any) => (
+                  {reservation.traces.slice(0, 4).map((t: any) => (
                     <div key={t.id} className="flex items-start justify-between gap-2">
                       <div>
                         <p className={t.isResolved ? "line-through text-muted-foreground" : ""}>{t.description}</p>
@@ -506,17 +645,127 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                       {!t.isResolved && <Badge variant="outline" className="text-[10px] shrink-0">Open</Badge>}
                     </div>
                   ))}
-                  {(reservation.traces?.length ?? 0) > 5 && (
-                    <Button variant="ghost" size="sm" className="w-full h-7 text-xs" onClick={() => setIsTraceOpen(true)}>
-                      View all {reservation.traces.length} traces
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Daily Details modal */}
+      <Dialog open={isDailyOpen} onOpenChange={(o) => { setIsDailyOpen(o); if (!o) setShowSummary(false) }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <div className="flex items-center gap-1.5">
+              <DialogTitle>Daily Details</DialogTitle>
+              {breakdown?.summary && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-7 w-7 ${showSummary ? "text-primary" : "text-muted-foreground"}`}
+                  title="Charge summary"
+                  onClick={() => setShowSummary((s) => !s)}
+                >
+                  <Info className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            <DialogDescription>
+              {showSummary
+                ? "Charge summary by category."
+                : `Projected day-by-day charges for this stay${breakdown?.pricesIncludeTaxes ? " (rates include taxes)" : ""}.`}
+            </DialogDescription>
+          </DialogHeader>
+          {!breakdown ? (
+            <div className="py-8 text-center text-muted-foreground">Loading breakdown…</div>
+          ) : showSummary && breakdown.summary ? (
+            <div className="max-h-[60vh] overflow-auto space-y-4 text-sm">
+              {[
+                { key: "room", label: "Room" },
+                { key: "allocation", label: "Allocation" },
+                { key: "other", label: "Other" },
+                { key: "taxes", label: "Taxes" },
+              ].map(({ key, label }) => {
+                const sec = breakdown.summary[key]
+                if (!sec || (sec.lines.length === 0 && Math.abs(sec.total) < 0.005)) return null
+                return (
+                  <div key={key}>
+                    <div className="flex items-center justify-between font-semibold border-b border-border pb-1 mb-1">
+                      <span>{label}</span>
+                      <span className="font-mono">{money(sec.total)}</span>
+                    </div>
+                    {sec.lines.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">—</p>
+                    ) : (
+                      sec.lines.map((l: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-muted-foreground py-0.5">
+                          <span>{l.name}</span>
+                          <span className="font-mono">{money(l.amount)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )
+              })}
+              <div className="flex items-center justify-between border-t border-border pt-2 font-bold text-base">
+                <span>Grand Total</span>
+                <span className="font-mono">{money(breakdown.summary.grandTotal)}</span>
+              </div>
+            </div>
+          ) : (breakdown.days?.length ?? 0) === 0 ? (
+            <p className="py-8 text-center text-muted-foreground">No priced nights on this reservation.</p>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto -mx-6">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card">
+                  <TableRow>
+                    <TableHead className="pl-6">Date</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead>Room Type</TableHead>
+                    <TableHead>Room</TableHead>
+                    <TableHead className="text-center">Pax</TableHead>
+                    <TableHead className="text-right">Room</TableHead>
+                    <TableHead className="text-right">Allocation</TableHead>
+                    <TableHead className="text-right">Other</TableHead>
+                    <TableHead className="text-right">Taxes</TableHead>
+                    <TableHead className="text-right pr-6">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {breakdown.days.map((d: any) => (
+                    <TableRow key={d.date}>
+                      <TableCell className="pl-6 whitespace-nowrap">{format(new Date(d.date + "T00:00:00"), "dd-MMM")}</TableCell>
+                      <TableCell className="text-right font-mono">{money(d.rate)}</TableCell>
+                      <TableCell className="text-xs">{d.roomTypeName ?? "—"}</TableCell>
+                      <TableCell>{d.roomNumber ? <Badge variant="outline">{d.roomNumber}</Badge> : "—"}</TableCell>
+                      <TableCell className="text-center text-xs">
+                        {d.adults}A{d.children > 0 ? ` ${d.children}C` : ""}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{money(d.roomCharge)}</TableCell>
+                      <TableCell className="text-right font-mono">{d.allocationCharge > 0 ? money(d.allocationCharge) : "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{d.otherCharge > 0 ? money(d.otherCharge) : "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{money(d.taxes)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold pr-6">{money(d.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {breakdown?.totals && !showSummary && (
+            <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 border-t border-border pt-3 text-sm">
+              <span className="text-muted-foreground">
+                Room {money(breakdown.totals.roomBase + breakdown.totals.extraOccupancyBase)} · Allocations {money(breakdown.totals.allocationsBase)}
+                {breakdown.totals.otherBase > 0 ? ` · Other ${money(breakdown.totals.otherBase)}` : ""} · Taxes {money(breakdown.totals.taxTotal)}
+              </span>
+              <span className="font-mono font-bold text-base">Total {money(breakdown.totals.grandTotal)}</span>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDailyOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Panels & dialogs */}
       <FolioPanel

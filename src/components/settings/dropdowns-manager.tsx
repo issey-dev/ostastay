@@ -62,6 +62,7 @@ export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
 
 export const RESERVATION_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "SPECIAL_REQUEST", label: "Special Requests" },
+  { code: "TRANSPORT_TYPE", label: "Transport Type (Pickup / Dropoff)" },
 ]
 
 // Room-specific feature lists, assigned per Room Type (all multi-select) via the Room
