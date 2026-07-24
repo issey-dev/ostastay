@@ -55,6 +55,7 @@ export async function POST(
         traceType: body.traceType,
         description: body.description,
         actionDate: body.actionDate ? new Date(body.actionDate) : null,
+        alertOnOpen: body.alertOnOpen === true,
       }
     });
 

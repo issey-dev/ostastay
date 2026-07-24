@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
+import { Bell } from "@/components/icons"
 
 const TRACE_TYPES = {
   GUEST_MESSAGE: { icon: MessageSquare, color: "text-info", bg: "bg-info-muted", label: "Guest Message" },
@@ -35,7 +37,8 @@ export function TracePanel({
   const [form, setForm] = useState({
     traceType: "GUEST_MESSAGE",
     description: "",
-    actionDate: ""
+    actionDate: "",
+    alertOnOpen: false,
   })
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export function TracePanel({
         body: JSON.stringify(form)
       })
       if (res.ok) {
-        setForm({ traceType: "GUEST_MESSAGE", description: "", actionDate: "" })
+        setForm({ traceType: "GUEST_MESSAGE", description: "", actionDate: "", alertOnOpen: false })
         setIsAdding(false)
         fetchTraces()
       }
@@ -149,12 +152,23 @@ export function TracePanel({
                 </div>
                 <div className="space-y-2">
                   <Label>Action Date (Optional)</Label>
-                  <DatePicker 
-                    value={form.actionDate} 
-                    onChange={(date) => setForm(p => ({ ...p, actionDate: date }))} 
+                  <DatePicker
+                    value={form.actionDate}
+                    onChange={(date) => setForm(p => ({ ...p, actionDate: date }))}
                     placeholder="Select action date..."
                   />
                 </div>
+                <label className="flex items-start gap-2.5 rounded-md border border-border p-3 cursor-pointer">
+                  <Checkbox
+                    checked={form.alertOnOpen}
+                    onCheckedChange={(v) => setForm(p => ({ ...p, alertOnOpen: !!v }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium flex items-center gap-1.5"><Bell className="w-3.5 h-3.5 text-warning" /> Alert on open</span>
+                    <span className="text-xs text-muted-foreground">Pop this message up every time the reservation is opened, until it's marked resolved.</span>
+                  </span>
+                </label>
                 <Button type="submit" className="w-full mt-2">Save Trace</Button>
               </form>
             </div>
@@ -180,9 +194,16 @@ export function TracePanel({
                     
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
-                        <Badge variant="outline" className={`${config.bg} ${config.color} border-none font-medium text-xs mb-1`}>
-                          <Icon className="w-3 h-3 mr-1 inline-block" /> {config.label}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                          <Badge variant="outline" className={`${config.bg} ${config.color} border-none font-medium text-xs`}>
+                            <Icon className="w-3 h-3 mr-1 inline-block" /> {config.label}
+                          </Badge>
+                          {trace.alertOnOpen && !trace.isResolved && (
+                            <Badge variant="outline" className="bg-warning-muted text-warning border-warning/40 text-[10px]">
+                              <Bell className="w-3 h-3 mr-1 inline-block" /> Alerts on open
+                            </Badge>
+                          )}
+                        </div>
                         <button onClick={() => handleDelete(trace.id)} className="text-muted-foreground hover:text-destructive transition-colors">
                           <Trash2 className="w-4 h-4" />
                         </button>

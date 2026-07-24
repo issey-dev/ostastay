@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
+import { useEffect, useState, useRef, use } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
-  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info,
+  Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info, Bell,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -76,6 +76,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isDepositOpen, setIsDepositOpen] = useState(false)
   const [isDailyOpen, setIsDailyOpen] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  // "Alert on open" traces pop once each time the reservation is opened, until resolved.
+  const [showAlerts, setShowAlerts] = useState(false)
+  const alertShownRef = useRef(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
 
@@ -103,6 +106,18 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       console.error(e)
     }
   }
+
+  // Fire the "alert on open" popup once per page open, as soon as the reservation loads
+  // with any unresolved alert trace.
+  useEffect(() => {
+    if (reservation && !alertShownRef.current) {
+      const alerts = (reservation.traces ?? []).filter((t: any) => t.alertOnOpen && !t.isResolved)
+      if (alerts.length > 0) {
+        setShowAlerts(true)
+        alertShownRef.current = true
+      }
+    }
+  }, [reservation])
 
   useEffect(() => {
     fetchReservation()
@@ -206,6 +221,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     { charges: 0, payments: 0, balance: 0 }
   )
   const openTraces = (reservation.traces ?? []).filter((t: any) => !t.isResolved)
+  const alertTraces = (reservation.traces ?? []).filter((t: any) => t.alertOnOpen && !t.isResolved)
 
   // Distinct rate plans across all segments.
   const ratePlans: { code?: string; name?: string }[] = []
@@ -820,6 +836,34 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           fetchReservation()
         }}
       />
+
+      {/* Alert-on-open traces — pop each time the reservation is opened until resolved. */}
+      <Dialog open={showAlerts && alertTraces.length > 0} onOpenChange={(open) => !open && setShowAlerts(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <Bell className="w-5 h-5" /> Attention
+            </DialogTitle>
+            <DialogDescription>
+              {alertTraces.length === 1 ? "This reservation has a flagged trace:" : `This reservation has ${alertTraces.length} flagged traces:`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {alertTraces.map((t: any) => (
+              <div key={t.id} className="rounded-md border border-warning/40 bg-warning-muted/40 p-3">
+                <p className="font-medium text-sm">{t.description}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {t.traceType}{t.actionDate ? ` · ${format(new Date(t.actionDate), "dd-MMM h:mm a")}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowAlerts(false); setIsTraceOpen(true) }}>Manage Traces</Button>
+            <Button onClick={() => setShowAlerts(false)}>Acknowledge</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
         <DialogContent className="sm:max-w-md">

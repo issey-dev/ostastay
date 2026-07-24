@@ -1326,6 +1326,9 @@ model ReservationTrace {
   description String
   actionDate  DateTime?
   isResolved  Boolean   @default(false)
+  // When true, opening the reservation pops this trace's text every time until it's
+  // marked resolved — for high-attention tasks the front desk must not miss.
+  alertOnOpen Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
