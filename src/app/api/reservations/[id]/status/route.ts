@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { findTypeAvailabilityConflicts } from "@/lib/availability";
-import { getActiveFeeRule, computeReservationFee } from "@/lib/fee-rules";
+import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
@@ -79,10 +79,10 @@ export async function PATCH(
     // posting, not a manual billing charge. Otherwise cancellation keeps the
     // zero-balance guard: it's only allowed once the folios net to ~zero, so it can
     // never silently orphan real money. (NO_SHOW is never blocked this way.)
-    let cancellationRule: Awaited<ReturnType<typeof getActiveFeeRule>> = null;
+    let cancellationRule: Awaited<ReturnType<typeof getFeeRuleById>> = null;
     let cancellationFee = 0;
     if (body.status === "CANCELLED") {
-      cancellationRule = await getActiveFeeRule(existing.propertyId, "CANCELLATION");
+      cancellationRule = await getFeeRuleById(existing.cancellationFeeRuleId, "CANCELLATION");
       if (cancellationRule && cancellationRule.chargeCodeId) {
         cancellationFee = await computeReservationFee(cancellationRule, existing);
       }

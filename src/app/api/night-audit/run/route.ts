@@ -5,7 +5,7 @@ import { resolveChargeTax } from "@/lib/tax-calc"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
-import { getActiveFeeRule, computeReservationFee } from "@/lib/fee-rules"
+import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -191,25 +191,24 @@ export async function POST(request: Request) {
     const chargeableReservations = activeReservations.filter((r) => r.checkOutDate > auditDate)
 
     // Arrivals that never checked in by audit time are marked NO_SHOW inside the
-    // transaction below. If an active per-property NO_SHOW fee rule applies, the fee
-    // is retained from a held deposit (posted to the reservation's open folio);
-    // when there's no folio to retain from, the fee is flagged as owed in the
-    // results for front office to collect.
+    // transaction below. Each no-show's fee comes from ITS OWN selected NO_SHOW rule
+    // (Reservation.noShowFeeRuleId) — no selection means no fee. When a fee applies it is
+    // ALWAYS posted to a folio (created if the reservation has none) so it carries into
+    // billing (owner rule 2026-07-24), on the audit date.
     const noShowCandidates = await prisma.reservation.findMany({
       where: { propertyId, status: "RESERVED", checkInDate: { lt: nextDay } },
       include: { assignments: true, folios: { include: { payments: true } } },
     })
 
-    const noShowRule = await getActiveFeeRule(propertyId, "NO_SHOW")
-    type NoShowFee = { confirmationNo: string; fee: number; folioId: string | null }
+    type NoShowFee = { reservationId: string; confirmationNo: string; fee: number; chargeCodeId: string; folioId: string | null; hadFolio: boolean }
     const noShowFees: NoShowFee[] = []
-    if (noShowRule && noShowRule.chargeCodeId) {
-      for (const r of noShowCandidates) {
-        const fee = await computeReservationFee(noShowRule, r)
-        if (fee > 0.005) {
-          const openFolio = r.folios.find((f) => !f.isClosed) ?? r.folios[0] ?? null
-          noShowFees.push({ confirmationNo: r.confirmationNo, fee, folioId: openFolio?.id ?? null })
-        }
+    for (const r of noShowCandidates) {
+      const rule = await getFeeRuleById(r.noShowFeeRuleId, "NO_SHOW")
+      if (!rule || !rule.chargeCodeId) continue
+      const fee = await computeReservationFee(rule, r)
+      if (fee > 0.005) {
+        const openFolio = r.folios.find((f) => !f.isClosed) ?? r.folios[0] ?? null
+        noShowFees.push({ reservationId: r.id, confirmationNo: r.confirmationNo, fee, chargeCodeId: rule.chargeCodeId, folioId: openFolio?.id ?? null, hadFolio: !!openFolio })
       }
     }
 
@@ -535,24 +534,28 @@ export async function POST(request: Request) {
             data: { status: "NO_SHOW", noShowAt: auditDate },
           })
         }
-        // No-show fees: post to the folio where one exists (retained from any held
-        // deposit); folio-less no-shows are flagged as owed in the response instead.
-        if (noShowRule?.chargeCodeId) {
-          for (const nf of noShowFees) {
-            if (nf.folioId) {
-              await tx.folioLineItem.create({
-                data: {
-                  folioId: nf.folioId,
-                  chargeCodeId: noShowRule.chargeCodeId,
-                  date: auditDate,
-                  description: "No-show fee",
-                  amount: nf.fee,
-                  taxAmount: 0,
-                  serviceChargeAmount: 0,
-                },
-              })
-            }
+        // No-show charges: ALWAYS post to a folio (created if the reservation has none)
+        // so the charge carries into billing. Each uses its own selected rule's charge
+        // code, posted on the audit date.
+        for (const nf of noShowFees) {
+          let folioId = nf.folioId
+          if (!folioId) {
+            const folio = await tx.folio.create({
+              data: { reservationId: nf.reservationId, propertyId, folioNumber: 1 },
+            })
+            folioId = folio.id
           }
+          await tx.folioLineItem.create({
+            data: {
+              folioId,
+              chargeCodeId: nf.chargeCodeId,
+              date: auditDate,
+              description: "No-show charge",
+              amount: nf.fee,
+              taxAmount: 0,
+              serviceChargeAmount: 0,
+            },
+          })
         }
 
         // 3. Log the audit run — inside the same transaction, so a COMPLETED log row
@@ -620,12 +623,14 @@ export async function POST(request: Request) {
       ...(noShowCandidates.length > 0 && {
         noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),
       }),
-      ...(noShowFees.some((f) => f.folioId) && {
-        noShowFeesCharged: noShowFees.filter((f) => f.folioId).map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
+      ...(noShowFees.length > 0 && {
+        // Every no-show fee is now posted to a folio; list them all as charged.
+        noShowFeesCharged: noShowFees.map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
       }),
-      ...(noShowFees.some((f) => !f.folioId) && {
-        noShowFeesOwed: noShowFees.filter((f) => !f.folioId).map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
-        noShowFeesOwedWarning: `${noShowFees.filter((f) => !f.folioId).length} no-show${noShowFees.filter((f) => !f.folioId).length > 1 ? "s have" : " has"} a fee owed with no deposit on file — collect it from front office.`,
+      ...(noShowFees.some((f) => !f.hadFolio) && {
+        // Posted to a freshly-created folio with no deposit behind it → unpaid, collect it.
+        noShowFeesOwed: noShowFees.filter((f) => !f.hadFolio).map((f) => ({ confirmationNo: f.confirmationNo, fee: f.fee })),
+        noShowFeesOwedWarning: `${noShowFees.filter((f) => !f.hadFolio).length} no-show charge${noShowFees.filter((f) => !f.hadFolio).length > 1 ? "s were" : " was"} posted to a new folio with no deposit on file — collect payment from front office.`,
       }),
       ...(zeroRateConfirmationNos.length > 0 && {
         zeroRateWarning: `${zeroRateConfirmationNos.length} reservation${zeroRateConfirmationNos.length > 1 ? "s" : ""} posted a $0 room charge because no rate is configured for tonight — check the Price Calendar (including the Base plan's coverage).`,

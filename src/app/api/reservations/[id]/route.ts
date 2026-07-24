@@ -102,6 +102,10 @@ const updateSchema = z.object({
   mealPlan: z.string().optional(),
   remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
+  // Per-reservation fee-rule selections (PropertyFeeRule ids, one per type). Null clears.
+  depositFeeRuleId: z.string().optional().nullable(),
+  cancellationFeeRuleId: z.string().optional().nullable(),
+  noShowFeeRuleId: z.string().optional().nullable(),
   accompanyingGuestIds: z.array(z.string()).optional(),
   manualAllocationIds: z.array(z.string()).optional(),
   specialRequestCodes: z.array(z.string()).optional(),
@@ -243,6 +247,23 @@ export async function PUT(
       return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
     }
 
+    // Validate any per-reservation fee-rule selections against this property + type
+    // (mirrors the create route). Only fields the client actually sent are touched.
+    const feeRuleSel: Partial<Record<"DEPOSIT" | "CANCELLATION" | "NO_SHOW", string | null>> = {};
+    if (data.depositFeeRuleId !== undefined) feeRuleSel.DEPOSIT = data.depositFeeRuleId || null;
+    if (data.cancellationFeeRuleId !== undefined) feeRuleSel.CANCELLATION = data.cancellationFeeRuleId || null;
+    if (data.noShowFeeRuleId !== undefined) feeRuleSel.NO_SHOW = data.noShowFeeRuleId || null;
+    const selectedRuleIds = Object.values(feeRuleSel).filter(Boolean) as string[];
+    if (selectedRuleIds.length > 0) {
+      const rules = await prisma.propertyFeeRule.findMany({ where: { id: { in: selectedRuleIds }, propertyId: existing.propertyId } });
+      const byId = new Map(rules.map((r) => [r.id, r]));
+      for (const [type, id] of Object.entries(feeRuleSel)) {
+        if (id && byId.get(id)?.ruleType !== type) {
+          return NextResponse.json({ error: "A selected fee rule is invalid for this property." }, { status: 400 });
+        }
+      }
+    }
+
     const updatedReservation = await prisma.reservation.update({
       where: { id },
       data: {
@@ -255,6 +276,9 @@ export async function PUT(
         mealPlan: data.mealPlan,
         ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
+        ...(data.depositFeeRuleId !== undefined && { depositFeeRuleId: data.depositFeeRuleId || null }),
+        ...(data.cancellationFeeRuleId !== undefined && { cancellationFeeRuleId: data.cancellationFeeRuleId || null }),
+        ...(data.noShowFeeRuleId !== undefined && { noShowFeeRuleId: data.noShowFeeRuleId || null }),
         status: data.status,
         hasScheduledRoomMove: detectScheduledRoomMove(data.assignments),
         assignments: {

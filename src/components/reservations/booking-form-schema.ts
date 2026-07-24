@@ -42,6 +42,11 @@ export const bookingFormSchema = z
     remarks: z.string(),
     mealPlan: z.string(),
     travelAgentId: z.string(),
+    // Per-reservation fee-rule selections ("none" = no rule of that type). Converted to
+    // null in the submit payload; the API validates them against the property.
+    depositFeeRuleId: z.string(),
+    cancellationFeeRuleId: z.string(),
+    noShowFeeRuleId: z.string(),
     accompanyingGuestIds: z.array(z.string()),
     manualAllocationIds: z.array(z.string()),
     specialRequestCodes: z.array(z.string()),
@@ -92,6 +97,9 @@ export const emptyBookingValues = (): BookingFormValues => ({
   remarks: "",
   mealPlan: "NONE",
   travelAgentId: "none",
+  depositFeeRuleId: "none",
+  cancellationFeeRuleId: "none",
+  noShowFeeRuleId: "none",
   accompanyingGuestIds: [],
   manualAllocationIds: [],
   specialRequestCodes: [],

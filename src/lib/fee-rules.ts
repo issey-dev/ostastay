@@ -3,8 +3,9 @@ import { computeReservationQuote } from "@/lib/reservation-quote-server";
 
 // Per-property Deposit / Cancellation / No-Show fee rules (Controls > Fee Rules)
 // and the amount computation that drives the Deposit module and the cancellation /
-// no-show triggers. Rules are stored one row per (property, ruleType) in
-// PropertyFeeRule; see schema.prisma.
+// no-show triggers. Many named rules are allowed per type; a reservation selects one of
+// each (Reservation.depositFeeRuleId / cancellationFeeRuleId / noShowFeeRuleId) and the
+// fee is computed from that selected rule at event time. See schema.prisma.
 
 export const FEE_RULE_TYPES = ["DEPOSIT", "CANCELLATION", "NO_SHOW"] as const;
 export const FEE_BASES = ["FLAT", "PERCENT", "FIRST_NIGHT", "FULL_STAY"] as const;
@@ -27,12 +28,17 @@ type ReservationLike = {
   assignments: Array<{ roomTypeId: string; ratePlanId: string; startDate: Date; endDate: Date; overrideRate: number | null }>;
 };
 
-// The active rule of a given type for a property, or null.
-export async function getActiveFeeRule(propertyId: string, ruleType: FeeRuleType) {
-  const rule = await prisma.propertyFeeRule.findUnique({
-    where: { propertyId_ruleType: { propertyId, ruleType } },
-  });
-  return rule && rule.isActive ? rule : null;
+// The fee rule a reservation selected, looked up by id. Returns null when nothing was
+// selected (no fee applies) or the rule was since deleted. `expectedType` guards against
+// a stale id pointing at the wrong type. The explicit selection is honored even if the
+// rule was later marked inactive — inactive only hides it from the picker for NEW
+// selections, it doesn't retroactively drop a fee the booking already committed to.
+export async function getFeeRuleById(ruleId: string | null | undefined, expectedType?: FeeRuleType) {
+  if (!ruleId) return null;
+  const rule = await prisma.propertyFeeRule.findUnique({ where: { id: ruleId } });
+  if (!rule) return null;
+  if (expectedType && rule.ruleType !== expectedType) return null;
+  return rule;
 }
 
 // Resolve a rule's fee amount for a specific reservation. FLAT needs no quote;

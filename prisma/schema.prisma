@@ -810,6 +810,14 @@ model Reservation {
   // which gates the same-day-only reversal of any City-Ledger (debtor) invoice finalized
   // at checkout — see api/reservations/[id]/reverse-check-out/route.ts.
   checkedOutAt         DateTime?
+  // Optional per-reservation fee-rule selections (PropertyFeeRule ids, one per type). The
+  // chosen rule drives the fee computed at its event: DEPOSIT (suggested pre-arrival
+  // amount), CANCELLATION (posted on cancel), NO_SHOW (posted at Night Audit). Null = no
+  // rule of that type applies = no fee. Plain id references (not FK relations) — a deleted
+  // or disabled rule is simply treated as "no fee" at apply time.
+  depositFeeRuleId      String?
+  cancellationFeeRuleId String?
+  noShowFeeRuleId       String?
   adults               Int       @default(1)
   children             Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)
@@ -1118,10 +1126,18 @@ model Payment {
 // projected stay total), FIRST_NIGHT (first night's room charge), or FULL_STAY
 // (the whole projected stay). CANCELLATION/NO_SHOW post their fee against
 // `chargeCode` so it reconciles on the folio against any held deposit.
+// A named, per-property fee rule. There can be MANY rules per ruleType (e.g. several
+// Cancellation policies); a reservation picks at most one rule of each type to apply, and
+// the fee amount is computed from that rule's basis at the moment the event fires (cancel
+// / no-show / deposit suggestion). `isActive` gates whether a rule is offered in the
+// reservation picker. Selection is optional — a reservation with no rule of a type simply
+// incurs no fee of that type. (Superseded the old one-rule-per-(property,ruleType) model,
+// 2026-07-24 — see DECISIONS.md.)
 model PropertyFeeRule {
   id           String      @id @default(uuid())
   propertyId   String
   property     Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String      @default("")
   ruleType     String // DEPOSIT | CANCELLATION | NO_SHOW
   basis        String      @default("FLAT") // FLAT | PERCENT | FIRST_NIGHT | FULL_STAY
   value        Float       @default(0)
@@ -1130,7 +1146,7 @@ model PropertyFeeRule {
   isActive     Boolean     @default(false)
   updatedAt    DateTime    @updatedAt
 
-  @@unique([propertyId, ruleType])
+  @@index([propertyId, ruleType])
 }
 
 // A cashier-recorded currency exchange (guest-facing FX, common at resort front

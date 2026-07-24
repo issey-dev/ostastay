@@ -1939,16 +1939,21 @@ Owner specified the full front-desk status model and corrected the fee-rule mode
   (business date ≤ departure). ⚠️ OPEN INTERACTION: a reinstated No-Show with a past
   arrival is "Reserved" but not "Due In", so it can't be checked in under the strict gate —
   flagged to the owner (do we auto-move its arrival to today on reinstate?). Not yet decided.
-- **No-show → billing: DONE PARTIALLY / DEFERRED.** Owner wants every no-show's charge
-  **always posted to a folio** (create one if none exists) so it carries into billing —
+- **No-show → billing: DONE (2026-07-24).** Every no-show's charge is **always posted to a
+  folio** (Night Audit creates one if the reservation has none) so it carries into billing —
   superseding the earlier "folio-less no-shows are only flagged owed" (2026-07-22). Amount
-  still comes from the No-Show fee rule (FIRST_NIGHT basis = the room rate). **Deferred**
-  because it depends on the fee-rule model change below.
-- **Fee rules: MULTIPLE per type, selected per reservation (NEW — supersedes 2026-07-22
-  "one rule per (property, ruleType)").** Owner: a property can define **several** rules per
-  type (Deposit / Cancellation / No-Show); on a reservation you **pick which rule applies**
-  (one per reservation), and the amount is computed from that selected rule. Requires:
-  `PropertyFeeRule` gains a name + drops the per-type uniqueness; the reservation stores the
-  selected rule per type; cancellation/no-show/deposit posting uses the reservation's
-  selected rule instead of the single "active" rule (`getActiveFeeRule`). **Not yet built —
-  needs its own scoping pass.**
+  comes from the reservation's selected No-Show rule (FIRST_NIGHT basis = the room rate).
+  Deposit-less charges are still surfaced in `noShowFeesOwed`/`...Warning` for collection.
+- **Fee rules: MULTIPLE per type, selected per reservation — DONE (2026-07-24, supersedes
+  the 2026-07-22 "one rule per (property, ruleType)").** A property defines **several** named
+  rules per type (Deposit / Cancellation / No-Show); a reservation **picks one of each** and
+  the amount is computed from the selected rule at event time. Delivered:
+  - `PropertyFeeRule` gained `name`, dropped the per-type unique (now `@@index`).
+  - `Reservation.depositFeeRuleId / cancellationFeeRuleId / noShowFeeRuleId` (plain id refs;
+    a deleted/absent rule = no fee; DELETE detaches referencing reservations).
+  - Fee Rules API is full CRUD (`/api/settings/fee-rules` GET/POST/PUT/DELETE); Controls card
+    lists named rules per type; booking form has a "Fee Policies" 3-picker block.
+  - Posting resolves the reservation's selected rule via `getFeeRuleById` (replaced
+    `getActiveFeeRule`): cancellation in `status/route.ts`, no-show in `night-audit/run`.
+  - Selection is optional (default "none" = no fee); an explicit selection is honored even if
+    the rule is later marked inactive (inactive only hides it from NEW pickers).

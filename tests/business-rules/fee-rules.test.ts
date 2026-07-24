@@ -38,12 +38,14 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
   let adminId: string;
   let guestId: string;
 
-  const mkReserved = async (opts: { checkInOffset?: number; withDeposit?: number } = {}) => {
+  const mkReserved = async (opts: { checkInOffset?: number; withDeposit?: number; cancellationFeeRuleId?: string; noShowFeeRuleId?: string } = {}) => {
     const checkIn = new Date(Date.now() + (opts.checkInOffset ?? 2) * DAY);
     const res = await prisma.reservation.create({
       data: {
         propertyId, confirmationNo: `FR-${uniq()}`, primaryGuestId: guestId,
         checkInDate: checkIn, checkOutDate: new Date(checkIn.getTime() + 2 * DAY), status: "RESERVED", adults: 1,
+        ...(opts.cancellationFeeRuleId ? { cancellationFeeRuleId: opts.cancellationFeeRuleId } : {}),
+        ...(opts.noShowFeeRuleId ? { noShowFeeRuleId: opts.noShowFeeRuleId } : {}),
         ...(opts.withDeposit != null
           ? { folios: { create: { folioNumber: 1, propertyId, payments: { create: { paymentMethodId, shiftId, amount: opts.withDeposit, depositPurpose: "DEPOSIT" } } } } }
           : {}),
@@ -89,13 +91,11 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     expect(payment.depositPurpose).toBe("PRE_ARRIVAL_FEE");
   });
 
-  it("cancellation with an active flat rule posts the fee, retains the deposit, and reports the reconciliation", async () => {
-    await prisma.propertyFeeRule.upsert({
-      where: { propertyId_ruleType: { propertyId, ruleType: "CANCELLATION" } },
-      update: { basis: "FLAT", value: 50, chargeCodeId: cxlCodeId, isActive: true },
-      create: { propertyId, ruleType: "CANCELLATION", basis: "FLAT", value: 50, chargeCodeId: cxlCodeId, isActive: true },
+  it("cancellation with a selected flat rule posts the fee, retains the deposit, and reports the reconciliation", async () => {
+    const rule = await prisma.propertyFeeRule.create({
+      data: { propertyId, name: "Standard Cancellation", ruleType: "CANCELLATION", basis: "FLAT", value: 50, chargeCodeId: cxlCodeId, isActive: true },
     });
-    const res = await mkReserved({ withDeposit: 30 });
+    const res = await mkReserved({ withDeposit: 30, cancellationFeeRuleId: rule.id });
 
     const resp = await asUser(adminId, () =>
       statusRoute.PATCH(
@@ -118,9 +118,8 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     expect(feeLine?.amount).toBe(50);
   });
 
-  it("cancellation with no active rule still requires a net-zero folio (deposit blocks)", async () => {
-    await prisma.propertyFeeRule.updateMany({ where: { propertyId, ruleType: "CANCELLATION" }, data: { isActive: false } });
-    const res = await mkReserved({ withDeposit: 20 });
+  it("cancellation with no selected rule still requires a net-zero folio (deposit blocks)", async () => {
+    const res = await mkReserved({ withDeposit: 20 }); // no cancellation rule selected → no fee
     const resp = await asUser(adminId, () =>
       statusRoute.PATCH(
         new Request(`http://localhost/api/reservations/${res.id}/status`, {
@@ -133,18 +132,16 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     expect((await resp.json()).error).toMatch(/unsettled balance/i);
   });
 
-  it("no-show fee at Night Audit posts to a held deposit folio, or flags owed when there's none", async () => {
-    await prisma.propertyFeeRule.upsert({
-      where: { propertyId_ruleType: { propertyId, ruleType: "NO_SHOW" } },
-      update: { basis: "FLAT", value: 40, chargeCodeId: nsfCodeId, isActive: true },
-      create: { propertyId, ruleType: "NO_SHOW", basis: "FLAT", value: 40, chargeCodeId: nsfCodeId, isActive: true },
+  it("no-show at Night Audit posts the selected-rule charge to a folio, creating one when needed", async () => {
+    const rule = await prisma.propertyFeeRule.create({
+      data: { propertyId, name: "Standard No-Show", ruleType: "NO_SHOW", basis: "FLAT", value: 40, chargeCodeId: nsfCodeId, isActive: true },
     });
     // Align the business date to today so the past-arrival no-shows qualify.
     const bizDate = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
     await prisma.property.update({ where: { id: propertyId }, data: { businessDate: bizDate } });
 
-    const withDeposit = await mkReserved({ checkInOffset: -1, withDeposit: 60 });
-    const noFolio = await mkReserved({ checkInOffset: -1 });
+    const withDeposit = await mkReserved({ checkInOffset: -1, withDeposit: 60, noShowFeeRuleId: rule.id });
+    const noFolio = await mkReserved({ checkInOffset: -1, noShowFeeRuleId: rule.id });
 
     const resp = await asUser(adminId, () =>
       nightAuditRunRoute.POST(new Request("http://localhost/api/night-audit/run", {
@@ -154,14 +151,18 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     expect(resp.status).toBe(200);
     const body = await resp.json();
 
-    // The deposit-holding no-show got a fee charge posted.
+    // The deposit-holding no-show got a charge posted to its existing folio.
     const feeLine = await prisma.folioLineItem.findFirst({ where: { folio: { reservationId: withDeposit.id }, chargeCodeId: nsfCodeId } });
     expect(feeLine?.amount).toBe(40);
 
-    // The folio-less no-show is flagged as owed, not posted.
-    expect(body.noShowFeesOwed?.some((f: any) => f.confirmationNo === noFolio.confirmationNo && f.fee === 40)).toBe(true);
-    const noFolioReservation = await prisma.reservation.findUnique({ where: { id: noFolio.id }, include: { folios: true } });
+    // The folio-less no-show now gets a folio CREATED with the charge posted to it.
+    const noFolioReservation = await prisma.reservation.findUnique({ where: { id: noFolio.id }, include: { folios: { include: { lineItems: true } } } });
     expect(noFolioReservation!.status).toBe("NO_SHOW");
-    expect(noFolioReservation!.folios.length).toBe(0);
+    expect(noFolioReservation!.folios.length).toBe(1);
+    expect(noFolioReservation!.folios[0].lineItems.some((li) => li.chargeCodeId === nsfCodeId && li.amount === 40)).toBe(true);
+
+    // Both are reported as charged; the deposit-less one is also flagged for collection.
+    expect(body.noShowFeesCharged?.some((f: any) => f.confirmationNo === noFolio.confirmationNo && f.fee === 40)).toBe(true);
+    expect(body.noShowFeesOwed?.some((f: any) => f.confirmationNo === noFolio.confirmationNo && f.fee === 40)).toBe(true);
   });
 });

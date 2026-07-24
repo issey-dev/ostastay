@@ -220,6 +220,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
     }
 
+    // Optional per-reservation fee-rule selections (one per type). Each id, if given,
+    // must be a rule of THIS property and the matching type — a bad id is rejected rather
+    // than silently attached. Null = no rule of that type = no fee.
+    const feeRuleSel: Record<"DEPOSIT" | "CANCELLATION" | "NO_SHOW", string | null> = {
+      DEPOSIT: body.depositFeeRuleId || null,
+      CANCELLATION: body.cancellationFeeRuleId || null,
+      NO_SHOW: body.noShowFeeRuleId || null,
+    };
+    const selectedRuleIds = Object.values(feeRuleSel).filter(Boolean) as string[];
+    if (selectedRuleIds.length > 0) {
+      const rules = await prisma.propertyFeeRule.findMany({ where: { id: { in: selectedRuleIds }, propertyId: body.propertyId } });
+      const byId = new Map(rules.map((r) => [r.id, r]));
+      for (const [type, id] of Object.entries(feeRuleSel)) {
+        if (id && byId.get(id)?.ruleType !== type) {
+          return NextResponse.json({ error: "A selected fee rule is invalid for this property." }, { status: 400 });
+        }
+      }
+    }
+
     // Fetch EnterpriseSettings to determine confirmation number format.
     const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
 
@@ -260,6 +279,9 @@ export async function POST(request: Request) {
         infants: parseInt(body.infants) || 0,
         mealPlan: body.mealPlan || "NONE",
         remarks: body.remarks || null,
+        depositFeeRuleId: feeRuleSel.DEPOSIT,
+        cancellationFeeRuleId: feeRuleSel.CANCELLATION,
+        noShowFeeRuleId: feeRuleSel.NO_SHOW,
         status: "RESERVED", // Default status
         hasScheduledRoomMove: detectScheduledRoomMove(assignmentsInput),
         assignments: {

@@ -38,6 +38,9 @@ type ReservationDetail = {
   mealPlan: string
   primaryGuestId: string
   travelAgentId: string | null
+  depositFeeRuleId: string | null
+  cancellationFeeRuleId: string | null
+  noShowFeeRuleId: string | null
   accompanyingGuests?: { profile: { upid: string } }[]
   specialRequests?: { code: string }[]
   assignments: {
@@ -92,6 +95,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   const [mealPlans, setMealPlans] = useState<any[]>([])
   const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [specialRequestOptions, setSpecialRequestOptions] = useState<{ code: string; value: string }[]>([])
+  const [feeRules, setFeeRules] = useState<{ id: string; name: string; ruleType: string; isActive: boolean }[]>([])
 
   const formCtl = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema) as Resolver<BookingFormValues>,
@@ -124,7 +128,8 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       fetch(`/api/meal-plans?propertyId=${propertyId}`).then(r => r.json()),
       fetch(`/api/allocations?propertyId=${propertyId}`).then(r => r.json()),
       fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=SPECIAL_REQUEST`).then(r => r.json()),
-    ]).then(([profData, rtData, rpData, rmData, mpData, alData, srData]) => {
+      fetch(`/api/settings/fee-rules?propertyId=${propertyId}`).then(r => r.json()),
+    ]).then(([profData, rtData, rpData, rmData, mpData, alData, srData, frData]) => {
       if (Array.isArray(profData)) setProfiles(profData)
       if (Array.isArray(rtData)) setRoomTypes(rtData)
       if (Array.isArray(rpData)) setRatePlans(rpData)
@@ -132,6 +137,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       if (Array.isArray(mpData)) setMealPlans(mpData)
       if (Array.isArray(alData)) setAllocations(alData)
       if (Array.isArray(srData)) setSpecialRequestOptions(srData.filter((c: any) => c.isActive))
+      if (Array.isArray(frData)) setFeeRules(frData)
     }).catch(console.error)
   }, [currentProperty, propertyId, enterpriseId])
 
@@ -153,6 +159,9 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
           remarks: res.remarks || "",
           mealPlan: res.mealPlan || "NONE",
           travelAgentId: res.travelAgentId || "none",
+          depositFeeRuleId: res.depositFeeRuleId || "none",
+          cancellationFeeRuleId: res.cancellationFeeRuleId || "none",
+          noShowFeeRuleId: res.noShowFeeRuleId || "none",
           accompanyingGuestIds: res.accompanyingGuests?.map(ag => ag.profile.upid) || [],
           manualAllocationIds: res.allocations?.filter(a => a.source === "MANUAL").map(a => a.allocationId) || [],
           specialRequestCodes: res.specialRequests?.map(sr => sr.code) || [],
@@ -396,6 +405,9 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
         travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
+        cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
+        noShowFeeRuleId: values.noShowFeeRuleId === "none" ? null : values.noShowFeeRuleId,
         assignments: values.assignments.map(a => ({
           roomTypeId: a.roomTypeId,
           roomId: a.roomId && a.roomId !== "none" ? a.roomId : null,
@@ -756,6 +768,41 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                   </Select>
                 </div>
               </div>
+
+              {feeRules.length > 0 && (
+                <div className="grid gap-2 p-4 bg-muted border rounded-md">
+                  <Label className="flex items-center gap-2">
+                    Fee Policies
+                    <span className="text-xs font-normal text-muted-foreground">— optional; drive this booking&apos;s deposit, cancellation &amp; no-show fees</span>
+                  </Label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {([
+                      { key: "depositFeeRuleId" as const, type: "DEPOSIT", label: "Deposit" },
+                      { key: "cancellationFeeRuleId" as const, type: "CANCELLATION", label: "Cancellation" },
+                      { key: "noShowFeeRuleId" as const, type: "NO_SHOW", label: "No-show" },
+                    ]).map(({ key, type, label }) => {
+                      const selectedId = form[key]
+                      const options = [
+                        { value: "none", label: "None" },
+                        ...feeRules
+                          .filter(r => r.ruleType === type && (r.isActive || r.id === selectedId))
+                          .map(r => ({ value: r.id, label: r.isActive ? r.name : `${r.name} (inactive)` })),
+                      ]
+                      return (
+                        <div key={key} className="grid gap-1.5">
+                          <Label className="text-xs text-muted-foreground">{label}</Label>
+                          <SearchableSelect
+                            value={selectedId}
+                            onChange={(v: string) => setField(key, v || "none")}
+                            placeholder="None"
+                            options={options}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-2 p-4 bg-muted border rounded-md">
                 <Label className="flex items-center justify-between">
