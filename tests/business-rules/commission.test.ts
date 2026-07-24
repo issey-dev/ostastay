@@ -212,4 +212,53 @@ describe("Travel Agent commission credit at checkout", () => {
     const body = await res.json();
     expect(body.commissionsPosted).toHaveLength(0);
   });
+
+  describe("City Ledger AR-account enforcement at checkout", () => {
+    it("BLOCKS checkout of a City Ledger folio whose profile has no AR account", async () => {
+      const ctx = await setup();
+      // Demote the agent — City Ledger folio, but no AR (credit) account behind it.
+      await prisma.profile.update({ where: { upid: ctx.agentUpid }, data: { isCreditAccount: false } });
+      const reservation = await createInHouseCityLedgerReservation(ctx);
+      await prisma.folioLineItem.create({
+        data: {
+          folioId: reservation.folios[0].id, chargeCodeId: ctx.roomCodeId, roomAssignmentId: reservation.assignments[0].id,
+          amount: 200, taxAmount: 0, serviceChargeAmount: 0, description: "Nightly Room Charge", date: new Date(),
+        },
+      });
+
+      const res = await asUser(ctx.adminId, () =>
+        checkOutRoute.POST(new Request(`http://localhost/api/reservations/${reservation.id}/check-out`, { method: "POST" }), {
+          params: Promise.resolve({ id: reservation.id }),
+        })
+      );
+      expect(res.status).toBe(400);
+      expect((await res.json()).cityLedgerNoAccount).toBe(true);
+
+      // Untouched: still in-house, folio not finalized to a debtor.
+      const r = await prisma.reservation.findUnique({ where: { id: reservation.id } });
+      expect(r!.status).toBe("IN_HOUSE");
+      const folio = await prisma.folio.findUnique({ where: { id: reservation.folios[0].id } });
+      expect(folio!.isDebtorAccount).toBe(false);
+    });
+
+    it("allows checkout once the profile IS an AR account (transfers to debtor)", async () => {
+      const ctx = await setup(); // agent is created with isCreditAccount: true
+      const reservation = await createInHouseCityLedgerReservation(ctx);
+      await prisma.folioLineItem.create({
+        data: {
+          folioId: reservation.folios[0].id, chargeCodeId: ctx.roomCodeId, roomAssignmentId: reservation.assignments[0].id,
+          amount: 200, taxAmount: 0, serviceChargeAmount: 0, description: "Nightly Room Charge", date: new Date(),
+        },
+      });
+
+      const res = await asUser(ctx.adminId, () =>
+        checkOutRoute.POST(new Request(`http://localhost/api/reservations/${reservation.id}/check-out`, { method: "POST" }), {
+          params: Promise.resolve({ id: reservation.id }),
+        })
+      );
+      expect(res.status).toBe(200);
+      const folio = await prisma.folio.findUnique({ where: { id: reservation.folios[0].id } });
+      expect(folio!.isDebtorAccount).toBe(true);
+    });
+  });
 });

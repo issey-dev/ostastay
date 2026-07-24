@@ -1975,3 +1975,23 @@ Owner specified the full front-desk status model and corrected the fee-rule mode
   `checkOutDate` to the business date (the real departure), so stay length reflects reality
   and no future night stays billable — owner rule. (An early departure that should charge the
   full stay is done by generating an Advance Bill first, then checking out.)
+
+## Checkout settlement rules — owner clarification (2026-07-24)
+
+Owner reframed "force-settle": there is NO write-off / proceed-with-balance override. A
+guest can NEVER check out with an open balance — that's the whole point.
+
+- **City Ledger → must have an AR account.** A City-Ledger folio transfers to the profile's
+  Debtor (AR) account at checkout; if the travel agent / company profile is not an AR account
+  (`isCreditAccount`), checkout is **BLOCKED** (error carries `cityLedgerNoAccount: true`).
+  DONE — replaced the old silent fallback-to-guest-payable in check-out/route.ts. Fix by
+  creating the AR account or changing the folio's settlement method.
+- **FIT / guest-settled → settle one way or another.** The zero-balance checkout guard stays.
+  If the guest won't pay, staff settle the balance to a **Service Recovery account** — a
+  payment method the property creates/manages (Controls > Finance > Payment Methods) and posts
+  the balance against, zeroing the folio. No new mechanism: it's the existing payment flow,
+  and the checkout block message now advises it. Tested in commission.test.ts.
+- **Checkout settlement document = the Tax Invoice.** The existing numbered Tax Invoice (final
+  posted charges + payments + zero balance) is the settlement document printed at checkout; no
+  separate doc type was added. A distinct "Settlement Receipt" would be a quick add (mirroring
+  the Interim bill) if the owner wants one — flag before building.

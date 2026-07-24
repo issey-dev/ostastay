@@ -449,7 +449,16 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
      detail page. Covered by `tests/business-rules/advance-bill.test.ts` (incl. the
      no-double-post guard). FOLLOW-UP: replace the window.prompt with a proper nights-picker
      modal + an Advance Bill print doc.
-  3. **Force-settle at checkout + checkout settlement document.**
+  3. **Checkout settlement enforcement** — ✅ DONE (2026-07-24). Owner reframed "force-settle":
+     NO write-off/override — a guest can never check out with an open balance.
+     - **City Ledger** now BLOCKS checkout if the settling profile has no AR account
+       (`isCreditAccount`), instead of silently falling back to guest-payable
+       (`cityLedgerNoAccount: true`). check-out/route.ts + commission.test.ts.
+     - **FIT/guest**: zero-balance guard stays; the block message advises settling to a
+       **Service Recovery** payment method (staff-managed) — existing payment flow, no new
+       mechanism.
+     - **Settlement document** = the existing Tax Invoice (no separate doc added; a distinct
+       Settlement Receipt is a quick follow-up if wanted).
   4. **Linked-profile folios** (company/agent/sharer across reservations).
 - **(superseded) Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/
   charging opens only after check-in and is frozen after check-out (corrections via a

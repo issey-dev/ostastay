@@ -58,11 +58,9 @@ export async function POST(
       );
     }
 
-    // 2. A City Ledger folio only transfers to a debtor account if the reservation's
-    // travel agent is still a valid, activated credit account at checkout time — this
-    // is the moment (not Night Audit, not folio creation) an invoice is actually born.
-    // Falls back to treating the folio as guest-payable if the TA isn't valid, so a
-    // misconfigured folio can't silently write off real revenue nobody will collect.
+    // 2. A City Ledger folio transfers to a debtor account at checkout — the moment (not
+    // Night Audit, not folio creation) the invoice is actually born. That transfer is only
+    // possible if the settling travel agent/company is an activated AR (credit) account.
     let creditAccount: { upid: string; firstName: string; lastName: string | null; companyName: string | null; creditLimit: number | null } | null = null;
     if (reservation.travelAgentId) {
       const travelAgent = await prisma.profile.findUnique({ where: { upid: reservation.travelAgentId } });
@@ -73,6 +71,22 @@ export async function POST(
 
     const qualifiesForAccount = (folio: (typeof reservation.folios)[number]) =>
       folio.settlementMethod === "CITY_LEDGER" && creditAccount !== null;
+
+    // City Ledger with no AR account behind it has nowhere for the invoice to go —
+    // checkout is BLOCKED (owner rule), rather than silently falling back to guest-payable
+    // and hiding the misconfiguration. Create the AR account, or change the settlement
+    // method, before checking out.
+    const cityLedgerFolios = reservation.folios.filter((f) => f.settlementMethod === "CITY_LEDGER");
+    if (cityLedgerFolios.length > 0 && !creditAccount) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot check out: this reservation settles by City Ledger, but its travel agent / company has no AR (credit) account. Create an AR account for that profile, or change the folio's settlement method, before checking out.",
+          cityLedgerNoAccount: true,
+        },
+        { status: 400 }
+      );
+    }
 
     // 3. Guest-payable balance excludes folios transferring to a debtor account —
     // those are the account's responsibility now, not the guest's, regardless of
@@ -94,7 +108,7 @@ export async function POST(
     const balance = totalCharges - totalPayments;
     if (Math.abs(balance) > 0.01) {
       return NextResponse.json({
-        error: "Cannot check out with an outstanding balance",
+        error: `Cannot check out with an outstanding balance of ${balance.toFixed(2)}. Settle it first — collect payment from the guest, or if they won't pay, post it to your Service Recovery account (a payment method you manage) — then check out.`,
         balance
       }, { status: 400 });
     }
