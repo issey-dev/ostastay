@@ -297,7 +297,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   )
   const regLabel = (profileId?: string) => {
     const r = profileId ? registrations.get(profileId) : undefined
-    return r ? `Reg #${r.registrationNo}/${r.year}` : null
+    return r ? String(r.registrationNo).padStart(4, "0") : null
   }
   const nights = Math.max(
     1,
