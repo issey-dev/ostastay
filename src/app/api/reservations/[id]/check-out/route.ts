@@ -126,9 +126,15 @@ export async function POST(
       // Update Reservation Status. checkedOutAt records the actual departure time — its
       // calendar date is the checkout's business day, which reverse-check-out uses to
       // gate same-day-only reversal of a finalized City-Ledger (debtor) invoice.
+      // On an EARLY departure the checkout date auto-moves to today (the real departure
+      // date), so the stay length reflects reality and no future night is left billable.
       await tx.reservation.update({
         where: { id },
-        data: { status: "CHECKED_OUT", checkedOutAt: new Date() }
+        data: {
+          status: "CHECKED_OUT",
+          checkedOutAt: new Date(),
+          ...(early && businessDate < checkOutDay && { checkOutDate: businessDate }),
+        }
       });
 
       // Update Room Status to DIRTY and queue the checkout clean so the room shows up

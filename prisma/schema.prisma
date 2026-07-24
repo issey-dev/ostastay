@@ -818,6 +818,12 @@ model Reservation {
   depositFeeRuleId      String?
   cancellationFeeRuleId String?
   noShowFeeRuleId       String?
+  // The last stay-night (date) already billed upfront by an Advance Bill. Night Audit
+  // skips room/allocation/green-tax posting for any night on or before this date — those
+  // nights were posted (dated the settlement day) when the Advance Bill was generated, so
+  // re-posting them would double-charge. Null = nothing advance-billed. See
+  // api/reservations/[id]/advance-bill/route.ts.
+  advanceBilledThrough  DateTime?
   adults               Int       @default(1)
   children             Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)

@@ -1957,3 +1957,21 @@ Owner specified the full front-desk status model and corrected the fee-rule mode
     `getActiveFeeRule`): cancellation in `status/route.ts`, no-show in `night-audit/run`.
   - Selection is optional (default "none" = no fee); an explicit selection is honored even if
     the rule is later marked inactive (inactive only hides it from NEW pickers).
+
+## Billing increments #2 delivered (2026-07-24)
+
+- **Interim Bill — DONE.** `type=interim` on the folio invoice-data route + print page: the
+  actually-posted charges/payments so far, mid-stay, labelled "Interim Bill", NOT numbered
+  and NO ledger change (distinct from the Proforma's full projection). Folio-panel button.
+- **Advance Bill — DONE.** Posts N upcoming nights upfront (`api/reservations/[id]/
+  advance-bill`), N chosen by front desk ≤ remaining un-billed nights. Charges = Rate +
+  Extra Occupancy + Allocations + Green Tax + any uncharged Transport, computed by
+  `computeReservationQuote` over assignments **clipped to the night window**, posted as folio
+  lines **dated today** (revenue recognized on the settlement date, per owner rule — not
+  spread). Key safeguard: `Reservation.advanceBilledThrough` (last billed night); **Night
+  Audit skips room/allocation/green-tax posting for any night ≤ it** (the one place that
+  would otherwise double-charge). Transport is double-post-safe via `chargedLineItemId`.
+- **Early departure auto-moves the checkout date.** An early check-out now sets
+  `checkOutDate` to the business date (the real departure), so stay length reflects reality
+  and no future night stays billable — owner rule. (An early departure that should charge the
+  full stay is done by generating an Advance Bill first, then checking out.)

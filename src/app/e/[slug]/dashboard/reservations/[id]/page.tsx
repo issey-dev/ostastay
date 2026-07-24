@@ -82,6 +82,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const alertShownRef = useRef(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [reversing, setReversing] = useState(false)
+  const [advancing, setAdvancing] = useState(false)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
 
   const fetchReservation = async () => {
@@ -182,6 +183,39 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     } finally {
       setCheckingOut(false)
+    }
+  }
+
+  const handleAdvanceBill = async () => {
+    const input = window.prompt(
+      "Advance-bill how many upcoming nights? Leave blank to bill ALL remaining nights.\n\nCharges (rate, allocations, green tax, transport) post today so the guest can settle before checkout.",
+      ""
+    )
+    if (input === null) return
+    const trimmed = input.trim()
+    const nights = trimmed === "" ? undefined : parseInt(trimmed, 10)
+    if (nights !== undefined && (!Number.isFinite(nights) || nights <= 0)) {
+      setNotification({ title: "Invalid", message: "Enter a positive number of nights, or leave blank for all remaining.", isError: true })
+      return
+    }
+    setAdvancing(true)
+    try {
+      const res = await fetch(`/api/reservations/${id}/advance-bill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nights !== undefined ? { nights } : {}),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setNotification({ title: "Advance Bill Posted", message: `${data.nights} night(s) posted — $${data.amountPosted.toFixed(2)} now on the folio (billed through ${data.advanceBilledThrough}).` })
+        fetchReservation()
+      } else {
+        setNotification({ title: "Advance Bill Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred generating the advance bill.", isError: true })
+    } finally {
+      setAdvancing(false)
     }
   }
 
@@ -368,6 +402,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 )}
                 <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>
                   <ArrowLeftRight className="w-4 h-4 mr-2" /> Move Room
+                </Button>
+                <Button variant="outline" onClick={handleAdvanceBill} disabled={advancing}>
+                  <Wallet className="w-4 h-4 mr-2" /> {advancing ? "Posting..." : "Advance Bill"}
                 </Button>
                 <Button
                   variant="outline"

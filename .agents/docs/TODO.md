@@ -438,10 +438,17 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
      + print page: the actually-posted charges/payments so far, mid-stay, labelled "Interim
      Bill", NOT numbered and NO ledger change (distinct from Proforma's full projection).
      "Interim Bill" print button on the folio panel.
-     **Advance bill** — STILL TODO (the complex half): posts remaining nights (Rate +
-     Transport + Extra Allocations), user-chosen count ≤ remaining nights, revenue on the
-     posting date; early-departure variant auto-moves the checkout date. Needs a posting
-     route (partial on-demand night-audit), a nights picker UI, and print.
+     **Advance bill** — ✅ DONE (2026-07-24). `api/reservations/[id]/advance-bill` posts N
+     upcoming nights (user-chosen ≤ remaining) — Rate + Extra Occupancy + Allocations +
+     Green Tax + uncharged Transport — computed via `computeReservationQuote` over
+     assignments clipped to the night window, posted as folio lines **dated today** (revenue
+     on the settlement date). Sets `Reservation.advanceBilledThrough`; Night Audit skips
+     room/allocation/green-tax posting for nights ≤ that date (no double-charge); transport
+     is double-post-safe via `chargedLineItemId`. Early check-out now auto-moves the checkout
+     date to the business date. "Advance Bill" button (nights prompt) on the reservation
+     detail page. Covered by `tests/business-rules/advance-bill.test.ts` (incl. the
+     no-double-post guard). FOLLOW-UP: replace the window.prompt with a proper nights-picker
+     modal + an Advance Bill print doc.
   3. **Force-settle at checkout + checkout settlement document.**
   4. **Linked-profile folios** (company/agent/sharer across reservations).
 - **(superseded) Billing module (large — needs its own scoping pass).** Owner's stated scope: billing/

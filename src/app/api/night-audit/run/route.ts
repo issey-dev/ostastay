@@ -288,6 +288,12 @@ export async function POST(request: Request) {
         for (const res of chargeableReservations) {
           if (res.folios.length === 0) continue
 
+          // Skip tonight entirely if this night was already billed upfront by an Advance
+          // Bill (posted then, dated the settlement day). Re-posting room/allocation/
+          // green-tax here would double-charge. Transport is a separate pass keyed on
+          // chargedLineItemId, so it's already double-post-safe.
+          if (res.advanceBilledThrough && dayMsUTC(res.advanceBilledThrough) >= dayMsUTC(auditDate)) continue
+
           const activeAssignment = res.assignments[0]
           if (!activeAssignment) continue
 
