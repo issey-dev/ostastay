@@ -16,6 +16,10 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   CHECKED_IN: "success",
   RESERVED: "info",
   CONFIRMED: "info",
+  // Derived "action needed today" states (see src/lib/reservation-state.ts) — the guest
+  // is arriving or departing on the current business date.
+  DUE_IN: "warning",
+  DUE_OUT: "warning",
   CHECKED_OUT: "neutral",
   CANCELLED: "danger",
   NO_SHOW: "danger",

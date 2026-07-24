@@ -26,6 +26,7 @@ import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
 import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -394,7 +395,7 @@ export default function ReservationsDashboard() {
     const canLetter = res.status === "RESERVED" || res.status === "IN_HOUSE"
     return (
       <div className="flex items-center justify-end gap-1.5">
-        {res.status === "RESERVED" && (
+        {canCheckIn(res.status, res.checkInDate, currentProperty?.businessDate) && (
           <Button size="sm" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" variant="outline" onClick={() => handleCheckIn(res)}>
             <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
           </Button>
@@ -551,8 +552,8 @@ export default function ReservationsDashboard() {
                         <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
                       </div>
                       <StatusBadge
-                        label={res.status.replace('_', ' ')}
-                        status={res.status}
+                        label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
+                        status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
                         className={`shrink-0 ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}
                       />
                     </div>
@@ -657,8 +658,8 @@ export default function ReservationsDashboard() {
                         {/* Status */}
                         <TableCell className="align-middle">
                           <StatusBadge
-                            label={res.status.replace('_', ' ')}
-                            status={res.status}
+                            label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
+                            status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
                             className={cancelled ? 'line-through opacity-70' : ''}
                           />
                         </TableCell>

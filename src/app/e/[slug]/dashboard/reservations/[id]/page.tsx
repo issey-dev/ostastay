@@ -22,6 +22,7 @@ import { CheckInDialog } from "@/components/front-office/check-in-dialog"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { useProperty } from "@/components/providers/property-provider"
+import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 
 // Property business date (UTC midnight ms) vs a reservation date, both date-only.
 const dayMs = (d?: string | null) => (d ? Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), new Date(d).getUTCDate()) : NaN)
@@ -260,6 +261,15 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     Math.round((new Date(reservation.checkOutDate).getTime() - new Date(reservation.checkInDate).getTime()) / 86_400_000)
   )
   const activeAssignment = reservation.assignments?.[0]
+  // Derived front-desk state (Reserved / Due In / In-House / Due Out / …) drives both the
+  // header badge and the action gating below — see src/lib/reservation-state.ts.
+  const derivedState = deriveReservationState(
+    reservation.status,
+    reservation.checkInDate,
+    reservation.checkOutDate,
+    currentProperty?.businessDate
+  )
+  const checkInAvailable = canCheckIn(reservation.status, reservation.checkInDate, currentProperty?.businessDate)
   const totals = (reservation.folios ?? []).reduce(
     (acc: { charges: number; payments: number; balance: number }, f: any) => {
       const t = folioBalance(f)
@@ -308,8 +318,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">{guestName}</h1>
               <StatusBadge
-                label={reservation.status.replace("_", " ")}
-                status={reservation.status}
+                label={reservationStateLabel(derivedState)}
+                status={derivedState}
                 className={reservation.status === "CANCELLED" ? "line-through opacity-70" : ""}
               />
             </div>
@@ -320,9 +330,13 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         <div className="flex flex-wrap gap-2">
           {reservation.status === "RESERVED" && (
             <>
-              <Button onClick={() => setIsCheckInOpen(true)}>
-                <Key className="w-4 h-4 mr-2" /> Check In
-              </Button>
+              {/* Check-in only on the arrival day (Due In). A future-dated Reserved
+                  booking shows Cancel only, per the front-desk lifecycle. */}
+              {checkInAvailable && (
+                <Button onClick={() => setIsCheckInOpen(true)}>
+                  <Key className="w-4 h-4 mr-2" /> Check In
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="text-destructive border-destructive/40 hover:bg-destructive-muted hover:text-destructive"

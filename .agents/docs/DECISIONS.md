@@ -1918,3 +1918,37 @@ verbal rules (capture verbatim intent — several have edge cases):
     reverse the debtor transfer and the auto-posted TA commission (as reversing entries,
     not deletions).
 - **Reverse check-in:** undo IN_HOUSE → RESERVED (guarded so it can't strand posted money).
+
+## Reservation lifecycle states + fee-rule selection (2026-07-24)
+
+Owner specified the full front-desk status model and corrected the fee-rule model.
+
+- **Derived front-desk states.** The DB still stores only RESERVED / IN_HOUSE /
+  CHECKED_OUT / NO_SHOW / CANCELLED. **Due In** and **Due Out** are DERIVED from the stay
+  dates vs the property business date (`src/lib/reservation-state.ts`):
+  - *Reserved* — arrival in the future → **Cancel only**.
+  - *Due In* — arrival = business date → **Check-in enabled**.
+  - *In-House* — staying → **Early departure enabled**.
+  - *Due Out* — departure = business date → **Check-out enabled**.
+- **Check-in is strictly gated to the arrival day** (arrival = business date). Enforced in
+  the reservation detail page and the reservations list (front-office board was already
+  date-scoped to today's arrivals). A past-arrival that never checked in is Night Audit's
+  No-Show, not a check-in.
+- **Reinstate is date-bounded** (`status/route.ts`): **Cancelled → Reserved** only while
+  arrival is still in the future; **No-Show → Reserved** only while within the stay period
+  (business date ≤ departure). ⚠️ OPEN INTERACTION: a reinstated No-Show with a past
+  arrival is "Reserved" but not "Due In", so it can't be checked in under the strict gate —
+  flagged to the owner (do we auto-move its arrival to today on reinstate?). Not yet decided.
+- **No-show → billing: DONE PARTIALLY / DEFERRED.** Owner wants every no-show's charge
+  **always posted to a folio** (create one if none exists) so it carries into billing —
+  superseding the earlier "folio-less no-shows are only flagged owed" (2026-07-22). Amount
+  still comes from the No-Show fee rule (FIRST_NIGHT basis = the room rate). **Deferred**
+  because it depends on the fee-rule model change below.
+- **Fee rules: MULTIPLE per type, selected per reservation (NEW — supersedes 2026-07-22
+  "one rule per (property, ruleType)").** Owner: a property can define **several** rules per
+  type (Deposit / Cancellation / No-Show); on a reservation you **pick which rule applies**
+  (one per reservation), and the amount is computed from that selected rule. Requires:
+  `PropertyFeeRule` gains a name + drops the per-type uniqueness; the reservation stores the
+  selected rule per type; cancellation/no-show/deposit posting uses the reservation's
+  selected rule instead of the single "active" rule (`getActiveFeeRule`). **Not yet built —
+  needs its own scoping pass.**

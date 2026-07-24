@@ -4,7 +4,7 @@ import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { findTypeAvailabilityConflicts } from "@/lib/availability";
 import { getActiveFeeRule, computeReservationFee } from "@/lib/fee-rules";
-import { resolveBusinessDate } from "@/lib/business-date";
+import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
 // The reservation lifecycle is a guarded state machine, not a free-text field.
@@ -112,9 +112,33 @@ export async function PATCH(
       }
     }
 
-    // Reinstating (CANCELLED/NO_SHOW → RESERVED) puts the reservation back into
-    // sellable inventory — the rooms may have been resold in the meantime, so it must
-    // pass the same availability guard as a fresh booking.
+    // Reinstating (CANCELLED/NO_SHOW → RESERVED) is date-bounded by the stay itself:
+    //  - a CANCELLED booking can only come back while its arrival is still in the future
+    //    (a past arrival is a fresh booking, not a reinstatement);
+    //  - a NO_SHOW can come back only while still within the stay period (business date
+    //    on or before departure) — once the departure date has passed there's nothing to
+    //    reinstate into.
+    if (body.status === "RESERVED") {
+      const bd = toUtcMidnight(resolveBusinessDate(existing.property)).getTime();
+      const arrival = toUtcMidnight(new Date(existing.checkInDate)).getTime();
+      const departure = toUtcMidnight(new Date(existing.checkOutDate)).getTime();
+      if (existing.status === "CANCELLED" && arrival <= bd) {
+        return NextResponse.json(
+          { error: "This reservation can't be reinstated — its arrival date is no longer in the future. Create a new booking instead." },
+          { status: 400 }
+        );
+      }
+      if (existing.status === "NO_SHOW" && bd > departure) {
+        return NextResponse.json(
+          { error: "This no-show can't be reinstated — the stay's departure date has already passed." },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Reinstating also puts the reservation back into sellable inventory — the rooms may
+    // have been resold in the meantime, so it must pass the same availability guard as a
+    // fresh booking.
     if (body.status === "RESERVED") {
       const conflicts = await findTypeAvailabilityConflicts({
         propertyId: existing.propertyId,
