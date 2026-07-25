@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus } from "@/components/icons"
 import { toast } from "@/lib/toast"
@@ -107,11 +108,11 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="checkInDate">Check-in</Label>
-              <Input type="date" id="checkInDate" name="checkInDate" required value={formData.checkInDate} onChange={handleChange} />
+              <DatePicker value={formData.checkInDate} onChange={(v) => setFormData({ ...formData, checkInDate: v })} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="checkOutDate">Check-out</Label>
-              <Input type="date" id="checkOutDate" name="checkOutDate" required value={formData.checkOutDate} onChange={handleChange} />
+              <DatePicker value={formData.checkOutDate} onChange={(v) => setFormData({ ...formData, checkOutDate: v })} />
             </div>
           </div>
 

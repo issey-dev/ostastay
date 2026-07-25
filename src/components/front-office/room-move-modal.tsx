@@ -7,7 +7,6 @@ import { useForm } from "react-hook-form"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -133,29 +132,12 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
                 <FormItem className="mt-2">
                   <FormLabel>New Room Type <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
-                    <Select value={field.value} onValueChange={(v) => { field.onChange(v ?? ""); form.setValue("roomId", "", { shouldValidate: true }) }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select New Room Type">
-                          {(() => {
-                            const rt = roomTypes.find(r => r.id === field.value)
-                            return rt ? `${rt.name} (${rt.code})` : undefined
-                          })()}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {loading ? (
-                          <SelectItem value="loading" disabled>Loading...</SelectItem>
-                        ) : roomTypes.length === 0 ? (
-                          <SelectItem value="none" disabled>No room types found</SelectItem>
-                        ) : (
-                          roomTypes.map(rt => (
-                            <SelectItem key={rt.id} value={rt.id}>
-                              {rt.name} ({rt.code})
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={(v) => { field.onChange(v ?? ""); form.setValue("roomId", "", { shouldValidate: true }) }}
+                      placeholder={loading ? "Loading..." : "Select New Room Type"}
+                      options={roomTypes.map(rt => ({ value: rt.id, label: `${rt.name} (${rt.code})` }))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

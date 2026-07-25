@@ -163,12 +163,12 @@ export function OutletsManager() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="space-y-2 max-w-xs w-full">
           <Label className="text-xs text-muted-foreground">Property</Label>
-          <Select value={propertyId} onValueChange={(v) => setPropertyId(v ?? "")}>
-            <SelectTrigger><SelectValue placeholder="Select property">{properties.find((p) => p.id === propertyId)?.name}</SelectValue></SelectTrigger>
-            <SelectContent>
-              {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={propertyId}
+            onChange={(v) => setPropertyId(v ?? "")}
+            placeholder="Select property"
+            options={properties.map((p) => ({ label: p.name, value: p.id }))}
+          />
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm() }}>

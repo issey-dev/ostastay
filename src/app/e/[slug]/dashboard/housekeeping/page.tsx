@@ -9,6 +9,7 @@ import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
@@ -592,10 +593,9 @@ export default function HousekeepingDashboard() {
                 {maintenanceTakeOOO && (
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-foreground">Expected return date (optional)</label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={maintenanceReturnDate}
-                      onChange={e => setMaintenanceReturnDate(e.target.value)}
+                      onChange={setMaintenanceReturnDate}
                     />
                   </div>
                 )}
@@ -683,10 +683,9 @@ export default function HousekeepingDashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Expected return date (optional)</label>
-              <Input
-                type="date"
+              <DatePicker
                 value={oooReturnDate}
-                onChange={e => setOooReturnDate(e.target.value)}
+                onChange={setOooReturnDate}
               />
             </div>
           </div>

@@ -10,6 +10,7 @@ import { useTableSort, SortableTableHead } from "@/components/controls/use-table
 import { ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/lib/toast"
@@ -221,18 +222,13 @@ export function ChargeCodesManager() {
                   </label>
                 </div>
                 {!chargeForm.useDefaultTax && (
-                  <Select required value={chargeForm.taxProfileId} onValueChange={v => setChargeForm(p => ({ ...p, taxProfileId: v ?? "" }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Custom Tax">
-                        {chargeForm.taxProfileId ? taxProfiles.find(t => t.id === chargeForm.taxProfileId)?.name : "Select Custom Tax"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taxProfiles.map(tp => (
-                        <SelectItem key={tp.id} value={tp.id}>{tp.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    required
+                    value={chargeForm.taxProfileId}
+                    onChange={v => setChargeForm(p => ({ ...p, taxProfileId: v ?? "" }))}
+                    placeholder="Select Custom Tax"
+                    options={taxProfiles.map(tp => ({ label: tp.name, value: tp.id }))}
+                  />
                 )}
                 {taxProfiles.length === 0 && !chargeForm.useDefaultTax && (
                   <p className="text-xs text-muted-foreground">No Custom Tax profiles yet — add one under Tax &gt; Custom Tax first.</p>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "@/components/icons"
+import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -334,26 +335,17 @@ export default function RevenueDashboard() {
                   <p className="text-xs text-muted-foreground mb-1">
                     Instead of its own Price Calendar, this plan's price is computed live as the parent plan's price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
                   </p>
-                  <Select
-                    value={form.parentRatePlanId || "__none__"}
-                    onValueChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v === "__none__" ? "" : (v ?? "") }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="None — independent rate plan">
-                        {form.parentRatePlanId
-                          ? ratePlans.find(r => r.id === form.parentRatePlanId)?.name
-                          : "None — independent rate plan"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">None — independent rate plan</SelectItem>
-                      {ratePlans
+                  <SearchableSelect
+                    value={form.parentRatePlanId}
+                    onChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v ?? "" }))}
+                    placeholder="None — independent rate plan"
+                    options={[
+                      { value: "", label: "None — independent rate plan" },
+                      ...ratePlans
                         .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id && !r.isLocked)
-                        .map(r => (
-                          <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        .map(r => ({ value: r.id, label: `${r.name} (${r.code})` })),
+                    ]}
+                  />
 
                   {form.parentRatePlanId && (
                     <div className="grid grid-cols-2 gap-4 mt-3">
@@ -520,7 +512,7 @@ export default function RevenueDashboard() {
               ) : loadError ? (
                 <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load rate plans" onRetry={fetchRatePlans} /></TableCell></TableRow>
               ) : ratePlans.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">No rate plans defined.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={CalendarDays} title="No rate plans defined" /></TableCell></TableRow>
               ) : (
                 ratePlans.map((plan) => (
                   <TableRow key={plan.id}>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -345,25 +346,12 @@ export default function POSDashboard() {
             <div className="grid grid-cols-2 gap-5">
               <div className="space-y-2">
                 <Label>Charge Code{selectedOutletId ? "" : " (Outlet)"}</Label>
-                <Select value={form.chargeCodeId} onValueChange={(val) => setForm({ ...form, chargeCodeId: val ?? "" })}>
-                  <SelectTrigger>
-                    {form.chargeCodeId ? (
-                      <span className="flex flex-1 text-left truncate">
-                        {(() => {
-                          const c = chargeCodes.find(x => x.id === form.chargeCodeId);
-                          return c ? `${c.description} (${c.code})` : "Select Outlet...";
-                        })()}
-                      </span>
-                    ) : (
-                      <SelectValue placeholder="Select Outlet..." />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chargeCodes.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{`${c.description} (${c.code})`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.chargeCodeId}
+                  onChange={(val) => setForm({ ...form, chargeCodeId: val ?? "" })}
+                  placeholder="Select Outlet..."
+                  options={chargeCodes.map(c => ({ value: c.id, label: `${c.description} (${c.code})` }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Amount ($)</Label>

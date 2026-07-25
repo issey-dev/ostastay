@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -89,14 +90,12 @@ export function SequenceManager() {
     <div className="space-y-4">
       <div className="space-y-2 max-w-xs">
         <Label className="text-sm font-medium">Property</Label>
-        <Select value={propertyId} onValueChange={(v) => setPropertyId(v ?? "")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select property">{properties.find((p) => p.id === propertyId)?.name}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={propertyId}
+          onChange={(v) => setPropertyId(v ?? "")}
+          placeholder="Select property"
+          options={properties.map((p) => ({ label: p.name, value: p.id }))}
+        />
         {properties.length === 0 && <p className="text-xs text-muted-foreground">Create a property first.</p>}
       </div>
 
@@ -111,7 +110,9 @@ export function SequenceManager() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Loading...</TableCell></TableRow>
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+              ))
             ) : (
               SEQUENCE_TYPES.map((sequenceType) => {
                 const seq = sequences.find((s) => s.sequenceType === sequenceType)

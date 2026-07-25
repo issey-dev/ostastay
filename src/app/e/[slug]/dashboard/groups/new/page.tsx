@@ -7,6 +7,7 @@ import { Save, ArrowLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
 
@@ -103,24 +104,16 @@ export default function NewGroupBlock() {
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="startDate">Start Date</Label>
-              <Input 
-                id="startDate" 
-                name="startDate" 
-                type="date" 
-                required 
+              <DatePicker
                 value={formData.startDate}
-                onChange={handleChange}
+                onChange={(v) => setFormData({ ...formData, startDate: v })}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="endDate">End Date</Label>
-              <Input 
-                id="endDate" 
-                name="endDate" 
-                type="date" 
-                required 
+              <DatePicker
                 value={formData.endDate}
-                onChange={handleChange}
+                onChange={(v) => setFormData({ ...formData, endDate: v })}
               />
             </div>
           </div>
@@ -141,12 +134,9 @@ export default function NewGroupBlock() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
-              <Input 
-                id="cutoffDate" 
-                name="cutoffDate" 
-                type="date" 
+              <DatePicker
                 value={formData.cutoffDate}
-                onChange={handleChange}
+                onChange={(v) => setFormData({ ...formData, cutoffDate: v })}
               />
               <p className="text-xs text-muted-foreground">Unreserved rooms will be released after this date.</p>
             </div>

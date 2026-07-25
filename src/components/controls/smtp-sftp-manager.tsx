@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Save } from "@/components/icons"
@@ -78,7 +79,7 @@ export function SmtpSftpManager() {
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>
+  if (loading) return <div className="space-y-3 py-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
 
   return (
     <form onSubmit={handleSave} className="space-y-8">
