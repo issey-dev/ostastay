@@ -34,7 +34,8 @@ export async function POST(request: Request) {
           }
         },
         currencyExchanges: true,
-        paidOuts: true
+        paidOuts: true,
+        property: { select: { defaultCurrency: true } }
       }
     });
 
@@ -42,10 +43,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No active shift found to close." }, { status: 400 });
     }
 
-    // 2. Expected Cash = Opening Float + cash in − cash refunds, via the shared
-    // shift-summary helper so history and close views can never disagree.
+    // 2. Expected Cash = Opening Float + cash in − cash refunds − paid-outs + the base-
+    // currency leg of any currency exchanges, via the shared shift-summary helper so
+    // history and close views can never disagree.
     const { byMethod } = summarizeShiftPayments(activeShift.payments);
-    const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts);
+    const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts, activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null);
     const paidOutTotal = activeShift.paidOuts.reduce((sum, p) => sum + p.amount, 0);
     const discrepancy = closingDrop - expectedCash; // Negative = Short, Positive = Over
 

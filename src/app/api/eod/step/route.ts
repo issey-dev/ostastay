@@ -54,11 +54,11 @@ export async function POST(request: Request) {
         // scoped) who has a drawer open on this property.
         const openShifts = await prisma.cashierShift.findMany({
           where: { propertyId, closedAt: null },
-          include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true },
+          include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true, currencyExchanges: true, property: { select: { defaultCurrency: true } } },
         });
 
         for (const shift of openShifts) {
-          const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts);
+          const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts, shift.currencyExchanges, shift.property?.defaultCurrency ?? null);
           await prisma.cashierShift.update({
             where: { id: shift.id },
             data: { closedAt: new Date(), closingDrop: expected },

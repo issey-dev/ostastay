@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
@@ -14,22 +15,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    const rate = parseFloat(body.rate);
+    const amountFrom = parseFloat(body.amountFrom);
+    const amountTo = parseFloat(body.amountTo);
+
+    // Every leg must be a positive number — a negative/zero or NaN amount would corrupt
+    // the drawer's expected-cash reconciliation (these figures feed expectedCashForShift).
+    if (![rate, amountFrom, amountTo].every((n) => Number.isFinite(n) && n > 0)) {
+      return NextResponse.json({ error: "Rate and amounts must be positive numbers." }, { status: 400 });
+    }
+
+    // The triple must be internally consistent: amountTo ≈ amountFrom × rate. Validated
+    // server-side (not trusted from the client) so a fat-fingered or tampered payout can't
+    // be recorded. A 2% tolerance absorbs legitimate denomination rounding on the payout.
+    const expectedTo = amountFrom * rate;
+    if (Math.abs(amountTo - expectedTo) > Math.max(0.01, expectedTo * 0.02)) {
+      return NextResponse.json(
+        { error: `Amounts are inconsistent: ${amountFrom} × ${rate} ≈ ${expectedTo.toFixed(2)}, not ${amountTo}.` },
+        { status: 400 }
+      );
+    }
+
     const propertyId = await resolveCurrentPropertyId(ctx);
     if (!propertyId) {
       return NextResponse.json({ error: "No property found for this session" }, { status: 400 });
     }
 
     // The client no longer picks a shift explicitly — currency exchanges always post
-    // against the caller's own currently-open cashier shift, auto-opening one (0 float)
-    // if they don't have one yet, mirroring how folio payments are posted.
-    let shift = await prisma.cashierShift.findFirst({
-      where: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, closedAt: null }
-    });
-    if (!shift) {
-      shift = await prisma.cashierShift.create({
-        data: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, openingFloat: 0 }
-      });
-    }
+    // against the caller's own currently-open cashier shift FOR THIS PROPERTY, auto-opening
+    // one (0 float, business-date-stamped) if needed. Uses the shared ensureOpenShift so
+    // the exchange can never attach to a drawer at a different property.
+    const shift = await ensureOpenShift(ctx, propertyId);
 
     const currencyExchange = await prisma.currencyExchange.create({
       data: {
@@ -38,9 +54,9 @@ export async function POST(request: Request) {
         guestName: body.guestName || null,
         fromCurrency: body.fromCurrency,
         toCurrency: body.toCurrency,
-        rate: parseFloat(body.rate),
-        amountFrom: parseFloat(body.amountFrom),
-        amountTo: parseFloat(body.amountTo),
+        rate,
+        amountFrom,
+        amountTo,
         createdByUserId: ctx.userId,
       }
     });

@@ -55,12 +55,33 @@ export function summarizeShiftPayments(payments: ShiftPayment[]) {
   };
 }
 
+type ExchangeLeg = { fromCurrency: string; toCurrency: string; amountFrom: number; amountTo: number };
+
+// A currency exchange moves physical cash through the same drawer, so it must count
+// toward expected cash or every shift that did one reports a false over/short. Only the
+// BASE-currency leg touches the base-currency drawer total: local cash taken in
+// (fromCurrency == base) adds, local cash paid out (toCurrency == base) subtracts.
+// Foreign-to-foreign legs don't affect the base drawer. Without a known base currency we
+// can't identify the base leg, so contribute 0 (old behavior) rather than guess.
+export function netBaseCashFromExchanges(exchanges: ExchangeLeg[], baseCurrency: string | null | undefined): number {
+  if (!baseCurrency) return 0;
+  const base = baseCurrency.trim().toUpperCase();
+  let net = 0;
+  for (const x of exchanges) {
+    if ((x.fromCurrency ?? "").trim().toUpperCase() === base) net += x.amountFrom;
+    if ((x.toCurrency ?? "").trim().toUpperCase() === base) net -= x.amountTo;
+  }
+  return net;
+}
+
 export function expectedCashForShift(
   openingFloat: number,
   payments: ShiftPayment[],
-  paidOuts: { amount: number }[] = []
+  paidOuts: { amount: number }[] = [],
+  exchanges: ExchangeLeg[] = [],
+  baseCurrency: string | null = null
 ): number {
   const { cashIn, cashOut } = summarizeShiftPayments(payments);
   const paidOutTotal = paidOuts.reduce((sum, p) => sum + p.amount, 0);
-  return openingFloat + cashIn - cashOut - paidOutTotal;
+  return openingFloat + cashIn - cashOut - paidOutTotal + netBaseCashFromExchanges(exchanges, baseCurrency);
 }
