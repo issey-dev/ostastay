@@ -18,9 +18,14 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
 - **Fixed (Batch 4):** A15 excursion past-departure guard · A16 group-pickup in-tx recheck ·
   A13 UTC day boundaries on write paths (excursion schedule gen, spa weekday, price-calendar
   single+bulk). Also fixed the date-fragile "cancelling past the cutoff" excursions test.
-- **Still open (deferred, in AUDIT_REPORT.md §8):** Batch 5 (all UX/design: error states,
-  RHF+Zod migrations, toast, SearchableSelect, component dedup) · A14 Float→integer-cents
-  (large systemic change) · S8 SMTP encryption-at-rest (needs KMS decision).
+- **Batch 5 (UX/design) — in progress:** D-1 error states DONE — new `ErrorState` component
+  surfaced on every list page + profile sub-manager + work-orders (21 files); activity-log
+  also gained a loading state. Remaining Batch 5: RHF+Zod on critical forms (check-in,
+  walk-in, deposit, room-move), searchable SystemCodeSelect (country/nationality), one toast
+  + standardize deletes on AlertDialog, check-in prefill/auto-save, extract shared
+  CrudManager/ResponsiveDataTable, select/date-picker/responsive outliers, tests/** lint.
+- **Still open (deferred):** A14 Float→integer-cents (large systemic change) · S8 SMTP
+  encryption-at-rest (needs KMS decision).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
   > "cancelling past the cutoff…"` fails on clean master — books a `day(-2)` departure for a
   `day(-1)` arrival, which the out-of-stay guard rejects, so the later cancel 500s.

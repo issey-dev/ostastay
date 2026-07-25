@@ -368,6 +368,12 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
 | A13 | Low | UTC day boundaries on write paths (excursion schedule gen, spa weekday, price-calendar single+bulk) | `excursions.ts`, `spa-availability.ts`, `price-calendar/route.ts`, `price-calendar/bulk/route.ts` | date-sensitive suites green |
 | — | — | Fixed the date-fragile "cancelling past the cutoff" excursions test fixture | `excursions.test.ts` | suite 405/405 |
 
+### Batch 5 (UX/consistency) — in progress
+
+| # | Sev | Fix | Files | Verified |
+|---|---|---|---|---|
+| D-1 | Med-High | Missing error states: new reusable `ErrorState` (retry) surfaced on every list page + profile sub-manager + work-orders that previously swallowed load failures; activity-log also gained a loading state | `ui/error-state.tsx` + 21 pages/components | `tsc` clean, production build clean, suite 405/405 |
+
 ### Batch 3 (remaining data-integrity races)
 
 | # | Sev | Fix | Files | Verified |
@@ -405,7 +411,9 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
   guest arriving `day(-1)`, which the out-of-stay guard correctly rejects, so the later
   cancel 500s. It's a date-fragile fixture bug, out of this batch's scope. Recommend fixing
   the fixture separately (book an in-stay past departure).
-- **Still open (deferred per plan):** Batch 5 (all UX/consistency — error states, RHF+Zod
-  migrations, toast, SearchableSelect, component dedup), A14 (Float→integer-cents storage —
-  large systemic change), S8 (SMTP encryption-at-rest — needs a KMS decision). **Batches 1–4
-  are now DONE (above).**
+- **Batch 5 (UX/consistency) — in progress:** D-1 (error states) DONE. Remaining: C-1/C-3
+  (RHF+Zod on critical forms, searchable SystemCodeSelect), D-3 (one toast + standardize
+  deletes on AlertDialog), C-2 (check-in prefill/auto-save), D-2 (extract shared CrudManager
+  / ResponsiveDataTable), C-4/D-4 (select/date-picker/responsive outliers), D-5 (test lint).
+- **Still open (deferred):** A14 (Float→integer-cents storage — large systemic change), S8
+  (SMTP encryption-at-rest — needs a KMS decision). **Batches 1–4 are DONE (above).**
