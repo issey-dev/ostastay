@@ -21,8 +21,6 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const outletsRoute = await import("@/app/api/outlets/route");
 const outletIdRoute = await import("@/app/api/outlets/[id]/route");
-const appointmentsRoute = await import("@/app/api/outlets/[id]/appointments/route");
-const appointmentIdRoute = await import("@/app/api/outlets/[id]/appointments/[appointmentId]/route");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -187,58 +185,4 @@ describe("Outlets: tenant isolation", () => {
     expect(res.status).toBe(403);
   });
 
-  // --- Appointments ---
-
-  it("POST /api/outlets/[id]/appointments 403s for a different enterprise's admin", async () => {
-    const res = await asUser(adminBId, () =>
-      appointmentsRoute.POST(
-        new Request("http://localhost", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startTime: new Date().toISOString(), walkInGuestName: "X" }) }),
-        { params: Promise.resolve({ id: outletAId }) }
-      )
-    );
-    expect(res.status).toBe(403);
-  });
-
-  it("POST /api/outlets/[id]/appointments succeeds for the correctly-scoped admin and enforces the reservationId/walkInGuestName XOR", async () => {
-    const missingGuest = await asUser(adminAId, () =>
-      appointmentsRoute.POST(
-        new Request("http://localhost", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startTime: new Date().toISOString() }) }),
-        { params: Promise.resolve({ id: outletAId }) }
-      )
-    );
-    expect(missingGuest.status).toBe(400);
-
-    const ok = await asUser(adminAId, () =>
-      appointmentsRoute.POST(
-        new Request("http://localhost", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ startTime: new Date().toISOString(), walkInGuestName: "Test Guest", chargeCodeId: chargeCodeAId }),
-        }),
-        { params: Promise.resolve({ id: outletAId }) }
-      )
-    );
-    expect(ok.status).toBe(201);
-    const body = await ok.json();
-    expect(body.appointment.walkInGuestName).toBe("Test Guest");
-    expect(body.capWarning).toBeUndefined();
-  });
-
-  it("PATCH /api/outlets/[id]/appointments/[appointmentId] 403s for a different enterprise's admin", async () => {
-    const created = await asUser(adminAId, () =>
-      appointmentsRoute.POST(
-        new Request("http://localhost", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startTime: new Date().toISOString(), walkInGuestName: "Another Guest" }) }),
-        { params: Promise.resolve({ id: outletAId }) }
-      )
-    );
-    const appointmentId = (await created.json()).appointment.id;
-
-    const res = await asUser(adminBId, () =>
-      appointmentIdRoute.PATCH(
-        new Request("http://localhost", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "CANCELLED" }) }),
-        { params: Promise.resolve({ id: outletAId, appointmentId }) }
-      )
-    );
-    expect(res.status).toBe(403);
-  });
 });

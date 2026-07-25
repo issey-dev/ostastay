@@ -44,7 +44,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   HOUSEKEEPING: "Housekeeping",
   MAINTENANCE: "Maintenance",
   CASHIERING: "Cashiering",
-  POS: "Point of Sale",
+  POS: "Fast Post",
   NIGHT_AUDIT: "Night Audit",
   DEBTORS: "Debtors",
   REVENUE: "Revenue",

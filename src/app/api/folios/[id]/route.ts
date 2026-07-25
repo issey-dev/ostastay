@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
 const FOLIO_DETAIL_INCLUDE = {
@@ -129,11 +130,32 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid settlement method" }, { status: 400 });
     }
 
+    // Close/reopen bookkeeping: stamp the property business date on close; only allow a
+    // REOPEN while the business date still equals that stamp (a Fast Post walk-in bill is
+    // final once Night Audit rolls the day). Cleared on reopen.
+    let closedBusinessDate: Date | null | undefined = undefined;
+    if (isClosed !== undefined && isClosed !== existing.isClosed) {
+      const property = await prisma.property.findUnique({ where: { id: existing.propertyId }, select: { businessDate: true } });
+      const bizDate = toUtcMidnight(property?.businessDate ?? new Date());
+      if (isClosed) {
+        closedBusinessDate = bizDate;
+      } else {
+        if (existing.closedBusinessDate && toUtcMidnight(existing.closedBusinessDate).getTime() !== bizDate.getTime()) {
+          return NextResponse.json(
+            { error: "This bill was closed on a previous business date and can no longer be reopened." },
+            { status: 400 }
+          );
+        }
+        closedBusinessDate = null;
+      }
+    }
+
     const updatedFolio = await prisma.folio.update({
       where: { id },
       data: {
         ...(payeeProfileId !== undefined && { payeeProfileId }),
         ...(isClosed !== undefined && { isClosed }),
+        ...(closedBusinessDate !== undefined && { closedBusinessDate }),
         ...(settlementMethod !== undefined && { settlementMethod }),
       },
       include: {

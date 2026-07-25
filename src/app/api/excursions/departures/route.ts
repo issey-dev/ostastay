@@ -7,9 +7,8 @@ import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorR
 // departure picker, unchanged from before. With from/to (the Excursions Calendar view):
 // every status within that exact date range, past or future, so cancelled departures
 // can be rendered dimmed rather than hidden. Capacity/minCapacity counts are computed
-// LIVE from non-cancelled bookings' headcounts rather than a stored counter (same
-// technique OutletAppointment already uses for its own soft-warning), so they can never
-// drift from reality.
+// LIVE from non-cancelled bookings' headcounts rather than a stored counter, so they can
+// never drift from reality.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();

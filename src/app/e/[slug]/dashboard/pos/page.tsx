@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, CalendarClock } from "@/components/icons"
+import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, History } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,11 +12,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
-import { OutletAppointmentsPanel } from "@/components/pos/outlet-appointments-panel"
+import { WalkInHistory } from "@/components/pos/walk-in-history"
 
 export default function POSDashboard() {
   const { currentProperty } = useProperty()
-  const [pageTab, setPageTab] = useState<"charges" | "appointments">("charges")
+  const [pageTab, setPageTab] = useState<"charges" | "history">("charges")
+  const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
   const [searchQuery, setSearchQuery] = useState("")
   const [guests, setGuests] = useState<any[]>([])
@@ -202,14 +203,14 @@ export default function POSDashboard() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Point of Sale Routing</h2>
-        <p className="text-muted-foreground">Search for in-house guests and route outlet charges to their room.</p>
+        <h2 className="text-3xl font-bold tracking-tight">Fast Post</h2>
+        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest's room or a walk-in bill.</p>
       </div>
 
-      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "charges" | "appointments") ?? "charges")}>
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "charges" | "history") ?? "charges")}>
         <TabsList>
           <TabsTrigger value="charges"><Store className="w-4 h-4 mr-2" /> Post Charges</TabsTrigger>
-          <TabsTrigger value="appointments"><CalendarClock className="w-4 h-4 mr-2" /> Appointments</TabsTrigger>
+          <TabsTrigger value="history"><History className="w-4 h-4 mr-2" /> History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="charges" className="m-0">
@@ -432,29 +433,25 @@ export default function POSDashboard() {
     </div>
         </TabsContent>
 
-        <TabsContent value="appointments" className="m-0">
-          {selectedOutletId ? (
-            <OutletAppointmentsPanel
-              outletId={selectedOutletId}
-              outletName={outlets.find(o => o.id === selectedOutletId)?.name || "Outlet"}
-              chargeCodes={chargeCodes}
-              propertyId={currentProperty?.id ?? ""}
-            />
-          ) : (
-            <EmptyState icon={CalendarClock} title="Select an outlet above to view or book appointments" />
-          )}
+        <TabsContent value="history" className="m-0">
+          <WalkInHistory
+            propertyId={currentProperty?.id ?? ""}
+            refreshKey={historyRefresh}
+            onOpen={(id) => { setWalkInFolioId(id); setIsWalkInPanelOpen(true) }}
+          />
         </TabsContent>
       </Tabs>
 
       <WalkInFolioPanel
         folioId={walkInFolioId}
         isOpen={isWalkInPanelOpen}
-        onClose={() => setIsWalkInPanelOpen(false)}
+        onClose={() => { setIsWalkInPanelOpen(false); setHistoryRefresh((n) => n + 1) }}
         onClosed={() => {
           setIsWalkInPanelOpen(false)
           setWalkInFolioId(null)
           setSelectedGuest(null)
           setWalkInForm({ name: "", contact: "" })
+          setHistoryRefresh((n) => n + 1)
         }}
       />
     </div>

@@ -37,7 +37,6 @@ const BLANK_FORM = () => ({
   isActive: true,
   taxOverrideMode: "NONE" as "NONE" | "DEFAULT_ENGINE" | "CUSTOM",
   taxProfileId: "",
-  appointmentCapPerSlot: "",
   chargeCodeIds: [] as string[],
 })
 
@@ -104,7 +103,6 @@ export function OutletsManager() {
       isActive: outlet.isActive,
       taxOverrideMode: outlet.taxOverrideMode,
       taxProfileId: outlet.taxProfileId || "",
-      appointmentCapPerSlot: outlet.appointmentCapPerSlot?.toString() || "",
       chargeCodeIds: (outlet.chargeCodes || []).map((oc: any) => oc.chargeCodeId),
     })
     setIsEditMode(true)
@@ -242,19 +240,6 @@ export function OutletsManager() {
               </div>
 
               <div className="space-y-2 border-t pt-4">
-                <Label>Appointment Cap Per Slot <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Input
-                  type="number" min="1" placeholder="e.g. 2"
-                  value={form.appointmentCapPerSlot}
-                  onChange={(e) => setForm((p) => ({ ...p, appointmentCapPerSlot: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Warns staff (doesn't block) when a new appointment would push an overlapping
-                  time slot over this count. Leave blank for no warning.
-                </p>
-              </div>
-
-              <div className="space-y-2 border-t pt-4">
                 <Label>Charge Codes</Label>
                 <OutletChargeCodePicker
                   allChargeCodes={chargeCodes}
@@ -291,7 +276,7 @@ export function OutletsManager() {
             <DialogTitle>Delete Outlet</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this outlet? This is only possible if it has no
-              posted revenue or appointment history — otherwise, deactivate it instead.
+              posted revenue — otherwise, deactivate it instead.
             </DialogDescription>
           </DialogHeader>
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}

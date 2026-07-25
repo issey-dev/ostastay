@@ -69,10 +69,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const appointmentCapPerSlot = body.appointmentCapPerSlot !== undefined && body.appointmentCapPerSlot !== null && body.appointmentCapPerSlot !== ""
-      ? parseInt(body.appointmentCapPerSlot)
-      : null;
-
     const newOutlet = await prisma.outlet.create({
       data: {
         propertyId: body.propertyId,
@@ -81,7 +77,6 @@ export async function POST(request: Request) {
         outletType,
         taxOverrideMode,
         taxProfileId,
-        appointmentCapPerSlot,
         chargeCodes: chargeCodeIds.length > 0 ? { create: chargeCodeIds.map((id) => ({ chargeCodeId: id })) } : undefined,
       },
       include: OUTLET_INCLUDE,

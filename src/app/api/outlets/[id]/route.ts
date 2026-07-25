@@ -69,13 +69,6 @@ export async function PATCH(
       taxProfileId = null;
     }
 
-    let appointmentCapPerSlot = existing.appointmentCapPerSlot;
-    if (body.appointmentCapPerSlot !== undefined) {
-      appointmentCapPerSlot = body.appointmentCapPerSlot === null || body.appointmentCapPerSlot === ""
-        ? null
-        : parseInt(body.appointmentCapPerSlot);
-    }
-
     let chargeCodeIds: string[] | undefined = undefined;
     if (Array.isArray(body.chargeCodeIds)) {
       chargeCodeIds = body.chargeCodeIds;
@@ -97,7 +90,6 @@ export async function PATCH(
           outletType,
           taxOverrideMode,
           taxProfileId,
-          appointmentCapPerSlot,
         },
       });
 
@@ -154,16 +146,13 @@ export async function DELETE(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
-    // Never lose revenue/appointment history — same never-hard-delete-what-happened
-    // pattern as RoomType.isActive. Deactivation (PATCH {isActive: false}) is the
-    // primary path once an outlet has any real activity.
-    const [lineItemCount, appointmentCount] = await Promise.all([
-      prisma.folioLineItem.count({ where: { outletId: id } }),
-      prisma.outletAppointment.count({ where: { outletId: id } }),
-    ]);
-    if (lineItemCount > 0 || appointmentCount > 0) {
+    // Never lose revenue history — same never-hard-delete-what-happened pattern as
+    // RoomType.isActive. Deactivation (PATCH {isActive: false}) is the primary path once
+    // an outlet has posted any charges.
+    const lineItemCount = await prisma.folioLineItem.count({ where: { outletId: id } });
+    if (lineItemCount > 0) {
       return NextResponse.json(
-        { error: "Cannot delete an outlet with posted revenue or appointment history — deactivate it instead." },
+        { error: "Cannot delete an outlet with posted revenue — deactivate it instead." },
         { status: 400 }
       );
     }

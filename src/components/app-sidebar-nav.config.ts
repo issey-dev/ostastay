@@ -60,7 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "Housekeeping", url: "/dashboard/housekeeping", icon: ClipboardList, module: "HOUSEKEEPING" },
       { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, module: "MAINTENANCE" },
-      { title: "Point of Sale", url: "/dashboard/pos", icon: Store, module: "POS" },
+      { title: "Fast Post", url: "/dashboard/pos", icon: Store, module: "POS" },
       { title: "Excursions", url: "/dashboard/excursions", icon: Compass, module: "EXCURSIONS" },
       { title: "Spa", url: "/dashboard/spa", icon: Sparkles, module: "SPA" },
     ],

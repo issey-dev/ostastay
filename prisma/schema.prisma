@@ -517,7 +517,6 @@ model ChargeCode {
   // The "shared pool" an Outlet curates from — a charge code is never owned by one
   // outlet, it can be exposed by any number of them (or none). See OutletChargeCode.
   outletCharges      OutletChargeCode[]
-  outletAppointments OutletAppointment[]
   allocations        Allocation[]
   // Rate plans that post their nightly room charge against this code (see
   // RatePlan.chargeCodeId). SetNull on delete, so removing a charge code just drops
@@ -858,7 +857,6 @@ model Reservation {
   folios                       Folio[]
   traces                       ReservationTrace[]
   accompanyingGuests           AccompanyingGuest[]
-  outletAppointments           OutletAppointment[]
   // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
   // written at create/edit, read by Night Audit. See ReservationAllocation.
   allocations                  ReservationAllocation[]
@@ -931,6 +929,10 @@ model Folio {
   property      Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   folioNumber   Int          @default(1)
   isClosed      Boolean      @default(false)
+  // The property business date on which this folio was closed. A closed walk-in (Fast
+  // Post) bill can only be REOPENED while the business date still equals this — once Night
+  // Audit rolls the day, the bill is final. Set when isClosed flips true, cleared on reopen.
+  closedBusinessDate DateTime?
   isMaster      Boolean      @default(false)
 
   // DIRECT (guest pays, default) | CITY_LEDGER (billed to a TA/corporate credit
@@ -1207,13 +1209,7 @@ model Outlet {
   taxProfileId    String?
   taxProfile      TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
-  // Simple appointment-log capacity control (see OutletAppointment) — a settable cap
-  // used only to *warn*, never block, when a new appointment would push an overlapping
-  // time slot's count over this. Null = never warn.
-  appointmentCapPerSlot Int?
-
   chargeCodes    OutletChargeCode[]
-  appointments   OutletAppointment[]
   folioLineItems FolioLineItem[]
 
   createdAt DateTime @default(now())
@@ -1238,37 +1234,6 @@ model OutletChargeCode {
   @@unique([outletId, chargeCodeId])
 }
 
-// AppointmentStatus: SCHEDULED, COMPLETED, CANCELLED, NO_SHOW
-// A simple appointment log only — no resource/room-capacity model (see
-// Outlet.appointmentCapPerSlot for the lightweight, warning-only cap instead). The
-// guest is either an existing reservation or a walk-in name/contact — validated as an
-// XOR in the route, not enforceable in SQLite via the schema itself.
-model OutletAppointment {
-  id       String @id @default(uuid())
-  outletId String
-  outlet   Outlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
-
-  chargeCodeId String?
-  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
-
-  startTime DateTime
-  endTime   DateTime?
-
-  reservationId      String?
-  reservation        Reservation? @relation(fields: [reservationId], references: [id])
-  walkInGuestName    String?
-  walkInGuestContact String?
-
-  notes  String?
-  status String  @default("SCHEDULED")
-
-  createdByUserId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([outletId, startTime])
-}
 
 model EnterpriseSettings {
   id           String     @id @default(uuid())

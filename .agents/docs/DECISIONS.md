@@ -2022,3 +2022,25 @@ Owner requested a guided check-in procedure and a printable registration card.
   `EnterpriseSettings` (`registrationCard*`).
 - Added a partial `PATCH /api/profiles/[upid]` (DOB/Nationality only) since PUT is a
   full-scalar replace; `IdentificationManager` gained an optional `onChange` callback.
+
+## Point of Sale → "Fast Post" rework (2026-07-25)
+
+Owner renamed POS to **Fast Post** and reshaped it to a pure posting terminal.
+
+- **Rename is label-only.** `MODULE_LABELS.POS`, the sidebar title, and the page header now
+  say "Fast Post". The permission enum key `"POS"` and the route `/dashboard/pos` are kept
+  (they're stored in role/module-access rows) to avoid a data migration.
+- **Appointments removed entirely.** Dropped the `OutletAppointment` model + `Outlet.
+  appointmentCapPerSlot` (migration), the `/api/outlets/[id]/appointments/*` routes, the
+  Appointments tab + `outlet-appointments-panel`, the Outlets-manager cap field, and the
+  "Outlet Calendar" report. **Spa appointments (`SpaAppointment`) are a separate system —
+  untouched.**
+- **Both flows kept**: post an outlet charge to an in-house guest's room, OR make a walk-in
+  bill. Only Appointments was stripped.
+- **Walk-in bill is now a modal** (was a right-side Sheet): **Tax Invoice / Void Bill / Take
+  Payment / Close** — no Proforma. **Void Bill** voids the whole bill via
+  `POST /api/folios/[id]/void-bill` (reason required; flags every line void, never deletes).
+- **History tab**: closed walk-in bills for the property, filterable by date
+  (`GET /api/folios/walk-in`). A bill can be **reopened for adjustments only while the
+  property business date still equals its close date** — enforced by a new
+  `Folio.closedBusinessDate` (stamped on close, gated on reopen in `PATCH /api/folios/[id]`).
