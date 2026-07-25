@@ -4,7 +4,7 @@ import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorR
 import { resolveChargeTax } from "@/lib/tax-calc";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
-import { rateForDate, computeBookingTotal } from "@/lib/excursions";
+import { rateForDate, computeBookingTotal, combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
 
 // Lists open walk-in excursion bills for a property — the retrieval path for the
@@ -124,6 +124,13 @@ export async function POST(request: Request) {
 
     if (departure.status !== "SCHEDULED") {
       return NextResponse.json({ error: "This departure is no longer taking bookings" }, { status: 400 });
+    }
+
+    // A departure that has already left can't be booked — nothing auto-transitions its
+    // status after it sails, so the SCHEDULED check above isn't enough (the spa side has
+    // the same guard). (A15)
+    if (combineDepartureDateTime(departure.departureDate, departure.departureTime) < new Date()) {
+      return NextResponse.json({ error: "This departure has already left and can no longer be booked." }, { status: 400 });
     }
 
     // Every booking must carry at least one guest — a 0-headcount booking would post a $0

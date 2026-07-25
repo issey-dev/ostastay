@@ -328,6 +328,18 @@ describe("Excursions: business rules", () => {
     expect(exact.status).toBe(201);
   });
 
+  it("A15: cannot book a departure that has already left", async () => {
+    const past = await makeDeparture(excursionTypeId, -1); // yesterday
+    const res = await asUser(adminId, () =>
+      bookingsRoute.POST(new Request("http://localhost/api/excursions/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ departureId: past.id, reservationId, adultCount: 1 }),
+      }))
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/already left/i);
+  });
+
   it("cancelling past the cutoff requires EXCURSIONS delete; within it, update is enough", async () => {
     // Departed 2 days ago, well past a 24h cutoff.
     const pastDeparture = await makeDeparture(excursionTypeId, -2);
@@ -443,15 +455,12 @@ describe("Excursions: business rules", () => {
     expect(tooEarly.status).toBe(400);
 
     const pastDeparture = await makeDeparture(excursionTypeId, -1);
-    const pastBooked = await asUser(adminId, () =>
-      bookingsRoute.POST(
-        new Request("http://localhost/api/excursions/bookings", {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ departureId: pastDeparture.id, reservationId, adultCount: 1 }),
-        })
-      )
-    );
-    const pastBookingId = (await pastBooked.json()).id;
+    // A past-departure booking can no longer be created via the route (A15 blocks it) — it
+    // would have been booked when the departure was still in the future, so seed it directly.
+    const pastBooking = await prisma.excursionBooking.create({
+      data: { departureId: pastDeparture.id, propertyId, reservationId, adultCount: 1, childCount: 0, infantCount: 0, totalAmount: 50, folioId: reservationFolioId, bookedByUserId: adminId, status: "CONFIRMED" },
+    });
+    const pastBookingId = pastBooking.id;
     const ok = await asUser(adminId, () => noShowRoute.POST(new Request("http://localhost", { method: "POST" }), { params: Promise.resolve({ id: pastBookingId }) }));
     expect(ok.status).toBe(200);
 
