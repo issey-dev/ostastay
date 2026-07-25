@@ -376,6 +376,15 @@ export async function POST(request: Request) {
       let folioLineItemId: string | null = null;
       let paymentStatus = "NOT_POSTED";
 
+      // Attribute the AT_BOOKING charge to the caller's open cashier drawer so it shows in
+      // their shift summary / EOD reconciliation (A7 — previously spa charges posted with
+      // no shiftId and were invisible to the drawer). Reuse the pay-now settlement's shift
+      // when there is one, otherwise open/find the caller's drawer for this property.
+      const chargeShiftId =
+        chargeTiming === "AT_BOOKING"
+          ? settlement?.shiftId ?? (await ensureOpenShift(ctx, propertyId)).id
+          : null;
+
       const created = await prisma.$transaction(async (tx) => {
         if (chargeTiming === "AT_BOOKING") {
           const enterpriseSettings = await tx.enterpriseSettings.findUnique({ where: { enterpriseId: treatment.property.enterpriseId } });
@@ -389,6 +398,7 @@ export async function POST(request: Request) {
             data: {
               folioId: billingFolioId,
               chargeCodeId: treatment.chargeCodeId,
+              shiftId: chargeShiftId,
               amount: baseAmount,
               taxAmount,
               serviceChargeAmount,
