@@ -868,63 +868,6 @@ export default function SpaPage() {
           )}
         </div>
 
-        {/* Right: today's schedule + open walk-in bills */}
-        <div className="w-full md:w-80 space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
-              <Clock className="w-5 h-5 text-primary" /> {selectedDate ? "Schedule" : "Today's Schedule"}
-            </h3>
-            {!loadingAppointments && todaysAppointments.length === 0 ? (
-              <EmptyState icon={Sparkles} title="No appointments" description="Nothing booked for this date yet." />
-            ) : (
-              <div className="space-y-3">
-                {todaysAppointments.map((a) => (
-                  <div key={a.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-sm text-foreground">{a.treatment.name}</p>
-                      <StatusBadge label={a.appointmentStatus} status={a.appointmentStatus} />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{a.startTime}–{a.treatmentEndTime} · {a.room?.name ?? "No room"}</p>
-                    <div className="mt-2 space-y-1">
-                      {a.participants.map((p, i) => (
-                        <p key={i} className="text-xs text-foreground">
-                          {p.reservation
-                            ? `${p.reservation.primaryGuest.firstName} ${p.reservation.primaryGuest.lastName ?? ""}`.trim()
-                            : p.walkInGuestName ?? "Guest"}
-                          {p.therapist && <span className="text-muted-foreground"> — {p.therapist.displayName}</span>}
-                        </p>
-                      ))}
-                    </div>
-                    <div className="mt-1">
-                      <Badge variant="outline" className="text-[10px]">{a.paymentStatus.replace(/_/g, " ")}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {openWalkIns.length > 0 && (
-            <div>
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
-                <Receipt className="w-5 h-5 text-primary" /> Open Walk-in Bills
-              </h3>
-              <div className="space-y-2">
-                {openWalkIns.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className="w-full text-left bg-card p-3 rounded-lg shadow-sm border border-border hover:bg-muted transition-colors"
-                    onClick={() => { setWalkInFolioId(a.folioId); setIsWalkInPanelOpen(true) }}
-                  >
-                    <p className="font-bold text-sm text-foreground">{a.participants[0]?.walkInGuestName ?? "Walk-in guest"}</p>
-                    <p className="text-xs text-muted-foreground">{a.treatment.name} · {a.startTime}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
         </TabsContent>
 

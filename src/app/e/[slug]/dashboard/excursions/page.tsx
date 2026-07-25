@@ -494,57 +494,6 @@ export default function ExcursionsPage() {
           </div>
         </div>
 
-        {/* Right: schedule overview + open walk-in bills */}
-        <div className="w-full md:w-80 space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
-              <CalendarClock className="w-5 h-5 text-primary" /> Upcoming Departures
-            </h3>
-            {!loadingDepartures && departures.length === 0 ? (
-              <EmptyState icon={CalendarClock} title="No upcoming departures" description="Set up excursions and schedules in Controls." />
-            ) : (
-              <div className="space-y-3">
-                {departures.slice(0, 8).map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    className="w-full text-left bg-card p-3 rounded-lg shadow-sm border border-border hover:bg-muted transition-colors"
-                    onClick={() => setManifestDepartureId(d.id)}
-                  >
-                    <p className="font-bold text-sm text-foreground">{d.excursionType.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(d.departureDate).toLocaleDateString([], { dateStyle: "medium" })} · {d.departureTime}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">{d.bookedHeadcount}/{d.capacity} booked</p>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {openWalkIns.length > 0 && (
-            <div>
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-3">
-                <Receipt className="w-5 h-5 text-primary" /> Open Walk-in Bills
-              </h3>
-              <div className="space-y-2">
-                {openWalkIns.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    className="w-full text-left bg-card p-3 rounded-lg shadow-sm border border-border hover:bg-muted transition-colors"
-                    onClick={() => { setWalkInFolioId(b.folioId); setIsWalkInPanelOpen(true) }}
-                  >
-                    <p className="font-bold text-sm text-foreground">{b.walkInGuestName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(b.departure.departureDate).toLocaleDateString([], { dateStyle: "medium" })} · {b.departure.departureTime}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
         </TabsContent>
 
