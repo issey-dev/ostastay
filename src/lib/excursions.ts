@@ -7,7 +7,9 @@ export type PricingMode = (typeof PRICING_MODES)[number];
 
 export const DAYS_OF_WEEK = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
-const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+// UTC day boundary — dates are stored as UTC midnights (see src/lib/business-date.ts), so
+// bucketing/iteration must use UTC too, or a non-UTC server drifts departures by a day (A13).
+const dayStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
 export type ExcursionRateInput = {
   adultPrice: number;
@@ -129,10 +131,10 @@ export function expandScheduleDates(daysOfWeek: string, from: Date, through: Dat
   const cursor = dayStart(from);
   const end = dayStart(through);
   while (cursor <= end) {
-    if (wanted.has(JS_DAY_TO_CODE[cursor.getDay()])) {
+    if (wanted.has(JS_DAY_TO_CODE[cursor.getUTCDay()])) {
       dates.push(new Date(cursor));
     }
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return dates;
 }

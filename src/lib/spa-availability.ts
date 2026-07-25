@@ -211,7 +211,9 @@ export async function getAvailableTherapists(params: {
 
   const therapistIds = qualified.map((q) => q.therapist.id);
   const day = dayStart(date);
-  const dayOfWeek = date.getDay();
+  // Weekday from the UTC-normalized day (not the raw date's local getDay), so it matches
+  // the UTC day boundary the schedules/exceptions are stored against (A13).
+  const dayOfWeek = day.getUTCDay();
 
   const [exceptions, schedules] = await Promise.all([
     prisma.spaTherapistAvailabilityException.findMany({ where: { therapistId: { in: therapistIds }, date: day } }),

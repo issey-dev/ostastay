@@ -6,11 +6,12 @@ import { expandScheduleDates, combineDepartureDateTime, computeBookingTotal, rat
 
 describe("excursions: pure helpers", () => {
   it("expandScheduleDates only returns the requested weekdays within range", () => {
-    // 2026-07-20 is a Monday.
-    const dates = expandScheduleDates("MON,WED", new Date(2026, 6, 20), new Date(2026, 6, 26));
-    const days = dates.map((d) => d.getDay());
+    // 2026-07-20 is a Monday. Dates are UTC-day-boundary, so build/assert in UTC.
+    const dates = expandScheduleDates("MON,WED", new Date(Date.UTC(2026, 6, 20)), new Date(Date.UTC(2026, 6, 26)));
+    const days = dates.map((d) => d.getUTCDay());
     expect(days.every((d) => d === 1 || d === 3)).toBe(true);
     expect(dates.length).toBe(2); // Mon 7/20, Wed 7/22 (next Mon 7/27 is out of range)
+    expect(dates.every((d) => d.getUTCHours() === 0)).toBe(true); // UTC midnight
   });
 
   it("combineDepartureDateTime merges the date-only field with the HH:MM string", () => {

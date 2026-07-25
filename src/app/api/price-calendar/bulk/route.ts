@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { MAX_PRICE_CALENDAR_RANGE_DAYS, MAX_PRICE_CALENDAR_RANGE_YEARS } from "@/lib/price-calendar";
+import { toUtcMidnight } from "@/lib/business-date";
 
 export async function POST(request: Request) {
   try {
@@ -53,11 +54,10 @@ export async function POST(request: Request) {
 
     // Generate array of dates between start and end (inclusive)
     const datesToUpdate: Date[] = [];
-    let currentDate = new Date(start);
-    // Ensure we start at midnight to avoid timezone drift issues in comparison
-    currentDate.setHours(0, 0, 0, 0);
-    const endMidnight = new Date(end);
-    endMidnight.setHours(0, 0, 0, 0);
+    // UTC day boundaries so stored dates line up with the UTC-midnight lookups the reads
+    // and Night Audit use — avoids a per-day drift on a non-UTC server (A13).
+    const currentDate = toUtcMidnight(new Date(start));
+    const endMidnight = toUtcMidnight(new Date(end));
 
     // An inverted range (start after end) previously fell through silently: the loop
     // below never runs, datesToUpdate stays empty, and an empty transaction "succeeds"
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
     while (currentDate <= endMidnight) {
       datesToUpdate.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
     const operations = [];

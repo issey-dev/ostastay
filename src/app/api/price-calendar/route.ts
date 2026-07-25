@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { addDays, differenceInDays, startOfDay } from "date-fns";
+import { toUtcMidnight } from "@/lib/business-date";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { applyRateAdjustment } from "@/lib/derived-rate";
@@ -105,10 +105,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 });
     }
 
-    const startDate = startOfDay(new Date(data.startDate));
-    const endDate = startOfDay(new Date(data.endDate));
+    // UTC day boundaries + UTC-millisecond iteration, so stored dates line up with the
+    // UTC-midnight dates the reads (and Night Audit / quote engine) look them up by (A13).
+    const DAY_MS = 86_400_000;
+    const startDate = toUtcMidnight(new Date(data.startDate));
+    const endDate = toUtcMidnight(new Date(data.endDate));
 
-    const totalDays = differenceInDays(endDate, startDate) + 1;
+    const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / DAY_MS) + 1;
 
     if (totalDays < 1) {
       return NextResponse.json({ error: "The end date must be on or after the start date." }, { status: 400 });
@@ -119,7 +122,7 @@ export async function POST(request: Request) {
 
     const upserts = [];
     for (let i = 0; i < totalDays; i++) {
-      const currentDate = addDays(startDate, i);
+      const currentDate = new Date(startDate.getTime() + i * DAY_MS);
 
       upserts.push(
         prisma.priceCalendar.upsert({
