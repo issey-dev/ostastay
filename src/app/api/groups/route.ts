@@ -43,9 +43,10 @@ export async function POST(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId)
 
-    // Check if group code exists
+    // Check if the group code is already used AT THIS PROPERTY (scoped, so it can't reveal
+    // another tenant's codes).
     const existing = await prisma.groupBlock.findUnique({
-      where: { code }
+      where: { propertyId_code: { propertyId, code } }
     })
 
     if (existing) {
