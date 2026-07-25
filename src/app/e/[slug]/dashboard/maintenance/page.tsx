@@ -6,6 +6,7 @@ import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "@/co
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { ErrorState } from "@/components/ui/error-state"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
 
 type Ticket = {
@@ -26,6 +27,7 @@ export default function MaintenanceDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [maintenanceTeam, setMaintenanceTeam] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
 
   const fetchMaintenanceTeam = async () => {
@@ -43,15 +45,18 @@ export default function MaintenanceDashboard() {
 
   const fetchTickets = async (silent = false) => {
     if (!currentProperty) return
-    if (!silent) setLoading(true)
+    if (!silent) {
+      setLoading(true)
+      setLoadError(false)
+    }
     try {
       const res = await fetch(`/api/maintenance?propertyId=${currentProperty.id}`)
-      if (res.ok) {
-        const data = await res.json()
-        setTickets(data)
-      }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setTickets(data)
     } catch (e) {
       console.error(e)
+      if (!silent) setLoadError(true)
     } finally {
       if (!silent) setLoading(false)
     }
@@ -131,6 +136,20 @@ export default function MaintenanceDashboard() {
             <Skeleton key={i} className="h-[500px] rounded-2xl" />
           ))}
         </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Maintenance Dashboard</h2>
+            <p className="text-muted-foreground">Track, manage, and resolve property maintenance issues.</p>
+          </div>
+        </div>
+        <ErrorState title="Couldn't load maintenance tickets" onRetry={() => fetchTickets()} />
       </div>
     )
   }

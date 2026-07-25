@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckSquare, X, Check, Wrench } from "@/components/icons"
 import { WorkOrderManager } from "@/components/housekeeping/work-order-manager"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorState } from "@/components/ui/error-state"
 import { statusMutedClasses, toneMutedClasses, toneSolidClasses, type StatusTone } from "@/lib/status-tone"
 
 type Room = {
@@ -32,6 +33,7 @@ const priorityTone: Record<string, StatusTone> = { HIGH: "danger", MEDIUM: "warn
 export default function RoomMatrix() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [propertyId, setPropertyId] = useState<string | null>(null)
   
   const [isBulkMode, setIsBulkMode] = useState(false)
@@ -58,11 +60,16 @@ export default function RoomMatrix() {
 
   const fetchRooms = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/rooms?propertyId=${propertyId}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then((data) => {
         if (Array.isArray(data)) setRooms(data)
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -209,6 +216,8 @@ export default function RoomMatrix() {
                 </div>
               </div>
             </div>
+          ) : loadError ? (
+            <ErrorState title="Couldn't load rooms" onRetry={fetchRooms} />
           ) : rooms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 max-w-sm mx-auto">
               <div className="h-20 w-20 bg-muted rounded-none flex items-center justify-center mb-6 shadow-inner">

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
@@ -34,6 +35,7 @@ export default function POSDashboard() {
   const [chargeCodes, setChargeCodes] = useState<any[]>([])
   const [recentPostings, setRecentPostings] = useState<any[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [posting, setPosting] = useState(false)
   const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null)
 
@@ -44,15 +46,24 @@ export default function POSDashboard() {
     reference: ""
   })
 
-  // Fetch active outlets for this property on mount
+  // Fetch active outlets for this property — the initial data load that gates the page.
+  const fetchOutlets = () => {
+    if (!currentProperty) return
+    setLoadError(false)
+    fetch(`/api/outlets?propertyId=${currentProperty.id}`)
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
+      .then(data => {
+        if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive))
+      })
+      .catch(() => setLoadError(true))
+  }
+
   useEffect(() => {
     if (currentProperty) {
-      fetch(`/api/outlets?propertyId=${currentProperty.id}`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive))
-        })
-        .catch(console.error)
+      fetchOutlets()
       // POS is a billing screen — opening it auto-opens the cashier's drawer for the
       // current property, even before anything is posted.
       fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
@@ -214,6 +225,9 @@ export default function POSDashboard() {
         </TabsList>
 
         <TabsContent value="charges" className="m-0">
+    {loadError ? (
+      <ErrorState title="Couldn't load outlets" onRetry={fetchOutlets} />
+    ) : (
     <div className="flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)]">
 
       {/* Left Column: Search & Post */}
@@ -431,6 +445,7 @@ export default function POSDashboard() {
         </SheetContent>
       </Sheet>
     </div>
+    )}
         </TabsContent>
 
         <TabsContent value="history" className="m-0">

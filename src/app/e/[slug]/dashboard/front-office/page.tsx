@@ -14,6 +14,7 @@ import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { useProperty } from "@/components/providers/property-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog"
@@ -22,6 +23,7 @@ export default function FrontOfficeDashboard() {
   const { currentProperty } = useProperty()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
   const [checkInRes, setCheckInRes] = useState<any>(null)
@@ -57,13 +59,14 @@ export default function FrontOfficeDashboard() {
   const fetchSummary = async () => {
     if (!propertyId) return
     setLoading(true)
+    setLoadError(false)
     try {
       const res = await fetch(`/api/front-office/summary?propertyId=${propertyId}`)
-      if (res.ok) {
-        setData(await res.json())
-      }
+      if (!res.ok) throw new Error()
+      setData(await res.json())
     } catch (e) {
       console.error(e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -269,7 +272,9 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
               {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
               <div className="md:hidden divide-y divide-border">
-                {arrivals.length === 0 ? (
+                {loadError ? (
+                  <ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} />
+                ) : arrivals.length === 0 ? (
                   <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
                 ) : (
                   arrivals.map((res: any) => (
@@ -333,7 +338,14 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {arrivals.map((res: any) => (
+                  {loadError && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-0">
+                        <ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadError && arrivals.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -380,7 +392,7 @@ export default function FrontOfficeDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {arrivals.length === 0 && (
+                  {!loadError && arrivals.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="py-0">
                         <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
@@ -394,7 +406,9 @@ export default function FrontOfficeDashboard() {
             {/* Departures Tab */}
             <TabsContent value="departures" className="m-0 border-none outline-none">
               <div className="md:hidden divide-y divide-border">
-                {departures.length === 0 ? (
+                {loadError ? (
+                  <ErrorState title="Couldn't load departures" onRetry={fetchSummary} />
+                ) : departures.length === 0 ? (
                   <EmptyState icon={LogOut} title="No departures scheduled for today" />
                 ) : (
                   departures.map((res: any) => (
@@ -445,7 +459,14 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {departures.map((res: any) => (
+                  {loadError && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-0">
+                        <ErrorState title="Couldn't load departures" onRetry={fetchSummary} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadError && departures.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -480,7 +501,7 @@ export default function FrontOfficeDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {departures.length === 0 && (
+                  {!loadError && departures.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="py-0">
                         <EmptyState icon={LogOut} title="No departures scheduled for today" />
@@ -494,7 +515,9 @@ export default function FrontOfficeDashboard() {
             {/* In-House Tab */}
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
               <div className="md:hidden divide-y divide-border">
-                {inHouse.length === 0 ? (
+                {loadError ? (
+                  <ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} />
+                ) : inHouse.length === 0 ? (
                   <EmptyState icon={CheckCircle} title="No guests currently in-house" />
                 ) : (
                   inHouse.map((res: any) => (
@@ -540,7 +563,14 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inHouse.map((res: any) => (
+                  {loadError && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-0">
+                        <ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadError && inHouse.map((res: any) => (
                     <TableRow key={res.id}>
                       <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
@@ -570,7 +600,7 @@ export default function FrontOfficeDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {inHouse.length === 0 && (
+                  {!loadError && inHouse.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="py-0">
                         <EmptyState icon={CheckCircle} title="No guests currently in-house" />
@@ -586,7 +616,9 @@ export default function FrontOfficeDashboard() {
                 coordinate the physical move (luggage, keys, housekeeping). */}
             <TabsContent value="roommoves" className="m-0 border-none outline-none">
               <div className="md:hidden divide-y divide-border">
-                {data?.roomMovesToday?.length === 0 ? (
+                {loadError ? (
+                  <ErrorState title="Couldn't load room moves" onRetry={fetchSummary} />
+                ) : data?.roomMovesToday?.length === 0 ? (
                   <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                 ) : (
                   data?.roomMovesToday?.map((mv: any) => (
@@ -617,7 +649,14 @@ export default function FrontOfficeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.roomMovesToday?.map((mv: any) => (
+                  {loadError && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-0">
+                        <ErrorState title="Couldn't load room moves" onRetry={fetchSummary} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadError && data?.roomMovesToday?.map((mv: any) => (
                     <TableRow key={mv.reservationId}>
                       <TableCell className="pl-6 font-medium">{mv.primaryGuest.firstName} {mv.primaryGuest.lastName}</TableCell>
                       <TableCell className="text-muted-foreground font-mono text-xs">{mv.confirmationNo}</TableCell>
@@ -626,7 +665,7 @@ export default function FrontOfficeDashboard() {
                       <TableCell className="pr-6 text-muted-foreground">{mv.toRoomTypeName}</TableCell>
                     </TableRow>
                   ))}
-                  {data?.roomMovesToday?.length === 0 && (
+                  {!loadError && data?.roomMovesToday?.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="py-0">
                         <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />

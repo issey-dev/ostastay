@@ -9,6 +9,7 @@ import Link from "next/link"
 import { format, parseISO } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -17,18 +18,20 @@ export default function GroupsDashboard() {
   const { currentProperty } = useProperty()
   const [groups, setGroups] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   const fetchGroups = async () => {
     if (!currentProperty) return
     setLoading(true)
+    setLoadError(false)
     try {
       const res = await fetch(`/api/groups?propertyId=${currentProperty.id}`)
-      if (res.ok) {
-        const data = await res.json()
-        setGroups(data)
-      }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setGroups(data)
     } catch (e) {
       console.error(e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -57,6 +60,8 @@ export default function GroupsDashboard() {
       <div className="md:hidden space-y-3">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
+        ) : loadError ? (
+          <ErrorState title="Couldn't load groups" onRetry={fetchGroups} className="rounded-xl border border-border bg-card" />
         ) : groups.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -111,6 +116,12 @@ export default function GroupsDashboard() {
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
               ))
+            ) : loadError ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-0">
+                  <ErrorState title="Couldn't load groups" onRetry={fetchGroups} />
+                </TableCell>
+              </TableRow>
             ) : groups.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-0">

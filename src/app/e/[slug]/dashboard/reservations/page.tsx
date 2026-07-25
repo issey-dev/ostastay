@@ -28,6 +28,7 @@ import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 
 type Reservation = {
@@ -172,6 +173,7 @@ export default function ReservationsDashboard() {
 
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Modals state — the booking create/edit form itself lives on its own page now
@@ -212,14 +214,18 @@ export default function ReservationsDashboard() {
   const fetchData = async () => {
     if (!currentProperty) return
     setLoading(true)
+    setLoadError(false)
     try {
-      const resData = await (await fetch(`/api/reservations?${buildQuery(0)}`)).json()
+      const res = await fetch(`/api/reservations?${buildQuery(0)}`)
+      if (!res.ok) throw new Error()
+      const resData = await res.json()
       if (Array.isArray(resData)) {
         setReservations(resData)
         setHasMore(resData.length === PAGE_SIZE)
       }
     } catch (e) {
       console.error("Failed to load data", e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -512,6 +518,8 @@ export default function ReservationsDashboard() {
           <div className="md:hidden space-y-3">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
+            ) : loadError ? (
+              <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
             ) : reservations.length === 0 ? (
               <EmptyState icon={CalendarDays} title="No reservations match your filters" />
             ) : (
@@ -582,6 +590,10 @@ export default function ReservationsDashboard() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                   ))
+                ) : loadError ? (
+                  <TableRow><TableCell colSpan={6} className="py-0">
+                    <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
+                  </TableCell></TableRow>
                 ) : reservations.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="py-0">
                     <EmptyState icon={CalendarDays} title="No reservations match your filters" />

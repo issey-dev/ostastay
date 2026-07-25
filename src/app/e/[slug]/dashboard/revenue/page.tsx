@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ErrorState } from "@/components/ui/error-state"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
@@ -55,6 +56,7 @@ export default function RevenueDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Modals state
@@ -91,11 +93,16 @@ export default function RevenueDashboard() {
   const fetchRatePlans = () => {
     if (!propertyId) return
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/rate-plans?propertyId=${propertyId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then(data => {
         if (Array.isArray(data)) setRatePlans(data)
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -510,6 +517,8 @@ export default function RevenueDashboard() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-10">Loading rate plans...</TableCell></TableRow>
+              ) : loadError ? (
+                <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load rate plans" onRetry={fetchRatePlans} /></TableCell></TableRow>
               ) : ratePlans.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-10">No rate plans defined.</TableCell></TableRow>
               ) : (

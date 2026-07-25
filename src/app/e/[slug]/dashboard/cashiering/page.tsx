@@ -13,11 +13,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function CashieringPage() {
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState("");
 
   // Open Shift State — default float and exchange currencies come from
@@ -84,11 +86,13 @@ export default function CashieringPage() {
 
   const fetchStatus = async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const [statusRes, historyRes] = await Promise.all([
         fetch("/api/cashiering/status"),
         fetch("/api/cashiering/shifts"),
       ]);
+      if (!statusRes.ok || !historyRes.ok) throw new Error();
       const json = await statusRes.json();
       if (json.success) {
         setStatus(json.data);
@@ -99,6 +103,7 @@ export default function CashieringPage() {
       }
     } catch (err) {
       console.error(err);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -214,6 +219,20 @@ export default function CashieringPage() {
           <Skeleton className="h-5 w-full max-w-xl" />
         </div>
         <Skeleton className="h-64 max-w-md mx-auto mt-12 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (loadError && !status) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Cashiering & Shift Reconciliation</h2>
+          <p className="text-muted-foreground">
+            Manage your physical cash drawer and track all financial postings during your shift.
+          </p>
+        </div>
+        <ErrorState title="Couldn't load cashiering" onRetry={fetchStatus} />
       </div>
     );
   }

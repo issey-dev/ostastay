@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useProperty } from "@/components/providers/property-provider"
 
@@ -36,13 +37,19 @@ export default function DebtorsPage() {
 
   const [accounts, setAccounts] = useState<DebtorAccount[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   const fetchAccounts = useCallback(() => {
     if (!propertyId) return
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/debtors/accounts?propertyId=${propertyId}`)
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then((data) => { if (Array.isArray(data)) setAccounts(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }, [propertyId])
 
@@ -66,6 +73,8 @@ export default function DebtorsPage() {
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </div>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load debtors" onRetry={fetchAccounts} />
       ) : accounts.length === 0 ? (
         <EmptyState
           icon={Landmark}
