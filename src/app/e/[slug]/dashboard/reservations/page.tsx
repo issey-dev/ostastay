@@ -9,6 +9,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -166,6 +167,7 @@ export default function ReservationsDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const { currentProperty } = useProperty()
+  const confirm = useConfirm()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
 
@@ -361,7 +363,7 @@ export default function ReservationsDashboard() {
         setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
         fetchData()
       } else if (data.earlyCheckoutRequired && !early) {
-        if (window.confirm(`${data.error}\n\nCheck out early anyway?`)) {
+        if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
           await handleCheckOut(res, true)
         }
       } else {

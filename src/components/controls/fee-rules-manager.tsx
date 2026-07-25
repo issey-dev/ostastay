@@ -10,6 +10,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Save, Plus, Trash2 } from "@/components/icons"
 import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
 
 type RuleType = "DEPOSIT" | "CANCELLATION" | "NO_SHOW"
 
@@ -41,6 +42,7 @@ const BASIS_OPTIONS = [
 
 export function FeeRulesManager() {
   const { currentProperty } = useProperty()
+  const confirm = useConfirm()
   const [rules, setRules] = useState<FeeRule[]>([])
   const [chargeCodes, setChargeCodes] = useState<{ id: string; code: string; description: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -101,7 +103,7 @@ export function FeeRulesManager() {
 
   const remove = async (rule: FeeRule) => {
     if (rule.id) {
-      if (!window.confirm(`Delete "${rule.name || "this rule"}"? Reservations using it will fall back to no fee.`)) return
+      if (!(await confirm({ title: `Delete "${rule.name || "this rule"}"?`, description: "Reservations using it will fall back to no fee.", confirmLabel: "Delete", destructive: true }))) return
       try {
         const res = await fetch(`/api/settings/fee-rules?id=${rule.id}`, { method: "DELETE" })
         if (!res.ok) { toast.error((await res.json()).error || "Failed to delete the rule."); return }

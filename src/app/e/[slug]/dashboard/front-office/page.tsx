@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
@@ -24,6 +25,7 @@ export default function FrontOfficeDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const confirm = useConfirm()
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
   const [checkInRes, setCheckInRes] = useState<any>(null)
@@ -93,7 +95,7 @@ export default function FrontOfficeDashboard() {
       } else if (data.earlyCheckoutRequired && !early) {
         // Not due out yet — offer an explicit early check-out.
         setActionLoading(null)
-        if (window.confirm(`${data.error}\n\nCheck out early anyway?`)) {
+        if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
           await handleCheckOut(id, true)
         }
         return

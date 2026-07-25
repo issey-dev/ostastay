@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
 
 type PaymentMethod = {
   id: string
@@ -24,6 +25,7 @@ type PaymentMethod = {
 }
 
 export function PaymentMethodsManager({ title, description }: { title: string; description?: string }) {
+  const confirm = useConfirm()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -83,7 +85,7 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this payment method? This action cannot be undone.")) return
+    if (!(await confirm({ title: "Delete this payment method?", description: "This action cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
     try {
       await fetch(`/api/payment-methods/${id}`, { method: "DELETE" })
       fetchMethods()

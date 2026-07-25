@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
@@ -146,8 +147,15 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       .catch(() => {})
   }, [id])
 
+  const confirm = useConfirm()
+
   const handleCancel = async () => {
-    if (!window.confirm("Cancel this reservation? If a cancellation-fee rule applies, the fee is retained against any deposit held.")) return
+    if (!(await confirm({
+      title: "Cancel this reservation?",
+      description: "If a cancellation-fee rule applies, the fee is retained against any deposit held.",
+      confirmLabel: "Cancel reservation",
+      destructive: true,
+    }))) return
     try {
       const res = await fetch(`/api/reservations/${id}/status`, {
         method: "PATCH",
@@ -173,7 +181,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   }
 
   const handleCheckOut = async (early = false) => {
-    if (early && !window.confirm("This guest isn't due out yet. Check them out early?")) return
+    if (early && !(await confirm({
+      title: "Check out early?",
+      description: "This guest isn't due out yet.",
+      confirmLabel: "Check out early",
+    }))) return
     setCheckingOut(true)
     try {
       const res = await fetch(`/api/reservations/${id}/check-out`, {
@@ -232,7 +244,12 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   }
 
   const handleReverseCheckIn = async () => {
-    if (!window.confirm("Reverse this check-in and put the guest back to Reserved?")) return
+    if (!(await confirm({
+      title: "Reverse this check-in?",
+      description: "This puts the guest back to Reserved.",
+      confirmLabel: "Reverse check-in",
+      destructive: true,
+    }))) return
     setReversing(true)
     try {
       const res = await fetch(`/api/reservations/${id}/reverse-check-in`, { method: "POST" })
