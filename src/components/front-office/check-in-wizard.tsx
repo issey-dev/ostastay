@@ -131,6 +131,20 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     fetch(`/api/payment-methods`).then((r) => r.json()).then((d) => {
       if (Array.isArray(d)) setPaymentMethods(d.filter((m: any) => m.isActive !== false))
     }).catch(() => {})
+    // Pre-fill the optional payment amount with the balance due (C-2 — don't make staff
+    // re-type a number the app already knows). setValue without validation so the "pick a
+    // method" hint only appears once they engage; clearing the amount opts out of collecting.
+    fetch(`/api/folios?reservationId=${reservationId}`).then((r) => r.json()).then((folios) => {
+      if (!Array.isArray(folios)) return
+      let charges = 0, payments = 0
+      for (const f of folios) {
+        if (f.isDebtorAccount) continue
+        for (const li of f.lineItems ?? []) if (!li.isVoid) charges += li.amount + li.taxAmount + (li.serviceChargeAmount || 0)
+        for (const p of f.payments ?? []) payments += p.isRefund ? -p.amount : p.amount
+      }
+      const balance = charges - payments
+      if (balance > 0.005) paymentForm.setValue("amount", balance.toFixed(2))
+    }).catch(() => {})
   }, [isOpen, reservationId, propertyId])
 
   const guestStatus = (upid: string) => {
@@ -143,18 +157,27 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     return { complete: missing.length === 0, missing, hasExpired: e.hasExpired }
   }
 
-  const saveGuestBasics = async (upid: string) => {
-    const e = idEdits[upid]
+  // Auto-save DOB / nationality the moment either changes (both are discrete pickers, not
+  // free text), so they're never silently lost — C-2 removed the separate manual "Save"
+  // button that staff had to remember to click. Fire-and-forget; the values are passed in
+  // to avoid a stale-state read.
+  const saveGuestBasics = async (upid: string, values: { dateOfBirth: string | null; nationality: string | null }) => {
     setSavingId(true)
     try {
       await fetch(`/api/profiles/${upid}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dateOfBirth: e.dateOfBirth, nationality: e.nationality }),
+        body: JSON.stringify({ dateOfBirth: values.dateOfBirth, nationality: values.nationality }),
       })
     } finally {
       setSavingId(false)
     }
+  }
+
+  const updateGuestBasics = (upid: string, patch: { dateOfBirth?: string | null; nationality?: string | null }) => {
+    const merged = { ...idEdits[upid], ...patch }
+    setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], ...patch } }))
+    saveGuestBasics(upid, { dateOfBirth: merged.dateOfBirth ?? null, nationality: merged.nationality ?? null })
   }
 
   // After the ID-document manager changes, re-pull the guest's docs to refresh warnings.
@@ -287,14 +310,14 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Date of Birth</Label>
-                      <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], dateOfBirth: v ?? null } }))} />
+                      <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => updateGuestBasics(upid, { dateOfBirth: v ?? null })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Nationality</Label>
-                      <SystemCodeSelect category="NATIONALITY" value={e?.nationality ?? ""} onValueChange={(v) => setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], nationality: v } }))} placeholder="Select nationality" />
+                      <SystemCodeSelect category="NATIONALITY" value={e?.nationality ?? ""} onValueChange={(v) => updateGuestBasics(upid, { nationality: v })} placeholder="Select nationality" />
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => saveGuestBasics(upid)} disabled={savingId}>{savingId ? "Saving…" : "Save Date of Birth & Nationality"}</Button>
+                  <p className="text-xs text-muted-foreground">{savingId ? "Saving…" : "Date of birth & nationality save automatically."}</p>
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Identification Documents</Label>
