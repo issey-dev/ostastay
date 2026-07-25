@@ -193,14 +193,14 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Key className="w-5 h-5" /> Check In — {reservation ? reservation.confirmationNo : ""}</DialogTitle>
           <DialogDescription>{reservation ? profName(reservation.primaryGuest) : ""}</DialogDescription>
         </DialogHeader>
 
         {/* Stepper */}
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {stepList.map((s, i) => (
             <div key={s.key} className={`flex items-center gap-1.5 px-2 py-1 rounded ${i === stepIndex ? "bg-primary/10 text-primary font-medium" : i < stepIndex ? "text-success" : "text-muted-foreground"}`}>
               <s.icon className="w-3.5 h-3.5" /> {s.label}
