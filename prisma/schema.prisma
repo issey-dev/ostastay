@@ -191,6 +191,7 @@ model User {
   supportGrantsApproved    SupportAccessGrant[] @relation("GrantApprovedBy")
   currencyExchangesCreated CurrencyExchange[]   @relation("CurrencyExchangeCreatedBy")
   propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
+  spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
 }
 
 // PropertyStatus: PENDING (newly created by a tenant, not yet reviewed — locked out of
@@ -2004,7 +2005,11 @@ model SpaTherapist {
   id           String   @id @default(uuid())
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  employeeId   String? // optional link to an existing employee/user record; plain id, no FK requirement to a login
+  // Links this therapist to a PMS login. When set, that user sees the appointments they're
+  // booked on ("My Appointments") and can edit their own gender/phone/email. One user maps
+  // to at most one therapist profile.
+  userId       String?  @unique
+  user         User?    @relation("SpaTherapistUser", fields: [userId], references: [id])
   displayName  String
   gender       String?
   phone        String?

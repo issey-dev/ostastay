@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,7 +28,8 @@ type ExceptionRow = { id: string; date: string; startTime: string | null; endTim
 
 type SpaTherapistDto = {
   id: string
-  employeeId: string | null
+  userId: string | null
+  user: { id: string; firstName: string; lastName: string; email: string } | null
   displayName: string
   gender: string | null
   phone: string | null
@@ -42,7 +44,7 @@ type SpaTherapistDto = {
 
 const therapistSchema = z.object({
   displayName: z.string().min(2, "Name must be at least 2 characters"),
-  employeeId: z.string().optional(),
+  userId: z.string().optional(),
   gender: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
@@ -54,7 +56,7 @@ const therapistSchema = z.object({
 type TherapistFormValues = z.infer<typeof therapistSchema>
 
 const emptyValues: TherapistFormValues = {
-  displayName: "", employeeId: "", gender: "", phone: "", email: "", isActive: true, bookable: true, displayOrder: "0",
+  displayName: "", userId: "", gender: "", phone: "", email: "", isActive: true, bookable: true, displayOrder: "0",
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -66,6 +68,7 @@ export function SpaTherapistsManager() {
 
   const [therapists, setTherapists] = useState<SpaTherapistDto[]>([])
   const [treatments, setTreatments] = useState<TreatmentOption[]>([])
+  const [users, setUsers] = useState<{ id: string; firstName: string; lastName: string; email: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SpaTherapistDto | null>(null)
@@ -100,6 +103,13 @@ export function SpaTherapistsManager() {
       .then((data) => { if (Array.isArray(data)) setTreatments(data.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))) })
   }, [propertyId])
 
+  useEffect(() => {
+    fetch(`/api/settings/users`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setUsers(data) })
+      .catch(() => {})
+  }, [])
+
   const openCreate = () => {
     setEditing(null)
     setServerError(null)
@@ -112,7 +122,7 @@ export function SpaTherapistsManager() {
     setServerError(null)
     form.reset({
       displayName: t.displayName,
-      employeeId: t.employeeId ?? "",
+      userId: t.userId ?? "",
       gender: t.gender ?? "",
       phone: t.phone ?? "",
       email: t.email ?? "",
@@ -285,10 +295,17 @@ export function SpaTherapistsManager() {
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <FormField control={form.control} name="employeeId" render={({ field }) => (
+                  <FormField control={form.control} name="userId" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Employee ID</FormLabel>
-                      <FormControl><Input placeholder="Optional" {...field} /></FormControl>
+                      <FormLabel>Linked User <span className="text-muted-foreground font-normal">(login)</span></FormLabel>
+                      <FormControl>
+                        <SearchableSelect
+                          value={field.value ?? ""}
+                          onChange={(v) => field.onChange(v)}
+                          placeholder="Link a PMS user (optional)..."
+                          options={[{ label: "— None —", value: "" }, ...users.map((u) => ({ label: `${u.firstName} ${u.lastName} (${u.email})`, value: u.id }))]}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

@@ -7,6 +7,7 @@ const includeShape = {
   skills: { include: { treatment: { select: { id: true, name: true } } } },
   schedules: { orderBy: { dayOfWeek: "asc" as const } },
   exceptions: { orderBy: { date: "asc" as const } },
+  user: { select: { id: true, firstName: true, lastName: true, email: true } },
 };
 
 export async function GET(request: Request) {
@@ -42,10 +43,22 @@ export async function POST(request: Request) {
     }
     await assertPropertyModuleAccess(ctx, body.propertyId, "SPA");
 
+    // Optional link to a PMS login — must be a user of this enterprise, and each user maps
+    // to at most one therapist (the schema's @unique enforces that; we surface a clean error).
+    if (body.userId) {
+      const linkUser = await prisma.user.findUnique({ where: { id: body.userId }, include: { spaTherapistProfile: true } });
+      if (!linkUser || linkUser.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Linked user not found" }, { status: 404 });
+      }
+      if (linkUser.spaTherapistProfile) {
+        return NextResponse.json({ error: "That user is already linked to another therapist" }, { status: 400 });
+      }
+    }
+
     const therapist = await prisma.spaTherapist.create({
       data: {
         propertyId: body.propertyId,
-        employeeId: body.employeeId || null,
+        userId: body.userId || null,
         displayName: body.displayName,
         gender: body.gender || null,
         phone: body.phone || null,

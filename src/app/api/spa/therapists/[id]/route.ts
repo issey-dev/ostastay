@@ -23,10 +23,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     await assertPropertyModuleAccess(ctx, existing.propertyId, "SPA");
 
+    if (body.userId) {
+      const linkUser = await prisma.user.findUnique({ where: { id: body.userId }, include: { spaTherapistProfile: true } });
+      if (!linkUser || linkUser.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Linked user not found" }, { status: 404 });
+      }
+      if (linkUser.spaTherapistProfile && linkUser.spaTherapistProfile.id !== id) {
+        return NextResponse.json({ error: "That user is already linked to another therapist" }, { status: 400 });
+      }
+    }
+
     const therapist = await prisma.spaTherapist.update({
       where: { id },
       data: {
-        employeeId: body.employeeId !== undefined ? body.employeeId || null : undefined,
+        userId: body.userId !== undefined ? body.userId || null : undefined,
         displayName: body.displayName ?? undefined,
         gender: body.gender !== undefined ? body.gender || null : undefined,
         phone: body.phone !== undefined ? body.phone || null : undefined,
