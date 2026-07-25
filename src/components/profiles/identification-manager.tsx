@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { DatePicker } from "@/components/ui/date-picker"
+import { ErrorState } from "@/components/ui/error-state"
 import { cn } from "@/lib/utils"
 
 type ProfileDocument = {
@@ -27,6 +28,7 @@ const emptyForm = { documentType: "", documentNumber: "", issuingCountry: "", ex
 export function IdentificationManager({ upid, onChange }: { upid: string; onChange?: () => void }) {
   const [rows, setRows] = useState<ProfileDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,9 +36,14 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
 
   const fetchRows = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles/${upid}/documents`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => { if (Array.isArray(data)) setRows(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -88,6 +95,8 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
     <div className="space-y-3">
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load identification documents" onRetry={fetchRows} />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No identification documents on file yet.</p>
       ) : (

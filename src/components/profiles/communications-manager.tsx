@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { ErrorState } from "@/components/ui/error-state"
 import { cn } from "@/lib/utils"
 
 type Communication = { id: string; type: string; value: string; isPrimary: boolean }
@@ -24,6 +25,7 @@ const TYPE_PLACEHOLDERS: Record<string, string> = {
 export function CommunicationsManager({ upid }: { upid: string }) {
   const [rows, setRows] = useState<Communication[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [newType, setNewType] = useState("EMAIL")
   const [newValue, setNewValue] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -31,9 +33,14 @@ export function CommunicationsManager({ upid }: { upid: string }) {
 
   const fetchRows = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles/${upid}/communications`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => { if (Array.isArray(data)) setRows(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -79,6 +86,8 @@ export function CommunicationsManager({ upid }: { upid: string }) {
     <div className="space-y-3">
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load communications" onRetry={fetchRows} />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No communications on file yet.</p>
       ) : (
