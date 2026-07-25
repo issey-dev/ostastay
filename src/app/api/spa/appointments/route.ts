@@ -52,9 +52,28 @@ export async function GET(request: Request) {
       return NextResponse.json(appointments);
     }
 
+    // Date-range mode (from/to), optionally filtered to one therapist — powers the Spa
+    // Schedule calendar. A therapist matches an appointment if any participant is assigned
+    // to them.
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (from && to) {
+      const therapistId = searchParams.get("therapistId");
+      const rangeAppointments = await prisma.spaAppointment.findMany({
+        where: {
+          propertyId,
+          appointmentDate: { gte: dayStart(new Date(from)), lte: dayStart(new Date(to)) },
+          ...(therapistId ? { participants: { some: { therapistId } } } : {}),
+        },
+        include: includeShape,
+        orderBy: [{ appointmentDate: "asc" }, { startTime: "asc" }],
+      });
+      return NextResponse.json(rangeAppointments);
+    }
+
     const dateParam = searchParams.get("date");
     if (!dateParam) {
-      return NextResponse.json({ error: "date (or openWalkIns=true) is required" }, { status: 400 });
+      return NextResponse.json({ error: "date, from/to range, or openWalkIns=true is required" }, { status: 400 });
     }
     const date = new Date(dateParam);
     if (isNaN(date.getTime())) {

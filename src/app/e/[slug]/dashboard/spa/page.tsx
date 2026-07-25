@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Sparkles, Clock, Users, X, Receipt, UserRound, Search } from "lucide-react"
+import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SpaSchedule } from "@/components/front-office/spa-schedule"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -104,6 +106,7 @@ type AppointmentListItem = {
 export default function SpaPage() {
   const { currentProperty } = useProperty()
 
+  const [pageTab, setPageTab] = useState<"book" | "schedule">("book")
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
 
   const [treatments, setTreatments] = useState<Treatment[]>([])
@@ -439,6 +442,13 @@ export default function SpaPage() {
         <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book a treatment.</p>
       </div>
 
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule") ?? "book")}>
+        <TabsList>
+          <TabsTrigger value="book"><Sparkles className="w-4 h-4 mr-2" /> Book</TabsTrigger>
+          <TabsTrigger value="schedule"><Calendar className="w-4 h-4 mr-2" /> Schedule</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="book" className="m-0">
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left: booking form */}
         <div className="flex-1 space-y-6">
@@ -885,6 +895,19 @@ export default function SpaPage() {
           )}
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="schedule" className="m-0">
+          {currentProperty && (
+            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+              <SpaSchedule
+                propertyId={currentProperty.id}
+                onSelectAppointment={(a) => { if (a.folioId) { setWalkInFolioId(a.folioId); setIsWalkInPanelOpen(true) } }}
+              />
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <WalkInFolioPanel
         folioId={walkInFolioId}
