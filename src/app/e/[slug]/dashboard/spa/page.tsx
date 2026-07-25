@@ -190,7 +190,12 @@ export default function SpaPage() {
   }
 
   const handlePartySizeChange = (value: string | null) => {
-    resetParticipants(parseInt(value ?? "1"))
+    const n = Math.max(1, parseInt(value ?? "1") || 1)
+    setPartySize(n)
+    // Grow/shrink WITHOUT wiping already-selected participants (esp. the primary in slot 0).
+    setParticipants((prev) => (n <= prev.length ? prev.slice(0, n) : [...prev, ...Array.from({ length: n - prev.length }, emptySlot)]))
+    setSelectedStartTime("")
+    setSlots([])
   }
 
   // A stable primitive key for "which guest is in which slot" — used (instead of the
