@@ -11,6 +11,7 @@ import { logActivity } from "@/lib/activity-log";
 const includeShape = {
   treatment: { select: { id: true, name: true } },
   room: { select: { id: true, name: true } },
+  folio: { select: { id: true, isClosed: true, taxInvoiceNumber: true } },
   participants: {
     include: {
       reservation: { include: { primaryGuest: true, assignments: { include: { room: true } } } },

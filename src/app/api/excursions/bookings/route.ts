@@ -24,6 +24,27 @@ export async function GET(request: Request) {
     }
     await assertPropertyModuleAccess(ctx, propertyId, "EXCURSIONS");
 
+    // History mode: every booking (in-house + walk-in, any status), optionally filtered by
+    // departure date — powers the Excursions History tab.
+    if (searchParams.get("history") === "true") {
+      const from = searchParams.get("from");
+      const to = searchParams.get("to");
+      const history = await prisma.excursionBooking.findMany({
+        where: {
+          propertyId,
+          ...(from && to ? { departure: { departureDate: { gte: new Date(from), lte: new Date(`${to}T23:59:59.999Z`) } } } : {}),
+        },
+        include: {
+          departure: { select: { departureDate: true, departureTime: true, excursionType: { select: { name: true } } } },
+          folio: { select: { id: true, isClosed: true, taxInvoiceNumber: true } },
+          reservation: { select: { primaryGuest: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: [{ departure: { departureDate: "desc" } }, { createdAt: "desc" }],
+        take: 500,
+      });
+      return NextResponse.json(history);
+    }
+
     const bookings = await prisma.excursionBooking.findMany({
       where: {
         propertyId,

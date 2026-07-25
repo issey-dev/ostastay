@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useParams } from "next/navigation"
 import { format } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
 import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "@/components/icons"
@@ -16,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { ExcursionManifestPanel } from "@/components/front-office/excursion-manifest-panel"
 import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
+import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
 
 type GuestResult = {
   reservationId: string
@@ -80,7 +82,30 @@ export default function ExcursionsPage() {
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const [manifestDepartureId, setManifestDepartureId] = useState<string | null>(null)
-  const [pageTab, setPageTab] = useState<"book" | "calendar">("book")
+  const { slug } = useParams<{ slug: string }>()
+  const [pageTab, setPageTab] = useState<"book" | "schedule" | "history">("book")
+  const [historyRefresh, setHistoryRefresh] = useState(0)
+
+  const loadHistory = useCallback(async (date: string | null): Promise<SalesRow[]> => {
+    if (!currentProperty) return []
+    const qs = new URLSearchParams({ propertyId: currentProperty.id, history: "true" })
+    if (date) { qs.set("from", date); qs.set("to", date) }
+    const res = await fetch(`/api/excursions/bookings?${qs}`)
+    const data = await res.json()
+    return (Array.isArray(data) ? data : []).map((b: any): SalesRow => ({
+      id: b.id,
+      date: b.departure.departureDate,
+      time: b.departure.departureTime,
+      guest: b.reservation ? `${b.reservation.primaryGuest.firstName} ${b.reservation.primaryGuest.lastName ?? ""}`.trim() : (b.walkInGuestName ?? "Walk-in"),
+      item: b.departure.excursionType.name,
+      amount: b.totalAmount,
+      status: b.status,
+      source: b.reservationId ? "guest" : "walkin",
+      folioId: b.folio?.id ?? null,
+      folioClosed: b.folio?.isClosed,
+      taxInvoiceNumber: b.folio?.taxInvoiceNumber,
+    }))
+  }, [currentProperty])
 
   const fetchDepartures = useCallback(() => {
     if (!currentProperty) return
@@ -225,10 +250,11 @@ export default function ExcursionsPage() {
         <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</p>
       </div>
 
-      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "calendar") ?? "book")}>
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
         <TabsList>
           <TabsTrigger value="book"><CalendarClock className="w-4 h-4 mr-2" /> Book</TabsTrigger>
-          <TabsTrigger value="calendar"><CalendarDays className="w-4 h-4 mr-2" /> Calendar</TabsTrigger>
+          <TabsTrigger value="schedule"><CalendarDays className="w-4 h-4 mr-2" /> Schedule</TabsTrigger>
+          <TabsTrigger value="history"><ClipboardList className="w-4 h-4 mr-2" /> History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="book" className="m-0">
@@ -522,11 +548,22 @@ export default function ExcursionsPage() {
       </div>
         </TabsContent>
 
-        <TabsContent value="calendar" className="m-0">
+        <TabsContent value="schedule" className="m-0">
           <div className="bg-card rounded-xl shadow-sm border border-border p-6">
             {currentProperty && (
               <ExcursionCalendar propertyId={currentProperty.id} onSelectDeparture={(id) => setManifestDepartureId(id)} />
             )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="m-0">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <SalesHistory
+              slug={slug}
+              refreshKey={historyRefresh}
+              load={loadHistory}
+              onOpenWalkInBill={(id) => { setWalkInFolioId(id); setIsWalkInPanelOpen(true) }}
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -534,13 +571,14 @@ export default function ExcursionsPage() {
       <WalkInFolioPanel
         folioId={walkInFolioId}
         isOpen={isWalkInPanelOpen}
-        onClose={() => setIsWalkInPanelOpen(false)}
+        onClose={() => { setIsWalkInPanelOpen(false); setHistoryRefresh((n) => n + 1) }}
         onClosed={() => {
           setIsWalkInPanelOpen(false)
           setWalkInFolioId(null)
           setWalkInForm({ name: "", contact: "" })
           setMode("guest")
           fetchOpenWalkIns()
+          setHistoryRefresh((n) => n + 1)
         }}
       />
 

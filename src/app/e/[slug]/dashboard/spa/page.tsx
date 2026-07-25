@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar } from "lucide-react"
+import { useParams } from "next/navigation"
+import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, ClipboardList } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SpaSchedule } from "@/components/front-office/spa-schedule"
+import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -106,7 +108,9 @@ type AppointmentListItem = {
 export default function SpaPage() {
   const { currentProperty } = useProperty()
 
-  const [pageTab, setPageTab] = useState<"book" | "schedule">("book")
+  const { slug } = useParams<{ slug: string }>()
+  const [pageTab, setPageTab] = useState<"book" | "schedule" | "history">("book")
+  const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
 
   const [treatments, setTreatments] = useState<Treatment[]>([])
@@ -171,6 +175,32 @@ export default function SpaPage() {
   }, [currentProperty])
 
   useEffect(() => { fetchOpenWalkIns() }, [fetchOpenWalkIns])
+
+  const loadHistory = useCallback(async (date: string | null): Promise<SalesRow[]> => {
+    if (!currentProperty) return []
+    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    const from = date || iso(new Date(Date.now() - 60 * 86_400_000))
+    const to = date || iso(new Date(Date.now() + 60 * 86_400_000))
+    const res = await fetch(`/api/spa/appointments?propertyId=${currentProperty.id}&from=${from}&to=${to}`)
+    const data = await res.json()
+    return (Array.isArray(data) ? data : []).map((a: any): SalesRow => {
+      const p = a.participants?.[0]
+      const isGuest = !!p?.reservation
+      return {
+        id: a.id,
+        date: a.appointmentDate,
+        time: a.startTime,
+        guest: isGuest ? `${p.reservation.primaryGuest.firstName} ${p.reservation.primaryGuest.lastName ?? ""}`.trim() : (p?.walkInGuestName ?? "Walk-in"),
+        item: a.treatment.name,
+        amount: a.priceSnapshot,
+        status: a.paymentStatus,
+        source: isGuest ? "guest" : "walkin",
+        folioId: a.folio?.id ?? a.folioId ?? null,
+        folioClosed: a.folio?.isClosed,
+        taxInvoiceNumber: a.folio?.taxInvoiceNumber,
+      }
+    })
+  }, [currentProperty])
 
   const resetParticipants = (size: number) => {
     setPartySize(size)
@@ -442,10 +472,11 @@ export default function SpaPage() {
         <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book a treatment.</p>
       </div>
 
-      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule") ?? "book")}>
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
         <TabsList>
           <TabsTrigger value="book"><Sparkles className="w-4 h-4 mr-2" /> Book</TabsTrigger>
           <TabsTrigger value="schedule"><Calendar className="w-4 h-4 mr-2" /> Schedule</TabsTrigger>
+          <TabsTrigger value="history"><ClipboardList className="w-4 h-4 mr-2" /> History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="book" className="m-0">
@@ -907,12 +938,23 @@ export default function SpaPage() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="history" className="m-0">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <SalesHistory
+              slug={slug}
+              refreshKey={historyRefresh}
+              load={loadHistory}
+              onOpenWalkInBill={(id) => { setWalkInFolioId(id); setIsWalkInPanelOpen(true) }}
+            />
+          </div>
+        </TabsContent>
       </Tabs>
 
       <WalkInFolioPanel
         folioId={walkInFolioId}
         isOpen={isWalkInPanelOpen}
-        onClose={() => setIsWalkInPanelOpen(false)}
+        onClose={() => { setIsWalkInPanelOpen(false); setHistoryRefresh((n) => n + 1) }}
         onClosed={() => {
           setIsWalkInPanelOpen(false)
           setWalkInFolioId(null)
@@ -920,6 +962,7 @@ export default function SpaPage() {
           setMode("guest")
           resetParticipants(1)
           fetchOpenWalkIns()
+          setHistoryRefresh((n) => n + 1)
         }}
       />
     </div>
