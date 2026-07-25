@@ -23,9 +23,10 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
   nationality) · D-3 toast system (`lib/toast.ts` + `ui/toaster.tsx`, base-ui, app-wide) with
   all 41 `alert()` migrated to `toast.*`, plus a promise-based `useConfirm` (`providers/
   confirm-provider.tsx`, AlertDialog-backed) replacing all 8 native `confirm()` deletes.
-  Remaining Batch 5: RHF+Zod on the 4 critical forms (check-in, walk-in, deposit, room-move),
-  check-in prefill/auto-save, extract shared CrudManager/ResponsiveDataTable,
-  select/date-picker/responsive outliers, tests/** lint.
+  C-1 RHF+Zod on the 4 critical forms (deposit, room-move, walk-in fully; check-in-wizard's
+  optional payment sub-form). Remaining Batch 5: C-2 check-in prefill/auto-save, D-2 extract
+  shared CrudManager/ResponsiveDataTable, C-4/D-4 select/date-picker/responsive outliers,
+  D-5 tests/** lint.
 - **Still open (deferred):** A14 Float→integer-cents (large systemic change) · S8 SMTP
   encryption-at-rest (needs KMS decision).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
