@@ -342,17 +342,17 @@ describe("Excursions: business rules", () => {
   });
 
   it("cancelling past the cutoff requires EXCURSIONS delete; within it, update is enough", async () => {
-    // Departed 2 days ago, well past a 24h cutoff.
+    // Departed 2 days ago, well past a 24h cutoff. A past-departure booking can't be made
+    // through the route (A15), so seed it directly WITH its posted (voidable) charge — it
+    // would have been booked and charged while the departure was still in the future.
     const pastDeparture = await makeDeparture(excursionTypeId, -2);
-    const booked = await asUser(adminId, () =>
-      bookingsRoute.POST(
-        new Request("http://localhost/api/excursions/bookings", {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ departureId: pastDeparture.id, reservationId, adultCount: 1 }),
-        })
-      )
-    );
-    const bookingId = (await booked.json()).id;
+    const lineItem = await prisma.folioLineItem.create({
+      data: { folioId: reservationFolioId, chargeCodeId, amount: 50, taxAmount: 0, serviceChargeAmount: 0, description: "Snorkelling Trip", date: new Date() },
+    });
+    const seeded = await prisma.excursionBooking.create({
+      data: { departureId: pastDeparture.id, propertyId, reservationId, adultCount: 1, childCount: 0, infantCount: 0, totalAmount: 50, folioId: reservationFolioId, folioLineItemId: lineItem.id, bookedByUserId: adminId, status: "CONFIRMED" },
+    });
+    const bookingId = seeded.id;
 
     // limitedUserId has EXCURSIONS delete too (granted FULL above), so it can't isolate
     // the cutoff block on its own — use a second, delete-less role for that half.
