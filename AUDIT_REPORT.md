@@ -355,9 +355,18 @@ Owner approved Batch 1 (financial integrity) + Batch 2 (security) + Batch 3 (rem
 race guards), plus policy rulings: A11 = block early check-in always; S4 = enforce
 `PROFILES.view` on reads; S6 = fix + scope group codes.
 
-**Status: all Batch 1 + Batch 2 + Batch 3 items DONE.** `tsc --noEmit` clean; test suite
-**402 passed / 1 pre-existing failure** (see note). Three Prisma migrations added. Committed
-stage-by-stage on branch `audit-remediation` (one commit per finding).
+**Status: Batches 1–4 DONE.** `tsc --noEmit` clean; test suite **405 passed / 0 failures**
+(the previously-noted pre-existing failure is now fixed too). Three Prisma migrations added.
+Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
+
+### Batch 4 (correctness hardening)
+
+| # | Sev | Fix | Files | Verified |
+|---|---|---|---|---|
+| A15 | Low | Reject booking a departure that has already left | `excursions/bookings/route.ts` | new past-departure test |
+| A16 | Low | Group pickup re-checks held-room count inside the tx | `groups/[id]/pickup/route.ts` | new concurrent-pickup test |
+| A13 | Low | UTC day boundaries on write paths (excursion schedule gen, spa weekday, price-calendar single+bulk) | `excursions.ts`, `spa-availability.ts`, `price-calendar/route.ts`, `price-calendar/bulk/route.ts` | date-sensitive suites green |
+| — | — | Fixed the date-fragile "cancelling past the cutoff" excursions test fixture | `excursions.test.ts` | suite 405/405 |
 
 ### Batch 3 (remaining data-integrity races)
 
@@ -396,7 +405,7 @@ stage-by-stage on branch `audit-remediation` (one commit per finding).
   guest arriving `day(-1)`, which the out-of-stay guard correctly rejects, so the later
   cancel 500s. It's a date-fragile fixture bug, out of this batch's scope. Recommend fixing
   the fixture separately (book an in-stay past departure).
-- **Still open (deferred per plan):** Batch 4 (A13 shared UTC day-boundary helper, A15
-  excursion past-departure guard, A16 group-pickup guard), Batch 5 (all UX/consistency —
-  error states, RHF+Zod migrations, toast, SearchableSelect, dedup), A14 (Float→integer-cents),
-  S8 (SMTP encryption-at-rest). These remain open in §8. **Batch 3 is now DONE (above).**
+- **Still open (deferred per plan):** Batch 5 (all UX/consistency — error states, RHF+Zod
+  migrations, toast, SearchableSelect, component dedup), A14 (Float→integer-cents storage —
+  large systemic change), S8 (SMTP encryption-at-rest — needs a KMS decision). **Batches 1–4
+  are now DONE (above).**
