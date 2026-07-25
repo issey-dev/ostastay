@@ -176,6 +176,8 @@ describe("Pre-arrival deposits", () => {
   });
 
   it("check-in reuses the deposit folio (no duplicate) and returns its id", async () => {
+    // Early check-in is blocked; the guest arrives on their check-in date (2026-09-01).
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 8, 1)) } });
     const res = await asUser(adminId, () =>
       checkInRoute.POST(new Request(`http://localhost/api/reservations/${reservationId}/check-in`, { method: "POST" }), {
         params: Promise.resolve({ id: reservationId }),

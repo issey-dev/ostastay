@@ -372,6 +372,18 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     );
     expect(early.status).toBe(400);
 
+    // A11: checking in before the arrival date (business date still 2026-07-25 << 2026-12-01)
+    // is rejected — a guest can never be checked in early.
+    const tooEarly = await asUser(adminId, () =>
+      checkInRoute.POST(new Request(`http://localhost/api/reservations/${body.id}/check-in`, { method: "POST" }), {
+        params: Promise.resolve({ id: body.id }),
+      })
+    );
+    expect(tooEarly.status).toBe(400);
+    expect((await tooEarly.json()).error).toMatch(/future|before their check-in/i);
+
+    // Early check-in is blocked now; the guest arrives on their check-in date (2026-12-01).
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 11, 1)) } });
     const checkIn = await asUser(adminId, () =>
       checkInRoute.POST(new Request(`http://localhost/api/reservations/${body.id}/check-in`, { method: "POST" }), {
         params: Promise.resolve({ id: body.id }),
