@@ -2,6 +2,39 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Spa + Excursions demo pass (2026-07-25)
+
+Both modules were made functionally identical and demo-ready. Both now share the same
+**Book · Schedule · History** tab layout (`Tabs` on each page):
+- **Book** = booking only. The old right-hand side-list column (today's schedule /
+  upcoming departures + open walk-in bills) was removed — that content moved to the
+  Schedule and History tabs. Book is single-column now.
+- **Schedule** = day/week/month calendar. Excursions uses `excursion-calendar.tsx`;
+  Spa uses the new `src/components/front-office/spa-schedule.tsx`, organized by
+  **therapist** (therapist filter + colour-coded chips, same palette as Excursions).
+- **History** = shared `src/components/front-office/sales-history.tsx` — date-filterable
+  list of all sales, Reprint (tax invoice) on every row, and a "Bill" button on walk-in
+  rows that reopens `WalkInFolioPanel` to take payment / close.
+- **Stay-period guard**: in-house Spa/Excursion bookings must fall within the guest's
+  `checkInDate..checkOutDate` (both POST routes reject `outsideStay: true`); otherwise
+  book as a walk-in.
+- **Charge & pay now** (✅ 2026-07-25): in-house bookings can optionally settle at
+  booking time — the POST route posts the charge to the room folio AND records a
+  `Payment` of the same gross (base+tax+service) in the same transaction, so the item
+  nets to zero instead of riding to checkout. New shared UI
+  `src/components/front-office/in-house-payment-choice.tsx` ("Charge to room" vs
+  "Charge & pay now" + payment-method picker). Both routes accept an optional
+  `settlement: { paymentMethodId, referenceNumber? }`, honored only for in-house
+  (`reservationId`) + `AT_BOOKING` charge timing; walk-ins keep their existing pay panel.
+- **Therapist ↔ User link**: `SpaTherapist.employeeId` dropped for `userId` (unique,
+  optional) linking a therapist to a PMS user (migration `spa_therapist_user_link`);
+  the Controls manager picks a linked user via `SearchableSelect`.
+
+**Deferred (not built — keep for later):**
+- **"My Appointments"** — a self-service view for a therapist-linked user to see their
+  own booked appointments. Schema/link is in place (`SpaTherapist.userId`); the view is
+  not built. Owner said keep as a TODO (2026-07-25).
+
 ## Spa Booking — sellable per-property add-on (Phases 0-3 done 2026-07-23, Phase 4 next)
 
 Full plan in [SPA_PLAN.md](SPA_PLAN.md). Front-office/spa-reception scheduling and

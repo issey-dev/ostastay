@@ -6,6 +6,7 @@ import { resolveBusinessDate } from "@/lib/business-date";
 import { addMinutesToTime, rateForDate, computeAppointmentTotal } from "@/lib/spa";
 import { dayStart, getAvailableRooms, getAvailableTherapists, getCompatibleRoomIds } from "@/lib/spa-availability";
 import { withResourceLocks, roomLockKey, therapistLockKey } from "@/lib/spa-resource-lock";
+import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 
 const includeShape = {
@@ -258,6 +259,29 @@ export async function POST(request: Request) {
     const requireTherapistAtBooking = settings?.requireTherapistAtBooking ?? true;
     const chargeTiming = settings?.chargeTiming ?? "AT_BOOKING";
 
+    // Optional "charge & pay now" for in-house bookings: post the charge to the room
+    // folio AND record a payment of the same amount in one go, so the item nets to zero
+    // instead of riding on the room bill to checkout. Only meaningful in-house (walk-ins
+    // already have their own pay panel) and only when the charge is actually posted now.
+    const settlementInput = body.settlement && typeof body.settlement === "object" && body.settlement.paymentMethodId
+      ? { paymentMethodId: String(body.settlement.paymentMethodId), referenceNumber: body.settlement.referenceNumber ? String(body.settlement.referenceNumber) : null }
+      : null;
+    let settlement: { paymentMethodId: string; referenceNumber: string | null; shiftId: string } | null = null;
+    if (settlementInput) {
+      if (!primary.reservationId) {
+        return NextResponse.json({ error: "Pay-now settlement is only available for in-house guests." }, { status: 400 });
+      }
+      if (chargeTiming !== "AT_BOOKING") {
+        return NextResponse.json({ error: "Pay-now settlement isn't available when charges are deferred to completion." }, { status: 400 });
+      }
+      const method = await prisma.paymentMethod.findUnique({ where: { id: settlementInput.paymentMethodId } });
+      if (!method || method.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
+      }
+      const shift = await ensureOpenShift(ctx, propertyId);
+      settlement = { paymentMethodId: method.id, referenceNumber: settlementInput.referenceNumber, shiftId: shift.id };
+    }
+
     // Lock every resource that COULD be assigned to this booking (every therapist
     // qualified for the treatment, every compatible room) — not just the ones
     // ultimately chosen — so the whole "check candidates -> pick -> insert" sequence
@@ -375,6 +399,21 @@ export async function POST(request: Request) {
           folioId = billingFolioId;
           folioLineItemId = lineItem.id;
           paymentStatus = "POSTED_TO_FOLIO";
+
+          // Charge & pay now: settle the just-posted charge with a payment of the same
+          // gross (base + tax + service), so the folio impact of this booking is zero.
+          if (settlement) {
+            await tx.payment.create({
+              data: {
+                folioId: billingFolioId,
+                paymentMethodId: settlement.paymentMethodId,
+                shiftId: settlement.shiftId,
+                amount: baseAmount + taxAmount + serviceChargeAmount,
+                referenceNumber: settlement.referenceNumber,
+              },
+            });
+            paymentStatus = "PAID";
+          }
         }
 
         return tx.spaAppointment.create({
@@ -449,7 +488,7 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "SpaAppointment",
       entityId: result.appointment.id,
-      description: `Booked ${treatment.name} for ${billingGuestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}`,
+      description: `Booked ${treatment.name} for ${billingGuestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}${settlement ? " — paid now" : ""}`,
     });
 
     return NextResponse.json(result.appointment, { status: 201 });

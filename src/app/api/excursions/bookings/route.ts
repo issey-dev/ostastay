@@ -80,6 +80,13 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { departureId, reservationId, folioId } = body;
+    // Optional "charge & pay now" for in-house bookings — post the charge to the room
+    // folio AND settle it with a payment of the same amount (see the spa route for the
+    // same pattern). Only honored for reservationId (in-house); walk-ins already have
+    // their own pay panel.
+    const settlementInput = body.settlement && typeof body.settlement === "object" && body.settlement.paymentMethodId
+      ? { paymentMethodId: String(body.settlement.paymentMethodId), referenceNumber: body.settlement.referenceNumber ? String(body.settlement.referenceNumber) : null }
+      : null;
     const adultCount = parseInt(body.adultCount) || 0;
     const childCount = parseInt(body.childCount) || 0;
     const infantCount = parseInt(body.infantCount) || 0;
@@ -171,6 +178,18 @@ export async function POST(request: Request) {
       activityGuestLabel = folio.walkInGuestName || "Walk-in guest";
     }
 
+    let settlement: { paymentMethodId: string; referenceNumber: string | null } | null = null;
+    if (settlementInput) {
+      if (!reservationId) {
+        return NextResponse.json({ error: "Pay-now settlement is only available for in-house guests." }, { status: 400 });
+      }
+      const method = await prisma.paymentMethod.findUnique({ where: { id: settlementInput.paymentMethodId } });
+      if (!method || method.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
+      }
+      settlement = { paymentMethodId: method.id, referenceNumber: settlementInput.referenceNumber };
+    }
+
     const rate = rateForDate(excursionType.rates, departure.departureDate);
     if (!rate) {
       return NextResponse.json({ error: "No price is configured for this departure's date" }, { status: 400 });
@@ -215,6 +234,20 @@ export async function POST(request: Request) {
           date: resolveBusinessDate(excursionType.property),
         },
       });
+
+      // Charge & pay now: settle the just-posted charge with a payment of the same gross
+      // (base + tax + service), so this booking's folio impact is zero.
+      if (settlement) {
+        await tx.payment.create({
+          data: {
+            folioId: folioIdToCharge,
+            paymentMethodId: settlement.paymentMethodId,
+            shiftId: shift.id,
+            amount: baseAmount + taxAmount + serviceChargeAmount,
+            referenceNumber: settlement.referenceNumber,
+          },
+        });
+      }
 
       return tx.excursionBooking.create({
         data: {

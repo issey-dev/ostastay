@@ -7,6 +7,7 @@ import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, Clipbo
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SpaSchedule } from "@/components/front-office/spa-schedule"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
+import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -141,6 +142,7 @@ export default function SpaPage() {
   const [currency, setCurrency] = useState("")
 
   const [notes, setNotes] = useState("")
+  const [inHousePayment, setInHousePayment] = useState<InHousePayment>({ settleNow: false, paymentMethodId: "" })
   const [booking, setBooking] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
@@ -411,7 +413,8 @@ export default function SpaPage() {
     participants.length === partySize &&
     participants.every((p) => !!p.value) &&
     !!selectedStartTime &&
-    (mode === "guest" || !!walkInFolioId)
+    (mode === "guest" || !!walkInFolioId) &&
+    (mode !== "guest" || !inHousePayment.settleNow || !!inHousePayment.paymentMethodId)
 
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -440,13 +443,19 @@ export default function SpaPage() {
           startTime: selectedStartTime,
           participants: payloadParticipants,
           notes: notes || undefined,
+          settlement: mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
+            ? { paymentMethodId: inHousePayment.paymentMethodId }
+            : undefined,
         }),
       })
       if (res.ok) {
-        setFeedback({ message: `Booked ${selectedTreatment.name} at ${selectedStartTime}.`, type: "success" })
+        const settled = mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
+        setFeedback({ message: `Booked ${selectedTreatment.name} at ${selectedStartTime}${settled ? " — paid" : ""}.`, type: "success" })
         resetParticipants(partySize)
         setNotes("")
+        setInHousePayment({ settleNow: false, paymentMethodId: "" })
         fetchTodaysAppointments()
+        setHistoryRefresh((n) => n + 1)
         if (mode === "walkin") {
           fetchOpenWalkIns()
           setIsWalkInPanelOpen(true) // let staff take payment or leave the bill open right away
@@ -853,6 +862,10 @@ export default function SpaPage() {
                   <Label>Notes (optional)</Label>
                   <Input placeholder="e.g. Prefers firm pressure" value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
+
+                {mode === "guest" && primaryReservation && (
+                  <InHousePaymentChoice value={inHousePayment} onChange={setInHousePayment} amount={price} currency={currency} />
+                )}
 
                 {feedback && (
                   <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === "success" ? "bg-success-muted text-success" : "bg-destructive-muted text-destructive"}`}>

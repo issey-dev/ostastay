@@ -18,6 +18,7 @@ import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { ExcursionManifestPanel } from "@/components/front-office/excursion-manifest-panel"
 import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
+import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
 
 type GuestResult = {
   reservationId: string
@@ -78,6 +79,7 @@ export default function ExcursionsPage() {
 
   const [counts, setCounts] = useState({ adultCount: "1", childCount: "0", infantCount: "0" })
   const [notes, setNotes] = useState("")
+  const [inHousePayment, setInHousePayment] = useState<InHousePayment>({ settleNow: false, paymentMethodId: "" })
   const [booking, setBooking] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
@@ -190,7 +192,8 @@ export default function ExcursionsPage() {
   // as chosen automatically; only fall back to an explicit picker when a day has more than one.
   const effectiveDepartureId = selectedDepartureId || (slotsForDate.length === 1 ? slotsForDate[0].id : "")
   const selectedDeparture = departures.find((d) => d.id === effectiveDepartureId) ?? null
-  const canBook = mode === "guest" ? !!selectedGuest : !!walkInFolioId
+  const canBook = (mode === "guest" ? !!selectedGuest : !!walkInFolioId) &&
+    (mode !== "guest" || !inHousePayment.settleNow || !!inHousePayment.paymentMethodId)
 
   const handleExcursionTypeChange = (value: string | null) => {
     setSelectedExcursionTypeId(value ?? "")
@@ -219,14 +222,20 @@ export default function ExcursionsPage() {
           childCount: counts.childCount,
           infantCount: counts.infantCount,
           notes: notes || undefined,
+          settlement: mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
+            ? { paymentMethodId: inHousePayment.paymentMethodId }
+            : undefined,
         }),
       })
       if (res.ok) {
         const label = mode === "guest" ? `Room ${selectedGuest!.roomNumber}` : walkInForm.name
-        setFeedback({ message: `Booked for ${label} — ${selectedDeparture.excursionType.name}.`, type: "success" })
+        const settled = mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
+        setFeedback({ message: `Booked for ${label} — ${selectedDeparture.excursionType.name}${settled ? " — paid" : ""}.`, type: "success" })
         setCounts({ adultCount: "1", childCount: "0", infantCount: "0" })
         setNotes("")
+        setInHousePayment({ settleNow: false, paymentMethodId: "" })
         fetchDepartures()
+        setHistoryRefresh((n) => n + 1)
         if (mode === "walkin") {
           fetchOpenWalkIns()
           setIsWalkInPanelOpen(true) // let staff take payment or leave the bill open right away
@@ -480,6 +489,10 @@ export default function ExcursionsPage() {
                 <Label>Notes (optional)</Label>
                 <Input placeholder="e.g. Non-swimmer, needs a life vest" value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
+
+              {mode === "guest" && selectedGuest && (
+                <InHousePaymentChoice value={inHousePayment} onChange={setInHousePayment} />
+              )}
 
               {feedback && (
                 <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === "success" ? "bg-success-muted text-success" : "bg-destructive-muted text-destructive"}`}>
