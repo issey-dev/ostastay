@@ -144,10 +144,22 @@ const designSystemGuardrails = {
   },
 };
 
+// Tests exercise API shapes with intentional `any` casts on request/response bodies.
+// Enforcing no-explicit-any there produced ~750 errors that buried any real lint
+// regression in the suite (see AUDIT_REPORT.md D-5); relax just that rule for tests/**
+// so the linter stays a useful signal there.
+const testOverrides = {
+  files: ["tests/**/*.{ts,tsx}"],
+  rules: {
+    "@typescript-eslint/no-explicit-any": "off",
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   designSystemGuardrails,
+  testOverrides,
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

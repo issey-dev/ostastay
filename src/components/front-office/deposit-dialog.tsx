@@ -108,7 +108,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
         <DialogHeader>
           <DialogTitle>Collect Deposit / Fee</DialogTitle>
           <DialogDescription>
-            {guestName ? `${guestName} — ` : ""}{confirmationNo || ""}. Posts to the reservation's folio and carries onto
+            {guestName ? `${guestName} — ` : ""}{confirmationNo || ""}. Posts to the reservation&apos;s folio and carries onto
             the billing window at check-in. Pre-arrival, cancellation, and no-show fees are collected here — not through billing.
           </DialogDescription>
         </DialogHeader>
