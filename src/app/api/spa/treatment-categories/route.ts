@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyModuleAccess, ForbiddenError, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Catalog management is gated by CONTROLS, same trust level as every other catalog
@@ -15,6 +15,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     }
     await assertPropertyModuleAccess(ctx, propertyId, "SPA");
+    // Readable by a SPA booking user OR a CONTROLS catalog manager, but not by a user with neither.
+    if (!hasPermission(ctx, "SPA", "view") && !hasPermission(ctx, "CONTROLS", "view")) {
+      throw new ForbiddenError("Missing view permission on Spa");
+    }
 
     const categories = await prisma.spaTreatmentCategory.findMany({
       where: { propertyId },

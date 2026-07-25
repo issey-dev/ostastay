@@ -14,6 +14,7 @@ export async function GET(
     const ctx = await requireSession();
     const { upid } = await params;
     await assertProfileAccess(ctx, upid);
+    requirePermission(ctx, "PROFILES", "view");
 
     const preferences = await prisma.profilePreference.findMany({ where: { upid } });
     return NextResponse.json(preferences);

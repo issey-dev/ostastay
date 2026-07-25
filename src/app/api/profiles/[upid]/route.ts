@@ -28,6 +28,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "view");
     const { upid } = await params;
 
     const profile = await prisma.profile.findUnique({

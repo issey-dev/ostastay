@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertyScope, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Lets a tenant put a REJECTED property back into the Osta approval queue after
@@ -19,6 +19,8 @@ export async function POST(
     if (!property || property.enterpriseId !== ctx.enterpriseId) {
       throw new ForbiddenError("Property not found");
     }
+    // A PROPERTY-scoped user may only resubmit their own work location, not a sibling.
+    requirePropertyScope(ctx, id);
     if (property.status !== "REJECTED") {
       return NextResponse.json({ error: "Only a rejected property can be resubmitted." }, { status: 400 });
     }

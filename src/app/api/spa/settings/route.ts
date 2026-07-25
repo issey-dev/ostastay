@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyModuleAccess, ForbiddenError, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 const CHARGE_TIMINGS = ["AT_BOOKING", "AT_COMPLETION"] as const;
@@ -18,6 +18,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     }
     await assertPropertyModuleAccess(ctx, propertyId, "SPA");
+    // Readable by a SPA booking user OR a CONTROLS catalog manager, but not by a user with neither.
+    if (!hasPermission(ctx, "SPA", "view") && !hasPermission(ctx, "CONTROLS", "view")) {
+      throw new ForbiddenError("Missing view permission on Spa");
+    }
 
     const settings = await prisma.spaSettings.findUnique({ where: { propertyId } });
     return NextResponse.json(settings);

@@ -12,6 +12,7 @@ export async function GET(
     const ctx = await requireSession();
     const { upid } = await params;
     await assertProfileAccess(ctx, upid);
+    requirePermission(ctx, "PROFILES", "view");
 
     const attachments = await prisma.profileAttachment.findMany({
       where: { upid },
