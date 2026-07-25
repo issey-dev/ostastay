@@ -113,6 +113,17 @@ export async function POST(request: Request) {
       if (!reservation || reservation.propertyId !== excursionType.propertyId) {
         return NextResponse.json({ error: "Reservation not found at this property" }, { status: 404 });
       }
+      // In-house bookings must fall WITHIN the guest's stay — the charge is realized on
+      // their room folio, so it can't sit outside the dates they're actually here. An
+      // out-of-stay departure should be booked as a walk-in instead.
+      const dayMs = (d: Date | string) => { const x = new Date(d); return Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()); };
+      const depMs = dayMs(departure.departureDate);
+      if (depMs < dayMs(reservation.checkInDate) || depMs > dayMs(reservation.checkOutDate)) {
+        return NextResponse.json(
+          { error: "This departure is outside the guest's stay. Book within their stay dates, or use the walk-in option.", outsideStay: true },
+          { status: 400 }
+        );
+      }
       const folio = reservation.folios[0];
       if (!folio) {
         return NextResponse.json({ error: "This guest has no open folio to bill the excursion to" }, { status: 400 });

@@ -200,6 +200,16 @@ export async function POST(request: Request) {
     let primaryWalkInIdentity: { walkInGuestName: string; walkInGuestContact: string | null } | null = null;
     if (primary.reservationId) {
       const reservation = reservationById.get(primary.reservationId)!;
+      // In-house appointments must fall WITHIN the guest's stay — the charge is realized on
+      // their room folio, so it can't sit outside the dates they're actually here. An
+      // out-of-stay date should be booked as a walk-in instead.
+      const apptMs = dayStart(date).getTime();
+      if (apptMs < dayStart(new Date(reservation.checkInDate)).getTime() || apptMs > dayStart(new Date(reservation.checkOutDate)).getTime()) {
+        return NextResponse.json(
+          { error: "This date is outside the guest's stay. Book within their stay dates, or use the walk-in option.", outsideStay: true },
+          { status: 400 }
+        );
+      }
       const folio = reservation.folios[0];
       if (!folio) {
         return NextResponse.json({ error: "The primary guest has no open folio to bill this appointment to" }, { status: 400 });

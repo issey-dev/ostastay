@@ -461,6 +461,56 @@ export default function SpaPage() {
               </div>
             </div>
 
+            {mode === "guest" && (
+              primaryReservation ? (
+                <div className="flex items-center justify-between bg-muted rounded-lg p-4">
+                  <div>
+                    <p className="font-bold text-foreground">{primaryReservation.guestName}</p>
+                    <p className="text-sm text-muted-foreground">Room {primaryReservation.roomNumber}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => clearSlot(0)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <form onSubmit={handleSearch} className="flex gap-3">
+                    <Input
+                      placeholder="Search by Room Number or Last Name..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button type="submit" disabled={loadingSearch || !searchQuery}>
+                      {loadingSearch ? "Searching..." : "Search"}
+                    </Button>
+                  </form>
+                  {guests.length > 0 && (
+                    <div className="mt-3 border rounded-lg overflow-hidden divide-y">
+                      {guests.map((g) => (
+                        <div
+                          key={g.reservationId}
+                          className="p-3 flex justify-between items-center cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => {
+                            setSlot(0, { kind: "reservation", reservationId: g.reservationId, guestName: g.guestName, roomNumber: g.roomNumber, profileId: g.profileId, accompanyingGuests: g.accompanyingGuests })
+                            setSearchQuery("")
+                            setGuests([])
+                          }}
+                        >
+                          <div>
+                            <p className="font-medium text-sm text-foreground">{g.guestName}</p>
+                            <p className="text-xs text-muted-foreground">Room {g.roomNumber}</p>
+                          </div>
+                          <StatusBadge label={g.status} status={g.status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchQuery && guests.length === 0 && !loadingSearch && (
+                    <p className="text-sm text-muted-foreground mt-3 text-center">No in-house guests match &quot;{searchQuery}&quot;.</p>
+                  )}
+                </>
+              )
+            )}
+
             {mode === "walkin" && (
               walkInFolioId ? (
                 <div className="flex items-center justify-between bg-muted rounded-lg p-4">
