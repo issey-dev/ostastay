@@ -1,12 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Loader2 } from "@/components/icons"
+import { toast } from "@/lib/toast"
 
 type DepositDialogProps = {
   reservationId: string | null
@@ -28,62 +32,73 @@ const PURPOSE_OPTIONS = [
 ]
 const PURPOSE_LABEL: Record<string, string> = Object.fromEntries(PURPOSE_OPTIONS.map((o) => [o.value, o.label]))
 
+// APP STANDARD 001: Zod + React Hook Form with inline, real-time validation. Amount is
+// kept as a string field (native number input) and validated to a positive number here,
+// replacing the old parseFloat-after-submit guard.
+const depositSchema = z.object({
+  purpose: z.string().min(1, "Select a type."),
+  paymentMethodId: z.string().min(1, "Select a payment method."),
+  amount: z
+    .string()
+    .refine((v) => v.trim() !== "", "Enter an amount.")
+    .refine((v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 }, "Enter a positive amount."),
+  referenceNumber: z.string().optional(),
+})
+type DepositFormValues = z.infer<typeof depositSchema>
+
 // Collect pre-arrival money on a RESERVED booking — a plain deposit or a typed fee
 // (pre-arrival / cancellation / no-show). Posts to the deposit route, which creates
 // the folio if the stay hasn't opened one yet, so the money is already on the
 // billing window at check-in. Fees are collected here, never through billing.
 export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen, onClose, onSaved, defaultPurpose, defaultAmount }: DepositDialogProps) {
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([])
-  const [paymentMethodId, setPaymentMethodId] = useState("")
-  const [purpose, setPurpose] = useState("DEPOSIT")
-  const [amount, setAmount] = useState("")
-  const [referenceNumber, setReferenceNumber] = useState("")
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
+  const form = useForm<DepositFormValues>({
+    resolver: zodResolver(depositSchema),
+    mode: "onChange",
+    defaultValues: { purpose: "DEPOSIT", paymentMethodId: "", amount: "", referenceNumber: "" },
+  })
 
   useEffect(() => {
-    if (isOpen) {
-      setPurpose(defaultPurpose ?? "DEPOSIT")
-      setAmount(defaultAmount != null ? String(defaultAmount) : "")
-      setReferenceNumber("")
-      setError(null)
-      fetch(`/api/payment-methods`)
-        .then((res) => res.json())
-        .then((data) => { if (Array.isArray(data)) setPaymentMethods(data.filter((m: any) => m.isActive !== false)) })
-        .catch(console.error)
-    }
+    if (!isOpen) return
+    form.reset({
+      purpose: defaultPurpose ?? "DEPOSIT",
+      paymentMethodId: "",
+      amount: defaultAmount != null ? String(defaultAmount) : "",
+      referenceNumber: "",
+    })
+    fetch(`/api/payment-methods`)
+      .then((res) => res.json())
+      .then((data) => { if (Array.isArray(data)) setPaymentMethods(data.filter((m: { isActive?: boolean }) => m.isActive !== false)) })
+      .catch(console.error)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultPurpose, defaultAmount])
 
-  const handleSubmit = async () => {
-    if (!reservationId) return
-    const parsedAmount = parseFloat(amount)
-    if (!paymentMethodId) { setError("Select a payment method."); return }
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) { setError("Enter a positive amount."); return }
+  const purpose = form.watch("purpose")
 
-    setSubmitting(true)
-    setError(null)
+  const onSubmit = async (values: DepositFormValues) => {
+    if (!reservationId) return
+    const parsedAmount = parseFloat(values.amount)
     try {
       const res = await fetch(`/api/reservations/${reservationId}/deposit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentMethodId,
+          paymentMethodId: values.paymentMethodId,
           amount: parsedAmount,
-          referenceNumber: referenceNumber || null,
-          purpose,
+          referenceNumber: values.referenceNumber || null,
+          purpose: values.purpose,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         onClose()
-        onSaved(`$${parsedAmount.toFixed(2)} ${PURPOSE_LABEL[purpose].toLowerCase()} collected${confirmationNo ? ` on ${confirmationNo}` : ""}.`)
+        onSaved(`$${parsedAmount.toFixed(2)} ${(PURPOSE_LABEL[values.purpose] ?? "payment").toLowerCase()} collected${confirmationNo ? ` on ${confirmationNo}` : ""}.`)
       } else {
-        setError(data.error || "Failed to collect payment.")
+        toast.error(data.error || "Failed to collect payment.")
       }
     } catch {
-      setError("An unexpected error occurred.")
-    } finally {
-      setSubmitting(false)
+      toast.error("An unexpected error occurred.")
     }
   }
 
@@ -97,55 +112,53 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
             the billing window at check-in. Pre-arrival, cancellation, and no-show fees are collected here — not through billing.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <SearchableSelect
-              value={purpose}
-              onChange={(v: string) => setPurpose(v)}
-              placeholder="Select type..."
-              options={PURPOSE_OPTIONS}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Payment Method</Label>
-            <SearchableSelect
-              value={paymentMethodId}
-              onChange={(v: string) => setPaymentMethodId(v)}
-              placeholder="Select payment method..."
-              options={paymentMethods.map((m) => ({ label: m.name, value: m.id }))}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deposit-amount">Amount</Label>
-            <Input
-              id="deposit-amount"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deposit-ref">Reference (optional)</Label>
-            <Input
-              id="deposit-ref"
-              placeholder="Card auth / transfer reference"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Collect {PURPOSE_LABEL[purpose]}
-          </Button>
-        </DialogFooter>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+            <FormField control={form.control} name="purpose" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Type</FormLabel>
+                <FormControl>
+                  <SearchableSelect value={field.value} onChange={field.onChange} placeholder="Select type..." options={PURPOSE_OPTIONS} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="paymentMethodId" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Method</FormLabel>
+                <FormControl>
+                  <SearchableSelect value={field.value} onChange={field.onChange} placeholder="Select payment method..." options={paymentMethods.map((m) => ({ label: m.name, value: m.id }))} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="amount" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Amount</FormLabel>
+                <FormControl>
+                  <Input type="number" min="0.01" step="0.01" placeholder="0.00" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="referenceNumber" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Reference (optional)</FormLabel>
+                <FormControl>
+                  <Input placeholder="Card auth / transfer reference" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Collect {PURPOSE_LABEL[purpose] ?? "Payment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )
