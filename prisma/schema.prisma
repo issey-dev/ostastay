@@ -1077,6 +1077,11 @@ model CashierShift {
 
   @@index([propertyId])
   @@index([userId])
+  // NOTE: a PARTIAL unique index `CashierShift_one_open_per_user_property` — UNIQUE
+  // (userId, propertyId) WHERE closedAt IS NULL — is enforced at the DB level via
+  // migration 20260725150000_cashier_shift_one_open. Prisma's schema can't express a
+  // filtered index, so it is intentionally NOT declared here. Do not let `prisma migrate
+  // dev` drop it — it's what stops a race from opening two drawers for one user+property.
 }
 
 // A petty-cash disbursement from the drawer during a shift (florist COD, taxi
