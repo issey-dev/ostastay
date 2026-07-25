@@ -25,6 +25,11 @@ const TRANSITION_HINTS: Record<string, string> = {
   CHECKED_OUT: "Use the Check-Out action instead of setting the status directly — it settles the folio balance.",
 };
 
+// Thrown inside the transition transaction when the reservation's status changed between
+// the read and the write (a concurrent transition already ran) — turned into a clean 409
+// rather than posting a cancellation fee / reopening folios twice.
+class StatusConflict extends Error {}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -175,11 +180,18 @@ export async function PATCH(
       statusData.noShowAt = null;
     }
 
-    const updatedReservation = await prisma.$transaction(async (tx) => {
-      const updated = await tx.reservation.update({
-        where: { id },
+    let updatedReservation;
+    try {
+    updatedReservation = await prisma.$transaction(async (tx) => {
+      // Conditional on the status observed above still being current, so two concurrent
+      // transitions can't both post a cancellation fee / reopen folios — the loser
+      // matches 0 rows and aborts.
+      const claimed = await tx.reservation.updateMany({
+        where: { id, status: existing.status },
         data: statusData,
       });
+      if (claimed.count === 0) throw new StatusConflict();
+      const updated = await tx.reservation.findUnique({ where: { id } });
 
       // A cancelled reservation's folios are closed so they can't accumulate
       // charges; reinstating reopens them. When a cancellation fee applies, post it
@@ -218,6 +230,12 @@ export async function PATCH(
 
       return updated;
     });
+    } catch (txError) {
+      if (txError instanceof StatusConflict) {
+        return NextResponse.json({ error: "This reservation's status was just changed by another action." }, { status: 409 });
+      }
+      throw txError;
+    }
 
     // Reconciliation for a cancellation fee: the fee is now posted; net it against
     // any deposit already held so the UI can prompt to collect a shortfall or

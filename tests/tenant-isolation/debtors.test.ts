@@ -373,6 +373,34 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     expect(updatedReservation!.status).toBe("CHECKED_OUT");
   });
 
+  it("A10: two concurrent checkouts finalize the invoice once (no double commission)", async () => {
+    const reservation = await createInHouseReservation({
+      travelAgentId: creditAccountAId,
+      settlementMethod: "CITY_LEDGER",
+      payeeProfileId: creditAccountAId,
+    });
+    await postCharge(reservation.folios[0].id, 300);
+
+    const doCheckout = () =>
+      asUser(adminAId, () =>
+        checkOutRoute.POST(new Request(`http://localhost/api/reservations/${reservation.id}/check-out`, { method: "POST" }), {
+          params: Promise.resolve({ id: reservation.id }),
+        })
+      );
+    const [a, b] = await Promise.all([doCheckout(), doCheckout()]);
+
+    // Exactly one run checks out; the other is rejected (409 guard, or a rolled-back
+    // DB-lock error) — never a second checkout that could post commission twice.
+    const okCount = [a, b].filter((r) => r.status === 200).length;
+    expect(okCount).toBe(1);
+
+    // No duplicate commission credit line on the finalized folio.
+    const commissionLines = await prisma.folioLineItem.findMany({
+      where: { folioId: reservation.folios[0].id, description: { contains: "Commission" } },
+    });
+    expect(commissionLines.length).toBeLessThanOrEqual(1);
+  });
+
   it("checkout still blocks a DIRECT folio with a nonzero balance", async () => {
     const reservation = await createInHouseReservation({ settlementMethod: "DIRECT" });
     await postCharge(reservation.folios[0].id, 150);
