@@ -24,9 +24,16 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
   all 41 `alert()` migrated to `toast.*`, plus a promise-based `useConfirm` (`providers/
   confirm-provider.tsx`, AlertDialog-backed) replacing all 8 native `confirm()` deletes.
   C-1 RHF+Zod on the 4 critical forms (deposit, room-move, walk-in fully; check-in-wizard's
-  optional payment sub-form). Remaining Batch 5: C-2 check-in prefill/auto-save, D-2 extract
-  shared CrudManager/ResponsiveDataTable, C-4/D-4 select/date-picker/responsive outliers,
-  D-5 tests/** lint.
+  optional payment sub-form) · C-2 check-in wizard DOB/nationality auto-save + payment
+  pre-filled with balance due · C-4 remaining raw Select→SearchableSelect + input[date]→
+  DatePicker · D-4 activity-log mobile scroll, Skeleton loading, EmptyState · D-5 tests/**
+  lint override (tests now clean).
+- **Batch 5 remaining — D-2 DEFERRED by judgment:** extract shared CrudManager/
+  ResponsiveDataTable is a large refactor of ~12 manager/list files just heavily edited this
+  branch; maintainability-only, high regression risk for no functional gain — do it as a
+  focused reviewed pass, not an autonomous sweep.
+- **Discovered (D-5):** `src/**` has ~441 pre-existing lint errors (mostly no-explicit-any) —
+  the audit's "src is lint-clean" claim was wrong. Pre-existing debt, separate cleanup.
 - **Still open (deferred):** A14 Float→integer-cents (large systemic change) · S8 SMTP
   encryption-at-rest (needs KMS decision).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
