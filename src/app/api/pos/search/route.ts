@@ -14,12 +14,13 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId)
 
-    // We search for CONFIRMED or CHECKED_IN reservations
-    // where either the room number or guest name matches the query.
+    // Only IN_HOUSE guests can be charged from Fast Post — a reservation that hasn't
+    // checked in yet has no billable, open folio to route an outlet charge to. Match on
+    // guest name or room number.
     const reservations = await prisma.reservation.findMany({
       where: {
         propertyId,
-        status: { in: ["RESERVED", "IN_HOUSE"] },
+        status: "IN_HOUSE",
         OR: [
           {
             primaryGuest: {
