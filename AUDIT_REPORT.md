@@ -349,13 +349,25 @@ assumed fix.*
 
 ---
 
-## 9. Phase 3 — Remediation changelog (Batch 1 + Batch 2)
+## 9. Phase 3 — Remediation changelog (Batch 1 + Batch 2 + Batch 3)
 
-Owner approved Batch 1 (financial integrity) + Batch 2 (security) plus policy rulings:
-A11 = block early check-in always; S4 = enforce `PROFILES.view` on reads; S6 = fix + scope group codes.
+Owner approved Batch 1 (financial integrity) + Batch 2 (security) + Batch 3 (remaining
+race guards), plus policy rulings: A11 = block early check-in always; S4 = enforce
+`PROFILES.view` on reads; S6 = fix + scope group codes.
 
-**Status: all Batch 1 + Batch 2 items DONE.** `tsc --noEmit` clean; test suite **398 passed / 1
-pre-existing failure** (see note). Two Prisma migrations added.
+**Status: all Batch 1 + Batch 2 + Batch 3 items DONE.** `tsc --noEmit` clean; test suite
+**402 passed / 1 pre-existing failure** (see note). Three Prisma migrations added. Committed
+stage-by-stage on branch `audit-remediation` (one commit per finding).
+
+### Batch 3 (remaining data-integrity races)
+
+| # | Sev | Fix | Files | Verified |
+|---|---|---|---|---|
+| A7 | Med | Spa AT_BOOKING charge attributed to the cashier shift (`ensureOpenShift` + `shiftId`) | `spa/appointments/route.ts` | spa test asserts shiftId |
+| A8 | Med | Move-line-items refuses a closed/debtor source folio | `folios/line-items/move/route.ts` | new folio-routing case |
+| A9 | Med | EOD post step skips when the business date already rolled out-of-band | `eod/step/route.ts` | new double-path test |
+| A10 | Med | Checkout/cancel/reverse re-assert status inside the tx (conditional updateMany → 409) | `check-out`, `status`, `reverse-check-in` routes | new concurrent-checkout test |
+| A12 | Med | One open drawer per user+property (DB partial unique index + P2002 handling) | migration `..150000_cashier_shift_one_open`, `cashier-shift.ts`, `schema.prisma` (doc) | new concurrent-ensure test |
 
 | # | Sev | Fix | Files | Verified |
 |---|---|---|---|---|
@@ -384,7 +396,7 @@ pre-existing failure** (see note). Two Prisma migrations added.
   guest arriving `day(-1)`, which the out-of-stay guard correctly rejects, so the later
   cancel 500s. It's a date-fragile fixture bug, out of this batch's scope. Recommend fixing
   the fixture separately (book an in-stay past departure).
-- **Not in this batch (deferred per plan):** Batch 3 (A7 spa shift attribution, A8 move-line
-  closed-source, A9 EOD cross-guard, A10 checkout/cancel/reverse status re-assert, A12
-  ensureOpenShift uniqueness), Batch 4 (A13 TZ helper, A15/A16), Batch 5 (all UX/consistency),
-  A14 (Float→integer-cents), S8 (SMTP encryption-at-rest). These remain open in §8.
+- **Still open (deferred per plan):** Batch 4 (A13 shared UTC day-boundary helper, A15
+  excursion past-departure guard, A16 group-pickup guard), Batch 5 (all UX/consistency —
+  error states, RHF+Zod migrations, toast, SearchableSelect, dedup), A14 (Float→integer-cents),
+  S8 (SMTP encryption-at-rest). These remain open in §8. **Batch 3 is now DONE (above).**

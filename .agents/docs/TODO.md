@@ -5,18 +5,20 @@
 ## Release-readiness audit + remediation (2026-07-25) — see [/AUDIT_REPORT.md](../../AUDIT_REPORT.md)
 
 Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 Med, ~20 Low.
-**Batch 1 (financial integrity) + Batch 2 (security) are DONE** (report §9), owner-approved:
-- **Fixed:** A1 night-audit atomic idempotency (double-post/double-roll) · A2 advance-bill
-  double-bill · A3/A4 currency-exchange drawer balancing + validation + shift scope · A5
-  excursion capacity · A6 move-bookings target capacity · S1 move-bookings cross-tenant
-  write · A11 early check-in blocked (owner policy) · S2 property scope on properties[id] ·
-  S3 spa catalog read perms · S4 profile read perms (`PROFILES.view`) · S5 payments shift
-  scope · S6 group-code unique per property. Two migrations added; 398 tests pass.
-- **Still open (deferred, in AUDIT_REPORT.md §8):** Batch 3 races (A7 spa shift attribution,
-  A8 move-line closed-source, A9 EOD/night-audit cross-guard, A10 checkout/cancel/reverse
-  status re-assert, A12 ensureOpenShift uniqueness) · Batch 4 (A13 shared UTC day-boundary
-  helper, A15/A16) · Batch 5 (all UX/design: error states, RHF+Zod migrations, toast,
-  SearchableSelect, dedup) · A14 Float→integer-cents · S8 SMTP encryption-at-rest.
+**Batch 1 (financial integrity) + Batch 2 (security) + Batch 3 (remaining races) are DONE**
+(report §9), owner-approved, committed stage-by-stage on branch `audit-remediation`:
+- **Fixed (Batch 1/2):** A1 night-audit atomic idempotency · A2 advance-bill double-bill ·
+  A3/A4 currency-exchange balancing + validation + shift scope · A5 excursion capacity ·
+  A6 move-bookings target capacity · S1 move-bookings cross-tenant write · A11 early check-in
+  blocked · S2 property scope · S3 spa catalog read perms · S4 profile read perms · S5
+  payments shift scope · S6 group-code unique per property.
+- **Fixed (Batch 3):** A7 spa shift attribution · A8 move-line closed-source guard · A9
+  EOD/night-audit cross-guard · A10 checkout/cancel/reverse status re-assert · A12
+  one-open-drawer partial unique index. Three migrations total; 402 tests pass.
+- **Still open (deferred, in AUDIT_REPORT.md §8):** Batch 4 (A13 shared UTC day-boundary
+  helper, A15 excursion past-departure guard, A16 group-pickup guard) · Batch 5 (all UX/design:
+  error states, RHF+Zod migrations, toast, SearchableSelect, dedup) · A14 Float→integer-cents ·
+  S8 SMTP encryption-at-rest.
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
   > "cancelling past the cutoff…"` fails on clean master — books a `day(-2)` departure for a
   `day(-1)` arrival, which the out-of-stay guard rejects, so the later cancel 500s.
