@@ -287,6 +287,47 @@ describe("Excursions: business rules", () => {
     expect((await smuggled.json()).error).toMatch(/use reservationId instead/i);
   });
 
+  it("enforces departure capacity and rejects empty bookings (A5)", async () => {
+    const departure = await makeDeparture(excursionTypeId, 4, "09:00", 3); // capacity 3
+
+    // Empty booking (no guests) is rejected.
+    const empty = await asUser(adminId, () =>
+      bookingsRoute.POST(new Request("http://localhost/api/excursions/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ departureId: departure.id, reservationId, adultCount: 0, childCount: 0, infantCount: 0 }),
+      }))
+    );
+    expect(empty.status).toBe(400);
+
+    // 2 of 3 seats fits.
+    const first = await asUser(adminId, () =>
+      bookingsRoute.POST(new Request("http://localhost/api/excursions/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ departureId: departure.id, reservationId, adultCount: 2 }),
+      }))
+    );
+    expect(first.status).toBe(201);
+
+    // Another 2 would make 4 > 3 → rejected as over capacity.
+    const over = await asUser(adminId, () =>
+      bookingsRoute.POST(new Request("http://localhost/api/excursions/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ departureId: departure.id, reservationId, adultCount: 2 }),
+      }))
+    );
+    expect(over.status).toBe(400);
+    expect((await over.json()).error).toMatch(/seat/i);
+
+    // Exactly the 1 remaining seat fits.
+    const exact = await asUser(adminId, () =>
+      bookingsRoute.POST(new Request("http://localhost/api/excursions/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ departureId: departure.id, reservationId, adultCount: 1 }),
+      }))
+    );
+    expect(exact.status).toBe(201);
+  });
+
   it("cancelling past the cutoff requires EXCURSIONS delete; within it, update is enough", async () => {
     // Departed 2 days ago, well past a 24h cutoff.
     const pastDeparture = await makeDeparture(excursionTypeId, -2);
@@ -538,6 +579,52 @@ describe("Excursions: business rules", () => {
     const forcedBody = await forcedMove.json();
     expect(forcedBody.moved.length).toBe(0);
     expect(forcedBody.failed[0].reason).toMatch(/double-charge/i);
+  });
+
+  it("S1: cannot move another enterprise's booking onto your own departure (no cross-tenant charge)", async () => {
+    // Attacker tenant A already exists (this suite's enterprise). Build a victim tenant B
+    // with its own EXCURSIONS-enabled property, an open walk-in folio, and a cancelled,
+    // still-movable booking (no charge ever posted → movable).
+    const entB = await prisma.enterprise.create({ data: { name: "Victim B", slug: `test-victim-${uniq()}`, type: "STANDARD" } });
+    const propB = await prisma.property.create({ data: { enterpriseId: entB.id, name: "B Prop", code: `VB-${uniq()}`, legalName: "B LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
+    await asUser(ostaAdminId, () =>
+      propertyModulesRoute.PATCH(new Request("http://localhost/api/licenses/property-modules", {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId: propB.id, module: "EXCURSIONS", enabled: true }),
+      }))
+    );
+    const ccB = await prisma.chargeCode.create({ data: { enterpriseId: entB.id, code: "VBX", description: "B Excursion" } });
+    const typeB = await prisma.excursionType.create({ data: { propertyId: propB.id, code: `VB-${uniq().slice(-6)}`, name: "B Trip", chargeCodeId: ccB.id } });
+    await prisma.excursionRate.create({ data: { excursionTypeId: typeB.id, adultPrice: 50, childPrice: 0, infantPrice: 0, effectiveFrom: new Date(2020, 0, 1) } });
+    const sourceB = await prisma.excursionDeparture.create({ data: { excursionTypeId: typeB.id, departureDate: day(2), departureTime: "09:00", capacity: 10, status: "CANCELLED" } });
+    const folioB = await prisma.folio.create({ data: { propertyId: propB.id, folioNumber: 1, walkInGuestName: "B Walk-in" } });
+    const bookingB = await prisma.excursionBooking.create({
+      data: { departureId: sourceB.id, propertyId: propB.id, walkInGuestName: "B Walk-in", adultCount: 1, childCount: 0, infantCount: 0, totalAmount: 50, folioId: folioB.id, bookedByUserId: adminId, status: "CANCELLED" },
+    });
+
+    // Attacker A's own target departure (A's admin is authorized for it).
+    const targetA = await makeDeparture(excursionTypeId, 6, "09:00", 10);
+
+    const linesBefore = await prisma.folioLineItem.count({ where: { folioId: folioB.id } });
+
+    // A's admin tries to move B's booking (source = B's departure) onto A's target.
+    const res = await asUser(adminId, () =>
+      moveBookingsRoute.POST(
+        new Request("http://localhost", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ targetDepartureId: targetA.id, bookingIds: [bookingB.id] }),
+        }),
+        { params: Promise.resolve({ id: sourceB.id }) }
+      )
+    );
+    const body = await res.json();
+    expect(body.moved.length).toBe(0);
+    expect(body.failed[0]?.reason).toMatch(/not found/i);
+
+    // No charge was posted onto B's folio, and B's booking was not marked moved.
+    expect(await prisma.folioLineItem.count({ where: { folioId: folioB.id } })).toBe(linesBefore);
+    const bAfter = await prisma.excursionBooking.findUnique({ where: { id: bookingB.id } });
+    expect(bAfter!.movedToBookingId).toBeNull();
   });
 
   it("generating departures twice for the same schedule/date range never duplicates", async () => {
