@@ -374,6 +374,7 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
 |---|---|---|---|---|
 | D-1 | Med-High | Missing error states: new reusable `ErrorState` (retry) surfaced on every list page + profile sub-manager + work-orders that previously swallowed load failures; activity-log also gained a loading state | `ui/error-state.tsx` + 21 pages/components | `tsc` clean, production build clean, suite 405/405 |
 | C-3 | Med | `SystemCodeSelect` now searchable above a 12-option threshold — fixes Country/Nationality pickers (200+) at every call site (ProfileForm, identification/address managers, check-in wizard) in one file | `ui/system-code-select.tsx` | `tsc` clean, build clean |
+| D-3 | Med | Adopted one toast system (base-ui, app-wide `<Toaster>`); migrated all 41 `alert()` calls to `toast.*`; standardized all 8 native `confirm()` deletes onto a promise-based `useConfirm` backed by `AlertDialog` | `lib/toast.ts`, `ui/toaster.tsx`, `providers/confirm-provider.tsx` + 23 call sites | `tsc` + build clean; toast verified live (seed toast), provider mounts clean on authed page |
 
 ### Batch 3 (remaining data-integrity races)
 
@@ -412,10 +413,9 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
   guest arriving `day(-1)`, which the out-of-stay guard correctly rejects, so the later
   cancel 500s. It's a date-fragile fixture bug, out of this batch's scope. Recommend fixing
   the fixture separately (book an in-stay past departure).
-- **Batch 5 (UX/consistency) — in progress:** D-1 (error states) + C-3 (searchable
-  SystemCodeSelect) DONE. Remaining: C-1 (RHF+Zod on the 4 critical forms), D-3 (one toast +
-  standardize deletes on AlertDialog), C-2 (check-in prefill/auto-save), D-2 (extract shared
-  CrudManager / ResponsiveDataTable), C-4/D-4 (select/date-picker/responsive outliers), D-5
-  (test lint).
+- **Batch 5 (UX/consistency) — in progress:** D-1 (error states), C-3 (searchable
+  SystemCodeSelect), and D-3 (toast + standardize confirmations) DONE. Remaining: C-1 (RHF+Zod
+  on the 4 critical forms), C-2 (check-in prefill/auto-save), D-2 (extract shared CrudManager /
+  ResponsiveDataTable), C-4/D-4 (select/date-picker/responsive outliers), D-5 (test lint).
 - **Still open (deferred):** A14 (Float→integer-cents storage — large systemic change), S8
   (SMTP encryption-at-rest — needs a KMS decision). **Batches 1–4 are DONE (above).**

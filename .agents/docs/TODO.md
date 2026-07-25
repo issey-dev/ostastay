@@ -18,12 +18,14 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
 - **Fixed (Batch 4):** A15 excursion past-departure guard · A16 group-pickup in-tx recheck ·
   A13 UTC day boundaries on write paths (excursion schedule gen, spa weekday, price-calendar
   single+bulk). Also fixed the date-fragile "cancelling past the cutoff" excursions test.
-- **Batch 5 (UX/design) — in progress:** D-1 error states DONE — new `ErrorState` component
-  surfaced on every list page + profile sub-manager + work-orders (21 files); activity-log
-  also gained a loading state. Remaining Batch 5: RHF+Zod on critical forms (check-in,
-  walk-in, deposit, room-move), searchable SystemCodeSelect (country/nationality), one toast
-  + standardize deletes on AlertDialog, check-in prefill/auto-save, extract shared
-  CrudManager/ResponsiveDataTable, select/date-picker/responsive outliers, tests/** lint.
+- **Batch 5 (UX/design) — in progress.** DONE: D-1 error states (`ErrorState` on 22 pages/
+  components + activity-log loading state) · C-3 searchable `SystemCodeSelect` (country/
+  nationality) · D-3 toast system (`lib/toast.ts` + `ui/toaster.tsx`, base-ui, app-wide) with
+  all 41 `alert()` migrated to `toast.*`, plus a promise-based `useConfirm` (`providers/
+  confirm-provider.tsx`, AlertDialog-backed) replacing all 8 native `confirm()` deletes.
+  Remaining Batch 5: RHF+Zod on the 4 critical forms (check-in, walk-in, deposit, room-move),
+  check-in prefill/auto-save, extract shared CrudManager/ResponsiveDataTable,
+  select/date-picker/responsive outliers, tests/** lint.
 - **Still open (deferred):** A14 Float→integer-cents (large systemic change) · S8 SMTP
   encryption-at-rest (needs KMS decision).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
