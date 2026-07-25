@@ -416,6 +416,27 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(payRes.status).toBe(201);
   });
 
+  it("A16: two concurrent pickups can't both take the last held room", async () => {
+    const block = await prisma.groupBlock.create({
+      data: { propertyId, code: `GBRACE-${uniq()}`, name: "Race Block", startDate: new Date("2026-12-01"), endDate: new Date("2026-12-20"), totalRoomsHeld: 1, status: "DEFINITE" },
+    });
+    const pickup = (checkIn: string, checkOut: string) =>
+      asUser(adminId, () => groupPickupRoute.POST(
+        new Request(`http://localhost/api/groups/${block.id}/pickup`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ firstName: "Race", lastName: "Guest", roomTypeId, checkInDate: checkIn, checkOutDate: checkOut, adults: 1 }),
+        }),
+        { params: Promise.resolve({ id: block.id }) }
+      ));
+    // Non-overlapping dates so physical room availability isn't the limiter — only the
+    // 1-held-room count is.
+    const [a, b] = await Promise.all([pickup("2026-12-01", "2026-12-03"), pickup("2026-12-10", "2026-12-12")]);
+    const okCount = [a, b].filter((r) => r.status === 200).length;
+    expect(okCount).toBe(1);
+    const active = await prisma.reservation.count({ where: { groupBlockId: block.id, status: { notIn: ["CANCELLED", "NO_SHOW"] } } });
+    expect(active).toBe(1);
+  });
+
   it("enforces group block held-room count and cutoff date on pickup, with allocation parity", async () => {
     const pickupBody = (checkIn: string, checkOut: string) => ({
       firstName: "Group",

@@ -6,6 +6,10 @@ import { allocateSequenceNumber } from "@/lib/document-sequence"
 import { materializeReservationAllocations } from "@/lib/allocations-server"
 import { logActivity } from "@/lib/activity-log"
 
+// Thrown inside the pickup transaction when the block filled up between the pre-check and
+// the create (a concurrent pickup took the last held room) — turned into a clean 400.
+class BlockFullConflict extends Error {}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession()
@@ -133,7 +137,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     // Create the Profile and Reservation inside a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    let result;
+    try {
+    result = await prisma.$transaction(async (tx) => {
+      // Re-check the held-room count INSIDE the transaction so two concurrent pickups
+      // can't both claim the last held room (the pre-check above is only a fast fail).
+      if (group.totalRoomsHeld > 0) {
+        const pickedUp = await tx.reservation.count({
+          where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
+        })
+        if (pickedUp >= group.totalRoomsHeld) throw new BlockFullConflict()
+      }
+
       // 1. Create or Find Profile
       let profile = email
         ? await tx.profile.findFirst({
@@ -196,6 +211,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       return reservation
     })
+    } catch (txError) {
+      if (txError instanceof BlockFullConflict) {
+        return NextResponse.json(
+          { error: `This block's ${group.totalRoomsHeld} held room${group.totalRoomsHeld > 1 ? "s are" : " is"} fully picked up.` },
+          { status: 400 }
+        )
+      }
+      throw txError
+    }
 
     await logActivity({
       ctx,
