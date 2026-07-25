@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { toast } from "@/lib/toast"
 
 export default function NewGroupBlock() {
   const { currentProperty } = useProperty()
@@ -47,11 +48,11 @@ export default function NewGroupBlock() {
         router.push(`/e/${slug}/dashboard/groups`)
       } else {
         const err = await res.json()
-        alert(err.error || "Failed to create group")
+        toast.error(err.error || "Failed to create group")
       }
     } catch (error) {
       console.error(error)
-      alert("An unexpected error occurred.")
+      toast.error("An unexpected error occurred.")
     } finally {
       setLoading(false)
     }

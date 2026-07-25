@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
+import { toast } from "@/lib/toast"
 
 export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -65,15 +66,15 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
     e.preventDefault()
 
     if (selectedRoomTypes.length === 0) {
-      alert("Please select at least one Room Type.")
+      toast.error("Please select at least one Room Type.")
       return
     }
     if (!dateRange?.from || !dateRange?.to) {
-      alert("Please select a date range.")
+      toast.error("Please select a date range.")
       return
     }
     if (dateRange.from > dateRange.to) {
-      alert("The From date must be on or before the To date.")
+      toast.error("The From date must be on or before the To date.")
       return
     }
 
@@ -95,7 +96,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
 
       const data = await res.json()
       if (res.ok) {
-        alert(data.message)
+        toast.success(data.message)
         // Reset form
         setDateRange(undefined)
         setPrice("")
@@ -103,11 +104,11 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         setExtraChildPrice("")
         setSelectedRoomTypes([])
       } else {
-        alert(data.error || "Failed to push prices")
+        toast.error(data.error || "Failed to push prices")
       }
     } catch (e) {
       console.error(e)
-      alert("An error occurred")
+      toast.error("An error occurred")
     } finally {
       setSubmitting(false)
     }

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus } from "@/components/icons"
+import { toast } from "@/lib/toast"
 
 export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSaved: () => void }) {
   const { currentProperty } = useProperty()
@@ -66,7 +67,7 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
         onSaved()
       } else {
         const err = await res.json()
-        alert(err.error || "Failed to create pickup reservation")
+        toast.error(err.error || "Failed to create pickup reservation")
       }
     } catch (e) {
       console.error(e)

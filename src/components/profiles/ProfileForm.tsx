@@ -18,6 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Save, ArrowLeft } from "@/components/icons"
 import { differenceInYears } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
+import { toast } from "@/lib/toast"
 import { CommunicationsManager } from "@/components/profiles/communications-manager"
 import { AddressManager } from "@/components/profiles/address-manager"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
@@ -214,7 +215,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
         router.refresh()
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to save profile")
+        toast.error(error.error || "Failed to save profile")
       }
     } catch (e) {
       console.error(e)

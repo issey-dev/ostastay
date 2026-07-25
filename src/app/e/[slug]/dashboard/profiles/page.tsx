@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
+import { toast } from "@/lib/toast"
 
 type Profile = {
   upid: string
@@ -130,7 +131,7 @@ export default function ProfilesDashboard() {
         fetchProfiles(search, activeTab)
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to delete profile")
+        toast.error(error.error || "Failed to delete profile")
       }
     } catch (e) {
       console.error(e)

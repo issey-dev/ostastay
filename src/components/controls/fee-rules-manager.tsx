@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Save, Plus, Trash2 } from "@/components/icons"
+import { toast } from "@/lib/toast"
 
 type RuleType = "DEPOSIT" | "CANCELLATION" | "NO_SHOW"
 
@@ -74,7 +75,7 @@ export function FeeRulesManager() {
 
   const save = async (rule: FeeRule) => {
     if (!currentProperty) return
-    if (!rule.name.trim()) { alert("Give the rule a name first."); return }
+    if (!rule.name.trim()) { toast.error("Give the rule a name first."); return }
     setSavingKey(rule._key)
     setSavedKey(null)
     try {
@@ -89,10 +90,10 @@ export function FeeRulesManager() {
         setSavedKey(rule._key)
         setTimeout(() => setSavedKey((k) => (k === rule._key ? null : k)), 2000)
       } else {
-        alert((await res.json()).error || "Failed to save the rule.")
+        toast.error((await res.json()).error || "Failed to save the rule.")
       }
     } catch {
-      alert("Failed to save the rule.")
+      toast.error("Failed to save the rule.")
     } finally {
       setSavingKey(null)
     }
@@ -103,9 +104,9 @@ export function FeeRulesManager() {
       if (!window.confirm(`Delete "${rule.name || "this rule"}"? Reservations using it will fall back to no fee.`)) return
       try {
         const res = await fetch(`/api/settings/fee-rules?id=${rule.id}`, { method: "DELETE" })
-        if (!res.ok) { alert((await res.json()).error || "Failed to delete the rule."); return }
+        if (!res.ok) { toast.error((await res.json()).error || "Failed to delete the rule."); return }
       } catch {
-        alert("Failed to delete the rule.")
+        toast.error("Failed to delete the rule.")
         return
       }
     }

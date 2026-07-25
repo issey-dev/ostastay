@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OutletChargeCodePicker, type ChargeCodeOption } from "@/components/controls/outlet-charge-code-picker"
+import { toast } from "@/lib/toast"
 
 const OUTLET_TYPES = [
   { value: "SPA", label: "Spa" },
@@ -127,7 +128,7 @@ export function OutletsManager() {
         fetchOutlets()
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to save outlet")
+        toast.error(error.error || "Failed to save outlet")
       }
     } catch (error) {
       console.error(error)

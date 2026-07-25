@@ -14,6 +14,7 @@ import { ControlsCard } from "@/components/controls/controls-card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { toast } from "@/lib/toast"
 
 type PaymentMethod = {
   id: string
@@ -77,7 +78,7 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
       fetchMethods()
     } catch (e) {
       console.error("Failed to save", e)
-      alert("Failed to save payment method.")
+      toast.error("Failed to save payment method.")
     }
   }
 
@@ -88,7 +89,7 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
       fetchMethods()
     } catch (e) {
       console.error(e)
-      alert("Failed to delete payment method.")
+      toast.error("Failed to delete payment method.")
     }
   }
 
