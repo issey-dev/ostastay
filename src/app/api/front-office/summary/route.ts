@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date";
+import { resolveBusinessDate, nextBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeFolioBalance } from "@/lib/debtor-accounts";
 
 type BalanceFolio = {
@@ -136,7 +136,25 @@ export async function GET(request: Request) {
       where: { propertyId, status: { notIn: ["OUT_OF_ORDER", "OUT_OF_SERVICE"] } },
       select: { id: true, status: true }
     });
-    const occupiedRoomIds = new Set(inHouse.flatMap(r => r.assignments.map(a => a.roomId)).filter(Boolean));
+    // A guest occupies exactly ONE physical room today — the assignment segment whose
+    // [start, end) window covers the business date. Counting every segment would
+    // double-count a reservation that has a scheduled room move (multiple segments),
+    // which inflated both the In-House room count and the occupied/vacant split.
+    const bdMs = startOfToday.getTime();
+    const activeRoomIdFor = (r: (typeof inHouse)[number]): string | null => {
+      const covering = r.assignments.find(a => {
+        const s = toUtcMidnight(new Date(a.startDate)).getTime();
+        const e = toUtcMidnight(new Date(a.endDate)).getTime();
+        return s <= bdMs && bdMs < e;
+      });
+      if (covering) return covering.roomId;
+      // Fallbacks for out-of-window data: the latest segment that has started, else the first.
+      const started = r.assignments
+        .filter(a => toUtcMidnight(new Date(a.startDate)).getTime() <= bdMs)
+        .sort((x, y) => toUtcMidnight(new Date(y.startDate)).getTime() - toUtcMidnight(new Date(x.startDate)).getTime());
+      return (started[0] ?? r.assignments[0])?.roomId ?? null;
+    };
+    const occupiedRoomIds = new Set(inHouse.map(activeRoomIdFor).filter(Boolean) as string[]);
     const vacantRooms = allRooms.filter(r => !occupiedRoomIds.has(r.id));
     const vacantReadyCount = vacantRooms.filter(r => r.status === "CLEAN" || r.status === "INSPECTED").length;
 
