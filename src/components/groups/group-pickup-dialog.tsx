@@ -21,9 +21,12 @@ type GroupPickupDialogProps = {
   // The block's date span (yyyy-MM-dd) — pickup dates are constrained to it.
   blockStart?: string
   blockEnd?: string
+  // The block's held room types — the only ones a pickup may choose. Falls back to all
+  // property room types when empty (legacy blocks with no per-type holds).
+  roomTypeOptions?: { id: string; name: string; code: string }[]
 }
 
-export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart, blockEnd }: GroupPickupDialogProps) {
+export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart, blockEnd, roomTypeOptions }: GroupPickupDialogProps) {
   const { currentProperty } = useProperty()
   const confirm = useConfirm()
   const [open, setOpen] = useState(false)
@@ -47,22 +50,33 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
     adults: "1"
   })
 
+  // Room types offered = the block's held types (roomTypeOptions); only fall back to
+  // fetching all property types when the block has no per-type holds (legacy).
+  const usesBlockTypes = !!(roomTypeOptions && roomTypeOptions.length)
+  const roomTypeList = usesBlockTypes ? roomTypeOptions! : roomTypes
+
   useEffect(() => {
-    if (open && currentProperty && roomTypes.length === 0) {
+    if (!open || !currentProperty) return
+    if (!usesBlockTypes && roomTypes.length === 0) {
       fetch(`/api/room-types?propertyId=${currentProperty.id}`)
         .then(res => res.json())
-        .then(data => setRoomTypes(data))
+        .then(data => { if (Array.isArray(data)) setRoomTypes(data) })
         .catch(console.error)
+    }
+    if (ratePlans.length === 0) {
       fetch(`/api/rate-plans?propertyId=${currentProperty.id}`)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setRatePlans(data.filter((rp: any) => rp.isActive !== false)) })
         .catch(console.error)
+    }
+    if (mealPlans.length === 0) {
       fetch(`/api/meal-plans?propertyId=${currentProperty.id}`)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setMealPlans(data.filter((mp: any) => mp.isActive !== false)) })
         .catch(console.error)
     }
-  }, [open, currentProperty])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, currentProperty, usesBlockTypes])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -93,8 +107,8 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
       if (res.status === 409 && err.requiresOverbookConfirm) {
         setLoading(false)
         const ok = await confirm({
-          title: "Overbook this room type?",
-          description: `${err.error}. This will oversell the room type — proceed anyway?`,
+          title: "Overbook?",
+          description: `${err.error} Proceed anyway?`,
           confirmLabel: "Overbook",
         })
         if (ok) { setLoading(true); await send(true) }
@@ -172,7 +186,7 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
               value={formData.roomTypeId}
               onChange={(v) => setFormData((p) => ({ ...p, roomTypeId: v ?? "" }))}
               placeholder="Select room type"
-              options={roomTypes.map((rt) => ({ label: `${rt.name} (${rt.code})`, value: rt.id }))}
+              options={roomTypeList.map((rt) => ({ label: `${rt.name} (${rt.code})`, value: rt.id }))}
             />
           </div>
 

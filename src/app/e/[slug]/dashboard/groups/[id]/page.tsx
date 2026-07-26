@@ -177,6 +177,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
             blockStart={group.startDate?.split("T")[0]}
             blockEnd={group.endDate?.split("T")[0]}
+            roomTypeOptions={(group.roomHolds ?? []).map((h: any) => ({ id: h.roomTypeId, name: h.roomType?.name, code: h.roomType?.code }))}
           />
         </div>
       </div>

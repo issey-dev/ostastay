@@ -486,8 +486,24 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         { params: Promise.resolve({ id: block.id }) }
       )
     );
-    expect(second.status).toBe(400);
-    expect((await second.json()).error).toMatch(/fully picked up/i);
+    // Exceeding the held count is now a soft overbook prompt, not a hard block.
+    expect(second.status).toBe(409);
+    const secondBody = await second.json();
+    expect(secondBody.error).toMatch(/fully picked up/i);
+    expect(secondBody.requiresOverbookConfirm).toBe(true);
+
+    // ...but acknowledging the overbook lets it through (block deliberately oversold).
+    const overbooked = await asUser(adminId, () =>
+      groupPickupRoute.POST(
+        new Request(`http://localhost/api/groups/${block.id}/pickup`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...pickupBody("2026-11-12", "2026-11-14"), acknowledgeOverbook: true }),
+        }),
+        { params: Promise.resolve({ id: block.id }) }
+      )
+    );
+    expect(overbooked.status).toBe(200);
 
     const pastCutoff = await prisma.groupBlock.create({
       data: {

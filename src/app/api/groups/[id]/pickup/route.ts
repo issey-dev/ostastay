@@ -68,14 +68,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: 400 }
       )
     }
-    if (group.totalRoomsHeld > 0) {
+    // Block capacity: pickups can't exceed the rooms held UNLESS overbooked (confirmed).
+    if (group.totalRoomsHeld > 0 && body.acknowledgeOverbook !== true) {
       const pickedUp = await prisma.reservation.count({
         where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
       })
       if (pickedUp >= group.totalRoomsHeld) {
         return NextResponse.json(
-          { error: `This block's ${group.totalRoomsHeld} held room${group.totalRoomsHeld > 1 ? "s are" : " is"} fully picked up.` },
-          { status: 400 }
+          {
+            error: `This block's ${group.totalRoomsHeld} held room${group.totalRoomsHeld > 1 ? "s are" : " is"} fully picked up — overbook the block to add more.`,
+            requiresOverbookConfirm: true,
+          },
+          { status: 409 }
         )
       }
     }
@@ -170,7 +174,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     result = await prisma.$transaction(async (tx) => {
       // Re-check the held-room count INSIDE the transaction so two concurrent pickups
       // can't both claim the last held room (the pre-check above is only a fast fail).
-      if (group.totalRoomsHeld > 0) {
+      // Skipped when overbooking is acknowledged — the block is being oversold on purpose.
+      if (group.totalRoomsHeld > 0 && body.acknowledgeOverbook !== true) {
         const pickedUp = await tx.reservation.count({
           where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
         })
