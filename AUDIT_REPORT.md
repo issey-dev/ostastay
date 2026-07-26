@@ -438,7 +438,12 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
   balances, and deposit reconciliation through exact integer-cent summation, eliminating the
   accumulation error the old 0.01 tolerances papered over. Storage stays Float; reports
   already `round2` display totals. New `money.test.ts` (5 tests); suite 410 green.
-- **Still open (deferred, need owner input):** S8 (SMTP encryption-at-rest — needs a
-  key-management decision), D-2 (shared-component refactor), plus the two lint follow-ups
-  (properly type the `any`s; React-Compiler-clean). Full Float→Int storage migration remains
-  available if ever wanted, but is not needed for integrity. **Batches 1–4 are DONE.**
+- **S8 (SMTP/SFTP password encryption-at-rest) — DONE.** New `src/lib/secret-crypto.ts`
+  (AES-256-GCM keyed on `SECRETS_ENCRYPTION_KEY`, self-describing ciphertext, backward-compatible
+  with legacy plaintext — no data migration). Encrypt on write (tenant-settings), decrypt on
+  read (mailer, send-time only); no-op when the key is unset. `.env.example` added; new
+  `secret-crypto.test.ts`; suite 417 green.
+- **Still open (deferred — code-cleanliness, non-blocking):** D-2 (shared-component refactor);
+  lint follow-ups (properly type the ~270 `any` warnings; make React-Compiler-clean); the full
+  Float→Int money storage migration (not needed for integrity — A14 targeted fix handled it).
+  **Batches 1–4 are DONE.**

@@ -42,9 +42,13 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
   risk). Added `src/lib/money.ts` (cent-based sums) and routed folio balance / drawer cash /
   checkout & cancel balances / deposit reconciliation through exact integer-cent math — kills
   the accumulation error the 0.01 tolerances hid. Storage stays Float. `money.test.ts` added.
-- **Still open (deferred):** S8 SMTP encryption-at-rest (needs KMS decision) · D-2
-  shared-component refactor · lint follow-ups (type the `any`s; make React-Compiler-clean) ·
-  full Float→Int storage migration (available if ever wanted; not needed for integrity).
+- **S8 SMTP/SFTP encryption-at-rest — DONE.** `src/lib/secret-crypto.ts` (AES-256-GCM, key
+  from `SECRETS_ENCRYPTION_KEY`, backward-compatible with legacy plaintext, no migration).
+  Encrypt on write (tenant-settings), decrypt on read (mailer); no-op without the key.
+  `.env.example` added. Set `SECRETS_ENCRYPTION_KEY` in each env to enable.
+- **Still open (deferred — non-blocking cleanliness):** D-2 shared-component refactor · lint
+  follow-ups (type the `any`s; make React-Compiler-clean) · full Float→Int money storage
+  migration (not needed for integrity; A14 targeted fix handled it).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
   > "cancelling past the cutoff…"` fails on clean master — books a `day(-2)` departure for a
   `day(-1)` arrival, which the out-of-stay guard rejects, so the later cancel 500s.
