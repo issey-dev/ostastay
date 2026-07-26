@@ -244,6 +244,18 @@ export async function POST(request: Request) {
     const routeTo = (reservationId: string, chargeCodeId: string, defaultFolioId: string) =>
       routingMap.get(`${reservationId}:${chargeCodeId}`) ?? defaultFolioId
 
+    // Group pickups default-route their charges to the block's master folio (the PM
+    // account), unless the pickup opted out (groupBillToMaster=false). An explicit
+    // FolioRoutingRule still wins over this via routeTo above.
+    const groupBlockIds = [...new Set(activeReservations.map((r) => r.groupBlockId).filter(Boolean))] as string[]
+    const masterFolios = groupBlockIds.length
+      ? await prisma.folio.findMany({
+          where: { groupBlockId: { in: groupBlockIds }, isMaster: true, isClosed: false },
+          select: { id: true, groupBlockId: true },
+        })
+      : []
+    const masterFolioByBlock = new Map(masterFolios.map((f) => [f.groupBlockId!, f.id]))
+
     // Transport charges due for realization. Hotel-booked, priced, charge-coded legs not
     // yet posted, whose realization date — transport time → carrier time → check-in
     // (pickup) / check-out (dropoff) — falls on or before the audit date. Posted in the
@@ -345,7 +357,10 @@ export async function POST(request: Request) {
           // any other stay; the transfer to a debtor account only happens at checkout
           // (see reservations/[id]/check-out/route.ts), not here. Debtors intentionally
           // never sees anything from an in-house reservation.
-          const targetFolioId = res.folios[0].id
+          // Default posting target: the block master folio for a bill-to-master group
+          // pickup, else the reservation's own folio. routeTo can still redirect per rule.
+          const groupMasterFolioId = res.groupBlockId && res.groupBillToMaster ? masterFolioByBlock.get(res.groupBlockId) : undefined
+          const targetFolioId = groupMasterFolioId ?? res.folios[0].id
 
           // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
           // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is

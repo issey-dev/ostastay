@@ -8,16 +8,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Plus } from "@/components/icons"
 import { toast } from "@/lib/toast"
 
-export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSaved: () => void }) {
+export function GroupPickupDialog({ groupId, onSaved, disabledReason }: { groupId: string, onSaved: () => void, disabledReason?: string }) {
   const { currentProperty } = useProperty()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
   const [mealPlans, setMealPlans] = useState<any[]>([])
+  // Group pickups bill the block's master folio by default; staff can opt a guest out.
+  const [billToMaster, setBillToMaster] = useState(true)
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -60,7 +63,7 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
       const res = await fetch(`/api/groups/${groupId}/pickup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, billToMaster })
       })
 
       if (res.ok) {
@@ -80,7 +83,7 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="flex items-center gap-2">
+        <Button className="flex items-center gap-2" disabled={!!disabledReason} title={disabledReason}>
           <Plus className="w-4 h-4" />
           Pickup Room
         </Button>
@@ -157,6 +160,16 @@ export function GroupPickupDialog({ groupId, onSaved }: { groupId: string, onSav
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div className="pr-3">
+              <Label className="text-sm">Bill to group master folio</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {billToMaster ? "Charges route to the block's master folio." : "This guest settles their own folio."}
+              </p>
+            </div>
+            <Switch checked={billToMaster} onCheckedChange={setBillToMaster} />
           </div>
 
           <DialogFooter className="pt-4">

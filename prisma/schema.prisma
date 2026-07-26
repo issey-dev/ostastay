@@ -801,6 +801,10 @@ model Reservation {
 
   groupBlockId String?
   groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
+  // Group pickups default to billing the block's master folio; staff can flip this
+  // off per pickup so the guest settles their own folio. Only meaningful when
+  // groupBlockId is set and the block has an open master folio (Night Audit routing).
+  groupBillToMaster Boolean @default(true)
 
   checkInDate           DateTime
   checkOutDate          DateTime

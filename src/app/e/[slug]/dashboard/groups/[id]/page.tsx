@@ -36,6 +36,19 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const [editForm, setEditForm] = useState({ name: "", status: "TENTATIVE", totalRoomsHeld: "0", cutoffDate: "" })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  const [creatingMaster, setCreatingMaster] = useState(false)
+
+  const handleCreateMaster = async () => {
+    setCreatingMaster(true)
+    try {
+      const res = await fetch(`/api/groups/${unwrappedParams.id}/master-folio`, { method: "POST" })
+      if (res.ok) fetchGroup()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCreatingMaster(false)
+    }
+  }
 
   const openEdit = () => {
     setEditForm({
@@ -117,6 +130,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
   const pickedUp = group.reservations?.length || 0
   const remaining = Math.max(0, group.totalRoomsHeld - pickedUp)
+  const openMaster = group.masterFolios?.find((f: any) => !f.isClosed)
 
   return (
     <div className="space-y-6">
@@ -138,15 +152,21 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <Button variant="outline" onClick={openEdit}>
             <Pencil className="w-4 h-4 mr-2" /> Edit Block
           </Button>
-          <Button
-            variant="outline"
-            disabled={!group.masterFolios?.length}
-            title={group.masterFolios?.length ? undefined : "No master folio has been created for this group yet"}
-            onClick={() => setIsMasterFolioOpen(true)}
-          >
-            <Wallet className="w-4 h-4 mr-2" /> Master Folio
-          </Button>
-          <GroupPickupDialog groupId={group.id} onSaved={fetchGroup} />
+          {openMaster ? (
+            <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
+              <Wallet className="w-4 h-4 mr-2" /> Master Folio
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={handleCreateMaster} disabled={creatingMaster || group.status === "CANCELLED"}>
+              {creatingMaster ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
+              Create Master Folio
+            </Button>
+          )}
+          <GroupPickupDialog
+            groupId={group.id}
+            onSaved={fetchGroup}
+            disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
+          />
         </div>
       </div>
 
@@ -255,7 +275,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       </Card>
 
       <WalkInFolioPanel
-        folioId={group.masterFolios?.[0]?.id ?? null}
+        folioId={openMaster?.id ?? null}
         isOpen={isMasterFolioOpen}
         onClose={() => setIsMasterFolioOpen(false)}
         onClosed={fetchGroup}

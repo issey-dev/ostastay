@@ -30,7 +30,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       children,
       infants,
       ratePlanId: requestedRatePlanId,
-      mealPlanCode
+      mealPlanCode,
+      billToMaster
     } = body
 
     if (!firstName || !lastName || !roomTypeId || !checkInDate || !checkOutDate) {
@@ -39,11 +40,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const group = await prisma.groupBlock.findUnique({
       where: { id },
-      include: { property: true }
+      include: { property: true, masterFolios: true }
     })
 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
+
+    // Gate: the block's master folio (PM account) must exist before any pickup, so
+    // charges have somewhere to route. Staff create it from the block page.
+    const masterFolio = group.masterFolios.find((f) => f.isMaster && !f.isClosed)
+    if (!masterFolio) {
+      return NextResponse.json(
+        { error: "Create the group's master folio before picking up rooms." },
+        { status: 400 }
+      )
+    }
+    // Default: bill the master folio; only false when staff explicitly opt the guest out.
+    const groupBillToMaster = billToMaster !== false
 
     // Block-level guards: a cancelled block can't be picked up; a past-cutoff block
     // has released its held rooms; and a block only holds totalRoomsHeld rooms —
@@ -179,6 +192,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           confirmationNo,
           primaryGuestId: profile.upid,
           groupBlockId: id,
+          groupBillToMaster,
           checkInDate: new Date(checkInDate),
           checkOutDate: new Date(checkOutDate),
           adults: parseInt(adults) || 1,
