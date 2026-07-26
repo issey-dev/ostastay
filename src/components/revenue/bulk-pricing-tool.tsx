@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarDays, Save, CheckSquare } from "@/components/icons"
+import { CalendarDays, Save } from "@/components/icons"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Button } from "@/components/ui/button"

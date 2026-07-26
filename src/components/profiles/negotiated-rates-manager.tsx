@@ -66,7 +66,7 @@ export function NegotiatedRatesManager({ upid }: { upid: string }) {
     setLinks((prev) => prev.map((l) => (l.ratePlanId === ratePlanId ? { ...l, commissionRate } : l)))
   }
 
-  const commitCommission = (ratePlanId: string) => {
+  const commitCommission = (_ratePlanId: string) => {
     save(links)
   }
 

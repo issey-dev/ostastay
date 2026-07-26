@@ -156,7 +156,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: data.error || "Failed to void charge.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error voiding charge.", isError: true })
     } finally {
       setVoidSaving(false)
@@ -178,7 +178,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: "Failed to create folio.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error creating folio.", isError: true })
     }
   }
@@ -204,7 +204,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: data.error || "Failed to post charge.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error posting charge.", isError: true })
     }
   }
@@ -228,7 +228,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: data.error || "Failed to post payment.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error posting payment.", isError: true })
     }
   }
@@ -345,7 +345,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: data.error || "Failed to move charges.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error moving charges.", isError: true })
     }
   }
@@ -364,7 +364,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: "Failed to update settlement method.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error updating settlement method.", isError: true })
     } finally {
       setSettlementSaving(false)
@@ -384,7 +384,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         const data = await res.json()
         setNotification({ title: "Error", message: data.error || "Failed to delete folio.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error deleting folio.", isError: true })
     }
   }
@@ -404,7 +404,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       } else {
         setNotification({ title: "Error", message: "Failed to assign payee.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error assigning payee.", isError: true })
     }
   }

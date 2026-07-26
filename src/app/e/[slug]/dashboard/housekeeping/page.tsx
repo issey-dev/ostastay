@@ -77,7 +77,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Task Update Failed", message: data.error || "Failed to complete the task.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred completing the task.", isError: true })
     }
   }
@@ -123,7 +123,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Update Failed", message: data.error || "Failed to update the room status.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred updating the room.", isError: true })
     }
   }
@@ -153,7 +153,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Bulk Update Failed", message: data.error || "Failed to update the selected rooms.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred during the bulk update.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -204,7 +204,7 @@ export default function HousekeepingDashboard() {
           const data = await res.json()
           setNotification({ title: "Update Failed", message: data.error || "Failed to update the ticket.", isError: true })
         }
-      } catch (e) {
+      } catch {
         setNotification({ title: "Error", message: "An error occurred updating the ticket.", isError: true })
       } finally {
         setIsUpdatingBulk(false)
@@ -235,7 +235,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Report Failed", message: data.error || "Failed to create the ticket.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred creating the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -256,7 +256,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Delete Failed", message: data.error || "Failed to delete the ticket.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred deleting the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -296,7 +296,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Update Failed", message: data.error || "Failed to mark rooms out of order.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred marking rooms out of order.", isError: true })
     } finally {
       setIsUpdatingBulk(false)

@@ -45,7 +45,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
       } else {
         setError(data.error || "Login failed")
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred")
     } finally {
       setIsLoading(false)

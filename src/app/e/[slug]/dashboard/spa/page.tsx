@@ -14,8 +14,6 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Badge } from "@/components/ui/badge"
-import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 
@@ -132,7 +130,7 @@ export default function SpaPage() {
   const [startingWalkIn, setStartingWalkIn] = useState(false)
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
-  const [openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
+  const [_openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
 
   const [selectedDate, setSelectedDate] = useState("")
   const [availableDates, setAvailableDates] = useState<string[]>([])
@@ -148,8 +146,8 @@ export default function SpaPage() {
   const [booking, setBooking] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
-  const [todaysAppointments, setTodaysAppointments] = useState<AppointmentListItem[]>([])
-  const [loadingAppointments, setLoadingAppointments] = useState(true)
+  const [_todaysAppointments, setTodaysAppointments] = useState<AppointmentListItem[]>([])
+  const [_loadingAppointments, setLoadingAppointments] = useState(true)
 
   useEffect(() => {
     if (!currentProperty) return

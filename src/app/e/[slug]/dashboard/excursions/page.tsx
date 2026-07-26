@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
-import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
@@ -70,7 +69,7 @@ export default function ExcursionsPage() {
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
 
-  const [openWalkIns, setOpenWalkIns] = useState<OpenWalkInBooking[]>([])
+  const [_openWalkIns, setOpenWalkIns] = useState<OpenWalkInBooking[]>([])
 
   const [departures, setDepartures] = useState<Departure[]>([])
   const [loadingDepartures, setLoadingDepartures] = useState(true)

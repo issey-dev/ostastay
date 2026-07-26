@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { computeFolioBalance } from "@/lib/debtor-accounts";
 import { rangeBounds } from "@/lib/reports/params";
-import { guestName, nights, primaryRoom, propertyOrThrow, guestSelect, assignmentInclude, titleCase } from "@/lib/reports/defs/_shared";
+import { guestName, nights, propertyOrThrow, guestSelect, assignmentInclude, titleCase } from "@/lib/reports/defs/_shared";
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });

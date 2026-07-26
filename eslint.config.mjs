@@ -154,6 +154,14 @@ const designSystemGuardrails = {
     // rather than a gating error. New genuine errors (design tokens, JSX escaping, dead
     // code, etc.) are fixed and stay errors.
     "@typescript-eslint/no-explicit-any": "warn",
+    // Honor the codebase's `_`-prefix convention for intentionally-unused bindings
+    // (positional destructuring, deliberately-ignored args/catch errors).
+    "@typescript-eslint/no-unused-vars": ["warn", {
+      argsIgnorePattern: "^_",
+      varsIgnorePattern: "^_",
+      caughtErrorsIgnorePattern: "^_",
+      destructuredArrayIgnorePattern: "^_",
+    }],
     // React Compiler advisory rules (new in eslint-config-next 16's react-hooks plugin):
     // set-state-in-effect, immutability, static-components, preserve-manual-memoization fire
     // on ~100 pre-existing, working patterns (e.g. setLoading() inside a fetch effect). Making

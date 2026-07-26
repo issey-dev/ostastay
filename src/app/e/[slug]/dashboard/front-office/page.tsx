@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MonitorPlay, LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, BellDot, ArrowLeftRight, Search, UserX } from "@/components/icons"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX } from "@/components/icons"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -102,7 +102,7 @@ export default function FrontOfficeDashboard() {
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     } finally {
       setActionLoading(null)

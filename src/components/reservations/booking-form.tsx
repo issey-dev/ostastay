@@ -435,7 +435,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
         setSubmitting(false)
       }
-    } catch (err) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred." })
       setSubmitting(false)
     }

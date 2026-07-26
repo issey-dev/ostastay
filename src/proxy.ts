@@ -23,7 +23,7 @@ export async function proxy(request: NextRequest) {
 
     try {
       await jwtVerify(token, JWT_SECRET)
-    } catch (error) {
+    } catch {
       // Invalid token
       return NextResponse.redirect(new URL('/login', request.url))
     }
@@ -35,7 +35,7 @@ export async function proxy(request: NextRequest) {
     try {
       await jwtVerify(token, JWT_SECRET)
       return NextResponse.redirect(new URL('/dashboard', request.url))
-    } catch (error) {
+    } catch {
       // invalid token, let them log in
     }
   }

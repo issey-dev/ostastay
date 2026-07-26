@@ -305,7 +305,7 @@ export default function ReservationsDashboard() {
       } else {
         setNotification({ title: "Error", message: "Failed to send request.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
@@ -319,7 +319,7 @@ export default function ReservationsDashboard() {
       setIsDeleteModalOpen(false)
       fetchData()
       setNotification({ title: "Success", message: "Reservation deleted." })
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Failed to delete reservation.", isError: true })
     }
   }
@@ -335,7 +335,7 @@ export default function ReservationsDashboard() {
       } else {
         setNotification({ title: "Error", message: "Failed to auto-assign rooms.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error occurred during auto-assign.", isError: true })
     } finally {
       setAutoAssigning(false)
@@ -369,7 +369,7 @@ export default function ReservationsDashboard() {
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     }
   }

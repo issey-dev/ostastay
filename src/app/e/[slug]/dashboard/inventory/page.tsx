@@ -17,7 +17,7 @@ import { CheckSquare, X, Check, Wrench } from "@/components/icons"
 import { WorkOrderManager } from "@/components/housekeeping/work-order-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
-import { statusMutedClasses, toneMutedClasses, toneSolidClasses, type StatusTone } from "@/lib/status-tone"
+import { statusMutedClasses, toneMutedClasses, toneSolidClasses } from "@/lib/status-tone"
 
 type Room = {
   id: string
@@ -28,7 +28,6 @@ type Room = {
   maintenance?: any[]
 }
 
-const priorityTone: Record<string, StatusTone> = { HIGH: "danger", MEDIUM: "warning", LOW: "info" }
 
 export default function RoomMatrix() {
   const [rooms, setRooms] = useState<Room[]>([])

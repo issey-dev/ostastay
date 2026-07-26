@@ -21,7 +21,6 @@ export async function generateTablePdf(
 
   const margin = 40;
   const usableWidth = page.getWidth() - margin * 2;
-  const usableHeight = page.getHeight() - margin * 2;
 
   const lineHeight = 20;
   const headerHeight = lineHeight * 2;
@@ -59,7 +58,7 @@ export async function generateTablePdf(
 
   // Draw rows
   let y = page.getHeight() - margin - headerHeight - 10;
-  rows.forEach((row, rowIndex) => {
+  rows.forEach((row) => {
     if (y < margin + lineHeight) {
       // Add new page if we run out of space
       const newPage = pdfDoc.addPage([595.28, 841.89]);

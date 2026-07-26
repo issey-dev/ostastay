@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { expectedCashForShift } from "@/lib/shift-summary";
-import { startEodRun, getActiveEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
+import { startEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
 import { assignRegistrationNumbers } from "@/lib/guest-registration";
 import { snapshotEodReports } from "@/lib/eod-reports";
 import { logActivity } from "@/lib/activity-log";

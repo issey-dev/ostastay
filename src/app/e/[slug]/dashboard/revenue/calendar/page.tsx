@@ -191,7 +191,7 @@ function PriceCalendarPageContent() {
         const message = typeof data?.error === "string" ? data.error : Array.isArray(data?.error) ? data.error.map((i: { message: string }) => i.message).join(", ") : "Failed to update prices."
         toast.error(message)
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred.")
     } finally {
       setBulkSubmitting(false)

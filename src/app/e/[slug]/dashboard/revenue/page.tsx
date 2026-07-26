@@ -199,7 +199,7 @@ export default function RevenueDashboard() {
         const err = await res.json()
         setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
       }
-    } catch (err) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
@@ -213,7 +213,7 @@ export default function RevenueDashboard() {
       setIsDeleteModalOpen(false)
       fetchRatePlans()
       setNotification({ title: "Success", message: "Rate plan deleted successfully." })
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Failed to delete rate plan.", isError: true })
     }
   }

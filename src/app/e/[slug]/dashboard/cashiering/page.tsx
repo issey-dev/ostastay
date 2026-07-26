@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { useParams } from "next/navigation";
-import { Wallet, Lock, Unlock, AlertTriangle, ArrowRight, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History, HandCoins } from "@/components/icons";
+import { Wallet, Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History, HandCoins } from "@/components/icons";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,7 +153,7 @@ export default function CashieringPage() {
       } else {
         setError(json.error || "Failed to open shift");
       }
-    } catch (err) {
+    } catch {
       setError("Unexpected error opening shift");
     } finally {
       setIsOpening(false);
@@ -179,7 +179,7 @@ export default function CashieringPage() {
         setError(json.error || "Failed to close shift");
         setIsCloseModalOpen(false);
       }
-    } catch (err) {
+    } catch {
       setError("Unexpected error closing shift");
       setIsCloseModalOpen(false);
     } finally {
@@ -204,7 +204,7 @@ export default function CashieringPage() {
         const json = await res.json();
         setError(json.error || "Failed to record currency exchange");
       }
-    } catch (err) {
+    } catch {
       setError("Unexpected error recording currency exchange");
     } finally {
       setIsExchanging(false);
