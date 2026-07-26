@@ -960,6 +960,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
             checkInDate={form.checkInDate}
             checkOutDate={form.checkOutDate}
             adults={form.adults}
+            // eslint-disable-next-line react/no-children-prop -- `children` is a numeric guest-count prop, not React content
             children={form.children}
             infants={form.infants}
             quote={quote}

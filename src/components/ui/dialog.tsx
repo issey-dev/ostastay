@@ -18,6 +18,7 @@ function DialogTrigger({ asChild, ...props }: DialogPrimitive.Trigger.Props & { 
         data-slot="dialog-trigger"
         render={props.children}
         {...props}
+        // eslint-disable-next-line react/no-children-prop
         children={undefined}
       />
     )

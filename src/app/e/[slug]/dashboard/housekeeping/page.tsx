@@ -668,7 +668,7 @@ export default function HousekeepingDashboard() {
           <DialogHeader>
             <DialogTitle>Mark Out of Order</DialogTitle>
             <DialogDescription>
-              Removes {selectedRooms.length} selected room(s) from sale — they won't be offered for new bookings or
+              Removes {selectedRooms.length} selected room(s) from sale — they won&apos;t be offered for new bookings or
               check-ins until returned to service.
             </DialogDescription>
           </DialogHeader>

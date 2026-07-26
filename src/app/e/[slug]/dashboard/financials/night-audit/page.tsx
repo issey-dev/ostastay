@@ -302,7 +302,7 @@ export default function EndOfDayPage() {
     if (key === "finalize") {
       return (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Sign property staff out and close the business date. They'll sign back in on the new date.</p>
+          <p className="text-sm text-muted-foreground">Sign property staff out and close the business date. They&apos;ll sign back in on the new date.</p>
           <Button variant="destructive" disabled={busy === "finalize"} onClick={() => runStep("finalize")}>
             {busy === "finalize" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogOut className="w-4 h-4 mr-2" />}
             Roll &amp; close

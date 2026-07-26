@@ -710,7 +710,7 @@ export default function FrontOfficeDashboard() {
           <DialogHeader>
             <DialogTitle>Mark as No-Show</DialogTitle>
             <DialogDescription>
-              Mark {noShowRes?.primaryGuest?.firstName} {noShowRes?.primaryGuest?.lastName}'s reservation
+              Mark {noShowRes?.primaryGuest?.firstName} {noShowRes?.primaryGuest?.lastName}&apos;s reservation
               ({noShowRes?.confirmationNo}) as a no-show? The room goes back on sale; any deposit stays on the folio
               for refund or fee handling.
             </DialogDescription>

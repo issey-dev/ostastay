@@ -216,7 +216,7 @@ export default function POSDashboard() {
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Fast Post</h2>
-        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest's room or a walk-in bill.</p>
+        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest&apos;s room or a walk-in bill.</p>
       </div>
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "charges" | "history") ?? "charges")}>
@@ -248,7 +248,7 @@ export default function POSDashboard() {
               {outlets.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-2">Selecting an outlet scopes the charge codes below to that outlet's own list, and attributes the revenue to it.</p>
+          <p className="text-xs text-muted-foreground mt-2">Selecting an outlet scopes the charge codes below to that outlet&apos;s own list, and attributes the revenue to it.</p>
         </div>
 
         {/* 1. Find Guest / Start Walk-in */}
@@ -302,7 +302,7 @@ export default function POSDashboard() {
                 </div>
               )}
               {searchQuery && guests.length === 0 && !loadingSearch && (
-                <p className="text-sm text-muted-foreground mt-4 text-center">No active guests found matching "{searchQuery}"</p>
+                <p className="text-sm text-muted-foreground mt-4 text-center">No active guests found matching &quot;{searchQuery}&quot;</p>
               )}
             </>
           ) : walkInFolioId ? (

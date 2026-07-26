@@ -16,6 +16,7 @@ function PopoverTrigger({ asChild, ...props }: PopoverPrimitive.Trigger.Props & 
         data-slot="popover-trigger"
         render={props.children}
         {...props}
+        // eslint-disable-next-line react/no-children-prop
         children={undefined}
       />
     )

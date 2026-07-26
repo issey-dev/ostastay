@@ -709,7 +709,7 @@ export default function ReservationsDashboard() {
           <DialogHeader>
             <DialogTitle>Housekeeping Request</DialogTitle>
             <DialogDescription>
-              Manage special requests for {selectedRes?.primaryGuest?.firstName} {selectedRes?.primaryGuest?.lastName}'s room.
+              Manage special requests for {selectedRes?.primaryGuest?.firstName} {selectedRes?.primaryGuest?.lastName}&apos;s room.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 flex flex-col gap-4">

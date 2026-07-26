@@ -17,6 +17,7 @@ function AlertDialogTrigger({ asChild, ...props }: AlertDialogPrimitive.Trigger.
         data-slot="alert-dialog-trigger"
         render={props.children}
         {...props}
+        // eslint-disable-next-line react/no-children-prop
         children={undefined}
       />
     )

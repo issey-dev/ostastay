@@ -281,7 +281,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   />
                 </div>
                 {roomBlocked && <p className="text-sm text-destructive flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room is out of order/service — check-in will be blocked. Pick another.</p>}
-                {selectedRoom?.status === "DIRTY" && <p className="text-sm text-warning flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room hasn't been cleaned yet — you can proceed with a warning.</p>}
+                {selectedRoom?.status === "DIRTY" && <p className="text-sm text-warning flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room hasn&apos;t been cleaned yet — you can proceed with a warning.</p>}
               </div>
             )}
 

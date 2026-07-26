@@ -142,7 +142,7 @@ export function PropertyProfileManager() {
           <Label htmlFor="requireInspectionOnCheckIn">Require Inspected Room at Check-In</Label>
           <p className="text-xs text-muted-foreground">
             On: guests can only be checked into rooms housekeeping has marked Inspected — a supervisor must sign off
-            each room before an arrival. Off: a dirty room warns but doesn't block.
+            each room before an arrival. Off: a dirty room warns but doesn&apos;t block.
           </p>
         </div>
         <Switch

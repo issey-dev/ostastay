@@ -129,6 +129,10 @@ export const SUPPORT_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
 export async function ensureRoles(
   prisma: {
     role: {
+      // Deliberate `any`: a minimal structural shape so the real (fully-typed) Prisma
+      // client is assignable here. A stricter arg type breaks assignability from Prisma's
+      // generated RolePermissionUpsertArgs under strictFunctionTypes.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       upsert: (args: any) => Promise<{ id: string; name: string }>;
     };
   },

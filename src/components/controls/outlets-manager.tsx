@@ -212,7 +212,7 @@ export function OutletsManager() {
                 <Label>Tax Override <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <p className="text-xs text-muted-foreground">
                   When set, every charge posted through this outlet uses this tax handling
-                  instead of the charge code's own — whether that code is on the default
+                  instead of the charge code&apos;s own — whether that code is on the default
                   engine or its own Custom Tax profile.
                 </p>
                 <Select value={form.taxOverrideMode} onValueChange={(v) => setForm((p) => ({ ...p, taxOverrideMode: (v ?? "NONE") as any }))}>
@@ -224,7 +224,7 @@ export function OutletsManager() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NONE">No override — use each charge code's own tax</SelectItem>
+                    <SelectItem value="NONE">No override — use each charge code&apos;s own tax</SelectItem>
                     <SelectItem value="DEFAULT_ENGINE">Force default Maldives Tax engine</SelectItem>
                     <SelectItem value="CUSTOM">Force a specific Custom Tax profile</SelectItem>
                   </SelectContent>

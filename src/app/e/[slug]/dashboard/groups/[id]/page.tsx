@@ -278,7 +278,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <DialogHeader>
             <DialogTitle>Edit Group Block</DialogTitle>
             <DialogDescription>
-              Rooms held cannot go below what's already picked up; a block with active pickups cannot be cancelled.
+              Rooms held cannot go below what&apos;s already picked up; a block with active pickups cannot be cancelled.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

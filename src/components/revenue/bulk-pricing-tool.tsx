@@ -182,7 +182,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
               <div className="space-y-2">
                 <Label>Extra Adult Price <span className="text-muted-foreground font-normal">Optional</span></Label>
                 <Input type="number" step="0.01" min="0" placeholder="0.00" value={extraAdultPrice} onChange={e => setExtraAdultPrice(e.target.value)} />
-                <p className="text-xs text-muted-foreground">Per night, per adult beyond each room type's Base Occupancy.</p>
+                <p className="text-xs text-muted-foreground">Per night, per adult beyond each room type&apos;s Base Occupancy.</p>
               </div>
               <div className="space-y-2">
                 <Label>Extra Child Price <span className="text-muted-foreground font-normal">Optional</span></Label>

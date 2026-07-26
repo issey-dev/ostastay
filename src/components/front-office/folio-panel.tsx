@@ -808,7 +808,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             <DialogTitle>Void Charge</DialogTitle>
             <DialogDescription>
               {voidTarget && (
-                <>Void "{voidTarget.description}" (${(voidTarget.amount + (voidTarget.serviceChargeAmount || 0) + voidTarget.taxAmount).toFixed(2)})?
+                <>Void &quot;{voidTarget.description}&quot; (${(voidTarget.amount + (voidTarget.serviceChargeAmount || 0) + voidTarget.taxAmount).toFixed(2)})?
                 The line stays on the folio marked VOID and no longer counts toward the balance.</>
               )}
             </DialogDescription>

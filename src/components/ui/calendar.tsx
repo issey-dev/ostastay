@@ -221,6 +221,7 @@ function Calendar({
         ),
         MonthGrid: ({ className, children, ...props }) => (
           <MonthGrid
+            // eslint-disable-next-line react/no-children-prop
             children={children}
             className={className}
             displayYears={displayYears}

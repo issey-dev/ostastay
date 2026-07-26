@@ -226,7 +226,7 @@ export default function RoomMatrix() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-foreground mb-2">No Rooms Configured</h3>
-              <p className="text-muted-foreground text-sm text-center">You haven't added any floors or rooms to this property yet. Set up your property to see the grid.</p>
+              <p className="text-muted-foreground text-sm text-center">You haven&apos;t added any floors or rooms to this property yet. Set up your property to see the grid.</p>
             </div>
           ) : (
             floors.map(floorName => (

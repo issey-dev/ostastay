@@ -531,7 +531,7 @@ export function RoomManager({
 
                   {isPseudoRoom ? (
                     <p className="text-xs text-muted-foreground rounded-md border border-border p-3">
-                      This is a Pseudo room type — it has no physical location, so Building, Floor, and Room Features aren't applicable.
+                      This is a Pseudo room type — it has no physical location, so Building, Floor, and Room Features aren&apos;t applicable.
                     </p>
                   ) : (
                     <>

@@ -333,7 +333,7 @@ export default function RevenueDashboard() {
                 <div className="grid gap-2 border rounded-lg p-4 bg-muted/30">
                   <Label>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></Label>
                   <p className="text-xs text-muted-foreground mb-1">
-                    Instead of its own Price Calendar, this plan's price is computed live as the parent plan's price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
+                    Instead of its own Price Calendar, this plan&apos;s price is computed live as the parent plan&apos;s price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
                   </p>
                   <SearchableSelect
                     value={form.parentRatePlanId}

@@ -215,8 +215,8 @@ export function TaxManager() {
                 <DialogDescription>
                   A profile can hold one or more tax lines, applied together on any charge code
                   that uses it instead of the default Maldives Tax. Each line is either a flat
-                  percentage of the subtotal ("On Subtotal") or a percentage of the running total
-                  so far ("On Subtotal + Prior Lines") — the same relationship Service Charge and
+                  percentage of the subtotal (&quot;On Subtotal&quot;) or a percentage of the running total
+                  so far (&quot;On Subtotal + Prior Lines&quot;) — the same relationship Service Charge and
                   GST already have.
                 </DialogDescription>
               </DialogHeader>
