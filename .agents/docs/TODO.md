@@ -56,6 +56,28 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
   concurrent write can surface as a DB-lock 5xx instead of a clean 409 — needs DB
   busy-timeout/retry tuning (infra-level, deferred).
 
+## Property Availability page + Stop Sale (2026-07-26) — DONE, with follow-ups
+
+Shipped a new **Availability** page (`/dashboard/availability`, new `AVAILABILITY` RBAC
+module): a Date × Room Type pivot of available rooms, expandable to Arrivals / Occupancy /
+Departures / Adults / Children / Infants (House + per type), tape-chart-themed, plus
+**Stop Sale** (Open/Closed) restrictions per date at property or room-type level.
+`AvailabilityRestriction` model (presence = Closed), `src/lib/restrictions.ts`,
+`GET /api/availability`, `POST|DELETE /api/availability/restrictions`. Enforced as a HARD
+block in `POST` + `PUT /api/reservations`. See DECISIONS.md (2026-07-26) for the rules.
+Tests: `tests/business-rules/availability-restrictions.test.ts` (4). `tsc` clean.
+
+**Deferred / open follow-ups (deliberately out of scope for v1, don't build without a nod):**
+- **Stop Sale enforcement is only on the direct reservation create/edit path.** Group
+  pickup (`POST /api/groups/[id]/pickup`) and the walk-in booking flow create/hold
+  inventory through their own paths and do **not** yet check `findStopSaleConflicts`. If the
+  owner wants closures to block those too, wire the same guard in.
+- **Restriction types are Open/Closed only.** CTA (Closed-to-Arrival), CTD, and min-stay
+  were explicitly deferred — the model/UI would need to grow.
+- **No mobile-specific layout** — the grid uses horizontal scroll like the tape chart; a
+  dedicated mobile list (as tape chart has) was not built.
+- **Availability grid excludes pseudo room types** (no physical rooms) by design.
+
 ## Spa + Excursions demo pass (2026-07-25)
 
 Both modules were made functionally identical and demo-ready. Both now share the same

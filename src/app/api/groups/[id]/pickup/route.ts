@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability"
+import { findStopSaleConflicts } from "@/lib/restrictions"
 import { allocateSequenceNumber } from "@/lib/document-sequence"
 import { materializeReservationAllocations } from "@/lib/allocations-server"
 import { logActivity } from "@/lib/activity-log"
@@ -109,6 +110,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!room || room.propertyId !== group.propertyId || room.status === "OUT_OF_SERVICE") {
         return NextResponse.json({ error: "Room does not belong to this property or is out of service" }, { status: 400 })
       }
+    }
+
+    // Stop-Sale is a HARD block — a closed date can't be sold, even via a group pickup.
+    const stopSaleConflicts = await findStopSaleConflicts({
+      propertyId: group.propertyId,
+      segments: [{ roomTypeId, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
+    })
+    if (stopSaleConflicts.length > 0) {
+      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 })
     }
 
     // Same overbooking guards as an ordinary reservation — a group pickup consumes

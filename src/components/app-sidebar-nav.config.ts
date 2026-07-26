@@ -1,5 +1,6 @@
 import {
   Calculator,
+  CalendarCheck,
   CalendarDays,
   ClipboardList,
   Compass,
@@ -51,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Front Desk", url: "/dashboard/front-office", icon: ConciergeBell, module: "FRONT_DESK" },
       { title: "Reservations", url: "/dashboard/reservations", icon: CalendarDays, module: "RESERVATIONS" },
       { title: "Tape Chart", url: "/dashboard/reservations/tape-chart", icon: LayoutGrid, module: "TAPE_CHART" },
+      { title: "Availability", url: "/dashboard/availability", icon: CalendarCheck, module: "AVAILABILITY" },
       { title: "Group Blocks", url: "/dashboard/groups", icon: UsersRound, module: "GROUP_BLOCKS" },
       { title: "Client Relations", url: "/dashboard/profiles", icon: Contact, module: "PROFILES" },
     ],

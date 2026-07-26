@@ -293,6 +293,9 @@ model Property {
   currencyExchanges            CurrencyExchange[]
   allocations                  Allocation[]
   feeRules                     PropertyFeeRule[]
+  // Stop-Sale / availability restrictions (see AvailabilityRestriction) — a row's
+  // presence closes that date for sale, property-wide or per room type.
+  availabilityRestrictions     AvailabilityRestriction[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles          Profile[]
@@ -381,6 +384,9 @@ model RoomType {
   // Assignments physically in another room type but billed AS this type (kept rate on a room move).
   chargeAssignments RoomAssignment[]  @relation("AssignmentChargeRoomType")
   blockHolds        GroupBlockRoom[]
+  // Per-room-type Stop-Sale rows (roomTypeId set) — property-level closures have a null
+  // roomTypeId and don't appear here.
+  availabilityRestrictions AvailabilityRestriction[]
   // Room-specific features — Bed Type, View, and Amenities are all multi-select, drawn
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
@@ -786,6 +792,33 @@ model PriceCalendar {
   extraChildPrice Float?
 
   @@unique([ratePlanId, roomTypeId, date])
+}
+
+// Stop-Sale / availability restriction. A row's PRESENCE means the date is CLOSED (not
+// open to sell); its absence means OPEN — the default — so OPEN is never stored and
+// "set to Open" simply deletes the row. Open/Closed is the only restriction type today
+// (no CTA/CTD/min-stay yet). Enforced as a HARD block on new reservations (see
+// src/lib/restrictions.ts + api/reservations), and surfaced on the Availability grid.
+//
+// roomTypeId null = a PROPERTY-WIDE closure that date (blocks every room type). A row
+// with roomTypeId set closes only that one type. Dates are UTC midnights, matching the
+// PriceCalendar/Reservation convention. Note: SQLite treats NULLs as distinct in the
+// unique index, so the @@unique below does not by itself prevent duplicate
+// property-level rows for a date — the API create-if-absent / delete-all-matching flow
+// keeps them idempotent (a duplicate "closed" row is harmless; delete removes them all).
+model AvailabilityRestriction {
+  id              String    @id @default(uuid())
+  propertyId      String
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomTypeId      String?
+  roomType        RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([propertyId, roomTypeId, date])
+  @@index([propertyId, date])
 }
 
 // ReservationStatus: RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED

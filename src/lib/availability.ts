@@ -137,21 +137,27 @@ export type BlockHoldWindow = { startMs: number; endMs: number; outstanding: num
 // window. Each entry blocks `outstanding` rooms for every night in [startMs, endMs).
 // A cancelled block never holds; a passed cutoff releases the hold; the picked-up
 // portion is subtracted (those rooms are already counted as real assignments).
+//
+// `blockStatusIn` narrows which block statuses count. Default = every live block
+// (TENTATIVE + DEFINITE — the booking overbook guard treats a tentative hold as a soft
+// block). The Property Availability grid passes ["DEFINITE"] so only firm blocks reduce
+// the displayed availability.
 export async function outstandingBlockHolds(opts: {
   propertyId: string;
   roomTypeId: string;
   windowStart: number;
   windowEnd: number;
   excludeGroupBlockId?: string | null;
+  blockStatusIn?: string[];
 }): Promise<BlockHoldWindow[]> {
-  const { propertyId, roomTypeId, windowStart, windowEnd, excludeGroupBlockId } = opts;
+  const { propertyId, roomTypeId, windowStart, windowEnd, excludeGroupBlockId, blockStatusIn } = opts;
   const holdRows = await prisma.groupBlockRoom.findMany({
     where: {
       roomTypeId,
       quantity: { gt: 0 },
       groupBlock: {
         propertyId,
-        status: { notIn: ["CANCELLED", "LOST"] },
+        status: blockStatusIn ? { in: blockStatusIn } : { notIn: ["CANCELLED", "LOST"] },
         startDate: { lt: new Date(windowEnd) },
         endDate: { gt: new Date(windowStart) },
         ...(excludeGroupBlockId ? { id: { not: excludeGroupBlockId } } : {}),

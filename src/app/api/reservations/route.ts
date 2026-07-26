@@ -4,6 +4,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
+import { findStopSaleConflicts } from "@/lib/restrictions";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
@@ -204,18 +205,25 @@ export async function POST(request: Request) {
       }
     }
 
+    const bookingSegments = assignmentsInput.map((a: { roomTypeId: string; startDate: string | Date; endDate: string | Date }) => ({
+      roomTypeId: a.roomTypeId,
+      startDate: new Date(a.startDate),
+      endDate: new Date(a.endDate),
+    }));
+
+    // Stop-Sale is a HARD block (no acknowledge/override) — checked FIRST so a closed
+    // date fails fast rather than after the soft overbook prompt below. A date closed for
+    // a room type or property-wide cannot be sold.
+    const stopSaleConflicts = await findStopSaleConflicts({ propertyId: body.propertyId, segments: bookingSegments });
+    if (stopSaleConflicts.length > 0) {
+      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 });
+    }
+
     // Type-level overbooking is a SOFT warning: a property may deliberately oversell a
     // room type (see src/lib/availability.ts). Staff must acknowledge it (acknowledgeOverbook)
     // — the physical same-room double-booking guard below stays hard. First pass without
     // acknowledgement returns 409 + requiresOverbookConfirm so the UI can confirm.
-    const availabilityConflicts = await findTypeAvailabilityConflicts({
-      propertyId: body.propertyId,
-      segments: assignmentsInput.map((a: { roomTypeId: string; startDate: string | Date; endDate: string | Date }) => ({
-        roomTypeId: a.roomTypeId,
-        startDate: new Date(a.startDate),
-        endDate: new Date(a.endDate),
-      })),
-    });
+    const availabilityConflicts = await findTypeAvailabilityConflicts({ propertyId: body.propertyId, segments: bookingSegments });
     if (availabilityConflicts.length > 0 && !body.acknowledgeOverbook) {
       return NextResponse.json(
         { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },

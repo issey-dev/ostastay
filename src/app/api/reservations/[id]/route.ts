@@ -5,6 +5,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
+import { findStopSaleConflicts } from "@/lib/restrictions";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
 
@@ -234,20 +235,36 @@ export async function PUT(
       }
     }
 
-    // Type-level overbooking guard (excluding this reservation's own existing
-    // assignments) — an edit that grows the stay or switches room type must still fit
-    // the property's sellable inventory. See src/lib/availability.ts.
+    const editSegments = data.assignments.map((a) => ({
+      roomTypeId: a.roomTypeId,
+      startDate: new Date(a.startDate),
+      endDate: new Date(a.endDate),
+    }));
+
+    // Stop-Sale is a HARD block (no override) — checked FIRST so a closed date fails fast
+    // before the soft overbook prompt. Only nights/room-types this edit NEWLY sells count;
+    // a segment the reservation already held on a since-closed date is exempt.
+    const stopSaleConflicts = await findStopSaleConflicts({
+      propertyId: existing.propertyId,
+      segments: editSegments,
+      existingSegments: existing.assignments.map((a) => ({
+        roomTypeId: a.roomTypeId,
+        startDate: a.startDate,
+        endDate: a.endDate,
+      })),
+    });
+    if (stopSaleConflicts.length > 0) {
+      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 });
+    }
+
+    // Type-level overbooking guard (excluding this reservation's own existing assignments)
+    // — an edit that grows the stay or switches room type must still fit the property's
+    // sellable inventory. Soft, acknowledgeable (physical room conflicts above stay hard).
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: existing.propertyId,
-      segments: data.assignments.map((a) => ({
-        roomTypeId: a.roomTypeId,
-        startDate: new Date(a.startDate),
-        endDate: new Date(a.endDate),
-      })),
+      segments: editSegments,
       excludeReservationId: id,
     });
-    // Type-level overbooking is a soft, acknowledgeable warning (physical room conflicts
-    // above stay hard).
     if (availabilityConflicts.length > 0 && !(body as { acknowledgeOverbook?: boolean }).acknowledgeOverbook) {
       return NextResponse.json(
         { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
