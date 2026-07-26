@@ -150,6 +150,15 @@ export async function PATCH(
       }
     }
 
+    // Closing a City-Ledger MASTER (group) folio with a payee finalizes it into a debtor
+    // invoice for that account — it then shows in Debtors and production reports. Mirrors
+    // how a reservation checkout finalizes a City-Ledger guest folio.
+    const effectiveSettlement = settlementMethod ?? existing.settlementMethod;
+    const effectivePayee = payeeProfileId !== undefined ? payeeProfileId : existing.payeeProfileId;
+    const finalizeDebtor =
+      isClosed === true && !existing.isClosed && existing.isMaster &&
+      effectiveSettlement === "CITY_LEDGER" && !!effectivePayee;
+
     const updatedFolio = await prisma.folio.update({
       where: { id },
       data: {
@@ -157,6 +166,7 @@ export async function PATCH(
         ...(isClosed !== undefined && { isClosed }),
         ...(closedBusinessDate !== undefined && { closedBusinessDate }),
         ...(settlementMethod !== undefined && { settlementMethod }),
+        ...(finalizeDebtor && { isDebtorAccount: true }),
       },
       include: {
         payeeProfile: true,

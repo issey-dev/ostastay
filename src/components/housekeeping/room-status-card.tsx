@@ -9,9 +9,12 @@ type RoomStatusCardProps = {
   onToggleSelect?: (roomId: string) => void
   onEditMaintenance?: (ticket: any) => void
   onCompleteTask?: (taskId: string) => void
+  /** The property's business date (YYYY-MM-DD) — the operational "today" that
+   *  drives due-out / arrival-today flags. Falls back to the wall clock. */
+  businessDate?: string | null
 }
 
-export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelect, onEditMaintenance, onCompleteTask }: RoomStatusCardProps) {
+export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelect, onEditMaintenance, onCompleteTask, businessDate }: RoomStatusCardProps) {
   const [loading, setLoading] = useState(false)
 
   // The board's assignments include both the current IN_HOUSE stay and any
@@ -21,10 +24,16 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
   const arrivingAssignment = assignments.find((a) => a.reservation?.status === "RESERVED")
   const isOccupied = !!activeAssignment
   const hasSharer = isOccupied && activeAssignment.reservation?.accompanyingGuests?.length > 0
+  const occ = isOccupied ? activeAssignment.reservation : null
+  const adults = occ?.adults ?? 0
+  const children = occ?.children ?? 0
+  const infants = occ?.infants ?? 0
 
   // Priority signals so attendants clean in the right order: rooms needed for an
   // arrival first, due-outs next (they'll need a departure clean soon), stayovers last.
-  const todayIso = new Date().toISOString().slice(0, 10)
+  // Anchored to the property's business date (the operational "today"), not the wall
+  // clock, so the flags match the occupancy the board is showing.
+  const todayIso = (businessDate ?? new Date().toISOString()).slice(0, 10)
   const isDueOut = isOccupied && activeAssignment.reservation?.checkOutDate?.slice(0, 10) === todayIso
   const isStayover = isOccupied && !isDueOut
   const hasArrivalToday = !!arrivingAssignment && arrivingAssignment.reservation?.checkInDate?.slice(0, 10) === todayIso
@@ -131,9 +140,14 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
               {isDueOut && <span className="bg-warning-muted text-warning px-1.5 py-0.5 rounded-none text-[10px] font-bold">Due Out</span>}
               {isStayover && <span className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded-none text-[10px]">Stayover</span>}
             </div>
-            <p className="text-xs text-muted-foreground mt-1 truncate">
+            <p className="text-xs font-medium text-foreground mt-1 truncate">
               {activeAssignment.reservation.primaryGuest?.firstName} {activeAssignment.reservation.primaryGuest?.lastName}
             </p>
+            <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold text-muted-foreground">
+              <span className="bg-muted px-1.5 py-0.5 rounded-none">{adults} Adult{adults === 1 ? "" : "s"}</span>
+              {children > 0 && <span className="bg-muted px-1.5 py-0.5 rounded-none">{children} Child{children === 1 ? "" : "ren"}</span>}
+              {infants > 0 && <span className="bg-muted px-1.5 py-0.5 rounded-none">{infants} Infant{infants === 1 ? "" : "s"}</span>}
+            </div>
           </div>
         ) : (
           <div className="bg-background/40 rounded-md p-2 mt-2 border border-dashed border-border">

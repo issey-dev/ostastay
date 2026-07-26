@@ -7,6 +7,7 @@ import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
+import { applyEodHousekeepingShift } from "@/lib/eod-housekeeping"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -160,6 +161,8 @@ export async function POST(request: Request) {
           orderBy: { startDate: 'desc' },
           include: {
             roomType: true,
+            // "Charge as" room type (kept-rate room move) — pricing resolves off this when set.
+            chargeRoomType: true,
             ratePlan: { include: { chargeCode: { include: taxInclude } } },
           }
         },
@@ -241,6 +244,18 @@ export async function POST(request: Request) {
     }
     const routeTo = (reservationId: string, chargeCodeId: string, defaultFolioId: string) =>
       routingMap.get(`${reservationId}:${chargeCodeId}`) ?? defaultFolioId
+
+    // Group pickups default-route their charges to the block's master folio (the PM
+    // account), unless the pickup opted out (groupBillToMaster=false). An explicit
+    // FolioRoutingRule still wins over this via routeTo above.
+    const groupBlockIds = [...new Set(activeReservations.map((r) => r.groupBlockId).filter(Boolean))] as string[]
+    const masterFolios = groupBlockIds.length
+      ? await prisma.folio.findMany({
+          where: { groupBlockId: { in: groupBlockIds }, isMaster: true, isClosed: false },
+          select: { id: true, groupBlockId: true },
+        })
+      : []
+    const masterFolioByBlock = new Map(masterFolios.map((f) => [f.groupBlockId!, f.id]))
 
     // Transport charges due for realization. Hotel-booked, priced, charge-coded legs not
     // yet posted, whose realization date — transport time → carrier time → check-in
@@ -324,6 +339,7 @@ export async function POST(request: Request) {
     // transaction — a failure anywhere rolls back every posting, so the ledger can
     // never be left half-audited. (Reads stay outside for speed; writes are cheap.)
     let log
+    let hkShift: { occupiedToDirty: number; vacantShifted: number } = { occupiedToDirty: 0, vacantShifted: 0 }
     try {
       log = await prisma.$transaction(async (tx) => {
         for (const res of chargeableReservations) {
@@ -343,7 +359,10 @@ export async function POST(request: Request) {
           // any other stay; the transfer to a debtor account only happens at checkout
           // (see reservations/[id]/check-out/route.ts), not here. Debtors intentionally
           // never sees anything from an in-house reservation.
-          const targetFolioId = res.folios[0].id
+          // Default posting target: the block master folio for a bill-to-master group
+          // pickup, else the reservation's own folio. routeTo can still redirect per rule.
+          const groupMasterFolioId = res.groupBlockId && res.groupBillToMaster ? masterFolioByBlock.get(res.groupBlockId) : undefined
+          const targetFolioId = groupMasterFolioId ?? res.folios[0].id
 
           // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
           // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is
@@ -353,6 +372,10 @@ export async function POST(request: Request) {
           const activeRatePlan = activeAssignment.ratePlan
           const isDerivedRatePlan = !!activeRatePlan.parentRatePlanId
           const calendarRatePlanId = isDerivedRatePlan ? activeRatePlan.parentRatePlanId! : activeAssignment.ratePlanId
+          // Price against the "charge as" room type when set (kept-rate move), else the
+          // physical room type. Governs the PriceCalendar lookup AND base occupancy below.
+          const chargeRoomTypeId = activeAssignment.chargeRoomTypeId ?? activeAssignment.roomTypeId
+          const chargeRoomType = activeAssignment.chargeRoomType ?? activeAssignment.roomType
 
           // Room charge posts against the rate plan's own accommodation code when set,
           // else the enterprise fallback resolved above.
@@ -364,7 +387,7 @@ export async function POST(request: Request) {
           // occupancy surcharges are a separate additive charge tied to today's calendar
           // entry — a manual base-rate override shouldn't silently suppress them.
           const calendarEntry = await tx.priceCalendar.findFirst({
-            where: { ratePlanId: calendarRatePlanId, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
+            where: { ratePlanId: calendarRatePlanId, roomTypeId: chargeRoomTypeId, date: todayRange }
           })
 
           let inputAmount = activeAssignment.overrideRate
@@ -375,7 +398,7 @@ export async function POST(request: Request) {
             // (skip the extra lookup if that's already what we just checked above).
             if (baseRoomPrice == null && baseRatePlan && calendarRatePlanId !== baseRatePlan.id) {
               const baseCalendarEntry = await tx.priceCalendar.findFirst({
-                where: { ratePlanId: baseRatePlan.id, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
+                where: { ratePlanId: baseRatePlan.id, roomTypeId: chargeRoomTypeId, date: todayRange }
               })
               baseRoomPrice = baseCalendarEntry?.price
             }
@@ -451,7 +474,7 @@ export async function POST(request: Request) {
           // "included children" baseline, same convention as Green Tax). Both rates are
           // optional per PriceCalendar day (no RoomType-level fallback), so this is a
           // no-op unless the property has actually configured them for today.
-          const extraAdults = Math.max(0, res.adults - activeAssignment.roomType.baseOccupancy)
+          const extraAdults = Math.max(0, res.adults - chargeRoomType.baseOccupancy)
           const extraOccupancyInput =
             extraAdults * (calendarEntry?.extraAdultPrice ?? 0) + res.children * (calendarEntry?.extraChildPrice ?? 0)
 
@@ -623,6 +646,16 @@ export async function POST(request: Request) {
           }
         })
 
+        // 3b. Optional housekeeping auto-shift (per-property setting): occupied rooms
+        // go Dirty for daily service, vacant sellable rooms step down / reset per the
+        // configured mode. A no-op when the property has it OFF (the default).
+        hkShift = await applyEodHousekeepingShift(tx, {
+          propertyId,
+          auditDate,
+          mode: property.eodHousekeepingMode,
+          targetStatus: property.eodHousekeepingTargetStatus,
+        })
+
         // 4. Roll THIS property's business date forward one day — the manual EOD roll.
         // Per-property, so it never affects a sibling property. EnterpriseSettings.
         // systemDate (the server date) is deliberately left untouched now.
@@ -670,6 +703,7 @@ export async function POST(request: Request) {
       success: true,
       log,
       noShowsProcessed: noShowCandidates.length,
+      ...((hkShift.occupiedToDirty > 0 || hkShift.vacantShifted > 0) && { housekeepingShift: hkShift }),
       ...(transportChargesPosted > 0 && { transportChargesPosted }),
       ...(noShowCandidates.length > 0 && {
         noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),

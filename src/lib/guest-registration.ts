@@ -37,7 +37,15 @@ export async function assignRegistrationNumbers(
       where: { propertyId_sequenceType: { propertyId, sequenceType: "GUEST_REG_NO" } },
     });
     // Reset the counter on the first assignment of a new year.
-    let current = seq && seq.resetYear === year ? seq.currentValue : 0;
+    const seqStart = seq && seq.resetYear === year ? seq.currentValue : 0;
+    // Never trust the sequence blindly: if registrations already exist for this year
+    // (e.g. from imported/seeded data that didn't advance the sequence), start above
+    // their maximum so we can't collide on @@unique([propertyId, year, registrationNo]).
+    const existingMax = await tx.guestRegistration.aggregate({
+      where: { propertyId, year },
+      _max: { registrationNo: true },
+    });
+    let current = Math.max(seqStart, existingMax._max.registrationNo ?? 0);
 
     for (const res of arrivals) {
       // Primary guest first, then accompanying guests — deduped (a profile can't take

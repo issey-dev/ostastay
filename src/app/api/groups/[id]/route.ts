@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log"
+import { GROUP_STATUSES, GROUP_RELEASING_STATUSES, GROUP_STATUS_LABEL, canTransitionGroupStatus, type GroupStatus } from "@/lib/group-status"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,7 +32,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               include: { paymentMethod: true }
             }
           }
-        }
+        },
+        roomHolds: {
+          include: { roomType: { select: { id: true, name: true, code: true } } },
+        },
+        payeeProfile: { select: { upid: true, firstName: true, lastName: true, companyName: true } },
       }
     })
 
@@ -47,11 +52,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const updateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  status: z.enum(["TENTATIVE", "DEFINITE", "CANCELLED"]).optional(),
+  status: z.enum(GROUP_STATUSES).optional(),
   startDate: z.string().min(1).optional(),
   endDate: z.string().min(1).optional(),
   cutoffDate: z.string().nullable().optional(),
   totalRoomsHeld: z.number().int().min(0).optional(),
+  // Per-room-type holds — when provided, they replace the block's holds entirely and
+  // totalRoomsHeld becomes their sum.
+  roomHolds: z.array(z.object({ roomTypeId: z.string().min(1), quantity: z.number().int().min(0) })).optional(),
+  // City-Ledger account for the master bill (null = clear / bill direct).
+  payeeProfileId: z.string().nullable().optional(),
 })
 
 // A block was previously frozen at creation — status, cutoff, and rooms-held could
@@ -74,17 +84,33 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
+    // Enforce the status state machine (see src/lib/group-status.ts).
+    if (data.status && data.status !== group.status && !canTransitionGroupStatus(group.status, data.status)) {
+      return NextResponse.json(
+        { error: `Cannot change status from ${GROUP_STATUS_LABEL[group.status as GroupStatus] ?? group.status} to ${GROUP_STATUS_LABEL[data.status]}.` },
+        { status: 400 }
+      )
+    }
+
     const activePickups = await prisma.reservation.count({
       where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
     })
 
-    if (data.status === "CANCELLED" && activePickups > 0) {
+    // Releasing a block (Lost / Cancelled) can't strand live pickups.
+    if (data.status && GROUP_RELEASING_STATUSES.includes(data.status) && activePickups > 0) {
+      const verb = data.status === "LOST" ? "mark lost" : "cancel"
       return NextResponse.json(
-        { error: `Cannot cancel a block with ${activePickups} active pickup${activePickups > 1 ? "s" : ""} — cancel those reservations first.` },
+        { error: `Cannot ${verb} a block with ${activePickups} active pickup${activePickups > 1 ? "s" : ""} — cancel those reservations first.` },
         { status: 400 }
       )
     }
-    if (data.totalRoomsHeld != null && data.totalRoomsHeld < activePickups) {
+    // Per-type holds (when provided) are the source of truth; totalRoomsHeld is their sum.
+    const cleanedHolds = data.roomHolds
+      ? data.roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })).filter((h) => h.quantity > 0)
+      : null
+    const effectiveHeld = cleanedHolds ? cleanedHolds.reduce((s, h) => s + h.quantity, 0) : data.totalRoomsHeld
+
+    if (effectiveHeld != null && effectiveHeld < activePickups) {
       return NextResponse.json(
         { error: `Rooms held cannot go below the ${activePickups} already picked up.` },
         { status: 400 }
@@ -97,6 +123,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "End date must be after start date" }, { status: 400 })
     }
 
+    // City-Ledger account: validate a credit account of this enterprise when set.
+    if (data.payeeProfileId) {
+      const payee = await prisma.profile.findUnique({ where: { upid: data.payeeProfileId } })
+      if (!payee || payee.enterpriseId !== ctx.enterpriseId || !payee.isCreditAccount) {
+        return NextResponse.json({ error: "Selected account is not a valid credit account for this enterprise." }, { status: 400 })
+      }
+    }
+
     const updated = await prisma.groupBlock.update({
       where: { id },
       data: {
@@ -107,9 +141,29 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(data.cutoffDate !== undefined
           ? { cutoffDate: data.cutoffDate ? new Date(data.cutoffDate) : null }
           : {}),
-        ...(data.totalRoomsHeld != null ? { totalRoomsHeld: data.totalRoomsHeld } : {}),
+        ...(effectiveHeld != null ? { totalRoomsHeld: effectiveHeld } : {}),
+        // Replace the block's holds wholesale when a new set is supplied.
+        ...(cleanedHolds ? { roomHolds: { deleteMany: {}, create: cleanedHolds } } : {}),
+        ...(data.payeeProfileId !== undefined ? { payeeProfileId: data.payeeProfileId || null } : {}),
       },
     })
+
+    // Keep an OPEN, not-yet-finalized master folio in sync with the block's account so
+    // the settlement target reflects the current linkage (no effect once it's closed).
+    if (data.payeeProfileId !== undefined) {
+      const openMaster = await prisma.folio.findFirst({
+        where: { groupBlockId: id, isMaster: true, isClosed: false, isDebtorAccount: false },
+        select: { id: true },
+      })
+      if (openMaster) {
+        await prisma.folio.update({
+          where: { id: openMaster.id },
+          data: data.payeeProfileId
+            ? { settlementMethod: "CITY_LEDGER", payeeProfileId: data.payeeProfileId }
+            : { settlementMethod: "DIRECT", payeeProfileId: null },
+        })
+      }
+    }
 
     await logActivity({
       ctx,

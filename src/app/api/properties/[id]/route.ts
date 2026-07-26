@@ -33,6 +33,14 @@ export async function PUT(
       return NextResponse.json({ error: "allocationCalculationMode must be RATE_PLAN or MEAL_PLAN" }, { status: 400 })
     }
 
+    if (body.eodHousekeepingMode !== undefined && !["OFF", "STEP_DOWN", "SET_STATUS"].includes(body.eodHousekeepingMode)) {
+      return NextResponse.json({ error: "eodHousekeepingMode must be OFF, STEP_DOWN or SET_STATUS" }, { status: 400 })
+    }
+    // SET_STATUS needs a valid sellable target; the shift never writes OOO/OOS.
+    if (body.eodHousekeepingMode === "SET_STATUS" && !["CLEAN", "DIRTY", "INSPECTED"].includes(body.eodHousekeepingTargetStatus)) {
+      return NextResponse.json({ error: "eodHousekeepingTargetStatus must be CLEAN, DIRTY or INSPECTED when mode is SET_STATUS" }, { status: 400 })
+    }
+
     // enterpriseId is deliberately never accepted here — a property can never be
     // reassigned to a different enterprise via this route.
     const property = await prisma.property.update({
@@ -54,6 +62,15 @@ export async function PUT(
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
         requireInspectionOnCheckIn: body.requireInspectionOnCheckIn !== undefined ? !!body.requireInspectionOnCheckIn : undefined,
         allocationCalculationMode: body.allocationCalculationMode,
+        eodHousekeepingMode: body.eodHousekeepingMode,
+        // Clear the target unless we're in SET_STATUS mode, so a stale target can't
+        // linger after switching to OFF/STEP_DOWN.
+        eodHousekeepingTargetStatus:
+          body.eodHousekeepingMode === undefined
+            ? undefined
+            : body.eodHousekeepingMode === "SET_STATUS"
+              ? body.eodHousekeepingTargetStatus
+              : null,
       },
     })
 

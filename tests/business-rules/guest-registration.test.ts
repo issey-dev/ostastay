@@ -64,6 +64,39 @@ describe("Guest Registration No (Green Tax) assignment at EOD", () => {
     expect(await prisma.guestRegistration.count({ where: { propertyId } })).toBe(3);
   });
 
+  it("starts above existing registrations when the sequence counter is stale (no unique collision)", async () => {
+    // Registrations already exist for the year but the GUEST_REG_NO sequence counter
+    // lags behind them (e.g. imported/seeded data that didn't advance the sequence).
+    // Assignment must resume above the real maximum, not blindly from the counter, or
+    // it collides on @@unique([propertyId, year, registrationNo]) — the "Internal
+    // server error" this guards against.
+    const staleEnt = await prisma.enterprise.create({ data: { name: "Stale", slug: `test-stale-${uniq()}`, type: "STANDARD" } });
+    const staleProp = await prisma.property.create({ data: { enterpriseId: staleEnt.id, name: "Stale Prop", code: `ST-${uniq()}`, legalName: "ST LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: BIZ } });
+    const staleRt = (await prisma.roomType.create({ data: { propertyId: staleProp.id, name: "Std", code: "STD", maxOccupancy: 2, isPseudo: false } })).id;
+    const staleRp = (await prisma.ratePlan.create({ data: { propertyId: staleProp.id, code: "BAR", name: "BAR" } })).id;
+    const priorGuest = (await prisma.profile.create({ data: { enterpriseId: staleEnt.id, profileType: "GUEST", firstName: "Prior", lastName: "Guest" } })).upid;
+    const newGuest = (await prisma.profile.create({ data: { enterpriseId: staleEnt.id, profileType: "GUEST", firstName: "New", lastName: "Guest" } })).upid;
+
+    // A prior reservation that already holds registrationNo 1 and 2 for the year...
+    const priorRoom = await prisma.room.create({ data: { propertyId: staleProp.id, roomTypeId: staleRt, roomNumber: `P${uniq().slice(-4)}`, status: "CLEAN" } });
+    const priorRes = await prisma.reservation.create({ data: { propertyId: staleProp.id, confirmationNo: `PR-${uniq()}`, primaryGuestId: priorGuest, checkInDate: new Date(BIZ.getTime() - 86_400_000), checkOutDate: new Date(BIZ.getTime() + 86_400_000), status: "IN_HOUSE", adults: 1, assignments: { create: { roomTypeId: staleRt, roomId: priorRoom.id, ratePlanId: staleRp, startDate: BIZ, endDate: new Date(BIZ.getTime() + 86_400_000) } } } });
+    await prisma.guestRegistration.create({ data: { propertyId: staleProp.id, reservationId: priorRes.id, profileId: priorGuest, registrationNo: 1, year: 2026, isPrimary: true, businessDate: BIZ } });
+    await prisma.guestRegistration.create({ data: { propertyId: staleProp.id, reservationId: priorRes.id, profileId: newGuest, registrationNo: 2, year: 2026, isPrimary: false, businessDate: BIZ } });
+    // ...but the sequence counter is stuck at 0 (the out-of-sync condition).
+    await prisma.propertySequence.create({ data: { propertyId: staleProp.id, sequenceType: "GUEST_REG_NO", currentValue: 0, resetYear: 2026 } });
+
+    // A fresh arrival to number today.
+    const room = await prisma.room.create({ data: { propertyId: staleProp.id, roomTypeId: staleRt, roomNumber: `A${uniq().slice(-4)}`, status: "CLEAN" } });
+    const arrival = await prisma.reservation.create({ data: { propertyId: staleProp.id, confirmationNo: `AR-${uniq()}`, primaryGuestId: newGuest, checkInDate: BIZ, checkOutDate: new Date(BIZ.getTime() + 86_400_000), status: "IN_HOUSE", adults: 1, checkedInAt: BIZ, assignments: { create: { roomTypeId: staleRt, roomId: room.id, ratePlanId: staleRp, startDate: BIZ, endDate: new Date(BIZ.getTime() + 86_400_000) } } } });
+
+    const res = await assignRegistrationNumbers(staleProp.id, BIZ);
+    expect(res.assigned).toBe(1);
+    const row = await prisma.guestRegistration.findFirst({ where: { reservationId: arrival.id } });
+    expect(row!.registrationNo).toBe(3); // resumes above the existing max (2), no collision
+    const seq = await prisma.propertySequence.findUnique({ where: { propertyId_sequenceType: { propertyId: staleProp.id, sequenceType: "GUEST_REG_NO" } } });
+    expect(seq!.currentValue).toBe(3); // counter is healed
+  });
+
   it("resets the sequence at the start of a new year", async () => {
     const nextYear = new Date(Date.UTC(2027, 0, 3)); // 2027-01-03
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rtId, roomNumber: `NY${uniq().slice(-4)}`, status: "CLEAN" } });

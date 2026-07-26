@@ -24,6 +24,8 @@ type PropertyDetail = {
   starRating: number | null
   pricesIncludeTaxes: boolean
   requireInspectionOnCheckIn: boolean
+  eodHousekeepingMode: string
+  eodHousekeepingTargetStatus: string | null
 }
 
 // Edits the CURRENT property's own profile directly (name, code, times, logo, contact
@@ -150,6 +152,52 @@ export function PropertyProfileManager() {
           checked={detail.requireInspectionOnCheckIn}
           onCheckedChange={(checked) => setDetail({ ...detail, requireInspectionOnCheckIn: !!checked })}
         />
+      </div>
+
+      <div className="rounded-md border border-border p-3 space-y-3">
+        <div>
+          <Label htmlFor="eodHousekeepingMode">Night Audit — Auto Room Status</Label>
+          <p className="text-xs text-muted-foreground">
+            When End-of-Day runs, automatically downgrade housekeeping statuses. Occupied rooms always become Dirty for
+            daily service; the rule below applies to <strong>vacant rooms only</strong>. Out-of-Order / Out-of-Service
+            rooms are never changed.
+          </p>
+        </div>
+        <select
+          id="eodHousekeepingMode"
+          className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+          value={detail.eodHousekeepingMode}
+          onChange={(e) => {
+            const mode = e.target.value
+            setDetail({
+              ...detail,
+              eodHousekeepingMode: mode,
+              // Default a target the moment SET_STATUS is chosen so the form is never
+              // in an invalid (SET_STATUS + no target) state; clear it otherwise.
+              eodHousekeepingTargetStatus:
+                mode === "SET_STATUS" ? (detail.eodHousekeepingTargetStatus ?? "DIRTY") : null,
+            })
+          }}
+        >
+          <option value="OFF">Off — don&apos;t change statuses</option>
+          <option value="STEP_DOWN">Move one status down (Inspected → Clean, Clean → Dirty, Dirty stays)</option>
+          <option value="SET_STATUS">Set all vacant rooms to a specific status…</option>
+        </select>
+        {detail.eodHousekeepingMode === "SET_STATUS" && (
+          <div className="space-y-1">
+            <Label htmlFor="eodHousekeepingTargetStatus" className="text-xs">Target status for vacant rooms</Label>
+            <select
+              id="eodHousekeepingTargetStatus"
+              className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+              value={detail.eodHousekeepingTargetStatus ?? "DIRTY"}
+              onChange={(e) => setDetail({ ...detail, eodHousekeepingTargetStatus: e.target.value })}
+            >
+              <option value="CLEAN">Clean</option>
+              <option value="DIRTY">Dirty</option>
+              <option value="INSPECTED">Inspected</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3 justify-end pt-4 border-t">

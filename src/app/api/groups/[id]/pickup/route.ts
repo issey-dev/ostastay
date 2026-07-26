@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability"
+import { findStopSaleConflicts } from "@/lib/restrictions"
 import { allocateSequenceNumber } from "@/lib/document-sequence"
 import { materializeReservationAllocations } from "@/lib/allocations-server"
 import { logActivity } from "@/lib/activity-log"
@@ -30,7 +31,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       children,
       infants,
       ratePlanId: requestedRatePlanId,
-      mealPlanCode
+      mealPlanCode,
+      billToMaster
     } = body
 
     if (!firstName || !lastName || !roomTypeId || !checkInDate || !checkOutDate) {
@@ -39,17 +41,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const group = await prisma.groupBlock.findUnique({
       where: { id },
-      include: { property: true }
+      include: { property: true, masterFolios: true }
     })
 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
+    // Pickup dates must fall within the block window.
+    const ci = new Date(checkInDate)
+    const co = new Date(checkOutDate)
+    if (co <= ci) {
+      return NextResponse.json({ error: "Check-out must be after check-in." }, { status: 400 })
+    }
+    if (ci < group.startDate || co > group.endDate) {
+      return NextResponse.json({ error: "Pickup dates must fall within the block's date range." }, { status: 400 })
+    }
+
     // Block-level guards: a cancelled block can't be picked up; a past-cutoff block
     // has released its held rooms; and a block only holds totalRoomsHeld rooms —
     // pickups beyond that are a normal reservation, not a block pickup.
-    if (group.status === "CANCELLED") {
-      return NextResponse.json({ error: "This group block is cancelled and cannot be picked up" }, { status: 400 })
+    if (group.status === "CANCELLED" || group.status === "LOST") {
+      return NextResponse.json({ error: `This group block is ${group.status === "LOST" ? "marked lost" : "cancelled"} and cannot be picked up` }, { status: 400 })
     }
     if (group.cutoffDate && new Date() > group.cutoffDate) {
       return NextResponse.json(
@@ -57,17 +69,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: 400 }
       )
     }
-    if (group.totalRoomsHeld > 0) {
+    // Block capacity: pickups can't exceed the rooms held UNLESS overbooked (confirmed).
+    if (group.totalRoomsHeld > 0 && body.acknowledgeOverbook !== true) {
       const pickedUp = await prisma.reservation.count({
         where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
       })
       if (pickedUp >= group.totalRoomsHeld) {
         return NextResponse.json(
-          { error: `This block's ${group.totalRoomsHeld} held room${group.totalRoomsHeld > 1 ? "s are" : " is"} fully picked up.` },
-          { status: 400 }
+          {
+            error: `This block's ${group.totalRoomsHeld} held room${group.totalRoomsHeld > 1 ? "s are" : " is"} fully picked up — overbook the block to add more.`,
+            requiresOverbookConfirm: true,
+          },
+          { status: 409 }
         )
       }
     }
+
+    // Gate: the block's master folio (PM account) must exist before any pickup so
+    // charges have somewhere to route. Checked after the block-state guards above so an
+    // expired/cancelled/full block reports that first. Staff create it from the block page.
+    const masterFolio = group.masterFolios.find((f) => f.isMaster && !f.isClosed)
+    if (!masterFolio) {
+      return NextResponse.json(
+        { error: "Create the group's master folio before picking up rooms." },
+        { status: 400 }
+      )
+    }
+    // Default: bill the master folio; only false when staff explicitly opt the guest out.
+    const groupBillToMaster = billToMaster !== false
 
     const roomType = await prisma.roomType.findUnique({ where: { id: roomTypeId } })
     if (!roomType || roomType.propertyId !== group.propertyId) {
@@ -83,14 +112,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
+    // Stop-Sale is a HARD block — a closed date can't be sold, even via a group pickup.
+    const stopSaleConflicts = await findStopSaleConflicts({
+      propertyId: group.propertyId,
+      segments: [{ roomTypeId, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
+    })
+    if (stopSaleConflicts.length > 0) {
+      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 })
+    }
+
     // Same overbooking guards as an ordinary reservation — a group pickup consumes
     // exactly the same physical inventory (see src/lib/availability.ts).
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: group.propertyId,
       segments: [{ roomTypeId, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
+      // This pickup draws from THIS block's held rooms — don't let the block block itself.
+      excludeGroupBlockId: id,
     })
-    if (availabilityConflicts.length > 0) {
-      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 })
+    // Type-level overbooking is a soft, acknowledgeable warning; the physical same-room
+    // guard below stays hard.
+    if (availabilityConflicts.length > 0 && body.acknowledgeOverbook !== true) {
+      return NextResponse.json({ error: availabilityConflicts.join("; "), requiresOverbookConfirm: true }, { status: 409 })
     }
     if (roomId) {
       const roomTaken = await hasRoomConflict({
@@ -142,7 +184,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     result = await prisma.$transaction(async (tx) => {
       // Re-check the held-room count INSIDE the transaction so two concurrent pickups
       // can't both claim the last held room (the pre-check above is only a fast fail).
-      if (group.totalRoomsHeld > 0) {
+      // Skipped when overbooking is acknowledged — the block is being oversold on purpose.
+      if (group.totalRoomsHeld > 0 && body.acknowledgeOverbook !== true) {
         const pickedUp = await tx.reservation.count({
           where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
         })
@@ -179,6 +222,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           confirmationNo,
           primaryGuestId: profile.upid,
           groupBlockId: id,
+          groupBillToMaster,
           checkInDate: new Date(checkInDate),
           checkOutDate: new Date(checkOutDate),
           adults: parseInt(adults) || 1,

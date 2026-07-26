@@ -5,6 +5,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
+import { findStopSaleConflicts } from "@/lib/restrictions";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
 
@@ -36,6 +37,8 @@ const RESERVATION_DETAIL_INCLUDE = {
   },
   specialRequests: true,
   transports: true,
+  // If this reservation belongs to a group block, surface its code/name subtly on the detail view.
+  groupBlock: { select: { id: true, code: true, name: true } },
   // Green Tax registration numbers assigned at EOD (Night Audit) — one per arriving guest
   // (primary + accompanying), surfaced per-guest on the detail screen.
   guestRegistrations: { select: { profileId: true, registrationNo: true, year: true, isPrimary: true } },
@@ -105,6 +108,8 @@ const updateSchema = z.object({
   mealPlan: z.string().optional(),
   remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
+  // Optional group-block association (null = detach). Validated against block dates + held types.
+  groupBlockId: z.string().optional().nullable(),
   // Per-reservation fee-rule selections (PropertyFeeRule ids, one per type). Null clears.
   depositFeeRuleId: z.string().optional().nullable(),
   cancellationFeeRuleId: z.string().optional().nullable(),
@@ -234,20 +239,64 @@ export async function PUT(
       }
     }
 
-    // Type-level overbooking guard (excluding this reservation's own existing
-    // assignments) — an edit that grows the stay or switches room type must still fit
-    // the property's sellable inventory. See src/lib/availability.ts.
+    const editSegments = data.assignments.map((a) => ({
+      roomTypeId: a.roomTypeId,
+      startDate: new Date(a.startDate),
+      endDate: new Date(a.endDate),
+    }));
+
+    // Stop-Sale is a HARD block (no override) — checked FIRST so a closed date fails fast
+    // before the soft overbook prompt. Only nights/room-types this edit NEWLY sells count;
+    // a segment the reservation already held on a since-closed date is exempt.
+    const stopSaleConflicts = await findStopSaleConflicts({
+      propertyId: existing.propertyId,
+      segments: editSegments,
+      existingSegments: existing.assignments.map((a) => ({
+        roomTypeId: a.roomTypeId,
+        startDate: a.startDate,
+        endDate: a.endDate,
+      })),
+    });
+    if (stopSaleConflicts.length > 0) {
+      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 });
+    }
+
+    // Type-level overbooking guard (excluding this reservation's own existing assignments)
+    // — an edit that grows the stay or switches room type must still fit the property's
+    // sellable inventory. Soft, acknowledgeable (physical room conflicts above stay hard).
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: existing.propertyId,
-      segments: data.assignments.map((a) => ({
-        roomTypeId: a.roomTypeId,
-        startDate: new Date(a.startDate),
-        endDate: new Date(a.endDate),
-      })),
+      segments: editSegments,
       excludeReservationId: id,
     });
-    if (availabilityConflicts.length > 0) {
-      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
+    if (availabilityConflicts.length > 0 && !(body as { acknowledgeOverbook?: boolean }).acknowledgeOverbook) {
+      return NextResponse.json(
+        { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
+        { status: 409 }
+      );
+    }
+
+    // Group-block association (optional): a reservation attached to a block must fit its
+    // date window and use only its held room types (the "blocked grid").
+    if (data.groupBlockId) {
+      const block = await prisma.groupBlock.findUnique({
+        where: { id: data.groupBlockId },
+        include: { roomHolds: { select: { roomTypeId: true } } },
+      });
+      if (!block || block.propertyId !== existing.propertyId) {
+        return NextResponse.json({ error: "Group block not found for this property" }, { status: 400 });
+      }
+      if (block.status === "CANCELLED" || block.status === "LOST") {
+        return NextResponse.json({ error: "That group block is closed." }, { status: 400 });
+      }
+      if (new Date(data.checkInDate) < block.startDate || new Date(data.checkOutDate) > block.endDate) {
+        return NextResponse.json({ error: "Reservation dates must fall within the group block's date range." }, { status: 400 });
+      }
+      const heldTypes = new Set(block.roomHolds.map((h) => h.roomTypeId));
+      const notHeld = [...new Set(data.assignments.map((a) => a.roomTypeId))].filter((t) => !heldTypes.has(t));
+      if (heldTypes.size > 0 && notHeld.length > 0) {
+        return NextResponse.json({ error: "That room type is not part of this group block's held room types." }, { status: 400 });
+      }
     }
 
     // Validate any per-reservation fee-rule selections against this property + type
@@ -279,6 +328,7 @@ export async function PUT(
         mealPlan: data.mealPlan,
         ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
+        ...(data.groupBlockId !== undefined && { groupBlockId: data.groupBlockId || null }),
         ...(data.depositFeeRuleId !== undefined && { depositFeeRuleId: data.depositFeeRuleId || null }),
         ...(data.cancellationFeeRuleId !== undefined && { cancellationFeeRuleId: data.cancellationFeeRuleId || null }),
         ...(data.noShowFeeRuleId !== undefined && { noShowFeeRuleId: data.noShowFeeRuleId || null }),

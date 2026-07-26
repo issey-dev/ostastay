@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 
 type WalkInBookingDialogProps = {
@@ -60,6 +61,7 @@ type WalkInFormValues = z.infer<typeof walkInSchema>
 // Walk-in mode additionally checks the guest straight in; book mode (used by the
 // tape chart's empty-cell click) leaves the booking RESERVED.
 export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode = "walkIn", initial }: WalkInBookingDialogProps) {
+  const confirm = useConfirm()
   const [profiles, setProfiles] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -173,23 +175,37 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         primaryGuestId = profileData.upid
       }
 
-      // 2. Create the reservation (single segment, room pre-picked).
-      const resRes = await fetch(`/api/reservations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId,
-          primaryGuestId,
-          checkInDate: toIsoDate(values.dates.from),
-          checkOutDate: toIsoDate(values.dates.to),
-          adults: parseInt(values.adults) || 1,
-          children: parseInt(values.children) || 0,
-          roomTypeId: values.roomTypeId,
-          roomId: values.roomId,
-          ratePlanId: values.ratePlanId,
-        }),
-      })
-      const resData = await resRes.json()
+      // 2. Create the reservation (single segment, room pre-picked). Overbooking is
+      // allowed with confirmation (409 + requiresOverbookConfirm → confirm → resend).
+      const createReservation = (acknowledgeOverbook: boolean) =>
+        fetch(`/api/reservations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            propertyId,
+            primaryGuestId,
+            checkInDate: toIsoDate(values.dates!.from!),
+            checkOutDate: toIsoDate(values.dates!.to!),
+            adults: parseInt(values.adults) || 1,
+            children: parseInt(values.children) || 0,
+            roomTypeId: values.roomTypeId,
+            roomId: values.roomId,
+            ratePlanId: values.ratePlanId,
+            acknowledgeOverbook,
+          }),
+        })
+      let resRes = await createReservation(false)
+      let resData = await resRes.json()
+      if (!resRes.ok && resRes.status === 409 && resData.requiresOverbookConfirm) {
+        const ok = await confirm({
+          title: "Overbook this room type?",
+          description: `${resData.error}. This will oversell the room type — proceed anyway?`,
+          confirmLabel: "Overbook",
+        })
+        if (!ok) return
+        resRes = await createReservation(true)
+        resData = await resRes.json()
+      }
       if (!resRes.ok) {
         toast.error(resData.error || "Failed to create the reservation.")
         return

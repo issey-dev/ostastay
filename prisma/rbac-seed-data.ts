@@ -10,6 +10,9 @@ export const MODULES = [
   "RESERVATIONS",
   "GROUP_BLOCKS",
   "TAPE_CHART",
+  // Property Availability grid + Stop-Sale restrictions. Kept in sync with
+  // src/lib/modules.ts's MODULES by hand (prisma/ scripts can't import from src/).
+  "AVAILABILITY",
   "PROFILES",
   "HOUSEKEEPING",
   "MAINTENANCE",
@@ -67,6 +70,9 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     RESERVATIONS: EDIT_NO_DELETE,
     GROUP_BLOCKS: EDIT_NO_DELETE,
     TAPE_CHART: EDIT_NO_DELETE,
+    // View the availability grid and toggle Stop-Sale (setting Open/Closed is gated on
+    // canUpdate — see api/availability/restrictions).
+    AVAILABILITY: EDIT_NO_DELETE,
     PROFILES: EDIT_NO_DELETE,
     HOUSEKEEPING: EDIT_NO_DELETE,
     MAINTENANCE: EDIT_NO_DELETE,
@@ -110,6 +116,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
   Reservations: matrix({
     RESERVATIONS: FULL,
     TAPE_CHART: FULL,
+    AVAILABILITY: FULL,
     GROUP_BLOCKS: EDIT_NO_DELETE,
     PROFILES: EDIT_NO_DELETE,
     FRONT_DESK: VIEW_ONLY,

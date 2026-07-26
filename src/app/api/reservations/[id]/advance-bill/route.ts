@@ -101,6 +101,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       propertyId: reservation.propertyId,
       assignments: truncated.map(({ a, start, end }) => ({
         roomTypeId: a.roomTypeId,
+        chargeRoomTypeId: a.chargeRoomTypeId,
         ratePlanId: a.ratePlanId,
         startDate: start,
         endDate: end,

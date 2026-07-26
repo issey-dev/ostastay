@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter, useParams } from "next/navigation"
 import { Save, ArrowLeft } from "@/components/icons"
@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
+import { GROUP_START_STATUSES, GROUP_STATUS_LABEL } from "@/lib/group-status"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
 
@@ -16,15 +19,27 @@ export default function NewGroupBlock() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(false)
-  
+  const [accounts, setAccounts] = useState<any[]>([])
+
   const [formData, setFormData] = useState({
     code: "",
     name: "",
     startDate: "",
     endDate: "",
     cutoffDate: "",
-    totalRoomsHeld: "10"
+    status: "TENTATIVE",
+    payeeProfileId: "none",
   })
+  const [roomHolds, setRoomHolds] = useState<RoomHold[]>([])
+
+  // Credit-account Travel Agent / Corporate profiles the master bill can settle to.
+  useEffect(() => {
+    if (!currentProperty) return
+    fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .catch(console.error)
+  }, [currentProperty])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -41,6 +56,8 @@ export default function NewGroupBlock() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          payeeProfileId: formData.payeeProfileId === "none" ? null : formData.payeeProfileId,
+          roomHolds: roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
           propertyId: currentProperty.id
         })
       })
@@ -120,17 +137,14 @@ export default function NewGroupBlock() {
 
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="totalRoomsHeld">Total Rooms to Hold</Label>
-              <Input 
-                id="totalRoomsHeld" 
-                name="totalRoomsHeld" 
-                type="number" 
-                min="1"
-                required 
-                value={formData.totalRoomsHeld}
-                onChange={handleChange}
+              <Label>Status</Label>
+              <SearchableSelect
+                value={formData.status}
+                onChange={(v) => setFormData({ ...formData, status: v ?? "TENTATIVE" })}
+                placeholder="Status"
+                options={GROUP_START_STATUSES.map((s) => ({ label: GROUP_STATUS_LABEL[s], value: s }))}
               />
-              <p className="text-xs text-muted-foreground">Inventory will be subtracted from availability.</p>
+              <p className="text-xs text-muted-foreground">A block starts Tentative or Definite.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
@@ -138,8 +152,34 @@ export default function NewGroupBlock() {
                 value={formData.cutoffDate}
                 onChange={(v) => setFormData({ ...formData, cutoffDate: v })}
               />
-              <p className="text-xs text-muted-foreground">Unreserved rooms will be released after this date.</p>
+              <p className="text-xs text-muted-foreground">Unreserved held rooms are released after this date.</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Bill to Account (City Ledger, Optional)</Label>
+            <SearchableSelect
+              value={formData.payeeProfileId}
+              onChange={(v) => setFormData({ ...formData, payeeProfileId: v ?? "none" })}
+              placeholder="No account (bill direct)..."
+              options={[
+                { value: "none", label: "None (bill direct)" },
+                ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">The block&apos;s master bill settles to this debtor account when closed.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Rooms to Hold (by type)</Label>
+            <GroupRoomHoldsEditor
+              propertyId={currentProperty?.id ?? ""}
+              value={roomHolds}
+              onChange={setRoomHolds}
+              startDate={formData.startDate || undefined}
+              endDate={formData.endDate || undefined}
+            />
+            <p className="text-xs text-muted-foreground">Held rooms are subtracted from availability until picked up or released at cutoff.</p>
           </div>
 
           <div className="pt-6 border-t flex justify-end gap-3">

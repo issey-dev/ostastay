@@ -1,27 +1,87 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX } from "@/components/icons"
+import { useParams, useRouter } from "next/navigation"
+import { format } from "date-fns"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { TracePanel } from "@/components/front-office/trace-panel"
 import { RoomMoveModal } from "@/components/front-office/room-move-modal"
+import { AssignRoomDialog } from "@/components/front-office/assign-room-dialog"
 import { useProperty } from "@/components/providers/property-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
-import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog"
+
+// ── Shared row helpers ───────────────────────────────────────────────────────
+const guestDisplayName = (g: any) =>
+  g?.profileType === "COMPANY" || g?.profileType === "TRAVEL_AGENT"
+    ? g?.companyName ?? ""
+    : `${g?.firstName ?? ""} ${g?.lastName ?? ""}`.trim()
+
+const nightsBetween = (ci: string, co: string) =>
+  Math.max(1, Math.round((new Date(co).getTime() - new Date(ci).getTime()) / 86_400_000))
+
+const getActiveTasks = (res: any) =>
+  (res.assignments ?? []).flatMap((a: any) => a.room?.housekeepingTasks ?? []).filter((t: any) => t.status !== "COMPLETED")
+
+const FLAG_TONE: Record<string, string> = {
+  info: "bg-info-muted text-info ring-info/20",
+  warning: "bg-warning-muted text-warning ring-warning/20",
+  destructive: "bg-destructive-muted text-destructive ring-destructive/20",
+}
+
+// Slim "Includes" chips for the front desk — meal plan, scheduled room move, and
+// active housekeeping requests. (Full flag set lives on the Reservations list.)
+function FrontDeskFlags({ res }: { res: any }) {
+  const flags: { key: string; icon: any; text?: string; title: string; tone: string }[] = []
+  if (res.mealPlan && res.mealPlan !== "NONE")
+    flags.push({ key: "meal", icon: Utensils, text: res.mealPlan, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
+  if (res.hasScheduledRoomMove)
+    flags.push({ key: "move", icon: ArrowLeftRight, title: "Scheduled room move during the stay", tone: "warning" })
+  const tasks = getActiveTasks(res).length
+  if (tasks > 0)
+    flags.push({ key: "task", icon: Bell, text: String(tasks), title: `${tasks} active housekeeping request${tasks > 1 ? "s" : ""}`, tone: "destructive" })
+  if (flags.length === 0) return <span className="text-xs text-muted-foreground/60">—</span>
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {flags.map((f) => {
+        const Icon = f.icon
+        return (
+          <span key={f.key} title={f.title} className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${FLAG_TONE[f.tone]}`}>
+            <Icon className="h-3 w-3 shrink-0" />
+            {f.text}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+const money = (n: number) => `$${(n ?? 0).toFixed(2)}`
 
 export default function FrontOfficeDashboard() {
   const { currentProperty } = useProperty()
+  const router = useRouter()
+  const { slug } = useParams<{ slug: string }>()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -31,7 +91,6 @@ export default function FrontOfficeDashboard() {
   const [checkInRes, setCheckInRes] = useState<any>(null)
   const [noShowRes, setNoShowRes] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [isWalkInOpen, setIsWalkInOpen] = useState(false)
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -48,6 +107,16 @@ export default function FrontOfficeDashboard() {
     reservationId: string;
     currentRoomNumber: string;
     currentRoomType: string;
+    checkInDate: string;
+    checkOutDate: string;
+  } | null>(null)
+
+  // Assign Room Dialog State (for TBA arrivals — assign without checking in)
+  const [assignData, setAssignData] = useState<{
+    reservationId: string;
+    assignmentId: string;
+    roomTypeId: string;
+    roomTypeName: string;
     checkInDate: string;
     checkOutDate: string;
   } | null>(null)
@@ -168,6 +237,76 @@ export default function FrontOfficeDashboard() {
     setIsRoomMoveModalOpen(true)
   }
 
+  const viewUrl = (id: string) => `/e/${slug}/dashboard/reservations/${id}`
+  const openRegCard = (id: string) => window.open(`/e/${slug}/dashboard/reservations/${id}/registration-card`, "_blank")
+
+  const openAssign = (res: any) => {
+    const seg = res.assignments?.[0]
+    if (!seg) return
+    setAssignData({
+      reservationId: res.id,
+      assignmentId: seg.id,
+      roomTypeId: seg.roomTypeId ?? seg.roomType?.id ?? "",
+      roomTypeName: seg.roomType?.name ?? "",
+      checkInDate: new Date(res.checkInDate).toISOString().split("T")[0],
+      checkOutDate: new Date(res.checkOutDate).toISOString().split("T")[0],
+    })
+  }
+
+  // Shared row cells so every tab's table reads like the Reservations list.
+  const bd = currentProperty?.businessDate
+  const renderStatus = (res: any) => {
+    const st = deriveReservationState(res.status, res.checkInDate, res.checkOutDate, bd)
+    return <StatusBadge label={reservationStateLabel(st)} status={st} />
+  }
+  const guestCell = (res: any, warn = false) => (
+    <>
+      <div className="font-medium flex items-center gap-1.5">
+        <span className="truncate">{guestDisplayName(res.primaryGuest)}</span>
+        {res.primaryGuest?.vipLevel && <span title="VIP"><Star className="h-4 w-4 text-warning shrink-0" /></span>}
+        {warn && res.profileIncomplete && (
+          <span title="Guest profile incomplete — missing nationality, date of birth, or ID">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          </span>
+        )}
+        {res.traces?.length > 0 && (
+          <span className="relative flex h-2.5 w-2.5" title={`${res.traces.length} active message(s)/task(s)`}>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive" />
+          </span>
+        )}
+      </div>
+      <div className="text-xs font-mono text-muted-foreground truncate">{res.confirmationNo}</div>
+    </>
+  )
+  const stayCell = (res: any) => {
+    const nights = nightsBetween(res.checkInDate, res.checkOutDate)
+    return (
+      <>
+        <div className="text-sm text-foreground whitespace-nowrap">
+          {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM yy")}
+        </div>
+        <div className="text-xs text-muted-foreground">{nights} {nights === 1 ? "night" : "nights"}</div>
+      </>
+    )
+  }
+  const roomCell = (res: any) => {
+    const first = res.assignments?.[0]
+    const extra = (res.assignments?.length ?? 0) > 1 ? res.assignments.length - 1 : 0
+    if (!first) return <span className="text-sm text-muted-foreground">No rooms</span>
+    return (
+      <div className="flex items-baseline gap-1.5 truncate">
+        <span className="text-sm font-semibold">{first.room?.roomNumber || "TBA"}</span>
+        <span className="text-xs text-muted-foreground">{first.roomType?.code}</span>
+        {extra > 0 && (
+          <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1 ring-1 ring-inset ring-border" title={`${res.assignments.length} rooms on this booking`}>
+            +{extra}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   if (loading && !data) {
     return (
       <div className="space-y-6">
@@ -200,48 +339,84 @@ export default function FrontOfficeDashboard() {
             · arrivals, departures, and in-house guests.
           </p>
         </div>
-        <Button onClick={() => setIsWalkInOpen(true)}>
+        <Button onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
           <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking
         </Button>
       </div>
 
       {/* KPI Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Arrivals — checked in of expected */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals Today</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals</CardTitle>
             <LogIn className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.arrivals?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.arrivalsSummary?.checkedIn ?? 0}</span>
+              <span className="text-lg font-medium text-muted-foreground">/ {data?.arrivalsSummary?.expected ?? 0}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              checked in · {Math.max(0, (data?.arrivalsSummary?.expected ?? 0) - (data?.arrivalsSummary?.checkedIn ?? 0))} to arrive
+            </p>
           </CardContent>
         </Card>
+
+        {/* Departures — checked out of expected */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Departures Today</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Departures</CardTitle>
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.departures?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.departuresSummary?.checkedOut ?? 0}</span>
+              <span className="text-lg font-medium text-muted-foreground">/ {data?.departuresSummary?.expected ?? 0}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              checked out · {Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out
+            </p>
           </CardContent>
         </Card>
+
+        {/* In-House — occupied rooms and the people in them */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">In-House Guests</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">In-House</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.inHouse?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.inHouseSummary?.rooms ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">rooms</span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.adults ?? 0}</span> Adt</span>
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.children ?? 0}</span> Chd</span>
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.infants ?? 0}</span> Inf</span>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Room Status — occupied/vacant split and housekeeping readiness */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Vacant Rooms</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Room Status</CardTitle>
             <BedDouble className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.vacantRoomsCount || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">{data?.vacantReadyCount ?? 0} clean &amp; ready</p>
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold">{data?.roomStatusSummary?.occupied ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">occ ·</span>
+              <span className="text-3xl font-bold">{data?.roomStatusSummary?.vacant ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">vac</span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {data?.roomStatusSummary?.clean ?? 0} Clean</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" /> {data?.roomStatusSummary?.inspected ?? 0} Insp</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {data?.roomStatusSummary?.dirty ?? 0} Dirty</span>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -270,412 +445,237 @@ export default function FrontOfficeDashboard() {
           </CardHeader>
           
           <CardContent className="p-0">
-            {/* Arrivals Tab */}
+            {/* Arrivals Tab — Check-In, Assign Room (TBA), Reg Card; ⚠ on incomplete profiles */}
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
-              {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
-              <div className="md:hidden divide-y divide-border">
-                {loadError ? (
-                  <ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} />
-                ) : arrivals.length === 0 ? (
-                  <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
-                ) : (
-                  arrivals.map((res: any) => (
-                    <div key={res.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3 shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="pl-6">Guest</TableHead>
+                      <TableHead>Stay</TableHead>
+                      <TableHead>Room</TableHead>
+                      <TableHead>Includes</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadError ? (
+                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} /></TableCell></TableRow>
+                    ) : arrivals.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="py-0"><EmptyState icon={LogIn} title="No arrivals scheduled for today" /></TableCell></TableRow>
+                    ) : arrivals.map((res: any) => {
+                      const unassigned = !res.assignments?.[0]?.room
+                      return (
+                        <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                          <TableCell className="pl-6 align-middle">{guestCell(res, true)}</TableCell>
+                          <TableCell className="align-middle">{stayCell(res)}</TableCell>
+                          <TableCell className="align-middle">{roomCell(res)}</TableCell>
+                          <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
+                          <TableCell className="align-middle">{renderStatus(res)}</TableCell>
+                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {unassigned && (
+                                <Button size="sm" variant="outline" className="h-8" onClick={() => openAssign(res)}>
+                                  <BedDouble className="h-3.5 w-3.5 mr-1.5" /> Assign
+                                </Button>
+                              )}
+                              <Button size="sm" variant="outline" className="h-8" onClick={() => openRegCard(res.id)} title="Print registration card">
+                                <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg Card
+                              </Button>
+                              {canCheckIn(res.status, res.checkInDate, bd) && (
+                                <Button size="sm" variant="outline" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
+                                  <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
+                                </Button>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-44">
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                                    <FileText className="h-4 w-4 mr-2" /> View details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
+                                    <MessageSquare className="h-4 w-4 mr-2" /> Traces
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => setNoShowRes(res)}>
+                                    <UserX className="h-4 w-4 mr-2" /> Mark no-show
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
-                          )}
-                        </div>
-                        <span className="text-muted-foreground font-mono text-xs shrink-0">{res.confirmationNo}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{res.assignments?.[0]?.roomType?.name}</span>
-                        {res.assignments?.[0]?.room ? (
-                          <Badge variant="outline" className="bg-muted">{res.assignments[0].room.roomNumber}</Badge>
-                        ) : (
-                          <span className="text-destructive text-xs font-medium">Unassigned</span>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-destructive hover:text-destructive"
-                          disabled={actionLoading === res.id}
-                          onClick={() => setNoShowRes(res)}
-                          title="Mark as No-Show"
-                        >
-                          <UserX className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1"
-                          disabled={actionLoading === res.id}
-                          onClick={() => setCheckInRes(res)}
-                        >
-                          {actionLoading === res.id ? "Processing..." : "Check-In"}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-
-              <Table className="hidden md:table">
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="pl-6">Guest</TableHead>
-                    <TableHead>Conf. #</TableHead>
-                    <TableHead>Room Type</TableHead>
-                    <TableHead>Assigned Room</TableHead>
-                    <TableHead className="text-right pr-6">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadError && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-0">
-                        <ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {!loadError && arrivals.map((res: any) => (
-                    <TableRow key={res.id}>
-                      <TableCell className="pl-6 font-medium">
-                        <div className="flex items-center gap-2">
-                          {res.primaryGuest.firstName} {res.primaryGuest.lastName}
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{res.confirmationNo}</TableCell>
-                      <TableCell>{res.assignments?.[0]?.roomType?.name}</TableCell>
-                      <TableCell>
-                        {res.assignments?.[0]?.room ? (
-                          <Badge variant="outline" className="bg-muted">{res.assignments[0].room.roomNumber}</Badge>
-                        ) : (
-                          <span className="text-destructive text-xs font-medium">Unassigned</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right pr-6 flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-destructive hover:text-destructive"
-                          disabled={actionLoading === res.id}
-                          onClick={() => setNoShowRes(res)}
-                          title="Mark as No-Show"
-                        >
-                          <UserX className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-24"
-                          disabled={actionLoading === res.id}
-                          onClick={() => setCheckInRes(res)}
-                        >
-                          {actionLoading === res.id ? "Processing..." : "Check-In"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!loadError && arrivals.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-0">
-                        <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
             </TabsContent>
 
-            {/* Departures Tab */}
+            {/* Departures Tab — balance shown, Folio + Check-Out */}
             <TabsContent value="departures" className="m-0 border-none outline-none">
-              <div className="md:hidden divide-y divide-border">
-                {loadError ? (
-                  <ErrorState title="Couldn't load departures" onRetry={fetchSummary} />
-                ) : departures.length === 0 ? (
-                  <EmptyState icon={LogOut} title="No departures scheduled for today" />
-                ) : (
-                  departures.map((res: any) => (
-                    <div key={res.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3 shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-muted-foreground font-mono text-xs shrink-0">{res.confirmationNo}</span>
-                      </div>
-                      <div>
-                        <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openFolio(res.id)}>
-                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1"
-                          disabled={actionLoading === res.id}
-                          onClick={() => handleCheckOut(res.id)}
-                        >
-                          {actionLoading === res.id ? "Processing..." : "Check-Out"}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="pl-6">Guest</TableHead>
+                      <TableHead>Stay</TableHead>
+                      <TableHead>Room</TableHead>
+                      <TableHead>Includes</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadError ? (
+                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load departures" onRetry={fetchSummary} /></TableCell></TableRow>
+                    ) : departures.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={LogOut} title="No departures scheduled for today" /></TableCell></TableRow>
+                    ) : departures.map((res: any) => (
+                      <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                        <TableCell className="pl-6 align-middle">{guestCell(res)}</TableCell>
+                        <TableCell className="align-middle">{stayCell(res)}</TableCell>
+                        <TableCell className="align-middle">{roomCell(res)}</TableCell>
+                        <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
+                        <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
+                        <TableCell className="align-middle">{renderStatus(res)}</TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
+                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8" disabled={actionLoading === res.id} onClick={() => handleCheckOut(res.id)}>
+                              <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "..." : "Check Out"}
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-44">
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                                  <FileText className="h-4 w-4 mr-2" /> View details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
+                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-
-              <Table className="hidden md:table">
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="pl-6">Guest</TableHead>
-                    <TableHead>Conf. #</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadError && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-0">
-                        <ErrorState title="Couldn't load departures" onRetry={fetchSummary} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {!loadError && departures.map((res: any) => (
-                    <TableRow key={res.id}>
-                      <TableCell className="pl-6 font-medium">
-                        <div className="flex items-center gap-2">
-                          {res.primaryGuest.firstName} {res.primaryGuest.lastName}
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{res.confirmationNo}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6 flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => openFolio(res.id)}>
-                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-28"
-                          disabled={actionLoading === res.id}
-                          onClick={() => handleCheckOut(res.id)}
-                        >
-                          {actionLoading === res.id ? "Processing..." : "Check-Out"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!loadError && departures.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-0">
-                        <EmptyState icon={LogOut} title="No departures scheduled for today" />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
             </TabsContent>
 
-            {/* In-House Tab */}
+            {/* In-House Tab — balance shown, Folio + Move Room */}
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
-              <div className="md:hidden divide-y divide-border">
-                {loadError ? (
-                  <ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} />
-                ) : inHouse.length === 0 ? (
-                  <EmptyState icon={CheckCircle} title="No guests currently in-house" />
-                ) : (
-                  inHouse.map((res: any) => (
-                    <div key={res.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{res.primaryGuest.firstName} {res.primaryGuest.lastName}</span>
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3 shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
-                            </div>
-                          )}
-                        </div>
-                        <Badge variant="outline" className="shrink-0">{res.assignments?.[0]?.room?.roomNumber}</Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Departs {new Date(res.checkOutDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openFolio(res.id)}>
-                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1 text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
-                          Move Room
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="pl-6">Guest</TableHead>
+                      <TableHead>Stay</TableHead>
+                      <TableHead>Room</TableHead>
+                      <TableHead>Includes</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadError ? (
+                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} /></TableCell></TableRow>
+                    ) : inHouse.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={CheckCircle} title="No guests currently in-house" /></TableCell></TableRow>
+                    ) : inHouse.map((res: any) => (
+                      <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                        <TableCell className="pl-6 align-middle">{guestCell(res)}</TableCell>
+                        <TableCell className="align-middle">{stayCell(res)}</TableCell>
+                        <TableCell className="align-middle">{roomCell(res)}</TableCell>
+                        <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
+                        <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
+                        <TableCell className="align-middle">{renderStatus(res)}</TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
+                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
+                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Move
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-44">
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                                  <FileText className="h-4 w-4 mr-2" /> View details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
+                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-
-              <Table className="hidden md:table">
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="pl-6">Guest</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Departure Date</TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadError && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-0">
-                        <ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {!loadError && inHouse.map((res: any) => (
-                    <TableRow key={res.id}>
-                      <TableCell className="pl-6 font-medium">
-                        <div className="flex items-center gap-2">
-                          {res.primaryGuest.firstName} {res.primaryGuest.lastName}
-                          {res.traces?.length > 0 && (
-                            <div className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-none h-3 w-3 bg-destructive" title={`${res.traces.length} active messages/tasks`}></span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{res.assignments?.[0]?.room?.roomNumber}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{new Date(res.checkOutDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
-                      <TableCell className="text-right pr-6 flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openTraces(res.id, `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`)}>
-                          <MessageSquare className="w-4 h-4 mr-2" /> Traces
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => openFolio(res.id)}>
-                          <ReceiptText className="w-4 h-4 mr-2" /> Folio
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
-                          Move Room
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!loadError && inHouse.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-0">
-                        <EmptyState icon={CheckCircle} title="No guests currently in-house" />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
             </TabsContent>
 
-            {/* Room Moves Tab — informational: the room already changes automatically
-                via the reservation's own segments, this is a heads-up for staff to
-                coordinate the physical move (luggage, keys, housekeeping). */}
+            {/* Room Moves Tab — scheduled moves; Move Room opens the move dialog
+                (which also assigns the target room when it's still unassigned). */}
             <TabsContent value="roommoves" className="m-0 border-none outline-none">
-              <div className="md:hidden divide-y divide-border">
-                {loadError ? (
-                  <ErrorState title="Couldn't load room moves" onRetry={fetchSummary} />
-                ) : data?.roomMovesToday?.length === 0 ? (
-                  <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
-                ) : (
-                  data?.roomMovesToday?.map((mv: any) => (
-                    <div key={mv.reservationId} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-medium">{mv.primaryGuest.firstName} {mv.primaryGuest.lastName}</span>
-                        <span className="text-muted-foreground font-mono text-xs shrink-0">{mv.confirmationNo}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Badge variant="outline">{mv.fromRoomNumber}</Badge>
-                        <ArrowLeftRight className="w-3 h-3 text-muted-foreground" />
-                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge>
-                        <span className="text-muted-foreground text-xs">({mv.toRoomTypeName})</span>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="pl-6">Guest</TableHead>
+                      <TableHead>Conf. #</TableHead>
+                      <TableHead>From Room</TableHead>
+                      <TableHead>To Room</TableHead>
+                      <TableHead>New Room Type</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadError ? (
+                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load room moves" onRetry={fetchSummary} /></TableCell></TableRow>
+                    ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="py-0"><EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" /></TableCell></TableRow>
+                    ) : data.roomMovesToday.map((mv: any) => {
+                      const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
+                      const unassigned = !mv.toRoomNumber
+                      return (
+                        <TableRow key={mv.reservationId} className={res ? "cursor-pointer" : ""} onClick={() => res && router.push(viewUrl(mv.reservationId))}>
+                          <TableCell className="pl-6 align-middle font-medium">{guestDisplayName(mv.primaryGuest)}</TableCell>
+                          <TableCell className="align-middle text-muted-foreground font-mono text-xs">{mv.confirmationNo}</TableCell>
+                          <TableCell className="align-middle"><Badge variant="outline">{mv.fromRoomNumber ?? "—"}</Badge></TableCell>
+                          <TableCell className="align-middle">
+                            {unassigned
+                              ? <span className="text-xs font-medium text-destructive">Unassigned</span>
+                              : <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge>}
+                          </TableCell>
+                          <TableCell className="align-middle text-muted-foreground">{mv.toRoomTypeName}</TableCell>
+                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" disabled={!res} onClick={() => res && openRoomMove(res)}>
+                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move Room"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-
-              <Table className="hidden md:table">
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="pl-6">Guest</TableHead>
-                    <TableHead>Conf. #</TableHead>
-                    <TableHead>From Room</TableHead>
-                    <TableHead>To Room</TableHead>
-                    <TableHead className="pr-6">New Room Type</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadError && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-0">
-                        <ErrorState title="Couldn't load room moves" onRetry={fetchSummary} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {!loadError && data?.roomMovesToday?.map((mv: any) => (
-                    <TableRow key={mv.reservationId}>
-                      <TableCell className="pl-6 font-medium">{mv.primaryGuest.firstName} {mv.primaryGuest.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">{mv.confirmationNo}</TableCell>
-                      <TableCell><Badge variant="outline">{mv.fromRoomNumber}</Badge></TableCell>
-                      <TableCell><Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge></TableCell>
-                      <TableCell className="pr-6 text-muted-foreground">{mv.toRoomTypeName}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!loadError && data?.roomMovesToday?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-0">
-                        <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
             </TabsContent>
           </CardContent>
         </Tabs>
@@ -735,15 +735,6 @@ export default function FrontOfficeDashboard() {
         }}
       />
 
-      <WalkInBookingDialog
-        propertyId={propertyId ?? ""}
-        isOpen={isWalkInOpen}
-        onClose={() => setIsWalkInOpen(false)}
-        onDone={(result) => {
-          setNotification(result)
-          fetchSummary()
-        }}
-      />
 
       <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
         <DialogContent className="sm:max-w-md">
@@ -772,6 +763,22 @@ export default function FrontOfficeDashboard() {
         currentRoomType={roomMoveData?.currentRoomType}
         checkInDate={roomMoveData?.checkInDate}
         checkOutDate={roomMoveData?.checkOutDate}
+      />
+
+      <AssignRoomDialog
+        isOpen={!!assignData}
+        onClose={() => setAssignData(null)}
+        propertyId={propertyId ?? ""}
+        reservationId={assignData?.reservationId ?? null}
+        assignmentId={assignData?.assignmentId ?? null}
+        roomTypeId={assignData?.roomTypeId ?? null}
+        roomTypeName={assignData?.roomTypeName}
+        checkInDate={assignData?.checkInDate}
+        checkOutDate={assignData?.checkOutDate}
+        onAssigned={(message) => {
+          setNotification({ title: "Room Assigned", message })
+          fetchSummary()
+        }}
       />
     </div>
   )

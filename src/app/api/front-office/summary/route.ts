@@ -2,7 +2,25 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date";
+import { resolveBusinessDate, nextBusinessDate, toUtcMidnight } from "@/lib/business-date";
+import { computeFolioBalance } from "@/lib/debtor-accounts";
+
+type BalanceFolio = {
+  lineItems: { amount: number; taxAmount: number; serviceChargeAmount: number; isVoid: boolean }[];
+  payments: { amount: number; isRefund: boolean }[];
+};
+// Outstanding balance across a reservation's folios (charges − payments), cent-safe.
+function reservationBalance(folios: BalanceFolio[]): number {
+  return folios.reduce((sum, f) => sum + computeFolioBalance(f.lineItems, f.payments), 0);
+}
+
+// An arrival's guest profile is "incomplete" (front desk should complete it before
+// check-in) when nationality, date of birth, OR any identification document is missing.
+// Only meaningful for individual guests — company/agent primaries have no such fields.
+function isProfileIncomplete(g: { profileType: string; nationality: string | null; dateOfBirth: Date | null; documents: { id: string }[] } | null): boolean {
+  if (!g || g.profileType !== "GUEST") return false;
+  return !g.nationality || !g.dateOfBirth || (g.documents?.length ?? 0) === 0;
+}
 
 export async function GET(request: Request) {
   try {
@@ -38,12 +56,12 @@ export async function GET(request: Request) {
         }
       },
       include: {
-        primaryGuest: true,
-        assignments: { include: { room: true, roomType: true } },
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
         traces: { where: { isResolved: false } },
-        // Deposits collected pre-arrival live as payments on the folio — the
-        // check-in dialog shows them so front desk knows what's already paid.
-        folios: { include: { payments: { select: { amount: true, isRefund: true } } } },
+        // Deposits collected pre-arrival live as payments on the folio; line items let
+        // us also surface the outstanding balance the check-in dialog will settle.
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
       }
     });
 
@@ -57,7 +75,12 @@ export async function GET(request: Request) {
           lte: endOfToday,
         }
       },
-      include: { primaryGuest: true, assignments: { include: { room: true, roomType: true } }, folios: true, traces: { where: { isResolved: false } } }
+      include: {
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
+        traces: { where: { isResolved: false } },
+      }
     });
 
     // 3. In-House
@@ -66,7 +89,12 @@ export async function GET(request: Request) {
         propertyId,
         status: ReservationStatus.IN_HOUSE,
       },
-      include: { primaryGuest: true, assignments: { include: { room: true, roomType: true } }, folios: true, traces: { where: { isResolved: false } } }
+      include: {
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
+        traces: { where: { isResolved: false } },
+      }
     });
 
     // 4. Room Moves Due Today — an in-house reservation whose split-stay segments
@@ -108,18 +136,66 @@ export async function GET(request: Request) {
       where: { propertyId, status: { notIn: ["OUT_OF_ORDER", "OUT_OF_SERVICE"] } },
       select: { id: true, status: true }
     });
-    const occupiedRoomIds = new Set(inHouse.flatMap(r => r.assignments.map(a => a.roomId)).filter(Boolean));
+    // A guest occupies exactly ONE physical room today — the assignment segment whose
+    // [start, end) window covers the business date. Counting every segment would
+    // double-count a reservation that has a scheduled room move (multiple segments),
+    // which inflated both the In-House room count and the occupied/vacant split.
+    const bdMs = startOfToday.getTime();
+    const activeRoomIdFor = (r: (typeof inHouse)[number]): string | null => {
+      const covering = r.assignments.find(a => {
+        const s = toUtcMidnight(new Date(a.startDate)).getTime();
+        const e = toUtcMidnight(new Date(a.endDate)).getTime();
+        return s <= bdMs && bdMs < e;
+      });
+      if (covering) return covering.roomId;
+      // Fallbacks for out-of-window data: the latest segment that has started, else the first.
+      const started = r.assignments
+        .filter(a => toUtcMidnight(new Date(a.startDate)).getTime() <= bdMs)
+        .sort((x, y) => toUtcMidnight(new Date(y.startDate)).getTime() - toUtcMidnight(new Date(x.startDate)).getTime());
+      return (started[0] ?? r.assignments[0])?.roomId ?? null;
+    };
+    const occupiedRoomIds = new Set(inHouse.map(activeRoomIdFor).filter(Boolean) as string[]);
     const vacantRooms = allRooms.filter(r => !occupiedRoomIds.has(r.id));
     const vacantReadyCount = vacantRooms.filter(r => r.status === "CLEAN" || r.status === "INSPECTED").length;
 
+    // 6. Housekeeping breakdown over in-service rooms — how the vacant/occupied
+    // split lands across CLEAN/INSPECTED/DIRTY (OOO/OOS are excluded upstream).
+    const clean = allRooms.filter(r => r.status === "CLEAN").length;
+    const inspected = allRooms.filter(r => r.status === "INSPECTED").length;
+    const dirty = allRooms.filter(r => r.status === "DIRTY").length;
+
+    // 7. Arrivals / Departures progress — expected vs. already actioned. Expected
+    // arrivals = anyone due in today who wasn't cancelled/no-show (still RESERVED, or
+    // already IN_HOUSE / CHECKED_OUT); checkedIn = those who have actually arrived.
+    // Departures mirror this on checkOutDate.
+    const arrivalDay = { checkInDate: { gte: startOfToday, lte: endOfToday } };
+    const departureDay = { checkOutDate: { gte: startOfToday, lte: endOfToday } };
+    const [arrivalsExpected, arrivalsCheckedIn, departuresExpected, departuresCheckedOut] = await Promise.all([
+      prisma.reservation.count({ where: { propertyId, ...arrivalDay, status: { in: [ReservationStatus.RESERVED, ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...arrivalDay, status: { in: [ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...departureDay, status: { in: [ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...departureDay, status: ReservationStatus.CHECKED_OUT } }),
+    ]);
+
+    // In-house occupancy — rooms occupied plus the people in them.
+    const occupancy = inHouse.reduce(
+      (acc, r) => { acc.adults += r.adults; acc.children += r.children; acc.infants += r.infants; return acc; },
+      { adults: 0, children: 0, infants: 0 }
+    );
+
     return NextResponse.json({
       businessDate: startOfToday,
-      arrivals,
-      departures,
-      inHouse,
+      // Each row carries its outstanding balance; arrivals also carry a profile-completeness flag.
+      arrivals: arrivals.map(r => ({ ...r, balance: reservationBalance(r.folios), profileIncomplete: isProfileIncomplete(r.primaryGuest) })),
+      departures: departures.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
+      inHouse: inHouse.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
       roomMovesToday,
       vacantRoomsCount: vacantRooms.length,
-      vacantReadyCount
+      vacantReadyCount,
+      arrivalsSummary: { expected: arrivalsExpected, checkedIn: arrivalsCheckedIn },
+      departuresSummary: { expected: departuresExpected, checkedOut: departuresCheckedOut },
+      inHouseSummary: { rooms: occupiedRoomIds.size, ...occupancy },
+      roomStatusSummary: { occupied: occupiedRoomIds.size, vacant: vacantRooms.length, clean, inspected, dirty },
     });
 
   } catch (error) {

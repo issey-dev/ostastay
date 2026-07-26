@@ -1,41 +1,73 @@
 "use client"
 
 import { useEffect, useState, use } from "react"
+import { useRouter } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
-import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2 } from "@/components/icons"
+import { useSmartBack } from "@/lib/use-smart-back"
+import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2, CheckCircle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
+import { GroupScheduleTimeline } from "@/components/groups/group-schedule-timeline"
+import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DatePicker } from "@/components/ui/date-picker"
+import { GROUP_STATUS_TRANSITIONS, GROUP_STATUS_LABEL, type GroupStatus } from "@/lib/group-status"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { deriveReservationState, reservationStateLabel } from "@/lib/reservation-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
   const { slug } = unwrappedParams
+  const router = useRouter()
+  const goBack = useSmartBack(`/e/${slug}/dashboard/groups`)
   const { currentProperty } = useProperty()
+  const bd = currentProperty?.businessDate
   const [group, setGroup] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isMasterFolioOpen, setIsMasterFolioOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: "", status: "TENTATIVE", totalRoomsHeld: "0", cutoffDate: "" })
+  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[]; payeeProfileId: string }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [], payeeProfileId: "none" })
+  const [accounts, setAccounts] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!currentProperty) return
+    fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .catch(console.error)
+  }, [currentProperty])
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  const [creatingMaster, setCreatingMaster] = useState(false)
+
+  const handleCreateMaster = async () => {
+    setCreatingMaster(true)
+    try {
+      const res = await fetch(`/api/groups/${unwrappedParams.id}/master-folio`, { method: "POST" })
+      if (res.ok) fetchGroup()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCreatingMaster(false)
+    }
+  }
 
   const openEdit = () => {
     setEditForm({
       name: group.name,
       status: group.status,
-      totalRoomsHeld: String(group.totalRoomsHeld),
       cutoffDate: group.cutoffDate ? group.cutoffDate.split("T")[0] : "",
+      roomHolds: (group.roomHolds ?? []).map((h: any) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })),
+      payeeProfileId: group.payeeProfileId || "none",
     })
     setEditError(null)
     setIsEditOpen(true)
@@ -51,8 +83,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         body: JSON.stringify({
           name: editForm.name,
           status: editForm.status,
-          totalRoomsHeld: parseInt(editForm.totalRoomsHeld) || 0,
           cutoffDate: editForm.cutoffDate || null,
+          roomHolds: editForm.roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
+          payeeProfileId: editForm.payeeProfileId === "none" ? null : editForm.payeeProfileId,
         }),
       })
       const data = await res.json()
@@ -74,10 +107,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
     setLoading(true)
     try {
       const res = await fetch(`/api/groups/${unwrappedParams.id}`)
-      if (res.ok) {
-        const data = await res.json()
-        setGroup(data)
-      }
+      if (res.ok) setGroup(await res.json())
     } catch (e) {
       console.error(e)
     } finally {
@@ -91,18 +121,16 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
   if (loading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Skeleton className="h-9 w-9 rounded-none" />
+          <Skeleton className="h-9 w-9 rounded-lg" />
           <div>
             <Skeleton className="h-8 w-56 mb-2" />
             <Skeleton className="h-4 w-32" />
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -113,148 +141,200 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
     return <EmptyState icon={Users} title="Group not found" className="py-24" />
   }
 
-  const pickedUp = group.reservations?.length || 0;
-  const remaining = Math.max(0, group.totalRoomsHeld - pickedUp);
+  const pickedUp = group.reservations?.length || 0
+  const remaining = Math.max(0, group.totalRoomsHeld - pickedUp)
+  const openMaster = group.masterFolios?.find((f: any) => !f.isClosed)
+  // Rooms picked up per room type (active pickups only) — for the Room Block breakdown.
+  const pickedByType: Record<string, number> = {}
+  for (const r of group.reservations ?? []) {
+    if (["CANCELLED", "NO_SHOW"].includes(r.status)) continue
+    const t = r.assignments?.[0]?.roomTypeId
+    if (t) pickedByType[t] = (pickedByType[t] ?? 0) + 1
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="flex items-center gap-4">
-          <Link href={`/e/${slug}/dashboard/groups`}>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl font-bold tracking-tight">{group.name}</h1>
+              <h2 className="text-3xl font-bold tracking-tight">{group.name}</h2>
               <StatusBadge label={group.status} status={group.status} />
             </div>
-            <p className="text-muted-foreground mt-1 font-mono text-sm">Code: {group.code}</p>
+            <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
+              Code: {group.code}
+              {group.payeeProfile && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-md bg-info-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-info ring-1 ring-inset ring-info/20"
+                  title="Master bill settles to this City-Ledger account"
+                >
+                  <Wallet className="h-3 w-3" /> {group.payeeProfile.companyName || `${group.payeeProfile.firstName} ${group.payeeProfile.lastName ?? ""}`.trim()}
+                </span>
+              )}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="flex items-center gap-2 flex-1 sm:flex-none" onClick={openEdit}>
-            <Pencil className="w-4 h-4" />
-            Edit Block
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={openEdit}>
+            <Pencil className="w-4 h-4 mr-2" /> Edit Block
           </Button>
-          <Button
-            variant="outline"
-            className="flex items-center gap-2 flex-1 sm:flex-none"
-            disabled={!group.masterFolios?.length}
-            title={group.masterFolios?.length ? undefined : "No master folio has been created for this group yet"}
-            onClick={() => setIsMasterFolioOpen(true)}
-          >
-            <Wallet className="w-4 h-4" />
-            Master Folio
-          </Button>
-          <GroupPickupDialog groupId={group.id} onSaved={fetchGroup} />
+          {openMaster ? (
+            <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
+              <Wallet className="w-4 h-4 mr-2" /> Master Folio
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={handleCreateMaster} disabled={creatingMaster || group.status === "CANCELLED"}>
+              {creatingMaster ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
+              Create Master Folio
+            </Button>
+          )}
+          <GroupPickupDialog
+            groupId={group.id}
+            onSaved={fetchGroup}
+            disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
+            blockStart={group.startDate?.split("T")[0]}
+            blockEnd={group.endDate?.split("T")[0]}
+            roomTypeOptions={(group.roomHolds ?? []).map((h: any) => ({ id: h.roomTypeId, name: h.roomType?.name, code: h.roomType?.code }))}
+          />
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
-          <div className="flex items-center gap-3 text-muted-foreground mb-2">
-            <CalendarDays className="w-5 h-5" />
-            <h3 className="font-semibold">Event Dates</h3>
-          </div>
-          <p className="text-lg font-bold text-foreground">
-            {format(parseISO(group.startDate), "dd-MMM")} - {format(parseISO(group.endDate), "dd-MMM-yy")}
-          </p>
-        </div>
-        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
-          <div className="flex items-center gap-3 text-muted-foreground mb-2">
-            <Users className="w-5 h-5" />
-            <h3 className="font-semibold">Total Held</h3>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{group.totalRoomsHeld}</p>
-        </div>
-        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
-          <div className="flex items-center gap-3 text-muted-foreground mb-2">
-            <UserPlus className="w-5 h-5" />
-            <h3 className="font-semibold">Picked Up</h3>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{pickedUp}</p>
-        </div>
-        <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-5">
-          <div className="flex items-center gap-3 text-muted-foreground mb-2">
-            <Users className="w-5 h-5" />
-            <h3 className="font-semibold">Remaining</h3>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{remaining}</p>
-        </div>
-      </div>
-
-      {/* Reservations List */}
-      <div className="bg-card rounded-xl shadow-elevation-1 border border-border overflow-hidden">
-        <div className="px-6 py-4 border-b flex justify-between items-center bg-muted">
-          <h2 className="text-lg font-bold text-foreground">Group Reservations (Pickups)</h2>
-        </div>
-
-        {group.reservations && group.reservations.length > 0 ? (
-          <>
-            {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
-            <div className="md:hidden divide-y divide-border">
-              {group.reservations.map((res: any) => (
-                <Link key={res.id} href={`/e/${slug}/dashboard/reservations/${res.id}`} className="block p-4 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-foreground">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
-                      <div className="font-mono text-xs text-muted-foreground mt-0.5">{res.confirmationNo}</div>
-                    </div>
-                    <StatusBadge label={res.status} status={res.status} className="shrink-0" />
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
-                    </span>
-                    <span className="font-semibold text-foreground">{res.assignments?.[0]?.room?.roomNumber || "Unassigned"}</span>
-                  </div>
-                </Link>
-              ))}
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-elevation-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Event Dates</CardTitle>
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {format(parseISO(group.startDate), "dd MMM")} – {format(parseISO(group.endDate), "dd MMM yy")}
             </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-elevation-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Held</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent><div className="text-3xl font-bold">{group.totalRoomsHeld}</div></CardContent>
+        </Card>
+        <Card className="shadow-elevation-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Picked Up</CardTitle>
+            <UserPlus className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent><div className="text-3xl font-bold">{pickedUp}</div></CardContent>
+        </Card>
+        <Card className="shadow-elevation-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Remaining</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent><div className="text-3xl font-bold">{remaining}</div></CardContent>
+        </Card>
+      </div>
 
-            <Table className="hidden md:table">
+      {/* Room Block — per room type held/picked/remaining */}
+      {group.roomHolds?.length > 0 && (
+        <Card className="shadow-elevation-1 overflow-hidden">
+          <CardHeader className="py-4">
+            <CardTitle className="text-lg">Room Block</CardTitle>
+          </CardHeader>
+          <div className="overflow-x-auto border-t border-border">
+            <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Res #</TableHead>
-                  <TableHead>Guest</TableHead>
-                  <TableHead>Dates</TableHead>
-                  <TableHead>Room</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="pl-6">Room Type</TableHead>
+                  <TableHead className="text-right">Held</TableHead>
+                  <TableHead className="text-right">Picked Up</TableHead>
+                  <TableHead className="text-right pr-6">Remaining</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {group.reservations.map((res: any) => (
-                  <TableRow key={res.id}>
-                    <TableCell className="font-mono text-sm text-foreground">{res.confirmationNo}</TableCell>
-                    <TableCell className="font-semibold text-foreground">
-                      {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(parseISO(res.checkInDate), "dd-MMM")} - {format(parseISO(res.checkOutDate), "dd-MMM")}
-                    </TableCell>
-                    <TableCell className="text-sm font-semibold text-foreground">
-                      {res.assignments?.[0]?.room?.roomNumber || "Unassigned"}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge label={res.status} status={res.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/e/${slug}/dashboard/reservations/${res.id}`}>
-                        <Button variant="ghost" size="sm">
-                          View
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {group.roomHolds.map((h: any) => {
+                  const picked = pickedByType[h.roomTypeId] ?? 0
+                  const rem = Math.max(0, h.quantity - picked)
+                  return (
+                    <TableRow key={h.id}>
+                      <TableCell className="pl-6 font-medium">
+                        {h.roomType?.name} <span className="text-xs text-muted-foreground">({h.roomType?.code})</span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{h.quantity}</TableCell>
+                      <TableCell className="text-right tabular-nums">{picked}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-semibold">{rem}</TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
-          </>
+          </div>
+        </Card>
+      )}
+
+      {/* Block Schedule */}
+      <Card className="shadow-elevation-1 overflow-hidden">
+        <CardHeader className="py-4">
+          <CardTitle className="text-lg">Block Schedule</CardTitle>
+        </CardHeader>
+        <div className="-mt-2">
+          <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} />
+        </div>
+      </Card>
+
+      {/* Pickups */}
+      <Card className="shadow-elevation-1 overflow-hidden">
+        <CardHeader className="py-4 border-b bg-muted/50">
+          <CardTitle className="text-lg">Group Reservations (Pickups)</CardTitle>
+        </CardHeader>
+
+        {group.reservations && group.reservations.length > 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="pl-6">Guest</TableHead>
+                  <TableHead>Stay</TableHead>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {group.reservations.map((res: any) => {
+                  const st = deriveReservationState(res.status, res.checkInDate, res.checkOutDate, bd)
+                  return (
+                    <TableRow
+                      key={res.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}`)}
+                    >
+                      <TableCell className="pl-6 align-middle">
+                        <div className="font-medium">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
+                        <div className="text-xs font-mono text-muted-foreground">{res.confirmationNo}</div>
+                      </TableCell>
+                      <TableCell className="align-middle whitespace-nowrap">
+                        <div className="text-sm">{format(parseISO(res.checkInDate), "dd MMM")} → {format(parseISO(res.checkOutDate), "dd MMM yy")}</div>
+                      </TableCell>
+                      <TableCell className="align-middle text-sm font-semibold">
+                        {res.assignments?.[0]?.room?.roomNumber || <span className="text-muted-foreground font-normal">Unassigned</span>}
+                      </TableCell>
+                      <TableCell className="align-middle">
+                        <StatusBadge label={reservationStateLabel(st)} status={st} />
+                      </TableCell>
+                      <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}`)}>View</Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
           <EmptyState
             icon={Users}
@@ -262,10 +342,10 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             description={'Click "Pickup Room" to add a guest to this group.'}
           />
         )}
-      </div>
+      </Card>
 
       <WalkInFolioPanel
-        folioId={group.masterFolios?.[0]?.id ?? null}
+        folioId={openMaster?.id ?? null}
         isOpen={isMasterFolioOpen}
         onClose={() => setIsMasterFolioOpen(false)}
         onClosed={fetchGroup}
@@ -273,7 +353,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
       {/* Edit Block dialog */}
       <Dialog open={isEditOpen} onOpenChange={(open) => !open && setIsEditOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Group Block</DialogTitle>
             <DialogDescription>
@@ -288,34 +368,47 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v ?? p.status }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TENTATIVE">Tentative</SelectItem>
-                    <SelectItem value="DEFINITE">Definite</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={editForm.status}
+                  onChange={(v) => setEditForm((p) => ({ ...p, status: v ?? p.status }))}
+                  placeholder="Status"
+                  options={(GROUP_STATUS_TRANSITIONS[(group.status as GroupStatus)] ?? [group.status as GroupStatus]).map((s) => ({
+                    label: GROUP_STATUS_LABEL[s], value: s,
+                  }))}
+                />
               </div>
               <div className="space-y-2">
-                <Label>Rooms Held</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editForm.totalRoomsHeld}
-                  onChange={(e) => setEditForm((p) => ({ ...p, totalRoomsHeld: e.target.value }))}
+                <Label>Cutoff Date</Label>
+                <DatePicker
+                  value={editForm.cutoffDate || null}
+                  onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
+                  placeholder="No cutoff"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Cutoff Date</Label>
-              <DatePicker
-                value={editForm.cutoffDate || null}
-                onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
-                placeholder="No cutoff"
+              <Label>Rooms Held (by type)</Label>
+              <GroupRoomHoldsEditor
+                propertyId={currentProperty?.id ?? ""}
+                value={editForm.roomHolds}
+                onChange={(v) => setEditForm((p) => ({ ...p, roomHolds: v }))}
+                startDate={group.startDate?.split("T")[0]}
+                endDate={group.endDate?.split("T")[0]}
+                excludeGroupBlockId={group.id}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Bill to Account (City Ledger)</Label>
+              <SearchableSelect
+                value={editForm.payeeProfileId}
+                onChange={(v) => setEditForm((p) => ({ ...p, payeeProfileId: v ?? "none" }))}
+                placeholder="No account (bill direct)..."
+                options={[
+                  { value: "none", label: "None (bill direct)" },
+                  ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
+                ]}
+              />
+              <p className="text-[11px] text-muted-foreground">The master bill settles to this debtor account when closed.</p>
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
           </div>
@@ -328,7 +421,6 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }

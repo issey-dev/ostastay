@@ -36,6 +36,10 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  // Rate preview for a move to a different room type — current ("keep") vs new rate.
+  const [rateInfo, setRateInfo] = useState<{ sameType: boolean; keepRate: number; newRate: number; remainingNights: number } | null>(null)
+  const [rateLoading, setRateLoading] = useState(false)
+  const [rateMode, setRateMode] = useState<"keep" | "new">("new")
 
   const form = useForm<RoomMoveFormValues>({
     resolver: zodResolver(roomMoveSchema),
@@ -50,6 +54,8 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
     if (isOpen) {
       form.reset({ roomTypeId: "", roomId: "", reason: "" })
       setAvailableRooms([])
+      setRateInfo(null)
+      setRateMode("new")
       setLoading(true)
       fetch(`/api/room-types?propertyId=${propertyId}`)
         .then(r => r.json())
@@ -80,6 +86,18 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
     }
   }, [selectedRoomTypeId, checkInDate, checkOutDate, reservationId, propertyId, isOpen])
 
+  // Rate preview whenever a (different) room type is chosen — current vs new nightly rate.
+  useEffect(() => {
+    if (!isOpen || !reservationId || !selectedRoomTypeId) { setRateInfo(null); return }
+    setRateLoading(true)
+    setRateMode("new")
+    fetch(`/api/reservations/${reservationId}/room-move-rate?newRoomTypeId=${selectedRoomTypeId}`)
+      .then((r) => r.json())
+      .then((d) => setRateInfo(d && typeof d.keepRate === "number" ? d : null))
+      .catch(() => setRateInfo(null))
+      .finally(() => setRateLoading(false))
+  }, [isOpen, reservationId, selectedRoomTypeId])
+
   const onSubmit = async (values: RoomMoveFormValues) => {
     if (!reservationId) return
     try {
@@ -89,7 +107,9 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
         body: JSON.stringify({
           newRoomId: values.roomId,
           newRoomTypeId: values.roomTypeId,
-          reason: values.reason
+          reason: values.reason,
+          // Only meaningful on a move to a different room type; ignored server-side otherwise.
+          ...(rateInfo && !rateInfo.sameType ? { rateMode } : {}),
         })
       })
 
@@ -160,6 +180,35 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {rateLoading && <p className="text-[11px] text-muted-foreground">Checking rates…</p>}
+              {rateInfo && !rateInfo.sameType && (
+                <div className="grid gap-2">
+                  <Label>Rate <span className="text-destructive">*</span></Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRateMode("new")}
+                      className={`rounded-md border p-3 text-left transition-colors ${rateMode === "new" ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border hover:bg-muted"}`}
+                    >
+                      <div className="text-xs text-muted-foreground">Charge new rate</div>
+                      <div className="text-lg font-semibold">${rateInfo.newRate.toFixed(2)}<span className="text-xs font-normal text-muted-foreground">/night</span></div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRateMode("keep")}
+                      className={`rounded-md border p-3 text-left transition-colors ${rateMode === "keep" ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border hover:bg-muted"}`}
+                    >
+                      <div className="text-xs text-muted-foreground">Keep current rate</div>
+                      <div className="text-lg font-semibold">${rateInfo.keepRate.toFixed(2)}<span className="text-xs font-normal text-muted-foreground">/night</span></div>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Applies to the remaining {rateInfo.remainingNights} night{rateInfo.remainingNights === 1 ? "" : "s"}.{" "}
+                    {rateMode === "keep" ? "Billed as the current room type." : "Billed at the new room type's rate."}
+                  </p>
+                </div>
+              )}
 
               <FormField control={form.control} name="reason" render={({ field }) => (
                 <FormItem>

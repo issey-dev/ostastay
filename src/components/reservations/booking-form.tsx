@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Trash2, Star, ArrowLeft, Save, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -38,6 +39,7 @@ type ReservationDetail = {
   mealPlan: string
   primaryGuestId: string
   travelAgentId: string | null
+  groupBlockId: string | null
   depositFeeRuleId: string | null
   cancellationFeeRuleId: string | null
   noShowFeeRuleId: string | null
@@ -74,13 +76,21 @@ const FieldError = ({ message }: { message?: string }) =>
 // booking-form-schema.ts owns every form-shape rule with inline, real-time
 // errors; this component keeps the booking machinery (Look-to-Book grid,
 // server quote, segment chaining) reading from the watched values.
-export function BookingForm({ reservationId }: { reservationId?: string }) {
+export function BookingForm({ reservationId, walkIn = false }: { reservationId?: string; walkIn?: boolean }) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
+  const confirm = useConfirm()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
   const isEditMode = !!reservationId
+
+  // Walk-in: the arrival is fixed to today's business date and can't be changed.
+  const businessDateIso = currentProperty?.businessDate
+    ? new Date(currentProperty.businessDate).toISOString().split("T")[0]
+    : ""
+  // Where the back/cancel/success navigation lands — walk-ins came from Front Desk.
+  const exitUrl = walkIn ? `/e/${slug}/dashboard/front-office` : `/e/${slug}/dashboard/reservations`
 
   const [loading, setLoading] = useState(isEditMode)
   const [submitting, setSubmitting] = useState(false)
@@ -96,6 +106,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [specialRequestOptions, setSpecialRequestOptions] = useState<{ code: string; value: string }[]>([])
   const [feeRules, setFeeRules] = useState<{ id: string; name: string; ruleType: string; isActive: boolean }[]>([])
+  const [groupBlocks, setGroupBlocks] = useState<any[]>([])
 
   const formCtl = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema) as Resolver<BookingFormValues>,
@@ -139,6 +150,12 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       if (Array.isArray(srData)) setSpecialRequestOptions(srData.filter((c: any) => c.isActive))
       if (Array.isArray(frData)) setFeeRules(frData)
     }).catch(console.error)
+
+    // Active group blocks a reservation can be attached to (server validates fit).
+    fetch(`/api/groups?propertyId=${propertyId}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setGroupBlocks(d.filter((g: any) => g.status !== "CANCELLED" && g.status !== "LOST")) })
+      .catch(console.error)
   }, [currentProperty, propertyId, enterpriseId])
 
   useEffect(() => {
@@ -159,6 +176,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
           remarks: res.remarks || "",
           mealPlan: res.mealPlan || "NONE",
           travelAgentId: res.travelAgentId || "none",
+          groupBlockId: res.groupBlockId || "none",
           depositFeeRuleId: res.depositFeeRuleId || "none",
           cancellationFeeRuleId: res.cancellationFeeRuleId || "none",
           noShowFeeRuleId: res.noShowFeeRuleId || "none",
@@ -313,6 +331,15 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
     }
   }
 
+  // Walk-in create mode: seed the arrival with the business date once it's known.
+  // The user still picks the departure; the arrival field itself is locked below.
+  useEffect(() => {
+    if (walkIn && !isEditMode && businessDateIso && !formCtl.getValues("checkInDate")) {
+      setStayDate("in", businessDateIso)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walkIn, isEditMode, businessDateIso])
+
   const selectGridCell = (roomTypeId: string, ratePlanId: string) => {
     const i = Math.min(activeSegmentIndex, formCtl.getValues("assignments").length - 1)
     updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
@@ -405,6 +432,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
         travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        groupBlockId: values.groupBlockId === "none" ? null : values.groupBlockId,
         depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
         cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
         noShowFeeRuleId: values.noShowFeeRuleId === "none" ? null : values.noShowFeeRuleId,
@@ -421,20 +449,37 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       const url = isEditMode ? `/api/reservations/${reservationId}` : `/api/reservations`
       const method = isEditMode ? "PUT" : "POST"
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (res.ok) {
-        router.push(`/e/${slug}/dashboard/reservations`)
-        router.refresh()
-      } else {
+      // Type-level overbooking is allowed with confirmation: the first save returns 409 +
+      // requiresOverbookConfirm; we ask, then resend with acknowledgeOverbook.
+      const send = async (acknowledgeOverbook: boolean) => {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, acknowledgeOverbook }),
+        })
+        if (res.ok) {
+          router.push(exitUrl)
+          router.refresh()
+          return
+        }
         const err = await res.json()
+        if (res.status === 409 && err.requiresOverbookConfirm) {
+          setSubmitting(false)
+          const ok = await confirm({
+            title: "Overbook this room type?",
+            description: `${err.error}. This will oversell the room type — proceed anyway?`,
+            confirmLabel: "Overbook",
+          })
+          if (ok) {
+            setSubmitting(true)
+            await send(true)
+          }
+          return
+        }
         setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
         setSubmitting(false)
       }
+      await send(false)
     } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred." })
       setSubmitting(false)
@@ -461,18 +506,20 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   return (
     <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
       <div className="flex items-center gap-4">
-        <Button type="button" variant="outline" size="icon" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>
+        <Button type="button" variant="outline" size="icon" onClick={() => router.push(exitUrl)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            {isEditMode ? "Edit Booking" : "New Booking"}
+            {isEditMode ? "Edit Booking" : walkIn ? "Walk-in Booking" : "New Booking"}
             {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
           </h2>
           <p className="text-muted-foreground">
             {isEditMode
               ? `Modify details for ${existingConfirmationNo ?? "this reservation"}. Status changes go through the Check-In / Check-Out / Cancel actions.`
-              : "Pick the stay dates, choose a room and rate from the grid, then attach the guest."}
+              : walkIn
+                ? "Arrival is set to today's business date. Pick the departure, choose a room and rate, then attach the guest — they'll appear in Arrivals to check in."
+                : "Pick the stay dates, choose a room and rate from the grid, then attach the guest."}
           </p>
         </div>
         {notification && (
@@ -490,8 +537,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="grid gap-2">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
-                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} />
-                  <FieldError message={errors.checkInDate?.message} />
+                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} disabled={walkIn} />
+                  {walkIn
+                    ? <p className="text-[11px] text-muted-foreground">Locked to today&apos;s business date.</p>
+                    : <FieldError message={errors.checkInDate?.message} />}
                 </div>
                 <div className="grid gap-2">
                   <Label className="flex items-center gap-2">
@@ -543,6 +592,21 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                     }))
                   ]}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label>Group Block (Optional)</Label>
+                <SearchableSelect
+                  value={form.groupBlockId}
+                  onChange={(v) => setField("groupBlockId", v)}
+                  placeholder="Not part of a group..."
+                  options={[
+                    { value: "none", label: "Standalone (no group)" },
+                    ...groupBlocks.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` })),
+                  ]}
+                />
+                {form.groupBlockId !== "none" && (
+                  <p className="text-[11px] text-muted-foreground">Dates and room type must fall within the block&apos;s window and held types.</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -623,9 +687,9 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                           <Label>From <span className="text-destructive">*</span></Label>
                           <DatePicker
                             value={assignment.startDate}
-                            disabled={index > 0}
+                            disabled={index > 0 || walkIn}
                             onChange={v => {
-                              if (index > 0) return; // locked — derived from the previous segment's departure
+                              if (index > 0 || walkIn) return; // locked — segment 0 = arrival (walk-in fixes it to today)
                               // Same hard rule as the top-level Arrival/Departure: moving
                               // this segment's start past its own end clears the now-invalid end.
                               const current = formCtl.getValues("assignments")[index];
@@ -970,10 +1034,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
           />
 
           <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>Cancel</Button>
+            <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(exitUrl)}>Cancel</Button>
             <Button type="submit" className="flex-1" disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              {submitting ? "Saving..." : isEditMode ? "Save Changes" : "Book Now"}
+              {submitting ? "Saving..." : isEditMode ? "Save Changes" : walkIn ? "Book Walk-in" : "Book Now"}
             </Button>
           </div>
         </div>

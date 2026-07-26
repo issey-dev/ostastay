@@ -18,6 +18,9 @@ export type ReservationQuoteInput = {
   propertyId: string;
   assignments: Array<{
     roomTypeId: string;
+    // Optional "room type to charge" — when set, pricing (calendar + base occupancy)
+    // resolves off this type instead of the physical roomTypeId (kept-rate room move).
+    chargeRoomTypeId?: string | null;
     ratePlanId: string;
     startDate: Date;
     endDate: Date;
@@ -161,7 +164,8 @@ export async function computeReservationQuote(
   });
   const ratePlanById = new Map(ratePlans.map((rp) => [rp.id, rp]));
 
-  const roomTypeIds = [...new Set(assignments.map((a) => a.roomTypeId))];
+  // Include any "charge as" room types so their prices AND base occupancy are loaded.
+  const roomTypeIds = [...new Set(assignments.flatMap((a) => [a.roomTypeId, a.chargeRoomTypeId ?? a.roomTypeId]))];
   const roomTypes = await prisma.roomType.findMany({ where: { id: { in: roomTypeIds } } });
   const roomTypeById = new Map(roomTypes.map((rt) => [rt.id, rt]));
 
@@ -300,19 +304,21 @@ export async function computeReservationQuote(
     const includeInRateGross = allocationsTonight.filter((a) => a.mode === "INCLUDE_IN_RATE").reduce((s, a) => s + a.amount, 0);
 
     if (assignment && segIndex >= 0) {
+      // Price against the "charge as" room type when set, else the physical one.
+      const chargeTypeId = assignment.chargeRoomTypeId ?? assignment.roomTypeId;
       const rp = ratePlanById.get(assignment.ratePlanId);
-      const roomType = roomTypeById.get(assignment.roomTypeId);
+      const roomType = roomTypeById.get(chargeTypeId);
       if (rp && roomType && fallbackRoomCode) {
         const isDerived = !!rp.parentRatePlanId;
         const calendarPlanId = calendarPlanIdFor(rp);
         const roomCode = rp.chargeCode ?? fallbackRoomCode;
-        const entry = calendar.get(calKey(calendarPlanId, assignment.roomTypeId, nightMs));
+        const entry = calendar.get(calKey(calendarPlanId, chargeTypeId, nightMs));
 
         let inputAmount = assignment.overrideRate ?? null;
         if (inputAmount == null) {
           let baseRoomPrice = entry?.price;
           if (baseRoomPrice == null && baseRatePlan && calendarPlanId !== baseRatePlan.id) {
-            baseRoomPrice = calendar.get(calKey(baseRatePlan.id, assignment.roomTypeId, nightMs))?.price;
+            baseRoomPrice = calendar.get(calKey(baseRatePlan.id, chargeTypeId, nightMs))?.price;
           }
           if (baseRoomPrice == null) segmentAccum[segIndex].unpricedNights += 1;
           let price = baseRoomPrice ?? 0;

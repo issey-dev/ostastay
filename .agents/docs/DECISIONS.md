@@ -2044,3 +2044,56 @@ Owner renamed POS to **Fast Post** and reshaped it to a pure posting terminal.
   (`GET /api/folios/walk-in`). A bill can be **reopened for adjustments only while the
   property business date still equals its close date** — enforced by a new
   `Folio.closedBusinessDate` (stamped on close, gated on reopen in `PATCH /api/folios/[id]`).
+
+## Property Availability page + Stop Sale (2026-07-26)
+
+App owner asked for a new **Property Availability** page: a pivot of Date × Room Type
+showing available rooms by default, expandable to Arrivals / Occupancy / Departures /
+Adults / Children / Infants at both House and room-type level, themed like the tape
+chart. Second function: **Stop Sale** restrictions (default Open, or Closed) at property
+or room-type level per date. Clarifying answers given before building:
+
+- **Stop Sale enforcement = HARD block** (app owner's explicit choice over store-and-
+  display-only). A Closed date/room-type blocks new reservations in `POST` and `PUT
+  /api/reservations` (409). Unlike the *soft, acknowledgeable* overbooking guard
+  (`findTypeAvailabilityConflicts`), there is **no override** — "cannot sell on those
+  dates" is literal. On edit, only nights the reservation **newly** sells are blocked; a
+  segment it already held on a since-closed date is exempt (`findStopSaleConflicts`'s
+  `existingSegments`), mirroring the inactive-room-type "only block on change" rule.
+- **Restriction types = Open / Closed only** (app owner's choice). No CTA/CTD/min-stay in
+  v1 — deferred; the model can grow later.
+- **Placement = new `AVAILABILITY` RBAC module + sidebar page** (app owner's choice over
+  reusing `TAPE_CHART`). New sidebar item under Operations, right after Tape Chart.
+  Admin/Manager FULL; Front Desk `EDIT_NO_DELETE`; Reservations FULL. The grid is gated on
+  `AVAILABILITY:view`; **setting Open/Closed is gated on `AVAILABILITY:update`** (a single
+  bit governs both close via POST and open via DELETE — Front Desk's canUpdate covers it).
+  New modules default to licensed (scope.ts's `?? true`) and self-heal onto existing roles
+  on next request, so no migration/backfill step was needed.
+- **Data model — `AvailabilityRestriction` (presence = Closed)**: a row means the date is
+  CLOSED; **absence = Open (the default), never stored** — "set to Open" deletes the row.
+  `roomTypeId null` = a property-wide closure that date (blocks every type); set = one
+  type. Dates are UTC midnights (PriceCalendar/Reservation convention). SQLite treats NULL
+  as distinct in the `@@unique([propertyId, roomTypeId, date])` index, so property-level
+  duplicates aren't DB-prevented — the API's delete-then-create (close) / delete-all
+  (open) keeps it idempotent (a duplicate "closed" row is harmless anyway).
+- **Group-block holds count only when DEFINITE** (app owner, 2026-07-26): on the
+  availability grid, a group block's outstanding held rooms reduce availability and appear
+  in a new **"Group Blocks"** expandable detail row **only if the block is `DEFINITE`** — a
+  `TENTATIVE` block does not count here. Implemented via a new `blockStatusIn` param on
+  `outstandingBlockHolds` (grid passes `["DEFINITE"]`); the booking overbook guard is
+  unchanged and still treats a tentative hold as a soft block (its default counts
+  TENTATIVE + DEFINITE). "Group Blocks" shows *outstanding* holds (quantity − picked-up), so
+  it never double-counts rooms already materialized into reservations (those show under
+  Occupancy). Empty detail cells render `0`, not blank (app owner ask).
+- **Availability math reuses `src/lib/availability.ts`**: per night, `available = capacity
+  − inventory-holding assignments − outstanding DEFINITE group-block holds` (oversell shows
+  negative in red). Occupancy/arrivals/departures/pax are derived per-night from the same overlapping
+  assignments in `GET /api/availability`; House = column-wise sum across types. Each grid
+  column is the **night** of that date, so a closure on a stay's checkout date never blocks
+  it (checkout day isn't a night).
+- **Verification**: `tsc` clean; new `tests/business-rules/availability-restrictions.test.ts`
+  (4 tests: type-level block + reopen, property-wide block, checkout-date-only doesn't
+  block, grid metrics + closed flags) passing; scope/licensing/booking suites still green.
+  Live-verified the page compiles/renders and the nav item + `AVAILABILITY` permission
+  resolve; full visual-with-data was limited because the in-session user's enterprise has
+  no properties (added a graceful "Select a property" empty state).
