@@ -5,6 +5,7 @@ import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accou
 import { calculateFolioCommission } from "@/lib/commission";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
+import { toCents, fromCents, sumBy } from "@/lib/money";
 
 // Thrown inside the checkout transaction when the reservation is no longer IN_HOUSE by
 // the time we claim it (a concurrent checkout already ran) — turned into a clean 409
@@ -96,21 +97,22 @@ export async function POST(
     // 3. Guest-payable balance excludes folios transferring to a debtor account —
     // those are the account's responsibility now, not the guest's, regardless of
     // their balance. Every other folio must still net to ~0, same rule as before.
-    let totalCharges = 0;
-    let totalPayments = 0;
+    // Sum in integer cents so the guest-payable balance nets exactly (no float drift).
+    let chargeCents = 0;
+    let paymentCents = 0;
     for (const folio of reservation.folios) {
       if (qualifiesForAccount(folio)) continue;
       for (const item of folio.lineItems) {
         if (!item.isVoid) {
-          totalCharges += (item.amount + item.taxAmount + (item.serviceChargeAmount || 0));
+          chargeCents += toCents(item.amount) + toCents(item.taxAmount) + toCents(item.serviceChargeAmount);
         }
       }
       for (const payment of folio.payments) {
-        totalPayments += payment.isRefund ? -payment.amount : payment.amount;
+        paymentCents += payment.isRefund ? -toCents(payment.amount) : toCents(payment.amount);
       }
     }
 
-    const balance = totalCharges - totalPayments;
+    const balance = fromCents(chargeCents - paymentCents);
     if (Math.abs(balance) > 0.01) {
       return NextResponse.json({
         error: `Cannot check out with an outstanding balance of ${balance.toFixed(2)}. Settle it first — collect payment from the guest, or if they won't pay, post it to your Service Recovery account (a payment method you manage) — then check out.`,
@@ -231,7 +233,7 @@ export async function POST(
     }
 
     const finalizedInvoices = reservation.folios.filter((f) => qualifiesForAccount(f)).length;
-    const totalCommission = commissionsPosted.reduce((sum, c) => sum + c.amount, 0);
+    const totalCommission = sumBy(commissionsPosted, (c) => c.amount);
     await logActivity({
       ctx,
       module: "RESERVATIONS",
