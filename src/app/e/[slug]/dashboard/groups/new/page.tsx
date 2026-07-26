@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
+import { GROUP_START_STATUSES, GROUP_STATUS_LABEL } from "@/lib/group-status"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
 
@@ -24,6 +26,7 @@ export default function NewGroupBlock() {
     startDate: "",
     endDate: "",
     cutoffDate: "",
+    status: "TENTATIVE",
   })
   const [roomHolds, setRoomHolds] = useState<RoomHold[]>([])
 
@@ -122,6 +125,16 @@ export default function NewGroupBlock() {
 
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
+              <Label>Status</Label>
+              <SearchableSelect
+                value={formData.status}
+                onChange={(v) => setFormData({ ...formData, status: v ?? "TENTATIVE" })}
+                placeholder="Status"
+                options={GROUP_START_STATUSES.map((s) => ({ label: GROUP_STATUS_LABEL[s], value: s }))}
+              />
+              <p className="text-xs text-muted-foreground">A block starts Tentative or Definite.</p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
               <DatePicker
                 value={formData.cutoffDate}
@@ -133,7 +146,13 @@ export default function NewGroupBlock() {
 
           <div className="space-y-2">
             <Label>Rooms to Hold (by type)</Label>
-            <GroupRoomHoldsEditor propertyId={currentProperty?.id ?? ""} value={roomHolds} onChange={setRoomHolds} />
+            <GroupRoomHoldsEditor
+              propertyId={currentProperty?.id ?? ""}
+              value={roomHolds}
+              onChange={setRoomHolds}
+              startDate={formData.startDate || undefined}
+              endDate={formData.endDate || undefined}
+            />
             <p className="text-xs text-muted-foreground">Held rooms are subtracted from availability until picked up or released at cutoff.</p>
           </div>
 

@@ -151,7 +151,7 @@ export async function outstandingBlockHolds(opts: {
       quantity: { gt: 0 },
       groupBlock: {
         propertyId,
-        status: { not: "CANCELLED" },
+        status: { notIn: ["CANCELLED", "LOST"] },
         startDate: { lt: new Date(windowEnd) },
         endDate: { gt: new Date(windowStart) },
         ...(excludeGroupBlockId ? { id: { not: excludeGroupBlockId } } : {}),
@@ -187,6 +187,44 @@ export async function outstandingBlockHolds(opts: {
     if (outstanding > 0) out.push({ startMs: dayStartMs(b.startDate), endMs: dayStartMs(b.endDate), outstanding });
   }
   return out;
+}
+
+// Minimum sellable rooms of a type available across every night of a window —
+// capacity minus inventory-holding assignments minus OTHER blocks' outstanding holds.
+// This is the most a group block can hold for the window without overbooking.
+export async function minTypeAvailability(opts: {
+  propertyId: string;
+  roomTypeId: string;
+  startDate: Date;
+  endDate: Date;
+  excludeGroupBlockId?: string | null;
+}): Promise<number> {
+  const { propertyId, roomTypeId, startDate, endDate, excludeGroupBlockId } = opts;
+  const windowStart = dayStartMs(startDate);
+  const windowEnd = dayStartMs(endDate);
+  if (windowEnd <= windowStart) return 0;
+
+  const capacity = await prisma.room.count({
+    where: { propertyId, roomTypeId, status: { notIn: UNSELLABLE_ROOM_STATUSES } },
+  });
+  const existing = await prisma.roomAssignment.findMany({
+    where: {
+      roomTypeId,
+      startDate: { lt: new Date(windowEnd) },
+      endDate: { gt: new Date(windowStart) },
+      reservation: { propertyId, status: { in: INVENTORY_HOLDING_STATUSES } },
+    },
+    select: { startDate: true, endDate: true },
+  });
+  const holdWindows = await outstandingBlockHolds({ propertyId, roomTypeId, windowStart, windowEnd, excludeGroupBlockId });
+
+  let min = capacity;
+  for (let night = windowStart; night < windowEnd; night += DAY_MS) {
+    const booked = existing.filter((a) => dayStartMs(a.startDate) <= night && dayStartMs(a.endDate) > night).length;
+    const held = holdWindows.reduce((s, h) => (h.startMs <= night && h.endMs > night ? s + h.outstanding : s), 0);
+    min = Math.min(min, capacity - booked - held);
+  }
+  return Math.max(0, min);
 }
 
 // Physical-room double-booking guard: true when another inventory-holding

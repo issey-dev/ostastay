@@ -40,6 +40,7 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   // Group block lifecycle
   DEFINITE: "success",
   TENTATIVE: "warning",
+  LOST: "neutral",
 }
 
 export function statusTone(status: string): StatusTone {

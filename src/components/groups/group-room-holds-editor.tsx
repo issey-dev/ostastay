@@ -3,23 +3,31 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2 } from "@/components/icons"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { Plus, Trash2, AlertTriangle } from "@/components/icons"
 
 export type RoomHold = { roomTypeId: string; quantity: number }
 
 // Per-room-type holds editor for a group block. Real (non-pseudo) room types only,
-// each usable once. The parent owns the value; totalRoomsHeld is its sum.
+// each usable once. Shows the max holdable per type for the block dates and warns
+// (soft — staff can still proceed) when a hold would overbook.
 export function GroupRoomHoldsEditor({
   propertyId,
   value,
   onChange,
+  startDate,
+  endDate,
+  excludeGroupBlockId,
 }: {
   propertyId: string
   value: RoomHold[]
   onChange: (v: RoomHold[]) => void
+  startDate?: string
+  endDate?: string
+  excludeGroupBlockId?: string
 }) {
   const [roomTypes, setRoomTypes] = useState<any[]>([])
+  const [available, setAvailable] = useState<Record<string, number> | null>(null)
 
   useEffect(() => {
     if (!propertyId) return
@@ -28,6 +36,16 @@ export function GroupRoomHoldsEditor({
       .then((d) => { if (Array.isArray(d)) setRoomTypes(d.filter((rt: any) => !rt.isPseudo && rt.isActive !== false)) })
       .catch(console.error)
   }, [propertyId])
+
+  // Max holdable per type for the block dates (excludes this block's own holds).
+  useEffect(() => {
+    if (!propertyId || !startDate || !endDate) { setAvailable(null); return }
+    const exclude = excludeGroupBlockId ? `&excludeGroupBlockId=${excludeGroupBlockId}` : ""
+    fetch(`/api/groups/room-availability?propertyId=${propertyId}&startDate=${startDate}&endDate=${endDate}${exclude}`)
+      .then((r) => r.json())
+      .then((d) => setAvailable(d?.available ?? null))
+      .catch(() => setAvailable(null))
+  }, [propertyId, startDate, endDate, excludeGroupBlockId])
 
   const usedIds = new Set(value.map((v) => v.roomTypeId))
   const total = value.reduce((s, v) => s + (v.quantity || 0), 0)
@@ -42,28 +60,46 @@ export function GroupRoomHoldsEditor({
   return (
     <div className="space-y-2">
       {value.length === 0 && <p className="text-xs text-muted-foreground">No room types held yet — add one to reserve inventory.</p>}
-      {value.map((row, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <Select value={row.roomTypeId} onValueChange={(v) => update(i, { roomTypeId: v ?? "" })}>
-            <SelectTrigger className="flex-1"><SelectValue placeholder="Room type" /></SelectTrigger>
-            <SelectContent>
-              {roomTypes
-                .filter((rt) => rt.id === row.roomTypeId || !usedIds.has(rt.id))
-                .map((rt) => <SelectItem key={rt.id} value={rt.id}>{rt.name} ({rt.code})</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Input
-            type="number"
-            min="0"
-            className="w-20"
-            value={row.quantity}
-            onChange={(e) => update(i, { quantity: parseInt(e.target.value) || 0 })}
-          />
-          <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)} title="Remove">
-            <Trash2 className="w-4 h-4 text-destructive" />
-          </Button>
-        </div>
-      ))}
+      {value.map((row, i) => {
+        const max = available && row.roomTypeId in available ? available[row.roomTypeId] : null
+        const overbooked = max != null && row.quantity > max
+        return (
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <SearchableSelect
+                  value={row.roomTypeId}
+                  onChange={(v) => update(i, { roomTypeId: v ?? "" })}
+                  placeholder="Room type"
+                  options={roomTypes
+                    .filter((rt) => rt.id === row.roomTypeId || !usedIds.has(rt.id))
+                    .map((rt) => ({ label: `${rt.name} (${rt.code})`, value: rt.id }))}
+                />
+              </div>
+              <Input
+                type="number"
+                min="0"
+                className={`w-20 ${overbooked ? "border-warning focus-visible:ring-warning/40" : ""}`}
+                value={row.quantity}
+                onChange={(e) => update(i, { quantity: parseInt(e.target.value) || 0 })}
+              />
+              <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)} title="Remove">
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </div>
+            {row.roomTypeId && max != null && (
+              overbooked ? (
+                <p className="text-[11px] text-warning flex items-center gap-1 pl-0.5">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  Only {max} available for these dates — holding {row.quantity} will overbook.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground pl-0.5">{max} available for these dates.</p>
+              )
+            )}
+          </div>
+        )
+      })}
       <div className="flex items-center justify-between pt-1">
         <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={roomTypes.length <= value.length}>
           <Plus className="w-4 h-4 mr-1" /> Add room type

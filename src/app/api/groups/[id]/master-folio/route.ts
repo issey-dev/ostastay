@@ -15,8 +15,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const group = await prisma.groupBlock.findUnique({ where: { id }, include: { masterFolios: true } });
     if (!group) return NextResponse.json({ error: "Group block not found" }, { status: 404 });
     await assertPropertyAccess(ctx, group.propertyId);
-    if (group.status === "CANCELLED") {
-      return NextResponse.json({ error: "Cannot create a master folio for a cancelled block." }, { status: 400 });
+    if (group.status === "CANCELLED" || group.status === "LOST") {
+      return NextResponse.json({ error: "Cannot create a master folio for a closed block." }, { status: 400 });
     }
 
     const existing = group.masterFolios.find((f) => f.isMaster && !f.isClosed);

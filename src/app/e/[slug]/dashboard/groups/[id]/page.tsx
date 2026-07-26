@@ -15,8 +15,9 @@ import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DatePicker } from "@/components/ui/date-picker"
+import { GROUP_STATUS_TRANSITIONS, GROUP_STATUS_LABEL, type GroupStatus } from "@/lib/group-status"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -174,6 +175,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             groupId={group.id}
             onSaved={fetchGroup}
             disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
+            blockStart={group.startDate?.split("T")[0]}
+            blockEnd={group.endDate?.split("T")[0]}
           />
         </div>
       </div>
@@ -328,7 +331,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
       {/* Edit Block dialog */}
       <Dialog open={isEditOpen} onOpenChange={(open) => !open && setIsEditOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Group Block</DialogTitle>
             <DialogDescription>
@@ -343,14 +346,14 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v ?? p.status }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TENTATIVE">Tentative</SelectItem>
-                    <SelectItem value="DEFINITE">Definite</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={editForm.status}
+                  onChange={(v) => setEditForm((p) => ({ ...p, status: v ?? p.status }))}
+                  placeholder="Status"
+                  options={(GROUP_STATUS_TRANSITIONS[(group.status as GroupStatus)] ?? [group.status as GroupStatus]).map((s) => ({
+                    label: GROUP_STATUS_LABEL[s], value: s,
+                  }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Cutoff Date</Label>
@@ -367,6 +370,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 propertyId={currentProperty?.id ?? ""}
                 value={editForm.roomHolds}
                 onChange={(v) => setEditForm((p) => ({ ...p, roomHolds: v }))}
+                startDate={group.startDate?.split("T")[0]}
+                endDate={group.endDate?.split("T")[0]}
+                excludeGroupBlockId={group.id}
               />
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}

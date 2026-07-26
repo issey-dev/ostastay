@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log"
+import { GROUP_STATUSES, GROUP_RELEASING_STATUSES, GROUP_STATUS_LABEL, canTransitionGroupStatus, type GroupStatus } from "@/lib/group-status"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,7 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const updateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  status: z.enum(["TENTATIVE", "DEFINITE", "CANCELLED"]).optional(),
+  status: z.enum(GROUP_STATUSES).optional(),
   startDate: z.string().min(1).optional(),
   endDate: z.string().min(1).optional(),
   cutoffDate: z.string().nullable().optional(),
@@ -80,13 +81,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
+    // Enforce the status state machine (see src/lib/group-status.ts).
+    if (data.status && data.status !== group.status && !canTransitionGroupStatus(group.status, data.status)) {
+      return NextResponse.json(
+        { error: `Cannot change status from ${GROUP_STATUS_LABEL[group.status as GroupStatus] ?? group.status} to ${GROUP_STATUS_LABEL[data.status]}.` },
+        { status: 400 }
+      )
+    }
+
     const activePickups = await prisma.reservation.count({
       where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
     })
 
-    if (data.status === "CANCELLED" && activePickups > 0) {
+    // Releasing a block (Lost / Cancelled) can't strand live pickups.
+    if (data.status && GROUP_RELEASING_STATUSES.includes(data.status) && activePickups > 0) {
+      const verb = data.status === "LOST" ? "mark lost" : "cancel"
       return NextResponse.json(
-        { error: `Cannot cancel a block with ${activePickups} active pickup${activePickups > 1 ? "s" : ""} — cancel those reservations first.` },
+        { error: `Cannot ${verb} a block with ${activePickups} active pickup${activePickups > 1 ? "s" : ""} — cancel those reservations first.` },
         { status: 400 }
       )
     }

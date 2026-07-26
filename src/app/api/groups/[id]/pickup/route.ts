@@ -46,11 +46,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
+    // Pickup dates must fall within the block window.
+    const ci = new Date(checkInDate)
+    const co = new Date(checkOutDate)
+    if (co <= ci) {
+      return NextResponse.json({ error: "Check-out must be after check-in." }, { status: 400 })
+    }
+    if (ci < group.startDate || co > group.endDate) {
+      return NextResponse.json({ error: "Pickup dates must fall within the block's date range." }, { status: 400 })
+    }
+
     // Block-level guards: a cancelled block can't be picked up; a past-cutoff block
     // has released its held rooms; and a block only holds totalRoomsHeld rooms —
     // pickups beyond that are a normal reservation, not a block pickup.
-    if (group.status === "CANCELLED") {
-      return NextResponse.json({ error: "This group block is cancelled and cannot be picked up" }, { status: 400 })
+    if (group.status === "CANCELLED" || group.status === "LOST") {
+      return NextResponse.json({ error: `This group block is ${group.status === "LOST" ? "marked lost" : "cancelled"} and cannot be picked up` }, { status: 400 })
     }
     if (group.cutoffDate && new Date() > group.cutoffDate) {
       return NextResponse.json(
@@ -105,8 +115,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // This pickup draws from THIS block's held rooms — don't let the block block itself.
       excludeGroupBlockId: id,
     })
-    if (availabilityConflicts.length > 0) {
-      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 })
+    // Type-level overbooking is a soft, acknowledgeable warning; the physical same-room
+    // guard below stays hard.
+    if (availabilityConflicts.length > 0 && body.acknowledgeOverbook !== true) {
+      return NextResponse.json({ error: availabilityConflicts.join("; "), requiresOverbookConfirm: true }, { status: 409 })
     }
     if (roomId) {
       const roomTaken = await hasRoomConflict({
