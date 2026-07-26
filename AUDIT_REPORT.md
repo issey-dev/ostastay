@@ -430,6 +430,15 @@ Committed stage-by-stage on branch `audit-remediation` (one commit per finding).
   ~100 React-Compiler advisories (`react-hooks/set-state-in-effect` etc., new in
   eslint-config-next 16). Typing all `any`s / making the app React-Compiler-clean are separate
   staged efforts. Also ignored `scripts/**` + `.claude/**` (not shipped app code).
-- **Still open (deferred, need owner input):** A14 (Float→integer-cents storage — large
-  systemic financial migration, warrants explicit review), S8 (SMTP encryption-at-rest — needs
-  a key-management decision), D-2 (shared-component refactor). **Batches 1–4 are DONE.**
+- **A14 (money integrity) — DONE (targeted).** Owner chose the targeted fix over a full
+  Float→Int storage migration (a ~99-file change with polymorphic money/percent fields —
+  `PropertyFeeRule.value`, `derivedAdjustmentValue`, spa charge values — that can't be
+  blanket-converted; disproportionate risk since every posting is already cent-rounded).
+  Added `src/lib/money.ts` and routed folio balance, drawer/shift cash, checkout & cancel
+  balances, and deposit reconciliation through exact integer-cent summation, eliminating the
+  accumulation error the old 0.01 tolerances papered over. Storage stays Float; reports
+  already `round2` display totals. New `money.test.ts` (5 tests); suite 410 green.
+- **Still open (deferred, need owner input):** S8 (SMTP encryption-at-rest — needs a
+  key-management decision), D-2 (shared-component refactor), plus the two lint follow-ups
+  (properly type the `any`s; React-Compiler-clean). Full Float→Int storage migration remains
+  available if ever wanted, but is not needed for integrity. **Batches 1–4 are DONE.**

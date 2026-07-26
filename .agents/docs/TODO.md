@@ -37,8 +37,14 @@ Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 
   documents; reclassified ~270 no-explicit-any and ~100 React-Compiler advisories to warnings
   (kept visible). Remaining follow-ups (warnings, not gating): properly type the `any`s and
   make the app React-Compiler-clean — both large staged efforts.
-- **Still open (deferred):** A14 Float→integer-cents (large systemic change) · S8 SMTP
-  encryption-at-rest (needs KMS decision).
+- **A14 money integrity — DONE (targeted).** Owner chose the targeted fix over a full
+  Float→Int storage migration (~99 files, polymorphic money/percent fields, disproportionate
+  risk). Added `src/lib/money.ts` (cent-based sums) and routed folio balance / drawer cash /
+  checkout & cancel balances / deposit reconciliation through exact integer-cent math — kills
+  the accumulation error the 0.01 tolerances hid. Storage stays Float. `money.test.ts` added.
+- **Still open (deferred):** S8 SMTP encryption-at-rest (needs KMS decision) · D-2
+  shared-component refactor · lint follow-ups (type the `any`s; make React-Compiler-clean) ·
+  full Float→Int storage migration (available if ever wanted; not needed for integrity).
 - **Discovered (out of scope, needs a fixture fix):** `tests/business-rules/excursions.test.ts
   > "cancelling past the cutoff…"` fails on clean master — books a `day(-2)` departure for a
   `day(-1)` arrival, which the out-of-stay guard rejects, so the later cancel 500s.
