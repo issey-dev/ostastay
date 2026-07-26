@@ -31,6 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               include: { paymentMethod: true }
             }
           }
+        },
+        roomHolds: {
+          include: { roomType: { select: { id: true, name: true, code: true } } },
         }
       }
     })
@@ -52,6 +55,9 @@ const updateSchema = z.object({
   endDate: z.string().min(1).optional(),
   cutoffDate: z.string().nullable().optional(),
   totalRoomsHeld: z.number().int().min(0).optional(),
+  // Per-room-type holds — when provided, they replace the block's holds entirely and
+  // totalRoomsHeld becomes their sum.
+  roomHolds: z.array(z.object({ roomTypeId: z.string().min(1), quantity: z.number().int().min(0) })).optional(),
 })
 
 // A block was previously frozen at creation — status, cutoff, and rooms-held could
@@ -84,7 +90,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { status: 400 }
       )
     }
-    if (data.totalRoomsHeld != null && data.totalRoomsHeld < activePickups) {
+    // Per-type holds (when provided) are the source of truth; totalRoomsHeld is their sum.
+    const cleanedHolds = data.roomHolds
+      ? data.roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })).filter((h) => h.quantity > 0)
+      : null
+    const effectiveHeld = cleanedHolds ? cleanedHolds.reduce((s, h) => s + h.quantity, 0) : data.totalRoomsHeld
+
+    if (effectiveHeld != null && effectiveHeld < activePickups) {
       return NextResponse.json(
         { error: `Rooms held cannot go below the ${activePickups} already picked up.` },
         { status: 400 }
@@ -107,7 +119,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(data.cutoffDate !== undefined
           ? { cutoffDate: data.cutoffDate ? new Date(data.cutoffDate) : null }
           : {}),
-        ...(data.totalRoomsHeld != null ? { totalRoomsHeld: data.totalRoomsHeld } : {}),
+        ...(effectiveHeld != null ? { totalRoomsHeld: effectiveHeld } : {}),
+        // Replace the block's holds wholesale when a new set is supplied.
+        ...(cleanedHolds ? { roomHolds: { deleteMany: {}, create: cleanedHolds } } : {}),
       },
     })
 

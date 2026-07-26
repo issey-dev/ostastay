@@ -46,18 +46,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
-    // Gate: the block's master folio (PM account) must exist before any pickup, so
-    // charges have somewhere to route. Staff create it from the block page.
-    const masterFolio = group.masterFolios.find((f) => f.isMaster && !f.isClosed)
-    if (!masterFolio) {
-      return NextResponse.json(
-        { error: "Create the group's master folio before picking up rooms." },
-        { status: 400 }
-      )
-    }
-    // Default: bill the master folio; only false when staff explicitly opt the guest out.
-    const groupBillToMaster = billToMaster !== false
-
     // Block-level guards: a cancelled block can't be picked up; a past-cutoff block
     // has released its held rooms; and a block only holds totalRoomsHeld rooms —
     // pickups beyond that are a normal reservation, not a block pickup.
@@ -82,6 +70,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
+    // Gate: the block's master folio (PM account) must exist before any pickup so
+    // charges have somewhere to route. Checked after the block-state guards above so an
+    // expired/cancelled/full block reports that first. Staff create it from the block page.
+    const masterFolio = group.masterFolios.find((f) => f.isMaster && !f.isClosed)
+    if (!masterFolio) {
+      return NextResponse.json(
+        { error: "Create the group's master folio before picking up rooms." },
+        { status: 400 }
+      )
+    }
+    // Default: bill the master folio; only false when staff explicitly opt the guest out.
+    const groupBillToMaster = billToMaster !== false
+
     const roomType = await prisma.roomType.findUnique({ where: { id: roomTypeId } })
     if (!roomType || roomType.propertyId !== group.propertyId) {
       return NextResponse.json({ error: "Room type does not belong to this property" }, { status: 400 })
@@ -101,6 +102,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: group.propertyId,
       segments: [{ roomTypeId, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
+      // This pickup draws from THIS block's held rooms — don't let the block block itself.
+      excludeGroupBlockId: id,
     })
     if (availabilityConflicts.length > 0) {
       return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 })

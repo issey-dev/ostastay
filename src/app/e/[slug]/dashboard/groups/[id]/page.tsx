@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
 import { GroupScheduleTimeline } from "@/components/groups/group-schedule-timeline"
+import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -33,7 +34,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const [loading, setLoading] = useState(true)
   const [isMasterFolioOpen, setIsMasterFolioOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: "", status: "TENTATIVE", totalRoomsHeld: "0", cutoffDate: "" })
+  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[] }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [] })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [creatingMaster, setCreatingMaster] = useState(false)
@@ -54,8 +55,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
     setEditForm({
       name: group.name,
       status: group.status,
-      totalRoomsHeld: String(group.totalRoomsHeld),
       cutoffDate: group.cutoffDate ? group.cutoffDate.split("T")[0] : "",
+      roomHolds: (group.roomHolds ?? []).map((h: any) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })),
     })
     setEditError(null)
     setIsEditOpen(true)
@@ -71,8 +72,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         body: JSON.stringify({
           name: editForm.name,
           status: editForm.status,
-          totalRoomsHeld: parseInt(editForm.totalRoomsHeld) || 0,
           cutoffDate: editForm.cutoffDate || null,
+          roomHolds: editForm.roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
         }),
       })
       const data = await res.json()
@@ -131,6 +132,13 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const pickedUp = group.reservations?.length || 0
   const remaining = Math.max(0, group.totalRoomsHeld - pickedUp)
   const openMaster = group.masterFolios?.find((f: any) => !f.isClosed)
+  // Rooms picked up per room type (active pickups only) — for the Room Block breakdown.
+  const pickedByType: Record<string, number> = {}
+  for (const r of group.reservations ?? []) {
+    if (["CANCELLED", "NO_SHOW"].includes(r.status)) continue
+    const t = r.assignments?.[0]?.roomTypeId
+    if (t) pickedByType[t] = (pickedByType[t] ?? 0) + 1
+  }
 
   return (
     <div className="space-y-6">
@@ -205,6 +213,43 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <CardContent><div className="text-3xl font-bold">{remaining}</div></CardContent>
         </Card>
       </div>
+
+      {/* Room Block — per room type held/picked/remaining */}
+      {group.roomHolds?.length > 0 && (
+        <Card className="shadow-elevation-1 overflow-hidden">
+          <CardHeader className="py-4">
+            <CardTitle className="text-lg">Room Block</CardTitle>
+          </CardHeader>
+          <div className="overflow-x-auto border-t border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="pl-6">Room Type</TableHead>
+                  <TableHead className="text-right">Held</TableHead>
+                  <TableHead className="text-right">Picked Up</TableHead>
+                  <TableHead className="text-right pr-6">Remaining</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {group.roomHolds.map((h: any) => {
+                  const picked = pickedByType[h.roomTypeId] ?? 0
+                  const rem = Math.max(0, h.quantity - picked)
+                  return (
+                    <TableRow key={h.id}>
+                      <TableCell className="pl-6 font-medium">
+                        {h.roomType?.name} <span className="text-xs text-muted-foreground">({h.roomType?.code})</span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{h.quantity}</TableCell>
+                      <TableCell className="text-right tabular-nums">{picked}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-semibold">{rem}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {/* Block Schedule */}
       <Card className="shadow-elevation-1 overflow-hidden">
@@ -308,21 +353,20 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Rooms Held</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editForm.totalRoomsHeld}
-                  onChange={(e) => setEditForm((p) => ({ ...p, totalRoomsHeld: e.target.value }))}
+                <Label>Cutoff Date</Label>
+                <DatePicker
+                  value={editForm.cutoffDate || null}
+                  onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
+                  placeholder="No cutoff"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Cutoff Date</Label>
-              <DatePicker
-                value={editForm.cutoffDate || null}
-                onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
-                placeholder="No cutoff"
+              <Label>Rooms Held (by type)</Label>
+              <GroupRoomHoldsEditor
+                propertyId={currentProperty?.id ?? ""}
+                value={editForm.roomHolds}
+                onChange={(v) => setEditForm((p) => ({ ...p, roomHolds: v }))}
               />
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}

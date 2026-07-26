@@ -149,6 +149,8 @@ describe("Group block editing & pickup rate choice", () => {
       },
     });
     groupId = group.id;
+    // Pickups require the block's master folio (PM account) to exist.
+    await prisma.folio.create({ data: { propertyId, groupBlockId: group.id, isMaster: true } });
   });
 
   it("edits status, cutoff, and rooms held", async () => {

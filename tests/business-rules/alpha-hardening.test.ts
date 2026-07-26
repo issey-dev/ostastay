@@ -421,6 +421,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     const block = await prisma.groupBlock.create({
       data: { propertyId, code: `GBRACE-${uniq()}`, name: "Race Block", startDate: new Date("2026-12-01"), endDate: new Date("2026-12-20"), totalRoomsHeld: 1, status: "DEFINITE" },
     });
+    await prisma.folio.create({ data: { propertyId, groupBlockId: block.id, isMaster: true } });
     const pickup = (checkIn: string, checkOut: string) =>
       asUser(adminId, () => groupPickupRoute.POST(
         new Request(`http://localhost/api/groups/${block.id}/pickup`, {
@@ -459,6 +460,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         status: "DEFINITE",
       },
     });
+    await prisma.folio.create({ data: { propertyId, groupBlockId: block.id, isMaster: true } });
 
     const first = await asUser(adminId, () =>
       groupPickupRoute.POST(

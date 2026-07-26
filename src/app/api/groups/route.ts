@@ -37,6 +37,16 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const { propertyId, code, name, startDate, endDate, cutoffDate, totalRoomsHeld } = body
+    // Per-room-type holds: [{ roomTypeId, quantity }]. When provided, they're the source
+    // of truth and totalRoomsHeld is their sum; otherwise fall back to the flat number.
+    const roomHolds: { roomTypeId: string; quantity: number }[] = Array.isArray(body.roomHolds)
+      ? body.roomHolds
+          .map((h: any) => ({ roomTypeId: String(h.roomTypeId), quantity: parseInt(h.quantity) || 0 }))
+          .filter((h: { roomTypeId: string; quantity: number }) => h.roomTypeId && h.quantity > 0)
+      : []
+    const heldTotal = roomHolds.length
+      ? roomHolds.reduce((s, h) => s + h.quantity, 0)
+      : parseInt(totalRoomsHeld) || 0
 
     if (!propertyId || !code || !name || !startDate || !endDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -61,8 +71,11 @@ export async function POST(request: Request) {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         cutoffDate: cutoffDate ? new Date(cutoffDate) : null,
-        totalRoomsHeld: parseInt(totalRoomsHeld) || 0,
-        status: "TENTATIVE"
+        totalRoomsHeld: heldTotal,
+        status: "TENTATIVE",
+        roomHolds: roomHolds.length
+          ? { create: roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })) }
+          : undefined,
       }
     })
 
@@ -72,7 +85,7 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "GroupBlock",
       entityId: newGroup.id,
-      description: `Created group block ${code} "${name}" (${parseInt(totalRoomsHeld) || 0} rooms held)`,
+      description: `Created group block ${code} "${name}" (${heldTotal} rooms held)`,
     })
 
     return NextResponse.json(newGroup)

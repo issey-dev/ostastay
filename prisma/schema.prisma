@@ -380,6 +380,7 @@ model RoomType {
   RoomAssignment    RoomAssignment[]  @relation("AssignmentPhysicalRoomType")
   // Assignments physically in another room type but billed AS this type (kept rate on a room move).
   chargeAssignments RoomAssignment[]  @relation("AssignmentChargeRoomType")
+  blockHolds        GroupBlockRoom[]
   // Room-specific features — Bed Type, View, and Amenities are all multi-select, drawn
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
@@ -1480,11 +1481,27 @@ model GroupBlock {
 
   reservations Reservation[]
   masterFolios Folio[]
+  // Per-room-type rooms held for the block. totalRoomsHeld is kept in sync as the sum.
+  roomHolds    GroupBlockRoom[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
+}
+
+// Rooms of a given type held by a group block for its whole date span. Outstanding
+// holds (quantity minus already-picked-up rooms of that type) are subtracted from
+// availability, so a block deducts from sellable inventory before pickups exist.
+model GroupBlockRoom {
+  id           String     @id @default(uuid())
+  groupBlockId String
+  groupBlock   GroupBlock @relation(fields: [groupBlockId], references: [id], onDelete: Cascade)
+  roomTypeId   String
+  roomType     RoomType   @relation(fields: [roomTypeId], references: [id])
+  quantity     Int        @default(0)
+
+  @@unique([groupBlockId, roomTypeId])
 }
 
 model PropertyNightAuditLog {

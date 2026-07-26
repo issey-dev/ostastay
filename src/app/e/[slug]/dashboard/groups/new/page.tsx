@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
+import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
 
@@ -16,15 +17,15 @@ export default function NewGroupBlock() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(false)
-  
+
   const [formData, setFormData] = useState({
     code: "",
     name: "",
     startDate: "",
     endDate: "",
     cutoffDate: "",
-    totalRoomsHeld: "10"
   })
+  const [roomHolds, setRoomHolds] = useState<RoomHold[]>([])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -41,6 +42,7 @@ export default function NewGroupBlock() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          roomHolds: roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
           propertyId: currentProperty.id
         })
       })
@@ -120,26 +122,19 @@ export default function NewGroupBlock() {
 
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="totalRoomsHeld">Total Rooms to Hold</Label>
-              <Input 
-                id="totalRoomsHeld" 
-                name="totalRoomsHeld" 
-                type="number" 
-                min="1"
-                required 
-                value={formData.totalRoomsHeld}
-                onChange={handleChange}
-              />
-              <p className="text-xs text-muted-foreground">Inventory will be subtracted from availability.</p>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
               <DatePicker
                 value={formData.cutoffDate}
                 onChange={(v) => setFormData({ ...formData, cutoffDate: v })}
               />
-              <p className="text-xs text-muted-foreground">Unreserved rooms will be released after this date.</p>
+              <p className="text-xs text-muted-foreground">Unreserved held rooms are released after this date.</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Rooms to Hold (by type)</Label>
+            <GroupRoomHoldsEditor propertyId={currentProperty?.id ?? ""} value={roomHolds} onChange={setRoomHolds} />
+            <p className="text-xs text-muted-foreground">Held rooms are subtracted from availability until picked up or released at cutoff.</p>
           </div>
 
           <div className="pt-6 border-t flex justify-end gap-3">
