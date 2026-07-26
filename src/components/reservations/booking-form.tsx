@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Trash2, Star, ArrowLeft, Save, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -77,6 +78,7 @@ const FieldError = ({ message }: { message?: string }) =>
 export function BookingForm({ reservationId, walkIn = false }: { reservationId?: string; walkIn?: boolean }) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
+  const confirm = useConfirm()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
@@ -437,20 +439,37 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       const url = isEditMode ? `/api/reservations/${reservationId}` : `/api/reservations`
       const method = isEditMode ? "PUT" : "POST"
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (res.ok) {
-        router.push(exitUrl)
-        router.refresh()
-      } else {
+      // Type-level overbooking is allowed with confirmation: the first save returns 409 +
+      // requiresOverbookConfirm; we ask, then resend with acknowledgeOverbook.
+      const send = async (acknowledgeOverbook: boolean) => {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, acknowledgeOverbook }),
+        })
+        if (res.ok) {
+          router.push(exitUrl)
+          router.refresh()
+          return
+        }
         const err = await res.json()
+        if (res.status === 409 && err.requiresOverbookConfirm) {
+          setSubmitting(false)
+          const ok = await confirm({
+            title: "Overbook this room type?",
+            description: `${err.error}. This will oversell the room type — proceed anyway?`,
+            confirmLabel: "Overbook",
+          })
+          if (ok) {
+            setSubmitting(true)
+            await send(true)
+          }
+          return
+        }
         setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
         setSubmitting(false)
       }
+      await send(false)
     } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred." })
       setSubmitting(false)

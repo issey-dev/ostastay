@@ -204,10 +204,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Type-level overbooking guard: block the booking outright when any night of any
-    // segment would exceed the sellable rooms of that type (see src/lib/availability.ts).
-    // This runs whether or not a specific room was picked — unassigned bookings hold
-    // inventory too.
+    // Type-level overbooking is a SOFT warning: a property may deliberately oversell a
+    // room type (see src/lib/availability.ts). Staff must acknowledge it (acknowledgeOverbook)
+    // — the physical same-room double-booking guard below stays hard. First pass without
+    // acknowledgement returns 409 + requiresOverbookConfirm so the UI can confirm.
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: body.propertyId,
       segments: assignmentsInput.map((a: { roomTypeId: string; startDate: string | Date; endDate: string | Date }) => ({
@@ -216,9 +216,13 @@ export async function POST(request: Request) {
         endDate: new Date(a.endDate),
       })),
     });
-    if (availabilityConflicts.length > 0) {
-      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
+    if (availabilityConflicts.length > 0 && !body.acknowledgeOverbook) {
+      return NextResponse.json(
+        { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
+        { status: 409 }
+      );
     }
+    const overbookWarning = availabilityConflicts.length > 0 ? availabilityConflicts.join("; ") : null;
 
     // Optional per-reservation fee-rule selections (one per type). Each id, if given,
     // must be a rule of THIS property and the matching type — a bad id is rejected rather
@@ -354,7 +358,7 @@ export async function POST(request: Request) {
       ? `${totalOccupants} guests exceeds max occupancy for: ${Array.from(overCapacityRoomTypes).join(", ")}`
       : undefined;
 
-    return NextResponse.json({ ...newReservation, capacityWarning }, { status: 201 });
+    return NextResponse.json({ ...newReservation, capacityWarning, overbookWarning }, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

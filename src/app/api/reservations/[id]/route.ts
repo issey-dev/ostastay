@@ -246,8 +246,13 @@ export async function PUT(
       })),
       excludeReservationId: id,
     });
-    if (availabilityConflicts.length > 0) {
-      return NextResponse.json({ error: availabilityConflicts.join("; ") }, { status: 409 });
+    // Type-level overbooking is a soft, acknowledgeable warning (physical room conflicts
+    // above stay hard).
+    if (availabilityConflicts.length > 0 && !(body as { acknowledgeOverbook?: boolean }).acknowledgeOverbook) {
+      return NextResponse.json(
+        { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
+        { status: 409 }
+      );
     }
 
     // Validate any per-reservation fee-rule selections against this property + type
