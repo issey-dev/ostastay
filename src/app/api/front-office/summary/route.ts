@@ -3,6 +3,24 @@ import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date";
+import { computeFolioBalance } from "@/lib/debtor-accounts";
+
+type BalanceFolio = {
+  lineItems: { amount: number; taxAmount: number; serviceChargeAmount: number; isVoid: boolean }[];
+  payments: { amount: number; isRefund: boolean }[];
+};
+// Outstanding balance across a reservation's folios (charges − payments), cent-safe.
+function reservationBalance(folios: BalanceFolio[]): number {
+  return folios.reduce((sum, f) => sum + computeFolioBalance(f.lineItems, f.payments), 0);
+}
+
+// An arrival's guest profile is "incomplete" (front desk should complete it before
+// check-in) when nationality, date of birth, OR any identification document is missing.
+// Only meaningful for individual guests — company/agent primaries have no such fields.
+function isProfileIncomplete(g: { profileType: string; nationality: string | null; dateOfBirth: Date | null; documents: { id: string }[] } | null): boolean {
+  if (!g || g.profileType !== "GUEST") return false;
+  return !g.nationality || !g.dateOfBirth || (g.documents?.length ?? 0) === 0;
+}
 
 export async function GET(request: Request) {
   try {
@@ -38,12 +56,12 @@ export async function GET(request: Request) {
         }
       },
       include: {
-        primaryGuest: true,
-        assignments: { include: { room: true, roomType: true } },
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
         traces: { where: { isResolved: false } },
-        // Deposits collected pre-arrival live as payments on the folio — the
-        // check-in dialog shows them so front desk knows what's already paid.
-        folios: { include: { payments: { select: { amount: true, isRefund: true } } } },
+        // Deposits collected pre-arrival live as payments on the folio; line items let
+        // us also surface the outstanding balance the check-in dialog will settle.
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
       }
     });
 
@@ -57,7 +75,12 @@ export async function GET(request: Request) {
           lte: endOfToday,
         }
       },
-      include: { primaryGuest: true, assignments: { include: { room: true, roomType: true } }, folios: true, traces: { where: { isResolved: false } } }
+      include: {
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
+        traces: { where: { isResolved: false } },
+      }
     });
 
     // 3. In-House
@@ -66,7 +89,12 @@ export async function GET(request: Request) {
         propertyId,
         status: ReservationStatus.IN_HOUSE,
       },
-      include: { primaryGuest: true, assignments: { include: { room: true, roomType: true } }, folios: true, traces: { where: { isResolved: false } } }
+      include: {
+        primaryGuest: { include: { documents: { select: { id: true } } } },
+        assignments: { include: { room: { include: { housekeepingTasks: { where: { taskType: "SPECIAL_REQUEST" }, orderBy: { createdAt: "desc" } } } }, roomType: true } },
+        folios: { include: { lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } }, payments: { select: { amount: true, isRefund: true } } } },
+        traces: { where: { isResolved: false } },
+      }
     });
 
     // 4. Room Moves Due Today — an in-house reservation whose split-stay segments
@@ -139,9 +167,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       businessDate: startOfToday,
-      arrivals,
-      departures,
-      inHouse,
+      // Each row carries its outstanding balance; arrivals also carry a profile-completeness flag.
+      arrivals: arrivals.map(r => ({ ...r, balance: reservationBalance(r.folios), profileIncomplete: isProfileIncomplete(r.primaryGuest) })),
+      departures: departures.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
+      inHouse: inHouse.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
       roomMovesToday,
       vacantRoomsCount: vacantRooms.length,
       vacantReadyCount,
