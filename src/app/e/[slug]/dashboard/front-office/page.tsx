@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX } from "@/components/icons"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -207,41 +207,77 @@ export default function FrontOfficeDashboard() {
 
       {/* KPI Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Arrivals — checked in of expected */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals Today</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals</CardTitle>
             <LogIn className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.arrivals?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.arrivalsSummary?.checkedIn ?? 0}</span>
+              <span className="text-lg font-medium text-muted-foreground">/ {data?.arrivalsSummary?.expected ?? 0}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              checked in · {Math.max(0, (data?.arrivalsSummary?.expected ?? 0) - (data?.arrivalsSummary?.checkedIn ?? 0))} to arrive
+            </p>
           </CardContent>
         </Card>
+
+        {/* Departures — checked out of expected */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Departures Today</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Departures</CardTitle>
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.departures?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.departuresSummary?.checkedOut ?? 0}</span>
+              <span className="text-lg font-medium text-muted-foreground">/ {data?.departuresSummary?.expected ?? 0}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              checked out · {Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out
+            </p>
           </CardContent>
         </Card>
+
+        {/* In-House — occupied rooms and the people in them */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">In-House Guests</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">In-House</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.inHouse?.length || 0}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold">{data?.inHouseSummary?.rooms ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">rooms</span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.adults ?? 0}</span> Adt</span>
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.children ?? 0}</span> Chd</span>
+              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.infants ?? 0}</span> Inf</span>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Room Status — occupied/vacant split and housekeeping readiness */}
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Vacant Rooms</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Room Status</CardTitle>
             <BedDouble className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{data?.vacantRoomsCount || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">{data?.vacantReadyCount ?? 0} clean &amp; ready</p>
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold">{data?.roomStatusSummary?.occupied ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">occ ·</span>
+              <span className="text-3xl font-bold">{data?.roomStatusSummary?.vacant ?? 0}</span>
+              <span className="text-sm font-medium text-muted-foreground">vac</span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {data?.roomStatusSummary?.clean ?? 0} Clean</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" /> {data?.roomStatusSummary?.inspected ?? 0} Insp</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {data?.roomStatusSummary?.dirty ?? 0} Dirty</span>
+            </div>
           </CardContent>
         </Card>
       </div>

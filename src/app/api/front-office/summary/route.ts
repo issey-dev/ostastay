@@ -112,6 +112,31 @@ export async function GET(request: Request) {
     const vacantRooms = allRooms.filter(r => !occupiedRoomIds.has(r.id));
     const vacantReadyCount = vacantRooms.filter(r => r.status === "CLEAN" || r.status === "INSPECTED").length;
 
+    // 6. Housekeeping breakdown over in-service rooms — how the vacant/occupied
+    // split lands across CLEAN/INSPECTED/DIRTY (OOO/OOS are excluded upstream).
+    const clean = allRooms.filter(r => r.status === "CLEAN").length;
+    const inspected = allRooms.filter(r => r.status === "INSPECTED").length;
+    const dirty = allRooms.filter(r => r.status === "DIRTY").length;
+
+    // 7. Arrivals / Departures progress — expected vs. already actioned. Expected
+    // arrivals = anyone due in today who wasn't cancelled/no-show (still RESERVED, or
+    // already IN_HOUSE / CHECKED_OUT); checkedIn = those who have actually arrived.
+    // Departures mirror this on checkOutDate.
+    const arrivalDay = { checkInDate: { gte: startOfToday, lte: endOfToday } };
+    const departureDay = { checkOutDate: { gte: startOfToday, lte: endOfToday } };
+    const [arrivalsExpected, arrivalsCheckedIn, departuresExpected, departuresCheckedOut] = await Promise.all([
+      prisma.reservation.count({ where: { propertyId, ...arrivalDay, status: { in: [ReservationStatus.RESERVED, ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...arrivalDay, status: { in: [ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...departureDay, status: { in: [ReservationStatus.IN_HOUSE, ReservationStatus.CHECKED_OUT] } } }),
+      prisma.reservation.count({ where: { propertyId, ...departureDay, status: ReservationStatus.CHECKED_OUT } }),
+    ]);
+
+    // In-house occupancy — rooms occupied plus the people in them.
+    const occupancy = inHouse.reduce(
+      (acc, r) => { acc.adults += r.adults; acc.children += r.children; acc.infants += r.infants; return acc; },
+      { adults: 0, children: 0, infants: 0 }
+    );
+
     return NextResponse.json({
       businessDate: startOfToday,
       arrivals,
@@ -119,7 +144,11 @@ export async function GET(request: Request) {
       inHouse,
       roomMovesToday,
       vacantRoomsCount: vacantRooms.length,
-      vacantReadyCount
+      vacantReadyCount,
+      arrivalsSummary: { expected: arrivalsExpected, checkedIn: arrivalsCheckedIn },
+      departuresSummary: { expected: departuresExpected, checkedOut: departuresCheckedOut },
+      inHouseSummary: { rooms: occupiedRoomIds.size, ...occupancy },
+      roomStatusSummary: { occupied: occupiedRoomIds.size, vacant: vacantRooms.length, clean, inspected, dirty },
     });
 
   } catch (error) {
