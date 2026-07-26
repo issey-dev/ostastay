@@ -139,6 +139,34 @@ describe("Reservation quote engine (src/lib/reservation-quote-server.ts)", () =>
     expect(quote.totals.roomBase).toBe(100); // $50 x 2 nights, not $100 x 2
   });
 
+  it("prices off chargeRoomTypeId (kept rate on a room move) while the day grid shows the physical room type", async () => {
+    const ctx = await setup();
+    // A second, pricier room type with its own calendar rows for the same nights.
+    const deluxe = await prisma.roomType.create({
+      data: { propertyId: ctx.propertyId, name: "Deluxe", code: `DLX-${uniq()}`, baseOccupancy: 2, maxOccupancy: 4 },
+    });
+    await prisma.priceCalendar.createMany({
+      data: [1, 2].map((d) => ({ ratePlanId: ctx.ratePlanId, roomTypeId: deluxe.id, date: new Date(Date.UTC(2026, 7, d)), price: 250 })),
+    });
+
+    const quote = await computeReservationQuote({
+      propertyId: ctx.propertyId,
+      // Physically in the Deluxe room, but billed AS the Standard type (rate kept).
+      assignments: [{
+        roomTypeId: deluxe.id,
+        chargeRoomTypeId: ctx.roomTypeId,
+        ratePlanId: ctx.ratePlanId,
+        startDate: new Date("2026-08-01"), endDate: new Date("2026-08-03"),
+      }],
+      adults: 2, children: 0,
+    }, prisma);
+
+    // Standard $100/night x 2 = $200, NOT Deluxe's $250 x 2 = $500.
+    expect(quote.totals.roomBase).toBe(200);
+    // The per-night grid still reports the physical room type the guest occupies.
+    expect(quote.days[0].roomTypeId).toBe(deluxe.id);
+  });
+
   it("flags nights with no configured rate as unpriced instead of silently charging $0 unnoticed", async () => {
     const ctx = await setup();
     const quote = await computeReservationQuote({

@@ -15,6 +15,10 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
     const { newRoomId, newRoomTypeId, reason } = body;
+    // Rate handling on a move to a DIFFERENT room type: "keep" bills the guest at their
+    // current (old) room type's rate; "new" reprices to the new room type. Ignored when
+    // the room type is unchanged (rate always carries over untouched). Default: "new".
+    const rateMode: "keep" | "new" = body.rateMode === "keep" ? "keep" : "new";
 
     if (!newRoomId || !newRoomTypeId || !reason) {
       return NextResponse.json({ error: "Missing required fields (newRoomId, newRoomTypeId, reason)" }, { status: 400 });
@@ -77,6 +81,30 @@ export async function POST(
       return NextResponse.json({ error: "This room type is inactive and cannot accept new reservations" }, { status: 400 });
     }
 
+    // Decide the pricing basis carried onto the new segment.
+    //  • Same room type → nothing about pricing changes; carry the existing basis
+    //    (any manual override AND any prior "charge as" type) untouched.
+    //  • Different type + keep → bill as the guest's current (effective) type: pin
+    //    chargeRoomTypeId to it and carry any manual override.
+    //  • Different type + new → price off the new physical type: no charge-as type,
+    //    and drop any manual override so it reprices to the new type's calendar.
+    const sameType = newRoomTypeId === activeAssignment.roomTypeId;
+    const oldEffectiveChargeTypeId = activeAssignment.chargeRoomTypeId ?? activeAssignment.roomTypeId;
+    let newChargeRoomTypeId: string | null;
+    let newOverrideRate: number | null;
+    if (sameType) {
+      newChargeRoomTypeId = activeAssignment.chargeRoomTypeId ?? null;
+      newOverrideRate = activeAssignment.overrideRate ?? null;
+    } else if (rateMode === "keep") {
+      // Redundant if the old billed type equals the new physical type — store null then.
+      newChargeRoomTypeId = oldEffectiveChargeTypeId === newRoomTypeId ? null : oldEffectiveChargeTypeId;
+      newOverrideRate = activeAssignment.overrideRate ?? null;
+    } else {
+      newChargeRoomTypeId = null;
+      newOverrideRate = null;
+    }
+    const keptRate = !sameType && rateMode === "keep";
+
     // 3. Perform the room move transaction
     const updatedReservation = await prisma.$transaction(async (tx) => {
       // a. Mark old room as DIRTY (if they were assigned one)
@@ -101,7 +129,9 @@ export async function POST(
           reservationId: id,
           roomId: newRoomId,
           roomTypeId: newRoomTypeId,
+          chargeRoomTypeId: newChargeRoomTypeId,
           ratePlanId: activeAssignment.ratePlanId,
+          overrideRate: newOverrideRate,
           startDate: today,
           endDate: currentRes.checkOutDate
         }
@@ -116,11 +146,16 @@ export async function POST(
       });
 
       // c. Create Trace/Audit Log
+      const rateNote = sameType
+        ? ""
+        : keptRate
+          ? " Rate kept — billed as the previous room type."
+          : " Charged the new room-type rate.";
       await tx.reservationTrace.create({
         data: {
           reservationId: id,
           traceType: "ROOM_MOVE",
-          description: `Moved from Room ${oldRoomNumber} to Room ${newRoom.roomNumber}. Reason: ${reason}`,
+          description: `Moved from Room ${oldRoomNumber} to Room ${newRoom.roomNumber}. Reason: ${reason}.${rateNote}`,
           actionDate: new Date(),
           isResolved: true // A room move trace is inherently resolved upon creation, just serving as an audit log
         }
@@ -135,7 +170,7 @@ export async function POST(
       action: "ROOM_MOVE",
       entityType: "Reservation",
       entityId: id,
-      description: `Moved ${currentRes.confirmationNo} from Room ${oldRoomNumber} to Room ${newRoom.roomNumber} — ${reason}`,
+      description: `Moved ${currentRes.confirmationNo} from Room ${oldRoomNumber} to Room ${newRoom.roomNumber} — ${reason}${!sameType ? (keptRate ? " (rate kept)" : " (new rate)") : ""}`,
     });
 
     return NextResponse.json(updatedReservation);

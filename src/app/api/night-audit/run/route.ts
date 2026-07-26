@@ -160,6 +160,8 @@ export async function POST(request: Request) {
           orderBy: { startDate: 'desc' },
           include: {
             roomType: true,
+            // "Charge as" room type (kept-rate room move) — pricing resolves off this when set.
+            chargeRoomType: true,
             ratePlan: { include: { chargeCode: { include: taxInclude } } },
           }
         },
@@ -353,6 +355,10 @@ export async function POST(request: Request) {
           const activeRatePlan = activeAssignment.ratePlan
           const isDerivedRatePlan = !!activeRatePlan.parentRatePlanId
           const calendarRatePlanId = isDerivedRatePlan ? activeRatePlan.parentRatePlanId! : activeAssignment.ratePlanId
+          // Price against the "charge as" room type when set (kept-rate move), else the
+          // physical room type. Governs the PriceCalendar lookup AND base occupancy below.
+          const chargeRoomTypeId = activeAssignment.chargeRoomTypeId ?? activeAssignment.roomTypeId
+          const chargeRoomType = activeAssignment.chargeRoomType ?? activeAssignment.roomType
 
           // Room charge posts against the rate plan's own accommodation code when set,
           // else the enterprise fallback resolved above.
@@ -364,7 +370,7 @@ export async function POST(request: Request) {
           // occupancy surcharges are a separate additive charge tied to today's calendar
           // entry — a manual base-rate override shouldn't silently suppress them.
           const calendarEntry = await tx.priceCalendar.findFirst({
-            where: { ratePlanId: calendarRatePlanId, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
+            where: { ratePlanId: calendarRatePlanId, roomTypeId: chargeRoomTypeId, date: todayRange }
           })
 
           let inputAmount = activeAssignment.overrideRate
@@ -375,7 +381,7 @@ export async function POST(request: Request) {
             // (skip the extra lookup if that's already what we just checked above).
             if (baseRoomPrice == null && baseRatePlan && calendarRatePlanId !== baseRatePlan.id) {
               const baseCalendarEntry = await tx.priceCalendar.findFirst({
-                where: { ratePlanId: baseRatePlan.id, roomTypeId: activeAssignment.roomTypeId, date: todayRange }
+                where: { ratePlanId: baseRatePlan.id, roomTypeId: chargeRoomTypeId, date: todayRange }
               })
               baseRoomPrice = baseCalendarEntry?.price
             }
@@ -451,7 +457,7 @@ export async function POST(request: Request) {
           // "included children" baseline, same convention as Green Tax). Both rates are
           // optional per PriceCalendar day (no RoomType-level fallback), so this is a
           // no-op unless the property has actually configured them for today.
-          const extraAdults = Math.max(0, res.adults - activeAssignment.roomType.baseOccupancy)
+          const extraAdults = Math.max(0, res.adults - chargeRoomType.baseOccupancy)
           const extraOccupancyInput =
             extraAdults * (calendarEntry?.extraAdultPrice ?? 0) + res.children * (calendarEntry?.extraChildPrice ?? 0)
 

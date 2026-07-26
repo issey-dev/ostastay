@@ -45,6 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       propertyId: reservation.propertyId,
       assignments: reservation.assignments.map((a) => ({
         roomTypeId: a.roomTypeId,
+        chargeRoomTypeId: a.chargeRoomTypeId,
         ratePlanId: a.ratePlanId,
         startDate: a.startDate,
         endDate: a.endDate,

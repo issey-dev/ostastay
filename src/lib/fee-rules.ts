@@ -25,7 +25,7 @@ type ReservationLike = {
   adults: number;
   children: number;
   mealPlan: string | null;
-  assignments: Array<{ roomTypeId: string; ratePlanId: string; startDate: Date; endDate: Date; overrideRate: number | null }>;
+  assignments: Array<{ roomTypeId: string; chargeRoomTypeId?: string | null; ratePlanId: string; startDate: Date; endDate: Date; overrideRate: number | null }>;
 };
 
 // The fee rule a reservation selected, looked up by id. Returns null when nothing was
@@ -52,6 +52,7 @@ export async function computeReservationFee(rule: RuleLike, reservation: Reserva
     propertyId: reservation.propertyId,
     assignments: reservation.assignments.map((a) => ({
       roomTypeId: a.roomTypeId,
+      chargeRoomTypeId: a.chargeRoomTypeId,
       ratePlanId: a.ratePlanId,
       startDate: a.startDate,
       endDate: a.endDate,
