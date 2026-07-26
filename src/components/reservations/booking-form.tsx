@@ -74,13 +74,20 @@ const FieldError = ({ message }: { message?: string }) =>
 // booking-form-schema.ts owns every form-shape rule with inline, real-time
 // errors; this component keeps the booking machinery (Look-to-Book grid,
 // server quote, segment chaining) reading from the watched values.
-export function BookingForm({ reservationId }: { reservationId?: string }) {
+export function BookingForm({ reservationId, walkIn = false }: { reservationId?: string; walkIn?: boolean }) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
   const isEditMode = !!reservationId
+
+  // Walk-in: the arrival is fixed to today's business date and can't be changed.
+  const businessDateIso = currentProperty?.businessDate
+    ? new Date(currentProperty.businessDate).toISOString().split("T")[0]
+    : ""
+  // Where the back/cancel/success navigation lands — walk-ins came from Front Desk.
+  const exitUrl = walkIn ? `/e/${slug}/dashboard/front-office` : `/e/${slug}/dashboard/reservations`
 
   const [loading, setLoading] = useState(isEditMode)
   const [submitting, setSubmitting] = useState(false)
@@ -313,6 +320,15 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
     }
   }
 
+  // Walk-in create mode: seed the arrival with the business date once it's known.
+  // The user still picks the departure; the arrival field itself is locked below.
+  useEffect(() => {
+    if (walkIn && !isEditMode && businessDateIso && !formCtl.getValues("checkInDate")) {
+      setStayDate("in", businessDateIso)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walkIn, isEditMode, businessDateIso])
+
   const selectGridCell = (roomTypeId: string, ratePlanId: string) => {
     const i = Math.min(activeSegmentIndex, formCtl.getValues("assignments").length - 1)
     updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
@@ -428,7 +444,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       })
 
       if (res.ok) {
-        router.push(`/e/${slug}/dashboard/reservations`)
+        router.push(exitUrl)
         router.refresh()
       } else {
         const err = await res.json()
@@ -461,18 +477,20 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
   return (
     <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
       <div className="flex items-center gap-4">
-        <Button type="button" variant="outline" size="icon" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>
+        <Button type="button" variant="outline" size="icon" onClick={() => router.push(exitUrl)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            {isEditMode ? "Edit Booking" : "New Booking"}
+            {isEditMode ? "Edit Booking" : walkIn ? "Walk-in Booking" : "New Booking"}
             {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
           </h2>
           <p className="text-muted-foreground">
             {isEditMode
               ? `Modify details for ${existingConfirmationNo ?? "this reservation"}. Status changes go through the Check-In / Check-Out / Cancel actions.`
-              : "Pick the stay dates, choose a room and rate from the grid, then attach the guest."}
+              : walkIn
+                ? "Arrival is set to today's business date. Pick the departure, choose a room and rate, then attach the guest — they'll appear in Arrivals to check in."
+                : "Pick the stay dates, choose a room and rate from the grid, then attach the guest."}
           </p>
         </div>
         {notification && (
@@ -490,8 +508,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="grid gap-2">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
-                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} />
-                  <FieldError message={errors.checkInDate?.message} />
+                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} disabled={walkIn} />
+                  {walkIn
+                    ? <p className="text-[11px] text-muted-foreground">Locked to today&apos;s business date.</p>
+                    : <FieldError message={errors.checkInDate?.message} />}
                 </div>
                 <div className="grid gap-2">
                   <Label className="flex items-center gap-2">
@@ -623,9 +643,9 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
                           <Label>From <span className="text-destructive">*</span></Label>
                           <DatePicker
                             value={assignment.startDate}
-                            disabled={index > 0}
+                            disabled={index > 0 || walkIn}
                             onChange={v => {
-                              if (index > 0) return; // locked — derived from the previous segment's departure
+                              if (index > 0 || walkIn) return; // locked — segment 0 = arrival (walk-in fixes it to today)
                               // Same hard rule as the top-level Arrival/Departure: moving
                               // this segment's start past its own end clears the now-invalid end.
                               const current = formCtl.getValues("assignments")[index];
@@ -970,10 +990,10 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
           />
 
           <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(`/e/${slug}/dashboard/reservations`)}>Cancel</Button>
+            <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(exitUrl)}>Cancel</Button>
             <Button type="submit" className="flex-1" disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              {submitting ? "Saving..." : isEditMode ? "Save Changes" : "Book Now"}
+              {submitting ? "Saving..." : isEditMode ? "Save Changes" : walkIn ? "Book Walk-in" : "Book Now"}
             </Button>
           </div>
         </div>

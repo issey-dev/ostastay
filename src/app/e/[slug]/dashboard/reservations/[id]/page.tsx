@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, use } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { useSmartBack } from "@/lib/use-smart-back"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
@@ -65,6 +66,7 @@ const isVip = (g: any) => g?.classification === "VIP" || !!g?.vipLevel
 
 export default function ReservationDetailPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params)
+  const goBack = useSmartBack(`/e/${slug}/dashboard/reservations`)
   const { currentProperty } = useProperty()
   const [reservation, setReservation] = useState<any>(null)
   const [breakdown, setBreakdown] = useState<any>(null)
@@ -381,11 +383,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href={`/e/${slug}/dashboard/reservations`}>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">{guestName}</h1>

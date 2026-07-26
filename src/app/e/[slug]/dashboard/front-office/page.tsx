@@ -30,7 +30,6 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
-import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog"
 
 // ── Shared row helpers ───────────────────────────────────────────────────────
 const guestDisplayName = (g: any) =>
@@ -92,7 +91,6 @@ export default function FrontOfficeDashboard() {
   const [checkInRes, setCheckInRes] = useState<any>(null)
   const [noShowRes, setNoShowRes] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [isWalkInOpen, setIsWalkInOpen] = useState(false)
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -341,7 +339,7 @@ export default function FrontOfficeDashboard() {
             · arrivals, departures, and in-house guests.
           </p>
         </div>
-        <Button onClick={() => setIsWalkInOpen(true)}>
+        <Button onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
           <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking
         </Button>
       </div>
@@ -737,15 +735,6 @@ export default function FrontOfficeDashboard() {
         }}
       />
 
-      <WalkInBookingDialog
-        propertyId={propertyId ?? ""}
-        isOpen={isWalkInOpen}
-        onClose={() => setIsWalkInOpen(false)}
-        onDone={(result) => {
-          setNotification(result)
-          fetchSummary()
-        }}
-      />
 
       <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
         <DialogContent className="sm:max-w-md">

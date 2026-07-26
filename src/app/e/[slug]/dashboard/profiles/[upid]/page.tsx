@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { useSmartBack } from "@/lib/use-smart-back"
 import { ArrowLeft, Pencil, ExternalLink, Star, CalendarDays, History as HistoryIcon, UserX } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,6 +51,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   const { upid } = use(params)
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
+  const goBack = useSmartBack(`/e/${slug}/dashboard/profiles`)
   const { currentProperty } = useProperty()
   const { label } = useSystemCodeLabels()
 
@@ -137,7 +139,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
       {/* Header — mirrors the Edit form's sticky header */}
       <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={goBack} title="Back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
