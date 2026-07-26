@@ -441,14 +441,15 @@ export default function HousekeepingDashboard() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {roomsByFloor[floorName].map((room: any) => (
-              <RoomStatusCard 
-                key={room.id} 
-                room={room} 
-                onStatusChange={handleStatusChange} 
+              <RoomStatusCard
+                key={room.id}
+                room={room}
+                onStatusChange={handleStatusChange}
                 isSelected={selectedRooms.includes(room.id)}
                 onToggleSelect={handleToggleSelect}
                 onCompleteTask={handleCompleteTask}
                 onEditMaintenance={handleEditMaintenance}
+                businessDate={currentProperty?.businessDate}
               />
             ))}
           </div>

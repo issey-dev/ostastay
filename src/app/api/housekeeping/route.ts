@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { resolveBusinessDate } from "@/lib/business-date"
 import { logActivity } from "@/lib/activity-log"
 
 export async function GET(request: Request) {
@@ -16,6 +17,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 })
     }
     await assertPropertyAccess(ctx, propertyId)
+
+    // Occupancy is anchored to the property's BUSINESS DATE (the operational "today"),
+    // not the wall clock — the whole PMS runs on business date, and a property whose
+    // audit hasn't rolled to real time would otherwise show every in-house guest as
+    // vacant (their stay looks "in the past" against new Date()).
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } })
+    if (!property) {
+      return NextResponse.json({ error: "Property not found" }, { status: 404 })
+    }
+    const businessDate = resolveBusinessDate(property)
 
     // Pseudo/virtual rooms have no floor at all, so they never belong on the
     // housekeeping board. Rooms whose room type has housekeepingEnabled off (the
@@ -62,8 +73,8 @@ export async function GET(request: Request) {
         },
         RoomAssignment: {
           where: {
-            startDate: { lte: new Date() },
-            endDate: { gte: new Date() },
+            startDate: { lte: businessDate },
+            endDate: { gte: businessDate },
             // Only live stays: a CHECKED_OUT/CANCELLED/NO_SHOW reservation's
             // assignment still spans today but the room is not occupied by it.
             // RESERVED is included so the board can flag today's arrivals.
@@ -72,8 +83,8 @@ export async function GET(request: Request) {
           include: {
             reservation: {
               include: {
-                // The board card shows the occupant's name and a sharer badge —
-                // a bare `reservation: true` never carried these.
+                // The board card shows the occupant's name, headcount, and a sharer
+                // badge — a bare `reservation: true` never carried these.
                 primaryGuest: { select: { firstName: true, lastName: true } },
                 accompanyingGuests: { select: { id: true } },
               },
