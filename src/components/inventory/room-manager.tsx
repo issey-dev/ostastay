@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DoorOpen } from "@/components/icons"
-import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, groupFeaturesByCategory, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
+import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import {
   Select,
   SelectContent,
@@ -33,7 +33,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
 
@@ -531,7 +530,7 @@ export function RoomManager({
 
                   {isPseudoRoom ? (
                     <p className="text-xs text-muted-foreground rounded-md border border-border p-3">
-                      This is a Pseudo room type — it has no physical location, so Building, Floor, and Room Features aren't applicable.
+                      This is a Pseudo room type — it has no physical location, so Building, Floor, and Room Features aren&apos;t applicable.
                     </p>
                   ) : (
                     <>

@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useRouter, useParams } from "next/navigation"
 import { Users, Building2, Briefcase, UserCog } from "@/components/icons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
+import { toast } from "@/lib/toast"
 
 type Profile = {
   upid: string
@@ -77,6 +78,7 @@ export default function ProfilesDashboard() {
   const { label } = useSystemCodeLabels()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [search, setSearch] = useState("")
   const [activeTab, setActiveTab] = useState("GUEST")
 
@@ -85,11 +87,16 @@ export default function ProfilesDashboard() {
 
   const fetchProfiles = (searchQuery = "", type = activeTab) => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles?search=${searchQuery}&profileType=${type}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setProfiles(data)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load profiles")
+        return res.json()
       })
+      .then((data) => {
+        setProfiles(Array.isArray(data) ? data : [])
+      })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -123,7 +130,7 @@ export default function ProfilesDashboard() {
         fetchProfiles(search, activeTab)
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to delete profile")
+        toast.error(error.error || "Failed to delete profile")
       }
     } catch (e) {
       console.error(e)
@@ -218,6 +225,8 @@ export default function ProfilesDashboard() {
               <div className="p-4 space-y-3">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
               </div>
+            ) : loadError ? (
+              <ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles(search, activeTab)} />
             ) : profiles.length === 0 ? (
               <EmptyState icon={Users} title="No profiles found" />
             ) : (
@@ -283,6 +292,8 @@ export default function ProfilesDashboard() {
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                 ))
+              ) : loadError ? (
+                <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles(search, activeTab)} /></TableCell></TableRow>
               ) : profiles.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={Users} title="No profiles found" /></TableCell></TableRow>
               ) : (

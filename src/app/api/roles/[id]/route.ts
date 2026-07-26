@@ -32,10 +32,10 @@ export async function PATCH(
         await tx.role.update({ where: { id }, data: { name: body.name } });
       }
       if (body.permissions) {
-        for (const module of MODULES) {
-          const p = permissions[module];
+        for (const moduleName of MODULES) {
+          const p = permissions[moduleName];
           await tx.rolePermission.upsert({
-            where: { roleId_module: { roleId: id, module } },
+            where: { roleId_module: { roleId: id, module: moduleName } },
             update: {
               canView: !!p?.canView,
               canCreate: !!p?.canCreate,
@@ -44,7 +44,7 @@ export async function PATCH(
             },
             create: {
               roleId: id,
-              module,
+              module: moduleName,
               canView: !!p?.canView,
               canCreate: !!p?.canCreate,
               canUpdate: !!p?.canUpdate,

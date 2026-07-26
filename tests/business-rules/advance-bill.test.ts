@@ -107,4 +107,28 @@ describe("Advance Bill", () => {
     expect(resp.status).toBe(200);
     expect((await resp.json()).nights).toBe(3); // only 3 nights in the stay
   });
+
+  // A2 regression: two concurrent advance-bills for the same reservation must bill the
+  // nights ONCE. The atomic check-and-set on advanceBilledThrough lets exactly one win.
+  it("two concurrent advance-bills post the nights once (no double bill)", async () => {
+    const { reservationId, folioId, adminId, biz } = await setup();
+
+    const [a, b] = await Promise.all([
+      advanceBill(adminId, reservationId, { nights: 3 }),
+      advanceBill(adminId, reservationId, { nights: 3 }),
+    ]);
+    // Exactly one run posts; the other is rejected (409 from the guard, or a rolled-back
+    // DB-lock error under SQLite). What matters is that it does NOT bill a second time.
+    const okCount = [a, b].filter((r) => r.status === 200).length;
+    expect(okCount).toBe(1);
+
+    // Three nights of accommodation at 100/night posted exactly once = 300 total.
+    const roomLines = await prisma.folioLineItem.findMany({ where: { folioId, description: { contains: "Accommodation" } } });
+    const roomTotal = roomLines.reduce((s, l) => s + l.amount + l.taxAmount + l.serviceChargeAmount, 0);
+    expect(roomTotal).toBeCloseTo(300, 1);
+
+    // Billed through the last night (biz + 2), set once.
+    const res = await prisma.reservation.findUnique({ where: { id: reservationId } });
+    expect(res!.advanceBilledThrough!.getTime()).toBe(biz.getTime() + 2 * DAY);
+  });
 });

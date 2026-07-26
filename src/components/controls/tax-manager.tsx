@@ -14,6 +14,7 @@ import { ControlsSectionBody } from "@/components/controls/controls-section-head
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "@/lib/toast"
 
 type TaxLineForm = { name: string; ratePercent: string; calculateOn: "BASE" | "COMPOUND" }
 const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculateOn: "BASE" })
@@ -94,13 +95,13 @@ export function TaxManager() {
         body: JSON.stringify(settingsForm)
       })
       if (res.ok) {
-        alert("Maldives Tax settings saved successfully!")
+        toast.success("Maldives Tax settings saved successfully!")
       } else {
-        alert("Failed to save settings.")
+        toast.error("Failed to save settings.")
       }
     } catch (e) {
       console.error(e)
-      alert("Failed to save settings.")
+      toast.error("Failed to save settings.")
     } finally {
       setSavingSettings(false)
     }
@@ -152,7 +153,7 @@ export function TaxManager() {
         fetchData()
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to save tax profile")
+        toast.error(error.error || "Failed to save tax profile")
       }
     } catch (error) {
       console.error(error)
@@ -171,7 +172,7 @@ export function TaxManager() {
         fetchData()
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to delete Custom Tax profile")
+        toast.error(error.error || "Failed to delete Custom Tax profile")
       }
     } catch (e) {
       console.error(e)
@@ -214,8 +215,8 @@ export function TaxManager() {
                 <DialogDescription>
                   A profile can hold one or more tax lines, applied together on any charge code
                   that uses it instead of the default Maldives Tax. Each line is either a flat
-                  percentage of the subtotal ("On Subtotal") or a percentage of the running total
-                  so far ("On Subtotal + Prior Lines") — the same relationship Service Charge and
+                  percentage of the subtotal (&quot;On Subtotal&quot;) or a percentage of the running total
+                  so far (&quot;On Subtotal + Prior Lines&quot;) — the same relationship Service Charge and
                   GST already have.
                 </DialogDescription>
               </DialogHeader>

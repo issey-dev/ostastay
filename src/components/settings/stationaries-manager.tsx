@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Save, RefreshCw, Palette, Type, Receipt, FileText, FileStack, Mail } from "@/components/icons"
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
+import { toast } from "@/lib/toast"
 
 const FONT_STYLES: Record<string, string> = {
   Geist: "font-sans",
@@ -91,7 +92,7 @@ export function StationariesManager() {
 
   useEffect(() => {
     fetchSettings()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   const handleSave = async (e: React.FormEvent) => {
@@ -104,13 +105,13 @@ export function StationariesManager() {
         body: JSON.stringify(formData),
       })
       if (res.ok) {
-        alert("Stationary settings saved successfully!")
+        toast.success("Stationary settings saved successfully!")
       } else {
-        alert("Failed to save stationary settings.")
+        toast.error("Failed to save stationary settings.")
       }
     } catch (e) {
       console.error(e)
-      alert("Error saving settings.")
+      toast.error("Error saving settings.")
     } finally {
       setSaving(false)
     }

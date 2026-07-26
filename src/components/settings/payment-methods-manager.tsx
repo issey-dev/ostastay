@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
 
 type PaymentMethod = {
   id: string
@@ -23,6 +25,7 @@ type PaymentMethod = {
 }
 
 export function PaymentMethodsManager({ title, description }: { title: string; description?: string }) {
+  const confirm = useConfirm()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -77,18 +80,18 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
       fetchMethods()
     } catch (e) {
       console.error("Failed to save", e)
-      alert("Failed to save payment method.")
+      toast.error("Failed to save payment method.")
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this payment method? This action cannot be undone.")) return
+    if (!(await confirm({ title: "Delete this payment method?", description: "This action cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
     try {
       await fetch(`/api/payment-methods/${id}`, { method: "DELETE" })
       fetchMethods()
     } catch (e) {
       console.error(e)
-      alert("Failed to delete payment method.")
+      toast.error("Failed to delete payment method.")
     }
   }
 

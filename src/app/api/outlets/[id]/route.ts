@@ -81,7 +81,7 @@ export async function PATCH(
     }
 
     const updatedOutlet = await prisma.$transaction(async (tx) => {
-      const updated = await tx.outlet.update({
+      await tx.outlet.update({
         where: { id },
         data: {
           name: body.name ?? existing.name,

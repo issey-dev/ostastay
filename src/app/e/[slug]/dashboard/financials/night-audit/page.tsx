@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight, FileText } from "@/components/icons"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -226,7 +226,7 @@ export default function EndOfDayPage() {
                   </div>
                   {extendFor === d.id && (
                     <div className="mt-2 flex items-center gap-2">
-                      <Input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className="w-44" />
+                      <DatePicker value={extendDate} onChange={setExtendDate} className="w-44" />
                       <Button size="sm" disabled={!extendDate || busy === `ext-${d.id}`} onClick={() => extendStay(d.id)}>
                         {busy === `ext-${d.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
                       </Button>
@@ -302,7 +302,7 @@ export default function EndOfDayPage() {
     if (key === "finalize") {
       return (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Sign property staff out and close the business date. They'll sign back in on the new date.</p>
+          <p className="text-sm text-muted-foreground">Sign property staff out and close the business date. They&apos;ll sign back in on the new date.</p>
           <Button variant="destructive" disabled={busy === "finalize"} onClick={() => runStep("finalize")}>
             {busy === "finalize" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogOut className="w-4 h-4 mr-2" />}
             Roll &amp; close

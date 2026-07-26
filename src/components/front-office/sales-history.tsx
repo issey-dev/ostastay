@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -58,7 +58,7 @@ export function SalesHistory({
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Filter by date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" />
+          <DatePicker value={date} onChange={setDate} className="w-auto" />
         </div>
         {date && <Button variant="ghost" size="sm" onClick={() => setDate("")}>Clear</Button>}
       </div>

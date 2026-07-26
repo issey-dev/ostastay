@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { AuthContext } from "@/lib/scope";
 import { resolveBusinessDate } from "@/lib/business-date";
@@ -27,13 +28,24 @@ export async function ensureOpenShift(ctx: AuthContext, propertyId: string) {
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   const businessDate = property ? resolveBusinessDate(property) : null;
 
-  return prisma.cashierShift.create({
-    data: {
-      enterpriseId: ctx.enterpriseId,
-      userId: ctx.userId,
-      propertyId,
-      businessDate,
-      openingFloat: 0,
-    },
-  });
+  try {
+    return await prisma.cashierShift.create({
+      data: {
+        enterpriseId: ctx.enterpriseId,
+        userId: ctx.userId,
+        propertyId,
+        businessDate,
+        openingFloat: 0,
+      },
+    });
+  } catch (e) {
+    // A concurrent first-posting raced us to open the drawer. The partial unique index
+    // (one open shift per user+property, migration 20260725150000) rejects the second
+    // insert — return the shift that actually won instead of erroring or duplicating.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const raced = await findOpenShift(ctx.userId, propertyId);
+      if (raced) return raced;
+    }
+    throw e;
+  }
 }

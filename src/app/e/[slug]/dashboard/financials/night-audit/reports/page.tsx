@@ -79,7 +79,7 @@ export default function EodReportsPage() {
             <ArrowLeft className="w-3.5 h-3.5" /> End of Day
           </Link>
           <h2 className="text-3xl font-bold tracking-tight">EOD Report Archive</h2>
-          <p className="text-muted-foreground">Frozen snapshots of each closed business date's reports.</p>
+          <p className="text-muted-foreground">Frozen snapshots of each closed business date&apos;s reports.</p>
         </div>
         <div className="flex items-end gap-2">
           <div className="w-64">

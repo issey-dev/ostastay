@@ -16,6 +16,11 @@ const DAY_MS = 86_400_000;
 const addDays = (d: Date, n: number) => new Date(toUtcMidnight(d).getTime() + n * DAY_MS);
 const diffNights = (a: Date, b: Date) => Math.round((toUtcMidnight(b).getTime() - toUtcMidnight(a).getTime()) / DAY_MS);
 
+// Thrown when the reservation's advanceBilledThrough changed between the read and the
+// posting transaction (a concurrent advance-bill, or a night-audit post, already advanced
+// it). Turned into a clean 409 rather than double-billing the same nights.
+class AdvanceBillConflict extends Error {}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession();
@@ -124,7 +129,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let linesPosted = 0;
     let amountPosted = 0;
-    await prisma.$transaction(async (tx) => {
+    try {
+      await prisma.$transaction(async (tx) => {
+      // Atomic check-and-set: claim the billing window by advancing advanceBilledThrough
+      // from the exact value observed at read time to lastNight, in one statement. A
+      // concurrent advance-bill (or a night-audit post that also advances it) will have
+      // changed it, so only one run matches and posts — the other gets 0 rows and aborts,
+      // preventing the same nights being billed twice.
+      const claimed = await tx.reservation.updateMany({
+        where: { id, advanceBilledThrough: reservation.advanceBilledThrough },
+        data: { advanceBilledThrough: lastNight },
+      });
+      if (claimed.count === 0) throw new AdvanceBillConflict();
+
       for (const seg of quote.segments) {
         const codeId = roomCodeForSeg(seg.roomTypeId, seg.ratePlanId);
         if (seg.roomBase > 0.005 || seg.roomTax > 0.005 || seg.roomServiceCharge > 0.005) {
@@ -203,8 +220,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
       }
 
-      // Mark the nights billed so Night Audit skips them.
-      await tx.reservation.update({ where: { id }, data: { advanceBilledThrough: lastNight } });
+      // (advanceBilledThrough was already set atomically by the claim above, so Night
+      // Audit skips these nights — no second write needed here.)
 
       const user = await tx.user.findUnique({ where: { id: ctx.userId } });
       await tx.reservationTrace.create({
@@ -214,7 +231,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           actionDate: new Date(), isResolved: true,
         },
       });
-    });
+      });
+    } catch (txError) {
+      if (txError instanceof AdvanceBillConflict) {
+        return NextResponse.json(
+          { error: "These nights were just advance-billed by another action. Refresh the folio and try again." },
+          { status: 409 }
+        );
+      }
+      throw txError;
+    }
 
     await logActivity({
       ctx, module: "CASHIERING", action: "ADVANCE_BILL", entityType: "Reservation", entityId: id,

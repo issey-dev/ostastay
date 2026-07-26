@@ -1077,6 +1077,11 @@ model CashierShift {
 
   @@index([propertyId])
   @@index([userId])
+  // NOTE: a PARTIAL unique index `CashierShift_one_open_per_user_property` — UNIQUE
+  // (userId, propertyId) WHERE closedAt IS NULL — is enforced at the DB level via
+  // migration 20260725150000_cashier_shift_one_open. Prisma's schema can't express a
+  // filtered index, so it is intentionally NOT declared here. Do not let `prisma migrate
+  // dev` drop it — it's what stops a race from opening two drawers for one user+property.
 }
 
 // A petty-cash disbursement from the drawer during a shift (florist COD, taxi
@@ -1450,7 +1455,10 @@ model GroupBlock {
   id             String    @id @default(uuid())
   propertyId     String
   property       Property  @relation(fields: [propertyId], references: [id])
-  code           String    @unique
+  // Group code is unique PER PROPERTY, not globally: a global unique let one tenant probe
+  // another tenant's code namespace ("code already exists") and reserved codes across
+  // unrelated properties. The create route checks existence via the compound key below.
+  code           String
   name           String
   startDate      DateTime
   endDate        DateTime
@@ -1463,6 +1471,8 @@ model GroupBlock {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
 }
 
 model PropertyNightAuditLog {
@@ -1479,7 +1489,14 @@ model PropertyNightAuditLog {
   taxPosted     Float
   totalPostings Int
 
+  // IN_PROGRESS | COMPLETED | FAILED. Exactly one row per (property, auditDate): the run
+  // route claims it IN_PROGRESS before posting, flips it to COMPLETED inside the posting
+  // transaction, or to FAILED on rollback (a FAILED row is reclaimable by a retry). The
+  // unique key below is the real idempotency gate — it makes a concurrent/retried run
+  // fail to claim rather than double-post. Mirrors EodRun's @@unique([propertyId, businessDate]).
   status String @default("COMPLETED")
+
+  @@unique([propertyId, auditDate])
 }
 
 // A step-by-step End-of-Day run for one property's business date. The business date

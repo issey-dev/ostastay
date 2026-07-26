@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "@/components/icons"
+import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ErrorState } from "@/components/ui/error-state"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
@@ -55,6 +57,7 @@ export default function RevenueDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Modals state
@@ -91,11 +94,16 @@ export default function RevenueDashboard() {
   const fetchRatePlans = () => {
     if (!propertyId) return
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/rate-plans?propertyId=${propertyId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then(data => {
         if (Array.isArray(data)) setRatePlans(data)
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -191,7 +199,7 @@ export default function RevenueDashboard() {
         const err = await res.json()
         setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
       }
-    } catch (err) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
@@ -205,7 +213,7 @@ export default function RevenueDashboard() {
       setIsDeleteModalOpen(false)
       fetchRatePlans()
       setNotification({ title: "Success", message: "Rate plan deleted successfully." })
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Failed to delete rate plan.", isError: true })
     }
   }
@@ -325,28 +333,19 @@ export default function RevenueDashboard() {
                 <div className="grid gap-2 border rounded-lg p-4 bg-muted/30">
                   <Label>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></Label>
                   <p className="text-xs text-muted-foreground mb-1">
-                    Instead of its own Price Calendar, this plan's price is computed live as the parent plan's price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
+                    Instead of its own Price Calendar, this plan&apos;s price is computed live as the parent plan&apos;s price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
                   </p>
-                  <Select
-                    value={form.parentRatePlanId || "__none__"}
-                    onValueChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v === "__none__" ? "" : (v ?? "") }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="None — independent rate plan">
-                        {form.parentRatePlanId
-                          ? ratePlans.find(r => r.id === form.parentRatePlanId)?.name
-                          : "None — independent rate plan"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">None — independent rate plan</SelectItem>
-                      {ratePlans
+                  <SearchableSelect
+                    value={form.parentRatePlanId}
+                    onChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v ?? "" }))}
+                    placeholder="None — independent rate plan"
+                    options={[
+                      { value: "", label: "None — independent rate plan" },
+                      ...ratePlans
                         .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id && !r.isLocked)
-                        .map(r => (
-                          <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        .map(r => ({ value: r.id, label: `${r.name} (${r.code})` })),
+                    ]}
+                  />
 
                   {form.parentRatePlanId && (
                     <div className="grid grid-cols-2 gap-4 mt-3">
@@ -510,8 +509,10 @@ export default function RevenueDashboard() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-10">Loading rate plans...</TableCell></TableRow>
+              ) : loadError ? (
+                <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load rate plans" onRetry={fetchRatePlans} /></TableCell></TableRow>
               ) : ratePlans.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">No rate plans defined.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={CalendarDays} title="No rate plans defined" /></TableCell></TableRow>
               ) : (
                 ratePlans.map((plan) => (
                   <TableRow key={plan.id}>

@@ -1,3 +1,5 @@
+import { toCents, fromCents } from "@/lib/money";
+
 // A debtor invoice IS a reservation's own Folio — settlementMethod: "CITY_LEDGER" and
 // payeeProfileId are set at reservation creation (see reservations/route.ts), but
 // isDebtorAccount only flips true at checkout (see reservations/[id]/check-out/
@@ -12,17 +14,18 @@ export function computeFolioBalance(
   lineItems: Array<{ amount: number; taxAmount: number; serviceChargeAmount: number; isVoid: boolean }>,
   payments: Array<{ amount: number; isRefund: boolean }>
 ): number {
-  let totalCharges = 0;
+  // Sum in integer cents so a folio with many lines/payments nets exactly (no float drift).
+  let chargeCents = 0;
   for (const item of lineItems) {
     if (!item.isVoid) {
-      totalCharges += item.amount + item.taxAmount + (item.serviceChargeAmount || 0);
+      chargeCents += toCents(item.amount) + toCents(item.taxAmount) + toCents(item.serviceChargeAmount);
     }
   }
-  let totalPayments = 0;
+  let paymentCents = 0;
   for (const payment of payments) {
-    totalPayments += payment.isRefund ? -payment.amount : payment.amount;
+    paymentCents += payment.isRefund ? -toCents(payment.amount) : toCents(payment.amount);
   }
-  return totalCharges - totalPayments;
+  return fromCents(chargeCents - paymentCents);
 }
 
 // Non-blocking credit-limit check — mirrors the Outlet appointment-capacity
@@ -64,9 +67,11 @@ export type DebtorInvoiceSummary = {
 // reservation it was billed from — see the module comment above. `reservation` is
 // only ever null for stale pre-redesign test data; every real invoice has one.
 export function buildInvoiceSummary(folio: DebtorInvoiceFolio): DebtorInvoiceSummary {
-  const total = folio.lineItems
-    .filter((li) => !li.isVoid)
-    .reduce((sum, li) => sum + li.amount + li.taxAmount + (li.serviceChargeAmount || 0), 0);
+  const total = fromCents(
+    folio.lineItems
+      .filter((li) => !li.isVoid)
+      .reduce((cents, li) => cents + toCents(li.amount) + toCents(li.taxAmount) + toCents(li.serviceChargeAmount), 0)
+  );
   const balance = computeFolioBalance(folio.lineItems, folio.payments);
   const guestName = folio.reservation
     ? [folio.reservation.primaryGuest.firstName, folio.reservation.primaryGuest.lastName].filter(Boolean).join(" ")

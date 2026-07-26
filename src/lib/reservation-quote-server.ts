@@ -192,11 +192,6 @@ export async function computeReservationQuote(
     });
   }
 
-  // Which segment (assignment) covers a given night — segments are validated
-  // non-overlapping/contiguous at booking time, so at most one should match.
-  const segmentForNight = (nightMs: number) =>
-    assignments.find((a) => dayStartMs(a.startDate) <= nightMs && dayStartMs(a.endDate) > nightMs);
-
   // ── Attached allocations (reservation-wide, not per-segment) ─────────────────
   const primaryRatePlan = ratePlanById.get(assignments[0].ratePlanId);
   const mealPlan = mealPlanCode

@@ -36,10 +36,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    await prisma.reservation.update({
-      where: { id },
+    // Conditional on the reservation still being IN_HOUSE, so two concurrent reversals
+    // (or a reversal racing a re-check-in) can't both run — the loser matches 0 rows.
+    const claimed = await prisma.reservation.updateMany({
+      where: { id, status: "IN_HOUSE" },
       data: { status: "RESERVED", checkedInAt: null },
     });
+    if (claimed.count === 0) {
+      return NextResponse.json({ error: "This reservation is no longer in-house." }, { status: 409 });
+    }
 
     await logActivity({
       ctx,

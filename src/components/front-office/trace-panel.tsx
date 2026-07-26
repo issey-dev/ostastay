@@ -166,7 +166,7 @@ export function TracePanel({
                   />
                   <span className="text-sm">
                     <span className="font-medium flex items-center gap-1.5"><Bell className="w-3.5 h-3.5 text-warning" /> Alert on open</span>
-                    <span className="text-xs text-muted-foreground">Pop this message up every time the reservation is opened, until it's marked resolved.</span>
+                    <span className="text-xs text-muted-foreground">Pop this message up every time the reservation is opened, until it&apos;s marked resolved.</span>
                   </span>
                 </label>
                 <Button type="submit" className="w-full mt-2">Save Trace</Button>

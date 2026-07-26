@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
+import { encryptSecret } from "@/lib/secret-crypto";
 import { logActivity } from "@/lib/activity-log";
 
 // Stored SMTP/SFTP passwords are never sent to the browser — GET (and the PATCH
@@ -60,6 +61,14 @@ export async function PATCH(request: Request) {
     // A round-tripped mask means "unchanged" — never store the literal sentinel.
     if (body.smtpPassword === SECRET_MASK) delete body.smtpPassword;
     if (body.sftpPassword === SECRET_MASK) delete body.sftpPassword;
+
+    // Encrypt-at-rest: a real (non-empty, non-mask) password the client just entered is
+    // encrypted here before it ever reaches the DB (S8). Empty string clears it (falls
+    // through to null below); with no SECRETS_ENCRYPTION_KEY configured this is a no-op and
+    // storage stays plaintext, as before. Both the update and create upsert branches read
+    // body.*Password, so encrypting it once here covers both.
+    if (body.smtpPassword) body.smtpPassword = encryptSecret(body.smtpPassword);
+    if (body.sftpPassword) body.sftpPassword = encryptSecret(body.sftpPassword);
 
     // Posting & settlement defaults reference other enterprise records — validate they
     // belong to this enterprise (and that the city-ledger method is actually a

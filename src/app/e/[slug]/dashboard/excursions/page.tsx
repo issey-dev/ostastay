@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
-import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { ExcursionManifestPanel } from "@/components/front-office/excursion-manifest-panel"
@@ -69,10 +69,11 @@ export default function ExcursionsPage() {
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
 
-  const [openWalkIns, setOpenWalkIns] = useState<OpenWalkInBooking[]>([])
+  const [_openWalkIns, setOpenWalkIns] = useState<OpenWalkInBooking[]>([])
 
   const [departures, setDepartures] = useState<Departure[]>([])
   const [loadingDepartures, setLoadingDepartures] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [selectedExcursionTypeId, setSelectedExcursionTypeId] = useState("")
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedDepartureId, setSelectedDepartureId] = useState<string>("")
@@ -112,9 +113,14 @@ export default function ExcursionsPage() {
   const fetchDepartures = useCallback(() => {
     if (!currentProperty) return
     setLoadingDepartures(true)
+    setLoadError(false)
     fetch(`/api/excursions/departures?propertyId=${currentProperty.id}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then((data) => { if (Array.isArray(data)) setDepartures(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoadingDepartures(false))
   }, [currentProperty])
 
@@ -367,7 +373,9 @@ export default function ExcursionsPage() {
             </h3>
             <form onSubmit={handleBook} className="space-y-4">
               <div className="space-y-3">
-                {departures.length === 0 && !loadingDepartures ? (
+                {loadError ? (
+                  <ErrorState title="Couldn't load excursions" onRetry={fetchDepartures} />
+                ) : departures.length === 0 && !loadingDepartures ? (
                   <p className="text-sm text-muted-foreground">No upcoming departures — set some up in Controls &gt; Excursions.</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">

@@ -49,7 +49,7 @@ export function FlashReport() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" />
-            Manager's Flash Report
+            Manager&apos;s Flash Report
           </h1>
           <p className="text-muted-foreground mt-1">Real-time KPI overview for {new Date(data.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
         </div>

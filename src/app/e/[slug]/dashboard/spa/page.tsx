@@ -14,8 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Badge } from "@/components/ui/badge"
-import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 
 type GuestResult = {
@@ -131,12 +130,13 @@ export default function SpaPage() {
   const [startingWalkIn, setStartingWalkIn] = useState(false)
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
-  const [openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
+  const [_openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
 
   const [selectedDate, setSelectedDate] = useState("")
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [slots, setSlots] = useState<SlotAvailability[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [selectedStartTime, setSelectedStartTime] = useState("")
   const [price, setPrice] = useState<number | null>(null)
   const [currency, setCurrency] = useState("")
@@ -146,8 +146,8 @@ export default function SpaPage() {
   const [booking, setBooking] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
-  const [todaysAppointments, setTodaysAppointments] = useState<AppointmentListItem[]>([])
-  const [loadingAppointments, setLoadingAppointments] = useState(true)
+  const [_todaysAppointments, setTodaysAppointments] = useState<AppointmentListItem[]>([])
+  const [_loadingAppointments, setLoadingAppointments] = useState(true)
 
   useEffect(() => {
     if (!currentProperty) return
@@ -311,13 +311,14 @@ export default function SpaPage() {
   // Fetch server-computed slots whenever treatment/date/partySize/requirements change —
   // never trust a client-cached list (SPA_PLAN.md §7). The booking submit re-validates
   // the exact same way server-side regardless.
-  useEffect(() => {
+  const fetchSlots = useCallback(() => {
     if (!currentProperty || !selectedTreatmentId || !selectedDate) {
       setSlots([])
       setPrice(null)
       return
     }
     setLoadingSlots(true)
+    setLoadError(false)
     setSelectedStartTime("")
     const qs = new URLSearchParams({
       propertyId: currentProperty.id,
@@ -327,14 +328,20 @@ export default function SpaPage() {
       requirements: requirementsKey,
     })
     fetch(`/api/spa/appointments/availability?${qs.toString()}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => {
         if (Array.isArray(data.slots)) setSlots(data.slots)
         setPrice(typeof data.price === "number" ? data.price : null)
         setCurrency(data.currency || "")
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoadingSlots(false))
   }, [currentProperty, selectedTreatmentId, selectedDate, partySize, requirementsKey])
+
+  useEffect(() => { fetchSlots() }, [fetchSlots])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -803,6 +810,8 @@ export default function SpaPage() {
                 {selectedDate && (
                   loadingSlots ? (
                     <p className="text-sm text-muted-foreground">Checking availability...</p>
+                  ) : loadError ? (
+                    <ErrorState title="Couldn't load time slots" onRetry={fetchSlots} />
                   ) : slots.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No time slots available on this date.</p>
                   ) : (

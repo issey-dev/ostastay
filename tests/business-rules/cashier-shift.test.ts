@@ -93,6 +93,21 @@ describe("Cashier shift: per-user/property, auto-open, charge attribution", () =
     expect(shifts[0].openingFloat).toBe(0);
   });
 
+  it("A12: concurrent ensure calls never open two drawers for one (user, property)", async () => {
+    // Fresh user so no shift exists yet, then race two opens.
+    const passwordHash = await bcrypt.hash("password123", 10);
+    const roleIds2 = await ensureRoles(prisma, enterpriseId, SYSTEM_ROLE_DEFS, true);
+    const racer = await prisma.user.create({ data: { enterpriseId, email: `cs-race-${uniq()}@test.local`, passwordHash, firstName: "Race", lastName: "Er", roleId: roleIds2["Front Desk"] ?? roleIds2["Admin"], scope: "PROPERTY", propertyId } });
+
+    await Promise.all([
+      asUser(racer.id, propertyId, () => ensureRoute.POST()),
+      asUser(racer.id, propertyId, () => ensureRoute.POST()),
+    ]);
+
+    const open = await prisma.cashierShift.findMany({ where: { userId: racer.id, propertyId, closedAt: null } });
+    expect(open).toHaveLength(1);
+  });
+
   it("attributes charges and payments to the open shift, grouped by charge code", async () => {
     expect((await postCharge(roomCodeId, 100)).status).toBe(201);
     expect((await postCharge(roomCodeId, 50)).status).toBe(201);

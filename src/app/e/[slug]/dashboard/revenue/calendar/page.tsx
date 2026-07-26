@@ -14,8 +14,10 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorState } from "@/components/ui/error-state"
 import type { DateRange } from "react-day-picker"
 import { useProperty } from "@/components/providers/property-provider"
+import { toast } from "@/lib/toast"
 
 type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
 type RoomType = { id: string; name: string; code: string }
@@ -43,6 +45,7 @@ function PriceCalendarPageContent() {
   
   const [prices, setPrices] = useState<PriceEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
 
   // Bulk update state
@@ -95,7 +98,7 @@ function PriceCalendarPageContent() {
   // types the same way checks the extra boxes from there.
   useEffect(() => {
     if (selectedRoomTypeId) setBulkRoomTypeIds([selectedRoomTypeId])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedRoomTypeId])
 
   const toggleBulkRoomType = (id: string, checked: boolean) => {
@@ -109,14 +112,19 @@ function PriceCalendarPageContent() {
     }
 
     setLoading(true)
+    setLoadError(false)
     const start = format(currentMonth, "yyyy-MM-dd")
     const end = format(endOfMonth(currentMonth), "yyyy-MM-dd")
-    
+
     fetch(`/api/price-calendar?ratePlanId=${selectedRatePlanId}&roomTypeId=${selectedRoomTypeId}&startDate=${start}&endDate=${end}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then(data => {
         if (Array.isArray(data)) setPrices(data)
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -131,15 +139,15 @@ function PriceCalendarPageContent() {
     // Edge cases the server would otherwise reject with a generic 400 — catch them
     // here with a message that actually says what's wrong.
     if (bulkRoomTypeIds.length === 0) {
-      alert("Check at least one room type to apply this price to.")
+      toast.error("Check at least one room type to apply this price to.")
       return
     }
     if (!bulkDateRange?.from || !bulkDateRange?.to) {
-      alert("Pick both a From and a To date.")
+      toast.error("Pick both a From and a To date.")
       return
     }
     if (bulkDateRange.from > bulkDateRange.to) {
-      alert("The From date must be on or before the To date.")
+      toast.error("The From date must be on or before the To date.")
       return
     }
 
@@ -164,7 +172,7 @@ function PriceCalendarPageContent() {
 
       if (res.ok) {
         const data = await res.json().catch(() => null)
-        alert(data?.message || "Prices updated successfully!")
+        toast.success(data?.message || "Prices updated successfully!")
         setBulkPrice("")
         setBulkExtraAdultPrice("")
         setBulkExtraChildPrice("")
@@ -181,10 +189,10 @@ function PriceCalendarPageContent() {
       } else {
         const data = await res.json().catch(() => null)
         const message = typeof data?.error === "string" ? data.error : Array.isArray(data?.error) ? data.error.map((i: { message: string }) => i.message).join(", ") : "Failed to update prices."
-        alert(message)
+        toast.error(message)
       }
-    } catch (err) {
-      alert("An error occurred.")
+    } catch {
+      toast.error("An error occurred.")
     } finally {
       setBulkSubmitting(false)
     }
@@ -374,6 +382,8 @@ function PriceCalendarPageContent() {
                     <Skeleton key={i} className="h-24 rounded-none" />
                   ))}
                 </div>
+              ) : loadError ? (
+                <ErrorState title="Couldn't load prices" onRetry={fetchPrices} />
               ) : !selectedRatePlanId || !selectedRoomTypeId ? (
                 <div className="h-96 flex items-center justify-center text-muted-foreground">
                   Select a Rate Plan and Room Type to view calendar.

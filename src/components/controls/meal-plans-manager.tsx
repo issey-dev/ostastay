@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useProperty } from "@/components/providers/property-provider"
+import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
 
 type MealPlan = {
   id: string
@@ -32,6 +34,7 @@ type AllocationOption = { id: string; code: string; name: string; mode: string; 
 // for kitchen/back-office visibility.
 export function MealPlansManager({ title, description }: { title: string; description?: string }) {
   const { currentProperty } = useProperty()
+  const confirm = useConfirm()
   const propertyId = currentProperty?.id ?? ""
 
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([])
@@ -91,22 +94,22 @@ export function MealPlansManager({ title, description }: { title: string; descri
         fetchMealPlans()
       } else {
         const body = await res.json()
-        alert(body.error || "Failed to save meal plan.")
+        toast.error(body.error || "Failed to save meal plan.")
       }
     } catch (e) {
       console.error(e)
-      alert("An unexpected error occurred.")
+      toast.error("An unexpected error occurred.")
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this meal plan?")) return
+    if (!(await confirm({ title: "Delete this meal plan?", confirmLabel: "Delete", destructive: true }))) return
     try {
       await fetch(`/api/meal-plans/${id}`, { method: "DELETE" })
       fetchMealPlans()
     } catch (e) {
       console.error(e)
-      alert("Failed to delete meal plan.")
+      toast.error("Failed to delete meal plan.")
     }
   }
 

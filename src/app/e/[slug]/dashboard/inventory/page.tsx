@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckSquare, X, Check, Wrench } from "@/components/icons"
 import { WorkOrderManager } from "@/components/housekeeping/work-order-manager"
 import { Skeleton } from "@/components/ui/skeleton"
-import { statusMutedClasses, toneMutedClasses, toneSolidClasses, type StatusTone } from "@/lib/status-tone"
+import { ErrorState } from "@/components/ui/error-state"
+import { statusMutedClasses, toneMutedClasses, toneSolidClasses } from "@/lib/status-tone"
 
 type Room = {
   id: string
@@ -27,11 +28,11 @@ type Room = {
   maintenance?: any[]
 }
 
-const priorityTone: Record<string, StatusTone> = { HIGH: "danger", MEDIUM: "warning", LOW: "info" }
 
 export default function RoomMatrix() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [propertyId, setPropertyId] = useState<string | null>(null)
   
   const [isBulkMode, setIsBulkMode] = useState(false)
@@ -58,11 +59,16 @@ export default function RoomMatrix() {
 
   const fetchRooms = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/rooms?propertyId=${propertyId}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
       .then((data) => {
         if (Array.isArray(data)) setRooms(data)
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -209,6 +215,8 @@ export default function RoomMatrix() {
                 </div>
               </div>
             </div>
+          ) : loadError ? (
+            <ErrorState title="Couldn't load rooms" onRetry={fetchRooms} />
           ) : rooms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 max-w-sm mx-auto">
               <div className="h-20 w-20 bg-muted rounded-none flex items-center justify-center mb-6 shadow-inner">
@@ -217,7 +225,7 @@ export default function RoomMatrix() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-foreground mb-2">No Rooms Configured</h3>
-              <p className="text-muted-foreground text-sm text-center">You haven't added any floors or rooms to this property yet. Set up your property to see the grid.</p>
+              <p className="text-muted-foreground text-sm text-center">You haven&apos;t added any floors or rooms to this property yet. Set up your property to see the grid.</p>
             </div>
           ) : (
             floors.map(floorName => (

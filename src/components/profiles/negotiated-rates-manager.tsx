@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { ErrorState } from "@/components/ui/error-state"
 
 type AvailableRatePlan = { id: string; name: string; code: string; propertyId: string; propertyName: string }
 type Link = { ratePlanId: string; commissionRate: number | null }
@@ -18,17 +19,26 @@ export function NegotiatedRatesManager({ upid }: { upid: string }) {
   const [available, setAvailable] = useState<AvailableRatePlan[]>([])
   const [links, setLinks] = useState<Link[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
+  const fetchRates = useCallback(() => {
+    setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles/${upid}/negotiated-rates`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => {
         setAvailable(data.available ?? [])
         setLinks(data.links ?? [])
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }, [upid])
+
+  useEffect(() => { fetchRates() }, [fetchRates])
 
   const save = async (next: Link[]) => {
     setLinks(next)
@@ -56,11 +66,12 @@ export function NegotiatedRatesManager({ upid }: { upid: string }) {
     setLinks((prev) => prev.map((l) => (l.ratePlanId === ratePlanId ? { ...l, commissionRate } : l)))
   }
 
-  const commitCommission = (ratePlanId: string) => {
+  const commitCommission = (_ratePlanId: string) => {
     save(links)
   }
 
   if (loading) return <p className="text-xs text-muted-foreground">Loading...</p>
+  if (loadError) return <ErrorState title="Couldn't load negotiated rates" onRetry={fetchRates} />
   if (available.length === 0) {
     return <p className="text-xs text-muted-foreground italic">No negotiated rate plans exist yet — mark a Rate Plan as negotiated in Revenue &gt; Rate Plans first.</p>
   }

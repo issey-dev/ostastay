@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { DarkModeProvider } from "@/components/providers/dark-mode-provider";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -43,6 +44,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} antialiased bg-background text-foreground`} suppressHydrationWarning>
         <DarkModeProvider>{children}</DarkModeProvider>
+        <Toaster />
       </body>
     </html>
   );

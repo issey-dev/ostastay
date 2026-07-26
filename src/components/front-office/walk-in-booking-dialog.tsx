@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { addDays, format, startOfDay } from "date-fns"
 import type { DateRange } from "react-day-picker"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
 import { Loader2, UserPlus } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -10,6 +13,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { toast } from "@/lib/toast"
 
 type WalkInBookingDialogProps = {
   propertyId: string
@@ -24,6 +29,32 @@ type WalkInBookingDialogProps = {
 
 const toIsoDate = (d: Date) => format(d, "yyyy-MM-dd")
 
+// APP STANDARD 001: Zod + React Hook Form with inline, real-time validation. Guest is
+// required either as a picked profile (guestId) or a quick-create first name, resolved
+// conditionally in superRefine based on newGuestMode. Dates must carry both ends.
+const walkInSchema = z
+  .object({
+    guestId: z.string(),
+    newGuestMode: z.boolean(),
+    newFirstName: z.string(),
+    newLastName: z.string(),
+    dates: z.custom<DateRange | undefined>().refine((d) => !!d?.from && !!d?.to, "Pick the stay dates."),
+    roomTypeId: z.string().min(1, "Select a room type."),
+    roomId: z.string().min(1, "Select an available room."),
+    ratePlanId: z.string().min(1, "Select a rate plan."),
+    adults: z.string(),
+    children: z.string(),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.newGuestMode && !val.guestId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a guest or create a new one.", path: ["guestId"] })
+    }
+    if (val.newGuestMode && !val.newFirstName.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter the guest's first name.", path: ["newFirstName"] })
+    }
+  })
+type WalkInFormValues = z.infer<typeof walkInSchema>
+
 // A compressed booking flow: pick or quick-create the guest, confirm dates/room/
 // rate, and book — one dialog instead of the full multi-segment booking form.
 // Walk-in mode additionally checks the guest straight in; book mode (used by the
@@ -34,33 +65,42 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
   const [ratePlans, setRatePlans] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
 
-  const [guestId, setGuestId] = useState("")
-  const [newGuestMode, setNewGuestMode] = useState(false)
-  const [newFirstName, setNewFirstName] = useState("")
-  const [newLastName, setNewLastName] = useState("")
-  const [dates, setDates] = useState<DateRange | undefined>()
-  const [roomTypeId, setRoomTypeId] = useState("")
-  const [roomId, setRoomId] = useState("")
-  const [ratePlanId, setRatePlanId] = useState("")
-  const [adults, setAdults] = useState("1")
-  const [children, setChildren] = useState("0")
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const form = useForm<WalkInFormValues>({
+    resolver: zodResolver(walkInSchema),
+    mode: "onChange",
+    defaultValues: {
+      guestId: "",
+      newGuestMode: false,
+      newFirstName: "",
+      newLastName: "",
+      dates: undefined,
+      roomTypeId: "",
+      roomId: "",
+      ratePlanId: "",
+      adults: "1",
+      children: "0",
+    },
+  })
+
+  const newGuestMode = form.watch("newGuestMode")
+  const roomTypeId = form.watch("roomTypeId")
+  const dates = form.watch("dates")
 
   useEffect(() => {
     if (!isOpen) return
     const start = initial?.checkInDate ? startOfDay(new Date(initial.checkInDate)) : startOfDay(new Date())
-    setDates({ from: start, to: addDays(start, 1) })
-    setGuestId("")
-    setNewGuestMode(false)
-    setNewFirstName("")
-    setNewLastName("")
-    setRoomTypeId(initial?.roomTypeId ?? "")
-    setRoomId(initial?.roomId ?? "")
-    setRatePlanId("")
-    setAdults("1")
-    setChildren("0")
-    setError(null)
+    form.reset({
+      guestId: "",
+      newGuestMode: false,
+      newFirstName: "",
+      newLastName: "",
+      dates: { from: start, to: addDays(start, 1) },
+      roomTypeId: initial?.roomTypeId ?? "",
+      roomId: initial?.roomId ?? "",
+      ratePlanId: "",
+      adults: "1",
+      children: "0",
+    })
 
     fetch(`/api/profiles?profileType=GUEST`)
       .then((r) => r.json())
@@ -74,6 +114,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setRatePlans(d.filter((rp: any) => rp.isActive !== false)) })
       .catch(console.error)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, propertyId])
 
   // Available rooms refresh whenever the room type or dates change.
@@ -90,10 +131,12 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
       .then((d) => {
         if (Array.isArray(d)) {
           setAvailableRooms(d)
-          setRoomId((prev) => (d.some((room: any) => room.id === prev) ? prev : ""))
+          const prev = form.getValues("roomId")
+          if (!d.some((room: any) => room.id === prev)) form.setValue("roomId", "", { shouldValidate: true })
         }
       })
       .catch(console.error)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, roomTypeId, dates?.from?.getTime(), dates?.to?.getTime()])
 
   const guestOptions = useMemo(
@@ -105,33 +148,26 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
     [profiles]
   )
 
-  const handleSubmit = async () => {
-    if (!dates?.from || !dates?.to) { setError("Pick the stay dates."); return }
-    if (!newGuestMode && !guestId) { setError("Select a guest or create a new one."); return }
-    if (newGuestMode && !newFirstName.trim()) { setError("Enter the guest's first name."); return }
-    if (!roomTypeId) { setError("Select a room type."); return }
-    if (!roomId) { setError("Select an available room."); return }
-    if (!ratePlanId) { setError("Select a rate plan."); return }
+  const onSubmit = async (values: WalkInFormValues) => {
+    if (!values.dates?.from || !values.dates?.to) return
 
-    setSubmitting(true)
-    setError(null)
     try {
       // 1. Quick-create the guest profile if needed.
-      let primaryGuestId = guestId
-      if (newGuestMode) {
+      let primaryGuestId = values.guestId
+      if (values.newGuestMode) {
         const profileRes = await fetch(`/api/profiles`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             profileType: "GUEST",
-            firstName: newFirstName.trim(),
-            lastName: newLastName.trim() || null,
+            firstName: values.newFirstName.trim(),
+            lastName: values.newLastName.trim() || null,
             originPropertyId: propertyId,
           }),
         })
         const profileData = await profileRes.json()
         if (!profileRes.ok) {
-          setError(profileData.error || "Failed to create the guest profile.")
+          toast.error(profileData.error || "Failed to create the guest profile.")
           return
         }
         primaryGuestId = profileData.upid
@@ -144,18 +180,18 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         body: JSON.stringify({
           propertyId,
           primaryGuestId,
-          checkInDate: toIsoDate(dates.from),
-          checkOutDate: toIsoDate(dates.to),
-          adults: parseInt(adults) || 1,
-          children: parseInt(children) || 0,
-          roomTypeId,
-          roomId,
-          ratePlanId,
+          checkInDate: toIsoDate(values.dates.from),
+          checkOutDate: toIsoDate(values.dates.to),
+          adults: parseInt(values.adults) || 1,
+          children: parseInt(values.children) || 0,
+          roomTypeId: values.roomTypeId,
+          roomId: values.roomId,
+          ratePlanId: values.ratePlanId,
         }),
       })
       const resData = await resRes.json()
       if (!resRes.ok) {
-        setError(resData.error || "Failed to create the reservation.")
+        toast.error(resData.error || "Failed to create the reservation.")
         return
       }
 
@@ -191,9 +227,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         })
       }
     } catch {
-      setError("An unexpected error occurred.")
-    } finally {
-      setSubmitting(false)
+      toast.error("An unexpected error occurred.")
     }
   }
 
@@ -209,95 +243,152 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Guest</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => { setNewGuestMode(!newGuestMode); setError(null) }}
-              >
-                <UserPlus className="w-3.5 h-3.5 mr-1" />
-                {newGuestMode ? "Pick existing guest" : "New guest"}
-              </Button>
-            </div>
-            {newGuestMode ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="First name" value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} />
-                <Input placeholder="Last name" value={newLastName} onChange={(e) => setNewLastName(e.target.value)} />
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Guest</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      const next = !newGuestMode
+                      form.setValue("newGuestMode", next, { shouldValidate: true })
+                      form.clearErrors(["guestId", "newFirstName"])
+                    }}
+                  >
+                    <UserPlus className="w-3.5 h-3.5 mr-1" />
+                    {newGuestMode ? "Pick existing guest" : "New guest"}
+                  </Button>
+                </div>
+                {newGuestMode ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField control={form.control} name="newFirstName" render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input placeholder="First name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="newLastName" render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input placeholder="Last name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                ) : (
+                  <FormField control={form.control} name="guestId" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <SearchableSelect
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Select guest..."
+                          options={guestOptions}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                )}
               </div>
-            ) : (
-              <SearchableSelect
-                value={guestId}
-                onChange={(v: string) => setGuestId(v)}
-                placeholder="Select guest..."
-                options={guestOptions}
-              />
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label>Stay Dates</Label>
-            <DateRangePicker value={dates} onChange={setDates} />
-          </div>
+              <FormField control={form.control} name="dates" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stay Dates</FormLabel>
+                  <FormControl>
+                    <DateRangePicker value={field.value} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Room Type</Label>
-              <SearchableSelect
-                value={roomTypeId}
-                onChange={(v: string) => { setRoomTypeId(v); setRoomId("") }}
-                placeholder="Room type..."
-                options={roomTypes.map((rt) => ({ label: rt.name, value: rt.id }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Room</Label>
-              <SearchableSelect
-                value={roomId}
-                onChange={(v: string) => setRoomId(v)}
-                placeholder={roomTypeId ? (availableRooms.length ? "Select room..." : "No rooms available") : "Pick a type first"}
-                options={availableRooms.map((r) => ({
-                  label: `${r.roomNumber} — ${r.status.replace(/_/g, " ").toLowerCase()}`,
-                  value: r.id,
-                }))}
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="roomTypeId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Room Type</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={(v: string) => { field.onChange(v); form.setValue("roomId", "", { shouldValidate: true }) }}
+                        placeholder="Room type..."
+                        options={roomTypes.map((rt) => ({ label: rt.name, value: rt.id }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="roomId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Room</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder={roomTypeId ? (availableRooms.length ? "Select room..." : "No rooms available") : "Pick a type first"}
+                        options={availableRooms.map((r) => ({
+                          label: `${r.roomNumber} — ${r.status.replace(/_/g, " ").toLowerCase()}`,
+                          value: r.id,
+                        }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2 col-span-1">
-              <Label>Rate Plan</Label>
-              <SearchableSelect
-                value={ratePlanId}
-                onChange={(v: string) => setRatePlanId(v)}
-                placeholder="Rate..."
-                options={ratePlans.map((rp) => ({ label: `${rp.code} — ${rp.name}`, value: rp.id }))}
-              />
+              <div className="grid grid-cols-3 gap-3">
+                <FormField control={form.control} name="ratePlanId" render={({ field }) => (
+                  <FormItem className="col-span-1">
+                    <FormLabel>Rate Plan</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Rate..."
+                        options={ratePlans.map((rp) => ({ label: `${rp.code} — ${rp.name}`, value: rp.id }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="adults" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Adults</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="children" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Children</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Adults</Label>
-              <Input type="number" min="1" value={adults} onChange={(e) => setAdults(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Children</Label>
-              <Input type="number" min="0" value={children} onChange={(e) => setChildren(e.target.value)} />
-            </div>
-          </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "book" ? "Create Booking" : "Book & Check In"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {mode === "book" ? "Create Booking" : "Book & Check In"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )

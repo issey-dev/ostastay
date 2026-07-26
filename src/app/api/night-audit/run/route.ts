@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { resolveChargeTax } from "@/lib/tax-calc"
@@ -278,6 +279,46 @@ export async function POST(request: Request) {
       ).map((c) => [c.id, c])
     )
     let transportChargesPosted = 0
+
+    // Atomic idempotency claim — the real guard against a concurrent/retried run
+    // double-posting. The `alreadyRun` fast-path read above is only a cheap
+    // short-circuit; it can't prevent a race (two runs both read null before either
+    // commits). @@unique([propertyId, auditDate]) makes the insert below the single
+    // point where exactly one run wins: the first inserts an IN_PROGRESS row, a racing
+    // run's insert hits the unique constraint and is rejected here, before any posting.
+    // A prior FAILED attempt (including a timed-out one, since the tx catch flips the
+    // claim to FAILED) is reclaimable so retries still work; the atomic
+    // updateMany(status: "FAILED") ensures only one of two concurrent retries reclaims it.
+    let auditLog: { id: string } | null
+    try {
+      auditLog = await prisma.propertyNightAuditLog.create({
+        data: { propertyId, auditDate, executedBy, roomsOccupied: 0, roomRevenue: 0, taxPosted: 0, totalPostings: 0, status: "IN_PROGRESS" },
+      })
+    } catch (claimError) {
+      if (claimError instanceof Prisma.PrismaClientKnownRequestError && claimError.code === "P2002") {
+        const reclaimed = await prisma.propertyNightAuditLog.updateMany({
+          where: { propertyId, auditDate, status: "FAILED" },
+          data: { executedBy, executedAt: new Date(), roomsOccupied: 0, roomRevenue: 0, taxPosted: 0, totalPostings: 0, status: "IN_PROGRESS" },
+        })
+        if (reclaimed.count === 0) {
+          const existing = await prisma.propertyNightAuditLog.findUnique({
+            where: { propertyId_auditDate: { propertyId, auditDate } },
+          })
+          return NextResponse.json(
+            { error: `Night audit is already ${existing?.status === "COMPLETED" ? "complete" : "in progress"} for ${auditDate.toISOString().slice(0, 10)}.`, log: existing },
+            { status: 409 }
+          )
+        }
+        auditLog = await prisma.propertyNightAuditLog.findUnique({
+          where: { propertyId_auditDate: { propertyId, auditDate } },
+        })
+      } else {
+        throw claimError
+      }
+    }
+    if (!auditLog) {
+      return NextResponse.json({ error: "Could not claim the night-audit run." }, { status: 500 })
+    }
 
     // 2. Post every reservation's nightly charges and write the audit log in ONE
     // transaction — a failure anywhere rolls back every posting, so the ledger can
@@ -564,13 +605,16 @@ export async function POST(request: Request) {
           })
         }
 
-        // 3. Log the audit run — inside the same transaction, so a COMPLETED log row
-        // exists if and only if every posting above landed.
-        const createdLog = await tx.propertyNightAuditLog.create({
+        // 3. Flip the pre-claimed IN_PROGRESS row to COMPLETED — inside the same
+        // transaction, so a COMPLETED log exists if and only if every posting above
+        // landed. (The row was claimed atomically before the transaction; updating it
+        // here rather than inserting a second row keeps @@unique([propertyId, auditDate])
+        // intact and preserves retry-after-failure semantics.)
+        const createdLog = await tx.propertyNightAuditLog.update({
+          where: { id: auditLog.id },
           data: {
-            propertyId,
-            auditDate,
             executedBy,
+            executedAt: new Date(),
             roomsOccupied: activeReservations.length,
             roomRevenue: totalRoomRevenue,
             taxPosted: totalTaxPosted,
@@ -590,15 +634,16 @@ export async function POST(request: Request) {
         return createdLog
       }, { timeout: 30_000 })
     } catch (postingError) {
-      // The transaction rolled back — no charges were posted. Record the failed run
-      // (outside the transaction, or it would roll back too) so the status page shows
-      // the attempt instead of it vanishing without a trace.
+      // The transaction rolled back — no charges were posted. Flip the pre-claimed row
+      // to FAILED (outside the transaction, or it would roll back too) so the status
+      // page shows the attempt instead of it vanishing — and, crucially, so a retry can
+      // reclaim this same row rather than being blocked by the unique key.
       console.error("Night audit failed and was rolled back:", postingError)
-      await prisma.propertyNightAuditLog.create({
+      await prisma.propertyNightAuditLog.update({
+        where: { id: auditLog.id },
         data: {
-          propertyId,
-          auditDate,
           executedBy,
+          executedAt: new Date(),
           roomsOccupied: activeReservations.length,
           roomRevenue: 0,
           taxPosted: 0,

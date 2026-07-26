@@ -253,6 +253,11 @@ describe("Spa booking: business rules", () => {
     const lineItem = await prisma.folioLineItem.findUnique({ where: { id: appt.folioLineItemId } });
     expect(lineItem?.folioId).toBe(folioId);
     expect(lineItem?.amount).toBeCloseTo(80, 2);
+    // A7: the charge is attributed to an open cashier shift for this property, so it
+    // shows in the drawer/EOD reconciliation (previously shiftId was null).
+    expect(lineItem?.shiftId).toBeTruthy();
+    const shift = await prisma.cashierShift.findUnique({ where: { id: lineItem!.shiftId! } });
+    expect(shift?.propertyId).toBe(propertyId);
   });
 
   it("rejects a second booking when the only qualified therapist is already booked over the requested time", async () => {

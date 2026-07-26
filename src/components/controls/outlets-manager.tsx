@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OutletChargeCodePicker, type ChargeCodeOption } from "@/components/controls/outlet-charge-code-picker"
+import { toast } from "@/lib/toast"
 
 const OUTLET_TYPES = [
   { value: "SPA", label: "Spa" },
@@ -127,7 +128,7 @@ export function OutletsManager() {
         fetchOutlets()
       } else {
         const error = await res.json()
-        alert(error.error || "Failed to save outlet")
+        toast.error(error.error || "Failed to save outlet")
       }
     } catch (error) {
       console.error(error)
@@ -162,12 +163,12 @@ export function OutletsManager() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="space-y-2 max-w-xs w-full">
           <Label className="text-xs text-muted-foreground">Property</Label>
-          <Select value={propertyId} onValueChange={(v) => setPropertyId(v ?? "")}>
-            <SelectTrigger><SelectValue placeholder="Select property">{properties.find((p) => p.id === propertyId)?.name}</SelectValue></SelectTrigger>
-            <SelectContent>
-              {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={propertyId}
+            onChange={(v) => setPropertyId(v ?? "")}
+            placeholder="Select property"
+            options={properties.map((p) => ({ label: p.name, value: p.id }))}
+          />
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm() }}>
@@ -211,7 +212,7 @@ export function OutletsManager() {
                 <Label>Tax Override <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <p className="text-xs text-muted-foreground">
                   When set, every charge posted through this outlet uses this tax handling
-                  instead of the charge code's own — whether that code is on the default
+                  instead of the charge code&apos;s own — whether that code is on the default
                   engine or its own Custom Tax profile.
                 </p>
                 <Select value={form.taxOverrideMode} onValueChange={(v) => setForm((p) => ({ ...p, taxOverrideMode: (v ?? "NONE") as any }))}>
@@ -223,7 +224,7 @@ export function OutletsManager() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NONE">No override — use each charge code's own tax</SelectItem>
+                    <SelectItem value="NONE">No override — use each charge code&apos;s own tax</SelectItem>
                     <SelectItem value="DEFAULT_ENGINE">Force default Maldives Tax engine</SelectItem>
                     <SelectItem value="CUSTOM">Force a specific Custom Tax profile</SelectItem>
                   </SelectContent>

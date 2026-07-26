@@ -59,13 +59,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const moved: Array<{ bookingId: string; newBookingId: string }> = [];
     const failed: Array<{ bookingId: string; reason: string }> = [];
 
+    // Target capacity: seed with what's already CONFIRMED on the replacement departure,
+    // then account for each move as it lands so a batch can't overfill it (the cancel
+    // route only SUGGESTS a replacement with room; this is the endpoint that must enforce it).
+    const targetBooked = await prisma.excursionBooking.aggregate({
+      where: { departureId: targetDepartureId, status: "CONFIRMED" },
+      _sum: { adultCount: true, childCount: true, infantCount: true },
+    });
+    let targetHeadcount = (targetBooked._sum.adultCount ?? 0) + (targetBooked._sum.childCount ?? 0) + (targetBooked._sum.infantCount ?? 0);
+
     for (const bookingId of bookingIds) {
       const original = await prisma.excursionBooking.findUnique({
         where: { id: bookingId },
         include: { folioLineItem: true, reservation: { include: { folios: { where: { isClosed: false } } } } },
       });
 
-      if (!original || original.departureId !== sourceDepartureId) {
+      // Tenant/property isolation: only the TARGET departure is authorized above
+      // (assertPropertyModuleAccess). The source departure id and each bookingId come
+      // straight from the request, so we must confirm the booking actually belongs to the
+      // same property as the authorized target — otherwise a caller could move (and post a
+      // charge onto) a booking in another enterprise. Same generic "not found" message so
+      // it can't be used to probe foreign booking ids.
+      if (!original || original.departureId !== sourceDepartureId || original.propertyId !== excursionType.propertyId) {
         failed.push({ bookingId, reason: "Booking not found on the source departure" });
         continue;
       }
@@ -99,6 +114,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           continue;
         }
         folioIdToCharge = folio.id;
+      }
+
+      const moveHeadcount = original.adultCount + original.childCount + original.infantCount;
+      if (targetHeadcount + moveHeadcount > targetDeparture.capacity) {
+        failed.push({ bookingId, reason: `The replacement departure is full (capacity ${targetDeparture.capacity}).` });
+        continue;
       }
 
       const totalAmount = computeBookingTotal(rate, excursionType.pricingMode, {
@@ -160,6 +181,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
 
       moved.push({ bookingId, newBookingId: newBooking.id });
+      targetHeadcount += moveHeadcount;
     }
 
     await logActivity({

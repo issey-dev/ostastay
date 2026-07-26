@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
 export async function POST(
@@ -35,6 +36,23 @@ export async function POST(
       return NextResponse.json({ error: "Cannot check in a cancelled or already checked out reservation" }, { status: 400 });
     }
 
+    // A11 (owner policy 2026-07-25): a guest can NEVER be checked in before their arrival
+    // date. If they turn up early, the front desk must update the reservation's check-in
+    // date first — early arrival is a deliberate edit, never a silent check-in. (Same-day
+    // and late arrivals are allowed; a never-arrived past booking is handled by Night
+    // Audit as a No-Show.) The property's business date is the operational "today".
+    const property = await prisma.property.findUnique({
+      where: { id: reservation.propertyId },
+      select: { businessDate: true, requireInspectionOnCheckIn: true },
+    });
+    const businessDate = property ? resolveBusinessDate(property) : null;
+    if (businessDate && toUtcMidnight(reservation.checkInDate).getTime() > businessDate.getTime()) {
+      return NextResponse.json(
+        { error: "This reservation's arrival date is in the future — a guest can't be checked in before their check-in date. Update the check-in date first if they've arrived early." },
+        { status: 400 }
+      );
+    }
+
     const activeAssignment = reservation.assignments[0];
     if (!activeAssignment?.roomId) {
       return NextResponse.json({ error: "A room must be assigned before checking in" }, { status: 400 });
@@ -54,10 +72,6 @@ export async function POST(
           { status: 400 }
         );
       }
-      const property = await prisma.property.findUnique({
-        where: { id: reservation.propertyId },
-        select: { requireInspectionOnCheckIn: true },
-      });
       if (property?.requireInspectionOnCheckIn && assignedRoom.status !== "INSPECTED") {
         return NextResponse.json(
           { error: `Room ${assignedRoom.roomNumber} has not been inspected — this property requires an inspected room before check-in (status: ${assignedRoom.status.replace(/_/g, " ").toLowerCase()}).` },

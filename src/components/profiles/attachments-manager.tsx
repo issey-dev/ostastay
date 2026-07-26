@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Plus, Trash2, ExternalLink } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ErrorState } from "@/components/ui/error-state"
 
 type Attachment = { id: string; label: string; url: string; createdAt: string }
 
@@ -12,6 +13,7 @@ type Attachment = { id: string; label: string; url: string; createdAt: string }
 export function AttachmentsManager({ upid }: { upid: string }) {
   const [rows, setRows] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [label, setLabel] = useState("")
   const [url, setUrl] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -19,9 +21,14 @@ export function AttachmentsManager({ upid }: { upid: string }) {
 
   const fetchRows = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles/${upid}/attachments`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => { if (Array.isArray(data)) setRows(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -62,6 +69,8 @@ export function AttachmentsManager({ upid }: { upid: string }) {
     <div className="space-y-3">
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load attachments" onRetry={fetchRows} />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No attachments linked yet.</p>
       ) : (

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
+import { ErrorState } from "@/components/ui/error-state"
 
 const ISSUE_TYPES = MAINTENANCE_ISSUE_TYPES
 
@@ -21,6 +22,7 @@ const PRIORITIES = {
 export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propertyId: string | null, rooms: any[], refreshMatrix: () => void }) {
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   
   const [form, setForm] = useState({
@@ -38,13 +40,14 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
 
   const fetchOrders = async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const res = await fetch(`/api/maintenance?propertyId=${propertyId}`)
-      if (res.ok) {
-        setOrders(await res.json())
-      }
+      if (!res.ok) throw new Error("Failed to load work orders")
+      setOrders(await res.json())
     } catch (e) {
       console.error(e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -87,6 +90,10 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
 
   if (loading) {
     return <div className="text-center py-12 text-muted-foreground">Loading work orders...</div>
+  }
+
+  if (loadError) {
+    return <ErrorState title="Couldn't load work orders" onRetry={fetchOrders} />
   }
 
   return (

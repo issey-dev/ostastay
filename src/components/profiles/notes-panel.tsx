@@ -5,6 +5,7 @@ import { Pin, PinOff, Trash2, Send } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { ErrorState } from "@/components/ui/error-state"
 
 type Note = { id: string; noteText: string; isPinned: boolean; createdAt: string; authorName: string }
 
@@ -14,14 +15,20 @@ type Note = { id: string; noteText: string; isPinned: boolean; createdAt: string
 export function NotesPanel({ upid }: { upid: string }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [text, setText] = useState("")
   const [saving, setSaving] = useState(false)
 
   const fetchNotes = () => {
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/profiles/${upid}/notes`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error()
+        return r.json()
+      })
       .then((data) => { if (Array.isArray(data)) setNotes(data) })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -76,6 +83,8 @@ export function NotesPanel({ upid }: { upid: string }) {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load notes" onRetry={fetchNotes} />
       ) : notes.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No notes yet.</p>
       ) : (

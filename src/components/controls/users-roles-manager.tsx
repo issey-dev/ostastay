@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -16,7 +15,6 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield } from "@/components/icons"
 import { RolePermissionMatrix, emptyPermissionMatrix, type PermissionMatrix } from "./role-permission-matrix"
-import { MODULES } from "@/lib/modules"
 import type { StatusTone } from "@/lib/status-tone"
 
 type Role = {

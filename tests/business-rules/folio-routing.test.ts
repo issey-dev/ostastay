@@ -139,4 +139,24 @@ describe("Folio routing + cross-folio move", () => {
     );
     expect(bad.status).toBe(400);
   });
+
+  it("A8: refuses to move a charge off a closed (finalized) source folio", async () => {
+    const a = await inHouseWithTwoFolios();
+    const posted = await postCharge(a.folio1, { chargeCodeId, amount: 30 });
+    const itemId = (await posted.json()).id;
+
+    // Finalize the source folio.
+    await prisma.folio.update({ where: { id: a.folio1 }, data: { isClosed: true } });
+
+    const res = await asUser(adminId, () =>
+      moveRoute.POST(new Request("http://localhost/api/folios/line-items/move", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lineItemIds: [itemId], targetFolioId: a.folio2 }),
+      }))
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/closed|finalized/i);
+    // The charge stayed on the closed folio.
+    expect((await prisma.folioLineItem.findUnique({ where: { id: itemId } }))!.folioId).toBe(a.folio1);
+  });
 });

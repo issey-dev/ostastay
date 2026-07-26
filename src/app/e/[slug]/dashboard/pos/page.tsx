@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
@@ -34,6 +36,7 @@ export default function POSDashboard() {
   const [chargeCodes, setChargeCodes] = useState<any[]>([])
   const [recentPostings, setRecentPostings] = useState<any[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [posting, setPosting] = useState(false)
   const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null)
 
@@ -44,15 +47,24 @@ export default function POSDashboard() {
     reference: ""
   })
 
-  // Fetch active outlets for this property on mount
+  // Fetch active outlets for this property — the initial data load that gates the page.
+  const fetchOutlets = () => {
+    if (!currentProperty) return
+    setLoadError(false)
+    fetch(`/api/outlets?propertyId=${currentProperty.id}`)
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
+      .then(data => {
+        if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive))
+      })
+      .catch(() => setLoadError(true))
+  }
+
   useEffect(() => {
     if (currentProperty) {
-      fetch(`/api/outlets?propertyId=${currentProperty.id}`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive))
-        })
-        .catch(console.error)
+      fetchOutlets()
       // POS is a billing screen — opening it auto-opens the cashier's drawer for the
       // current property, even before anything is posted.
       fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
@@ -204,7 +216,7 @@ export default function POSDashboard() {
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Fast Post</h2>
-        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest's room or a walk-in bill.</p>
+        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest&apos;s room or a walk-in bill.</p>
       </div>
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "charges" | "history") ?? "charges")}>
@@ -214,6 +226,9 @@ export default function POSDashboard() {
         </TabsList>
 
         <TabsContent value="charges" className="m-0">
+    {loadError ? (
+      <ErrorState title="Couldn't load outlets" onRetry={fetchOutlets} />
+    ) : (
     <div className="flex flex-col md:flex-row gap-8 min-h-[calc(100vh-4rem)]">
 
       {/* Left Column: Search & Post */}
@@ -233,7 +248,7 @@ export default function POSDashboard() {
               {outlets.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-2">Selecting an outlet scopes the charge codes below to that outlet's own list, and attributes the revenue to it.</p>
+          <p className="text-xs text-muted-foreground mt-2">Selecting an outlet scopes the charge codes below to that outlet&apos;s own list, and attributes the revenue to it.</p>
         </div>
 
         {/* 1. Find Guest / Start Walk-in */}
@@ -287,7 +302,7 @@ export default function POSDashboard() {
                 </div>
               )}
               {searchQuery && guests.length === 0 && !loadingSearch && (
-                <p className="text-sm text-muted-foreground mt-4 text-center">No active guests found matching "{searchQuery}"</p>
+                <p className="text-sm text-muted-foreground mt-4 text-center">No active guests found matching &quot;{searchQuery}&quot;</p>
               )}
             </>
           ) : walkInFolioId ? (
@@ -331,25 +346,12 @@ export default function POSDashboard() {
             <div className="grid grid-cols-2 gap-5">
               <div className="space-y-2">
                 <Label>Charge Code{selectedOutletId ? "" : " (Outlet)"}</Label>
-                <Select value={form.chargeCodeId} onValueChange={(val) => setForm({ ...form, chargeCodeId: val ?? "" })}>
-                  <SelectTrigger>
-                    {form.chargeCodeId ? (
-                      <span className="flex flex-1 text-left truncate">
-                        {(() => {
-                          const c = chargeCodes.find(x => x.id === form.chargeCodeId);
-                          return c ? `${c.description} (${c.code})` : "Select Outlet...";
-                        })()}
-                      </span>
-                    ) : (
-                      <SelectValue placeholder="Select Outlet..." />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chargeCodes.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{`${c.description} (${c.code})`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.chargeCodeId}
+                  onChange={(val) => setForm({ ...form, chargeCodeId: val ?? "" })}
+                  placeholder="Select Outlet..."
+                  options={chargeCodes.map(c => ({ value: c.id, label: `${c.description} (${c.code})` }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Amount ($)</Label>
@@ -431,6 +433,7 @@ export default function POSDashboard() {
         </SheetContent>
       </Sheet>
     </div>
+    )}
         </TabsContent>
 
         <TabsContent value="history" className="m-0">

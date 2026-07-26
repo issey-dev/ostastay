@@ -400,6 +400,22 @@ export async function assertPropertyModuleAccess(ctx: AuthContext, propertyId: s
   }
 }
 
+// Non-throwing permission probe — same rule as requirePermission (licensing + role CRUD
+// flag) but returns a boolean. Use when a route accepts EITHER of two permissions
+// (e.g. a Spa catalog readable by both a CONTROLS catalog-manager and a SPA booking user).
+export function hasPermission(ctx: AuthContext, module: Module, action: Action): boolean {
+  if (!ctx.licensedModules.has(module)) return false;
+  const perm = ctx.permissions.get(module);
+  if (!perm) return false;
+  return action === "view"
+    ? perm.canView
+    : action === "create"
+    ? perm.canCreate
+    : action === "update"
+    ? perm.canUpdate
+    : perm.canDelete;
+}
+
 export function requirePermission(ctx: AuthContext, module: Module, action: Action) {
   if (!ctx.licensedModules.has(module)) {
     throw new ForbiddenError(`${module} is not enabled for this enterprise`);

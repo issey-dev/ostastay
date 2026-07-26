@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
@@ -101,7 +102,9 @@ export function FacilityAmenitiesManager() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={3} className="text-center">Loading...</TableCell></TableRow>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                ))
               ) : facilities.length === 0 ? (
                 <TableRow><TableCell colSpan={3} className="text-center">No facilities configured.</TableCell></TableRow>
               ) : (

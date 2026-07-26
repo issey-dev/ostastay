@@ -21,6 +21,7 @@ function DropdownMenuTrigger({ asChild, ...props }: MenuPrimitive.Trigger.Props 
         data-slot="dropdown-menu-trigger"
         render={props.children}
         {...props}
+        // eslint-disable-next-line react/no-children-prop
         children={undefined}
       />
     )

@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     requirePermission(ctx, "ACTIVITY_LOG", "view");
 
     const { searchParams } = new URL(request.url);
-    const module = searchParams.get("module");
+    const moduleParam = searchParams.get("module");
     const action = searchParams.get("action");
     const userId = searchParams.get("userId");
     const q = searchParams.get("q");
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     const where = {
       enterpriseId: ctx.enterpriseId,
-      ...(module ? { module } : {}),
+      ...(moduleParam ? { module: moduleParam } : {}),
       ...(action ? { action } : {}),
       ...(userId ? { userId } : {}),
       ...(q ? { description: { contains: q } } : {}),

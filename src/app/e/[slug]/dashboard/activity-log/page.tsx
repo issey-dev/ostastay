@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { History, Search } from "@/components/icons"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
@@ -48,6 +50,7 @@ export default function ActivityLogPage() {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [moduleFilter, setModuleFilter] = useState<string>(ALL)
   const [actionFilter, setActionFilter] = useState("")
   const [search, setSearch] = useState("")
@@ -55,17 +58,19 @@ export default function ActivityLogPage() {
   const fetchEntries = useCallback(
     async (offset: number, replace: boolean) => {
       setLoading(true)
+      setLoadError(false)
       try {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
         if (moduleFilter !== ALL) params.set("module", moduleFilter)
         if (actionFilter.trim()) params.set("action", actionFilter.trim().toUpperCase())
         if (search.trim()) params.set("q", search.trim())
         const res = await fetch(`/api/activity-log?${params}`)
-        if (res.ok) {
-          const data = await res.json()
-          setTotal(data.total)
-          setEntries((prev) => (replace ? data.entries : [...prev, ...data.entries]))
-        }
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        setTotal(data.total)
+        setEntries((prev) => (replace ? data.entries : [...prev, ...data.entries]))
+      } catch {
+        setLoadError(true)
       } finally {
         setLoading(false)
       }
@@ -123,7 +128,7 @@ export default function ActivityLogPage() {
         </span>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
         <Table>
           <TableHeader className="bg-muted">
             <TableRow>
@@ -135,42 +140,53 @@ export default function ActivityLogPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((e) => (
-              <TableRow key={e.id}>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {new Date(e.createdAt).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+            {loading && entries.length === 0 ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+              ))
+            ) : loadError ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-0">
+                  <ErrorState title="Couldn't load activity" onRetry={() => fetchEntries(0, true)} />
                 </TableCell>
-                <TableCell>
-                  <div className="text-sm">{e.userName ?? e.userEmail ?? "—"}</div>
-                  {e.isSupport && (
-                    <Badge variant="outline" className="text-xs border-warning text-warning">
-                      Osta Support
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {e.module === "AUTH" ? "Authentication" : (MODULE_LABELS as Record<string, string>)[e.module] ?? e.module}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn("text-xs", ACTION_BADGE_CLASS[e.action])}>
-                    {e.action}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm">{e.description}</TableCell>
               </TableRow>
-            ))}
-            {entries.length === 0 && !loading && (
+            ) : entries.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-0">
                   <EmptyState icon={History} title="No activity recorded yet" />
                 </TableCell>
               </TableRow>
+            ) : (
+              entries.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(e.createdAt).toLocaleString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{e.userName ?? e.userEmail ?? "—"}</div>
+                    {e.isSupport && (
+                      <Badge variant="outline" className="text-xs border-warning text-warning">
+                        Osta Support
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {e.module === "AUTH" ? "Authentication" : (MODULE_LABELS as Record<string, string>)[e.module] ?? e.module}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn("text-xs", ACTION_BADGE_CLASS[e.action])}>
+                      {e.action}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{e.description}</TableCell>
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>

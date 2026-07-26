@@ -6,6 +6,7 @@ import { findTypeAvailabilityConflicts } from "@/lib/availability";
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
+import { toCents, fromCents, subMoney } from "@/lib/money";
 
 // The reservation lifecycle is a guarded state machine, not a free-text field.
 // Check-in and check-out have their own dedicated routes (which validate room
@@ -24,6 +25,11 @@ const TRANSITION_HINTS: Record<string, string> = {
   IN_HOUSE: "Use the Check-In action instead of setting the status directly.",
   CHECKED_OUT: "Use the Check-Out action instead of setting the status directly — it settles the folio balance.",
 };
+
+// Thrown inside the transition transaction when the reservation's status changed between
+// the read and the write (a concurrent transition already ran) — turned into a clean 409
+// rather than posting a cancellation fee / reopening folios twice.
+class StatusConflict extends Error {}
 
 export async function PATCH(
   request: Request,
@@ -88,17 +94,17 @@ export async function PATCH(
       }
       if (cancellationFee <= 0.005) {
         // No applicable fee → require a net-zero folio before cancelling.
-        let charges = 0;
-        let payments = 0;
+        let chargeCents = 0;
+        let paymentCents = 0;
         for (const f of existing.folios) {
           for (const li of f.lineItems) {
-            if (!li.isVoid) charges += li.amount + li.taxAmount + (li.serviceChargeAmount || 0);
+            if (!li.isVoid) chargeCents += toCents(li.amount) + toCents(li.taxAmount) + toCents(li.serviceChargeAmount);
           }
           for (const p of f.payments) {
-            payments += p.isRefund ? -p.amount : p.amount;
+            paymentCents += p.isRefund ? -toCents(p.amount) : toCents(p.amount);
           }
         }
-        const balance = charges - payments;
+        const balance = fromCents(chargeCents - paymentCents);
         if (Math.abs(balance) > 0.01) {
           return NextResponse.json(
             {
@@ -175,11 +181,18 @@ export async function PATCH(
       statusData.noShowAt = null;
     }
 
-    const updatedReservation = await prisma.$transaction(async (tx) => {
-      const updated = await tx.reservation.update({
-        where: { id },
+    let updatedReservation;
+    try {
+    updatedReservation = await prisma.$transaction(async (tx) => {
+      // Conditional on the status observed above still being current, so two concurrent
+      // transitions can't both post a cancellation fee / reopen folios — the loser
+      // matches 0 rows and aborts.
+      const claimed = await tx.reservation.updateMany({
+        where: { id, status: existing.status },
         data: statusData,
       });
+      if (claimed.count === 0) throw new StatusConflict();
+      const updated = await tx.reservation.findUnique({ where: { id } });
 
       // A cancelled reservation's folios are closed so they can't accumulate
       // charges; reinstating reopens them. When a cancellation fee applies, post it
@@ -218,16 +231,22 @@ export async function PATCH(
 
       return updated;
     });
+    } catch (txError) {
+      if (txError instanceof StatusConflict) {
+        return NextResponse.json({ error: "This reservation's status was just changed by another action." }, { status: 409 });
+      }
+      throw txError;
+    }
 
     // Reconciliation for a cancellation fee: the fee is now posted; net it against
     // any deposit already held so the UI can prompt to collect a shortfall or
     // refund a remainder.
     let cancellationFeeInfo: { fee: number; depositHeld: number; refundDue: number; shortfall: number } | null = null;
     if (body.status === "CANCELLED" && cancellationFee > 0.005) {
-      const depositHeld = existing.folios
-        .flatMap((f) => f.payments)
-        .reduce((s, p) => s + (p.isRefund ? -p.amount : p.amount), 0);
-      const net = cancellationFee - depositHeld;
+      const depositHeld = fromCents(
+        existing.folios.flatMap((f) => f.payments).reduce((c, p) => c + (p.isRefund ? -toCents(p.amount) : toCents(p.amount)), 0)
+      );
+      const net = subMoney(cancellationFee, depositHeld);
       cancellationFeeInfo = {
         fee: cancellationFee,
         depositHeld,

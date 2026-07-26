@@ -8,6 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+
+// Above this many options a plain dropdown is painful to scan (Country/Nationality carry
+// 200+), so switch to the searchable variant. Short LOVs (Gender, Title, ID Type…) stay a
+// plain Select. One threshold here fixes every SystemCodeSelect call site at once.
+const SEARCHABLE_THRESHOLD = 12
 
 type SystemCode = {
   id: string
@@ -95,6 +101,22 @@ export function SystemCodeSelect({
           <SelectValue placeholder="No options available" />
         </SelectTrigger>
       </Select>
+    )
+  }
+
+  // Long lists (Country, Nationality…) get a type-to-filter combobox; short LOVs keep the
+  // plain dropdown. Same value/onChange contract either way, so every call site is unchanged.
+  if (options.length > SEARCHABLE_THRESHOLD) {
+    return (
+      <SearchableSelect
+        value={value}
+        onChange={(val) => onValueChange(val ?? "")}
+        options={options.map((opt) => ({ label: opt.value, value: opt.code }))}
+        placeholder={placeholder}
+        searchPlaceholder="Search..."
+        disabled={disabled}
+        required={required}
+      />
     )
   }
 

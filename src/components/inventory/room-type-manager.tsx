@@ -25,7 +25,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
 
@@ -191,7 +190,7 @@ export function RoomTypeManager({
     lastAddSignal.current = addSignal
     resetForm()
     setIsDialogOpen(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [addSignal])
 
   // First-column (Code) sorting, asc<->desc.

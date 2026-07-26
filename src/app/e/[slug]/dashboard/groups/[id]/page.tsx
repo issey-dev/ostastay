@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { useRouter } from "next/navigation"
 import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -278,7 +277,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <DialogHeader>
             <DialogTitle>Edit Group Block</DialogTitle>
             <DialogDescription>
-              Rooms held cannot go below what's already picked up; a block with active pickups cannot be cancelled.
+              Rooms held cannot go below what&apos;s already picked up; a block with active pickups cannot be cancelled.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertyScope, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
@@ -19,6 +19,10 @@ export async function GET(request: Request) {
       if (!shift || shift.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: "Shift not found" }, { status: 404 });
       }
+      // A PROPERTY-scoped user may only read their own property's shift payments — the
+      // folioId branch already scopes via assertPropertyAccess; mirror it here. (Guarded
+      // on propertyId being set, since pre-migration shifts can have a null property.)
+      if (shift.propertyId) requirePropertyScope(ctx, shift.propertyId);
     }
     if (folioId) {
       const folio = await prisma.folio.findUnique({ where: { id: folioId } });

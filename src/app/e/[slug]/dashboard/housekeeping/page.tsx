@@ -9,6 +9,7 @@ import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
@@ -76,7 +77,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Task Update Failed", message: data.error || "Failed to complete the task.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred completing the task.", isError: true })
     }
   }
@@ -122,7 +123,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Update Failed", message: data.error || "Failed to update the room status.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred updating the room.", isError: true })
     }
   }
@@ -152,7 +153,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Bulk Update Failed", message: data.error || "Failed to update the selected rooms.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred during the bulk update.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -203,7 +204,7 @@ export default function HousekeepingDashboard() {
           const data = await res.json()
           setNotification({ title: "Update Failed", message: data.error || "Failed to update the ticket.", isError: true })
         }
-      } catch (e) {
+      } catch {
         setNotification({ title: "Error", message: "An error occurred updating the ticket.", isError: true })
       } finally {
         setIsUpdatingBulk(false)
@@ -234,7 +235,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Report Failed", message: data.error || "Failed to create the ticket.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred creating the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -255,7 +256,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Delete Failed", message: data.error || "Failed to delete the ticket.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred deleting the ticket.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -295,7 +296,7 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setNotification({ title: "Update Failed", message: data.error || "Failed to mark rooms out of order.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred marking rooms out of order.", isError: true })
     } finally {
       setIsUpdatingBulk(false)
@@ -592,10 +593,9 @@ export default function HousekeepingDashboard() {
                 {maintenanceTakeOOO && (
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-foreground">Expected return date (optional)</label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={maintenanceReturnDate}
-                      onChange={e => setMaintenanceReturnDate(e.target.value)}
+                      onChange={setMaintenanceReturnDate}
                     />
                   </div>
                 )}
@@ -668,7 +668,7 @@ export default function HousekeepingDashboard() {
           <DialogHeader>
             <DialogTitle>Mark Out of Order</DialogTitle>
             <DialogDescription>
-              Removes {selectedRooms.length} selected room(s) from sale — they won't be offered for new bookings or
+              Removes {selectedRooms.length} selected room(s) from sale — they won&apos;t be offered for new bookings or
               check-ins until returned to service.
             </DialogDescription>
           </DialogHeader>
@@ -683,10 +683,9 @@ export default function HousekeepingDashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Expected return date (optional)</label>
-              <Input
-                type="date"
+              <DatePicker
                 value={oooReturnDate}
-                onChange={e => setOooReturnDate(e.target.value)}
+                onChange={setOooReturnDate}
               />
             </div>
           </div>

@@ -1,6 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
 import { useParams } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -8,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -23,6 +27,25 @@ type WizardProps = {
 }
 
 type Step = "room" | "identification" | "regcard" | "confirm"
+
+// APP STANDARD 001: the optional "collect a payment now" sub-form is validated inline via
+// Zod + RHF (replacing the old parseFloat-at-submit guard). Payment is optional; but once
+// an amount is entered it must be a positive number and have a method selected.
+const paymentSchema = z.object({
+  methodId: z.string(),
+  amount: z.string(),
+  reference: z.string(),
+}).superRefine((v, ctx) => {
+  const entered = v.amount.trim() !== ""
+  if (!entered) return
+  const n = parseFloat(v.amount)
+  if (!Number.isFinite(n) || n <= 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "Enter a positive amount." })
+  } else if (!v.methodId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["methodId"], message: "Select a payment method for this amount." })
+  }
+})
+type PaymentFormValues = z.infer<typeof paymentSchema>
 
 const profName = (p: any) => p?.companyName || [p?.title, p?.firstName, p?.middleName, p?.lastName].filter(Boolean).join(" ")
 const isExpired = (d?: string | null) => !!d && new Date(d).getTime() < Date.now()
@@ -43,7 +66,11 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   const [idEdits, setIdEdits] = useState<Record<string, { dateOfBirth: string | null; nationality: string | null; docCount: number; hasExpired: boolean }>>({})
   const [savingId, setSavingId] = useState(false)
   const [regCollected, setRegCollected] = useState<Set<string>>(new Set())
-  const [payment, setPayment] = useState({ methodId: "", amount: "", reference: "" })
+  const paymentForm = useForm<PaymentFormValues>({
+    resolver: zodResolver(paymentSchema),
+    mode: "onChange",
+    defaultValues: { methodId: "", amount: "", reference: "" },
+  })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,7 +92,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   useEffect(() => {
     if (!isOpen || !reservationId) return
     setLoading(true); setError(null); setStep("room"); setGuestIdx(0); setRegCollected(new Set())
-    setPayment({ methodId: "", amount: "", reference: "" })
+    paymentForm.reset({ methodId: "", amount: "", reference: "" })
     fetch(`/api/reservations/${reservationId}/registration-card-data`)
       .then((r) => r.json())
       .then((d) => {
@@ -104,6 +131,20 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     fetch(`/api/payment-methods`).then((r) => r.json()).then((d) => {
       if (Array.isArray(d)) setPaymentMethods(d.filter((m: any) => m.isActive !== false))
     }).catch(() => {})
+    // Pre-fill the optional payment amount with the balance due (C-2 — don't make staff
+    // re-type a number the app already knows). setValue without validation so the "pick a
+    // method" hint only appears once they engage; clearing the amount opts out of collecting.
+    fetch(`/api/folios?reservationId=${reservationId}`).then((r) => r.json()).then((folios) => {
+      if (!Array.isArray(folios)) return
+      let charges = 0, payments = 0
+      for (const f of folios) {
+        if (f.isDebtorAccount) continue
+        for (const li of f.lineItems ?? []) if (!li.isVoid) charges += li.amount + li.taxAmount + (li.serviceChargeAmount || 0)
+        for (const p of f.payments ?? []) payments += p.isRefund ? -p.amount : p.amount
+      }
+      const balance = charges - payments
+      if (balance > 0.005) paymentForm.setValue("amount", balance.toFixed(2))
+    }).catch(() => {})
   }, [isOpen, reservationId, propertyId])
 
   const guestStatus = (upid: string) => {
@@ -116,18 +157,27 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     return { complete: missing.length === 0, missing, hasExpired: e.hasExpired }
   }
 
-  const saveGuestBasics = async (upid: string) => {
-    const e = idEdits[upid]
+  // Auto-save DOB / nationality the moment either changes (both are discrete pickers, not
+  // free text), so they're never silently lost — C-2 removed the separate manual "Save"
+  // button that staff had to remember to click. Fire-and-forget; the values are passed in
+  // to avoid a stale-state read.
+  const saveGuestBasics = async (upid: string, values: { dateOfBirth: string | null; nationality: string | null }) => {
     setSavingId(true)
     try {
       await fetch(`/api/profiles/${upid}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dateOfBirth: e.dateOfBirth, nationality: e.nationality }),
+        body: JSON.stringify({ dateOfBirth: values.dateOfBirth, nationality: values.nationality }),
       })
     } finally {
       setSavingId(false)
     }
+  }
+
+  const updateGuestBasics = (upid: string, patch: { dateOfBirth?: string | null; nationality?: string | null }) => {
+    const merged = { ...idEdits[upid], ...patch }
+    setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], ...patch } }))
+    saveGuestBasics(upid, { dateOfBirth: merged.dateOfBirth ?? null, nationality: merged.nationality ?? null })
   }
 
   // After the ID-document manager changes, re-pull the guest's docs to refresh warnings.
@@ -148,6 +198,9 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
 
   const doCheckIn = async () => {
     if (!reservationId) return
+    // Validate the optional payment sub-form inline before doing anything irreversible.
+    if (!(await paymentForm.trigger())) return
+    const payment = paymentForm.getValues()
     setSubmitting(true); setError(null)
     try {
       // 1. Assign the arrival room if it changed.
@@ -228,7 +281,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   />
                 </div>
                 {roomBlocked && <p className="text-sm text-destructive flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room is out of order/service — check-in will be blocked. Pick another.</p>}
-                {selectedRoom?.status === "DIRTY" && <p className="text-sm text-warning flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room hasn't been cleaned yet — you can proceed with a warning.</p>}
+                {selectedRoom?.status === "DIRTY" && <p className="text-sm text-warning flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> This room hasn&apos;t been cleaned yet — you can proceed with a warning.</p>}
               </div>
             )}
 
@@ -257,14 +310,14 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Date of Birth</Label>
-                      <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], dateOfBirth: v ?? null } }))} />
+                      <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => updateGuestBasics(upid, { dateOfBirth: v ?? null })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Nationality</Label>
-                      <SystemCodeSelect category="NATIONALITY" value={e?.nationality ?? ""} onValueChange={(v) => setIdEdits((p) => ({ ...p, [upid]: { ...p[upid], nationality: v } }))} placeholder="Select nationality" />
+                      <SystemCodeSelect category="NATIONALITY" value={e?.nationality ?? ""} onValueChange={(v) => updateGuestBasics(upid, { nationality: v })} placeholder="Select nationality" />
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => saveGuestBasics(upid)} disabled={savingId}>{savingId ? "Saving…" : "Save Date of Birth & Nationality"}</Button>
+                  <p className="text-xs text-muted-foreground">{savingId ? "Saving…" : "Date of birth & nationality save automatically."}</p>
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Identification Documents</Label>
@@ -310,14 +363,37 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   {anyIdIncomplete && <p className="text-warning flex items-center gap-1.5 pt-1"><AlertTriangle className="w-4 h-4" /> Some guests have incomplete identification (not enforced).</p>}
                   {anyExpired && <p className="text-destructive flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> A guest has an expired ID on file.</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Collect a payment now (optional)</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <SearchableSelect value={payment.methodId} onChange={(v) => setPayment((p) => ({ ...p, methodId: v }))} placeholder="Method" options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} />
-                    <Input type="number" min="0" step="0.01" placeholder="Amount" value={payment.amount} onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))} />
-                    <Input placeholder="Reference" value={payment.reference} onChange={(e) => setPayment((p) => ({ ...p, reference: e.target.value }))} />
+                <Form {...paymentForm}>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Collect a payment now (optional)</Label>
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <FormField control={paymentForm.control} name="methodId" render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <SearchableSelect value={field.value} onChange={field.onChange} placeholder="Method" options={paymentMethods.map((m) => ({ value: m.id, label: m.name }))} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={paymentForm.control} name="amount" render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input type="number" min="0" step="0.01" placeholder="Amount" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={paymentForm.control} name="reference" render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input placeholder="Reference" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
                   </div>
-                </div>
+                </Form>
                 {error && <p className="text-sm text-destructive">{error}</p>}
               </div>
             )}

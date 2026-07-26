@@ -9,6 +9,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +29,7 @@ import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 
 type Reservation = {
@@ -165,6 +167,7 @@ export default function ReservationsDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const { currentProperty } = useProperty()
+  const confirm = useConfirm()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
 
@@ -172,6 +175,7 @@ export default function ReservationsDashboard() {
 
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Modals state — the booking create/edit form itself lives on its own page now
@@ -212,14 +216,18 @@ export default function ReservationsDashboard() {
   const fetchData = async () => {
     if (!currentProperty) return
     setLoading(true)
+    setLoadError(false)
     try {
-      const resData = await (await fetch(`/api/reservations?${buildQuery(0)}`)).json()
+      const res = await fetch(`/api/reservations?${buildQuery(0)}`)
+      if (!res.ok) throw new Error()
+      const resData = await res.json()
       if (Array.isArray(resData)) {
         setReservations(resData)
         setHasMore(resData.length === PAGE_SIZE)
       }
     } catch (e) {
       console.error("Failed to load data", e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -297,7 +305,7 @@ export default function ReservationsDashboard() {
       } else {
         setNotification({ title: "Error", message: "Failed to send request.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
@@ -311,7 +319,7 @@ export default function ReservationsDashboard() {
       setIsDeleteModalOpen(false)
       fetchData()
       setNotification({ title: "Success", message: "Reservation deleted." })
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Failed to delete reservation.", isError: true })
     }
   }
@@ -327,7 +335,7 @@ export default function ReservationsDashboard() {
       } else {
         setNotification({ title: "Error", message: "Failed to auto-assign rooms.", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "Error occurred during auto-assign.", isError: true })
     } finally {
       setAutoAssigning(false)
@@ -355,13 +363,13 @@ export default function ReservationsDashboard() {
         setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
         fetchData()
       } else if (data.earlyCheckoutRequired && !early) {
-        if (window.confirm(`${data.error}\n\nCheck out early anyway?`)) {
+        if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
           await handleCheckOut(res, true)
         }
       } else {
         setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
       }
-    } catch (e) {
+    } catch {
       setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
     }
   }
@@ -512,6 +520,8 @@ export default function ReservationsDashboard() {
           <div className="md:hidden space-y-3">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
+            ) : loadError ? (
+              <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
             ) : reservations.length === 0 ? (
               <EmptyState icon={CalendarDays} title="No reservations match your filters" />
             ) : (
@@ -582,6 +592,10 @@ export default function ReservationsDashboard() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                   ))
+                ) : loadError ? (
+                  <TableRow><TableCell colSpan={6} className="py-0">
+                    <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
+                  </TableCell></TableRow>
                 ) : reservations.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="py-0">
                     <EmptyState icon={CalendarDays} title="No reservations match your filters" />
@@ -695,7 +709,7 @@ export default function ReservationsDashboard() {
           <DialogHeader>
             <DialogTitle>Housekeeping Request</DialogTitle>
             <DialogDescription>
-              Manage special requests for {selectedRes?.primaryGuest?.firstName} {selectedRes?.primaryGuest?.lastName}'s room.
+              Manage special requests for {selectedRes?.primaryGuest?.firstName} {selectedRes?.primaryGuest?.lastName}&apos;s room.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 flex flex-col gap-4">

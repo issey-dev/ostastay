@@ -4,7 +4,7 @@ import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorR
 import { resolveChargeTax } from "@/lib/tax-calc";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
-import { rateForDate, computeBookingTotal } from "@/lib/excursions";
+import { rateForDate, computeBookingTotal, combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
 
 // Lists open walk-in excursion bills for a property — the retrieval path for the
@@ -124,6 +124,38 @@ export async function POST(request: Request) {
 
     if (departure.status !== "SCHEDULED") {
       return NextResponse.json({ error: "This departure is no longer taking bookings" }, { status: 400 });
+    }
+
+    // A departure that has already left can't be booked — nothing auto-transitions its
+    // status after it sails, so the SCHEDULED check above isn't enough (the spa side has
+    // the same guard). (A15)
+    if (combineDepartureDateTime(departure.departureDate, departure.departureTime) < new Date()) {
+      return NextResponse.json({ error: "This departure has already left and can no longer be booked." }, { status: 400 });
+    }
+
+    // Every booking must carry at least one guest — a 0-headcount booking would post a $0
+    // charge and consume a manifest slot for nobody.
+    const requested = adultCount + childCount + infantCount;
+    if (requested <= 0) {
+      return NextResponse.json({ error: "At least one guest is required to book." }, { status: 400 });
+    }
+
+    // Capacity enforcement: a departure's capacity is a hard boat/tour limit, not a soft
+    // preference. Sum the CONFIRMED headcount already booked (same accounting the departures
+    // list shows as bookedHeadcount) and reject if this booking would exceed capacity. (Best
+    // effort against a concurrent burst under SQLite — the same TOCTOU caveat as every other
+    // count-then-write guard here; the realistic path is a single operator clicking Book.)
+    const booked = await prisma.excursionBooking.aggregate({
+      where: { departureId, status: "CONFIRMED" },
+      _sum: { adultCount: true, childCount: true, infantCount: true },
+    });
+    const bookedHeadcount = (booked._sum.adultCount ?? 0) + (booked._sum.childCount ?? 0) + (booked._sum.infantCount ?? 0);
+    if (bookedHeadcount + requested > departure.capacity) {
+      const remaining = Math.max(0, departure.capacity - bookedHeadcount);
+      return NextResponse.json(
+        { error: `This departure only has ${remaining} seat${remaining === 1 ? "" : "s"} left (capacity ${departure.capacity}).` },
+        { status: 400 }
+      );
     }
 
     let folioIdToCharge: string;

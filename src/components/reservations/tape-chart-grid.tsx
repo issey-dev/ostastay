@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
-import { Loader2, Calendar, User, Hash, DoorOpen, Star, Key, ExternalLink } from "@/components/icons";
+import { Loader2, Calendar, User, DoorOpen, Star, Key, ExternalLink } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -15,6 +15,7 @@ import { statusSolidClasses } from "@/lib/status-tone";
 import { useDeviceTier } from "@/hooks/use-mobile";
 import { TapeChartMobileList } from "@/components/reservations/tape-chart-mobile-list";
 import { useProperty } from "@/components/providers/property-provider";
+import { toast } from "@/lib/toast";
 
 export interface Room {
   id: string;
@@ -120,13 +121,13 @@ export function TapeChartGrid() {
 
       const json = await res.json();
       if (!res.ok) {
-        alert(json.error || "Failed to reassign room.");
+        toast.error(json.error || "Failed to reassign room.");
       } else {
         await fetchData(startDate);
       }
     } catch (error) {
       console.error("Reassign error:", error);
-      alert("An error occurred while reassigning the room.");
+      toast.error("An error occurred while reassigning the room.");
     } finally {
       setIsLoading(false);
       setDraggedAssignmentId(null);

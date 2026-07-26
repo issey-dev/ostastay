@@ -15,6 +15,7 @@ export async function GET(
     const ctx = await requireSession();
     const { upid } = await params;
     await assertProfileAccess(ctx, upid);
+    requirePermission(ctx, "PROFILES", "view");
 
     const [available, linked] = await Promise.all([
       prisma.ratePlan.findMany({

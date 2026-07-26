@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, assertProfileAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertProfileAccess, toErrorResponse } from "@/lib/scope";
 
 // Future/History stay records for a profile — see .agents/docs/PROFILES_REDESIGN_PLAN.md
 // "Stay History". Profile is enterprise-wide (no propertyId of its own), so this spans
@@ -14,6 +14,7 @@ export async function GET(
     const ctx = await requireSession();
     const { upid } = await params;
     await assertProfileAccess(ctx, upid);
+    requirePermission(ctx, "PROFILES", "view");
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");

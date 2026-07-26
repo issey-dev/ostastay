@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveBusinessDate } from "@/lib/business-date";
+import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { expectedCashForShift } from "@/lib/shift-summary";
-import { startEodRun, getActiveEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
+import { startEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type EodStepKey } from "@/lib/eod";
 import { assignRegistrationNumbers } from "@/lib/guest-registration";
 import { snapshotEodReports } from "@/lib/eod-reports";
 import { logActivity } from "@/lib/activity-log";
@@ -54,11 +54,11 @@ export async function POST(request: Request) {
         // scoped) who has a drawer open on this property.
         const openShifts = await prisma.cashierShift.findMany({
           where: { propertyId, closedAt: null },
-          include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true },
+          include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true, currencyExchanges: true, property: { select: { defaultCurrency: true } } },
         });
 
         for (const shift of openShifts) {
-          const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts);
+          const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts, shift.currencyExchanges, shift.property?.defaultCurrency ?? null);
           await prisma.cashierShift.update({
             where: { id: shift.id },
             data: { closedAt: new Date(), closingDrop: expected },
@@ -69,26 +69,37 @@ export async function POST(request: Request) {
       }
     } else if (step === "post") {
       if (!isStepDone(run, "post")) {
-        // Delegate the heavy posting to the Night Audit run route — its
-        // same-business-date idempotency IS the double-post guard. It also processes
-        // no-shows and rolls the business date forward.
-        const runResp = await nightAuditRunRoute.POST(
-          new Request("http://localhost/api/night-audit/run", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ propertyId, confirmed: true, reason: "End-of-Day procedure" }),
-          })
-        );
-        const runData = await runResp.json();
-        if (runResp.ok) {
-          stepResult = { posting: runData };
-        } else if (runResp.status === 409 && runData.log) {
-          // Already posted for this business date — treat the step as done (idempotent).
-          stepResult = { posting: { alreadyPosted: true } };
+        // A9 cross-path guard: night-audit/run audits the property's CURRENT business
+        // date. If that date has already advanced past this run's business date, the
+        // posting for run.businessDate already happened out-of-band (a standalone Night
+        // Audit, or a parallel EOD run) — delegating now would audit a NEW night and roll
+        // the date a second time. Treat the step as already done instead.
+        if (toUtcMidnight(run.businessDate).getTime() !== toUtcMidnight(businessDate).getTime()) {
+          // Already rolled out-of-band — skip delegation, just mark the step done.
+          await completeEodStep(run.id, "post");
+          stepResult = { posting: { alreadyPosted: true, businessDateAdvanced: true } };
         } else {
-          return NextResponse.json({ error: runData.error || "Posting failed.", posting: runData }, { status: runResp.status });
+          // Delegate the heavy posting to the Night Audit run route — its
+          // same-business-date idempotency IS the double-post guard. It also processes
+          // no-shows and rolls the business date forward.
+          const runResp = await nightAuditRunRoute.POST(
+            new Request("http://localhost/api/night-audit/run", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ propertyId, confirmed: true, reason: "End-of-Day procedure" }),
+            })
+          );
+          const runData = await runResp.json();
+          if (runResp.ok) {
+            stepResult = { posting: runData };
+          } else if (runResp.status === 409 && runData.log) {
+            // Already posted for this business date — treat the step as done (idempotent).
+            stepResult = { posting: { alreadyPosted: true } };
+          } else {
+            return NextResponse.json({ error: runData.error || "Posting failed.", posting: runData }, { status: runResp.status });
+          }
+          await completeEodStep(run.id, "post");
         }
-        await completeEodStep(run.id, "post");
       }
     } else if (step === "registration") {
       if (!isStepDone(run, "registration")) {

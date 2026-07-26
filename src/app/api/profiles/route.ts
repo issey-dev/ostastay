@@ -15,6 +15,7 @@ const PROFILE_CHILD_INCLUDE = {
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "PROFILES", "view");
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search"); // Used for global search
     const profileType = searchParams.get("profileType");

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { KeyRound, Hotel } from "@/components/icons"
+import { toast } from "@/lib/toast"
 
 // Shared by the generic /login (asks for an Enterprise Code) and each enterprise's own
 // dedicated /e/{slug}/login (the code is baked in from the URL, hidden from the form).
@@ -44,7 +45,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
       } else {
         setError(data.error || "Login failed")
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred")
     } finally {
       setIsLoading(false)
@@ -54,7 +55,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   const handleSeed = async () => {
     const res = await fetch("/api/auth/seed", { method: "POST" })
     if (res.ok) {
-      alert("Seed complete! Use admin@hotel.com and password123 (Enterprise Code: demo)")
+      toast.success("Seed complete! Use admin@hotel.com and password123 (Enterprise Code: demo)")
     }
   }
 

@@ -19,6 +19,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
+const { decryptSecret } = await import("@/lib/secret-crypto");
 
 const reservationsRoute = await import("@/app/api/reservations/route");
 const reservationIdRoute = await import("@/app/api/reservations/[id]/route");
@@ -372,6 +373,18 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     );
     expect(early.status).toBe(400);
 
+    // A11: checking in before the arrival date (business date still 2026-07-25 << 2026-12-01)
+    // is rejected — a guest can never be checked in early.
+    const tooEarly = await asUser(adminId, () =>
+      checkInRoute.POST(new Request(`http://localhost/api/reservations/${body.id}/check-in`, { method: "POST" }), {
+        params: Promise.resolve({ id: body.id }),
+      })
+    );
+    expect(tooEarly.status).toBe(400);
+    expect((await tooEarly.json()).error).toMatch(/future|before their check-in/i);
+
+    // Early check-in is blocked now; the guest arrives on their check-in date (2026-12-01).
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 11, 1)) } });
     const checkIn = await asUser(adminId, () =>
       checkInRoute.POST(new Request(`http://localhost/api/reservations/${body.id}/check-in`, { method: "POST" }), {
         params: Promise.resolve({ id: body.id }),
@@ -402,6 +415,27 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
       )
     );
     expect(payRes.status).toBe(201);
+  });
+
+  it("A16: two concurrent pickups can't both take the last held room", async () => {
+    const block = await prisma.groupBlock.create({
+      data: { propertyId, code: `GBRACE-${uniq()}`, name: "Race Block", startDate: new Date("2026-12-01"), endDate: new Date("2026-12-20"), totalRoomsHeld: 1, status: "DEFINITE" },
+    });
+    const pickup = (checkIn: string, checkOut: string) =>
+      asUser(adminId, () => groupPickupRoute.POST(
+        new Request(`http://localhost/api/groups/${block.id}/pickup`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ firstName: "Race", lastName: "Guest", roomTypeId, checkInDate: checkIn, checkOutDate: checkOut, adults: 1 }),
+        }),
+        { params: Promise.resolve({ id: block.id }) }
+      ));
+    // Non-overlapping dates so physical room availability isn't the limiter — only the
+    // 1-held-room count is.
+    const [a, b] = await Promise.all([pickup("2026-12-01", "2026-12-03"), pickup("2026-12-10", "2026-12-12")]);
+    const okCount = [a, b].filter((r) => r.status === 200).length;
+    expect(okCount).toBe(1);
+    const active = await prisma.reservation.count({ where: { groupBlockId: block.id, status: { notIn: ["CANCELLED", "NO_SHOW"] } } });
+    expect(active).toBe(1);
   });
 
   it("enforces group block held-room count and cutoff date on pickup, with allocation parity", async () => {
@@ -520,13 +554,17 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(setBody.smtpPassword).toBe("********");
 
     let stored = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId } });
-    expect(stored!.smtpPassword).toBe("s3cret-smtp"); // real value at rest (encryption still a flagged follow-up)
+    // The real value is at rest and recoverable — stored encrypted when SECRETS_ENCRYPTION_KEY
+    // is set (S8), otherwise legacy plaintext. decryptSecret handles both, and it must never
+    // be the redaction mask.
+    expect(stored!.smtpPassword).not.toBe("********");
+    expect(decryptSecret(stored!.smtpPassword)).toBe("s3cret-smtp");
 
     // The settings form round-trips the mask — must not clobber the stored secret.
     const roundTrip = await patch({ smtpPassword: "********", smtpHost: "mail.test.local" });
     expect(roundTrip.status).toBe(200);
     stored = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId } });
-    expect(stored!.smtpPassword).toBe("s3cret-smtp");
+    expect(decryptSecret(stored!.smtpPassword)).toBe("s3cret-smtp");
     expect(stored!.smtpHost).toBe("mail.test.local");
 
     const get = await asUser(adminId, () => tenantSettingsRoute.GET());

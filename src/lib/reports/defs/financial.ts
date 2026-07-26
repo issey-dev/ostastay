@@ -80,7 +80,7 @@ const cashierSummary: ReportDef = {
     const { gte } = dayRange(date);
     const shifts = await prisma.cashierShift.findMany({
       where: { propertyId, businessDate: gte },
-      include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true },
+      include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true, currencyExchanges: true, property: { select: { defaultCurrency: true } } },
     });
     const userIds = Array.from(new Set(shifts.map((s) => s.userId)));
     const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } });
@@ -90,7 +90,7 @@ const cashierSummary: ReportDef = {
     let grandNet = 0;
     for (const s of shifts) {
       const { byMethod } = summarizeShiftPayments(s.payments);
-      const expected = expectedCashForShift(s.openingFloat, s.payments, s.paidOuts);
+      const expected = expectedCashForShift(s.openingFloat, s.payments, s.paidOuts, s.currencyExchanges, s.property?.defaultCurrency ?? null);
       const net = byMethod.reduce((x, m) => x + m.net, 0);
       grandNet += net;
       groups.push({

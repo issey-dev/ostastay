@@ -43,6 +43,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "One or more charges are not at this property" }, { status: 400 });
     }
 
+    // A source folio that is already closed (or a finalized debtor/City-Ledger invoice) is
+    // immutable — pulling a line off it would silently change that finalized invoice's
+    // balance and the debtor AR total. The void route enforces the same immutability;
+    // the move path must too. (A8)
+    const lockedSource = lineItems.find((li) => li.folio.isClosed || li.folio.isDebtorAccount);
+    if (lockedSource) {
+      return NextResponse.json(
+        { error: `Charge is on a ${lockedSource.folio.isDebtorAccount ? "finalized debtor" : "closed"} folio and can't be moved.` },
+        { status: 400 }
+      );
+    }
+
     // Move the line items
     await prisma.folioLineItem.updateMany({
       where: {

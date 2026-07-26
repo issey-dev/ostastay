@@ -24,6 +24,7 @@ export async function GET() {
         currencyExchanges: { orderBy: { createdAt: "desc" } },
         paidOuts: { orderBy: { createdAt: "desc" } },
         lineItems: { include: { chargeCode: { select: { code: true, description: true, category: true } } } },
+        property: { select: { defaultCurrency: true } },
       },
     });
 
@@ -48,7 +49,7 @@ export async function GET() {
       // Payment Summary — how much they collected, by method.
       const { byMethod } = summarizeShiftPayments(activeShift.payments);
       const paymentsNet = byMethod.reduce((s, m) => s + m.net, 0);
-      const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts);
+      const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts, activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null);
 
       summary = {
         postingsByChargeCode,

@@ -109,6 +109,7 @@ export default function ConfirmationLetterPage({ params }: { params: Promise<{ i
           <div className="flex justify-between items-start border-b-2 pb-6 mb-8" style={{ borderBottomColor: brandColor }}>
             <div>
               {settings.invoiceLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- fixed-paper print/PDF brand logo from a user-supplied URL; next/image's optimization + domain allowlist don't apply here
                 <img
                   src={settings.invoiceLogoUrl}
                   alt="Brand Logo"

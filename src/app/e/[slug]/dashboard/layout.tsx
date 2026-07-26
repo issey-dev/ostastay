@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { HeaderBrand, HeaderBusinessDate } from "@/components/ui/dashboard-header"
 import { PropertyProvider } from "@/components/providers/property-provider"
+import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { PropertyAccentScope } from "@/components/providers/property-accent-scope"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
@@ -77,7 +78,7 @@ export default async function DashboardLayout({
           <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
             <PropertyAccentScope>
               <div className="max-w-7xl mx-auto w-full print:max-w-none">
-                {children}
+                <ConfirmProvider>{children}</ConfirmProvider>
               </div>
             </PropertyAccentScope>
           </div>

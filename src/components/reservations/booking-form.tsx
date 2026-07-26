@@ -208,7 +208,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       .catch(console.error)
       .finally(() => { if (!cancelled) setGridLoading(false) })
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [propertyId, gridStart, gridEnd, form.adults, form.children, reservationId])
 
   // ── Server-side quote: authoritative total + full tax breakdown ──────────
@@ -435,7 +435,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
         setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
         setSubmitting(false)
       }
-    } catch (err) {
+    } catch {
       setNotification({ title: "Error", message: "An unexpected error occurred." })
       setSubmitting(false)
     }
@@ -960,6 +960,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
             checkInDate={form.checkInDate}
             checkOutDate={form.checkOutDate}
             adults={form.adults}
+            // eslint-disable-next-line react/no-children-prop -- `children` is a numeric guest-count prop, not React content
             children={form.children}
             infants={form.infants}
             quote={quote}
