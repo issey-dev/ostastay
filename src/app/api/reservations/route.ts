@@ -211,6 +211,36 @@ export async function POST(request: Request) {
       endDate: new Date(a.endDate),
     }));
 
+    // Optional: attach this ordinary reservation to a group block. It must fit the block's
+    // date window AND use only the block's held room types (the "blocked grid"). Attaching
+    // makes it draw from the block's held inventory (excludeGroupBlockId below) and counts
+    // toward the block's pickups. Guest keeps their own folio (not billed to master by
+    // default — that's the explicit group-pickup path).
+    let groupBlockId: string | null = null;
+    if (body.groupBlockId) {
+      const block = await prisma.groupBlock.findUnique({
+        where: { id: body.groupBlockId },
+        include: { roomHolds: { select: { roomTypeId: true } } },
+      });
+      if (!block || block.propertyId !== body.propertyId) {
+        return NextResponse.json({ error: "Group block not found for this property" }, { status: 400 });
+      }
+      if (block.status === "CANCELLED" || block.status === "LOST") {
+        return NextResponse.json({ error: "That group block is closed." }, { status: 400 });
+      }
+      const ci = new Date(body.checkInDate);
+      const co = new Date(body.checkOutDate);
+      if (ci < block.startDate || co > block.endDate) {
+        return NextResponse.json({ error: "Reservation dates must fall within the group block's date range." }, { status: 400 });
+      }
+      const heldTypes = new Set(block.roomHolds.map((h) => h.roomTypeId));
+      const notHeld = [...new Set(bookingSegments.map((s: { roomTypeId: string }) => s.roomTypeId))].filter((t) => !heldTypes.has(t as string));
+      if (heldTypes.size > 0 && notHeld.length > 0) {
+        return NextResponse.json({ error: "That room type is not part of this group block's held room types." }, { status: 400 });
+      }
+      groupBlockId = block.id;
+    }
+
     // Stop-Sale is a HARD block (no acknowledge/override) — checked FIRST so a closed
     // date fails fast rather than after the soft overbook prompt below. A date closed for
     // a room type or property-wide cannot be sold.
@@ -223,7 +253,7 @@ export async function POST(request: Request) {
     // room type (see src/lib/availability.ts). Staff must acknowledge it (acknowledgeOverbook)
     // — the physical same-room double-booking guard below stays hard. First pass without
     // acknowledgement returns 409 + requiresOverbookConfirm so the UI can confirm.
-    const availabilityConflicts = await findTypeAvailabilityConflicts({ propertyId: body.propertyId, segments: bookingSegments });
+    const availabilityConflicts = await findTypeAvailabilityConflicts({ propertyId: body.propertyId, segments: bookingSegments, excludeGroupBlockId: groupBlockId ?? undefined });
     if (availabilityConflicts.length > 0 && !body.acknowledgeOverbook) {
       return NextResponse.json(
         { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
@@ -284,6 +314,10 @@ export async function POST(request: Request) {
         propertyId: body.propertyId,
         primaryGuestId: body.primaryGuestId,
         travelAgentId: body.travelAgentId,
+        groupBlockId,
+        // Attached-to-block reservations keep their own folio by default (the pickup
+        // dialog is the explicit bill-to-master path).
+        ...(groupBlockId ? { groupBillToMaster: false } : {}),
         checkInDate: new Date(body.checkInDate),
         checkOutDate: new Date(body.checkOutDate),
         adults: parseInt(body.adults) || 1,

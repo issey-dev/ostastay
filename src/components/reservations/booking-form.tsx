@@ -39,6 +39,7 @@ type ReservationDetail = {
   mealPlan: string
   primaryGuestId: string
   travelAgentId: string | null
+  groupBlockId: string | null
   depositFeeRuleId: string | null
   cancellationFeeRuleId: string | null
   noShowFeeRuleId: string | null
@@ -105,6 +106,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const [allocations, setAllocations] = useState<AllocationOption[]>([])
   const [specialRequestOptions, setSpecialRequestOptions] = useState<{ code: string; value: string }[]>([])
   const [feeRules, setFeeRules] = useState<{ id: string; name: string; ruleType: string; isActive: boolean }[]>([])
+  const [groupBlocks, setGroupBlocks] = useState<any[]>([])
 
   const formCtl = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema) as Resolver<BookingFormValues>,
@@ -148,6 +150,12 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       if (Array.isArray(srData)) setSpecialRequestOptions(srData.filter((c: any) => c.isActive))
       if (Array.isArray(frData)) setFeeRules(frData)
     }).catch(console.error)
+
+    // Active group blocks a reservation can be attached to (server validates fit).
+    fetch(`/api/groups?propertyId=${propertyId}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setGroupBlocks(d.filter((g: any) => g.status !== "CANCELLED" && g.status !== "LOST")) })
+      .catch(console.error)
   }, [currentProperty, propertyId, enterpriseId])
 
   useEffect(() => {
@@ -168,6 +176,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           remarks: res.remarks || "",
           mealPlan: res.mealPlan || "NONE",
           travelAgentId: res.travelAgentId || "none",
+          groupBlockId: res.groupBlockId || "none",
           depositFeeRuleId: res.depositFeeRuleId || "none",
           cancellationFeeRuleId: res.cancellationFeeRuleId || "none",
           noShowFeeRuleId: res.noShowFeeRuleId || "none",
@@ -423,6 +432,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
         travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        groupBlockId: values.groupBlockId === "none" ? null : values.groupBlockId,
         depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
         cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
         noShowFeeRuleId: values.noShowFeeRuleId === "none" ? null : values.noShowFeeRuleId,
@@ -582,6 +592,21 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     }))
                   ]}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label>Group Block (Optional)</Label>
+                <SearchableSelect
+                  value={form.groupBlockId}
+                  onChange={(v) => setField("groupBlockId", v)}
+                  placeholder="Not part of a group..."
+                  options={[
+                    { value: "none", label: "Standalone (no group)" },
+                    ...groupBlocks.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` })),
+                  ]}
+                />
+                {form.groupBlockId !== "none" && (
+                  <p className="text-[11px] text-muted-foreground">Dates and room type must fall within the block&apos;s window and held types.</p>
+                )}
               </div>
             </CardContent>
           </Card>

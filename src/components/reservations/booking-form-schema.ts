@@ -42,6 +42,9 @@ export const bookingFormSchema = z
     remarks: z.string(),
     mealPlan: z.string(),
     travelAgentId: z.string(),
+    // Optional group block to attach this reservation to ("none" = standalone). The API
+    // validates the stay fits the block's dates and held room types.
+    groupBlockId: z.string(),
     // Per-reservation fee-rule selections ("none" = no rule of that type). Converted to
     // null in the submit payload; the API validates them against the property.
     depositFeeRuleId: z.string(),
@@ -97,6 +100,7 @@ export const emptyBookingValues = (): BookingFormValues => ({
   remarks: "",
   mealPlan: "NONE",
   travelAgentId: "none",
+  groupBlockId: "none",
   depositFeeRuleId: "none",
   cancellationFeeRuleId: "none",
   noShowFeeRuleId: "none",

@@ -395,7 +395,18 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 className={reservation.status === "CANCELLED" ? "line-through opacity-70" : ""}
               />
             </div>
-            <p className="text-muted-foreground mt-1 font-mono text-sm">{reservation.confirmationNo}</p>
+            <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
+              {reservation.confirmationNo}
+              {reservation.groupBlock && (
+                <Link
+                  href={`/e/${slug}/dashboard/groups/${reservation.groupBlock.id}`}
+                  title={`Group block: ${reservation.groupBlock.name}`}
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-muted-foreground ring-1 ring-inset ring-border no-underline hover:text-foreground"
+                >
+                  <Users className="h-3 w-3" /> {reservation.groupBlock.code}
+                </Link>
+              )}
+            </p>
           </div>
         </div>
 
