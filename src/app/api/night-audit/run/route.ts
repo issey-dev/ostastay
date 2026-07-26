@@ -7,6 +7,7 @@ import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
+import { applyEodHousekeepingShift } from "@/lib/eod-housekeeping"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -338,6 +339,7 @@ export async function POST(request: Request) {
     // transaction — a failure anywhere rolls back every posting, so the ledger can
     // never be left half-audited. (Reads stay outside for speed; writes are cheap.)
     let log
+    let hkShift: { occupiedToDirty: number; vacantShifted: number } = { occupiedToDirty: 0, vacantShifted: 0 }
     try {
       log = await prisma.$transaction(async (tx) => {
         for (const res of chargeableReservations) {
@@ -644,6 +646,16 @@ export async function POST(request: Request) {
           }
         })
 
+        // 3b. Optional housekeeping auto-shift (per-property setting): occupied rooms
+        // go Dirty for daily service, vacant sellable rooms step down / reset per the
+        // configured mode. A no-op when the property has it OFF (the default).
+        hkShift = await applyEodHousekeepingShift(tx, {
+          propertyId,
+          auditDate,
+          mode: property.eodHousekeepingMode,
+          targetStatus: property.eodHousekeepingTargetStatus,
+        })
+
         // 4. Roll THIS property's business date forward one day — the manual EOD roll.
         // Per-property, so it never affects a sibling property. EnterpriseSettings.
         // systemDate (the server date) is deliberately left untouched now.
@@ -691,6 +703,7 @@ export async function POST(request: Request) {
       success: true,
       log,
       noShowsProcessed: noShowCandidates.length,
+      ...((hkShift.occupiedToDirty > 0 || hkShift.vacantShifted > 0) && { housekeepingShift: hkShift }),
       ...(transportChargesPosted > 0 && { transportChargesPosted }),
       ...(noShowCandidates.length > 0 && {
         noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),

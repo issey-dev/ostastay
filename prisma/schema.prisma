@@ -239,6 +239,18 @@ model Property {
   // (DIRTY warns, only OOO/OOS block).
   requireInspectionOnCheckIn Boolean @default(false)
 
+  // Optional End-of-Day housekeeping auto-shift (app-owner request 2026-07-26). When
+  // enabled, Night Audit downgrades room housekeeping statuses as the business date
+  // rolls. OCCUPIED rooms always become DIRTY (daily service); the mode below governs
+  // only VACANT sellable rooms. Out-of-Order / Out-of-Service rooms are never touched.
+  //   OFF        — no auto-shift (default; current behavior).
+  //   STEP_DOWN  — move one status down: Inspected→Clean, Clean→Dirty, Dirty stays.
+  //   SET_STATUS — set every vacant room to eodHousekeepingTargetStatus.
+  eodHousekeepingMode         String  @default("OFF")
+  // Target status for SET_STATUS mode — one of CLEAN | DIRTY | INSPECTED. Null/ignored
+  // for OFF and STEP_DOWN.
+  eodHousekeepingTargetStatus String?
+
   // "Top level" inclusive/exclusive tax setting — applies to anything charged at this
   // property unless a future transaction-level override says otherwise (not built yet).
   // True: rates are tax-inclusive, so Green Tax/GST/Service Charge are reverse-calculated
