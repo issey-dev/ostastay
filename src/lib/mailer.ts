@@ -1,15 +1,16 @@
 import nodemailer from "nodemailer"
 import type { EnterpriseSettings } from "@prisma/client"
+import { decryptSecret } from "@/lib/secret-crypto"
 
 // Shared SMTP-sending helper — the one place that turns EnterpriseSettings.smtp*
 // scaffold fields into an actual outgoing email. Every route that sends mail (starting
 // with the reservation Confirmation Letter) should go through this rather than
 // constructing its own transport, so SMTP behavior stays consistent in one place.
 //
-// SECURITY NOTE: EnterpriseSettings.smtpPassword is stored in plain text today (see the
-// schema comment on EnterpriseSettings) — this function reads it server-side only and
-// never re-exposes it to the client, but the at-rest storage itself is not encrypted.
-// Treat this as a known follow-up, not something this function can fix on its own.
+// SECURITY: EnterpriseSettings.smtpPassword is encrypted at rest (AES-256-GCM, see
+// src/lib/secret-crypto.ts) when SECRETS_ENCRYPTION_KEY is configured; legacy plaintext
+// values still read transparently. This function decrypts it server-side only at send
+// time and never re-exposes it to the client.
 
 export type SmtpConfig = Pick<
   EnterpriseSettings,
@@ -70,7 +71,8 @@ export async function sendMail(params: {
     // to be distinguished, rather than treating "TLS on" as always meaning port 465.
     secure: smtpPort === 465,
     requireTLS: smtpPort !== 465 && smtpUseTls,
-    auth: { user: smtpUsername, pass: smtpPassword },
+    // Decrypt at send time (no-op for legacy plaintext); the plaintext never leaves here.
+    auth: { user: smtpUsername, pass: decryptSecret(smtpPassword) ?? undefined },
   })
 
   await transporter.sendMail({

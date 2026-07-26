@@ -19,6 +19,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
+const { decryptSecret } = await import("@/lib/secret-crypto");
 
 const reservationsRoute = await import("@/app/api/reservations/route");
 const reservationIdRoute = await import("@/app/api/reservations/[id]/route");
@@ -553,13 +554,17 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(setBody.smtpPassword).toBe("********");
 
     let stored = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId } });
-    expect(stored!.smtpPassword).toBe("s3cret-smtp"); // real value at rest (encryption still a flagged follow-up)
+    // The real value is at rest and recoverable — stored encrypted when SECRETS_ENCRYPTION_KEY
+    // is set (S8), otherwise legacy plaintext. decryptSecret handles both, and it must never
+    // be the redaction mask.
+    expect(stored!.smtpPassword).not.toBe("********");
+    expect(decryptSecret(stored!.smtpPassword)).toBe("s3cret-smtp");
 
     // The settings form round-trips the mask — must not clobber the stored secret.
     const roundTrip = await patch({ smtpPassword: "********", smtpHost: "mail.test.local" });
     expect(roundTrip.status).toBe(200);
     stored = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId } });
-    expect(stored!.smtpPassword).toBe("s3cret-smtp");
+    expect(decryptSecret(stored!.smtpPassword)).toBe("s3cret-smtp");
     expect(stored!.smtpHost).toBe("mail.test.local");
 
     const get = await asUser(adminId, () => tenantSettingsRoute.GET());
