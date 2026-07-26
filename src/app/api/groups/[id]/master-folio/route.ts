@@ -29,6 +29,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         isMaster: true,
         // Group-level folio, not tied to a single reservation; labelled for the panel.
         walkInGuestName: `${group.name} — Master Folio`,
+        // Block linked to a credit account → the master bill is a City-Ledger receivable
+        // for it; closing the folio finalizes the debtor invoice (see folios/[id] PATCH).
+        ...(group.payeeProfileId
+          ? { settlementMethod: "CITY_LEDGER", payeeProfileId: group.payeeProfileId }
+          : {}),
       },
     });
 

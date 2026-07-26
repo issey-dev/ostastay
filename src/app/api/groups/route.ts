@@ -67,6 +67,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Group code already exists" }, { status: 400 })
     }
 
+    // Optional City-Ledger account the block's master bill settles to — must be a credit
+    // account of this enterprise (Travel Agent / Corporate).
+    let payeeProfileId: string | null = null
+    if (body.payeeProfileId) {
+      const payee = await prisma.profile.findUnique({ where: { upid: body.payeeProfileId } })
+      if (!payee || payee.enterpriseId !== ctx.enterpriseId || !payee.isCreditAccount) {
+        return NextResponse.json({ error: "Selected account is not a valid credit account for this enterprise." }, { status: 400 })
+      }
+      payeeProfileId = payee.upid
+    }
+
     const newGroup = await prisma.groupBlock.create({
       data: {
         propertyId,
@@ -77,6 +88,7 @@ export async function POST(request: Request) {
         cutoffDate: cutoffDate ? new Date(cutoffDate) : null,
         totalRoomsHeld: heldTotal,
         status: startStatus,
+        payeeProfileId,
         roomHolds: roomHolds.length
           ? { create: roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })) }
           : undefined,

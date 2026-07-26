@@ -35,7 +35,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         },
         roomHolds: {
           include: { roomType: { select: { id: true, name: true, code: true } } },
-        }
+        },
+        payeeProfile: { select: { upid: true, firstName: true, lastName: true, companyName: true } },
       }
     })
 
@@ -59,6 +60,8 @@ const updateSchema = z.object({
   // Per-room-type holds — when provided, they replace the block's holds entirely and
   // totalRoomsHeld becomes their sum.
   roomHolds: z.array(z.object({ roomTypeId: z.string().min(1), quantity: z.number().int().min(0) })).optional(),
+  // City-Ledger account for the master bill (null = clear / bill direct).
+  payeeProfileId: z.string().nullable().optional(),
 })
 
 // A block was previously frozen at creation — status, cutoff, and rooms-held could
@@ -120,6 +123,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "End date must be after start date" }, { status: 400 })
     }
 
+    // City-Ledger account: validate a credit account of this enterprise when set.
+    if (data.payeeProfileId) {
+      const payee = await prisma.profile.findUnique({ where: { upid: data.payeeProfileId } })
+      if (!payee || payee.enterpriseId !== ctx.enterpriseId || !payee.isCreditAccount) {
+        return NextResponse.json({ error: "Selected account is not a valid credit account for this enterprise." }, { status: 400 })
+      }
+    }
+
     const updated = await prisma.groupBlock.update({
       where: { id },
       data: {
@@ -133,8 +144,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(effectiveHeld != null ? { totalRoomsHeld: effectiveHeld } : {}),
         // Replace the block's holds wholesale when a new set is supplied.
         ...(cleanedHolds ? { roomHolds: { deleteMany: {}, create: cleanedHolds } } : {}),
+        ...(data.payeeProfileId !== undefined ? { payeeProfileId: data.payeeProfileId || null } : {}),
       },
     })
+
+    // Keep an OPEN, not-yet-finalized master folio in sync with the block's account so
+    // the settlement target reflects the current linkage (no effect once it's closed).
+    if (data.payeeProfileId !== undefined) {
+      const openMaster = await prisma.folio.findFirst({
+        where: { groupBlockId: id, isMaster: true, isClosed: false, isDebtorAccount: false },
+        select: { id: true },
+      })
+      if (openMaster) {
+        await prisma.folio.update({
+          where: { id: openMaster.id },
+          data: data.payeeProfileId
+            ? { settlementMethod: "CITY_LEDGER", payeeProfileId: data.payeeProfileId }
+            : { settlementMethod: "DIRECT", payeeProfileId: null },
+        })
+      }
+    }
 
     await logActivity({
       ctx,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter, useParams } from "next/navigation"
 import { Save, ArrowLeft } from "@/components/icons"
@@ -19,6 +19,7 @@ export default function NewGroupBlock() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(false)
+  const [accounts, setAccounts] = useState<any[]>([])
 
   const [formData, setFormData] = useState({
     code: "",
@@ -27,8 +28,18 @@ export default function NewGroupBlock() {
     endDate: "",
     cutoffDate: "",
     status: "TENTATIVE",
+    payeeProfileId: "none",
   })
   const [roomHolds, setRoomHolds] = useState<RoomHold[]>([])
+
+  // Credit-account Travel Agent / Corporate profiles the master bill can settle to.
+  useEffect(() => {
+    if (!currentProperty) return
+    fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .catch(console.error)
+  }, [currentProperty])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -45,6 +56,7 @@ export default function NewGroupBlock() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          payeeProfileId: formData.payeeProfileId === "none" ? null : formData.payeeProfileId,
           roomHolds: roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
           propertyId: currentProperty.id
         })
@@ -142,6 +154,20 @@ export default function NewGroupBlock() {
               />
               <p className="text-xs text-muted-foreground">Unreserved held rooms are released after this date.</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Bill to Account (City Ledger, Optional)</Label>
+            <SearchableSelect
+              value={formData.payeeProfileId}
+              onChange={(v) => setFormData({ ...formData, payeeProfileId: v ?? "none" })}
+              placeholder="No account (bill direct)..."
+              options={[
+                { value: "none", label: "None (bill direct)" },
+                ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">The block&apos;s master bill settles to this debtor account when closed.</p>
           </div>
 
           <div className="space-y-2">

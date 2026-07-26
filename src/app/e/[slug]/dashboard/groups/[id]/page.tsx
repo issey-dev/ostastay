@@ -35,7 +35,16 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const [loading, setLoading] = useState(true)
   const [isMasterFolioOpen, setIsMasterFolioOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[] }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [] })
+  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[]; payeeProfileId: string }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [], payeeProfileId: "none" })
+  const [accounts, setAccounts] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!currentProperty) return
+    fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .catch(console.error)
+  }, [currentProperty])
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [creatingMaster, setCreatingMaster] = useState(false)
@@ -58,6 +67,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       status: group.status,
       cutoffDate: group.cutoffDate ? group.cutoffDate.split("T")[0] : "",
       roomHolds: (group.roomHolds ?? []).map((h: any) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })),
+      payeeProfileId: group.payeeProfileId || "none",
     })
     setEditError(null)
     setIsEditOpen(true)
@@ -75,6 +85,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           status: editForm.status,
           cutoffDate: editForm.cutoffDate || null,
           roomHolds: editForm.roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
+          payeeProfileId: editForm.payeeProfileId === "none" ? null : editForm.payeeProfileId,
         }),
       })
       const data = await res.json()
@@ -154,7 +165,17 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
               <h2 className="text-3xl font-bold tracking-tight">{group.name}</h2>
               <StatusBadge label={group.status} status={group.status} />
             </div>
-            <p className="text-muted-foreground mt-1 font-mono text-sm">Code: {group.code}</p>
+            <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
+              Code: {group.code}
+              {group.payeeProfile && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-md bg-info-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-info ring-1 ring-inset ring-info/20"
+                  title="Master bill settles to this City-Ledger account"
+                >
+                  <Wallet className="h-3 w-3" /> {group.payeeProfile.companyName || `${group.payeeProfile.firstName} ${group.payeeProfile.lastName ?? ""}`.trim()}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -375,6 +396,19 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 endDate={group.endDate?.split("T")[0]}
                 excludeGroupBlockId={group.id}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Bill to Account (City Ledger)</Label>
+              <SearchableSelect
+                value={editForm.payeeProfileId}
+                onChange={(v) => setEditForm((p) => ({ ...p, payeeProfileId: v ?? "none" }))}
+                placeholder="No account (bill direct)..."
+                options={[
+                  { value: "none", label: "None (bill direct)" },
+                  ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
+                ]}
+              />
+              <p className="text-[11px] text-muted-foreground">The master bill settles to this debtor account when closed.</p>
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
           </div>

@@ -630,6 +630,7 @@ model Profile {
   travelAgentReservations  Reservation[]                 @relation("TravelAgent")
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
+  groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
@@ -1523,6 +1524,12 @@ model GroupBlock {
   cutoffDate     DateTime?
   totalRoomsHeld Int       @default(0)
   status         String    @default("TENTATIVE")
+
+  // Optional Travel Agent / Corporate credit account the block's master bill settles to
+  // (City Ledger). When set, the master folio is created as CITY_LEDGER with this payee,
+  // and CLOSING it finalizes a debtor invoice for the account — no per-reservation setup.
+  payeeProfileId String?
+  payeeProfile   Profile? @relation("GroupBlockPayee", fields: [payeeProfileId], references: [upid])
 
   reservations Reservation[]
   masterFolios Folio[]
