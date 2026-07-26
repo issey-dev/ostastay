@@ -208,7 +208,7 @@ export function BookingForm({ reservationId }: { reservationId?: string }) {
       .catch(console.error)
       .finally(() => { if (!cancelled) setGridLoading(false) })
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [propertyId, gridStart, gridEnd, form.adults, form.children, reservationId])
 
   // ── Server-side quote: authoritative total + full tax breakdown ──────────

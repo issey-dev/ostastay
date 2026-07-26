@@ -98,7 +98,7 @@ function PriceCalendarPageContent() {
   // types the same way checks the extra boxes from there.
   useEffect(() => {
     if (selectedRoomTypeId) setBulkRoomTypeIds([selectedRoomTypeId])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedRoomTypeId])
 
   const toggleBulkRoomType = (id: string, checked: boolean) => {
