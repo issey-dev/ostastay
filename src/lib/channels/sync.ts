@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
 import { perNightTypeAvailability, formatLocalDay } from "@/lib/availability";
+import { resolveRatesForLink } from "@/lib/channels/rates";
 
 // The outbound half of the sync engine: what we would publish to the channel manager for a
 // linked property, and why.
@@ -32,6 +33,14 @@ export type ChannelNight = {
   available: number;
   /** True when a stop-sale applies — the room type must be CLOSED at the channel, not just zeroed. */
   closed: boolean;
+  /**
+   * Prices for this night, keyed by the CHANNEL's rate id.
+   *
+   * A rate id is ABSENT when that plan has no resolvable price for the night. Absent means
+   * "we don't know", and it must never be pushed as 0 — zero is a real price that would put
+   * rooms on sale for nothing. See src/lib/channels/rates.ts.
+   */
+  prices: Record<string, number>;
 };
 
 export type ChannelRoomTypePlan = {
@@ -116,6 +125,20 @@ export async function computeChannelAvailability(opts: {
   const isClosed = (roomTypeId: string, date: string) =>
     closedDates.has(`*|${date}`) || closedDates.has(`${roomTypeId}|${date}`);
 
+  // Which room types will actually be published — resolved first so rates are fetched in
+  // one pass rather than per room type.
+  const publishable = roomTypes.filter((rt) => {
+    const map = mapByRoomTypeId.get(rt.id);
+    return !rt.isPseudo && rt.isActive && !!map && map.shared;
+  });
+  const ratesByRoomType = await resolveRatesForLink({
+    propertyId: link.propertyId,
+    linkId: link.id,
+    roomTypeIds: publishable.map((rt) => rt.id),
+    from,
+    to,
+  });
+
   const included: ChannelRoomTypePlan[] = [];
   const excluded: ChannelAvailabilityPlan["excluded"] = [];
 
@@ -153,10 +176,19 @@ export async function computeChannelAvailability(opts: {
       externalRoomId: map.externalRoomId,
       nights: nights.map((n) => {
         const closed = isClosed(rt.id, n.date);
+
+        // Only rate plans with a resolvable price for THIS night appear. An unpriced night
+        // is omitted rather than zeroed — see rates.ts.
+        const prices: Record<string, number> = {};
+        for (const plan of ratesByRoomType.get(rt.id) ?? []) {
+          const price = plan.prices[n.date];
+          if (price != null) prices[plan.externalRateId] = price;
+        }
+
         // Closed nights publish 0 AND carry the closed flag. Availability 0 alone is not
         // equivalent: several OTAs read it as "temporarily sold out" and keep the listing
         // live, whereas a closure removes it. Rule 5 of the D-7 ruling.
-        return { date: n.date, available: closed ? 0 : n.available, closed };
+        return { date: n.date, available: closed ? 0 : n.available, closed, prices };
       }),
     });
   }

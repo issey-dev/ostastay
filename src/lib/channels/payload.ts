@@ -29,6 +29,14 @@ export type Beds24CalendarRange = {
    * its own as "temporarily sold out" while keeping the listing live.
    */
   closed?: boolean;
+  /**
+   * Prices keyed by the channel's rate id. OMITTED entirely when nothing is priced.
+   *
+   * A rate absent from this map means "no price known for these dates" — the channel keeps
+   * whatever it already has. It must never be sent as 0, which is a real price meaning the
+   * rooms are free.
+   */
+  prices?: Record<string, number>;
 };
 
 export type Beds24RoomCalendar = {
@@ -54,23 +62,41 @@ export function compactNights(nights: ChannelNight[]): Beds24CalendarRange[] {
 
   for (const night of nights) {
     const last = ranges[ranges.length - 1];
+    // Prices are part of what makes two nights "the same". Merging on availability alone
+    // would swallow a price change into the preceding range and publish yesterday's rate
+    // for today — a silent mispricing, which is worse than a failed push.
     const sameValues =
-      last !== undefined && last.numAvail === night.available && !!last.closed === night.closed;
+      last !== undefined &&
+      last.numAvail === night.available &&
+      !!last.closed === night.closed &&
+      samePrices(last.prices, night.prices);
 
     if (sameValues && isNextDay(last.to, night.date)) {
       last.to = night.date;
       continue;
     }
 
+    const prices = Object.keys(night.prices).length > 0 ? { ...night.prices } : undefined;
     ranges.push({
       from: night.date,
       to: night.date,
       numAvail: night.available,
       ...(night.closed ? { closed: true } : {}),
+      ...(prices ? { prices } : {}),
     });
   }
 
   return ranges;
+}
+
+// Two price maps are equal only if they carry exactly the same rate ids at the same
+// amounts. A rate present in one and absent from the other is a difference, not a match —
+// "unpriced" is a distinct state from any number.
+function samePrices(a: Record<string, number> | undefined, b: Record<string, number>): boolean {
+  const aKeys = a ? Object.keys(a) : [];
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((k) => a![k] === b[k]);
 }
 
 // True when `next` is the calendar day immediately after `prev` (both YYYY-MM-DD).

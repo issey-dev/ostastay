@@ -34,9 +34,9 @@ describe("Channel push", () => {
     it("collapses consecutive identical nights into one inclusive range", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 3, closed: false },
-          { date: "2026-03-02", available: 3, closed: false },
-          { date: "2026-03-03", available: 3, closed: false },
+          { date: "2026-03-01", available: 3, closed: false, prices: {} },
+          { date: "2026-03-02", available: 3, closed: false, prices: {} },
+          { date: "2026-03-03", available: 3, closed: false, prices: {} },
         ])
       ).toEqual([{ from: "2026-03-01", to: "2026-03-03", numAvail: 3 }]);
     });
@@ -44,9 +44,9 @@ describe("Channel push", () => {
     it("splits when the number changes", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 3, closed: false },
-          { date: "2026-03-02", available: 1, closed: false },
-          { date: "2026-03-03", available: 3, closed: false },
+          { date: "2026-03-01", available: 3, closed: false, prices: {} },
+          { date: "2026-03-02", available: 1, closed: false, prices: {} },
+          { date: "2026-03-03", available: 3, closed: false, prices: {} },
         ])
       ).toEqual([
         { from: "2026-03-01", to: "2026-03-01", numAvail: 3 },
@@ -60,9 +60,9 @@ describe("Channel push", () => {
       // listing, 0 leaves it up as sold out. Merging them would silently discard the
       // distinction the D-7 ruling exists to preserve.
       const ranges = compactNights([
-        { date: "2026-03-01", available: 0, closed: false },
-        { date: "2026-03-02", available: 0, closed: true },
-        { date: "2026-03-03", available: 0, closed: false },
+        { date: "2026-03-01", available: 0, closed: false, prices: {} },
+        { date: "2026-03-02", available: 0, closed: true, prices: {} },
+        { date: "2026-03-03", available: 0, closed: false, prices: {} },
       ]);
       expect(ranges).toHaveLength(3);
       expect(ranges[1]).toEqual({ from: "2026-03-02", to: "2026-03-02", numAvail: 0, closed: true });
@@ -73,8 +73,8 @@ describe("Channel push", () => {
     it("merges consecutive closed nights with each other", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 0, closed: true },
-          { date: "2026-03-02", available: 0, closed: true },
+          { date: "2026-03-01", available: 0, closed: true, prices: {} },
+          { date: "2026-03-02", available: 0, closed: true, prices: {} },
         ])
       ).toEqual([{ from: "2026-03-01", to: "2026-03-02", numAvail: 0, closed: true }]);
     });
@@ -84,8 +84,8 @@ describe("Channel push", () => {
       // would be silently overwritten with a value never computed for it.
       expect(
         compactNights([
-          { date: "2026-03-01", available: 2, closed: false },
-          { date: "2026-03-05", available: 2, closed: false },
+          { date: "2026-03-01", available: 2, closed: false, prices: {} },
+          { date: "2026-03-05", available: 2, closed: false, prices: {} },
         ])
       ).toEqual([
         { from: "2026-03-01", to: "2026-03-01", numAvail: 2 },
@@ -96,8 +96,8 @@ describe("Channel push", () => {
     it("merges correctly across a month boundary", () => {
       expect(
         compactNights([
-          { date: "2026-03-31", available: 1, closed: false },
-          { date: "2026-04-01", available: 1, closed: false },
+          { date: "2026-03-31", available: 1, closed: false, prices: {} },
+          { date: "2026-04-01", available: 1, closed: false, prices: {} },
         ])
       ).toEqual([{ from: "2026-03-31", to: "2026-04-01", numAvail: 1 }]);
     });
@@ -124,9 +124,9 @@ describe("Channel push", () => {
           roomTypeCode: "A",
           externalRoomId: "beds-a",
           nights: [
-            { date: "2026-03-01", available: 2, closed: false },
-            { date: "2026-03-02", available: 2, closed: false },
-            { date: "2026-03-03", available: 0, closed: true },
+            { date: "2026-03-01", available: 2, closed: false, prices: {} },
+            { date: "2026-03-02", available: 2, closed: false, prices: {} },
+            { date: "2026-03-03", available: 0, closed: true, prices: {} },
           ],
         },
       ],
