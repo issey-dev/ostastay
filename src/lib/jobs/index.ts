@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { needsKeepAlive } from "@/lib/channels/beds24";
 import { testConnection } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
+import { pushAllEnabledLinks } from "@/lib/channels/push";
 import type { Job } from "@/lib/jobs/runner";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
@@ -79,7 +80,45 @@ export const channelLogPruneJob: Job = {
   },
 };
 
-export const JOBS: readonly Job[] = [channelKeepAliveJob, channelLogPruneJob];
+/**
+ * Publish availability to the channel manager for every property that is sharing.
+ *
+ * This is what makes the integration live rather than a one-off: inventory changes
+ * constantly (bookings, cancellations, room moves, stop-sales), and a channel told once and
+ * never again is worse than one never told at all — it is confidently wrong.
+ *
+ * Scheduled rather than event-driven for now, deliberately. A push per inventory change
+ * would mean a burst of desk activity becoming a burst of API calls straight into a rate
+ * limit; a periodic sweep coalesces all of it into one push per property. The cost is
+ * staleness bounded by the cron interval, which is the standard trade for channel
+ * management. Event-driven invalidation can refine this later without changing what is
+ * pushed.
+ *
+ * pushAllEnabledLinks skips anything not actually sharing, so this is cheap when idle.
+ */
+export const channelAriPushJob: Job = {
+  name: "channel-ari-push",
+  description: "Publish availability to the channel manager for properties that are sharing",
+  run: async (enterpriseId) => {
+    const results = await pushAllEnabledLinks(enterpriseId);
+    const pushed = results.filter((r) => r.status === "PUSHED");
+    const failed = results.filter((r) => r.status === "FAILED");
+
+    return {
+      itemsProcessed: pushed.length,
+      summary:
+        results.length === 0
+          ? "No properties are sharing"
+          : failed.length === 0
+            ? `Pushed ${pushed.length} of ${results.length} property(ies)`
+            : `Pushed ${pushed.length} of ${results.length}; failed: ${failed
+                .map((f) => f.propertyName)
+                .join(", ")}`,
+    };
+  },
+};
+
+export const JOBS: readonly Job[] = [channelKeepAliveJob, channelLogPruneJob, channelAriPushJob];
 
 export function findJob(name: string): Job | undefined {
   return JOBS.find((j) => j.name === name);

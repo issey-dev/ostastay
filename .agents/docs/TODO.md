@@ -128,9 +128,35 @@ first has shipped, on branch `feature/hub-shell`.
     available to **view-only** users too. Checking what would be sent is a read, and is the
     last cheap moment to catch a mapping mistake — after sharing is on, the next thing to
     notice a wrong number is an OTA.
-- **Next: the outbound push itself** (`POST /inventory/rooms/calendar`), then inbound
-  bookings (webhook + `GET /bookings` polling fallback, idempotent on the OTA booking id,
-  with the **"channel overbook" alert** from rule 4).
+- **DONE — outbound push** (branch `feature/sync-push`). `src/lib/channels/payload.ts`
+  (pure transform) + `push.ts` (guards + send) + `POST /api/hub/property-links/[id]/push`
+  + a **Send now** button in the preview dialog + the `channel-ari-push` scheduled job.
+  **This is the first thing in the integration that actually reaches an OTA.**
+  - ⚠️ **The calendar payload SHAPE is NOT verified against a live account.** Beds24's
+    field names for `/inventory/rooms/calendar` are only in its account-gated Swagger.
+    Everything is arranged so being wrong is cheap: the transform is pure and fully tested
+    independently of the wire format, **dry-run returns the exact body without sending**,
+    and a wrong name is a one-line fix in `payload.ts` with nothing else moving.
+    **Confirm during the sandbox spike BEFORE enabling sharing on a real property.**
+  - **Guards (checked in the service, not just the UI):** refuses unless `syncEnabled`;
+    refuses with no credentials; refuses an empty payload (an empty push looks like success
+    while hiding a broken mapping). A job, a retry or any future caller cannot route around
+    `syncEnabled` — it is the operator's consent to publish.
+  - **Dry-run is allowed while sharing is OFF** — inspecting the body before it reaches an
+    OTA is the entire point. Gated on `view`; a real push needs `update`.
+  - **Ranges are compacted**: consecutive identical nights collapse into one inclusive
+    `from`/`to` entry. Note `to` is INCLUSIVE here, deliberately unlike the half-open
+    `[from, to)` used for stay dates everywhere else — conflating them would push one night
+    too many. A CLOSED night never merges with an equally-zero OPEN night; they mean
+    different things at the channel.
+  - **Excluded room types are OMITTED, never sent as 0** — sending 0 would actively close
+    inventory the operator only meant to stop managing from here.
+  - Push failures are returned, never thrown, so one property cannot abort a sweep.
+  - Pushing also refreshes the access token, which resets Beds24's 30-day idle clock — an
+    actively-syncing property keeps its own credentials alive without the keep-alive job.
+- **Next: inbound bookings.** Webhook + `GET /bookings` polling fallback, **idempotent on
+  the OTA booking id** (`ChannelReservationRef` from the plan — not yet built), handling
+  create/modify/cancel, with the **"channel overbook" alert** from D-7 rule 4.
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
