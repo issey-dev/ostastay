@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Plus, Trash2, ArrowLeftRight } from "@/components/icons"
+import { Building2, Plus, Trash2, ArrowLeftRight, Eye } from "@/components/icons"
+import { AvailabilityPreview } from "@/components/hub/availability-preview"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -65,6 +66,7 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
   const [newConnectionId, setNewConnectionId] = useState("")
   const [newExternalId, setNewExternalId] = useState("")
   const [saving, setSaving] = useState(false)
+  const [previewFor, setPreviewFor] = useState<PropertyLink | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -208,6 +210,14 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
                       <code className="text-xs">{link.externalPropertyId}</code>
                     </CardDescription>
                   </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {/* Available to view-only users too — checking what would be sent is a
+                        read, and is the cheapest moment to catch a mapping mistake. */}
+                    <Button variant="outline" size="sm" onClick={() => setPreviewFor(link)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </Button>
+                  </div>
                   {canManage && (
                     <div className="flex shrink-0 items-center gap-3">
                       <div className="flex items-center gap-2">
@@ -344,6 +354,15 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
             </Card>
           ))}
         </div>
+      )}
+
+      {previewFor && (
+        <AvailabilityPreview
+          linkId={previewFor.id}
+          propertyName={previewFor.propertyName}
+          open={previewFor !== null}
+          onOpenChange={(o) => !o && setPreviewFor(null)}
+        />
       )}
 
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
