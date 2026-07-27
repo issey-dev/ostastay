@@ -78,13 +78,40 @@ first has shipped, on branch `feature/hub-shell`.
     skip or repeat rows as new entries arrive mid-page.
 - **Next (not started):** Sharing/mapping (property links + room-type/rate-plan mapping) → sync
   engine, inbound read-only first.
-- **Two operational gaps, both still open and both worth closing before production:**
-  1. **No scheduled keep-alive.** The Check button resets Beds24's 30-day idle clock, but only
-     when a human clicks it. Without a job, an untouched connection still dies silently.
-  2. **No scheduled log pruning.** `pruneSyncLogs(enterpriseId, days)` exists and is tested,
-     but nothing calls it — `ChannelSyncLog` grows unbounded with every exchange. The mechanism
-     is there; the schedule is not.
-  Both want the same thing: a place to run periodic per-enterprise jobs. Worth solving once.
+- **DONE — Background job runner** (branch `feature/hub-job-runner`, stacked on
+  `feature/hub-sync-logs`). Closes BOTH operational gaps above with one piece of shared
+  infrastructure. `JobRun` model, `src/lib/jobs/` (runner + registry + cron auth),
+  `POST /api/jobs/run`, and a job-health card on the Hub overview.
+  - **Next.js has no scheduler**, so an EXTERNAL cron drives it:
+    `curl -X POST https://<host>/api/jobs/run -H "x-cron-secret: $CRON_SECRET"`. Hourly is a
+    sensible cadence — both jobs are cheap when nothing is due. An in-process `setInterval`
+    would be wrong: it dies with the process, and on >1 instance every job runs >1 time.
+  - **`CRON_SECRET` must be set per environment** (see `.env.example`). The endpoint
+    **FAILS CLOSED** — unset means it refuses every request (503) rather than running
+    unauthenticated. Compared via SHA-256 digests + `timingSafeEqual`, so neither the value
+    nor its length leaks through timing.
+  - **Mutual exclusion is a PARTIAL UNIQUE INDEX** `JobRun_one_running_per_job_enterprise`
+    — UNIQUE (jobName, enterpriseId) WHERE status = 'RUNNING' — created in raw SQL because
+    Prisma cannot express it (same approach as `CashierShift_one_open_per_user_property`,
+    audit finding A12). An overlapping cron invocation's INSERT fails and is skipped instead
+    of double-running. `JobRun.enterpriseId` is deliberately NOT nullable: SQLite treats
+    NULLs as distinct in a unique index, so a nullable column would silently allow
+    concurrent "global" runs.
+  - **Stale-lock recovery:** a RUNNING row older than 30 min is assumed dead and taken over
+    (marked FAILED, not deleted — a crash-looping job must stay visible). Without a lease,
+    one crash would wedge a job permanently.
+  - **Failure isolation:** the runner never throws. One enterprise failing must not stop the
+    rest, and a 500 from cron would not tell the operator which of N enterprises broke.
+  - Jobs run sequentially across enterprises on purpose — they make outbound channel-manager
+    calls, and firing all at once would burst into a provider rate limit.
+  - Jobs registered: `channel-keepalive` (only touches connections `needsKeepAlive()` says
+    are due) and `channel-log-prune` (retention `SYNC_LOG_RETENTION_DAYS = 60`).
+  - The Hub overview shows last-run status per job and flags a run **older than 24h as
+    Stale** — a cron that has quietly stopped firing is worse than no cron, since the
+    keep-alive looks fine right up until a credential lapses.
+- **Still outstanding for deployment:** actually schedule the cron in each environment and set
+  `CRON_SECRET` there. The mechanism now exists and is verified; the schedule is
+  environment configuration, not code.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull

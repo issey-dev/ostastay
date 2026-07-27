@@ -1,5 +1,6 @@
 import { ArrowLeftRight } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { JobStatusCard } from "@/components/hub/job-status-card"
 import { requireSession } from "@/lib/scope"
 
 // Hub overview. Intentionally thin for now — the Hub shell ships before any
@@ -44,6 +45,8 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           </CardContent>
         </Card>
       </div>
+
+      <JobStatusCard />
     </div>
   )
 }
