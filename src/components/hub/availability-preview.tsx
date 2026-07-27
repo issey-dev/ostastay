@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 
 // Shows exactly what WOULD be published for a link, without publishing anything.
 //
@@ -38,17 +41,21 @@ function shortDate(iso: string) {
 export function AvailabilityPreview({
   linkId,
   propertyName,
+  canPush,
   open,
   onOpenChange,
 }: {
   linkId: string
   propertyName: string
+  canPush: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const confirm = useConfirm()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [pushing, setPushing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -67,6 +74,35 @@ export function AvailabilityPreview({
   useEffect(() => {
     if (open) void load()
   }, [open, load])
+
+  const handlePush = async () => {
+    // Confirmed because this is the one control in the Hub whose effect is immediately
+    // visible to the public — the numbers above go live on booking sites.
+    const ok = await confirm({
+      title: `Send this to the channel manager?`,
+      description: `Availability for ${propertyName} will be published to the connected booking channels straight away.`,
+      confirmLabel: "Send now",
+    })
+    if (!ok) return
+
+    setPushing(true)
+    try {
+      const res = await fetch(`/api/hub/property-links/${linkId}/push`, { method: "POST" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not push")
+        return
+      }
+      if (data.status === "PUSHED") {
+        toast.success(`Sent ${data.roomTypeCount} room type(s), ${data.nightCount} nights`)
+      } else {
+        // SKIPPED and FAILED both arrive as 200 — the request succeeded, the push did not.
+        toast.error(data.reason ?? `Not sent (${data.status})`)
+      }
+    } finally {
+      setPushing(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,6 +192,19 @@ export function AvailabilityPreview({
               </div>
             )}
           </div>
+        )}
+
+        {!loading && !failed && plan && (
+          <DialogFooter>
+            {/* Sending is only offered when the operator has already turned sharing on —
+                the push itself refuses otherwise, so offering it would just produce a
+                confusing failure. */}
+            {canPush && plan.syncEnabled && plan.roomTypes.length > 0 && (
+              <Button onClick={() => void handlePush()} disabled={pushing}>
+                {pushing ? "Sending..." : "Send now"}
+              </Button>
+            )}
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

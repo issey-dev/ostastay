@@ -360,6 +360,7 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
         <AvailabilityPreview
           linkId={previewFor.id}
           propertyName={previewFor.propertyName}
+          canPush={canManage}
           open={previewFor !== null}
           onOpenChange={(o) => !o && setPreviewFor(null)}
         />

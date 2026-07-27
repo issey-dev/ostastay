@@ -113,11 +113,17 @@ async function requestJson(
   path: string,
   headers: Record<string, string>,
   operation: string,
-  sink?: ChannelLogSink
+  sink?: ChannelLogSink,
+  // Defaulted so every existing GET call site is unchanged. A body is redacted for the log
+  // like everything else — a calendar payload carries no credential, but that is a property
+  // of today's payloads, not a rule to rely on.
+  init?: { method: "POST"; body: unknown }
 ): Promise<Beds24TokenResponse> {
   const startedAt = Date.now();
   // Header VALUES are never logged — this is where the invite code and tokens live.
-  const requestSummary = redactHeaders(headers);
+  const requestSummary = init
+    ? `${redactHeaders(headers)} body=${redactForLog(init.body)}`
+    : redactHeaders(headers);
   const base = {
     direction: "OUTBOUND" as const,
     operation,
@@ -127,7 +133,11 @@ async function requestJson(
 
   let res: Response;
   try {
-    res = await fetch(`${BEDS24_API_BASE}${path}`, { method: "GET", headers });
+    res = await fetch(`${BEDS24_API_BASE}${path}`, {
+      method: init?.method ?? "GET",
+      headers: init ? { ...headers, "Content-Type": "application/json" } : headers,
+      ...(init ? { body: JSON.stringify(init.body) } : {}),
+    });
   } catch (e) {
     // Network-level failure (DNS, TLS, timeout) — distinct from an auth rejection, and
     // must not be reported to the operator as "bad credentials".
@@ -238,6 +248,24 @@ export async function refreshAccessToken(refreshToken: string, sink?: ChannelLog
 /** The auth header every non-authentication Beds24 call must carry. */
 export function authHeader(accessToken: string): Record<string, string> {
   return { [ACCESS_TOKEN_HEADER]: accessToken };
+}
+
+/**
+ * Push per-date availability to Beds24's calendar.
+ *
+ * The payload SHAPE is not yet verified against a live account — see the caveat in
+ * src/lib/channels/payload.ts. The transport, auth header and error handling here are the
+ * same ones already proven live by the authentication calls.
+ */
+export async function pushCalendar(
+  accessToken: string,
+  payload: unknown,
+  sink?: ChannelLogSink
+): Promise<void> {
+  await requestJson("/inventory/rooms/calendar", authHeader(accessToken), "calendar.push", sink, {
+    method: "POST",
+    body: payload,
+  });
 }
 
 /** True when the cached access token is missing or close enough to expiry to re-mint. */
