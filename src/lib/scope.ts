@@ -2,10 +2,10 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { MODULES, MODULE_LABELS, type Module, type Action } from "@/lib/modules";
+import { MODULES, MODULE_LABELS, HUB_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
-export { MODULES, type Module, type Action };
+export { MODULES, HUB_MODULES, type Module, type Action };
 
 import { JWT_SECRET as SUPPORT_JWT_SECRET } from "@/lib/jwt-secret";
 
@@ -445,7 +445,6 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
 // property dashboard. The Hub is enterprise-level by definition — connectivity and
 // enterprise-wide configuration — and contains NO PMS functionality. Adding a module
 // here is what puts it in the Hub; MODULES itself stays a flat list.
-export const HUB_MODULES: readonly Module[] = ["INTEGRATIONS"] as const;
 
 // Non-throwing probe — use for navigation/visibility decisions (e.g. whether to show
 // the "Hub" link in the property sidebar). requireHubAccess() is the actual gate.
@@ -475,7 +474,7 @@ export function requireHubAccess(ctx: AuthContext): void {
 // administrator. Such a user must land on the Hub, since every dashboard route would
 // bounce them or render an empty shell. See src/app/e/[slug]/dashboard/page.tsx.
 export function hasAnyPropertyModule(ctx: AuthContext): boolean {
-  return MODULES.some((m) => !HUB_MODULES.includes(m) && hasPermission(ctx, m, "view"));
+  return MODULES.some((m) => moduleScope(m) === "PROPERTY" && hasPermission(ctx, m, "view"));
 }
 
 // Shared shape for turning a thrown UnauthorizedError/ForbiddenError into a NextResponse

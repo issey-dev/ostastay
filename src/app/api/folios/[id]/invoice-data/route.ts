@@ -340,23 +340,56 @@ export async function GET(
       }
     }
 
-    // A walk-in bill raised "on behalf of" an outlet prints the outlet's own header
-    // (name/address/tax no) instead of the guest-house one, and shows the outlet check
-    // number as a reference. Only walk-in folios carry a check with folioId set (one
-    // check == one walk-in bill == one outlet). The legal document number is still the
-    // TAX_INVOICE number allocated above.
-    const outletCheck = await prisma.outletCheck.findFirst({
+    // WHOSE header the document prints under. An outlet carries its own business
+    // identity (name/address/contact/tax no — Controls > Outlets), so a bill for its
+    // trade can be raised on its behalf rather than the property's.
+    //
+    // Two ways an outlet is in the picture:
+    //   * the folio IS the outlet's — a walk-in bill, which carries a check with
+    //     folioId set (one check == one walk-in bill == one outlet). This still
+    //     defaults to the outlet's header, as before.
+    //   * the folio merely CONTAINS the outlet's charges — a guest's room folio with a
+    //     spa treatment on it. That defaults to the property, since the hotel is
+    //     billing, but the outlet is offered so a separate bill can be raised under it.
+    //
+    // `?header=` overrides either default with a specific outlet id, or "property".
+    // The legal document number is still the one allocated above, whichever header wins.
+    const walkInCheck = await prisma.outletCheck.findFirst({
       where: { folioId: folio.id },
-      include: { outlet: { select: { name: true, address: true, email: true, phone: true, taxNo: true } } },
+      include: { outlet: { select: { id: true, name: true, address: true, email: true, phone: true, taxNo: true } } },
     });
-    const outletHeader = outletCheck?.outlet
+
+    // Every outlet with activity on this folio, for the header picker.
+    const outletsOnFolio = await prisma.outlet.findMany({
+      where: {
+        propertyId: folio.propertyId,
+        OR: [
+          { folioLineItems: { some: { folioId: folio.id } } },
+          ...(walkInCheck?.outlet ? [{ id: walkInCheck.outlet.id }] : []),
+        ],
+      },
+      select: { id: true, name: true, address: true, email: true, phone: true, taxNo: true },
+      orderBy: { name: "asc" },
+    });
+
+    const headerParam = url.searchParams.get("header");
+    const chosenOutlet =
+      headerParam === "property"
+        ? null
+        : headerParam
+          ? outletsOnFolio.find((o) => o.id === headerParam) ?? null
+          : walkInCheck?.outlet ?? null; // no explicit choice — keep the walk-in default
+
+    const outletHeader = chosenOutlet
       ? {
-          name: outletCheck.outlet.name,
-          address: outletCheck.outlet.address,
-          email: outletCheck.outlet.email,
-          phone: outletCheck.outlet.phone,
-          taxNo: outletCheck.outlet.taxNo,
-          checkNumber: outletCheck.checkNumber,
+          id: chosenOutlet.id,
+          name: chosenOutlet.name,
+          address: chosenOutlet.address,
+          email: chosenOutlet.email,
+          phone: chosenOutlet.phone,
+          taxNo: chosenOutlet.taxNo,
+          // Only a walk-in bill has a check number to quote, and only its own.
+          checkNumber: walkInCheck && walkInCheck.outlet?.id === chosenOutlet.id ? walkInCheck.checkNumber : null,
         }
       : null;
 
@@ -364,7 +397,13 @@ export async function GET(
       folio: responseFolio,
       settings,
       documentType,
-      outletHeader
+      outletHeader,
+      // What the print dialog offers as header choices, and which one is in effect.
+      headerOptions: {
+        propertyName: folio.property.name,
+        outlets: outletsOnFolio.map((o) => ({ id: o.id, name: o.name })),
+        selected: chosenOutlet?.id ?? "property",
+      },
     });
 
   } catch (error) {

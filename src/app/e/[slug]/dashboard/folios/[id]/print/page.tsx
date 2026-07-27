@@ -21,6 +21,9 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   // default: it shows every posted transaction, including each charge's own Service
   // Charge and GST lines.
   const styleParam = searchParams.get("view")
+  // Whose business identity heads the document — an outlet id, or "property". Passed
+  // straight through to the API, which resolves the default when it's absent.
+  const headerParam = searchParams.get("header")
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -29,7 +32,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const fetchInvoiceData = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/folios/${id}/invoice-data?type=${documentTypeParam}`)
+      const res = await fetch(`/api/folios/${id}/invoice-data?type=${documentTypeParam}${headerParam ? `&header=${encodeURIComponent(headerParam)}` : ""}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -48,7 +51,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     fetchInvoiceData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, documentTypeParam])
+  }, [id, documentTypeParam, headerParam])
 
   if (loading) return <PrintLoading label="Preparing printable invoice..." />
   if (error || !data) return <PrintError message={error || "Folio not found"} />

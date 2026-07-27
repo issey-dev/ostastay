@@ -66,3 +66,31 @@ export const MODULE_LABELS: Record<Module, string> = {
   SPA: "Spa",
   INTEGRATIONS: "Integrations",
 };
+
+// ── Scope level ───────────────────────────────────────────────────────────────────
+//
+// Which shell a module belongs to. This lives here, not in scope.ts, because the
+// Controls permission matrix has to render the distinction and scope.ts is server-only
+// (it imports prisma). scope.ts re-exports HUB_MODULES so there is still one list.
+//
+// It matters for more than layout: a PROPERTY-scoped user is pinned to a single work
+// location and can never hold Hub access, whatever their role says (see hasHubAccess in
+// src/lib/scope.ts). Without the grouping an admin can tick Integrations for a
+// property-scoped user, save successfully, and have nothing happen.
+export const HUB_MODULES = ["INTEGRATIONS"] as const satisfies readonly Module[];
+
+export type ModuleScope = "PROPERTY" | "HUB";
+
+export function moduleScope(module: Module): ModuleScope {
+  return (HUB_MODULES as readonly Module[]).includes(module) ? "HUB" : "PROPERTY";
+}
+
+export const MODULE_SCOPE_LABELS: Record<ModuleScope, string> = {
+  PROPERTY: "Property modules",
+  HUB: "Hub modules (enterprise-wide)",
+};
+
+export const MODULE_SCOPE_DESCRIPTIONS: Record<ModuleScope, string> = {
+  PROPERTY: "Day-to-day operation of a property. Available to every user who has a work location.",
+  HUB: "Enterprise-wide connectivity and credentials. Only an All-Properties user can hold these — a user pinned to a single property is blocked from the Hub regardless of their role.",
+};

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Printer } from "@/components/icons"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   FOLIO_STYLES,
   FOLIO_STYLE_LABELS,
@@ -14,6 +15,12 @@ import {
 } from "@/lib/folio-presentation"
 
 export type FolioDocumentType = "tax" | "proforma" | "interim"
+
+type HeaderOptions = {
+  propertyName: string
+  outlets: Array<{ id: string; name: string }>
+  selected: string
+}
 
 const DOCUMENT_LABELS: Record<FolioDocumentType, string> = {
   tax: "Tax Invoice",
@@ -41,6 +48,9 @@ export function FolioPrintDialog({
   slug: string
 }) {
   const [style, setStyle] = useState<FolioStyle>("detailed")
+  // "property", or an outlet id — whose business identity heads the document.
+  const [header, setHeader] = useState<string>("property")
+  const [headerOptions, setHeaderOptions] = useState<HeaderOptions | null>(null)
 
   // Open on the property's configured default (Stationaries > Invoices > Default Folio
   // Style). Re-read each time the dialog opens so a change in Controls takes effect
@@ -57,8 +67,32 @@ export function FolioPrintDialog({
     return () => { cancelled = true }
   }, [open])
 
+  // Which outlets have activity on this folio, and which header the API would pick on
+  // its own — a walk-in bill defaults to the outlet that raised it, everything else to
+  // the property.
+  //
+  // Probed as `interim` deliberately, NOT as the document being generated: a Tax Invoice
+  // or Proforma allocates its document number on first fetch, so asking with the real
+  // type would burn a sequence number just for opening this dialog — even on cancel.
+  // Interim is the informational variant that never numbers, and the outlets on a folio
+  // are the same whichever document is being raised.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    fetch(`/api/folios/${folioId}/invoice-data?type=interim`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.headerOptions) return
+        setHeaderOptions(d.headerOptions)
+        setHeader(d.headerOptions.selected ?? "property")
+      })
+      .catch(() => { /* no picker — the API's own default applies */ })
+    return () => { cancelled = true }
+  }, [open, folioId])
+
   const generate = () => {
-    window.open(`/e/${slug}/dashboard/folios/${folioId}/print?type=${documentType}&view=${style}`, "_blank")
+    const params = new URLSearchParams({ type: documentType, view: style, header })
+    window.open(`/e/${slug}/dashboard/folios/${folioId}/print?${params}`, "_blank")
     onOpenChange(false)
   }
 
@@ -72,6 +106,34 @@ export function FolioPrintDialog({
             only the grouping changes.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Only shown when an outlet is actually in the picture — a plain room folio
+            with no outlet trade on it has nothing to choose between. */}
+        {headerOptions && headerOptions.outlets.length > 0 && (
+          <div className="space-y-2 mt-2">
+            <Label className="text-xs text-muted-foreground">Raise under</Label>
+            <Select value={header} onValueChange={(v) => setHeader(v ?? "property")}>
+              <SelectTrigger>
+                <SelectValue>
+                  {header === "property"
+                    ? headerOptions.propertyName
+                    : headerOptions.outlets.find((o) => o.id === header)?.name ?? headerOptions.propertyName}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="property">{headerOptions.propertyName} (property)</SelectItem>
+                {headerOptions.outlets.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>{o.name} (outlet)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Whose name, address, contact details and tax number head the document. An
+              outlet&apos;s own details come from Controls &gt; Outlets; the accent colour and
+              font always stay the property&apos;s.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2 mt-2">
           <Label className="text-xs text-muted-foreground">Folio style</Label>
