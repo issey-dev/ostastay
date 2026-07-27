@@ -90,12 +90,11 @@ Follow-ups deliberately left open:
   codes exist and are wired to the fee rules, but the deposit collection flow itself still
   records a Payment rather than posting a folio charge. Unchanged behaviour; flagged only
   so the charge codes aren't mistaken for being in use.
-- **A guest-facing default folio style** is not configurable per property — the picker
-  defaults to Detailed every time. If a property always wants "taxes merged", that wants
-  an EnterpriseSettings/Property preference.
-- **No-show fee postings** deliberately still bypass `postCharge` — a fee rule's amount is
-  a flat policy figure posted gross with no tax resolution, exactly as before. Changing
-  that is a pricing decision for the owner, not a refactor.
+- **Fee amounts are now taxed — wants owner sign-off.** Cancellation and no-show fees
+  previously posted gross and untaxed; they now go through `postCharge` like everything
+  else, so the rule's amount follows the property's "Prices Include Taxes" convention and
+  is split into net + GST. Also: both carry GST but NO service charge (no service was
+  rendered) — a judgement call, changeable per property in the Generates editor.
 - **Backfill on production tenants** has not been run (dev.db only). Run it dry first;
   any code it reports as unmappable needs a Subgroup assigned by hand in Controls →
   Cashiering, then re-run.
