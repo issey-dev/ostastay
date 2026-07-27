@@ -76,8 +76,34 @@ first has shipped, on branch `feature/hub-shell`.
     troubleshooting record.
   - Cursor paging, not offset — the table is written to continuously, so offset paging would
     skip or repeat rows as new entries arrive mid-page.
-- **Next (not started):** Sharing/mapping (property links + room-type/rate-plan mapping) → sync
-  engine, inbound read-only first.
+- **DONE — Sharing / mapping** (branch `feature/hub-sharing`, stacked on
+  `feature/hub-job-runner`). `ChannelPropertyLink` / `ChannelRoomTypeMap` /
+  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI at
+  `/e/{slug}/hub/channel-manager/sharing`. This is the "control what is shared" surface.
+  - ⚠️ **`ChannelPropertyLink.propertyId` is UNIQUE ACROSS ALL CONNECTIONS**, not per
+    connection. Linking one property through two channel-manager accounts would have both
+    pushing availability for the same rooms and both taking bookings — a **double-sell that
+    surfaces as an overbooked guest at the desk, never as an error in software**. One
+    property, one channel manager.
+  - **Readiness gate:** sharing cannot be turned ON while any *active, shared* room type is
+    unmapped — a half-mapped push is worse than none because it looks like it worked.
+    Inactive and deliberately-unshared room types do not block. A link with nothing shared is
+    never "ready". Rate plans are **optional** and deliberately do NOT gate readiness (a
+    property can push availability on a default rate long before per-plan mapping exists).
+    **Disabling is always allowed** — stopping must never be blocked.
+  - New links default `syncEnabled = false`: publishing inventory is an explicit act, never a
+    side effect of linking.
+  - Mappings are validated to belong to the link's own property, otherwise one property's
+    inventory could be published under another property's roof.
+  - **External IDs are typed in by hand for now.** A picker that reads the channel manager's
+    own property/room list needs a real Beds24 account to design the response parsing
+    against — deliberately not guessed. Manual entry is correct regardless and is what an
+    operator would do pre-certification.
+- **Next (not started): the sync engine.** Inbound read-only first (rollout Phase 1), then
+  one-way ARI push, then two-way on one OTA. **Decision D-7 must be answered before two-way
+  sync** — when ostastay's overbooking/soft-cap group blocks disagree with channel-manager
+  inventory, which side is authoritative? That is a business call, not a code one, and
+  discovering it in production means real guests are already affected.
 - **DONE — Background job runner** (branch `feature/hub-job-runner`, stacked on
   `feature/hub-sync-logs`). Closes BOTH operational gaps above with one piece of shared
   infrastructure. `JobRun` model, `src/lib/jobs/` (runner + registry + cron auth),

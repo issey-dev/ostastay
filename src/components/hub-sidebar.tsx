@@ -25,6 +25,7 @@ import {
 const items = [
   { title: "Overview", url: "hub", icon: LayoutDashboard },
   { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
+  { title: "Sharing", url: "hub/channel-manager/sharing", icon: Building2 },
   { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
 ]
 
