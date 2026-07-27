@@ -3,6 +3,7 @@ import { needsKeepAlive } from "@/lib/channels/beds24";
 import { testConnection } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
 import { pushAllEnabledLinks } from "@/lib/channels/push";
+import { pollAllConnections } from "@/lib/channels/inbound/poll";
 import type { Job } from "@/lib/jobs/runner";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
@@ -118,7 +119,44 @@ export const channelAriPushJob: Job = {
   },
 };
 
-export const JOBS: readonly Job[] = [channelKeepAliveJob, channelLogPruneJob, channelAriPushJob];
+/**
+ * Poll the channel manager for recent bookings.
+ *
+ * The safety net behind the webhook, not a replacement for it. A webhook that is never
+ * delivered leaves no trace anywhere — and a missed booking is a guest arriving to a room
+ * nobody knows about. That failure must not depend on a single delivery succeeding, so it
+ * is swept for as well. Beds24 itself endorses using both.
+ *
+ * Cheap to run often: ingestion is idempotent on the channel's booking id, so re-reading an
+ * overlapping window costs a few no-op updates rather than duplicates.
+ */
+export const channelBookingPollJob: Job = {
+  name: "channel-booking-poll",
+  description: "Fetch recent bookings from the channel manager (fallback for missed webhooks)",
+  run: async (enterpriseId) => {
+    const results = await pollAllConnections(enterpriseId);
+    const created = results.reduce((n, r) => n + r.created, 0);
+    const updated = results.reduce((n, r) => n + r.updated, 0);
+    const overbookings = results.reduce((n, r) => n + r.overbookings, 0);
+    const failed = results.filter((r) => r.status === "FAILED");
+
+    const parts = [`${created} new, ${updated} updated`];
+    if (overbookings > 0) parts.push(`${overbookings} OVERBOOKING(S)`);
+    if (failed.length > 0) parts.push(`failed: ${failed.map((f) => f.connectionName).join(", ")}`);
+
+    return {
+      itemsProcessed: created,
+      summary: results.length === 0 ? "No connections to poll" : parts.join("; "),
+    };
+  },
+};
+
+export const JOBS: readonly Job[] = [
+  channelKeepAliveJob,
+  channelLogPruneJob,
+  channelAriPushJob,
+  channelBookingPollJob,
+];
 
 export function findJob(name: string): Job | undefined {
   return JOBS.find((j) => j.name === name);
