@@ -233,6 +233,90 @@ export async function minTypeAvailability(opts: {
   return Math.max(0, min);
 }
 
+// Formats a LOCAL day-start timestamp as YYYY-MM-DD from local components.
+//
+// Deliberately not fmtDay() above: that one does `new Date(ms).toISOString()`, and since
+// dayStartMs() produces a LOCAL midnight, any timezone ahead of UTC (e.g. Maldives, UTC+5)
+// turns local midnight into 19:00 the PREVIOUS day in UTC — so the ISO slice reports the
+// wrong date. Harmless in fmtDay's only current use (a human-readable conflict message),
+// but a day-shifted date pushed to a channel manager would move real inventory onto the
+// wrong night, so it must not be reused here.
+export function formatLocalDay(ms: number): string {
+  const d = new Date(ms);
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+export type NightAvailability = { date: string; available: number };
+
+/**
+ * Sellable rooms of a type FOR EACH NIGHT in [startDate, endDate).
+ *
+ * The per-night sibling of minTypeAvailability() above — same capacity, same
+ * inventory-holding statuses, same group-hold treatment — but returned per night rather
+ * than collapsed to a minimum, because a channel manager's calendar is per-date.
+ *
+ * Deliberately lives here, beside minTypeAvailability(), rather than in the channels
+ * module: if channel availability were computed from a separate copy of this arithmetic,
+ * the two would eventually disagree and the app's own grid would contradict what OTAs were
+ * being told. One definition, two callers.
+ *
+ * Never returns a negative number — a manual overbook clamps to 0. See the D-7 ruling in
+ * .agents/docs/DECISIONS.md: what we publish is actual availability, never including
+ * overbooking headroom, so the channel manager can never itself cause an overbook.
+ */
+export async function perNightTypeAvailability(opts: {
+  propertyId: string;
+  roomTypeId: string;
+  startDate: Date;
+  endDate: Date;
+  blockStatusIn?: string[];
+}): Promise<NightAvailability[]> {
+  const { propertyId, roomTypeId, startDate, endDate, blockStatusIn } = opts;
+  const windowStart = dayStartMs(startDate);
+  const windowEnd = dayStartMs(endDate);
+  if (windowEnd <= windowStart) return [];
+
+  const capacity = await prisma.room.count({
+    where: { propertyId, roomTypeId, status: { notIn: UNSELLABLE_ROOM_STATUSES } },
+  });
+
+  const existing = await prisma.roomAssignment.findMany({
+    where: {
+      roomTypeId,
+      startDate: { lt: new Date(windowEnd) },
+      endDate: { gt: new Date(windowStart) },
+      reservation: { propertyId, status: { in: INVENTORY_HOLDING_STATUSES } },
+    },
+    select: { startDate: true, endDate: true },
+  });
+
+  // outstandingBlockHolds() already drops holds whose block cutoff has passed, which is
+  // exactly the owner's group-block ruling (hold until cutoff, then release) — so that
+  // rule needs no reimplementation here.
+  const holdWindows = await outstandingBlockHolds({
+    propertyId,
+    roomTypeId,
+    windowStart,
+    windowEnd,
+    blockStatusIn,
+  });
+
+  const out: NightAvailability[] = [];
+  for (let night = windowStart; night < windowEnd; night += DAY_MS) {
+    const booked = existing.filter(
+      (a) => dayStartMs(a.startDate) <= night && dayStartMs(a.endDate) > night
+    ).length;
+    const held = holdWindows.reduce(
+      (s, h) => (h.startMs <= night && h.endMs > night ? s + h.outstanding : s),
+      0
+    );
+    out.push({ date: formatLocalDay(night), available: Math.max(0, capacity - booked - held) });
+  }
+  return out;
+}
+
 // Physical-room double-booking guard: true when another inventory-holding
 // reservation's assignment already occupies this room for any overlapping night.
 export async function hasRoomConflict(opts: {

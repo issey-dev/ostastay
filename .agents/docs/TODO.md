@@ -99,9 +99,38 @@ first has shipped, on branch `feature/hub-shell`.
     own property/room list needs a real Beds24 account to design the response parsing
     against — deliberately not guessed. Manual entry is correct regardless and is what an
     operator would do pre-certification.
-- **Next (not started): the sync engine.** Inbound read-only first (rollout Phase 1), then
-  one-way ARI push, then two-way on one OTA. **All blocking decisions are now closed** — D-6
-  is moot (see above) and D-7 was ruled on by the owner 2026-07-27.
+- **IN PROGRESS — sync engine.** First slice done on branch `feature/sync-availability`:
+  the outbound **availability calculation + preview**. It COMPUTES and EXPLAINS; it does not
+  push. The HTTP push is the next slice, on top of this.
+  - `perNightTypeAvailability()` was added to **`src/lib/availability.ts`, deliberately NOT
+    to the channels module** — beside `minTypeAvailability()`, sharing its constants and
+    group-hold logic. A separate copy of that arithmetic would eventually disagree with the
+    app's own Availability grid, and then OTAs would be told something the PMS contradicts.
+    **One definition, two callers — keep it that way.**
+  - Most of D-7 turned out to be **already implemented**: `outstandingBlockHolds()` already
+    drops holds past `cutoffDate` (the group-block ruling), and `minTypeAvailability()`
+    already clamps at 0. The work was per-night output plus the channel-facing filters.
+  - `src/lib/channels/sync.ts` adds what is channel-specific: excludes **pseudo** room types
+    (no physical rooms behind them — publishing one sells rooms that do not exist),
+    inactive, unmapped and held-back types, each with a stated reason; and marks stop-sale
+    nights `closed` **as well as** 0 (rule 5).
+  - ⚠️ **Group holds use BOTH `TENTATIVE` and `DEFINITE`**, matching the booking overbook
+    guard rather than the Availability grid (which shows DEFINITE only). A tentative block
+    is still a real claim until its cutoff, and publishing those rooms would let the block
+    firming up cause exactly the channel overbook rule 1 forbids. This deliberately
+    under-sells while a block is tentative — **owner may want to revisit**.
+  - ⚠️ Added `formatLocalDay()` rather than reusing `fmtDay()`: `fmtDay` does
+    `toISOString()` on a LOCAL midnight, so any timezone ahead of UTC (Maldives is UTC+5)
+    reports the **previous day**. Harmless in its current use (a conflict message) but a
+    day-shifted push would move real inventory onto the wrong night. `fmtDay` itself is
+    left alone — a separate, low-risk cleanup.
+  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Sharing screen,
+    available to **view-only** users too. Checking what would be sent is a read, and is the
+    last cheap moment to catch a mapping mistake — after sharing is on, the next thing to
+    notice a wrong number is an OTA.
+- **Next: the outbound push itself** (`POST /inventory/rooms/calendar`), then inbound
+  bookings (webhook + `GET /bookings` polling fallback, idempotent on the OTA booking id,
+  with the **"channel overbook" alert** from rule 4).
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
