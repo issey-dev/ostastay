@@ -198,9 +198,8 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
   });
 
   it("POST /api/pos/charge 404s when the charge code belongs to a different enterprise", async () => {
-    const otherChargeCode = await prisma.chargeCode.create({
-      data: { enterpriseId: (await prisma.property.findUniqueOrThrow({ where: { id: propertyBId } })).enterpriseId, code: "MB", description: "Minibar" },
-    });
+    const propertyB = await prisma.property.findUniqueOrThrow({ where: { id: propertyBId } });
+    const otherChargeCode = await customChargeCode(propertyB.enterpriseId, { code: "MB", description: "Minibar" });
     const res = await asUser(adminAId, () =>
       posChargeRoute.POST(
         new Request("http://localhost/api/pos/charge", {

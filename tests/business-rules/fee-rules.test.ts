@@ -17,6 +17,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const depositRoute = await import("@/app/api/reservations/[id]/deposit/route");
 const statusRoute = await import("@/app/api/reservations/[id]/status/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -64,9 +65,9 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     propertyId = property.id;
     const pm = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
     paymentMethodId = pm.id;
-    cxlCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: "CXL", description: "Cancellation Fee" } })).id;
-    nsfCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: "NSF", description: "No-Show Fee" } })).id;
-    roomCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: "ROOM", description: "Room Revenue" } })).id;
+    cxlCodeId = (await customChargeCode(enterpriseId, { code: "CXL", description: "Cancellation Fee" })).id;
+    nsfCodeId = (await customChargeCode(enterpriseId, { code: "NSF", description: "No-Show Fee" })).id;
+    roomCodeId = (await customChargeCode(enterpriseId, { code: "ROOM", description: "Room Revenue" })).id;
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `fr-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "FR", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;

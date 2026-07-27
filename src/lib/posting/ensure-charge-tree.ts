@@ -102,7 +102,9 @@ export async function ensureChargeTree(
       ? await client.chargeCode.update({
           where: { id: existing.id },
           data: {
-            chargeSubgroupId: existing.chargeSubgroupId ?? subgroupId,
+            // chargeSubgroupId is required, so an existing code always has one — the
+            // seeder classifies, it never re-files a code the property has moved.
+            chargeSubgroupId: existing.chargeSubgroupId,
             postingType: existing.isSystem ? existing.postingType : c.postingType,
             isSystem: c.isSystem ?? existing.isSystem,
           },

@@ -116,10 +116,7 @@ async function setupCheckedInReservation(opts: {
     await ensureChargeTree(prisma, enterprise.id);
   } else {
     for (const cc of opts.chargeCodes) {
-      // Raw create, NOT the chart helper: this branch exists to reproduce the
-      // pre-hierarchy shape — a property with a couple of bare codes and nothing else.
-      // Seeding the chart here would give it GTX and defeat the point.
-      await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: cc.code, description: cc.code } });
+      await customChargeCode(enterprise.id, { code: cc.code, description: cc.code });
     }
   }
 
@@ -229,11 +226,21 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       adults: 1,
       children: 0,
       infants: 0,
-      // A bare ROOM code and nothing else — the pre-hierarchy shape, where no Green Tax
-      // code has ever been created. A property seeded with the standard chart always has
-      // GTX, so this only reaches the guard for an enterprise that predates it.
       chargeCodes: [{ code: "ROOM" }],
       settings: { greenTaxEnabled: true },
+    });
+
+    // chargeSubgroupId is required, so creating any code seeds the whole chart — which
+    // includes GTX. Remove it explicitly to reach the guard: this is an enterprise whose
+    // Green Tax code was deleted while the levy is still switched on.
+    const prop = await prisma.property.findUniqueOrThrow({ where: { id: propertyId } });
+    await prisma.chargeCodeGenerate.deleteMany({
+      where: { generatedCode: { enterpriseId: prop.enterpriseId, code: "GTX" } },
+    });
+    await prisma.chargeCode.deleteMany({ where: { enterpriseId: prop.enterpriseId, code: "GTX" } });
+    await prisma.enterpriseSettings.updateMany({
+      where: { enterpriseId: prop.enterpriseId },
+      data: { defaultGreenTaxChargeCodeId: null },
     });
 
     const res = await asUser(adminId, () =>
@@ -295,9 +302,7 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     const levySubgroup = await prisma.chargeSubgroup.findUniqueOrThrow({
       where: { enterpriseId_code: { enterpriseId, code: "GOVERNMENT_LEVY" } },
     });
-    const bedTax = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" },
-    });
+    const bedTax = await customChargeCode(enterpriseId, { code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" });
     const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "ROOM" } } });
     await prisma.chargeCodeGenerate.create({
       data: {

@@ -23,6 +23,7 @@ const addressesRoute = await import("@/app/api/profiles/[upid]/addresses/route")
 const documentsRoute = await import("@/app/api/profiles/[upid]/documents/route");
 const preferencesRoute = await import("@/app/api/profiles/[upid]/preferences/route");
 const stayHistoryRoute = await import("@/app/api/profiles/[upid]/stay-history/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const DAY = 86400000;
@@ -297,8 +298,8 @@ describe("Profile: origin property + stay history", () => {
     });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: "101" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "Best Available" } });
-    const roomCode = await prisma.chargeCode.create({ data: { enterpriseId, code: "ROOM", description: "Room" } });
-    const fbCode = await prisma.chargeCode.create({ data: { enterpriseId, code: "FB", description: "F&B" } });
+    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
+    const fbCode = await customChargeCode(enterpriseId, { code: "FB", description: "F&B" });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Stay" } });
 
     const today = new Date();

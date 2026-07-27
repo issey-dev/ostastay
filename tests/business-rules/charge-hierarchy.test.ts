@@ -135,30 +135,28 @@ describe("ensureChargeTree", () => {
 });
 
 describe("ensureChargeTree alongside a property's own codes", () => {
-  it("leaves a code that isn't in the standard chart alone", async () => {
+  it("leaves a property's own codes alone while creating the chart around them", async () => {
     const ent = await freshEnterprise("coexist");
+    await ensureChargeTree(prisma, ent.id);
 
-    // Classification used to be inferred from a free-text `category` column; that column
-    // is gone, so a code outside the chart simply stays unclassified until someone puts
-    // it in a subgroup from Controls > Cashiering. The seeder must not guess.
-    await prisma.chargeCode.createMany({
-      data: [
-        { enterpriseId: ent.id, code: "HOUSE", description: "House Special" },
-        { enterpriseId: ent.id, code: "WAT", description: "Mystery" },
-      ],
+    // A code the property added itself, properly classified — chargeSubgroupId is
+    // required, so an unclassified code can no longer exist at all.
+    const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
+      where: { enterpriseId_code: { enterpriseId: ent.id, code: "MISCELLANEOUS" } },
+    });
+    await prisma.chargeCode.create({
+      data: { enterpriseId: ent.id, code: "HOUSE", description: "House Special", chargeSubgroupId: sub.id },
     });
 
+    // Re-running the seeder creates nothing and leaves the property's code untouched.
     const result = await ensureChargeTree(prisma, ent.id);
+    expect(result.codesCreated).toBe(0);
 
-    // The whole chart is created; neither pre-existing code is touched or duplicated.
-    expect(result.codesCreated).toBe(STANDARD_CHARGE_CODES.length);
-    for (const code of ["HOUSE", "WAT"]) {
-      const row = await prisma.chargeCode.findUniqueOrThrow({
-        where: { enterpriseId_code: { enterpriseId: ent.id, code } },
-      });
-      expect(row.chargeSubgroupId, code).toBeNull();
-      expect(row.isSystem, code).toBe(false);
-    }
+    const row = await prisma.chargeCode.findUniqueOrThrow({
+      where: { enterpriseId_code: { enterpriseId: ent.id, code: "HOUSE" } },
+    });
+    expect(row.chargeSubgroupId).toBe(sub.id);
+    expect(row.isSystem).toBe(false);
   });
 
   it("adopts an existing ROOM/GTX code instead of colliding with it, keeping its tax config", async () => {
@@ -167,13 +165,15 @@ describe("ensureChargeTree alongside a property's own codes", () => {
     // A raw create, deliberately NOT the test helper: the helper seeds the whole chart,
     // and this test is specifically about what ensureChargeTree does when it meets a
     // property's own pre-existing ROOM code for the first time.
-    await prisma.chargeCode.create({
-      data: { enterpriseId: ent.id, code: "ROOM", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id },
-    });
+    // customChargeCode seeds the chart, then re-points ROOM at the property's own tax
+    // profile — the shape an enterprise that has customised its accommodation code
+    // arrives in. (chargeSubgroupId is required, so a bare unclassified ROOM can no
+    // longer exist to begin with.)
+    await customChargeCode(ent.id, { code: "ROOM", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id });
 
+    // A re-run adopts it rather than colliding, and creates nothing new.
     const result = await ensureChargeTree(prisma, ent.id);
-    // The whole chart minus the one code that already existed and was adopted.
-    expect(result.codesCreated).toBe(STANDARD_CHARGE_CODES.length - 1);
+    expect(result.codesCreated).toBe(0);
 
     const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId: ent.id, code: "ROOM" } } });
     expect(room.isSystem).toBe(true);

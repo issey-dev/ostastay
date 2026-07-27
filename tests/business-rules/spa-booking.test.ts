@@ -64,6 +64,7 @@ const availabilityRoute = await import("@/app/api/spa/appointments/availability/
 const therapistsForTreatmentRoute = await import("@/app/api/spa/treatments/[id]/therapists/route");
 const posSearchRoute = await import("@/app/api/pos/search/route");
 const walkInFolioRoute = await import("@/app/api/folios/walk-in/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -173,7 +174,7 @@ describe("Spa booking: business rules", () => {
       )
     );
 
-    const chargeCode = await prisma.chargeCode.create({ data: { enterpriseId, code: "SPA", description: "Spa Charge" } });
+    const chargeCode = await customChargeCode(enterpriseId, { code: "SPA", description: "Spa Charge" });
     chargeCodeId = chargeCode.id;
 
     const admin = await prisma.user.create({

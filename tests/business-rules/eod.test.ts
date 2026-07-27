@@ -17,6 +17,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const statusRoute = await import("@/app/api/eod/status/route");
 const stepRoute = await import("@/app/api/eod/step/route");
 const checkOutRoute = await import("@/app/api/reservations/[id]/check-out/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -55,7 +56,7 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
     const roomA = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: `A${uniq().slice(-4)}`, status: "CLEAN" } });
     const roomB = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: `B${uniq().slice(-4)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await prisma.chargeCode.create({ data: { enterpriseId, code: "ROOM", description: "Room Revenue" } });
+    await customChargeCode(enterpriseId, { code: "ROOM", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `ew-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EW", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;

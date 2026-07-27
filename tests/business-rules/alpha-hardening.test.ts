@@ -34,6 +34,7 @@ const loginRoute = await import("@/app/api/auth/login/route");
 const tenantSettingsRoute = await import("@/app/api/tenant-settings/route");
 const { _resetLoginRateLimiter } = await import("@/lib/login-rate-limit");
 const activityLogRoute = await import("@/app/api/activity-log/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -131,9 +132,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     });
     ratePlanId = ratePlan.id;
 
-    const roomCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "ROOM", description: "Room Revenue" },
-    });
+    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room Revenue" });
     roomCodeId = roomCode.id;
 
     const paymentMethod = await prisma.paymentMethod.create({
@@ -653,8 +652,11 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     const noShowAfter = await prisma.reservation.findUnique({ where: { id: noShow.id } });
     expect(noShowAfter!.status).toBe("NO_SHOW");
 
-    const currentItems = await prisma.folioLineItem.findMany({ where: { folioId: current.folios[0].id } });
-    expect(currentItems.length).toBe(1); // exactly one room charge
+    const currentItems = await prisma.folioLineItem.findMany({ where: { folioId: current.folios[0].id }, include: { chargeCode: { select: { code: true } } } });
+    // One room charge — which since tax moved to group level is a family of lines: the
+    // net on ROOM plus its Service Charge and GST on the Accommodation group's own
+    // codes. What must not happen is a SECOND room charge from a re-run.
+    expect(currentItems.filter((i: { chargeCode: { code: string } }) => i.chargeCode.code === "ROOM").length).toBe(1);
     expect(currentItems[0].date.getTime()).toBe(bizDate.getTime()); // stamped with the business date
     const overstayItems = await prisma.folioLineItem.findMany({ where: { folioId: overstay.folios[0].id } });
     expect(overstayItems.length).toBe(0); // no unbounded accrual
@@ -678,7 +680,9 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(run2.status).toBe(409); // idempotency guard
 
     const afterRerun = await prisma.folioLineItem.findMany({ where: { folioId: current.folios[0].id } });
-    expect(afterRerun.length).toBe(1); // nothing double-posted
+    // Nothing double-posted: the folio still holds exactly the lines the single run
+    // wrote — the room charge plus the Service Charge and GST it generates.
+    expect(afterRerun.length).toBe(currentItems.length);
   });
 
   it("writes an activity trail for the actions performed above", async () => {

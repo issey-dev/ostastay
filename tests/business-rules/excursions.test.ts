@@ -140,9 +140,7 @@ describe("Excursions: business rules", () => {
       )
     );
 
-    const chargeCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "XBR", description: "Excursion BR Charge" },
-    });
+    const chargeCode = await customChargeCode(enterpriseId, { code: "XBR", description: "Excursion BR Charge" });
     chargeCodeId = chargeCode.id;
 
     const admin = await prisma.user.create({

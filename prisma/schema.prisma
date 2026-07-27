@@ -595,18 +595,13 @@ model ChargeCode {
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code          String
   description   String
-  // Level 3 of the hierarchy — the real classification, and now the ONLY one: the
-  // deprecated free-text `category` column it replaced was dropped once every reader was
-  // confirmed migrated (CHARGE_CODE_PLAN.md phase 4). Read classification through
-  // chargeSubgroup.chargeGroup.reportBucket.
-  //
-  // Still nullable. Making it NOT NULL is the rest of phase 4 and is a separate change:
-  // every write path already sets it, so the only thing the constraint would add is
-  // rejecting a hand-written insert — at the cost of touching every test fixture that
-  // creates a bare code. Left for its own commit rather than riding along with the
-  // column drop.
-  chargeSubgroupId String?
-  chargeSubgroup   ChargeSubgroup? @relation(fields: [chargeSubgroupId], references: [id])
+  // Level 3 of the hierarchy — and the ONLY classification: the deprecated free-text
+  // `category` column it replaced was dropped once every reader was migrated
+  // (CHARGE_CODE_PLAN.md phase 4). REQUIRED — every code is properly linked
+  // group -> subgroup -> code, so nothing can post with no classification behind it.
+  // Read the reporting bucket through chargeSubgroup.chargeGroup.reportBucket.
+  chargeSubgroupId String
+  chargeSubgroup   ChargeSubgroup @relation(fields: [chargeSubgroupId], references: [id])
   // Posting semantics that used to be implied by the magic code string:
   // CHARGE (ordinary revenue) | TAX (a levy — excluded from the GST base, e.g. GTX) |
   // CREDIT (posts negative, e.g. TA commission) | NON_REVENUE (never earned revenue).

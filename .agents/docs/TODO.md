@@ -67,6 +67,27 @@ defined taxes.
   Proforma / Tax Invoice / Interim Bill is generated. Unit-tested invariant: every style
   totals identically. The proforma projection emits the same tax split as a real posting.
 
+**Fifth pass (2026-07-28, owner):** payments linked to charge codes, `category` dropped,
+`chargeSubgroupId` NOT NULL, and a rebuilt demo seed.
+- **chargeSubgroupId is REQUIRED** — every code is properly linked group → subgroup →
+  code. `tests/helpers/charge-codes.ts` gives fixtures the real seeded chart, which is
+  how ~30 test files were migrated off hand-built stubs.
+- **`scripts/seed/seed-demo-data.ts`** — the demo dataset, called from seed-veyo.ts.
+  Business date pinned to **2026-08-01** on both properties and EVERY date derived from
+  it, so "arrivals today" stays true however long after seeding. Second property
+  (VEYO-LAGOON) with its own room types, rooms and outlets; the enterprise-level things
+  (chart, tax, payment methods, profiles) are deliberately shared. 20 reservations per
+  property across arrivals / in-house / departures / checked-out / cancelled / no-show /
+  future, plus a group block with pickups billing to a City Ledger master, housekeeping
+  tasks, maintenance tickets and an out-of-order room.
+- The seed's parallel numeric chart (10RV / 60RV / 50RV / 40RV) and the legacy RM/FB pair
+  are gone — the canonical chart is the only chart now.
+- **Analytics was filtering revenue on `createdAt`** (wall clock) while every other report
+  used the business `date`. A Night Audit run just after midnight therefore landed on the
+  wrong day there. Now agrees with the rest.
+- Room revenue reads 0 on a freshly seeded business date **by design** — Night Audit
+  hasn't run for it yet. Same-day outlet sales are seeded so the dashboard isn't empty.
+
 **Fourth pass (2026-07-27, owner):** VAT guard, default folio style, grouped pickers.
 - **Tax never generates on a non-sale.** `canGenerateTax()` — only `CHARGE` qualifies.
   Refused by the generates API (create + edit, including a `PERCENT` disguised as a

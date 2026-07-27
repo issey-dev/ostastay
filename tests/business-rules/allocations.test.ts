@@ -520,9 +520,7 @@ describe("Allocations: reservation materialization", () => {
     expect(property!.allocationCalculationMode).toBe("RATE_PLAN");
 
     // A second allocation linked to the rate plan, and a third linked to a meal plan.
-    const cc = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "TRF", description: "Transfers" },
-    });
+    const cc = await customChargeCode(enterpriseId, { code: "TRF", description: "Transfers" });
     const transfer = await prisma.allocation.create({
       data: {
         propertyId, code: "TRF-SB", name: "Speedboat Transfer", type: "TRANSFER",
@@ -578,9 +576,7 @@ describe("Allocations: reservation materialization", () => {
     });
     await prisma.property.update({ where: { id: propertyId }, data: { allocationCalculationMode: "MEAL_PLAN" } });
 
-    const cc = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "TRF2", description: "Transfers" },
-    });
+    const cc = await customChargeCode(enterpriseId, { code: "TRF2", description: "Transfers" });
     const transfer = await prisma.allocation.create({
       data: {
         propertyId, code: "TRF-SB2", name: "Speedboat Transfer", type: "TRANSFER",

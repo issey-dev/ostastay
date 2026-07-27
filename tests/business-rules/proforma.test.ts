@@ -15,6 +15,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const invoiceDataRoute = await import("@/app/api/folios/[id]/invoice-data/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -49,8 +50,8 @@ describe("Proforma = full projected stay", () => {
     const roomType = await prisma.roomType.create({ data: { propertyId, name: "Deluxe", code: "DLX", maxOccupancy: 3, baseOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await prisma.chargeCode.create({ data: { enterpriseId, code: "ROOM", description: "Room" } });
-    await prisma.chargeCode.create({ data: { enterpriseId, code: "GTX", description: "Green Tax" } });
+    await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
+    await customChargeCode(enterpriseId, { code: "GTX", description: "Green Tax" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `pf-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "PF", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;
@@ -76,11 +77,20 @@ describe("Proforma = full projected stay", () => {
     const pf = await proforma.json();
     expect(pf.documentType).toBe("proforma");
     expect(pf.folio.lineItems.length).toBeGreaterThan(0);
-    // Room charge is projected: 2 nights × $150 = $300 gross (base + tax + service
-    // charge, since the property prices tax-inclusive).
+    // Room charge is projected: 2 nights × $150 = $300 gross. Tax is attached at group
+    // level now, so the room line carries only its net and the Service Charge / GST sit
+    // on their own lines against SVCACM / GSTACM — the same split a real posting makes.
+    // The projection must total the same $300 the guest was quoted.
     const roomLine = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "ROOM");
     expect(roomLine).toBeTruthy();
-    expect(roomLine.amount + roomLine.taxAmount + roomLine.serviceChargeAmount).toBeCloseTo(300, 1);
+    const roomFamily = pf.folio.lineItems.filter(
+      (l: any) => l.id === roomLine.id || l.generatedFromLineItemId === roomLine.id
+    );
+    const roomGross = roomFamily.reduce(
+      (sum: number, l: any) => sum + l.amount + l.taxAmount + l.serviceChargeAmount,
+      0
+    );
+    expect(roomGross).toBeCloseTo(300, 1);
     // Green Tax projected: 2 adults × $12 × 2 nights = $48.
     const gtx = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "GTX");
     expect(gtx).toBeTruthy();
