@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { resolveChargeTax } from "@/lib/tax-calc";
+import { resolveOutletChargeTax } from "@/lib/tax-calc";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { addMinutesToTime, rateForDate, computeAppointmentTotal } from "@/lib/spa";
 import { dayStart, getAvailableRooms, getAvailableTherapists, getCompatibleRoomIds } from "@/lib/spa-availability";
@@ -253,7 +253,13 @@ export async function POST(request: Request) {
       primaryWalkInIdentity = { walkInGuestName: folio.walkInGuestName ?? "Walk-in guest", walkInGuestContact: folio.walkInGuestContact };
     }
 
-    const settings = await prisma.spaSettings.findUnique({ where: { propertyId } });
+    const settings = await prisma.spaSettings.findUnique({
+      where: { propertyId },
+      // Include the module-level Outlet link (if any) with its tax profile so an
+      // AT_BOOKING charge can attribute to the outlet and follow its Tax Rule.
+      include: { outlet: { include: { taxProfile: { include: { rates: true } } } } },
+    });
+    const spaOutlet = settings?.outlet ?? null;
     const allowAutoAssignment = settings?.allowAutoAssignment ?? true;
     const requireRoomAtBooking = settings?.requireRoomAtBooking ?? true;
     const requireTherapistAtBooking = settings?.requireTherapistAtBooking ?? true;
@@ -388,8 +394,12 @@ export async function POST(request: Request) {
       const created = await prisma.$transaction(async (tx) => {
         if (chargeTiming === "AT_BOOKING") {
           const enterpriseSettings = await tx.enterpriseSettings.findUnique({ where: { enterpriseId: treatment.property.enterpriseId } });
-          const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+          // When a Spa Outlet is linked, the charge posts through it — the outlet's Tax
+          // Rule wins (resolveOutletChargeTax falls back to the treatment charge code's own
+          // tax when the outlet mode is NONE). Unlinked = identical to before.
+          const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
             chargeCode: treatment.chargeCode,
+            outlet: spaOutlet,
             inputAmount: priceSnapshot,
             settings: enterpriseSettings,
             pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
@@ -398,6 +408,7 @@ export async function POST(request: Request) {
             data: {
               folioId: billingFolioId,
               chargeCodeId: treatment.chargeCodeId,
+              outletId: spaOutlet?.id ?? null,
               shiftId: chargeShiftId,
               amount: baseAmount,
               taxAmount,

@@ -2,22 +2,11 @@
 
 import { useEffect, useState, use } from "react"
 import { format, parseISO } from "date-fns"
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
-import {
-  PrintDocumentShell,
-  PrintLoading,
-  PrintError,
-  resolvePrintFontClass,
-} from "@/components/print/print-document-shell"
-import {
-  PrintDocumentHeader,
-  PrintInfoColumns,
-  PrintTransactionTable,
-  PrintTotals,
-  PrintFooter,
-  type PrintTransactionRow,
-} from "@/components/print/print-blocks"
+import { resolveStationeryBrand } from "@/lib/stationery-brand"
+import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
+import { ReceiptDocument } from "@/components/print/stationery/documents"
+import type { StationeryRow, MetaItem } from "@/components/print/stationery/blocks"
 
 export default function PaymentReceiptPage({ params }: { params: Promise<{ id: string; slug: string }> }) {
   const { id } = use(params)
@@ -73,79 +62,52 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ id: s
     folioBalance += p.isRefund ? p.amount : -p.amount
   })
 
-  const brandColor = resolveInvoiceBrandColor(settings.invoiceBrandColor)
-  const fontClassName = resolvePrintFontClass(settings.invoiceFontFamily)
+  const brand = resolveStationeryBrand(folio.property)
+  const currency = folio.property.defaultCurrency || "USD"
 
-  const paymentRows: PrintTransactionRow[] = [{
+  const rows: StationeryRow[] = [{
     date: format(parseISO(payment.createdAt), "dd-MMM-yy"),
-    description: `${payment.isRefund ? "Refund" : "Payment"} - ${payment.paymentMethod?.name || ""}`,
+    description: `${payment.isRefund ? "Refund" : "Payment"} — ${payment.paymentMethod?.name || ""}`,
     reference: payment.referenceNumber,
     amount: payment.isRefund ? -payment.amount : payment.amount,
   }]
 
   const guestEmail = primaryEmail(guest.communications)
   const guestMobile = primaryMobile(guest.communications)
-  const guestLines = [
-    `${guest.firstName} ${guest.lastName}`.trim(),
-    guestEmail ? `Email: ${guestEmail}` : "",
-    guestMobile ? `Phone: ${guestMobile}` : "",
+  const receivedFrom = `${guest.firstName} ${guest.lastName}`.trim() || "Guest"
+
+  const paymentDetails: MetaItem[] = [
+    { label: "Method", value: payment.paymentMethod?.name || "—" },
+    ...(payment.referenceNumber ? [{ label: "Reference", value: payment.referenceNumber }] : []),
+    ...(guestEmail ? [{ label: "Email", value: guestEmail }] : []),
+    ...(guestMobile ? [{ label: "Phone", value: guestMobile }] : []),
   ]
 
-  const paymentLines = [
-    `Method: ${payment.paymentMethod?.name || "—"}`,
-    payment.referenceNumber ? `Reference: ${payment.referenceNumber}` : "",
+  const meta: MetaItem[] = [
+    { label: "Receipt No", value: payment.receiptNumber || "—" },
+    { label: "Date", value: format(parseISO(payment.createdAt), "dd-MMM-yy") },
+    { label: "Folio No", value: String(folio.folioNumber) },
   ]
 
   return (
     <PrintDocumentShell
       previewLabel={`Payment Receipt Preview for ${reservation ? `#${reservation.confirmationNo}` : "Walk-in Sale"}`}
-      fontClassName={fontClassName}
+      fontClassName={brand.fontClass}
     >
-      <PrintDocumentHeader
-        brandName={settings.invoiceBrandName || "Main Guest House"}
-        logoUrl={settings.invoiceLogoUrl}
-        address={settings.invoiceAddress}
-        phone={settings.invoicePhone}
-        email={settings.invoiceEmail}
-        taxId={settings.invoiceTaxId}
-        brandColor={brandColor}
-        title="Payment Receipt"
-        metaRows={[
-          { label: "Receipt No", value: payment.receiptNumber || "—" },
-          { label: "Date", value: format(parseISO(payment.createdAt), "dd-MMM-yy") },
-          { label: "Folio No", value: String(folio.folioNumber) },
-        ]}
-      />
-
-      <PrintInfoColumns
-        columns={[
-          { heading: "Guest Information", lines: guestLines },
-          { heading: "Payment Details", lines: paymentLines },
-        ]}
-      />
-
-      <div className="mb-2">
-        <PrintTransactionTable rows={paymentRows} brandColor={brandColor} />
-      </div>
-
-      <PrintTotals
-        lines={[
-          { label: payment.isRefund ? "Amount Refunded" : "Amount Received", amount: payment.amount, emphasis: true },
-        ]}
-        balanceLabel="Remaining Folio Balance"
-        balanceAmount={folioBalance}
-        brandColor={brandColor}
-      />
-
-      <PrintFooter
-        paymentInfo={{
-          accountName: settings.invoicePaymentAccountName,
-          accountNumber: settings.invoicePaymentAccountNumber,
-          iban: settings.invoicePaymentIban,
-          bankInfo: settings.invoicePaymentBankInfo,
-        }}
-        terms={settings.invoicePaymentTerms}
-        closingText={settings.invoiceFooterText}
+      <ReceiptDocument
+        brand={brand}
+        kind="payment"
+        meta={meta}
+        receivedFrom={receivedFrom}
+        paymentDetails={paymentDetails}
+        rows={rows}
+        amountLabel={payment.isRefund ? "Amount Refunded" : "Amount Received"}
+        amount={payment.amount}
+        currency={currency}
+        remainingLabel="Remaining folio balance"
+        remainingAmount={folioBalance}
+        terms={settings.receiptTerms}
+        footerNote={settings.receiptFooterText}
       />
     </PrintDocumentShell>
   )

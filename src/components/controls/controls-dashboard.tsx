@@ -38,11 +38,13 @@ import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
 import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
 import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
+import { PropertyStationeryFontManager } from "@/components/controls/property-stationery-font-manager"
 import { SmtpSftpManager } from "@/components/controls/smtp-sftp-manager"
 import { SequenceManager } from "@/components/controls/sequence-manager"
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 import { AllocationCalculationManager } from "@/components/controls/allocation-calculation-manager"
 import { ExcursionsManager } from "@/components/controls/excursions-manager"
+import { ExcursionSettingsForm } from "@/components/controls/excursion-settings-form"
 import { SpaCatalogManager } from "@/components/controls/spa-manager"
 import { SpaTherapistsManager } from "@/components/controls/spa-therapists-manager"
 import { SpaRoomsManager } from "@/components/controls/spa-rooms-manager"
@@ -91,8 +93,9 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
           <ControlsCard title="Property Information" description="This property's own profile. Which enterprise it belongs to cannot be changed here.">
             <PropertyProfileManager />
           </ControlsCard>
-          <ControlsCard title="Appearance" description="Choose this property's own banner accent, shown at the top of every page.">
+          <ControlsCard title="Appearance" description="Choose this property's own banner accent and stationery font — inherited across the app and every printed document.">
             <PropertyBannerColorManager />
+            <PropertyStationeryFontManager />
           </ControlsCard>
         </div>
       ),
@@ -205,10 +208,15 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       label: "Excursions",
       icon: Compass,
       render: () => (
-        <ExcursionsManager
-          title="Excursions"
-          description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta."
-        />
+        <div className="space-y-6">
+          <ExcursionsManager
+            title="Excursions"
+            description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta."
+          />
+          <ControlsCard title="Excursion Settings" description="Optionally link an outlet so excursion sales attribute to it and follow its Tax Rule.">
+            <ExcursionSettingsForm />
+          </ControlsCard>
+        </div>
       ),
     },
     {

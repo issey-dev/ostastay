@@ -34,6 +34,10 @@ export default function POSDashboard() {
   const [selectedOutletId, setSelectedOutletId] = useState<string>("")
 
   const [chargeCodes, setChargeCodes] = useState<any[]>([])
+  // The open outlet sales check for the current session (one outlet + one guest/bill).
+  // The first post opens it; subsequent posts reuse its id so they group under one
+  // check number (e.g. SPA-00001). Reset when the outlet or guest/bill changes.
+  const [activeCheck, setActiveCheck] = useState<{ id: string; number: string } | null>(null)
   const [recentPostings, setRecentPostings] = useState<any[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
   const [loadError, setLoadError] = useState(false)
@@ -90,6 +94,10 @@ export default function POSDashboard() {
     }
     setForm(f => ({ ...f, chargeCodeId: "" }))
   }, [selectedOutletId, currentProperty])
+
+  // A "session" is one outlet + one guest/bill. Changing either ends the current outlet
+  // check, so the next post opens (and numbers) a fresh one.
+  useEffect(() => { setActiveCheck(null) }, [selectedGuest?.folioId, selectedOutletId])
 
   const handleStartWalkIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -149,7 +157,9 @@ export default function POSDashboard() {
         chargeCodeId: form.chargeCodeId,
         description: form.description,
         reference: form.reference,
-        outletId: selectedOutletId || undefined
+        outletId: selectedOutletId || undefined,
+        // Reuse the session's open check so this line groups under the same number.
+        outletCheckId: activeCheck?.id || undefined,
       }
 
       const res = await fetch(`/api/pos/charge`, {
@@ -160,6 +170,13 @@ export default function POSDashboard() {
 
       if (res.ok) {
         const lineItem = await res.json()
+
+        // Carry the (possibly newly opened) outlet check into the session so the next
+        // post reuses its number.
+        const checkNumber: string | undefined = lineItem.outletCheck?.checkNumber
+        if (lineItem.outletCheck) {
+          setActiveCheck({ id: lineItem.outletCheck.id, number: lineItem.outletCheck.checkNumber })
+        }
 
         // Add to recent postings
         setRecentPostings(prev => [{
@@ -172,8 +189,8 @@ export default function POSDashboard() {
         setForm({ amount: "", chargeCodeId: form.chargeCodeId, description: "", reference: "" })
         setFeedback({
           message: mode === "walkin"
-            ? "Charge posted to the walk-in bill."
-            : "Charge posted successfully to Room " + selectedGuest.roomNumber,
+            ? `Charge posted to the walk-in bill.${checkNumber ? ` Check ${checkNumber}.` : ""}`
+            : `Charge posted successfully to Room ${selectedGuest.roomNumber}.${checkNumber ? ` Check ${checkNumber}.` : ""}`,
           type: "success"
         })
       } else {
@@ -200,6 +217,9 @@ export default function POSDashboard() {
               <div>
                 <p className="font-bold text-sm text-foreground">Room {item.roomNumber}</p>
                 <p className="text-xs text-muted-foreground truncate w-32">{item.chargeCode?.description || "Charge"}</p>
+                {item.outletCheck?.checkNumber && (
+                  <p className="text-[10px] font-mono text-primary">{item.outletCheck.checkNumber}</p>
+                )}
               </div>
               <div className="text-right">
                 <p className="font-bold text-success">${parseFloat(item.amount).toFixed(2)}</p>

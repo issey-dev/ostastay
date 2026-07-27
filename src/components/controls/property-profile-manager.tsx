@@ -21,7 +21,9 @@ type PropertyDetail = {
   taxId: string | null
   contactPhone: string | null
   contactEmail: string | null
+  address: string | null
   starRating: number | null
+  stationeryFont: string | null
   pricesIncludeTaxes: boolean
   requireInspectionOnCheckIn: boolean
   eodHousekeepingMode: string
@@ -119,6 +121,17 @@ export function PropertyProfileManager() {
         <div className="space-y-2">
           <Label>Contact Email</Label>
           <Input type="email" value={detail.contactEmail ?? ""} onChange={(e) => setDetail({ ...detail, contactEmail: e.target.value })} />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label>Address</Label>
+          <Input
+            placeholder="e.g. North Male Atoll, Maldives"
+            value={detail.address ?? ""}
+            onChange={(e) => setDetail({ ...detail, address: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Shown on every printed stationary header (invoices, receipts, letters, registration cards, statements).
+          </p>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>

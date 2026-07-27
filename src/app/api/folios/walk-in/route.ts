@@ -32,7 +32,13 @@ export async function GET(request: Request) {
     const [folios, property] = await Promise.all([
       prisma.folio.findMany({
         where,
-        include: { lineItems: true, payments: true },
+        include: {
+          lineItems: true,
+          payments: true,
+          // A walk-in bill maps 1:1 to an outlet sales check when it was raised through an
+          // outlet — surface its number and outlet so the list is identifiable by outlet.
+          outletChecks: { select: { checkNumber: true, outlet: { select: { name: true } } } },
+        },
         orderBy: [{ closedBusinessDate: "desc" }, { id: "desc" }],
         take: 500,
       }),
@@ -43,11 +49,14 @@ export async function GET(request: Request) {
     const rows = folios.map((f) => {
       const charges = f.lineItems.filter((li) => !li.isVoid).reduce((s, li) => s + li.amount + li.taxAmount + (li.serviceChargeAmount || 0), 0);
       const payments = f.payments.reduce((s, p) => s + (p.isRefund ? -p.amount : p.amount), 0);
+      const check = f.outletChecks[0];
       return {
         id: f.id,
         walkInGuestName: f.walkInGuestName,
         walkInGuestContact: f.walkInGuestContact,
         taxInvoiceNumber: f.taxInvoiceNumber,
+        outletCheckNumber: check?.checkNumber ?? null,
+        outletName: check?.outlet?.name ?? null,
         closedBusinessDate: f.closedBusinessDate,
         charges: Math.round(charges * 100) / 100,
         payments: Math.round(payments * 100) / 100,

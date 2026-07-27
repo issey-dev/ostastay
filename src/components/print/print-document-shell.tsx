@@ -3,21 +3,12 @@
 import { Printer, ArrowLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
-// Shared chrome for every printable document (Invoice, Payment Receipt, Currency
-// Exchange Receipt) — the on-screen control bar (hidden on actual print) plus the
-// white A4-ish document container and print-specific CSS. One place to fix print
-// behavior for all three documents instead of three near-duplicate implementations.
-const FONT_CLASSES: Record<string, string> = {
-  Geist: "font-sans",
-  Inter: "font-sans",
-  Roboto: "font-sans",
-  Georgia: "font-serif",
-  Courier: "font-mono",
-}
-
-export function resolvePrintFontClass(fontFamily: string | null | undefined) {
-  return (fontFamily && FONT_CLASSES[fontFamily]) || "font-sans"
-}
+// Shared chrome for every printable document (Invoice, Receipt, Confirmation Letter,
+// Registration Card, Statement) — the on-screen control bar (hidden on actual print) plus
+// the white A4-ish document container and print-specific CSS. One place to fix print
+// behavior for every document instead of near-duplicate implementations. The document body
+// itself is composed from src/components/print/stationery; font resolution lives in
+// src/lib/stationery-fonts (resolveStationeryFontClass), no longer duplicated here.
 
 export function PrintDocumentShell({
   previewLabel,

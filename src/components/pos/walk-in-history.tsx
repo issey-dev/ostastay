@@ -12,6 +12,8 @@ type Row = {
   id: string
   walkInGuestName: string | null
   taxInvoiceNumber: string | null
+  outletCheckNumber: string | null
+  outletName: string | null
   closedBusinessDate: string | null
   charges: number
   payments: number
@@ -59,8 +61,12 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
           {rows.map((r) => (
             <div key={r.id} className="flex items-center justify-between gap-3 p-4">
               <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">{r.walkInGuestName || "Walk-in"}</p>
+                <p className="truncate font-medium text-foreground">
+                  {r.walkInGuestName || "Walk-in"}
+                  {r.outletCheckNumber && <span className="ml-2 font-mono text-xs text-primary">{r.outletCheckNumber}</span>}
+                </p>
                 <p className="text-xs text-muted-foreground">
+                  {r.outletName ? `${r.outletName} · ` : ""}
                   {r.taxInvoiceNumber ? `${r.taxInvoiceNumber} · ` : ""}
                   {r.closedBusinessDate ? new Date(r.closedBusinessDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : ""}
                 </p>

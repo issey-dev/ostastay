@@ -3,22 +3,11 @@
 import { useEffect, useState, use } from "react"
 import { useSearchParams } from "next/navigation"
 import { format, parseISO } from "date-fns"
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
-import {
-  PrintDocumentShell,
-  PrintLoading,
-  PrintError,
-  resolvePrintFontClass,
-} from "@/components/print/print-document-shell"
-import {
-  PrintDocumentHeader,
-  PrintInfoColumns,
-  PrintTransactionTable,
-  PrintTotals,
-  PrintFooter,
-  type PrintTransactionRow,
-} from "@/components/print/print-blocks"
+import { resolveStationeryBrand } from "@/lib/stationery-brand"
+import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
+import { InvoiceDocument } from "@/components/print/stationery/documents"
+import type { StationeryRow, StationeryTotalLine, MetaItem } from "@/components/print/stationery/blocks"
 
 export default function PrintInvoicePage({ params }: { params: Promise<{ id: string; slug: string }> }) {
   const { id } = use(params)
@@ -58,7 +47,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   if (loading) return <PrintLoading label="Preparing printable invoice..." />
   if (error || !data) return <PrintError message={error || "Folio not found"} />
 
-  const { folio, settings, documentType } = data
+  const { folio, settings, documentType, outletHeader } = data
   const { reservation, payeeProfile } = folio
   // A walk-in/outlet-only folio has no reservation — fall back to the lightweight
   // guest info captured when the walk-in bill was opened.
@@ -93,26 +82,28 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
 
   const balance = (totalBaseCharges + totalServiceCharges + totalTaxes + totalGreenTax) - totalPayments
 
-  const brandColor = resolveInvoiceBrandColor(settings.invoiceBrandColor)
-  const fontClassName = resolvePrintFontClass(settings.invoiceFontFamily)
+  // Branding identity now comes from the folio's property (name/logo/address/contact/tax +
+  // accent colour + font), with the outlet override for on-behalf-of-outlet walk-in bills.
+  const brand = resolveStationeryBrand(folio.property, outletHeader)
+  const currency = folio.property.defaultCurrency || "USD"
 
   const isTax = documentType === "tax"
   const isInterim = documentType === "interim"
   const documentNumber = isTax ? folio.taxInvoiceNumber : isInterim ? null : folio.proformaInvoiceNumber
-  const title = isTax ? "Tax Invoice" : isInterim ? "Interim Bill" : "Proforma Invoice"
-  const disclaimer = isTax ? undefined : isInterim ? "Interim statement of charges posted so far — not a tax invoice." : "This is not a tax invoice."
+  const displayTitle = isTax ? "Tax Invoice" : isInterim ? "Interim Bill" : "Proforma Invoice"
 
-  const chargeRows: PrintTransactionRow[] = folio.lineItems
+  const chargeRows: StationeryRow[] = folio.lineItems
     .filter((item: any) => !item.isVoid)
     .map((item: any) => ({
       date: format(parseISO(item.date), "dd-MMM-yy"),
       description: item.description,
-      // The line's own Reference (operator-entered), falling back to the charge code.
-      reference: item.reference || item.chargeCode?.code,
+      // The line's own Reference (operator-entered), then the outlet sales-check number
+      // for outlet charges, falling back to the charge code.
+      reference: item.reference || item.outletCheck?.checkNumber || item.chargeCode?.code,
       amount: item.amount + (item.serviceChargeAmount || 0) + item.taxAmount,
     }))
 
-  const paymentRows: PrintTransactionRow[] = folio.payments.map((payment: any) => ({
+  const paymentRows: StationeryRow[] = folio.payments.map((payment: any) => ({
     date: format(parseISO(payment.createdAt), "dd-MMM-yy"),
     description: `Payment - ${payment.paymentMethod?.name || ""}`,
     reference: payment.referenceNumber,
@@ -123,111 +114,68 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     ? Math.max(1, Math.round((new Date(reservation.checkOutDate).getTime() - new Date(reservation.checkInDate).getTime()) / (1000 * 3600 * 24)))
     : null
 
-  const stayLines = reservation
-    ? [
-        `Check-In: ${format(parseISO(reservation.checkInDate), "dd-MMM-yy")}`,
-        `Check-Out: ${format(parseISO(reservation.checkOutDate), "dd-MMM-yy")}`,
-        `Total Nights: ${nights}`,
-        `Rooms: ${reservation.assignments?.map((a: any) => a.room?.roomNumber).filter(Boolean).join(", ") || "TBA"}`,
-      ]
-    : ["Walk-in / Outlet Sale — no room booking"]
-
   const invoiceGuestEmail = primaryEmail(invoiceGuest.communications)
   const invoiceGuestMobile = primaryMobile(invoiceGuest.communications)
-  const guestLines = [
-    `${invoiceGuest.firstName} ${invoiceGuest.lastName}`.trim(),
-    invoiceGuestEmail ? `Email: ${invoiceGuestEmail}` : "",
-    invoiceGuestMobile ? `Phone: ${invoiceGuestMobile}` : "",
+
+  const meta: MetaItem[] = [
+    { label: isTax ? "Invoice No" : isInterim ? "Statement" : "Proforma No", value: documentNumber || "—" },
+    ...(outletHeader ? [{ label: "Check No", value: outletHeader.checkNumber }] : []),
+    ...(reservation ? [{ label: "Confirmation No", value: reservation.confirmationNo }] : []),
+    { label: "Date", value: format(new Date(), "dd-MMM-yy") },
+    { label: "Folio No", value: String(folio.folioNumber) },
+  ]
+
+  const billedTo = {
+    name: `${invoiceGuest.firstName} ${invoiceGuest.lastName}`.trim() || "Guest",
+    lines: [invoiceGuestEmail || "", invoiceGuestMobile || ""],
+  }
+
+  const staySummary: MetaItem[] = reservation
+    ? [
+        { label: "Check-in", value: format(parseISO(reservation.checkInDate), "dd-MMM-yy") },
+        { label: "Check-out", value: format(parseISO(reservation.checkOutDate), "dd-MMM-yy") },
+        { label: "Nights", value: String(nights) },
+        { label: "Rooms", value: reservation.assignments?.map((a: any) => a.room?.roomNumber).filter(Boolean).join(", ") || "TBA" },
+      ]
+    : [{ label: "Type", value: "Walk-in / Outlet Sale" }]
+
+  const roomAssignments =
+    reservation?.assignments && reservation.assignments.length > 1
+      ? reservation.assignments.map((a: any) => ({
+          room: `Room ${a.room?.roomNumber || "TBA"}`,
+          type: a.roomType.name,
+          dates: `${format(parseISO(a.startDate), "dd-MMM")} – ${format(parseISO(a.endDate), "dd-MMM-yy")}`,
+        }))
+      : undefined
+
+  const totals: StationeryTotalLine[] = [
+    { label: "Subtotal Charges", amount: totalBaseCharges },
+    ...(settings.serviceChargeEnabled && totalServiceCharges > 0 ? [{ label: `Service Charge (${settings.serviceChargeRate}%)`, amount: totalServiceCharges }] : []),
+    ...(settings.tgstEnabled && totalTaxes > 0 ? [{ label: `TGST (${settings.tgstRate}%)`, amount: totalTaxes }] : []),
+    ...(settings.greenTaxEnabled && totalGreenTax > 0 ? [{ label: "Green Tax", amount: totalGreenTax }] : []),
+    { label: "Total Paid", amount: totalPayments, emphasis: true },
   ]
 
   return (
     <PrintDocumentShell
-      previewLabel={`${title} Preview for ${reservation ? `#${reservation.confirmationNo}` : "Walk-in Sale"}`}
-      fontClassName={fontClassName}
+      previewLabel={`${displayTitle} Preview for ${reservation ? `#${reservation.confirmationNo}` : "Walk-in Sale"}`}
+      fontClassName={brand.fontClass}
     >
-      <PrintDocumentHeader
-        brandName={settings.invoiceBrandName || "Main Guest House"}
-        logoUrl={settings.invoiceLogoUrl}
-        address={settings.invoiceAddress}
-        phone={settings.invoicePhone}
-        email={settings.invoiceEmail}
-        taxId={settings.invoiceTaxId}
-        brandColor={brandColor}
-        title={title}
-        disclaimer={disclaimer}
-        metaRows={[
-          { label: isTax ? "Invoice No" : isInterim ? "Statement" : "Proforma No", value: documentNumber || "—" },
-          ...(reservation ? [{ label: "Confirmation No", value: reservation.confirmationNo }] : []),
-          { label: "Date", value: format(new Date(), "dd-MMM-yy") },
-          { label: "Folio No", value: String(folio.folioNumber) },
-        ]}
-      />
-
-      {settings.invoiceHeaderText && (
-        <div className="bg-slate-50 p-4 rounded border border-slate-100 text-xs text-slate-600 mb-6 whitespace-pre-line leading-relaxed">
-          {settings.invoiceHeaderText}
-        </div>
-      )}
-
-      <PrintInfoColumns
-        columns={[
-          { heading: "Guest Information", lines: guestLines },
-          { heading: reservation ? "Stay Summary" : "Sale Type", lines: stayLines },
-        ]}
-      />
-
-      {reservation?.assignments && reservation.assignments.length > 1 && (
-        <div className="mb-8">
-          <h3 className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-2">Room Stay Assignments</h3>
-          <div className="border rounded-md overflow-hidden">
-            <table className="w-full text-xs text-slate-700">
-              <thead className="bg-slate-50 border-b">
-                <tr>
-                  <th className="text-left p-2 font-semibold">Room Number</th>
-                  <th className="text-left p-2 font-semibold">Room Type</th>
-                  <th className="text-right p-2 font-semibold">Dates</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reservation.assignments.map((a: any) => (
-                  <tr key={a.id} className="border-b last:border-0">
-                    <td className="p-2 font-semibold">Room {a.room?.roomNumber || "TBA"}</td>
-                    <td className="p-2">{a.roomType.name}</td>
-                    <td className="p-2 text-right text-slate-500">
-                      {format(parseISO(a.startDate), "dd-MMM")} - {format(parseISO(a.endDate), "dd-MMM-yy")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-2">
-        <h3 className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-2">Charges</h3>
-        <PrintTransactionTable rows={chargeRows} brandColor={brandColor} emptyLabel="No charges posted." />
-      </div>
-
-      <div className="mb-2">
-        <h3 className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-2">Payments & Credits</h3>
-        <PrintTransactionTable rows={paymentRows} brandColor={brandColor} emptyLabel="No payments recorded." />
-      </div>
-
-      <PrintTotals
-        lines={[
-          { label: "Subtotal Charges", amount: totalBaseCharges },
-          ...(settings.serviceChargeEnabled && totalServiceCharges > 0 ? [{ label: `Service Charge (${settings.serviceChargeRate}%)`, amount: totalServiceCharges }] : []),
-          ...(settings.tgstEnabled && totalTaxes > 0 ? [{ label: `TGST (${settings.tgstRate}%)`, amount: totalTaxes }] : []),
-          ...(settings.greenTaxEnabled && totalGreenTax > 0 ? [{ label: "Green Tax", amount: totalGreenTax }] : []),
-          { label: "Total Paid", amount: totalPayments, emphasis: true },
-        ]}
+      <InvoiceDocument
+        brand={brand}
+        variant={documentType}
+        meta={meta}
+        headerText={settings.invoiceHeaderText || null}
+        billedTo={billedTo}
+        staySummary={staySummary}
+        staySummaryHeading={reservation ? "Stay Summary" : "Sale Type"}
+        roomAssignments={roomAssignments}
+        charges={chargeRows}
+        payments={paymentRows}
+        totals={totals}
         balanceLabel="Net Balance Due"
         balanceAmount={balance}
-        brandColor={brandColor}
-      />
-
-      <PrintFooter
+        currency={currency}
         paymentInfo={{
           accountName: settings.invoicePaymentAccountName,
           accountNumber: settings.invoicePaymentAccountNumber,
@@ -235,7 +183,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
           bankInfo: settings.invoicePaymentBankInfo,
         }}
         terms={settings.invoicePaymentTerms}
-        closingText={settings.invoiceFooterText}
+        footerNote={settings.invoiceFooterText}
       />
     </PrintDocumentShell>
   )

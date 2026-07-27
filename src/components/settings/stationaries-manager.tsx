@@ -5,55 +5,54 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Save, RefreshCw, Palette, Type, Receipt, FileText, FileStack, Mail } from "@/components/icons"
-import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
+import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info } from "@/components/icons"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
+import { useProperty } from "@/components/providers/property-provider"
+import { resolveStationeryBrand, type PropertyBrandInput } from "@/lib/stationery-brand"
+import { StationeryPreviewFrame } from "@/components/print/stationery/preview-frame"
+import {
+  InvoiceDocument,
+  ReceiptDocument,
+  ConfirmationLetterDocument,
+  RegistrationCardDocument,
+  StatementDocument,
+} from "@/components/print/stationery/documents"
+import {
+  buildSampleInvoice,
+  buildSampleReceipt,
+  buildSampleLetter,
+  buildSampleRegistrationCard,
+  buildSampleStatement,
+  EMPTY_STATIONERY_CONTENT,
+  type StationeryContent,
+} from "@/components/print/stationery/sample"
 
-const FONT_STYLES: Record<string, string> = {
-  Geist: "font-sans",
-  Inter: "font-sans",
-  Roboto: "font-sans",
-  Courier: "font-mono",
-  Georgia: "font-serif",
-}
+type StationeryTab = "invoices" | "receipts" | "letter" | "regcard" | "statement"
 
-type PreviewMode = "invoice" | "letter" | "receipt" | "statement"
+// The content this page owns — everything that is NOT branding. Branding identity (name,
+// logo, tax id, contact, address), accent colour and font all come from the property's own
+// General profile + Appearance (Controls > General), so this manager never edits them; it
+// only reads the property to render a faithful live preview.
+type FormData = StationeryContent & { registrationCardEnabled: boolean }
 
-// Every field here maps 1:1 to an EnterpriseSettings column of the same name — see
-// the field-usage matrix in .agents/docs/DECISIONS.md "Stationaries page" for which
-// of the 5 printable documents (Invoice, Confirmation Letter, Payment Receipt,
-// Currency Exchange Receipt, Debtor Statement) actually reads each one. This manager
-// groups fields by that usage (Branding / Financial Documents / Confirmation Letter)
-// instead of one undifferentiated list, per the app owner's explicit request to move
-// this out of Controls > Reports into its own page.
+const EMPTY_FORM: FormData = { ...EMPTY_STATIONERY_CONTENT, registrationCardEnabled: true }
+
 export function StationariesManager() {
+  const { currentProperty } = useProperty()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("invoice")
-  const [formData, setFormData] = useState({
-    invoiceBrandName: "",
-    invoiceLogoUrl: "",
-    invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
-    invoiceFontFamily: "Geist",
-    invoiceTaxId: "",
-    invoicePhone: "",
-    invoiceEmail: "",
-    invoiceAddress: "",
-    invoiceHeaderText: "",
-    invoiceFooterText: "",
-    invoicePaymentTerms: "",
-    invoicePaymentAccountName: "",
-    invoicePaymentAccountNumber: "",
-    invoicePaymentIban: "",
-    invoicePaymentBankInfo: "",
-    confirmationLetterMessage: "",
-    registrationCardEnabled: true,
-    registrationCardMessage: "",
-    registrationCardTerms: "",
-  })
+  const [activeTab, setActiveTab] = useState<StationeryTab>("invoices")
+  // Which invoice header variant the preview shows; both share everything else.
+  const [invoiceVariant, setInvoiceVariant] = useState<"proforma" | "tax">("proforma")
+  const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
+  // The current property's full branding row, fetched for the preview only.
+  const [propertyBrand, setPropertyBrand] = useState<PropertyBrandInput | null>(null)
+
+  const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
+    setFormData((p) => ({ ...p, [key]: value }))
 
   const fetchSettings = async () => {
     setLoading(true)
@@ -62,25 +61,21 @@ export function StationariesManager() {
       if (res.ok) {
         const data = await res.json()
         setFormData({
-          invoiceBrandName: data.invoiceBrandName || "",
-          invoiceLogoUrl: data.invoiceLogoUrl || "",
-          invoiceBrandColor: data.invoiceBrandColor || DEFAULT_INVOICE_BRAND_COLOR,
-          invoiceFontFamily: data.invoiceFontFamily || "Geist",
-          invoiceTaxId: data.invoiceTaxId || "",
-          invoicePhone: data.invoicePhone || "",
-          invoiceEmail: data.invoiceEmail || "",
-          invoiceAddress: data.invoiceAddress || "",
           invoiceHeaderText: data.invoiceHeaderText || "",
-          invoiceFooterText: data.invoiceFooterText || "",
-          invoicePaymentTerms: data.invoicePaymentTerms || "",
           invoicePaymentAccountName: data.invoicePaymentAccountName || "",
           invoicePaymentAccountNumber: data.invoicePaymentAccountNumber || "",
           invoicePaymentIban: data.invoicePaymentIban || "",
           invoicePaymentBankInfo: data.invoicePaymentBankInfo || "",
+          invoicePaymentTerms: data.invoicePaymentTerms || "",
+          invoiceFooterText: data.invoiceFooterText || "",
+          receiptFooterText: data.receiptFooterText || "",
+          receiptTerms: data.receiptTerms || "",
+          statementFooterText: data.statementFooterText || "",
+          statementTerms: data.statementTerms || "",
           confirmationLetterMessage: data.confirmationLetterMessage || "",
-          registrationCardEnabled: data.registrationCardEnabled ?? true,
           registrationCardMessage: data.registrationCardMessage || "",
           registrationCardTerms: data.registrationCardTerms || "",
+          registrationCardEnabled: data.registrationCardEnabled ?? true,
         })
       }
     } catch (e) {
@@ -90,10 +85,31 @@ export function StationariesManager() {
     }
   }
 
+  // Pull the current property's own branding row so the preview shows the real identity,
+  // accent and font that the printed documents will use.
+  const fetchPropertyBrand = async () => {
+    try {
+      const res = await fetch(`/api/properties`)
+      if (res.ok) {
+        const list: PropertyBrandInput[] = await res.json()
+        const match =
+          (currentProperty && list.find((p: any) => p.id === currentProperty.id)) || list[0] || null
+        setPropertyBrand(match)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   useEffect(() => {
     fetchSettings()
-     
+
   }, [])
+
+  useEffect(() => {
+    fetchPropertyBrand()
+
+  }, [currentProperty?.id])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -121,622 +137,200 @@ export function StationariesManager() {
     return <div className="py-12 text-center text-muted-foreground">Loading stationary configuration...</div>
   }
 
-  const fontClass = FONT_STYLES[formData.invoiceFontFamily] || "font-sans"
-  const brandName = formData.invoiceBrandName || "YOUR HOTEL NAME"
+  // Branding for the preview: the current property (name/logo/colour/font/contact/address),
+  // with a neutral placeholder before it loads so the preview never renders blank.
+  const brand = resolveStationeryBrand(
+    propertyBrand ?? {
+      name: currentProperty?.name || "Your Property",
+      bannerColor: currentProperty?.bannerColor ?? null,
+      stationeryFont: currentProperty?.stationeryFont ?? null,
+    }
+  )
 
   return (
-    <div className="grid lg:grid-cols-5 gap-8 items-start">
+    <div className="grid items-start gap-8 lg:grid-cols-5">
       {/* Editor Form */}
-      <form onSubmit={handleSave} className="lg:col-span-3 space-y-5">
-        <Tabs defaultValue="branding" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="branding"><Palette className="w-4 h-4 mr-1.5" /> Branding</TabsTrigger>
-            <TabsTrigger value="financial"><Receipt className="w-4 h-4 mr-1.5" /> Financial Docs</TabsTrigger>
-            <TabsTrigger value="letter"><Mail className="w-4 h-4 mr-1.5" /> Confirmation Letter</TabsTrigger>
-            <TabsTrigger value="regcard"><FileStack className="w-4 h-4 mr-1.5" /> Registration Card</TabsTrigger>
+      <form onSubmit={handleSave} className="space-y-5 lg:col-span-3">
+        {/* Branding now lives in General — make that unmistakable so nobody hunts for it here. */}
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            Logo, name, tax ID, contact details, <strong className="text-foreground">accent colour</strong> and{" "}
+            <strong className="text-foreground">font</strong> come from{" "}
+            <strong className="text-foreground">Controls › General</strong> (Property Information &amp; Appearance) and
+            are inherited by every document. This page sets each document&apos;s wording.
+          </p>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StationeryTab)} className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="invoices"><FileText className="mr-1.5 h-4 w-4" /> Invoices</TabsTrigger>
+            <TabsTrigger value="receipts"><Receipt className="mr-1.5 h-4 w-4" /> Receipts</TabsTrigger>
+            <TabsTrigger value="letter"><Mail className="mr-1.5 h-4 w-4" /> Letter</TabsTrigger>
+            <TabsTrigger value="regcard"><ClipboardList className="mr-1.5 h-4 w-4" /> Reg. Card</TabsTrigger>
+            <TabsTrigger value="statement"><Landmark className="mr-1.5 h-4 w-4" /> Statement</TabsTrigger>
           </TabsList>
 
-          {/* -------- Branding: shared by every document -------- */}
-          <TabsContent value="branding" className="space-y-5 mt-5">
+          {/* -------- Invoices: Proforma + Tax share everything but the header line -------- */}
+          <TabsContent value="invoices" className="mt-5 space-y-5">
             <p className="text-xs text-muted-foreground">
-              Identity shown on every stationary — Invoices, Confirmation Letters, Payment Receipts, Currency Exchange Receipts, and Debtor Statements.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Brand / Hotel Name</Label>
-                <Input
-                  placeholder="e.g. Cozy Guest House"
-                  value={formData.invoiceBrandName}
-                  onChange={e => setFormData(p => ({ ...p, invoiceBrandName: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Logo URL</Label>
-                <Input
-                  placeholder="https://example.com/logo.png"
-                  value={formData.invoiceLogoUrl}
-                  onChange={e => setFormData(p => ({ ...p, invoiceLogoUrl: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Tax / VAT Number</Label>
-                <Input
-                  placeholder="e.g. TAX-12345678"
-                  value={formData.invoiceTaxId}
-                  onChange={e => setFormData(p => ({ ...p, invoiceTaxId: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Contact Phone</Label>
-                <Input
-                  placeholder="+1 (555) 0199"
-                  value={formData.invoicePhone}
-                  onChange={e => setFormData(p => ({ ...p, invoicePhone: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Contact Email</Label>
-                <Input
-                  type="email"
-                  placeholder="billing@guesthouse.com"
-                  value={formData.invoiceEmail}
-                  onChange={e => setFormData(p => ({ ...p, invoiceEmail: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Billing Address</Label>
-              <Input
-                placeholder="123 Main St, City, Country"
-                value={formData.invoiceAddress}
-                onChange={e => setFormData(p => ({ ...p, invoiceAddress: e.target.value }))}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1"><Palette className="w-4 h-4" /> Accent Brand Color</Label>
-                <div className="flex gap-2 items-center">
-                  <Input
-                    type="color"
-                    className="w-12 h-10 p-1 cursor-pointer border rounded-md"
-                    value={formData.invoiceBrandColor}
-                    onChange={e => setFormData(p => ({ ...p, invoiceBrandColor: e.target.value }))}
-                  />
-                  <Input
-                    className="font-mono"
-                    placeholder="#4f46e5"
-                    value={formData.invoiceBrandColor}
-                    onChange={e => setFormData(p => ({ ...p, invoiceBrandColor: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1"><Type className="w-4 h-4" /> Font Style</Label>
-                <Select value={formData.invoiceFontFamily} onValueChange={v => setFormData(p => ({ ...p, invoiceFontFamily: v ?? "" }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Font" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Geist">Geist (Default)</SelectItem>
-                    <SelectItem value="Inter">Inter (Clean)</SelectItem>
-                    <SelectItem value="Roboto">Roboto (Sleek)</SelectItem>
-                    <SelectItem value="Georgia">Georgia (Classic Serif)</SelectItem>
-                    <SelectItem value="Courier">Courier (Retro Mono)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* -------- Financial Documents: Invoice, Receipt, Exchange Receipt, Statement -------- */}
-          <TabsContent value="financial" className="space-y-5 mt-5">
-            <p className="text-xs text-muted-foreground">
-              Used by Tax/Proforma Invoices, Payment Receipts, Currency Exchange Receipts, and Debtor Statements.
+              Proforma and Tax invoices are identical apart from the header — Proforma shows “This is not a tax
+              invoice”, Tax shows “Tax invoice”. Everything below applies to both.
             </p>
             <div className="space-y-2">
-              <Label>Header Text <span className="text-muted-foreground font-normal">(Invoices only)</span></Label>
+              <Label>Header Text <span className="font-normal text-muted-foreground">(registered business info)</span></Label>
               <Textarea
-                placeholder="Cozy Guest House LLC. Registered in State. Registration #98765"
                 rows={2}
+                placeholder="Veyo Beach House Pvt Ltd. Registered in Maldives. Registration #98765"
                 value={formData.invoiceHeaderText}
-                onChange={e => setFormData(p => ({ ...p, invoiceHeaderText: e.target.value }))}
+                onChange={(e) => set("invoiceHeaderText", e.target.value)}
               />
             </div>
 
-            <div className="space-y-3 border rounded-lg p-4">
-              <Label className="flex items-center gap-1"><Receipt className="w-4 h-4" /> Payment Information</Label>
+            <div className="space-y-3 rounded-lg border p-4">
+              <Label className="flex items-center gap-1"><Receipt className="h-4 w-4" /> Payment Information</Label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Account Name</Label>
-                  <Input
-                    placeholder="Cozy Guest House LLC"
-                    value={formData.invoicePaymentAccountName}
-                    onChange={e => setFormData(p => ({ ...p, invoicePaymentAccountName: e.target.value }))}
-                  />
+                  <Input value={formData.invoicePaymentAccountName} onChange={(e) => set("invoicePaymentAccountName", e.target.value)} placeholder="Veyo Beach House Pvt Ltd" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Account Number</Label>
-                  <Input
-                    placeholder="0123456789"
-                    value={formData.invoicePaymentAccountNumber}
-                    onChange={e => setFormData(p => ({ ...p, invoicePaymentAccountNumber: e.target.value }))}
-                  />
+                  <Input value={formData.invoicePaymentAccountNumber} onChange={(e) => set("invoicePaymentAccountNumber", e.target.value)} placeholder="0123456789" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">IBAN</Label>
-                  <Input
-                    placeholder="GB29 NWBK 6016 1331 9268 19"
-                    value={formData.invoicePaymentIban}
-                    onChange={e => setFormData(p => ({ ...p, invoicePaymentIban: e.target.value }))}
-                  />
+                  <Input value={formData.invoicePaymentIban} onChange={(e) => set("invoicePaymentIban", e.target.value)} placeholder="MV.. .... ...." />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Bank Info</Label>
-                  <Input
-                    placeholder="Bank of Example, Swift: EXMPGB2L"
-                    value={formData.invoicePaymentBankInfo}
-                    onChange={e => setFormData(p => ({ ...p, invoicePaymentBankInfo: e.target.value }))}
-                  />
+                  <Input value={formData.invoicePaymentBankInfo} onChange={(e) => set("invoicePaymentBankInfo", e.target.value)} placeholder="Bank of Maldives, Swift: MALBMVMV" />
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Terms & Conditions</Label>
-              <Textarea
-                placeholder="Payment is due immediately upon check-out. Late payments accrue interest at 1.5% per month."
-                rows={3}
-                value={formData.invoicePaymentTerms}
-                onChange={e => setFormData(p => ({ ...p, invoicePaymentTerms: e.target.value }))}
-              />
+              <Label>Terms &amp; Conditions</Label>
+              <Textarea rows={3} value={formData.invoicePaymentTerms} onChange={(e) => set("invoicePaymentTerms", e.target.value)} placeholder="Payment due within 30 days of invoice date." />
             </div>
 
             <div className="space-y-2">
-              <Label>Footer Text / Greetings</Label>
-              <Textarea
-                placeholder="Thank you for staying with us! We look forward to welcoming you back."
-                rows={2}
-                value={formData.invoiceFooterText}
-                onChange={e => setFormData(p => ({ ...p, invoiceFooterText: e.target.value }))}
-              />
+              <Label>Footer Text / Greeting</Label>
+              <Textarea rows={2} value={formData.invoiceFooterText} onChange={(e) => set("invoiceFooterText", e.target.value)} placeholder="Thank you for staying with us! We look forward to welcoming you back." />
             </div>
           </TabsContent>
 
-          {/* -------- Confirmation Letter: its own policy text -------- */}
-          <TabsContent value="letter" className="space-y-5 mt-5">
+          {/* -------- Receipts: Payment + Currency Exchange, header label only differs -------- */}
+          <TabsContent value="receipts" className="mt-5 space-y-5">
             <p className="text-xs text-muted-foreground">
-              Shown near the bottom of the guest Confirmation Letter, sent once a stay is confirmed.
+              Used by Payment Receipts and Currency Exchange Receipts — only the header label differs between them.
             </p>
             <div className="space-y-2">
-              <Label>Confirmation Letter — Policy Text</Label>
+              <Label>Footer Text / Greeting</Label>
+              <Textarea rows={2} value={formData.receiptFooterText} onChange={(e) => set("receiptFooterText", e.target.value)} placeholder="Thank you for staying with us!" />
+            </div>
+            <div className="space-y-2">
+              <Label>Terms &amp; Conditions</Label>
+              <Textarea rows={3} value={formData.receiptTerms} onChange={(e) => set("receiptTerms", e.target.value)} placeholder="This receipt confirms the payment recorded above." />
+            </div>
+          </TabsContent>
+
+          {/* -------- Confirmation Letter -------- */}
+          <TabsContent value="letter" className="mt-5 space-y-5">
+            <p className="text-xs text-muted-foreground">
+              Shown as the policy paragraph on the guest Confirmation Letter, sent once a stay is confirmed.
+            </p>
+            <div className="space-y-2">
+              <Label>Policy Text</Label>
               <Textarea
-                placeholder="Check-in time is from 14:00 and check-out time is until 12:00. We kindly request that all guests carry a valid photo ID or passport upon arrival."
-                rows={5}
+                rows={6}
                 value={formData.confirmationLetterMessage}
-                onChange={e => setFormData(p => ({ ...p, confirmationLetterMessage: e.target.value }))}
+                onChange={(e) => set("confirmationLetterMessage", e.target.value)}
+                placeholder="We kindly request that all guests carry a valid photo ID or passport upon arrival. This letter may be presented as confirmation of accommodation for immigration and travel purposes."
               />
             </div>
           </TabsContent>
 
-          {/* -------- Registration Card: check-in stationary -------- */}
-          <TabsContent value="regcard" className="space-y-5 mt-5">
+          {/* -------- Registration Card -------- */}
+          <TabsContent value="regcard" className="mt-5 space-y-5">
             <p className="text-xs text-muted-foreground">
-              Printed and signed by the guest at check-in (one card per guest). When enabled, the check-in procedure includes a Registration Card step.
+              Printed and signed by the guest at check-in (one card per guest).
             </p>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <Label>Registration Card step</Label>
                 <p className="text-xs text-muted-foreground">Prompt to print &amp; collect a signed card during check-in.</p>
               </div>
-              <Switch
-                checked={formData.registrationCardEnabled}
-                onCheckedChange={v => setFormData(p => ({ ...p, registrationCardEnabled: !!v }))}
-              />
+              <Switch checked={formData.registrationCardEnabled} onCheckedChange={(v) => set("registrationCardEnabled", !!v)} />
             </div>
             <div className="space-y-2">
               <Label>Welcome / Intro Message</Label>
-              <Input
-                value={formData.registrationCardMessage}
-                onChange={e => setFormData(p => ({ ...p, registrationCardMessage: e.target.value }))}
-                placeholder="Welcome — please review, complete, and sign below."
-              />
+              <Input value={formData.registrationCardMessage} onChange={(e) => set("registrationCardMessage", e.target.value)} placeholder="Welcome — please review, complete, and sign below." />
             </div>
             <div className="space-y-2">
               <Label>Terms &amp; Conditions</Label>
-              <Textarea
-                rows={8}
-                value={formData.registrationCardTerms}
-                onChange={e => setFormData(p => ({ ...p, registrationCardTerms: e.target.value }))}
-                placeholder="Printed above the signature line. Leave blank to use the default wording."
-              />
+              <Textarea rows={8} value={formData.registrationCardTerms} onChange={(e) => set("registrationCardTerms", e.target.value)} placeholder="Printed above the signature line. Leave blank to use the default wording." />
+            </div>
+          </TabsContent>
+
+          {/* -------- Account Statement (scaffold) -------- */}
+          <TabsContent value="statement" className="mt-5 space-y-5">
+            <div className="flex items-start gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>The full statement layout will be finalised once you share its template. For now you can set its footer and terms; the preview uses the interim layout.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Footer Text / Greeting</Label>
+              <Textarea rows={2} value={formData.statementFooterText} onChange={(e) => set("statementFooterText", e.target.value)} placeholder="Thank you for your business." />
+            </div>
+            <div className="space-y-2">
+              <Label>Terms &amp; Conditions</Label>
+              <Textarea rows={3} value={formData.statementTerms} onChange={(e) => set("statementTerms", e.target.value)} placeholder="Balances are due per the agreed credit terms." />
             </div>
           </TabsContent>
         </Tabs>
 
-        <div className="flex justify-end pt-4 border-t gap-2">
+        <div className="flex justify-end gap-2 border-t pt-4">
           <Button type="button" variant="outline" onClick={fetchSettings} disabled={saving}>
-            <RefreshCw className="w-4 h-4 mr-2" /> Reset
+            <RefreshCw className="mr-2 h-4 w-4" /> Reset
           </Button>
           <Button type="submit" disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />
+            <Save className="mr-2 h-4 w-4" />
             {saving ? "Saving..." : "Save Stationary Settings"}
           </Button>
         </div>
       </form>
 
-      {/* Live Preview Column */}
-      <div className="lg:col-span-2 space-y-2 sticky top-6">
+      {/* Live Preview — follows the active tab; no separate document selector. */}
+      <div className="sticky top-6 space-y-2 lg:col-span-2">
         <div className="flex items-center justify-between">
-          <Label className="text-muted-foreground font-semibold uppercase text-xs tracking-wider">Live Preview</Label>
-          <Select value={previewMode} onValueChange={v => setPreviewMode((v as PreviewMode) ?? "invoice")}>
-            <SelectTrigger className="h-8 w-[168px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="invoice"><FileText className="w-3.5 h-3.5 mr-1.5 inline" /> Invoice</SelectItem>
-              <SelectItem value="letter"><Mail className="w-3.5 h-3.5 mr-1.5 inline" /> Confirmation Letter</SelectItem>
-              <SelectItem value="receipt"><Receipt className="w-3.5 h-3.5 mr-1.5 inline" /> Receipt</SelectItem>
-              <SelectItem value="statement"><FileStack className="w-3.5 h-3.5 mr-1.5 inline" /> Statement</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {previewMode === "invoice" && <InvoicePreview formData={formData} fontClass={fontClass} brandName={brandName} />}
-        {previewMode === "letter" && <ConfirmationLetterPreview formData={formData} fontClass={fontClass} brandName={brandName} />}
-        {previewMode === "receipt" && <ReceiptPreview formData={formData} fontClass={fontClass} brandName={brandName} />}
-        {previewMode === "statement" && <StatementPreview formData={formData} fontClass={fontClass} brandName={brandName} />}
-      </div>
-    </div>
-  )
-}
-
-type FormData = {
-  invoiceBrandName: string
-  invoiceLogoUrl: string
-  invoiceBrandColor: string
-  invoiceFontFamily: string
-  invoiceTaxId: string
-  invoicePhone: string
-  invoiceEmail: string
-  invoiceAddress: string
-  invoiceHeaderText: string
-  invoiceFooterText: string
-  invoicePaymentTerms: string
-  invoicePaymentAccountName: string
-  invoicePaymentAccountNumber: string
-  invoicePaymentIban: string
-  invoicePaymentBankInfo: string
-  confirmationLetterMessage: string
-  registrationCardEnabled: boolean
-  registrationCardMessage: string
-  registrationCardTerms: string
-}
-
-function PreviewLogo({ formData, brandName }: { formData: FormData; brandName: string }) {
-  return formData.invoiceLogoUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={formData.invoiceLogoUrl}
-      alt="Logo"
-      className="max-h-8 max-w-[120px] mb-2 object-contain"
-      onError={(e) => { e.currentTarget.style.display = "none" }}
-    />
-  ) : (
-    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-muted-foreground mb-2 font-bold text-xs border border-dashed">
-      {brandName[0]?.toUpperCase() || "H"}
-    </div>
-  )
-}
-
-function InvoicePreview({ formData, fontClass, brandName }: { formData: FormData; fontClass: string; brandName: string }) {
-  return (
-    <div className={`bg-card border rounded-xl shadow-md p-6 overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex flex-col justify-between ${fontClass}`}>
-      <div>
-        <div className="flex justify-between items-start border-b pb-4 mb-4">
-          <div>
-            <PreviewLogo formData={formData} brandName={brandName} />
-            <h4 className="font-bold text-sm text-foreground uppercase tracking-tight">{brandName}</h4>
-            <p className="text-[8px] text-muted-foreground whitespace-pre-line mt-1">
-              {formData.invoiceAddress || "123 Street Name, City, Country"}<br />
-              Phone: {formData.invoicePhone || "+1 (555) 0123"}<br />
-              Email: {formData.invoiceEmail || "billing@hotel.com"}
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="inline-block px-2 py-0.5 rounded text-[8px] font-bold text-white uppercase tracking-wider mb-2" style={{ backgroundColor: formData.invoiceBrandColor }}>
-              INVOICE
-            </span>
-            <p className="font-semibold text-foreground">CONF-98218</p>
-            <p className="text-[8px] text-muted-foreground">Date: {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")}</p>
-            {formData.invoiceTaxId && (
-              <p className="text-[8px] text-muted-foreground mt-1">Tax ID: <span className="font-medium">{formData.invoiceTaxId}</span></p>
-            )}
-          </div>
-        </div>
-
-        {formData.invoiceHeaderText && (
-          <div className="bg-muted p-2 rounded border border-border text-[8px] text-muted-foreground mb-4 whitespace-pre-line">
-            {formData.invoiceHeaderText}
-          </div>
-        )}
-
-        <div className="mb-4">
-          <span className="font-bold text-muted-foreground uppercase tracking-wider text-[8px]">Bill To:</span>
-          <p className="font-semibold text-foreground text-xs">Jane Doe</p>
-          <p className="text-[8px] text-muted-foreground">Stay: Jul 9, 2026 - Jul 11, 2026 (2 Nights)</p>
-        </div>
-
-        <table className="w-full mb-4 text-[8px]">
-          <thead>
-            <tr className="border-b-2 text-muted-foreground font-semibold" style={{ borderBottomColor: formData.invoiceBrandColor }}>
-              <th className="text-left pb-1">Description</th>
-              <th className="text-right pb-1">Amount</th>
-              <th className="text-right pb-1">Tax</th>
-              <th className="text-right pb-1">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b text-foreground">
-              <td className="py-1">Room Charge (Deluxe Room) - 2 Nights</td>
-              <td className="text-right py-1">$300.00</td>
-              <td className="text-right py-1">$30.00</td>
-              <td className="text-right py-1 font-semibold">$330.00</td>
-            </tr>
-            <tr className="border-b text-foreground">
-              <td className="py-1">Room Service</td>
-              <td className="text-right py-1">$45.00</td>
-              <td className="text-right py-1">$4.50</td>
-              <td className="text-right py-1 font-semibold">$49.50</td>
-            </tr>
-            <tr className="text-foreground font-semibold">
-              <td className="py-2" colSpan={3}>Total Due:</td>
-              <td className="text-right py-2 text-destructive text-xs">$379.50</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="border-t pt-3 mt-4 space-y-2">
-        {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo || formData.invoicePaymentTerms) && (
-          <div className="grid grid-cols-2 gap-3">
-            {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo) && (
-              <div>
-                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Payment Information:</span>
-                <div className="text-[7.5px] text-muted-foreground leading-tight space-y-0.5">
-                  {formData.invoicePaymentAccountName && <p>Account Name: {formData.invoicePaymentAccountName}</p>}
-                  {formData.invoicePaymentAccountNumber && <p>Account Number: {formData.invoicePaymentAccountNumber}</p>}
-                  {formData.invoicePaymentIban && <p>IBAN: {formData.invoicePaymentIban}</p>}
-                  {formData.invoicePaymentBankInfo && <p className="whitespace-pre-line">{formData.invoicePaymentBankInfo}</p>}
-                </div>
-              </div>
-            )}
-            {formData.invoicePaymentTerms && (
-              <div>
-                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Terms & Conditions:</span>
-                <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">{formData.invoicePaymentTerms}</p>
-              </div>
-            )}
-          </div>
-        )}
-        {formData.invoiceFooterText && (
-          <p className="text-[8px] text-muted-foreground text-center italic pt-1 whitespace-pre-line border-t border-border">
-            {formData.invoiceFooterText}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ConfirmationLetterPreview({ formData, fontClass, brandName }: { formData: FormData; fontClass: string; brandName: string }) {
-  const policyText = formData.confirmationLetterMessage
-    || "Check-in time is from 14:00 and check-out time is until 12:00. We kindly request that all guests carry a valid photo ID or passport upon arrival. This letter may be presented as confirmation of accommodation for immigration and travel purposes."
-
-  return (
-    <div className={`bg-card border rounded-xl shadow-md overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex ${fontClass}`}>
-      <div className="w-2 shrink-0" style={{ backgroundColor: formData.invoiceBrandColor }} />
-      <div className="flex-1 p-6 flex flex-col justify-between">
-        <div>
-          <div className="flex justify-between items-start border-b-2 pb-3 mb-4" style={{ borderBottomColor: formData.invoiceBrandColor }}>
-            <div>
-              <PreviewLogo formData={formData} brandName={brandName} />
-              <h4 className="font-bold text-sm text-foreground uppercase tracking-tight">{brandName}</h4>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</Label>
+          {activeTab === "invoices" && (
+            <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
+              {(["proforma", "tax"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setInvoiceVariant(v)}
+                  className={cn(
+                    "rounded px-2.5 py-1 font-medium capitalize transition-colors",
+                    invoiceVariant === v ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
-            <div className="text-right text-[8px] text-muted-foreground space-y-0.5">
-              <p>{formData.invoiceAddress || "123 Street Name, City, Country"}</p>
-              <p>{formData.invoicePhone || "+1 (555) 0123"}</p>
-              <p>{formData.invoiceEmail || "billing@hotel.com"}</p>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-baseline mb-3">
-            <div>
-              <p className="text-[8px] text-muted-foreground">Dear</p>
-              <p className="text-xs font-bold text-foreground">Jane Doe</p>
-            </div>
-            <p className="text-[8px] text-muted-foreground">
-              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
-            </p>
-          </div>
-
-          <p className="text-[8px] text-muted-foreground leading-relaxed mb-3">
-            We are delighted to confirm your upcoming reservation with {brandName}. Please find the details of your stay below.
-          </p>
-
-          <div className="bg-muted rounded-md p-3 mb-4 text-[8px] space-y-1">
-            <div className="flex justify-between"><span className="text-muted-foreground">Confirmation No.</span><span className="font-semibold text-foreground">S7CP92</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Stay Period</span><span className="font-semibold text-foreground">01 Aug – 03 Aug 2026</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Nights</span><span className="font-semibold text-foreground">2</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Room Category</span><span className="font-semibold text-foreground">Deluxe Room</span></div>
-          </div>
-
-          <p className="text-[7.5px] text-muted-foreground leading-relaxed mb-4 whitespace-pre-line">{policyText}</p>
+          )}
         </div>
 
-        <div>
-          <p className="text-[8px] text-muted-foreground">We look forward to welcoming you.</p>
-          <p className="text-[8px] text-muted-foreground mt-1">
-            Warm regards,<br />
-            <span className="font-semibold text-foreground">{brandName} Reservations Team</span>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ReceiptPreview({ formData, fontClass, brandName }: { formData: FormData; fontClass: string; brandName: string }) {
-  return (
-    <div className={`bg-card border rounded-xl shadow-md p-6 overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex flex-col justify-between ${fontClass}`}>
-      <div>
-        <div className="flex justify-between items-start border-b pb-4 mb-4">
-          <div>
-            <PreviewLogo formData={formData} brandName={brandName} />
-            <h4 className="font-bold text-sm text-foreground uppercase tracking-tight">{brandName}</h4>
-            <p className="text-[8px] text-muted-foreground whitespace-pre-line mt-1">
-              {formData.invoiceAddress || "123 Street Name, City, Country"}<br />
-              Phone: {formData.invoicePhone || "+1 (555) 0123"}<br />
-              Email: {formData.invoiceEmail || "billing@hotel.com"}
-            </p>
-          </div>
-          <span className="inline-block px-2 py-0.5 rounded text-[8px] font-bold text-white uppercase tracking-wider" style={{ backgroundColor: formData.invoiceBrandColor }}>
-            Receipt
-          </span>
-        </div>
-
-        <p className="text-[7px] text-muted-foreground uppercase tracking-wide mb-2">
-          Representative of Payment Receipts and Currency Exchange Receipts — same shared shell.
-        </p>
-
-        <table className="w-full mb-4 text-[8px]">
-          <thead>
-            <tr className="border-b-2 text-muted-foreground font-semibold" style={{ borderBottomColor: formData.invoiceBrandColor }}>
-              <th className="text-left pb-1">Date</th>
-              <th className="text-left pb-1">Description</th>
-              <th className="text-right pb-1">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b text-foreground">
-              <td className="py-1">19-Jul-26</td>
-              <td className="py-1">Payment — Cash</td>
-              <td className="text-right py-1 font-semibold">$150.00</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="border-t pt-3 mt-4 space-y-2">
-        {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo || formData.invoicePaymentTerms) && (
-          <div className="grid grid-cols-2 gap-3">
-            {(formData.invoicePaymentAccountName || formData.invoicePaymentAccountNumber || formData.invoicePaymentIban || formData.invoicePaymentBankInfo) && (
-              <div>
-                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Payment Information:</span>
-                <div className="text-[7.5px] text-muted-foreground leading-tight space-y-0.5">
-                  {formData.invoicePaymentAccountName && <p>Account Name: {formData.invoicePaymentAccountName}</p>}
-                  {formData.invoicePaymentAccountNumber && <p>Account Number: {formData.invoicePaymentAccountNumber}</p>}
-                  {formData.invoicePaymentIban && <p>IBAN: {formData.invoicePaymentIban}</p>}
-                  {formData.invoicePaymentBankInfo && <p className="whitespace-pre-line">{formData.invoicePaymentBankInfo}</p>}
-                </div>
-              </div>
-            )}
-            {formData.invoicePaymentTerms && (
-              <div>
-                <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Terms & Conditions:</span>
-                <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">{formData.invoicePaymentTerms}</p>
-              </div>
-            )}
-          </div>
-        )}
-        {formData.invoiceFooterText && (
-          <p className="text-[8px] text-muted-foreground text-center italic pt-1 whitespace-pre-line border-t border-border">
-            {formData.invoiceFooterText}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function StatementPreview({ formData, fontClass, brandName }: { formData: FormData; fontClass: string; brandName: string }) {
-  return (
-    <div className={`bg-card border rounded-xl shadow-md p-6 overflow-hidden select-none text-[10px] leading-normal min-h-[480px] flex flex-col justify-between ${fontClass}`}>
-      <div>
-        <div className="flex justify-between items-start border-b pb-4 mb-4">
-          <div>
-            <PreviewLogo formData={formData} brandName={brandName} />
-            <h4 className="font-bold text-sm text-foreground uppercase tracking-tight">{brandName}</h4>
-            <p className="text-[8px] text-muted-foreground whitespace-pre-line mt-1">
-              {formData.invoiceAddress || "123 Street Name, City, Country"}<br />
-              Phone: {formData.invoicePhone || "+1 (555) 0123"}<br />
-              Email: {formData.invoiceEmail || "billing@hotel.com"}
-            </p>
-          </div>
-          <span className="inline-block px-2 py-0.5 rounded text-[8px] font-bold text-white uppercase tracking-wider" style={{ backgroundColor: formData.invoiceBrandColor }}>
-            Account Statement
-          </span>
-        </div>
-
-        <p className="text-[7px] text-muted-foreground uppercase tracking-wide mb-2">
-          One row per invoice, plus a summary aging of open (unpaid) invoices only.
-        </p>
-
-        <div className="mb-3">
-          <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Open Balance Aging</span>
-          <div className="grid grid-cols-5 gap-1 mt-1 text-center">
-            {[["Current", "0.00"], ["1-30d", "150.00"], ["31-60d", "0.00"], ["61-90d", "0.00"], ["90+d", "0.00"]].map(([label, amt]) => (
-              <div key={label} className="bg-muted rounded p-1">
-                <p className="text-[6.5px] text-muted-foreground">{label}</p>
-                <p className="text-[7.5px] font-semibold text-foreground">{amt}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <table className="w-full mb-4 text-[8px]">
-          <thead>
-            <tr className="border-b-2 text-muted-foreground font-semibold" style={{ borderBottomColor: formData.invoiceBrandColor }}>
-              <th className="text-left pb-1">Date</th>
-              <th className="text-left pb-1">Guest / Invoice</th>
-              <th className="text-right pb-1">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b text-foreground">
-              <td className="py-1">11-Jul-26</td>
-              <td className="py-1">Jane Doe — S7CP92 (Paid)</td>
-              <td className="text-right py-1 font-semibold">$379.50</td>
-            </tr>
-            <tr className="border-b text-foreground">
-              <td className="py-1">18-Jul-26</td>
-              <td className="py-1">John Smith — K2MZ01</td>
-              <td className="text-right py-1 font-semibold">$150.00</td>
-            </tr>
-            <tr className="text-foreground font-semibold">
-              <td className="py-2" colSpan={2}>Balance Due:</td>
-              <td className="text-right py-2 text-destructive text-xs">$150.00</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="border-t pt-3 mt-4 space-y-2">
-        {formData.invoicePaymentTerms && (
-          <div>
-            <span className="font-bold text-muted-foreground uppercase tracking-wider text-[7px]">Terms & Conditions:</span>
-            <p className="text-[7.5px] text-muted-foreground leading-tight whitespace-pre-line">{formData.invoicePaymentTerms}</p>
-          </div>
-        )}
-        {formData.invoiceFooterText && (
-          <p className="text-[8px] text-muted-foreground text-center italic pt-1 whitespace-pre-line border-t border-border">
-            {formData.invoiceFooterText}
-          </p>
-        )}
+        <StationeryPreviewFrame>
+          {activeTab === "invoices" && <InvoiceDocument {...buildSampleInvoice(brand, formData, invoiceVariant)} />}
+          {activeTab === "receipts" && <ReceiptDocument {...buildSampleReceipt(brand, formData)} />}
+          {activeTab === "letter" && <ConfirmationLetterDocument {...buildSampleLetter(brand, formData)} />}
+          {activeTab === "regcard" && <RegistrationCardDocument {...buildSampleRegistrationCard(brand, formData)} />}
+          {activeTab === "statement" && <StatementDocument {...buildSampleStatement(brand, formData)} />}
+        </StationeryPreviewFrame>
       </div>
     </div>
   )

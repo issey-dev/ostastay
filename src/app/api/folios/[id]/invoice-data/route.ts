@@ -9,7 +9,11 @@ import { resolveChargeTax } from "@/lib/tax-calc";
 const INVOICE_INCLUDE = {
   lineItems: {
     include: {
-      chargeCode: true
+      chargeCode: true,
+      // The outlet sales check a line was posted under, if any — its number is shown in
+      // the Reference column of a guest-house invoice so room-posted outlet charges point
+      // back to the outlet's own check.
+      outletCheck: { select: { checkNumber: true } }
     }
   },
   payments: {
@@ -125,6 +129,10 @@ export async function GET(
         invoicePaymentAccountNumber: null,
         invoicePaymentIban: null,
         invoicePaymentBankInfo: null,
+        receiptFooterText: null,
+        receiptTerms: null,
+        statementFooterText: null,
+        statementTerms: null,
         confirmationLetterMessage: null,
         registrationCardEnabled: true,
         registrationCardMessage: null,
@@ -250,10 +258,31 @@ export async function GET(
       }
     }
 
+    // A walk-in bill raised "on behalf of" an outlet prints the outlet's own header
+    // (name/address/tax no) instead of the guest-house one, and shows the outlet check
+    // number as a reference. Only walk-in folios carry a check with folioId set (one
+    // check == one walk-in bill == one outlet). The legal document number is still the
+    // TAX_INVOICE number allocated above.
+    const outletCheck = await prisma.outletCheck.findFirst({
+      where: { folioId: folio.id },
+      include: { outlet: { select: { name: true, address: true, email: true, phone: true, taxNo: true } } },
+    });
+    const outletHeader = outletCheck?.outlet
+      ? {
+          name: outletCheck.outlet.name,
+          address: outletCheck.outlet.address,
+          email: outletCheck.outlet.email,
+          phone: outletCheck.outlet.phone,
+          taxNo: outletCheck.outlet.taxNo,
+          checkNumber: outletCheck.checkNumber,
+        }
+      : null;
+
     return NextResponse.json({
       folio: responseFolio,
       settings,
-      documentType
+      documentType,
+      outletHeader
     });
 
   } catch (error) {

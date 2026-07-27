@@ -8,6 +8,9 @@ type Property = {
   name: string
   logoUrl: string | null
   bannerColor: string | null
+  // Stationery typeface (Controls > General > Appearance) inherited by every printed
+  // document. Null falls back to the default. See src/lib/stationery-fonts.ts.
+  stationeryFont: string | null
   // "RATE_PLAN" or "MEAL_PLAN" — which side drives automatic Allocation attachment
   // on a reservation (Controls > Revenue). See src/lib/allocations.ts.
   allocationCalculationMode: string

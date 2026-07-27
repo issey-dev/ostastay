@@ -128,7 +128,7 @@ describe("Outlets: tenant isolation", () => {
         new Request("http://localhost/api/outlets", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ propertyId: propertyAId, name: "Ocean Spa", outletType: "SPA", chargeCodeIds: [chargeCodeAId] }),
+          body: JSON.stringify({ propertyId: propertyAId, name: "Ocean Spa", code: "OCE", outletType: "SPA", chargeCodeIds: [chargeCodeAId] }),
         })
       )
     );
@@ -141,7 +141,7 @@ describe("Outlets: tenant isolation", () => {
         new Request("http://localhost/api/outlets", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ propertyId: propertyAId, name: "Cross-Tenant Outlet", chargeCodeIds: [chargeCodeBId] }),
+          body: JSON.stringify({ propertyId: propertyAId, name: "Cross-Tenant Outlet", code: "XTN", chargeCodeIds: [chargeCodeBId] }),
         })
       )
     );
