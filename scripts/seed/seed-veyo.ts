@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data";
 import { expandScheduleDates } from "../../src/lib/excursions";
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
-import { seedDemoData, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
+import { seedDemoData, seedSpaAndExcursionBookings, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
 
 const prisma = new PrismaClient();
 
@@ -51,11 +51,11 @@ async function main() {
 
   // 3. Users.
   const admin = await prisma.user.upsert({
-    where: { email: "admin@veyo.com" },
+    where: { email: "admin@veyo.mv" },
     update: {},
     create: {
       enterpriseId: veyo.id,
-      email: "admin@veyo.com",
+      email: "admin@veyo.mv",
       passwordHash,
       firstName: "Veyo",
       lastName: "Admin",
@@ -64,11 +64,11 @@ async function main() {
     },
   });
   await prisma.user.upsert({
-    where: { email: "frontdesk@veyo.com" },
+    where: { email: "frontdesk@veyo.mv" },
     update: {},
     create: {
       enterpriseId: veyo.id,
-      email: "frontdesk@veyo.com",
+      email: "frontdesk@veyo.mv",
       passwordHash,
       firstName: "Fatima",
       lastName: "Desk",
@@ -77,11 +77,11 @@ async function main() {
     },
   });
   await prisma.user.upsert({
-    where: { email: "housekeeping@veyo.com" },
+    where: { email: "housekeeping@veyo.mv" },
     update: {},
     create: {
       enterpriseId: veyo.id,
-      email: "housekeeping@veyo.com",
+      email: "housekeeping@veyo.mv",
       passwordHash,
       firstName: "Aisha",
       lastName: "Maid",
@@ -407,6 +407,18 @@ async function main() {
   // full arrivals / in-house / departures / history / exceptions spread anchored on the
   // business date. This used to hand-build three of them here against wall-clock dates.
 
+  // ── 10b. Demo dataset: the SECOND property, its property-scoped users, and the
+  // reservation spread across both. Runs HERE rather than at the end because the Spa
+  // and Excursions add-ons below are sold at the Lagoon property, which this creates —
+  // and their bookings attach to the in-house reservations it seeds.
+  const demo = await seedDemoData(prisma, {
+    enterpriseId: veyo.id,
+    adminUserId: admin.id,
+    passwordHash,
+    adminRoleId: systemRoleIds["Admin"],
+  });
+  const lagoon = demo.lagoon;
+
   // 11. Excursions Booking add-on (see .agents/docs/EXCURSIONS_PLAN.md) — Osta-enabled
   // for this property (defaults OFF everywhere else, same as a real customer would need
   // it turned on via /osta/properties/[id]), a small chart of excursion types with
@@ -414,9 +426,9 @@ async function main() {
   // so the feature has real, clickable data immediately after seeding, not just an
   // empty Controls tab.
   await prisma.propertyModuleAccess.upsert({
-    where: { propertyId_module: { propertyId: property.id, module: "EXCURSIONS" } },
+    where: { propertyId_module: { propertyId: lagoon.id, module: "EXCURSIONS" } },
     update: { enabled: true },
-    create: { propertyId: property.id, module: "EXCURSIONS", enabled: true },
+    create: { propertyId: lagoon.id, module: "EXCURSIONS", enabled: true },
   });
 
   const excursionChargeCodes: Array<{ code: string; description: string }> = [
@@ -473,10 +485,10 @@ async function main() {
 
   for (const def of excursionDefs) {
     const excursionType =
-      (await prisma.excursionType.findFirst({ where: { propertyId: property.id, code: def.code } })) ??
+      (await prisma.excursionType.findFirst({ where: { propertyId: lagoon.id, code: def.code } })) ??
       (await prisma.excursionType.create({
         data: {
-          propertyId: property.id,
+          propertyId: lagoon.id,
           code: def.code,
           name: def.name,
           description: def.description,
@@ -543,9 +555,9 @@ async function main() {
   // to be created by walking through the real booking flow, rather than
   // hand-fabricating FolioLineItem/Payment state for fake historical transactions.
   await prisma.propertyModuleAccess.upsert({
-    where: { propertyId_module: { propertyId: property.id, module: "SPA" } },
+    where: { propertyId_module: { propertyId: lagoon.id, module: "SPA" } },
     update: { enabled: true },
-    create: { propertyId: property.id, module: "SPA", enabled: true },
+    create: { propertyId: lagoon.id, module: "SPA", enabled: true },
   });
 
   const spaChargeCodes: Array<{ code: string; description: string }> = [
@@ -571,9 +583,9 @@ async function main() {
   const spaCategoryByName: Record<string, string> = {};
   for (const def of spaCategoryDefs) {
     const category =
-      (await prisma.spaTreatmentCategory.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
+      (await prisma.spaTreatmentCategory.findFirst({ where: { propertyId: lagoon.id, name: def.name } })) ??
       (await prisma.spaTreatmentCategory.create({
-        data: { propertyId: property.id, name: def.name, description: def.description },
+        data: { propertyId: lagoon.id, name: def.name, description: def.description },
       }));
     spaCategoryByName[def.name] = category.id;
   }
@@ -581,17 +593,41 @@ async function main() {
   // Deliberately varied working hours per therapist (not all 09-18) — realistic, and
   // gives the availability engine genuine differences to resolve rather than three
   // identical schedules that would never expose a scheduling edge case.
-  const spaTherapistDefs: Array<{ name: string; gender: string; phone: string; startTime: string; endTime: string }> = [
-    { name: "Aisha Rahman", gender: "FEMALE", phone: "555-0110", startTime: "08:00", endTime: "20:00" },
+  // One therapist has a PMS login (SpaTherapist.userId) — the optional link that lets a
+  // therapist sign in and see their own schedule. Property-scoped to the Lagoon, since
+  // that is where the Spa add-on is sold.
+  const spaUser = await prisma.user.upsert({
+    where: { email: "spa@veyo.mv" },
+    update: { propertyId: lagoon.id, scope: "PROPERTY" },
+    create: {
+      enterpriseId: veyo.id,
+      email: "spa@veyo.mv",
+      passwordHash,
+      firstName: "Aisha",
+      lastName: "Rahman",
+      roleId: systemRoleIds["Front Desk"],
+      scope: "PROPERTY",
+      propertyId: lagoon.id,
+    },
+  });
+
+  const spaTherapistDefs: Array<{ name: string; gender: string; phone: string; startTime: string; endTime: string; userId?: string }> = [
+    { name: "Aisha Rahman", gender: "FEMALE", phone: "555-0110", startTime: "08:00", endTime: "20:00", userId: spaUser.id },
     { name: "Fatima Ali", gender: "FEMALE", phone: "555-0111", startTime: "09:00", endTime: "18:00" },
     { name: "Noor Hassan", gender: "MALE", phone: "555-0112", startTime: "10:00", endTime: "19:00" },
   ];
   const spaTherapistByName: Record<string, string> = {};
   for (const def of spaTherapistDefs) {
     const therapist =
-      (await prisma.spaTherapist.findFirst({ where: { propertyId: property.id, displayName: def.name } })) ??
+      (await prisma.spaTherapist.findFirst({ where: { propertyId: lagoon.id, displayName: def.name } })) ??
       (await prisma.spaTherapist.create({
-        data: { propertyId: property.id, displayName: def.name, gender: def.gender, phone: def.phone },
+        data: {
+          propertyId: lagoon.id,
+          displayName: def.name,
+          gender: def.gender,
+          phone: def.phone,
+          ...(def.userId ? { userId: def.userId, email: "spa@veyo.mv" } : {}),
+        },
       }));
     spaTherapistByName[def.name] = therapist.id;
 
@@ -617,8 +653,8 @@ async function main() {
   const spaRoomByName: Record<string, string> = {};
   for (const def of spaRoomDefs) {
     const room =
-      (await prisma.spaRoom.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
-      (await prisma.spaRoom.create({ data: { propertyId: property.id, name: def.name, capacity: def.capacity } }));
+      (await prisma.spaRoom.findFirst({ where: { propertyId: lagoon.id, name: def.name } })) ??
+      (await prisma.spaRoom.create({ data: { propertyId: lagoon.id, name: def.name, capacity: def.capacity } }));
     spaRoomByName[def.name] = room.id;
   }
 
@@ -645,10 +681,10 @@ async function main() {
 
   for (const def of spaTreatmentDefs) {
     const treatment =
-      (await prisma.spaTreatment.findFirst({ where: { propertyId: property.id, name: def.name } })) ??
+      (await prisma.spaTreatment.findFirst({ where: { propertyId: lagoon.id, name: def.name } })) ??
       (await prisma.spaTreatment.create({
         data: {
-          propertyId: property.id,
+          propertyId: lagoon.id,
           categoryId: spaCategoryByName[def.category],
           name: def.name,
           defaultDurationMinutes: def.duration,
@@ -674,26 +710,31 @@ async function main() {
     }
   }
 
-  const spaSettingsExisting = await prisma.spaSettings.findUnique({ where: { propertyId: property.id } });
+  const spaSettingsExisting = await prisma.spaSettings.findUnique({ where: { propertyId: lagoon.id } });
   if (!spaSettingsExisting) {
     await prisma.spaSettings.create({
-      data: { propertyId: property.id, defaultOpeningTime: "09:00", defaultClosingTime: "19:00" },
+      data: { propertyId: lagoon.id, defaultOpeningTime: "09:00", defaultClosingTime: "19:00" },
     });
   }
 
-  // ── 13. Demo dataset: the second property, and the full reservation spread across
-  // both. Everything in there is anchored on BUSINESS_DATE rather than wall clock, so
-  // "arrivals today" stays true however long after seeding you open the app.
-  await seedDemoData(prisma, { enterpriseId: veyo.id, adminUserId: admin.id });
+  // ── 13. Spa appointments and excursion bookings for the Lagoon's in-house guests,
+  // spread across the booking lifecycle and posting to their folios.
+  const bookings = await seedSpaAndExcursionBookings(prisma, {
+    enterpriseId: veyo.id,
+    propertyId: lagoon.id,
+    bookedByUserId: admin.id,
+  });
 
   console.log("\nVeyo enterprise seeded successfully.");
   console.log(`Login URL slug: /e/${veyo.slug}/login`);
   console.log("Users (password: password123):");
-  console.log("  admin@veyo.com (Admin)");
-  console.log("  frontdesk@veyo.com (Front Desk)");
-  console.log("  housekeeping@veyo.com (Housekeeping)");
-  console.log("Excursions add-on: enabled, with Snorkelling Trip / Island Hopping / Night Fishing seeded.");
-  console.log("Spa add-on: enabled, with 6 treatments across 3 categories, 3 therapists, and 3 rooms (incl. a couple room) seeded.");
+  console.log("  admin@veyo.mv          Admin, all properties");
+  console.log("  admin.main@veyo.mv     Admin, Veyo Beach Resort only");
+  console.log("  admin.lagoon@veyo.mv   Admin, Veyo Lagoon Retreat only");
+  console.log("  frontdesk@veyo.mv      Front Desk");
+  console.log("  housekeeping@veyo.mv   Housekeeping");
+  console.log("  spa@veyo.mv            Front Desk, linked to therapist Aisha Rahman");
+  console.log(`Spa + Excursions add-ons: Veyo Lagoon Retreat only — ${bookings.spa} appointments, ${bookings.excursions} excursion bookings.`);
   console.log(`
 Business date pinned to ${BUSINESS_DATE.toISOString().slice(0, 10)} on both properties:`);
   console.log("  VEYO-MAIN    Veyo Beach Resort    — Deluxe Beach Villa / Overwater Suite; Coral Restaurant + Serenity Spa");

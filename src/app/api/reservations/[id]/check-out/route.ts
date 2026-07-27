@@ -223,7 +223,10 @@ export async function POST(
                 inputAmount: -commissionAmount,
                 settings,
                 pricesIncludeTaxes: false,
-                date: new Date(),
+                // The property's business date, never wall clock. Revenue and credits
+                // land on the operational day the app is in — if EOD hasn't run, a
+                // checkout after midnight still books to the open business date.
+                date: businessDate,
                 description: `Travel Agent Commission — ${agentName}`,
               });
               commissionsPosted.push({ folioId: folio.id, amount: commissionAmount, agentName });

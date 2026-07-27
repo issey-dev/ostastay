@@ -186,6 +186,47 @@ async function seedOutlets(prisma: Tx, enterpriseId: string, propertyId: string,
   }
 }
 
+/**
+ * Write a folio charge the way postCharge writes one: net on the charge line, with the
+ * Service Charge and GST on their OWN lines against the group's tax codes and linked
+ * back via generatedFromLineItemId.
+ *
+ * Hand-written rather than calling postCharge so the seed stays independent of a running
+ * server — but the SHAPE matches exactly, so a seeded folio and a Night-Audit folio read
+ * identically in every report and folio style.
+ */
+async function postSeedCharge(
+  prisma: Tx,
+  opts: {
+    folioId: string
+    codeId: (c: string) => string
+    chargeCode: string
+    description: string
+    net: number
+    date: Date
+    taxed?: boolean
+    outletId?: string | null
+  }
+) {
+  const { folioId, codeId, chargeCode, description, net, date, outletId } = opts
+  const taxed = opts.taxed ?? true
+  const parent = await prisma.folioLineItem.create({
+    data: { folioId, chargeCodeId: codeId(chargeCode), date, description, amount: net, taxAmount: 0, serviceChargeAmount: 0, outletId: outletId ?? null },
+  })
+  if (!taxed) return parent
+  const svc = Math.round(net * 0.1 * 100) / 100
+  const gst = Math.round((net + svc) * 0.17 * 100) / 100
+  // Which group's tax codes the charge routes to — the whole point of group-level tax.
+  const group = chargeCode.startsWith("FB") ? "FNB" : chargeCode.startsWith("SPA") ? "SPA" : chargeCode.startsWith("EXC") ? "EXC" : chargeCode.startsWith("TRF") ? "TRN" : "ACM"
+  await prisma.folioLineItem.create({
+    data: { folioId, chargeCodeId: codeId(`SVC${group}`), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+  })
+  await prisma.folioLineItem.create({
+    data: { folioId, chargeCodeId: codeId(`GST${group}`), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+  })
+  return parent
+}
+
 // ── Reservations ──────────────────────────────────────────────────────────────────
 //
 // The spread front office actually needs to see on a given day: people arriving, people
@@ -239,13 +280,42 @@ const RESERVATION_MIX: ResSpec[] = [
   { status: "RESERVED", inOff: 22, outOff: 26, adults: 4, mealPlan: "FB" },
 ]
 
-export async function seedDemoData(prisma: PrismaClient, opts: { enterpriseId: string; adminUserId: string }) {
-  const { enterpriseId, adminUserId } = opts
+export async function seedDemoData(
+  prisma: PrismaClient,
+  opts: { enterpriseId: string; adminUserId: string; passwordHash: string; adminRoleId: string }
+) {
+  const { enterpriseId, adminUserId, passwordHash, adminRoleId } = opts
 
   // Pin the business date on every property — the whole dataset hangs off it.
   await prisma.property.updateMany({ where: { enterpriseId }, data: { businessDate: BUSINESS_DATE } })
 
-  const lagoon = await seedLagoonProperty(prisma, enterpriseId)
+  const lagoonSetup = await seedLagoonProperty(prisma, enterpriseId)
+  const lagoon = lagoonSetup.property
+
+  // Property-scoped admins, one per property. These are what actually exercise
+  // per-property scoping: each sees only their own work location, and neither can reach
+  // the Hub (hasHubAccess blocks a PROPERTY-scoped user outright, whatever the role
+  // grants). The enterprise-scoped admin@veyo.mv sees both.
+  const mainProperty = await prisma.property.findUniqueOrThrow({ where: { code: "VEYO-MAIN" } })
+  for (const u of [
+    { email: "admin.main@veyo.mv", firstName: "Main", lastName: "Admin", propertyId: mainProperty.id },
+    { email: "admin.lagoon@veyo.mv", firstName: "Lagoon", lastName: "Admin", propertyId: lagoon.id },
+  ]) {
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { propertyId: u.propertyId, scope: "PROPERTY" },
+      create: {
+        enterpriseId,
+        email: u.email,
+        passwordHash,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        roleId: adminRoleId,
+        scope: "PROPERTY",
+        propertyId: u.propertyId,
+      },
+    })
+  }
 
   // Charge codes and fee rules are enterprise-level, so this picks up the new property's
   // fee rules without touching the first property's.
@@ -333,26 +403,9 @@ export async function seedDemoData(prisma: PrismaClient, opts: { enterpriseId: s
         },
       })
 
-      // Posted the way the app posts: net on the charge line, service charge and GST on
-      // their own group-scoped lines (see src/lib/posting/post-charge.ts). Hand-writing
-      // them keeps the seed independent of a running server, but the SHAPE matches, so a
-      // seeded folio and a Night-Audit folio read identically.
       const roomNet = 250
-      const post = async (chargeCode: string, description: string, net: number, date: Date, taxed = true) => {
-        const parent = await prisma.folioLineItem.create({
-          data: { folioId: folio.id, chargeCodeId: codeId(chargeCode), date, description, amount: net, taxAmount: 0, serviceChargeAmount: 0 },
-        })
-        if (!taxed) return
-        const svc = Math.round(net * 0.1 * 100) / 100
-        const gst = Math.round((net + svc) * 0.17 * 100) / 100
-        const group = chargeCode.startsWith("FB") ? "FNB" : chargeCode.startsWith("SPA") ? "SPA" : "ACM"
-        await prisma.folioLineItem.create({
-          data: { folioId: folio.id, chargeCodeId: codeId(`SVC${group}`), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id },
-        })
-        await prisma.folioLineItem.create({
-          data: { folioId: folio.id, chargeCodeId: codeId(`GST${group}`), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id },
-        })
-      }
+      const post = (chargeCode: string, description: string, net: number, date: Date, taxed = true) =>
+        postSeedCharge(prisma, { folioId: folio.id, codeId, chargeCode, description, net, date, taxed })
 
       // Room revenue is posted by Night Audit, so it exists for nights ALREADY audited —
       // up to but not including the business date, which hasn't been run yet. Leaving
@@ -409,6 +462,10 @@ export async function seedDemoData(prisma: PrismaClient, opts: { enterpriseId: s
     await seedGroupBlock(prisma, { property, ratePlanId, enterpriseId, guests, codeId })
     await seedOperations(prisma, property.id)
   }
+
+  // Handed back so the caller can hang the Spa and Excursions add-ons off the Lagoon
+  // property — they are sold there only.
+  return { lagoon, mainProperty }
 }
 
 // ── Group block ───────────────────────────────────────────────────────────────────
@@ -531,4 +588,170 @@ async function seedOperations(prisma: Tx, propertyId: string) {
       { roomId: rooms[1 % rooms.length].id, issueType: "GENERAL", description: "Balcony door stiff", priority: "MEDIUM", status: "RESOLVED" },
     ],
   })
+}
+
+// ── Spa & Excursion bookings ──────────────────────────────────────────────────────
+//
+// Both add-ons are sold at the Lagoon property only, so their bookings belong to its
+// in-house guests. Statuses are spread across the lifecycle — a booking sitting in
+// CONFIRMED, one already CHECKED_IN, one COMPLETED and paid, one CANCELLED — because a
+// scheduler that only ever shows CONFIRMED proves nothing about the other transitions.
+//
+// Charged bookings post through postSeedCharge, so a spa treatment on a guest's folio
+// carries SVCSPA/GSTSPA and an excursion carries SVCEXC/GSTEXC, exactly as the live
+// routes would write them.
+export async function seedSpaAndExcursionBookings(
+  prisma: PrismaClient,
+  opts: { enterpriseId: string; propertyId: string; bookedByUserId: string }
+) {
+  const { enterpriseId, propertyId, bookedByUserId } = opts
+
+  const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
+  const codeId = (c: string) => codes.find((x) => x.code === c)!.id
+
+  // In-house guests with an open folio — the only ones a room-posted booking can bill to.
+  const inHouse = await prisma.reservation.findMany({
+    where: { propertyId, status: "IN_HOUSE", folios: { some: { isClosed: false } } },
+    include: { folios: { where: { isClosed: false }, take: 1 } },
+    orderBy: { confirmationNo: "asc" },
+  })
+  if (inHouse.length === 0) return { spa: 0, excursions: 0 }
+
+  // ── Spa appointments ──
+  let spaCount = 0
+  if ((await prisma.spaAppointment.count({ where: { propertyId } })) === 0) {
+    const treatments = await prisma.spaTreatment.findMany({
+      where: { propertyId },
+      include: { rates: { where: { isActive: true }, orderBy: { effectiveFrom: "desc" }, take: 1 } },
+      orderBy: { name: "asc" },
+    })
+    const rooms = await prisma.spaRoom.findMany({ where: { propertyId }, orderBy: { name: "asc" } })
+    const therapists = await prisma.spaTherapist.findMany({ where: { propertyId }, orderBy: { displayName: "asc" } })
+
+    if (treatments.length > 0 && rooms.length > 0 && therapists.length > 0) {
+      const plan: Array<{ status: string; payment: string; dayOff: number; time: string; charge: boolean }> = [
+        { status: "CONFIRMED", payment: "NOT_POSTED", dayOff: 0, time: "10:00", charge: false },
+        { status: "CONFIRMED", payment: "POSTED_TO_FOLIO", dayOff: 0, time: "14:00", charge: true },
+        { status: "CHECKED_IN", payment: "POSTED_TO_FOLIO", dayOff: 0, time: "11:30", charge: true },
+        { status: "COMPLETED", payment: "POSTED_TO_FOLIO", dayOff: -1, time: "16:00", charge: true },
+        { status: "CANCELLED", payment: "NOT_POSTED", dayOff: -1, time: "09:00", charge: false },
+        { status: "CONFIRMED", payment: "NOT_POSTED", dayOff: 2, time: "15:00", charge: false },
+      ]
+
+      for (const [i, p] of plan.entries()) {
+        const res = inHouse[i % inHouse.length]
+        const folio = res.folios[0]
+        const treatment = treatments[i % treatments.length]
+        const room = rooms[i % rooms.length]
+        const date = bizPlus(p.dayOff)
+        const price = treatment.rates[0]?.price ?? 0
+        if (!price) continue
+
+        const [h, m] = p.time.split(":").map(Number)
+        const endMins = h * 60 + m + treatment.defaultDurationMinutes
+        const hhmm = (mins: number) => `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`
+
+        const line = p.charge
+          ? await postSeedCharge(prisma, {
+              folioId: folio.id,
+              codeId,
+              chargeCode: "SPATRT",
+              description: `${treatment.name} — ${date.toISOString().slice(0, 10)} ${p.time}`,
+              net: price,
+              date,
+            })
+          : null
+
+        await prisma.spaAppointment.create({
+          data: {
+            propertyId,
+            treatmentId: treatment.id,
+            treatmentNameSnapshot: treatment.name,
+            durationMinutesSnapshot: treatment.defaultDurationMinutes,
+            preparationBufferMinutesSnapshot: treatment.preparationBufferMinutes ?? 0,
+            cleanupBufferMinutesSnapshot: treatment.cleanupBufferMinutes ?? 0,
+            partySize: 1,
+            priceSnapshot: price,
+            currencySnapshot: "USD",
+            appointmentDate: date,
+            startTime: p.time,
+            treatmentEndTime: hhmm(endMins),
+            blockedUntilTime: hhmm(endMins + (treatment.cleanupBufferMinutes ?? 0)),
+            roomId: room.id,
+            appointmentStatus: p.status,
+            paymentStatus: p.payment,
+            source: "FRONT_DESK",
+            folioId: p.charge ? folio.id : null,
+            folioLineItemId: line?.id ?? null,
+            bookedByUserId,
+            ...(p.status === "CHECKED_IN" ? { checkedInAt: date } : {}),
+            ...(p.status === "COMPLETED" ? { checkedInAt: date, completedAt: date, completedByUserId: bookedByUserId } : {}),
+            ...(p.status === "CANCELLED" ? { cancelledAt: date, cancelledByUserId: bookedByUserId, cancellationReasonCode: "GUEST_REQUEST" } : {}),
+            participants: { create: [{ participantIndex: 1, reservationId: res.id, therapistId: therapists[i % therapists.length].id }] },
+          },
+        })
+        spaCount += 1
+      }
+    }
+  }
+
+  // ── Excursion bookings ──
+  let excCount = 0
+  if ((await prisma.excursionBooking.count({ where: { propertyId } })) === 0) {
+    // Upcoming departures with room to sell, nearest first.
+    const departures = await prisma.excursionDeparture.findMany({
+      where: { excursionType: { propertyId }, departureDate: { gte: bizPlus(0) } },
+      include: { excursionType: { include: { rates: true } } },
+      orderBy: [{ departureDate: "asc" }, { departureTime: "asc" }],
+      take: 12,
+    })
+
+    const plan: Array<{ status: string; adults: number; children: number; charge: boolean }> = [
+      { status: "CONFIRMED", adults: 2, children: 0, charge: true },
+      { status: "CONFIRMED", adults: 2, children: 2, charge: true },
+      { status: "CONFIRMED", adults: 1, children: 0, charge: true },
+      { status: "COMPLETED", adults: 2, children: 1, charge: true },
+      { status: "CANCELLED", adults: 2, children: 0, charge: false },
+    ]
+
+    for (const [i, p] of plan.entries()) {
+      const departure = departures[i % Math.max(1, departures.length)]
+      if (!departure) break
+      const res = inHouse[i % inHouse.length]
+      const folio = res.folios[0]
+      const rate = departure.excursionType.rates[0]
+      if (!rate) continue
+
+      const total = Math.round((p.adults * rate.adultPrice + p.children * rate.childPrice) * 100) / 100
+      const line = p.charge
+        ? await postSeedCharge(prisma, {
+            folioId: folio.id,
+            codeId,
+            chargeCode: "EXCTUR",
+            description: `${departure.excursionType.name} — ${departure.departureDate.toISOString().slice(0, 10)} ${departure.departureTime}`,
+            net: total,
+            date: bizPlus(0),
+          })
+        : null
+
+      await prisma.excursionBooking.create({
+        data: {
+          departureId: departure.id,
+          propertyId,
+          reservationId: res.id,
+          adultCount: p.adults,
+          childCount: p.children,
+          infantCount: 0,
+          totalAmount: total,
+          status: p.status,
+          folioId: folio.id,
+          folioLineItemId: line?.id ?? null,
+          bookedByUserId,
+        },
+      })
+      excCount += 1
+    }
+  }
+
+  return { spa: spaCount, excursions: excCount }
 }

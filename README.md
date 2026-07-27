@@ -5,91 +5,87 @@ open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
 for what's done and what's left, kept in-repo so any contributor (human or agent) can
 pick up the project's progress without needing prior chat history.
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Quick start
 
-## Getting Started
+Three commands, in order:
 
-First, run the development server:
+```bash
+npm install
+```
+
+```bash
+npm run db:reset
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`npm run db:reset` drops the dev database, replays every migration, and runs the full
+seed. If the database is already set up and you only want to re-seed on top of it, run
+`npm run seed` instead — the seed is idempotent, so it's safe to re-run any time.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+> **The dev server holds a lock on `dev.db`.** Stop it before running `db:reset` or the
+> reset fails with "device or resource busy".
 
-## Seed data (internal only — removed before release)
+## Credentials
 
-> **These accounts and scripts exist purely for internal development and demoing.**
-> Before a real release, all `scripts/seed/*` scripts and the credentials below will be
-> deleted — do not build any workflow that assumes they'll still exist in production.
+Every seeded account uses the password **`password123`**.
 
-Two independent, idempotent seed scripts (safe to re-run any time, in either order):
+| Email | Enterprise | Sees |
+|---|---|---|
+| `osta@admin.mv` | Osta (platform admin) | The `/osta` console — all enterprises |
+| `admin@veyo.mv` | Veyo | Both properties (master admin) |
+| `admin.main@veyo.mv` | Veyo | Veyo Beach Resort only |
+| `admin.lagoon@veyo.mv` | Veyo | Veyo Lagoon Retreat only |
+| `frontdesk@veyo.mv` | Veyo | Front Desk role |
+| `housekeeping@veyo.mv` | Veyo | Housekeeping role |
+| `spa@veyo.mv` | Veyo | Front Desk role, linked to Spa therapist Aisha Rahman |
+
+Sign in at [`/login`](http://localhost:3000/login) and enter the Enterprise Code
+(`osta` or `veyo`), or go straight to [`/e/veyo/login`](http://localhost:3000/e/veyo/login).
+
+Signing in as an Osta user redirects to `/osta`, a separate console from the tenant
+dashboard: enterprises, property approvals, module licensing, time-boxed support access
+into a tenant's data, and DB health.
+
+## What the seed creates
+
+The business date on both properties is pinned to **2026-08-01**. Postings always land
+on the property's current business date, not the wall clock — so everything the seed
+creates is dated against that day and the dashboard has live data on first load.
+
+**Veyo Beach Resort** (`VEYO-MAIN`) — 2 room types (Deluxe Beach Villa, Overwater
+Suite), 10 rooms, outlets Coral Restaurant + Serenity Spa.
+
+**Veyo Lagoon Retreat** (`VEYO-LAGOON`) — 3 room types (Garden Bungalow, Lagoon Pool
+Villa, Family Beach House), 9 rooms, outlets Lagoon Beach Grill + Blue Water Dive
+Centre. The **Spa and Excursions modules are set up on this property only**, with
+seeded appointments and excursion bookings across the booking lifecycle (confirmed,
+checked-in, completed, cancelled) posted to guest folios.
+
+Each property also gets arrivals due today, in-house guests, departures due today,
+checked-out history with closed folios, a cancellation, a no-show, future demand, a
+group block with room holds and a City Ledger master folio, plus housekeeping tasks
+and maintenance tickets.
+
+Financially: a full Opera-style chart of accounts (Charge Group → Subgroup → Charge
+Code) with group-level tax generates, so posting a room or outlet charge automatically
+posts its service charge and GST as separate linked lines. Every folio line and every
+payment is linked to a charge code.
+
+## Development
 
 ```bash
-npx tsx scripts/seed/seed-osta.ts             # the Osta platform-admin enterprise
-npx tsx scripts/seed/seed-veyo-beach-house.ts # a full demo tenant (wipes & rebuilds "Veyo" each run)
+npm test
 ```
 
-All seeded passwords are **`password123`**.
+```bash
+npm run lint
+```
 
-### Logging in as Osta (platform admin)
-
-`scripts/seed/seed-osta.ts` creates the one `INTERNAL` enterprise every other enterprise
-is managed through — it never deletes anything (Osta's Role rows are referenced by
-every tenant's Users, so wiping it would break every tenant's login).
-
-- **Login**: [`/e/osta/login`](http://localhost:3000/e/osta/login) (or the generic
-  [`/login`](http://localhost:3000/login) with Enterprise Code `osta`)
-- **User**: `admin@osta.internal` (role `Admin` — full access)
-
-Signing in as an Osta user redirects straight to `/osta`, a completely separate
-console from the tenant dashboard:
-
-| Page | What it does |
-|---|---|
-| `/osta` | Overview — enterprise/pending-approval/support-grant counts |
-| `/osta/enterprises` | Every customer enterprise and its properties |
-| `/osta/properties` | Approve or reject newly-created properties — a property is locked out of real use until approved here |
-| `/osta/licensing` | Per-tier and per-enterprise module enable/disable, property limits |
-| `/osta/support-access` | Request/approve time-boxed access into a tenant's own data |
-| `/osta/db-health` | Row counts, migration status, and live query performance (this server instance only, since last restart) |
-
-### Logging in as the seeded Veyo tenant
-
-`scripts/seed/seed-veyo-beach-house.ts` builds a complete demo hotel — 4 room types,
-15 rooms, 2 outlets, a full chart of accounts, meal plans, 11 rate plans with 2 years
-of pricing, and 20 sample profiles — with **no reservations**, so it's a clean baseline
-to click around in. Re-running it wipes and rebuilds the whole "Veyo" enterprise from
-scratch.
-
-- **Login**: [`/e/veyo/login`](http://localhost:3000/e/veyo/login) (or the generic
-  [`/login`](http://localhost:3000/login) with Enterprise Code `veyo`)
-- **Users**:
-  - `admin@veyo.com` — role `Admin` (full access to the tenant dashboard)
-  - `frontdesk@veyo.com` — role `Front Desk`
-  - `housekeeping@veyo.com` — role `Housekeeping`
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Seed scripts live in `scripts/seed/`. They're for internal development and demoing —
+they and the credentials above are expected to be removed before a real release, so
+don't build any workflow that assumes they exist in production.
