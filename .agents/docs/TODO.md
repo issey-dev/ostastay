@@ -54,11 +54,37 @@ first has shipped, on branch `feature/hub-shell`.
   - **Beds24 base URL + `/authentication/setup` are now VERIFIED LIVE** (2026-07-27): a real
     call returned Beds24's own "Token not valid" for a bogus invite code. The invite-code header
     name (`code`) is strongly indicated but not proven with a genuinely valid code.
-- **Next (not started):** Logs screen (build BEFORE the sync engine so the first sync is
-  debuggable) → Sharing/mapping → sync engine, inbound read-only first. Also still needed: a
-  **scheduled keep-alive job** — the Check button exists, but nothing runs it automatically, so
-  an untouched connection can still hit the 30-day idle death. That job is the missing half of
-  this screen.
+- **DONE — Exchange Log** (branch `feature/hub-sync-logs`, stacked on `feature/hub-connection`).
+  `ChannelSyncLog` model + `src/lib/channels/redact.ts` + `sync-log.ts` (read/prune) +
+  `/api/hub/sync-logs` + `src/components/hub/sync-log-viewer.tsx`, at
+  `/e/{slug}/hub/channel-manager/logs`. Built BEFORE the sync engine, deliberately, so the
+  first sync is debuggable rather than a black box.
+  - ⚠️ **`ChannelSyncLog` MUST NEVER CONTAIN A CREDENTIAL.** The table is plaintext and
+    readable by anyone with Hub view access, so a token landing in it would defeat the
+    encryption-at-rest on `ChannelConnection` entirely. `redact.ts` is **deny-by-default on
+    keys**: a value is masked unless its key is explicitly whitelisted, so a field Beds24
+    adds tomorrow is redacted automatically rather than leaked by omission. Header values are
+    masked unconditionally (no whitelist at all — that is where the credentials live).
+    Verified live: a real failed exchange logged `{"code":"[redacted]"}` while keeping the
+    diagnostic `{"success":false,"type":"error","code":401,"error":"Token not valid"}`.
+  - Logs use `onDelete: SetNull` + a snapshotted `connectionName`, so the entries explaining
+    **why** a connection was removed survive its deletion.
+  - A rejected invite code is logged even though no connection row is created — otherwise the
+    most common setup failure would leave no trace. On success those entries are then linked
+    to the connection they produced (a test caught that they were being orphaned).
+  - Read-only: no create/edit/delete endpoints. A log an operator can quietly erase is not a
+    troubleshooting record.
+  - Cursor paging, not offset — the table is written to continuously, so offset paging would
+    skip or repeat rows as new entries arrive mid-page.
+- **Next (not started):** Sharing/mapping (property links + room-type/rate-plan mapping) → sync
+  engine, inbound read-only first.
+- **Two operational gaps, both still open and both worth closing before production:**
+  1. **No scheduled keep-alive.** The Check button resets Beds24's 30-day idle clock, but only
+     when a human clicks it. Without a job, an untouched connection still dies silently.
+  2. **No scheduled log pruning.** `pruneSyncLogs(enterpriseId, days)` exists and is tested,
+     but nothing calls it — `ChannelSyncLog` grows unbounded with every exchange. The mechanism
+     is there; the schedule is not.
+  Both want the same thing: a place to run periodic per-enterprise jobs. Worth solving once.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull

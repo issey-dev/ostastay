@@ -41,6 +41,8 @@ export const REFRESH_TOKEN_KEEPALIVE_DAYS = 7;
 // can't have a token expire mid-flight.
 const ACCESS_TOKEN_EXPIRY_SKEW_MS = 5 * 60 * 1000;
 
+import { redactForLog, redactHeaders, redactErrorMessage } from "@/lib/channels/redact";
+
 export class ChannelAuthError extends Error {
   status = 401;
 }
@@ -72,25 +74,109 @@ type Beds24TokenResponse = {
   error?: string;
 };
 
+// One record of a single exchange, already redacted and safe to persist. The client emits
+// these through a sink rather than writing them itself, so this module keeps no database
+// dependency and stays trivially testable — src/lib/channels/connection.ts supplies the
+// sink that turns them into ChannelSyncLog rows.
+export type ChannelCallLog = {
+  direction: "OUTBOUND" | "INBOUND";
+  operation: string;
+  endpoint: string;
+  ok: boolean;
+  httpStatus: number | null;
+  latencyMs: number;
+  requestSummary: string;
+  responseSummary: string;
+  errorMessage: string | null;
+};
+
+export type ChannelLogSink = (entry: ChannelCallLog) => void | Promise<void>;
+
+// A logging failure must never break the call it describes — the same rule logActivity()
+// follows. Swallow and carry on.
+async function emit(sink: ChannelLogSink | undefined, entry: ChannelCallLog) {
+  if (!sink) return;
+  try {
+    await sink(entry);
+  } catch (e) {
+    console.error("channel log sink failed", e);
+  }
+}
+
 // Beds24 reports failures both as non-2xx AND as 200-with-an-error-body, so both paths are
 // checked. The response body is deliberately NOT echoed into the thrown message — it can
 // carry a token — only a short, operator-readable reason.
-async function requestJson(path: string, headers: Record<string, string>): Promise<Beds24TokenResponse> {
+//
+// Every outcome, including failures, is emitted to the log sink before throwing: a failed
+// exchange is precisely the one an operator needs to see afterwards.
+async function requestJson(
+  path: string,
+  headers: Record<string, string>,
+  operation: string,
+  sink?: ChannelLogSink
+): Promise<Beds24TokenResponse> {
+  const startedAt = Date.now();
+  // Header VALUES are never logged — this is where the invite code and tokens live.
+  const requestSummary = redactHeaders(headers);
+  const base = {
+    direction: "OUTBOUND" as const,
+    operation,
+    endpoint: path,
+    requestSummary,
+  };
+
   let res: Response;
   try {
     res = await fetch(`${BEDS24_API_BASE}${path}`, { method: "GET", headers });
   } catch (e) {
     // Network-level failure (DNS, TLS, timeout) — distinct from an auth rejection, and
     // must not be reported to the operator as "bad credentials".
-    throw new ChannelApiError(`Could not reach Beds24: ${e instanceof Error ? e.message : "network error"}`, 0);
+    const message = `Could not reach Beds24: ${e instanceof Error ? e.message : "network error"}`;
+    await emit(sink, {
+      ...base,
+      ok: false,
+      httpStatus: null,
+      latencyMs: Date.now() - startedAt,
+      responseSummary: "",
+      errorMessage: redactErrorMessage(message),
+    });
+    throw new ChannelApiError(message, 0);
   }
+
+  const latencyMs = Date.now() - startedAt;
 
   let body: Beds24TokenResponse;
   try {
     body = (await res.json()) as Beds24TokenResponse;
   } catch {
-    throw new ChannelApiError(`Beds24 returned a non-JSON response (HTTP ${res.status})`, res.status);
+    const message = `Beds24 returned a non-JSON response (HTTP ${res.status})`;
+    await emit(sink, {
+      ...base,
+      ok: false,
+      httpStatus: res.status,
+      latencyMs,
+      responseSummary: "",
+      errorMessage: redactErrorMessage(message),
+    });
+    throw new ChannelApiError(message, res.status);
   }
+
+  // The body here can contain `token`/`refreshToken`; redactForLog is deny-by-default on
+  // keys, so those are masked while the diagnosable shape survives.
+  const responseSummary = redactForLog(body);
+  const failed = !res.ok || !!body.error;
+  const errorMessage = failed
+    ? (body.error ?? (res.ok ? "Unknown error" : `Beds24 request failed (HTTP ${res.status})`))
+    : null;
+
+  await emit(sink, {
+    ...base,
+    ok: !failed,
+    httpStatus: res.status,
+    latencyMs,
+    responseSummary,
+    errorMessage: errorMessage ? redactErrorMessage(errorMessage) : null,
+  });
 
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
@@ -116,8 +202,13 @@ function expiryFrom(expiresIn: number | undefined): Date {
  * access token. Invite codes are single-use — a retry after success will fail, which is
  * why the caller must persist the result before doing anything else.
  */
-export async function exchangeInviteCode(inviteCode: string): Promise<TokenPair> {
-  const body = await requestJson("/authentication/setup", { [INVITE_CODE_HEADER]: inviteCode });
+export async function exchangeInviteCode(inviteCode: string, sink?: ChannelLogSink): Promise<TokenPair> {
+  const body = await requestJson(
+    "/authentication/setup",
+    { [INVITE_CODE_HEADER]: inviteCode },
+    "auth.setup",
+    sink
+  );
 
   if (!body.refreshToken) {
     throw new ChannelAuthError("Beds24 did not return a refresh token for this invite code");
@@ -130,8 +221,13 @@ export async function exchangeInviteCode(inviteCode: string): Promise<TokenPair>
 }
 
 /** Exchange a refresh token for a fresh short-lived access token. */
-export async function refreshAccessToken(refreshToken: string): Promise<AccessToken> {
-  const body = await requestJson("/authentication/token", { [REFRESH_TOKEN_HEADER]: refreshToken });
+export async function refreshAccessToken(refreshToken: string, sink?: ChannelLogSink): Promise<AccessToken> {
+  const body = await requestJson(
+    "/authentication/token",
+    { [REFRESH_TOKEN_HEADER]: refreshToken },
+    "auth.token",
+    sink
+  );
 
   if (!body.token) {
     throw new ChannelAuthError("Beds24 did not return an access token");
