@@ -31,6 +31,7 @@ model Enterprise {
   roomAttendants        RoomAttendant[]
   license               EnterpriseLicense?
   moduleAccessOverrides EnterpriseModuleAccess[]
+  channelConnections    ChannelConnection[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -2490,4 +2491,55 @@ model SpaGuestTherapistPreference {
   updatedAt   DateTime     @updatedAt
 
   @@unique([profileId, propertyId])
+}
+
+// A connection to an external channel manager (Beds24 today) — the exchange interface
+// between this enterprise and the booking channels. Lives at the ENTERPRISE level, which
+// is why it is administered from the Hub and not the property dashboard. See
+// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+//
+// Deliberately NOT unique per enterprise. Beds24's own account model puts many properties
+// under one account, but some operators keep a separate account per property — allowing
+// several connections per enterprise supports both without a schema change, so the
+// "one account per enterprise or per property?" question (plan decision D-6) never has to
+// be answered up front. Which ostastay properties a connection covers is a separate
+// mapping concern (ChannelPropertyLink), landing with the Sharing screen.
+model ChannelConnection {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  // Only "BEDS24" today. A plain string rather than an enum to match the rest of this
+  // schema (see Property.status, ChargeCode.category) and to keep adding a provider a
+  // code-only change.
+  provider     String     @default("BEDS24")
+  // Operator-facing label, so several accounts stay tellable apart.
+  name         String
+
+  // The long-lived credential. ENCRYPTED AT REST via src/lib/secret-crypto.ts, exactly
+  // like the SMTP/SFTP secrets in EnterpriseSettings — encrypt on write, decrypt only at
+  // point of use, never returned to the client (the API redacts it with SECRET_MASK).
+  //
+  // Beds24 refresh tokens do not expire, BUT die if unused for 30 days — so a connection
+  // that is simply idle will silently break. lastTokenRefreshAt is what makes that
+  // visible before it happens; a keep-alive refresh must run well inside the window.
+  refreshToken       String?
+  lastTokenRefreshAt DateTime?
+
+  // Cached short-lived access token (Beds24: ~24h), so a burst of API calls re-mints once
+  // rather than per request. Also encrypted — it is a bearer credential in its own right.
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+
+  // NOT_CONNECTED | CONNECTED | ERROR. Health is observed, never assumed: it is set from
+  // real API outcomes (see src/lib/channels/beds24.ts), not from the fact that a
+  // credential was saved.
+  status            String    @default("NOT_CONNECTED")
+  lastHealthCheckAt DateTime?
+  // Operator-readable reason for the last failure; cleared on success.
+  lastError         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enterpriseId, name])
 }
