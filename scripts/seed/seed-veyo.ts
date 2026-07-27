@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data";
 import { expandScheduleDates } from "../../src/lib/excursions";
+import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
+import { legacyCategoryForSubgroup } from "../../src/lib/posting/charge-tree";
 
 const prisma = new PrismaClient();
 
@@ -199,40 +201,74 @@ async function main() {
     create: { enterpriseId: veyo.id, code: "FB", description: "Food & Beverage", category: "FOOD_BEVERAGE", taxProfileId: taxProfile.id },
   });
 
-  // Sample chart of charge codes. ChargeCode.category has no SPA bucket (ROOM |
-  // FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | SYSTEM), so spa items are grouped
-  // under OTHERS. All use the enterprise default tax engine. (No PAYMENT category —
-  // payment types are Payment Methods, seeded below.)
-  const sampleChargeCodes: Array<{ code: string; description: string; category: string }> = [
+  // The canonical Charge Group -> Subgroup -> Code tree (the same one property
+  // onboarding creates), including the system ROOM / GTX / COMM codes and the
+  // ROOM -> Green Tax generate. Everything below classifies into it.
+  await ensureChargeTree(prisma, veyo.id);
+  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId: veyo.id } });
+  const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id;
+
+  // Sample chart of charge codes, classified by Subgroup rather than the deprecated
+  // free-text `category` string. Spa now has a real home (OTHER / SPA) instead of being
+  // lumped into "OTHERS". All use the enterprise default tax engine. (No PAYMENT bucket
+  // — payment types are Payment Methods, seeded below.)
+  const sampleChargeCodes: Array<{ code: string; description: string; subgroup: string; postingType?: string }> = [
     // Accommodation
-    { code: "10RV", description: "Accommodation Revenue", category: "ROOM" },
-    { code: "11RV", description: "Accommodation Upgrade", category: "ROOM" },
-    { code: "13RV", description: "Cancellation Penalty", category: "ROOM" },
-    { code: "14RV", description: "Noshow Penalty", category: "ROOM" },
+    { code: "10RV", description: "Accommodation Revenue", subgroup: "ROOM_REVENUE" },
+    { code: "11RV", description: "Accommodation Upgrade", subgroup: "ROOM_REVENUE" },
+    { code: "13RV", description: "Cancellation Penalty", subgroup: "ROOM_REVENUE" },
+    { code: "14RV", description: "Noshow Penalty", subgroup: "ROOM_REVENUE" },
     // F&B
-    { code: "60RV", description: "Package Breakfast", category: "FOOD_BEVERAGE" },
-    { code: "61RV", description: "Package Lunch", category: "FOOD_BEVERAGE" },
-    { code: "62RV", description: "Package Dinner", category: "FOOD_BEVERAGE" },
+    { code: "60RV", description: "Package Breakfast", subgroup: "MEAL_PLAN" },
+    { code: "61RV", description: "Package Lunch", subgroup: "MEAL_PLAN" },
+    { code: "62RV", description: "Package Dinner", subgroup: "MEAL_PLAN" },
     // Transport
-    { code: "50RV", description: "Airport Transfer", category: "TRANSPORTATION" },
-    { code: "51RV", description: "SpeedBoat Transfer", category: "TRANSPORTATION" },
+    { code: "50RV", description: "Airport Transfer", subgroup: "TRANSFERS" },
+    { code: "51RV", description: "SpeedBoat Transfer", subgroup: "TRANSFERS" },
     // Spa
-    { code: "40RV", description: "Spa Massage", category: "OTHERS" },
-    { code: "41RV", description: "Spa Treatment", category: "OTHERS" },
-    { code: "49RV", description: "Spa Misc", category: "OTHERS" },
-    // Green Tax — required by night-audit/run whenever EnterpriseSettings.greenTaxEnabled
-    // is true (defaults to true), which it is for Veyo; without this code Night Audit 400s.
-    { code: "GTX", description: "Green Tax", category: "TAX" },
+    { code: "40RV", description: "Spa Massage", subgroup: "SPA" },
+    { code: "41RV", description: "Spa Treatment", subgroup: "SPA" },
+    { code: "49RV", description: "Spa Misc", subgroup: "SPA" },
   ];
   const chargeCodeByCode: Record<string, string> = {};
   for (const cc of sampleChargeCodes) {
     const created = await prisma.chargeCode.upsert({
       where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
-      update: {},
-      create: { enterpriseId: veyo.id, ...cc },
+      update: { chargeSubgroupId: subgroupId(cc.subgroup) },
+      create: {
+        enterpriseId: veyo.id,
+        code: cc.code,
+        description: cc.description,
+        chargeSubgroupId: subgroupId(cc.subgroup),
+        category: legacyCategoryForSubgroup(cc.subgroup),
+        postingType: cc.postingType ?? "CHARGE",
+      },
     });
     chargeCodeByCode[cc.code] = created.id;
   }
+  // GTX comes from the seeded tree now (postingType TAX, so it posts at face value and
+  // stays out of the GST base) rather than being hand-created here.
+  const gtxCode = await prisma.chargeCode.findUniqueOrThrow({
+    where: { enterpriseId_code: { enterpriseId: veyo.id, code: "GTX" } },
+  });
+  chargeCodeByCode["GTX"] = gtxCode.id;
+
+  // 10RV is the property's real accommodation code, so it — not just the system ROOM
+  // code — is what must levy the nightly Green Tax. This is the same row the charge-code
+  // API seeds automatically when a new ACCOMMODATION-bucket code is added in Controls.
+  await prisma.chargeCodeGenerate.upsert({
+    where: { generatorCodeId_generatedCodeId: { generatorCodeId: chargeCodeByCode["10RV"], generatedCodeId: gtxCode.id } },
+    update: {},
+    create: {
+      enterpriseId: veyo.id,
+      generatorCodeId: chargeCodeByCode["10RV"],
+      generatedCodeId: gtxCode.id,
+      method: "GREEN_TAX",
+      value: 0,
+      calculateOn: "NET",
+      sortOrder: 10,
+    },
+  });
 
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CARD" } });
   if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Credit Card", type: "CARD" } });
@@ -243,13 +279,14 @@ async function main() {
   let pmCityLedger = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CITY_LEDGER" } });
   if (!pmCityLedger) pmCityLedger = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "City Ledger", type: "CITY_LEDGER" } });
 
-  // Posting & settlement defaults (Controls > Finance): the main Accommodation code
-  // (10RV) is what rate plans post the nightly room charge against by default, and the
-  // City Ledger payment method settles debtor-account folios at checkout.
+  // Role -> charge code pointers (Controls > Cashiering > Posting Defaults). These are
+  // what resolveChargeCode() reads, so the runtime never looks a code up by name. The
+  // City Ledger method (Controls > Finance) settles debtor-account folios at checkout.
   await prisma.enterpriseSettings.update({
     where: { enterpriseId: veyo.id },
     data: {
       defaultAccommodationChargeCodeId: chargeCodeByCode["10RV"],
+      defaultGreenTaxChargeCodeId: gtxCode.id,
       cityLedgerPaymentMethodId: pmCityLedger.id,
     },
   });

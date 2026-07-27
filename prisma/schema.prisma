@@ -19,7 +19,10 @@ model Enterprise {
 
   properties            Property[]
   taxProfiles           TaxProfile[]
+  chargeGroups          ChargeGroup[]
+  chargeSubgroups       ChargeSubgroup[]
   chargeCodes           ChargeCode[]
+  chargeCodeGenerates   ChargeCodeGenerate[]
   paymentMethods        PaymentMethod[]
   profiles              Profile[]
   cashierShifts         CashierShift[]
@@ -542,21 +545,84 @@ model TaxRate {
   effectiveTo   DateTime?
 }
 
+// Level 1 of the Opera-modelled Group → Subgroup → Code hierarchy. `reportBucket` is
+// THE canonical reporting classification — every revenue/EOD/analytics report reads it
+// (via ChargeCode.chargeSubgroup.chargeGroup) instead of the old free-text
+// ChargeCode.category string. See src/lib/posting/charge-tree.ts for the canonical set
+// seeded at onboarding.
+model ChargeGroup {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  code         String // ACCOMMODATION | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM
+  name         String
+  // ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM — the one
+  // closed list. Several groups may share a bucket; a bucket never spans meanings.
+  reportBucket String
+  // false for NON_REVENUE (commissions, deposits) and pass-through TAX buckets — these
+  // must never be counted as earned revenue.
+  isRevenue    Boolean    @default(true)
+  // System-managed: cannot be deleted or have its code/bucket changed from the UI.
+  isSystem     Boolean    @default(false)
+  sortOrder    Int        @default(0)
+
+  subgroups ChargeSubgroup[]
+
+  @@unique([enterpriseId, code])
+}
+
+// Level 2 — the reporting sub-classification inside a group (e.g. ROOM_REVENUE and
+// EXTRA_OCCUPANCY both under ACCOMMODATION).
+model ChargeSubgroup {
+  id            String      @id @default(uuid())
+  enterpriseId  String
+  enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  chargeGroupId String
+  chargeGroup   ChargeGroup @relation(fields: [chargeGroupId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  isSystem      Boolean     @default(false)
+  sortOrder     Int         @default(0)
+
+  chargeCodes ChargeCode[]
+
+  @@unique([enterpriseId, code])
+}
+
 model ChargeCode {
   id            String      @id @default(uuid())
   enterpriseId  String
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code          String
   description   String
-  // Grouping for reporting only — ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX |
-  // SYSTEM. (PAYMENT was removed — payment types are Payment Methods, not charge codes.)
+  // Level 3 of the hierarchy — the real classification. Nullable only until the
+  // backfill (scripts/dev-tools/backfill-charge-hierarchy.ts) has run everywhere; every
+  // write path sets it. Read classification through
+  // chargeSubgroup.chargeGroup.reportBucket, never `category`.
+  chargeSubgroupId String?
+  chargeSubgroup   ChargeSubgroup? @relation(fields: [chargeSubgroupId], references: [id])
+  // DEPRECATED — superseded by chargeSubgroup → chargeGroup.reportBucket. Kept in sync
+  // on write during the migration window so any un-migrated reader still sees a sane
+  // value; drop the column once §5 of CHARGE_CODE_PLAN.md is confirmed clean.
   category      String      @default("OTHERS")
+  // Posting semantics that used to be implied by the magic code string:
+  // CHARGE (ordinary revenue) | TAX (a levy — excluded from the GST base, e.g. GTX) |
+  // CREDIT (posts negative, e.g. TA commission) | NON_REVENUE (never earned revenue).
+  postingType   String      @default("CHARGE")
+  // System-provisioned (accommodation, green tax, commission...): cannot be deleted.
+  isSystem      Boolean     @default(false)
+  isActive      Boolean     @default(true)
   // Whether this charge code applies the enterprise's own Maldives Tax config (Green
   // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
   // taxProfileId is only ever set when useDefaultTax is false.
   useDefaultTax Boolean     @default(true)
   taxProfileId  String?
   taxProfile    TaxProfile? @relation(fields: [taxProfileId], references: [id])
+
+  // Opera's "generates" mechanism — posting this code automatically posts the derived
+  // codes on the other side of these rows (see ChargeCodeGenerate).
+  generatesFrom ChargeCodeGenerate[] @relation("GeneratorCode")
+  generatedBy   ChargeCodeGenerate[] @relation("GeneratedCode")
 
   folioLineItems FolioLineItem[]
   // The "shared pool" an Outlet curates from — a charge code is never owned by one
@@ -574,6 +640,34 @@ model ChargeCode {
   spaTreatments  SpaTreatment[]
 
   @@unique([enterpriseId, code])
+}
+
+// Declarative replacement for hardcoded "posting ROOM also posts GTX" logic: posting the
+// generator code automatically posts each generated code, in ascending sortOrder, through
+// the same tax engine. See src/lib/posting/run-generates.ts.
+model ChargeCodeGenerate {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  generatorCodeId String
+  generatorCode   ChargeCode @relation("GeneratorCode", fields: [generatorCodeId], references: [id], onDelete: Cascade)
+  generatedCodeId String
+  generatedCode   ChargeCode @relation("GeneratedCode", fields: [generatedCodeId], references: [id], onDelete: Cascade)
+
+  // PERCENT (of the basis) | FLAT (per posting) | PER_PERSON_PER_NIGHT (the Green-Tax
+  // shape — value × persons × nights, supplied by the caller's postingContext).
+  method String
+  value  Float
+  // What a PERCENT applies to: NET (the parent's pre-tax base), GROSS (base + tax +
+  // service charge), or ANOTHER_GENERATE (basisGenerateId's own output — cascading).
+  calculateOn     String  @default("NET")
+  basisGenerateId String?
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
+
+  @@unique([generatorCodeId, generatedCodeId])
+  @@index([enterpriseId, generatorCodeId])
 }
 
 // PaymentType: CASH, CARD, TRANSFER
@@ -1099,6 +1193,16 @@ model FolioLineItem {
   taxAmount           Float           @default(0.0)
   serviceChargeAmount Float           @default(0.0)
   isVoid              Boolean         @default(false)
+  // Set on a line that a ChargeCodeGenerate produced (Service Charge, GST, Green Tax,
+  // any declared levy), pointing at the revenue line that generated it. Two things need
+  // it: a tax line must report under the bucket of the revenue that earned it — a GST
+  // line's own charge code sits in the TAX group, so without this every report would
+  // show tax detached from its source — and it makes a parent's derived lines findable
+  // as a set. SetNull rather than Cascade: losing the attribution must never silently
+  // delete a posted tax line.
+  generatedFromLineItemId String?
+  generatedFrom           FolioLineItem?  @relation("GeneratedLines", fields: [generatedFromLineItemId], references: [id], onDelete: SetNull)
+  generatedLines          FolioLineItem[] @relation("GeneratedLines")
 
   createdAt DateTime @default(now())
 
@@ -1398,6 +1502,10 @@ model EnterpriseSettings {
   // CITY_LEDGER-type method) used to record a settlement payment when a City Ledger
   // folio transfers to a debtor account at checkout.
   defaultAccommodationChargeCodeId String?
+  // The ChargeCode the nightly Green Tax levy posts against, resolved by role instead of
+  // the old literal `code: "GTX"` lookup (see resolveChargeCode in
+  // src/lib/posting/resolve-charge-code.ts). Falls back to the system-seeded GTX code.
+  defaultGreenTaxChargeCodeId      String?
   cityLedgerPaymentMethodId        String?
   // The (typically NON_REVENUE-categorized) ChargeCode a Travel Agent commission posts
   // against as a credit line at checkout — see RatePlanAgentAccess.commissionRate.
@@ -1420,6 +1528,10 @@ model EnterpriseSettings {
   invoiceAddress      String?
 
   // Invoice document content (Proforma + Tax share everything but the header line).
+  // The folio layout a Proforma / Tax Invoice / Interim Bill opens on — one of
+  // src/lib/folio-presentation.ts's FOLIO_STYLES. The operator can still pick a
+  // different one for an individual document; this is only what the picker defaults to.
+  defaultFolioStyle   String  @default("detailed")
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?

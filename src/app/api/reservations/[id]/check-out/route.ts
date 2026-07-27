@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
 import { calculateFolioCommission } from "@/lib/commission";
+import { postCharge, chargeCodeInclude, type PostableChargeCode } from "@/lib/posting/post-charge";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 import { toCents, fromCents, sumBy } from "@/lib/money";
@@ -125,18 +126,21 @@ export async function POST(
     // (qualifiesForAccount), the account has a commission % linked to whichever rate
     // plan(s) earned the room revenue, and the enterprise has a Commission charge code
     // configured (EnterpriseSettings.commissionChargeCodeId). See src/lib/commission.ts.
-    let commissionChargeCode: { id: string } | null = null;
+    let commissionChargeCode: PostableChargeCode | null = null;
     let rateLinks: { ratePlanId: string; commissionRate: number | null }[] = [];
+    // Hoisted: postCharge needs it inside the transaction below.
+    let settings: Awaited<ReturnType<typeof prisma.enterpriseSettings.findUnique>> = null;
     if (creditAccount && reservation.folios.some(qualifiesForAccount)) {
-      const [settings, links] = await Promise.all([
+      const [loadedSettings, links] = await Promise.all([
         prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } }),
         prisma.ratePlanAgentAccess.findMany({ where: { upid: creditAccount.upid }, select: { ratePlanId: true, commissionRate: true } }),
       ]);
+      settings = loadedSettings;
       rateLinks = links;
       if (settings?.commissionChargeCodeId) {
         commissionChargeCode = await prisma.chargeCode.findFirst({
           where: { id: settings.commissionChargeCodeId, enterpriseId: ctx.enterpriseId },
-          select: { id: true },
+          include: chargeCodeInclude(),
         });
       }
     }
@@ -210,14 +214,17 @@ export async function POST(
             );
             if (commissionAmount > 0.01) {
               const agentName = creditAccount!.companyName || `${creditAccount!.firstName} ${creditAccount!.lastName ?? ""}`.trim();
-              await tx.folioLineItem.create({
-                data: {
-                  folioId: folio.id,
-                  chargeCodeId: commissionChargeCode.id,
-                  amount: -commissionAmount,
-                  description: `Travel Agent Commission — ${agentName}`,
-                  date: new Date(),
-                },
+              // Through the one posting service like every other line. A CREDIT code is
+              // not a taxable event, so postCharge posts the negative at face value —
+              // and any generate the property has declared on it still fires.
+              await postCharge(tx, {
+                folioId: folio.id,
+                chargeCode: commissionChargeCode,
+                inputAmount: -commissionAmount,
+                settings,
+                pricesIncludeTaxes: false,
+                date: new Date(),
+                description: `Travel Agent Commission — ${agentName}`,
               });
               commissionsPosted.push({ folioId: folio.id, amount: commissionAmount, agentName });
             }

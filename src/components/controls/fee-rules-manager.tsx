@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { useProperty } from "@/components/providers/property-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -188,7 +189,7 @@ export function FeeRulesManager() {
                           value={rule.chargeCodeId ?? ""}
                           onChange={(v: string) => patch(rule._key, { chargeCodeId: v || null })}
                           placeholder="Select code..."
-                          options={chargeCodes.map((c) => ({ value: c.id, label: `${c.code} — ${c.description}` }))}
+                          options={chargeCodeOptions(chargeCodes, { includeNonRevenue: true })}
                         />
                       </div>
                     )}

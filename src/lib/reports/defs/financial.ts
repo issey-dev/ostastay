@@ -3,6 +3,7 @@ import { dayRange, rangeBounds } from "@/lib/reports/params";
 import { guestName, propertyOrThrow, guestSelect } from "@/lib/reports/defs/_shared";
 import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
+import { LINE_BUCKET_INCLUDE, lineReportBucket, reportBucketLabel, isLevyLine } from "@/lib/posting/report-bucket";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -184,13 +185,17 @@ const folioTax: ReportDef = {
     const { gte, lt } = rangeBounds(range.from, range.to);
     const lines = await prisma.folioLineItem.findMany({
       where: { folio: { propertyId }, isVoid: false, date: { gte, lt } },
-      include: { chargeCode: { select: { category: true, code: true } } },
+      include: LINE_BUCKET_INCLUDE,
     });
     const byCat = new Map<string, { category: string; base: number; serviceCharge: number; gst: number; greenTax: number }>();
     for (const li of lines) {
-      const isGtx = li.chargeCode?.code === "GTX";
-      const cat = isGtx ? "GREEN_TAX" : li.chargeCode?.category ?? "OTHERS";
-      const row = byCat.get(cat) ?? { category: cat.replace(/_/g, " "), base: 0, serviceCharge: 0, gst: 0, greenTax: 0 };
+      // A levy (postingType TAX) is reported in its own bucket and never contributes to
+      // the GST base — that used to be a hardcoded `code === "GTX"` test. Service Charge
+      // and GST lines, by contrast, report under the revenue that earned them
+      // (lineReportBucket), so a per-group tax code doesn't detach tax from its source.
+      const isGtx = isLevyLine(li.chargeCode);
+      const cat = isGtx ? "GREEN_TAX" : lineReportBucket(li);
+      const row = byCat.get(cat) ?? { category: isGtx ? "Green Tax" : reportBucketLabel(cat), base: 0, serviceCharge: 0, gst: 0, greenTax: 0 };
       if (isGtx) row.greenTax += li.amount;
       else { row.base += li.amount; row.serviceCharge += li.serviceChargeAmount || 0; row.gst += li.taxAmount; }
       byCat.set(cat, row);
@@ -292,7 +297,7 @@ const gst: ReportDef = {
     const folios = await prisma.folio.findMany({
       where: { propertyId, taxInvoiceNumber: { not: null }, lineItems: { some: { date: { gte, lt } } } },
       include: {
-        lineItems: { include: { chargeCode: { select: { code: true } } } },
+        lineItems: { include: { chargeCode: { select: { code: true, postingType: true } } } },
         reservation: { select: { primaryGuest: guestSelect } },
       },
       orderBy: { taxInvoiceNumber: "asc" },
@@ -301,7 +306,7 @@ const gst: ReportDef = {
       let base = 0, sc = 0, gstAmt = 0;
       for (const li of f.lineItems) {
         if (li.isVoid || li.date < gte || li.date >= lt) continue;
-        if (li.chargeCode?.code === "GTX") { base += li.amount; continue; } // green tax is not GST-bearing
+        if (isLevyLine(li.chargeCode)) { base += li.amount; continue; } // a levy is not GST-bearing
         base += li.amount; sc += li.serviceChargeAmount || 0; gstAmt += li.taxAmount;
       }
       return {

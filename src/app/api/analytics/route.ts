@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { startOfDay, endOfDay } from "date-fns"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { LINE_BUCKET_INCLUDE, lineReportBucket } from "@/lib/posting/report-bucket"
 
 export async function GET(request: Request) {
   try {
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
           reservation: { propertyId }
         }
       },
-      include: { chargeCode: true }
+      include: LINE_BUCKET_INCLUDE
     })
 
     // Aggregate Room Revenue vs Other Revenue
@@ -63,16 +64,20 @@ export async function GET(request: Request) {
       const amount = item.amount
       totalRevenue += amount
 
-      const category = item.chargeCode?.code || "OTHER"
+      // Was `item.chargeCode?.code` — a variable named `category` that actually held the
+      // CODE, so `revenueByCategory` was keyed by code while every other report keyed by
+      // category, and room revenue only worked by the accident that the code string
+      // happened to be "ROOM". Now the real reporting bucket, same as everywhere else.
+      const bucket = lineReportBucket(item)
 
-      if (category === "ROOM") {
+      if (bucket === "ROOM") {
         roomRevenue += amount
       } else {
         otherRevenue += amount
       }
 
-      if (!revenueByCategory[category]) revenueByCategory[category] = 0
-      revenueByCategory[category] += amount
+      if (!revenueByCategory[bucket]) revenueByCategory[bucket] = 0
+      revenueByCategory[bucket] += amount
     })
 
     // 4. Calculate KPIs

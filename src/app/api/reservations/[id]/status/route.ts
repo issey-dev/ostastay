@@ -5,6 +5,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { findTypeAvailabilityConflicts } from "@/lib/availability";
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
+import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
 import { logActivity } from "@/lib/activity-log";
 import { toCents, fromCents, subMoney } from "@/lib/money";
 
@@ -54,7 +55,7 @@ export async function PATCH(
     const existing = await prisma.reservation.findUnique({
       where: { id },
       include: {
-        property: { select: { businessDate: true } },
+        property: { select: { businessDate: true, enterpriseId: true, pricesIncludeTaxes: true } },
         assignments: true,
         folios: { include: { lineItems: true, payments: true } },
       },
@@ -206,16 +207,26 @@ export async function PATCH(
               include: { lineItems: true, payments: true },
             });
           }
-          await tx.folioLineItem.create({
-            data: {
-              folioId: folio.id,
-              chargeCodeId: cancellationRule.chargeCodeId,
-              date: resolveBusinessDate(existing.property),
-              description: "Cancellation fee",
-              amount: cancellationFee,
-              taxAmount: 0,
-              serviceChargeAmount: 0,
-            },
+          // Through the one posting service, so the fee's charge code taxes and
+          // generates like any other charge. The rule's amount is treated the same way
+          // every other configured price in the app is — gross or net per the property's
+          // "Prices Include Taxes" setting — so the guest is charged the amount that was
+          // configured, split into net + GST rather than posted untaxed.
+          const feeCode = await tx.chargeCode.findUniqueOrThrow({
+            where: { id: cancellationRule.chargeCodeId },
+            include: chargeCodeInclude(),
+          });
+          const feeSettings = await tx.enterpriseSettings.findUnique({
+            where: { enterpriseId: existing.property.enterpriseId },
+          });
+          await postCharge(tx, {
+            folioId: folio.id,
+            chargeCode: feeCode,
+            inputAmount: cancellationFee,
+            settings: feeSettings,
+            pricesIncludeTaxes: existing.property.pricesIncludeTaxes,
+            date: resolveBusinessDate(existing.property),
+            description: "Cancellation fee",
           });
         }
         await tx.folio.updateMany({

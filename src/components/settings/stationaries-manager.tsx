@@ -6,12 +6,20 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info } from "@/components/icons"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { useProperty } from "@/components/providers/property-provider"
 import { resolveStationeryBrand, type PropertyBrandInput } from "@/lib/stationery-brand"
+import {
+  FOLIO_STYLES,
+  FOLIO_STYLE_LABELS,
+  FOLIO_STYLE_DESCRIPTIONS,
+  isFolioStyle,
+  type FolioStyle,
+} from "@/lib/folio-presentation"
 import { StationeryPreviewFrame } from "@/components/print/stationery/preview-frame"
 import {
   InvoiceDocument,
@@ -36,9 +44,9 @@ type StationeryTab = "invoices" | "receipts" | "letter" | "regcard" | "statement
 // logo, tax id, contact, address), accent colour and font all come from the property's own
 // General profile + Appearance (Controls > General), so this manager never edits them; it
 // only reads the property to render a faithful live preview.
-type FormData = StationeryContent & { registrationCardEnabled: boolean }
+type FormData = StationeryContent & { registrationCardEnabled: boolean; defaultFolioStyle: FolioStyle }
 
-const EMPTY_FORM: FormData = { ...EMPTY_STATIONERY_CONTENT, registrationCardEnabled: true }
+const EMPTY_FORM: FormData = { ...EMPTY_STATIONERY_CONTENT, registrationCardEnabled: true, defaultFolioStyle: "detailed" }
 
 export function StationariesManager() {
   const { currentProperty } = useProperty()
@@ -61,6 +69,7 @@ export function StationariesManager() {
       if (res.ok) {
         const data = await res.json()
         setFormData({
+          defaultFolioStyle: isFolioStyle(data.defaultFolioStyle) ? data.defaultFolioStyle : "detailed",
           invoiceHeaderText: data.invoiceHeaderText || "",
           invoicePaymentAccountName: data.invoicePaymentAccountName || "",
           invoicePaymentAccountNumber: data.invoicePaymentAccountNumber || "",
@@ -185,6 +194,31 @@ export function StationariesManager() {
                 value={formData.invoiceHeaderText}
                 onChange={(e) => set("invoiceHeaderText", e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-4">
+              <Label>Default Folio Style</Label>
+              <Select
+                value={formData.defaultFolioStyle}
+                onValueChange={(v) => set("defaultFolioStyle", (isFolioStyle(v) ? v : "detailed"))}
+              >
+                <SelectTrigger>
+                  <SelectValue>{FOLIO_STYLE_LABELS[formData.defaultFolioStyle]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {FOLIO_STYLES.map((st) => (
+                    <SelectItem key={st} value={st}>{FOLIO_STYLE_LABELS[st]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {FOLIO_STYLE_DESCRIPTIONS[formData.defaultFolioStyle]}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                What the style picker opens on when a Proforma, Tax Invoice or Interim Bill is
+                generated. Front office can still choose a different layout for an individual
+                document — every style totals to the same amount.
+              </p>
             </div>
 
             <div className="space-y-3 rounded-lg border p-4">

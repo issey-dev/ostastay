@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { toUtcMidnight } from "@/lib/business-date";
 import { summarizeShiftPayments, type MethodBreakdownRow } from "@/lib/shift-summary";
+import { LINE_BUCKET_INCLUDE, lineReportBucket } from "@/lib/posting/report-bucket";
 
 // The six End-of-Day reports, snapshotted per business date during the reports
 // step (see src/app/api/eod/step/route.ts). Each is stored as a JSON blob on
@@ -56,7 +57,7 @@ async function loadFolios(propertyId: string) {
   return prisma.folio.findMany({
     where: { propertyId },
     include: {
-      lineItems: { include: { chargeCode: { select: { category: true, description: true } } } },
+      lineItems: { include: { ...LINE_BUCKET_INCLUDE, chargeCode: { select: { ...LINE_BUCKET_INCLUDE.chargeCode.select, description: true } } } },
       payments: true,
       payeeProfile: { select: { firstName: true, lastName: true } },
       reservation: {
@@ -178,7 +179,7 @@ export async function generateEodReports(propertyId: string, businessDate: Date)
     for (const li of f.lineItems) {
       if (li.isVoid) continue;
       if (li.date < day || li.date >= dayEnd) continue;
-      const category = li.chargeCode?.category ?? "OTHERS";
+      const category = lineReportBucket(li);
       const row = catMap.get(category) ?? { category, count: 0, amount: 0, tax: 0, serviceCharge: 0, total: 0 };
       row.count += 1;
       row.amount += li.amount;

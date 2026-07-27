@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useFieldArray } from "react-hook-form"
 import * as z from "zod"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Plus, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -451,10 +452,7 @@ export function AllocationsManager() {
                             value={field.value}
                             onChange={field.onChange}
                             placeholder="Select charge code..."
-                            options={chargeCodes.map((c) => ({
-                              label: `${c.code} — ${c.description}`,
-                              value: c.id,
-                            }))}
+                            options={chargeCodeOptions(chargeCodes)}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
