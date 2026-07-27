@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -15,7 +15,7 @@ import { toast } from "@/lib/toast"
 // that notices a wrong number is an OTA — and by then it has either sold a room that does
 // not exist or hidden one that does.
 
-type Night = { date: string; available: number; closed: boolean }
+type Night = { date: string; available: number; closed: boolean; prices: Record<string, number> }
 type RoomTypePlan = {
   roomTypeId: string
   roomTypeName: string
@@ -36,6 +36,15 @@ type Plan = {
 function shortDate(iso: string) {
   const [, m, d] = iso.split("-")
   return `${d}/${m}`
+}
+
+// Every channel rate id that appears on ANY night for this room type. Derived from the
+// nights rather than assumed, so a rate priced on only some dates still gets a row —
+// otherwise its partially-priced nights would be invisible.
+function rateIdsFor(rt: RoomTypePlan): string[] {
+  const ids = new Set<string>()
+  for (const n of rt.nights) for (const id of Object.keys(n.prices)) ids.add(id)
+  return [...ids].sort()
 }
 
 export function AvailabilityPreview({
@@ -142,31 +151,51 @@ export function AvailabilityPreview({
                   </thead>
                   <tbody>
                     {plan.roomTypes.map((rt) => (
-                      <tr key={rt.roomTypeId} className="border-b border-border last:border-0">
-                        <td className="p-2">
-                          <span className="font-medium">{rt.roomTypeName}</span>
-                          <span className="ml-2 font-mono text-xs text-muted-foreground">
-                            → {rt.externalRoomId}
-                          </span>
-                        </td>
-                        {rt.nights.map((n) => (
-                          <td
-                            key={n.date}
-                            className={`p-2 text-center tabular-nums ${
-                              n.closed
-                                ? "bg-destructive-muted font-semibold text-destructive"
-                                : n.available === 0
-                                  ? "text-muted-foreground"
-                                  : ""
-                            }`}
-                            // Closed and zero look different on purpose — they mean
-                            // different things at the channel.
-                            title={n.closed ? "Stop-sale — room type closed at the channel" : undefined}
-                          >
-                            {n.closed ? "×" : n.available}
+                      <Fragment key={rt.roomTypeId}>
+                        <tr className="border-b border-border">
+                          <td className="p-2">
+                            <span className="font-medium">{rt.roomTypeName}</span>
+                            <span className="ml-2 font-mono text-xs text-muted-foreground">
+                              → {rt.externalRoomId}
+                            </span>
                           </td>
+                          {rt.nights.map((n) => (
+                            <td
+                              key={n.date}
+                              className={`p-2 text-center tabular-nums ${
+                                n.closed
+                                  ? "bg-destructive-muted font-semibold text-destructive"
+                                  : n.available === 0
+                                    ? "text-muted-foreground"
+                                    : ""
+                              }`}
+                              // Closed and zero look different on purpose — they mean
+                              // different things at the channel.
+                              title={n.closed ? "Stop-sale — room type closed at the channel" : undefined}
+                            >
+                              {n.closed ? "×" : n.available}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* One row per rate actually being sent for this room type. An
+                            unpriced night shows "—" because nothing is sent for it — the
+                            channel keeps whatever price it already has. */}
+                        {rateIdsFor(rt).map((rateId) => (
+                          <tr key={`${rt.roomTypeId}-${rateId}`} className="border-b border-border last:border-0">
+                            <td className="py-1 pl-6 pr-2">
+                              <span className="font-mono text-xs text-muted-foreground">{rateId}</span>
+                            </td>
+                            {rt.nights.map((n) => (
+                              <td
+                                key={n.date}
+                                className="py-1 px-2 text-center text-xs tabular-nums text-muted-foreground"
+                              >
+                                {n.prices[rateId] != null ? n.prices[rateId] : "—"}
+                              </td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -175,7 +204,9 @@ export function AvailabilityPreview({
 
             <p className="text-xs text-muted-foreground">
               <span className="font-semibold text-destructive">×</span> = stop-sale, closed at the channel (distinct
-              from 0, which means sold out but still listed).
+              from 0, which means sold out but still listed). Indented rows are prices per channel rate;{" "}
+              <span className="font-mono">—</span> means no price is sent for that night, so the channel keeps
+              whatever it already has.
             </p>
 
             {plan.excluded.length > 0 && (
