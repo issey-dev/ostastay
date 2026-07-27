@@ -32,9 +32,33 @@ first has shipped, on branch `feature/hub-shell`.
   enterprise-level), and D-7 is which side is authoritative when ostastay's overbooking/soft-cap
   group blocks disagree with the channel manager's inventory. **D-7 must be answered before
   two-way sync (rollout Phase 3), not discovered in production.**
-- **Next (not started):** Connection screen (Beds24 credentials via the existing
-  `src/lib/secret-crypto.ts` pattern) → Logs screen (build BEFORE the sync engine so the first
-  sync is debuggable) → Sharing/mapping → sync engine, inbound read-only first.
+- **DONE — Connection screen** (branch `feature/hub-connection`, stacked on `feature/hub-shell`).
+  `ChannelConnection` model (enterprise-level, **deliberately not unique per enterprise** so
+  several accounts are allowed — this is what makes plan decision **D-6 moot**, no schema change
+  needed either way). `src/lib/channels/beds24.ts` (auth + the 30-day idle math),
+  `src/lib/channels/connection.ts` (service layer owning encryption + honest status),
+  `/api/hub/connections` (+ `[id]`, `[id]/test`), and the RHF+Zod UI at
+  `src/components/hub/channel-connection-manager.tsx`.
+  - Credentials use the existing `secret-crypto.ts` pattern. **There is deliberately no
+    "reveal" endpoint** — a channel-manager token can move real inventory and take real
+    bookings, so it is write-only from the browser's side. `PublicConnection` has no token
+    fields *at all* rather than masked ones.
+  - Health is **observed, never assumed** — status only becomes CONNECTED because a real Beds24
+    call just succeeded. A reachable-but-rejected connection returns 200 with `lastError`: the
+    check succeeded, the health is bad.
+  - The connection row is written **only after** the invite-code exchange succeeds; a
+    saved-but-unusable connection would report a credential it cannot authenticate with.
+  - `POST /api/hub/connections/[id]/test` doubles as the **keep-alive** (a successful refresh
+    resets Beds24's idle clock) and is gated on `update`, not `view` — it mutates and makes a
+    real outbound call.
+  - **Beds24 base URL + `/authentication/setup` are now VERIFIED LIVE** (2026-07-27): a real
+    call returned Beds24's own "Token not valid" for a bogus invite code. The invite-code header
+    name (`code`) is strongly indicated but not proven with a genuinely valid code.
+- **Next (not started):** Logs screen (build BEFORE the sync engine so the first sync is
+  debuggable) → Sharing/mapping → sync engine, inbound read-only first. Also still needed: a
+  **scheduled keep-alive job** — the Check button exists, but nothing runs it automatically, so
+  an untouched connection can still hit the 30-day idle death. That job is the missing half of
+  this screen.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull
