@@ -38,6 +38,12 @@ export const MODULES = [
   // Spa bookings (see .agents/docs/SPA_PLAN.md) — same add-on shape and same
   // hand-sync caveat as EXCURSIONS above.
   "SPA",
+  // Hub / channel-manager connectivity (see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md) —
+  // the first ENTERPRISE-level module, not a property-operational one. Same hand-sync
+  // caveat as EXCURSIONS above. Note the role matrices below give this to Admin/Manager
+  // automatically (they map over MODULES), and NONE to every operational role — which is
+  // exactly right: front-desk/housekeeping staff have no business holding OTA credentials.
+  "INTEGRATIONS",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];

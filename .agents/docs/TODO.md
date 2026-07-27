@@ -2,6 +2,45 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Hub level + Channel Manager (2026-07-27) — shell DONE, channel manager NOT STARTED
+
+Plan: [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md). Two separable pieces; only the
+first has shipped, on branch `feature/hub-shell`.
+
+- **DONE — Hub shell.** A new enterprise-level shell at `/e/{slug}/hub` with **zero PMS
+  functionality**. `src/app/e/[slug]/hub/layout.tsx` deliberately omits `PropertyProvider`
+  (same precedent as `src/app/osta/layout.tsx`), which is what *enforces* the no-PMS rule rather
+  than merely stating it: without it `useProperty()` throws, so property-centric components
+  cannot mount. **Do not add `PropertyProvider` to that layout.**
+- New RBAC module **`INTEGRATIONS`** (added to BOTH `src/lib/modules.ts` and
+  `prisma/rbac-seed-data.ts` — the hand-synced pair). Admin/Manager get it automatically (their
+  matrices map over `MODULES`); every operational role gets NONE.
+- New helpers in `src/lib/scope.ts`: `HUB_MODULES`, `hasHubAccess()`, `requireHubAccess()`,
+  `hasAnyPropertyModule()`. **Hub API routes must call `requireHubAccess(ctx)`** — the layout
+  check guards the UI shell only. One shared helper deliberately, rather than the inline
+  `if (!ctx.isInternal)` pattern the `/api/osta/**` routes repeat (that duplication is the shape
+  of audit finding S2).
+- PROPERTY-scoped users are hard-blocked from the Hub **regardless of role bits** — verified by
+  test and end-to-end in the browser.
+- A Hub-only administrator needs **no schema change**: `scope="ENTERPRISE"` + a role granting only
+  `INTEGRATIONS`. `src/app/e/[slug]/dashboard/page.tsx` routes such a user to `/hub` so they never
+  land on a dashboard page they cannot view.
+- Tests: `tests/business-rules/hub-access.test.ts` (7). Includes a guard asserting the two
+  `MODULES` lists stay identical — the long-standing hand-sync hazard now fails loudly.
+- **Open decisions still to settle** (see plan §"Open decisions"): D-6 is the Beds24 account model
+  (one account per enterprise vs per property — decides whether `ChannelConnection` is truly
+  enterprise-level), and D-7 is which side is authoritative when ostastay's overbooking/soft-cap
+  group blocks disagree with the channel manager's inventory. **D-7 must be answered before
+  two-way sync (rollout Phase 3), not discovered in production.**
+- **Next (not started):** Connection screen (Beds24 credentials via the existing
+  `src/lib/secret-crypto.ts` pattern) → Logs screen (build BEFORE the sync engine so the first
+  sync is debuggable) → Sharing/mapping → sync engine, inbound read-only first.
+- **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
+  **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
+  `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull
+  reservations. Webhook payload schema, retry behaviour, signature verification and real rate
+  limits are **unverified** — Beds24's Swagger is account-gated; confirm in a sandbox spike.
+
 ## Release-readiness audit + remediation (2026-07-25) — see [/AUDIT_REPORT.md](../../AUDIT_REPORT.md)
 
 Full-project audit (§1–§8 of AUDIT_REPORT.md) found 1 Critical, 5 High, ~15 Med, ~20 Low.

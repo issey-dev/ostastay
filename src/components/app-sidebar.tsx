@@ -1,11 +1,21 @@
-import { requireSession, resolveCurrentPropertyId, type Module } from "@/lib/scope"
+import { requireSession, resolveCurrentPropertyId, hasHubAccess, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
+import { ArrowLeftRight } from "@/components/icons"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
 import { AppSidebarNav } from "@/components/app-sidebar-nav"
 // NAV_MODULES comes from the neutral config module, not from the "use client" nav —
 // a server component reading a value out of a client module gets a reference proxy.
 import { NAV_MODULES } from "@/components/app-sidebar-nav.config"
-import { Sidebar, SidebarContent, SidebarMenu } from "@/components/ui/sidebar"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar"
 
 export async function AppSidebar() {
   const ctx = await requireSession().catch(() => null);
@@ -53,10 +63,30 @@ export async function AppSidebar() {
     return true;
   });
 
+  // The Hub is not a property module and deliberately never appears in NAV_MODULES —
+  // it's a separate enterprise-level shell (see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md),
+  // so it gets its own group here rather than joining the operational nav groups.
+  const showHub = hasHubAccess(ctx) && enterprisePrefix !== "";
+
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
         <AppSidebarNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} />
+        {showHub && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Enterprise</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Hub" render={<a href={`${enterprisePrefix}/hub`} />}>
+                    <ArrowLeftRight className="h-4 w-4" />
+                    <span>Hub</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
