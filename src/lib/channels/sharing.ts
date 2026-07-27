@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
+import { isValidPriceSlot, MAX_PRICE_SLOTS } from "@/lib/channels/payload";
 
 // Sharing / mapping: which properties a channel-manager connection covers, and how this
 // system's room types and rate plans correspond to the channel manager's own.
@@ -217,6 +218,15 @@ export async function setRatePlanMapping(params: {
   const ratePlan = await prisma.ratePlan.findUnique({ where: { id: ratePlanId } });
   if (!ratePlan || ratePlan.propertyId !== link.propertyId) {
     throw new ForbiddenError("Rate plan does not belong to this property");
+  }
+
+  // Beds24 exposes SIXTEEN NUMBERED PRICE SLOTS (price1..price16) rather than named rates,
+  // so this stores a slot number, not an arbitrary id. Verified against Beds24's official
+  // OpenAPI spec — see src/lib/channels/payload.ts. Rejected early because a slot that
+  // cannot be turned into `priceN` would silently never be sent.
+  const trimmedRate = externalRateId.trim();
+  if (trimmedRate && !isValidPriceSlot(trimmedRate)) {
+    throw new ForbiddenError(`Price slot must be a number from 1 to ${MAX_PRICE_SLOTS}`);
   }
 
   if (!externalRateId.trim()) {

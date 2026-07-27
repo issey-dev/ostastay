@@ -1,20 +1,26 @@
 // Normalises a raw Beds24 booking into the shape ostastay understands.
 //
-// ⚠️ THE SOURCE SHAPE IS NOT VERIFIED AGAINST A LIVE ACCOUNT. Beds24's booking payload —
-// both the webhook body and `GET /bookings` — is documented only in its account-gated
-// Swagger. The field names below follow Beds24's published booking vocabulary.
+// ✅ VERIFIED 2026-07-28 against Beds24's OFFICIAL OpenAPI specification (read from the
+// `@lionlai/beds24-v2-sdk` package, which is generated from it). Every primary field name
+// below is confirmed present on Beds24's `booking` / `newBooking` schemas:
 //
-// Everything here is arranged so that being wrong is survivable rather than destructive:
-//   - this module is PURE and exhaustively unit tested against fixtures, so its behaviour
-//     is pinned independently of whether the field names are right,
+//   id, roomId, propertyId, status, arrival, departure, numAdult, numChild,
+//   firstName, lastName, email, phone, price, referer, apiSource, channel
+//
+// `status` is a closed enum: "confirmed" | "request" | "new" | "cancelled" | "black" |
+// "inquiry" — which is why both "cancelled" and "black" count as cancellation below.
+//
+// The ALIASES are kept deliberately. They cost nothing, and they cover the webhook body
+// (whose shape Beds24 does not publish separately from the REST schema) plus any future
+// drift. Reading an extra spelling is free; missing the real one is a booking that silently
+// arrives blank.
+//
+// The rest of the design still assumes this can be wrong somewhere:
+//   - this module is PURE and exhaustively unit tested against fixtures,
 //   - the RAW payload is always stored by the caller, even when parsing fails, so a
-//     mis-parse is replayable once the real shape is known rather than lost,
+//     mis-parse is replayable rather than lost,
 //   - a partially-understood booking is kept with a `problem` note rather than discarded,
 //   - nothing here creates a Reservation, so a wrong field cannot corrupt the PMS.
-//
-// Field names are read leniently (several plausible spellings accepted) precisely BECAUSE
-// they are unverified — the cost of accepting an extra alias is nil, and the cost of
-// missing the real one is a booking that silently arrives blank.
 
 export type ParsedBooking = {
   externalBookingId: string | null;

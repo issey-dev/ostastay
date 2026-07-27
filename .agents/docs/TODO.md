@@ -184,10 +184,37 @@ first has shipped, on branch `feature/hub-shell`.
     problem noted and resolved in the Hub instead.
   - This is the first thing to write **INBOUND** exchange-log entries; until now that filter
     could never match anything.
+- **DONE — wire formats VERIFIED** (branch `feature/sync-verified-fields`, 2026-07-28).
+  Beds24's **official OpenAPI spec** was obtained by reading the `@lionlai/beds24-v2-sdk`
+  npm package, which is generated from it. The account-gated Swagger is no longer a blocker.
+  - **Inbound was already correct.** `id`, `roomId`, `propertyId`, `status`, `arrival`,
+    `departure`, `numAdult`, `numChild`, `firstName`, `lastName`, `email`, `price`,
+    `referer`, `apiSource`, `channel` all confirmed. `status` is a closed enum —
+    `confirmed | request | new | cancelled | black | inquiry` — which is why both
+    "cancelled" and "black" count as cancellation.
+  - **Outbound had THREE errors, now fixed:**
+    1. `roomId` is a **number**, not a string. A non-numeric external id is now skipped
+       rather than coerced into addressing the wrong room.
+    2. A stop-sale is **`override: "blackout"`**, not a `closed` boolean. `override: "none"`
+       is sent explicitly on open dates so a previously blacked-out date is actively
+       re-opened.
+    3. Prices are **sixteen NUMBERED SLOTS** (`price1`..`price16`), not a map keyed by rate
+       id. `ChannelRatePlanMap.externalRateId` therefore holds a **slot number 1–16**,
+       validated on write; the Sharing UI labels it as such.
+  - ⚠️ **From Beds24's spec, worth not rediscovering:** *"If you change override from
+    blackout to none without setting numAvail, numAvail will change to the maximum
+    possible."* Every range we send carries an explicit `numAvail`, so lifting a blackout
+    cannot silently re-open a room type at full capacity. **Do not make `numAvail` optional.**
+  - Also noted: `numAvail` may legitimately be negative in Beds24 (an overbooked room), but
+    we never send one — D-7 says publish actual availability, clamped at 0.
+  - Rate limiting is real: responses carry `X-FiveMinCreditLimit`,
+    `X-FiveMinCreditLimit-Remaining` and `-ResetsIn` headers. **Not yet read or respected** —
+    worth handling before high-frequency pushing.
+  - The spec also exposes `minStay`, `maxStay`, `multiplier` (required, default 1) and
+    per-channel `maxBookings` on the calendar. None are used yet.
 - **Next: extract a reservation-creation service**, then convert inbound bookings through
-  it. Also still open: the **sandbox spike** to verify the Beds24 wire formats (calendar
-  field names outbound, booking field names inbound) — still the one genuinely blocking
-  item before any of this runs against a real property.
+  it. A live sandbox account is still needed to exercise the integration end to end, but the
+  field names are no longer guesses.
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`

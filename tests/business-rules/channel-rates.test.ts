@@ -88,10 +88,12 @@ describe("Channel rates", () => {
       })
     ).id;
 
+    // Beds24 stores prices in sixteen NUMBERED SLOTS per room, so a mapping holds a slot
+    // number rather than an arbitrary rate id. Verified against its official OpenAPI spec.
     for (const [planId, ext] of [
-      [basePlanId, "beds-base"],
-      [ownPlanId, "beds-own"],
-      [derivedPlanId, "beds-der"],
+      [basePlanId, "1"],
+      [ownPlanId, "2"],
+      [derivedPlanId, "3"],
     ] as const) {
       await prisma.channelRatePlanMap.create({
         data: { linkId, ratePlanId: planId, externalRateId: ext },
@@ -159,46 +161,59 @@ describe("Channel rates", () => {
     expect(JSON.stringify([...rates.values()])).not.toContain("999");
   });
 
-  it("keys published prices by the CHANNEL's rate id, not ours", async () => {
+  it("keys published prices by the CHANNEL's price slot, not our rate-plan id", async () => {
     const plan = await computeChannelAvailability({ enterpriseId, linkId, from: day(0), to: day(1) });
     const night = plan.roomTypes[0].nights[0];
 
-    expect(night.prices["beds-own"]).toBe(175);
-    expect(night.prices["beds-der"]).toBe(180);
+    expect(night.prices["2"]).toBe(175);
+    expect(night.prices["3"]).toBe(180);
     // Our internal ids must never cross the wire.
     expect(Object.keys(night.prices)).not.toContain(ownPlanId);
   });
 
   it("a price change SPLITS a compacted range instead of being swallowed by it", () => {
     const ranges = compactNights([
-      { date: "2026-05-01", available: 2, closed: false, prices: { r1: 100 } },
-      { date: "2026-05-02", available: 2, closed: false, prices: { r1: 100 } },
-      { date: "2026-05-03", available: 2, closed: false, prices: { r1: 150 } },
+      { date: "2026-05-01", available: 2, closed: false, prices: { "1": 100 } },
+      { date: "2026-05-02", available: 2, closed: false, prices: { "1": 100 } },
+      { date: "2026-05-03", available: 2, closed: false, prices: { "1": 150 } },
     ]);
 
     // Availability is identical across all three nights. Merging on that alone would
     // publish 100 for a night that costs 150 — a silent mispricing, worse than a failure.
     expect(ranges).toHaveLength(2);
-    expect(ranges[0]).toMatchObject({ from: "2026-05-01", to: "2026-05-02", prices: { r1: 100 } });
-    expect(ranges[1]).toMatchObject({ from: "2026-05-03", to: "2026-05-03", prices: { r1: 150 } });
+    // Slots are emitted as Beds24's flat priceN fields, not a nested map.
+    expect(ranges[0]).toMatchObject({ from: "2026-05-01", to: "2026-05-02", price1: 100 });
+    expect(ranges[1]).toMatchObject({ from: "2026-05-03", to: "2026-05-03", price1: 150 });
   });
 
   it("a night that GAINS or LOSES a rate splits the range", () => {
     const ranges = compactNights([
-      { date: "2026-05-01", available: 1, closed: false, prices: { r1: 100 } },
-      // Same r1 price, but r2 appears — a different instruction to the channel.
-      { date: "2026-05-02", available: 1, closed: false, prices: { r1: 100, r2: 90 } },
-      // r1 drops out entirely — "unpriced" is a distinct state, not a match.
+      { date: "2026-05-01", available: 1, closed: false, prices: { "1": 100 } },
+      // Same slot 1 price, but slot 2 appears — a different instruction to the channel.
+      { date: "2026-05-02", available: 1, closed: false, prices: { "1": 100, "2": 90 } },
+      // Slot 1 drops out entirely — "unpriced" is a distinct state, not a match.
       { date: "2026-05-03", available: 1, closed: false, prices: {} },
     ]);
     expect(ranges).toHaveLength(3);
-    expect("prices" in ranges[2]).toBe(false);
+    expect("price1" in ranges[2]).toBe(false);
   });
 
-  it("omits the prices key entirely when nothing is priced", () => {
+  it("emits no price field at all when nothing is priced", () => {
     const ranges = compactNights([{ date: "2026-05-01", available: 1, closed: false, prices: {} }]);
-    // An absent key leaves whatever the channel already has; an empty object could be
-    // read as an instruction to clear pricing.
-    expect("prices" in ranges[0]).toBe(false);
+    // An absent priceN leaves whatever the channel already has; sending 0 would put the
+    // rooms on sale for nothing.
+    expect(Object.keys(ranges[0]).some((k) => /^price\d+$/.test(k))).toBe(false);
+  });
+
+  it("rejects a price slot outside Beds24's 1-16 range", async () => {
+    const { setRatePlanMapping } = await import("@/lib/channels/sharing");
+    // Beds24 has exactly sixteen numbered slots; anything else could never be turned into
+    // a priceN field and would silently never be sent.
+    await expect(
+      setRatePlanMapping({ enterpriseId, linkId, ratePlanId: ownPlanId, externalRateId: "99" })
+    ).rejects.toThrow();
+    await expect(
+      setRatePlanMapping({ enterpriseId, linkId, ratePlanId: ownPlanId, externalRateId: "abc" })
+    ).rejects.toThrow();
   });
 });

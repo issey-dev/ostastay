@@ -318,12 +318,16 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
                     <h4 className="mb-2 text-sm font-semibold">
                       Rate plans <span className="font-normal text-muted-foreground">(optional)</span>
                     </h4>
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Beds24 stores prices in sixteen numbered slots per room rather than named rates. Enter which
+                      slot each plan should publish to.
+                    </p>
                     <div className="overflow-x-auto rounded-md border border-border">
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>Rate plan</TableHead>
-                            <TableHead>Channel rate ID</TableHead>
+                            <TableHead>Price slot (1&ndash;16)</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -337,7 +341,7 @@ export function SharingManager({ canManage }: { canManage: boolean }) {
                                 <MappingInput
                                   value={rp.externalRateId ?? ""}
                                   disabled={!canManage}
-                                  placeholder="Beds24 rate ID"
+                                  placeholder="e.g. 1"
                                   onSave={(v) =>
                                     patchLink(link.id, { ratePlanId: rp.ratePlanId, externalRateId: v }, "Mapping saved")
                                   }
