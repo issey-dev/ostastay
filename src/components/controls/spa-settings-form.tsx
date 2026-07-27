@@ -16,6 +16,7 @@ const intString = z.string().refine((v) => !isNaN(parseInt(v)) && parseInt(v) >=
 const optionalNumString = z.string().refine((v) => v === "" || !isNaN(parseFloat(v)), "Must be a number")
 
 const settingsSchema = z.object({
+  outletId: z.string(),
   defaultOpeningTime: z.string().min(1),
   defaultClosingTime: z.string().min(1),
   slotIntervalMinutes: intString,
@@ -40,6 +41,7 @@ const settingsSchema = z.object({
 type SettingsFormValues = z.infer<typeof settingsSchema>
 
 const defaults: SettingsFormValues = {
+  outletId: "",
   defaultOpeningTime: "09:00",
   defaultClosingTime: "18:00",
   slotIntervalMinutes: "15",
@@ -71,9 +73,19 @@ export function SpaSettingsForm() {
   const [serverError, setServerError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([])
+
   const form = useForm<SettingsFormValues>({ resolver: zodResolver(settingsSchema), mode: "onChange", defaultValues: defaults })
   const lateType = form.watch("lateCancellationChargeType")
   const noShowType = form.watch("noShowChargeType")
+
+  useEffect(() => {
+    if (!propertyId) return
+    fetch(`/api/outlets?propertyId=${propertyId}`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setOutlets(data.filter((o: any) => o.isActive)) })
+      .catch(() => {})
+  }, [propertyId])
 
   useEffect(() => {
     if (!propertyId) return
@@ -83,6 +95,7 @@ export function SpaSettingsForm() {
       .then((data) => {
         if (data) {
           form.reset({
+            outletId: data.outletId ?? "",
             defaultOpeningTime: data.defaultOpeningTime,
             defaultClosingTime: data.defaultClosingTime,
             slotIntervalMinutes: String(data.slotIntervalMinutes),
@@ -184,6 +197,26 @@ export function SpaSettingsForm() {
           )} />
           <FormField control={form.control} name="allowAutoAssignment" render={({ field }) => (
             <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Allow auto-assignment</FormLabel></FormItem>
+          )} />
+        </div>
+
+        <div className="max-w-md">
+          <FormField control={form.control} name="outletId" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Spa Outlet <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+              <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                <SelectContent>
+                  <SelectItem value="none">None — post under each treatment&apos;s own charge code</SelectItem>
+                  {outlets.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                When linked, spa charges post through this outlet — attributing the revenue to it and
+                applying the outlet&apos;s Tax Rule.
+              </p>
+              <FormMessage />
+            </FormItem>
           )} />
         </div>
 

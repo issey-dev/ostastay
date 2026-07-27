@@ -2097,3 +2097,47 @@ or room-type level per date. Clarifying answers given before building:
   Live-verified the page compiles/renders and the nav item + `AVAILABILITY` permission
   resolve; full visual-with-data was limited because the in-session user's enterprise has
   no properties (added a graceful "Select a property" empty state).
+
+## Stationery redesign — branding moves to Property, per-document tabs (2026-07-27)
+
+App owner request (with a PDF template, "Stationery redesign project.pdf"): (1) drop the
+Stationaries **Branding** tab — branding is read from the property's own General control;
+(2) add a **font** picker to General > Appearance so all stationaries inherit it; (3) the
+tabs should be **Invoices** (Proforma + Tax, differing only by header line), **Receipts**,
+**Confirmation Letter**, **Registration Card**, **Account Statement** (template TBD); (4)
+recreate every document to match the template; (5) the live preview must follow the
+selected tab (previously required switching the tab *and* a separate dropdown).
+
+Decisions taken (owner-confirmed via questions):
+- **Branding source = Property.** Documents source identity (name/logo/tax/phone/email/
+  **address**) from the property's General profile, accent from **Property.bannerColor**,
+  and font from a new **Property.stationeryFont** — all resolved by
+  `resolveStationeryBrand()` in `src/lib/stationery-brand.ts`. Added `Property.address`
+  (General > Property Information) and `Property.stationeryFont` (General > Appearance,
+  new `PropertyStationeryFontManager`). The outlet-header override for on-behalf-of-outlet
+  walk-in bills is unchanged (outlet identity wins; property accent/font still apply).
+- **Deprecated, not dropped:** the old `EnterpriseSettings.invoice*` branding columns
+  (name/logo/colour/font/tax/phone/email/address) are retained in the DB but nothing reads
+  them for rendering and the UI no longer writes them — remove in a later cleanup migration.
+- **Footer/terms are per-document** (owner chose "separate per document"): added
+  `EnterpriseSettings.receiptFooterText/receiptTerms/statementFooterText/statementTerms`.
+  Invoices keep `invoiceHeaderText` + payment-info block + `invoicePaymentTerms` +
+  `invoiceFooterText`; Confirmation Letter and Registration Card keep their existing fields.
+- **One set of document components** (`src/components/print/stationery/`): redesigned
+  blocks + five document layouts (`InvoiceDocument`/`ReceiptDocument`/
+  `ConfirmationLetterDocument`/`RegistrationCardDocument`/`StatementDocument`). Both the
+  real print pages (live data) and the configurator preview (sample data via `sample.ts`,
+  scaled by `StationeryPreviewFrame`) render the *same* components — the preview can no
+  longer drift from what prints. The Confirmation Letter, previously a standalone layout,
+  now uses the shared `PrintDocumentShell` + document component too.
+- **Font map de-duplicated** into `src/lib/stationery-fonts.ts`
+  (`resolveStationeryFontClass`); the three old copies (Stationaries manager, print shell,
+  confirmation-letter inline) are gone. `src/components/print/print-blocks.tsx` deleted.
+- **Preview follows the tab**; the Invoices tab has a Proforma⇄Tax preview toggle (header
+  line only). Account Statement tab is scaffolded (footer/terms editable, interim preview)
+  pending the owner's dedicated statement template.
+- Supersedes the three-tab (Branding / Financial Documents / Confirmation Letter) grouping
+  and the separate preview dropdown described in the 2026-07-19 "Stationaries page" entry.
+- **Verification**: migration `20260726224317_stationery_property_branding` applied; `tsc`
+  clean (only a pre-existing dev-tools script error remains); new
+  `tests/business-rules/stationery-brand.test.ts` (6 tests) passing.

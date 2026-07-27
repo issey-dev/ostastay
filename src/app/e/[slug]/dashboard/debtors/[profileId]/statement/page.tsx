@@ -4,22 +4,11 @@ import { useEffect, useState, use } from "react"
 import { format, parseISO } from "date-fns"
 import { Mail } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
 import { totalOutstanding } from "@/lib/debtor-aging"
-import {
-  PrintDocumentShell,
-  PrintLoading,
-  PrintError,
-  resolvePrintFontClass,
-} from "@/components/print/print-document-shell"
-import {
-  PrintDocumentHeader,
-  PrintInfoColumns,
-  PrintTransactionTable,
-  PrintTotals,
-  PrintFooter,
-  type PrintTransactionRow,
-} from "@/components/print/print-blocks"
+import { resolveStationeryBrand } from "@/lib/stationery-brand"
+import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
+import { StatementDocument } from "@/components/print/stationery/documents"
+import type { StationeryRow, MetaItem } from "@/components/print/stationery/blocks"
 
 export default function DebtorStatementPage({ params }: { params: Promise<{ profileId: string; slug: string }> }) {
   const { profileId } = use(params)
@@ -76,12 +65,12 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
   const { profile, property, invoices, balance, aging, settings } = data
   const accountName = profile.companyName || `${profile.firstName} ${profile.lastName || ""}`.trim()
 
-  const brandColor = resolveInvoiceBrandColor(settings?.invoiceBrandColor)
-  const fontClassName = resolvePrintFontClass(settings?.invoiceFontFamily)
+  const brand = resolveStationeryBrand(property)
+  const currency = property.defaultCurrency || "USD"
 
   const totalInvoiced = invoices.reduce((sum: number, inv: any) => sum + inv.total, 0)
 
-  const invoiceRows: PrintTransactionRow[] = invoices.map((inv: any) => ({
+  const invoiceRows: StationeryRow[] = invoices.map((inv: any) => ({
     date: inv.checkOutDate ? format(parseISO(inv.checkOutDate), "dd-MMM-yy") : "—",
     description: `${inv.guestName}${inv.confirmationNo ? ` — ${inv.confirmationNo}` : ""}${!inv.isOpen ? " (Paid)" : ""}`,
     reference: inv.checkInDate && inv.checkOutDate
@@ -90,10 +79,24 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
     amount: inv.total,
   }))
 
+  const meta: MetaItem[] = [
+    { label: "AR Number", value: profile.arNumber || "—" },
+    { label: "Date", value: format(new Date(), "dd-MMM-yy") },
+    { label: "Property", value: property.name },
+  ]
+
+  const agingRow: MetaItem[] = [
+    { label: "Current", value: aging.current.toFixed(2) },
+    { label: "1–30d", value: aging["1-30"].toFixed(2) },
+    { label: "31–60d", value: aging["31-60"].toFixed(2) },
+    { label: "61–90d", value: aging["61-90"].toFixed(2) },
+    { label: "90+d", value: aging["90+"].toFixed(2) },
+  ]
+
   return (
     <PrintDocumentShell
       previewLabel={`Account Statement for ${accountName}`}
-      fontClassName={fontClassName}
+      fontClassName={brand.fontClass}
       extraActions={
         <div className="flex items-center gap-2">
           {sendResult && (
@@ -105,59 +108,21 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
         </div>
       }
     >
-      <PrintDocumentHeader
-        brandName={settings?.invoiceBrandName || property.name}
-        logoUrl={settings?.invoiceLogoUrl}
-        address={settings?.invoiceAddress}
-        phone={settings?.invoicePhone}
-        email={settings?.invoiceEmail}
-        taxId={settings?.invoiceTaxId}
-        brandColor={brandColor}
-        title="Account Statement"
-        metaRows={[
-          { label: "AR Number", value: profile.arNumber || "—" },
-          { label: "Date", value: format(new Date(), "dd-MMM-yy") },
-          { label: "Property", value: property.name },
-        ]}
-      />
-
-      <PrintInfoColumns
-        columns={[
-          { heading: "Account", lines: [accountName, profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"] },
-          { heading: "Open Balance Aging", lines: [
-            `Current: ${aging.current.toFixed(2)}`,
-            `1-30 days: ${aging["1-30"].toFixed(2)}`,
-            `31-60 days: ${aging["31-60"].toFixed(2)}`,
-            `61-90 days: ${aging["61-90"].toFixed(2)}`,
-            `90+ days: ${aging["90+"].toFixed(2)}`,
-          ] },
-        ]}
-      />
-
-      <div className="mb-2">
-        <h3 className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-2">Invoices</h3>
-        <PrintTransactionTable rows={invoiceRows} brandColor={brandColor} emptyLabel="No invoices billed to this account yet." />
-      </div>
-
-      <PrintTotals
-        lines={[
+      <StatementDocument
+        brand={brand}
+        meta={meta}
+        account={{ name: accountName, lines: [profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"] }}
+        aging={agingRow}
+        rows={invoiceRows}
+        totals={[
           { label: "Total Invoiced", amount: totalInvoiced },
           { label: "Open Balance (Aging)", amount: totalOutstanding(aging) },
         ]}
         balanceLabel="Balance Due"
         balanceAmount={balance}
-        brandColor={brandColor}
-      />
-
-      <PrintFooter
-        paymentInfo={{
-          accountName: settings?.invoicePaymentAccountName,
-          accountNumber: settings?.invoicePaymentAccountNumber,
-          iban: settings?.invoicePaymentIban,
-          bankInfo: settings?.invoicePaymentBankInfo,
-        }}
-        terms={settings?.invoicePaymentTerms}
-        closingText={settings?.invoiceFooterText}
+        currency={currency}
+        terms={settings?.statementTerms}
+        footerNote={settings?.statementFooterText}
       />
     </PrintDocumentShell>
   )

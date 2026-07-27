@@ -32,7 +32,11 @@ const PRINT_DOCUMENT_FILES = [
   "src/app/print/folios/[id]/page.tsx",
   "src/app/e/[slug]/dashboard/folios/[id]/print/page.tsx",
   "src/components/print/print-document-shell.tsx",
-  "src/components/print/print-blocks.tsx",
+  // Shared stationery document components (header/table/totals/footer + the five document
+  // layouts) — palette-fixed "paper" markup, same rationale as the print pages that render
+  // them. Consumed by both the print pages and the Stationaries configurator preview.
+  "src/components/print/stationery/blocks.tsx",
+  "src/components/print/stationery/documents.tsx",
   "src/app/e/[slug]/dashboard/payments/[id]/receipt/page.tsx",
   "src/app/e/[slug]/dashboard/cashiering/exchange/[id]/receipt/page.tsx",
   // Guest/AR documents that render as fixed "paper" for print, same rationale as the

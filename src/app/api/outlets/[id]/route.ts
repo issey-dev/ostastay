@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { OUTLET_TYPES, TAX_OVERRIDE_MODES } from "../route";
+import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
 import { logActivity } from "@/lib/activity-log";
 
 const OUTLET_INCLUDE = {
@@ -47,6 +48,25 @@ export async function PATCH(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
+    // `code` is only re-validated when the caller sends it; a PATCH that omits it keeps
+    // the existing code. Once set, uniqueness is enforced per property (excluding self).
+    let code = existing.code;
+    if (body.code !== undefined) {
+      code = normalizeOutletCode(body.code);
+      const codeError = validateOutletCode(code);
+      if (codeError) {
+        return NextResponse.json({ error: codeError }, { status: 400 });
+      }
+      if (code !== existing.code) {
+        const codeClash = await prisma.outlet.findFirst({
+          where: { propertyId: existing.propertyId, code, id: { not: id } },
+        });
+        if (codeClash) {
+          return NextResponse.json({ error: `Another outlet at this property already uses the code "${code}"` }, { status: 409 });
+        }
+      }
+    }
+
     const outletType = body.outletType !== undefined
       ? (OUTLET_TYPES.includes(body.outletType) ? body.outletType : "OTHER")
       : existing.outletType;
@@ -85,6 +105,11 @@ export async function PATCH(
         where: { id },
         data: {
           name: body.name ?? existing.name,
+          code,
+          address: body.address !== undefined ? (body.address?.trim() || null) : existing.address,
+          email: body.email !== undefined ? (body.email?.trim() || null) : existing.email,
+          phone: body.phone !== undefined ? (body.phone?.trim() || null) : existing.phone,
+          taxNo: body.taxNo !== undefined ? (body.taxNo?.trim() || null) : existing.taxNo,
           description: body.description !== undefined ? body.description : existing.description,
           isActive: body.isActive !== undefined ? !!body.isActive : existing.isActive,
           outletType,

@@ -485,6 +485,53 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 
 ## Recently completed (for momentum visibility — trim entries older than a few weeks)
 
+- **2026-07-27** — **Stationery redesign** (app-owner request + PDF template). Branding for
+  every printed document now comes from the **property** (General profile + Appearance), not
+  `EnterpriseSettings.invoice*`: added `Property.address` (Property Information) and
+  `Property.stationeryFont` (Appearance, new `PropertyStationeryFontManager`), resolved by
+  `resolveStationeryBrand()` (`src/lib/stationery-brand.ts`). Old `invoice*` branding columns
+  deprecated (kept in DB, unread — remove in a later migration). Stationaries configurator
+  tabs are now **Invoices / Receipts / Confirmation Letter / Registration Card / Account
+  Statement**; the live preview follows the active tab (the old switch-tab-*and*-dropdown is
+  gone) and the Invoices tab has a Proforma⇄Tax toggle. All five documents recreated per the
+  template in one shared module (`src/components/print/stationery/`) consumed by both the
+  print pages and the preview (via `StationeryPreviewFrame` + sample data) so they can't
+  drift. Per-document footer/terms added (`receipt*`/`statement*` on `EnterpriseSettings`).
+  Font map de-duplicated into `src/lib/stationery-fonts.ts`; `print-blocks.tsx` deleted; the
+  Confirmation Letter folded into the shared `PrintDocumentShell`. Migration
+  `20260726224317_stationery_property_branding`; new `stationery-brand.test.ts` (6) green;
+  `tsc` clean. **Follow-up:** Account Statement tab is scaffolded (footer/terms + interim
+  preview) — redesign its layout when the owner provides the statement template. See
+  DECISIONS.md "Stationery redesign" (2026-07-27).
+- **2026-07-27** — **Outlets as first-class billing entities + per-outlet sales checks +
+  Spa/Excursion outlet linking** (app-owner request). Three phases:
+  1. `Outlet` gains `code` (uppercase 2–8, unique per property, doubles as the check
+     prefix), `address`/`email`/`phone`/`taxNo`, and a `checkSequence` counter
+     (migration `20260726191243_outlet_details_and_check_seq`). Add/Edit modal is now a
+     two-panel "book" (Outlet Information | Financial Information); Tax Override relabeled
+     "Tax Rule (Default/Custom)"; charge-code pool unchanged, just relocated. Code
+     validation lives in `src/lib/outlet-code.ts`. Existing outlets keep `code = null`
+     until first edit (API requires one on save; list shows "Set a code").
+  2. New `OutletCheck` model + `FolioLineItem.outletCheckId`;
+     `allocateOutletCheckNumber()` in `document-sequence.ts` (per-outlet counter →
+     `SPA-00001`). `pos/charge` opens a check on the first outlet post and reuses it via
+     `outletCheckId` for the session; a walk-in bill is 1:1 with a check and rejects a
+     second outlet. Walk-in outlet bills print the **outlet's own header** + Check No but
+     still get the legal `TAX_INVOICE` number (owner decision); room-posted outlet
+     charges reference the check number on the guest-house invoice.
+  3. `SpaSettings.outletId` + `ExcursionSettings` (new model + `api/excursions/settings`
+     route + Controls card). When linked, spa/excursion booking posts stamp
+     `FolioLineItem.outletId` and route tax through `resolveOutletChargeTax` (outlet Tax
+     Rule wins); unlinked = unchanged. Migration `20260726192342_spa_excursion_outlet_link`.
+  Tests: `outlet-code`, `outlet-check-numbering`, `outlet-module-link` (18 outlet tests
+  pass; 64 touched-path regression tests pass; `tsc --noEmit` clean). **Not** visually
+  verified in-browser — Controls/Fast Post are behind the auth wall (no seeded creds),
+  so the two-panel modal, Fast Post check flow, and walk-in outlet-header bill were
+  verified at the route/logic level only.
+  Backfill for pre-existing null codes: `scripts/dev-tools/backfill-outlet-codes.ts`
+  (derives from name + dedupes per property, idempotent; dry-run by default, `--apply` to
+  write). Run once against dev.db on 2026-07-27 (Veyo Garden→VEY, Maaveyo Spa→MAA).
+  Run against other environments as they upgrade.
 - **2026-07-24** — **Reservation detail screen redesign + Transport feature.** Reworked
   `src/app/e/[slug]/dashboard/reservations/[id]/page.tsx`: Guest is now the first section
   (lead guest clickable → profile, VIP badge/level, nationality flag+name, pax w/ icon;

@@ -222,6 +222,10 @@ model Property {
   taxId            String?
   contactPhone     String?
   contactEmail     String?
+  // Street/location line shown on every printed stationary header (Invoices, Receipts,
+  // Confirmation Letters, Registration Cards, Statements). Per-property, since branding
+  // identity is sourced from the property's own General profile — not enterprise-wide.
+  address          String?
   latitude         Float?
   longitude        Float?
   starRating       Int?
@@ -231,7 +235,18 @@ model Property {
   // means no custom accent (monochromatic default). A raw hex, not a preset name, so a
   // future free-form color picker doesn't need a schema change. Distinct per property,
   // never shared across an enterprise's other properties.
+  //
+  // Doubles as the accent colour of every printed stationary for this property (invoice
+  // header rules, table borders, totals) — chosen in Controls > General > Appearance,
+  // alongside stationeryFont below. Null falls back to the default brand colour at render
+  // time (see resolveInvoiceBrandColor).
   bannerColor String?
+
+  // Typeface for every printed stationary for this property — set in Controls > General >
+  // Appearance so all documents inherit one font. Maps to a Tailwind font class via
+  // resolveStationeryFontClass (Geist/Inter/Roboto → sans, Georgia → serif, Courier → mono).
+  // Null falls back to "Geist".
+  stationeryFont String? @default("Geist")
 
   // Per-property arrival gate (app-owner decision 2026-07-21): when on, a guest can
   // only be checked into a room whose housekeeping status is INSPECTED — the
@@ -301,6 +316,7 @@ model Property {
   workLocationUsers            User[]                        @relation("UserWorkLocation")
   sequences                    PropertySequence[]
   outlets                      Outlet[]
+  outletChecks                 OutletCheck[]
   folios                       Folio[]
   currencyExchanges            CurrencyExchange[]
   allocations                  Allocation[]
@@ -315,6 +331,7 @@ model Property {
   // bookings sold through one, if purchased.
   moduleAccessOverrides        PropertyModuleAccess[]
   excursionTypes               ExcursionType[]
+  excursionSettings            ExcursionSettings?
   excursionBookings            ExcursionBooking[]
   // Spa Booking add-on (see SPA_PLAN.md) — same per-property add-on shape as
   // Excursions above, gated through the same moduleAccessOverrides.
@@ -1027,6 +1044,7 @@ model Folio {
   routingTargetRules FolioRoutingRule[] @relation("RoutingTargetFolio")
   excursionBookings  ExcursionBooking[]
   spaAppointments    SpaAppointment[]
+  outletChecks       OutletCheck[]
 
   @@index([propertyId])
 }
@@ -1042,6 +1060,12 @@ model FolioLineItem {
   // charge code itself works.
   outletId            String?
   outlet              Outlet?         @relation(fields: [outletId], references: [id])
+  // The outlet sales check this line belongs to, if it was posted through an outlet.
+  // Groups the line items sold in one Fast Post session (or one walk-in bill) under a
+  // single human-readable check number (SPA-00001). Null for non-outlet charges.
+  // SetNull on delete — losing the grouping never deletes billing history.
+  outletCheckId       String?
+  outletCheck         OutletCheck?    @relation(fields: [outletCheckId], references: [id], onDelete: SetNull)
   // Which RoomAssignment (segment) this line came from — set on the Nightly Room
   // Charge and Extra Occupancy Charge lines posted by Night Audit, null for every
   // other charge type. Lets checkout attribute room revenue back to the specific rate
@@ -1258,6 +1282,20 @@ model Outlet {
   outletType  String   @default("OTHER")
   isActive    Boolean  @default(true)
 
+  // Business identity — an Outlet can raise walk-in bills "on its own behalf", so it
+  // carries its own printed header (name above + these) and a tax registration number.
+  // All nullable: legacy outlets predate these and are backfilled on next edit.
+  code    String? // Short prefix for this outlet's sales-check numbers, e.g. "SPA" -> SPA-00001. Required by the API, nullable in the DB so existing rows don't break; unique per property (NULLs stay distinct).
+  address String?
+  email   String?
+  phone   String?
+  taxNo   String?
+
+  // Per-outlet sales-check counter. Atomically incremented by allocateOutletCheckNumber
+  // (src/lib/document-sequence.ts) when a check is opened; combined with `code` to form
+  // the human-readable check number (SPA-00001). Never reset — numbers are never reused.
+  checkSequence Int @default(0)
+
   // Top-level tax override, optional: NONE = no override, every charge code posted
   // through this outlet uses its own useDefaultTax/taxProfile exactly as everywhere
   // else. DEFAULT_ENGINE = force the enterprise default engine (Service Charge + GST)
@@ -1268,13 +1306,19 @@ model Outlet {
   taxProfileId    String?
   taxProfile      TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
-  chargeCodes    OutletChargeCode[]
-  folioLineItems FolioLineItem[]
+  chargeCodes       OutletChargeCode[]
+  folioLineItems    FolioLineItem[]
+  checks            OutletCheck[]
+  // Module-level links (see SpaSettings.outlet / ExcursionSettings.outlet). Array-typed
+  // back-relations though in practice each property links at most one outlet per module.
+  spaSettings       SpaSettings[]       @relation("SpaOutlet")
+  excursionSettings ExcursionSettings[] @relation("ExcursionOutlet")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, name])
+  @@unique([propertyId, code])
 }
 
 // The curated many-to-many "shared pool" — an explicit join model (not Prisma's
@@ -1291,6 +1335,35 @@ model OutletChargeCode {
   createdAt DateTime @default(now())
 
   @@unique([outletId, chargeCodeId])
+}
+
+// One outlet "sales check" — the identifiable grouping of charges sold through an Outlet
+// in a single Fast Post session or a single walk-in bill. Its `checkNumber` (e.g.
+// SPA-00001) is drawn once from the outlet's own counter (Outlet.checkSequence, via
+// allocateOutletCheckNumber) so outlet sales are recognizable at a glance and never
+// reuse a number. A walk-in bill maps 1:1 to a check (folioId set, and the bill prints
+// the outlet's own header); room-posted charges reference the check number on the
+// guest-house invoice without moving off it.
+model OutletCheck {
+  id          String   @id @default(uuid())
+  outletId    String
+  outlet      Outlet   @relation(fields: [outletId], references: [id])
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // Set only for a walk-in bill's check (one check == one walk-in folio). Null while a
+  // check groups charges posted onto in-house room folios.
+  folioId     String?
+  folio       Folio?   @relation(fields: [folioId], references: [id])
+  checkNumber String
+  isClosed    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  lineItems FolioLineItem[]
+
+  @@unique([outletId, checkNumber])
+  @@index([folioId])
+  @@index([propertyId])
 }
 
 model EnterpriseSettings {
@@ -1324,7 +1397,12 @@ model EnterpriseSettings {
   // Null disables commission posting entirely, even if a rate plan has a rate set.
   commissionChargeCodeId           String?
 
-  // Custom Invoice Settings
+  // DEPRECATED branding identity (name/logo/colour/font/tax/contact/address). Stationery
+  // branding now comes from the property's own General profile + Appearance (Property.name,
+  // logoUrl, taxId, contactPhone, contactEmail, address, bannerColor, stationeryFont) — see
+  // resolveStationeryBrand() in src/lib/stationery-brand.ts. These columns are retained only
+  // so existing rows aren't dropped; nothing reads them for rendering and the Stationaries
+  // UI no longer writes them. Remove in a later cleanup migration once confirmed unused.
   invoiceBrandName    String?
   invoiceLogoUrl      String?
   invoiceBrandColor   String? @default("#4f46e5")
@@ -1333,17 +1411,30 @@ model EnterpriseSettings {
   invoicePhone        String?
   invoiceEmail        String?
   invoiceAddress      String?
+
+  // Invoice document content (Proforma + Tax share everything but the header line).
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
 
-  // Payment Information footer block shown on printed invoices/receipts (a raw hex
-  // account/bank block, not a payment-gateway integration — the app never moves money
-  // itself). All optional; the block is simply omitted where none are set.
+  // Payment Information footer block shown on printed invoices (a raw hex account/bank
+  // block, not a payment-gateway integration — the app never moves money itself). All
+  // optional; the block is simply omitted where none are set.
   invoicePaymentAccountName   String?
   invoicePaymentAccountNumber String?
   invoicePaymentIban          String?
   invoicePaymentBankInfo      String?
+
+  // Receipt document content (Payment + Currency Exchange receipts — the header label is
+  // the only structural difference between them). Separate from the invoice footer/terms
+  // so receipts can carry their own closing wording.
+  receiptFooterText String?
+  receiptTerms      String?
+
+  // Account/Debtor Statement document content — its own footer/terms, separate from
+  // invoices. (Full statement layout redesign pending the owner's template.)
+  statementFooterText String?
+  statementTerms      String?
 
   // Generic hotel-info/policy paragraph shown near the bottom of the guest
   // Confirmation Letter (see src/app/e/[slug]/dashboard/reservations/[id]/
@@ -1857,6 +1948,22 @@ model PropertyModuleAccess {
   @@unique([propertyId, module])
 }
 
+// Property-level Excursions settings — currently just the optional module-level Outlet
+// link (mirrors SpaSettings). A missing row means "defaults / unlinked", every property's
+// starting state, so the settings API upserts lazily. When outletId is set, excursion
+// charges post through that outlet (revenue attribution + the outlet's Tax Rule via
+// resolveOutletChargeTax); null keeps the current behavior (the excursion type's own
+// charge code and tax).
+model ExcursionSettings {
+  propertyId String   @id
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  outletId String?
+  outlet   Outlet? @relation("ExcursionOutlet", fields: [outletId], references: [id])
+
+  updatedAt DateTime @updatedAt
+}
+
 // Property-scoped catalog entry for a bookable activity (Snorkelling Trip, Island
 // Hopping, Night Fishing...) — same scoping convention as RatePlan/Allocation/Outlet:
 // the offering differs per property, but the linked ChargeCode stays enterprise-wide.
@@ -2216,6 +2323,13 @@ model SpaRoomAvailabilityException {
 model SpaSettings {
   propertyId String   @id
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Optional module-level Outlet link. When set, every Spa charge posts through this
+  // outlet — attributing its revenue and applying the outlet's Tax Rule (see
+  // resolveOutletChargeTax). Null = unlinked; Spa keeps working exactly as before,
+  // posting under the treatment's own charge code and tax.
+  outletId String?
+  outlet   Outlet? @relation("SpaOutlet", fields: [outletId], references: [id])
 
   defaultOpeningTime              String  @default("09:00")
   defaultClosingTime              String  @default("18:00")

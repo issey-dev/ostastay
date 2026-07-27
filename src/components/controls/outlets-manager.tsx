@@ -33,6 +33,11 @@ type TaxProfileOption = { id: string; name: string }
 
 const BLANK_FORM = () => ({
   name: "",
+  code: "",
+  address: "",
+  email: "",
+  phone: "",
+  taxNo: "",
   description: "",
   outletType: "OTHER",
   isActive: true,
@@ -99,6 +104,11 @@ export function OutletsManager() {
   const openEdit = (outlet: any) => {
     setForm({
       name: outlet.name,
+      code: outlet.code || "",
+      address: outlet.address || "",
+      email: outlet.email || "",
+      phone: outlet.phone || "",
+      taxNo: outlet.taxNo || "",
       description: outlet.description || "",
       outletType: outlet.outletType,
       isActive: outlet.isActive,
@@ -177,92 +187,132 @@ export function OutletsManager() {
               <Plus className="w-4 h-4 mr-2" /> Add Outlet
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
               <DialogTitle>{isEditMode ? "Edit Outlet" : "Add Outlet"}</DialogTitle>
               <DialogDescription>
-                A revenue-generating point of sale — Spa, Restaurant, Bar, etc. Curate which
-                charge codes it exposes, and optionally override tax handling for everything
-                sold through it.
+                A revenue-generating point of sale — Spa, Restaurant, Bar, etc. Its own details
+                appear on walk-in bills raised on its behalf; the financial side curates which
+                charge codes it exposes and how tax is handled.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Name *</Label>
-                  <Input required placeholder="e.g. Ocean Spa" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:divide-x md:divide-border">
+                {/* Left — Outlet Information */}
+                <div className="space-y-4 md:pr-6">
+                  <h3 className="text-sm font-semibold text-foreground">Outlet Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Name *</Label>
+                      <Input required placeholder="e.g. Ocean Spa" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Type</Label>
+                      <Select value={form.outletType} onValueChange={(v) => setForm((p) => ({ ...p, outletType: v ?? "OTHER" }))}>
+                        <SelectTrigger><SelectValue>{OUTLET_TYPE_LABELS[form.outletType]}</SelectValue></SelectTrigger>
+                        <SelectContent>
+                          {OUTLET_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Code *</Label>
+                    <Input
+                      required
+                      placeholder="e.g. SPA"
+                      value={form.code}
+                      maxLength={8}
+                      onChange={(e) => setForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      2–8 letters/digits. Prefixes this outlet&apos;s sales-check numbers (e.g. {form.code ? form.code : "SPA"}-00001).
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <Input placeholder="Outlet address (shown on walk-in bills)" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input type="email" placeholder="outlet@example.com" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input placeholder="+960 ..." value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tax No</Label>
+                    <Input placeholder="Tax registration number" value={form.taxNo} onChange={(e) => setForm((p) => ({ ...p, taxNo: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input placeholder="Optional details..." value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={form.outletType} onValueChange={(v) => setForm((p) => ({ ...p, outletType: v ?? "OTHER" }))}>
-                    <SelectTrigger><SelectValue>{OUTLET_TYPE_LABELS[form.outletType]}</SelectValue></SelectTrigger>
-                    <SelectContent>
-                      {OUTLET_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+
+                {/* Right — Financial Information */}
+                <div className="space-y-4 md:pl-6">
+                  <h3 className="text-sm font-semibold text-foreground">Financial Information</h3>
+                  <div className="space-y-2">
+                    <Label>Tax Rule</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Choose <span className="font-medium">Default</span> to let each charge code keep its own
+                      tax, or <span className="font-medium">Custom</span> to force one handling for everything
+                      sold through this outlet.
+                    </p>
+                    <Select value={form.taxOverrideMode} onValueChange={(v) => setForm((p) => ({ ...p, taxOverrideMode: (v ?? "NONE") as any }))}>
+                      <SelectTrigger>
+                        <SelectValue>
+                          {form.taxOverrideMode === "NONE" ? "Default — each charge code's own tax"
+                            : form.taxOverrideMode === "DEFAULT_ENGINE" ? "Custom — force default Maldives Tax engine"
+                            : "Custom — force a specific Tax profile"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Default — each charge code&apos;s own tax</SelectItem>
+                        <SelectItem value="DEFAULT_ENGINE">Custom — force default Maldives Tax engine</SelectItem>
+                        <SelectItem value="CUSTOM">Custom — force a specific Tax profile</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.taxOverrideMode === "CUSTOM" && (
+                      <SearchableSelect
+                        required
+                        options={taxProfiles.map((tp) => ({ label: tp.name, value: tp.id }))}
+                        value={form.taxProfileId}
+                        onChange={(v) => setForm((p) => ({ ...p, taxProfileId: v }))}
+                        placeholder="Select Custom Tax profile..."
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-2 border-t pt-4">
+                    <Label>Charge Codes</Label>
+                    <OutletChargeCodePicker
+                      allChargeCodes={chargeCodes}
+                      selectedIds={form.chargeCodeIds}
+                      onChange={(next) => setForm((p) => ({ ...p, chargeCodeIds: next }))}
+                    />
+                  </div>
+
+                  {isEditMode && (
+                    <div className="flex items-center gap-2 border-t pt-4">
+                      <input
+                        type="checkbox"
+                        id="outletActive"
+                        className="h-4 w-4"
+                        checked={form.isActive}
+                        onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+                      />
+                      <Label htmlFor="outletActive" className="cursor-pointer select-none font-normal">Active</Label>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input placeholder="Optional details..." value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-              </div>
-
-              <div className="space-y-2 border-t pt-4">
-                <Label>Tax Override <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <p className="text-xs text-muted-foreground">
-                  When set, every charge posted through this outlet uses this tax handling
-                  instead of the charge code&apos;s own — whether that code is on the default
-                  engine or its own Custom Tax profile.
-                </p>
-                <Select value={form.taxOverrideMode} onValueChange={(v) => setForm((p) => ({ ...p, taxOverrideMode: (v ?? "NONE") as any }))}>
-                  <SelectTrigger>
-                    <SelectValue>
-                      {form.taxOverrideMode === "NONE" ? "No override — use each charge code's own tax"
-                        : form.taxOverrideMode === "DEFAULT_ENGINE" ? "Force default Maldives Tax engine"
-                        : "Force a specific Custom Tax profile"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">No override — use each charge code&apos;s own tax</SelectItem>
-                    <SelectItem value="DEFAULT_ENGINE">Force default Maldives Tax engine</SelectItem>
-                    <SelectItem value="CUSTOM">Force a specific Custom Tax profile</SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.taxOverrideMode === "CUSTOM" && (
-                  <SearchableSelect
-                    required
-                    options={taxProfiles.map((tp) => ({ label: tp.name, value: tp.id }))}
-                    value={form.taxProfileId}
-                    onChange={(v) => setForm((p) => ({ ...p, taxProfileId: v }))}
-                    placeholder="Select Custom Tax profile..."
-                  />
-                )}
-              </div>
-
-              <div className="space-y-2 border-t pt-4">
-                <Label>Charge Codes</Label>
-                <OutletChargeCodePicker
-                  allChargeCodes={chargeCodes}
-                  selectedIds={form.chargeCodeIds}
-                  onChange={(next) => setForm((p) => ({ ...p, chargeCodeIds: next }))}
-                />
-              </div>
-
-              {isEditMode && (
-                <div className="flex items-center gap-2 border-t pt-4">
-                  <input
-                    type="checkbox"
-                    id="outletActive"
-                    className="h-4 w-4"
-                    checked={form.isActive}
-                    onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
-                  />
-                  <Label htmlFor="outletActive" className="cursor-pointer select-none font-normal">Active</Label>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2 pt-4">
+              <div className="flex justify-end space-x-2 border-t pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>Save</Button>
               </div>
@@ -296,8 +346,9 @@ export function OutletsManager() {
             <TableHeader className="bg-muted/80">
               <TableRow>
                 <SortableTableHead columnKey="name" sort={sort}>Name</SortableTableHead>
+                <TableHead>Code</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Tax Override</TableHead>
+                <TableHead>Tax Rule</TableHead>
                 <TableHead>Charge Codes</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -307,6 +358,11 @@ export function OutletsManager() {
               {sortedOutlets.map((o) => (
                 <TableRow key={o.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{o.name}</TableCell>
+                  <TableCell>
+                    {o.code
+                      ? <span className="font-mono text-xs">{o.code}</span>
+                      : <span className="text-xs text-warning">Set a code</span>}
+                  </TableCell>
                   <TableCell><Badge variant="outline" className="font-normal">{OUTLET_TYPE_LABELS[o.outletType] || o.outletType}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {o.taxOverrideMode === "NONE" ? "—" : o.taxOverrideMode === "DEFAULT_ENGINE" ? "Default engine" : o.taxProfile?.name || "Custom"}
@@ -331,7 +387,7 @@ export function OutletsManager() {
               ))}
               {outlets.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-0">
+                  <TableCell colSpan={7} className="py-0">
                     <EmptyState icon={Store} title="No outlets configured for this property" />
                   </TableCell>
                 </TableRow>

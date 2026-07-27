@@ -57,8 +57,12 @@ export async function PUT(
         taxId: body.taxId,
         contactPhone: body.contactPhone,
         contactEmail: body.contactEmail,
+        address: body.address,
         starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
         bannerColor: body.bannerColor,
+        // Stationery typeface (Controls > General > Appearance). undefined leaves it
+        // unchanged so the banner-colour PUT and the font PUT don't clobber each other.
+        stationeryFont: body.stationeryFont !== undefined ? body.stationeryFont : undefined,
         pricesIncludeTaxes: body.pricesIncludeTaxes !== undefined ? !!body.pricesIncludeTaxes : undefined,
         requireInspectionOnCheckIn: body.requireInspectionOnCheckIn !== undefined ? !!body.requireInspectionOnCheckIn : undefined,
         allocationCalculationMode: body.allocationCalculationMode,

@@ -5,6 +5,7 @@ import { resolveOutletChargeTax } from "@/lib/tax-calc"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { resolveRoutingTargetFolioId } from "@/lib/folio-routing"
 import { ensureOpenShift } from "@/lib/cashier-shift"
+import { allocateOutletCheckNumber } from "@/lib/document-sequence"
 import { logActivity } from "@/lib/activity-log"
 
 export async function POST(request: Request) {
@@ -71,6 +72,41 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolve the outlet sales check this charge belongs to (only when posting through an
+    // outlet). A walk-in bill is 1:1 with a check and carries a single outlet; room posts
+    // reuse the check id the client holds for the session, or open a fresh one. The actual
+    // number allocation + OutletCheck insert happen inside the transaction below.
+    let existingOutletCheckId: string | null = null
+    let checkToCreateFolioId: string | null | undefined = undefined // undefined = don't create
+    if (outlet) {
+      const requestedCheckId = typeof body.outletCheckId === "string" ? body.outletCheckId : null
+      if (requestedCheckId) {
+        const check = await prisma.outletCheck.findUnique({ where: { id: requestedCheckId } })
+        if (!check || check.outletId !== outlet.id || check.propertyId !== folio.propertyId) {
+          return NextResponse.json({ error: "Outlet check not found for this outlet" }, { status: 404 })
+        }
+        if (check.isClosed) {
+          return NextResponse.json({ error: "This outlet check is already closed" }, { status: 400 })
+        }
+        existingOutletCheckId = check.id
+      } else if (!folio.reservationId) {
+        // Walk-in bill: at most one check, and it may only carry one outlet.
+        const existing = await prisma.outletCheck.findFirst({ where: { folioId: folio.id } })
+        if (existing) {
+          if (existing.outletId !== outlet.id) {
+            return NextResponse.json({ error: "A walk-in bill can only carry charges from one outlet" }, { status: 400 })
+          }
+          existingOutletCheckId = existing.id
+        } else {
+          checkToCreateFolioId = folio.id
+        }
+      } else {
+        // Charge posted onto an in-house room folio — the check groups the session but is
+        // not tied to the guest's folio (that stays the guest-house bill).
+        checkToCreateFolioId = null
+      }
+    }
+
     // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
     // property → enterprise (not a hardcoded constant) — works the same whether the
     // folio is reservation-backed or a walk-in.
@@ -97,22 +133,40 @@ export async function POST(request: Request) {
     // Attribute to the caller's open drawer for the folio's property (auto-open if needed).
     const shift = await ensureOpenShift(ctx, folio.propertyId)
 
-    const lineItem = await prisma.folioLineItem.create({
-      data: {
-        folioId: targetFolioId,
-        chargeCodeId,
-        outletId: outletId || null,
-        shiftId: shift.id,
-        amount: baseAmount,
-        taxAmount,
-        serviceChargeAmount,
-        description: lineDescription,
-        reference: lineReference,
-        date: resolveBusinessDate(folio.property)
-      },
-      include: {
-        chargeCode: true
+    const lineItem = await prisma.$transaction(async (tx) => {
+      let outletCheckId = existingOutletCheckId
+      if (outlet && checkToCreateFolioId !== undefined) {
+        const checkNumber = await allocateOutletCheckNumber(outlet.id, tx)
+        const created = await tx.outletCheck.create({
+          data: {
+            outletId: outlet.id,
+            propertyId: folio.propertyId,
+            folioId: checkToCreateFolioId,
+            checkNumber,
+          },
+        })
+        outletCheckId = created.id
       }
+
+      return tx.folioLineItem.create({
+        data: {
+          folioId: targetFolioId,
+          chargeCodeId,
+          outletId: outletId || null,
+          outletCheckId,
+          shiftId: shift.id,
+          amount: baseAmount,
+          taxAmount,
+          serviceChargeAmount,
+          description: lineDescription,
+          reference: lineReference,
+          date: resolveBusinessDate(folio.property)
+        },
+        include: {
+          chargeCode: true,
+          outletCheck: { select: { id: true, checkNumber: true } },
+        }
+      })
     })
 
     await logActivity({

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { resolveChargeTax } from "@/lib/tax-calc";
+import { resolveOutletChargeTax } from "@/lib/tax-calc";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal, combineDepartureDateTime } from "@/lib/excursions";
@@ -72,7 +72,8 @@ export async function GET(request: Request) {
 // folio itself rather than re-entered, so there's one source of truth for a walk-in's
 // name/contact). Exactly one of the two must be provided. Billing always flows through
 // the existing Folio/FolioLineItem machinery, same tax path as /api/pos/charge
-// (resolveChargeTax, no Outlet involved).
+// (resolveOutletChargeTax — routed through the module-level Excursion Outlet when one is
+// linked in Excursion settings, otherwise the charge code's own tax, unchanged).
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
@@ -231,8 +232,17 @@ export async function POST(request: Request) {
     const settings = await prisma.enterpriseSettings.findUnique({
       where: { enterpriseId: excursionType.property.enterpriseId },
     });
-    const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+    // Module-level Excursion Outlet link (if any) with its tax profile. When set, the
+    // charge posts through the outlet and its Tax Rule wins; unlinked = identical to
+    // before (resolveOutletChargeTax falls back to the charge code's own tax).
+    const excursionSettings = await prisma.excursionSettings.findUnique({
+      where: { propertyId: excursionType.propertyId },
+      include: { outlet: { include: { taxProfile: { include: { rates: true } } } } },
+    });
+    const excursionOutlet = excursionSettings?.outlet ?? null;
+    const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
       chargeCode: excursionType.chargeCode,
+      outlet: excursionOutlet,
       inputAmount: totalAmount,
       settings,
       pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
@@ -258,6 +268,7 @@ export async function POST(request: Request) {
         data: {
           folioId: folioIdToCharge,
           chargeCodeId: excursionType.chargeCodeId,
+          outletId: excursionOutlet?.id ?? null,
           shiftId: shift.id,
           amount: baseAmount,
           taxAmount,

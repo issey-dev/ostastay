@@ -3,14 +3,10 @@
 import { use, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { format } from "date-fns"
-import {
-  PrintDocumentShell,
-  PrintLoading,
-  PrintError,
-  resolvePrintFontClass,
-} from "@/components/print/print-document-shell"
-import { PrintDocumentHeader } from "@/components/print/print-blocks"
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding"
+import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
+import { RegistrationCardDocument } from "@/components/print/stationery/documents"
+import type { FieldItem, MetaItem } from "@/components/print/stationery/blocks"
+import { resolveStationeryBrand } from "@/lib/stationery-brand"
 
 // A registration card is printed per guest, then completed by hand and signed. Any field
 // the system doesn't know is rendered as a blank writable line so the guest can fill it in.
@@ -57,9 +53,7 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
   if (loading) return <PrintLoading label="Loading registration card…" />
   if (error || !reservation || !guest) return <PrintError message={error || "Registration card not found"} />
 
-  const brandColor = resolveInvoiceBrandColor(settings.invoiceBrandColor)
-  const fontClassName = resolvePrintFontClass(settings.invoiceFontFamily)
-  const brandName = settings.invoiceBrandName || reservation.property.name
+  const brand = resolveStationeryBrand(reservation.property)
   const isLead = guest.upid === reservation.primaryGuest.upid
 
   const guestName = guest.companyName || [guest.title, guest.firstName, guest.middleName, guest.lastName].filter(Boolean).join(" ")
@@ -78,108 +72,57 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
   const terms = settings.registrationCardTerms?.trim() || DEFAULT_TERMS
   const welcome = settings.registrationCardMessage?.trim() || "Welcome — please review, complete, and sign below."
 
+  const meta: MetaItem[] = [
+    { label: "Confirmation", value: reservation.confirmationNo },
+    { label: isLead ? "Guest" : "Accompanying Guest", value: guestName },
+    { label: "Date", value: format(new Date(), "dd-MMM-yyyy") },
+  ]
+
+  const guestDetails: FieldItem[] = [
+    { label: "Name", value: guestName },
+    { label: "Company", value: guest.companyName && !isLead ? null : guest.companyName },
+    { label: "Travel agent", value: reservation.travelAgent?.companyName ?? null },
+    { label: "Address", value: address?.fullAddress ?? null },
+    { label: "City", value: address?.city ?? null },
+    { label: "Postal code", value: address?.postalCode ?? null },
+    { label: "Country", value: address?.country ?? guest.nationality ?? null },
+    { label: "Telephone", value: comm("MOBILE") },
+    { label: "Email", value: comm("EMAIL") },
+    { label: "Date of birth", value: fmtDate(guest.dateOfBirth) },
+    { label: "Nationality", value: guest.nationality ?? null },
+  ]
+
+  const stayDetails: FieldItem[] = [
+    { label: "Room", value: activeAssignment?.room?.roomNumber ?? null },
+    { label: "Room type", value: activeAssignment?.roomType?.name ?? null },
+    { label: "Rate plan", value: activeAssignment?.ratePlan?.name ?? null },
+    { label: "Arrival", value: fmtDate(reservation.checkInDate) },
+    { label: "Departure", value: fmtDate(reservation.checkOutDate) },
+    { label: "Nights", value: String(nights) },
+    { label: "Adults / Children", value: `${reservation.adults} / ${reservation.children}` },
+  ]
+
+  const identification: FieldItem[] = [
+    { label: "ID type", value: doc?.documentType ?? null },
+    { label: "ID number", value: doc?.documentNumber ?? null },
+    { label: "Issuing country", value: doc?.issuingCountry ?? null },
+    { label: "Expiry date", value: fmtDate(doc?.expiryDate) },
+  ]
+
   return (
     <PrintDocumentShell
       previewLabel={`Registration Card — ${guestName} (#${reservation.confirmationNo})`}
-      fontClassName={fontClassName}
+      fontClassName={brand.fontClass}
     >
-      <PrintDocumentHeader
-        brandName={brandName}
-        logoUrl={settings.invoiceLogoUrl}
-        address={settings.invoiceAddress}
-        phone={settings.invoicePhone}
-        email={settings.invoiceEmail}
-        taxId={settings.invoiceTaxId}
-        brandColor={brandColor}
-        title="Registration Card"
-        metaRows={[
-          { label: "Confirmation No", value: reservation.confirmationNo },
-          { label: isLead ? "Guest" : "Accompanying Guest", value: guestName },
-          { label: "Date", value: format(new Date(), "dd-MMM-yyyy") },
-        ]}
+      <RegistrationCardDocument
+        brand={brand}
+        meta={meta}
+        welcomeMessage={welcome}
+        guestDetails={guestDetails}
+        stayDetails={stayDetails}
+        identification={identification}
+        terms={terms}
       />
-
-      <p className="mt-4 text-sm text-slate-600">{welcome}</p>
-
-      {/* Guest + stay details, two columns like a classic reg card */}
-      <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-0 sm:grid-cols-2">
-        <div>
-          <SectionTitle brandColor={brandColor}>Guest Details</SectionTitle>
-          <Field label="Name" value={guestName} />
-          <Field label="Company" value={guest.companyName && !isLead ? null : guest.companyName} />
-          <Field label="Travel Agent" value={reservation.travelAgent?.companyName ?? null} />
-          <Field label="Address" value={address?.fullAddress ?? null} />
-          <Field label="City" value={address?.city ?? null} />
-          <Field label="Postal Code" value={address?.postalCode ?? null} />
-          <Field label="Country" value={address?.country ?? guest.nationality ?? null} />
-          <Field label="Telephone" value={comm("MOBILE") ?? null} />
-          <Field label="Email" value={comm("EMAIL") ?? null} />
-          <Field label="Date of Birth" value={fmtDate(guest.dateOfBirth)} />
-          <Field label="Nationality" value={guest.nationality ?? null} />
-        </div>
-        <div>
-          <SectionTitle brandColor={brandColor}>Stay Details</SectionTitle>
-          <Field label="Room" value={activeAssignment?.room?.roomNumber ?? null} />
-          <Field label="Room Type" value={activeAssignment?.roomType?.name ?? null} />
-          <Field label="Rate Plan" value={activeAssignment?.ratePlan?.name ?? null} />
-          <Field label="Arrival" value={fmtDate(reservation.checkInDate)} />
-          <Field label="Departure" value={fmtDate(reservation.checkOutDate)} />
-          <Field label="Nights" value={String(nights)} />
-          <Field label="Adults / Children" value={`${reservation.adults} / ${reservation.children}`} />
-          <SectionTitle brandColor={brandColor} className="mt-4">Identification</SectionTitle>
-          <Field label="ID Type" value={doc?.documentType ?? null} />
-          <Field label="ID Number" value={doc?.documentNumber ?? null} />
-          <Field label="Issuing Country" value={doc?.issuingCountry ?? null} />
-          <Field label="Expiry Date" value={fmtDate(doc?.expiryDate)} />
-        </div>
-      </div>
-
-      {/* Terms & Conditions */}
-      <div className="mt-6">
-        <SectionTitle brandColor={brandColor}>Terms &amp; Conditions</SectionTitle>
-        <p className="text-[11px] leading-relaxed text-slate-600 whitespace-pre-line">{terms}</p>
-      </div>
-
-      {/* Signatures */}
-      <div className="mt-10 grid grid-cols-2 gap-10">
-        <SignatureLine caption="Guest Signature" />
-        <SignatureLine caption="Front Office" />
-      </div>
     </PrintDocumentShell>
-  )
-}
-
-function SectionTitle({ children, brandColor, className = "" }: { children: React.ReactNode; brandColor: string; className?: string }) {
-  return (
-    <p
-      className={`mb-2 pb-1 text-xs font-semibold uppercase tracking-wide ${className}`}
-      style={{ color: brandColor, borderBottom: `1px solid ${brandColor}33` }}
-    >
-      {children}
-    </p>
-  )
-}
-
-// A labelled field. When the value is known it prints it; otherwise it leaves a blank
-// writable line so the guest can complete it by hand after printing.
-function Field({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="flex items-baseline gap-2 py-1 text-sm">
-      <span className="w-32 shrink-0 text-slate-500">{label}</span>
-      {value ? (
-        <span className="font-medium text-slate-800">{value}</span>
-      ) : (
-        <span className="min-w-[120px] flex-1 border-b border-dashed border-slate-300">&nbsp;</span>
-      )}
-    </div>
-  )
-}
-
-function SignatureLine({ caption }: { caption: string }) {
-  return (
-    <div>
-      <div className="h-10 border-b border-slate-400" />
-      <p className="mt-1 text-xs text-slate-500">{caption}</p>
-    </div>
   )
 }

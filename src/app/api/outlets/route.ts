@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
 
 export const OUTLET_TYPES = ["SPA", "RESTAURANT", "BAR", "RETAIL", "TRANSPORT", "RECREATION", "OTHER"];
 export const TAX_OVERRIDE_MODES = ["NONE", "DEFAULT_ENGINE", "CUSTOM"];
@@ -46,6 +47,16 @@ export async function POST(request: Request) {
     }
     await assertPropertyAccess(ctx, body.propertyId);
 
+    const code = normalizeOutletCode(body.code);
+    const codeError = validateOutletCode(code);
+    if (codeError) {
+      return NextResponse.json({ error: codeError }, { status: 400 });
+    }
+    const codeClash = await prisma.outlet.findFirst({ where: { propertyId: body.propertyId, code } });
+    if (codeClash) {
+      return NextResponse.json({ error: `Another outlet at this property already uses the code "${code}"` }, { status: 409 });
+    }
+
     const outletType = OUTLET_TYPES.includes(body.outletType) ? body.outletType : "OTHER";
     const taxOverrideMode = TAX_OVERRIDE_MODES.includes(body.taxOverrideMode) ? body.taxOverrideMode : "NONE";
 
@@ -73,6 +84,11 @@ export async function POST(request: Request) {
       data: {
         propertyId: body.propertyId,
         name: body.name,
+        code,
+        address: body.address?.trim() || null,
+        email: body.email?.trim() || null,
+        phone: body.phone?.trim() || null,
+        taxNo: body.taxNo?.trim() || null,
         description: body.description || null,
         outletType,
         taxOverrideMode,
