@@ -100,10 +100,24 @@ first has shipped, on branch `feature/hub-shell`.
     against — deliberately not guessed. Manual entry is correct regardless and is what an
     operator would do pre-certification.
 - **Next (not started): the sync engine.** Inbound read-only first (rollout Phase 1), then
-  one-way ARI push, then two-way on one OTA. **Decision D-7 must be answered before two-way
-  sync** — when ostastay's overbooking/soft-cap group blocks disagree with channel-manager
-  inventory, which side is authoritative? That is a business call, not a code one, and
-  discovering it in production means real guests are already affected.
+  one-way ARI push, then two-way on one OTA. **All blocking decisions are now closed** — D-6
+  is moot (see above) and D-7 was ruled on by the owner 2026-07-27.
+- **D-7 ruling — the rules the sync engine must implement** (full text in
+  [DECISIONS.md](DECISIONS.md)):
+  1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
+     if a manual overbook has driven it negative — never a negative, never "0 plus headroom".
+     The channel manager must never be able to *cause* an overbook.
+  2. **Overbooking stays manual-only** at the desk, via the existing confirmation step.
+  3. **Group-block held rooms are withheld until `GroupBlock.cutoffDate`, then released.**
+     No schema change needed — `cutoffDate` exists and `api/groups/[id]/pickup` already
+     refuses pickup past it, which is precisely what makes releasing safe.
+     ⚠️ `cutoffDate` is **nullable**: no cutoff means hold indefinitely, NOT release now.
+  4. **Inbound race → accept and flag.** An OTA booking is already confirmed to the guest
+     before it reaches us, so refusing is not really available. Accept it and raise a
+     visible **"channel overbook"** alert so the desk learns days ahead, not at the door.
+     Must NOT be folded in silently as if it were a deliberate manual overbook.
+  5. **Stop-sale must CLOSE the room type at the channel**, not merely push availability 0 —
+     some OTAs treat 0 as "temporarily sold out" and keep the listing live.
 - **DONE — Background job runner** (branch `feature/hub-job-runner`, stacked on
   `feature/hub-sync-logs`). Closes BOTH operational gaps above with one piece of shared
   infrastructure. `JobRun` model, `src/lib/jobs/` (runner + registry + cron auth),
