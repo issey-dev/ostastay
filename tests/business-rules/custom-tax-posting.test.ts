@@ -20,6 +20,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const posChargeRoute = await import("@/app/api/pos/charge/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -80,9 +81,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
 
     // A charge code left on the default engine — proves it's unaffected by the
     // presence of custom profiles elsewhere in the enterprise.
-    const defaultCode = await prisma.chargeCode.create({
-      data: { enterpriseId: enterprise.id, code: "MB", description: "Minibar", category: "FOOD_BEVERAGE", useDefaultTax: true },
-    });
+    const defaultCode = await customChargeCode(enterprise.id, { code: "MB", description: "Minibar", useDefaultTax: true, subgroupCode: "RESTAURANT" });
     defaultChargeCodeId = defaultCode.id;
 
     // A multi-line Custom Tax profile (State Tax flat on subtotal, Local Fee compound
@@ -99,12 +98,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
         },
       },
     });
-    const customCode = await prisma.chargeCode.create({
-      data: {
-        enterpriseId: enterprise.id, code: "SPA", description: "Spa Treatment", category: "OTHERS",
-        useDefaultTax: false, taxProfileId: taxProfile.id,
-      },
-    });
+    const customCode = await customChargeCode(enterprise.id, { code: "SPA", description: "Spa Treatment", useDefaultTax: false, taxProfileId: taxProfile.id, subgroupCode: "MISCELLANEOUS" });
     customChargeCodeId = customCode.id;
 
     const passwordHash = await bcrypt.hash("password123", 10);

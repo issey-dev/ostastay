@@ -15,6 +15,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -50,7 +51,7 @@ describe("End-of-Day 12-hour recency guard", () => {
     });
     propertyId = property.id;
     // A ROOM charge code is required by the audit even with no in-house guests.
-    await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room Revenue" } });
+    await customChargeCode(enterprise.id, { code: "ROOM", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `eod-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EOD", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;

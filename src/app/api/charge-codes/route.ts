@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { POSTING_TYPES, legacyCategoryForSubgroup, groupTaxCodesForSubgroup, type PostingType } from "@/lib/posting/charge-tree";
+import { POSTING_TYPES, groupTaxCodesForSubgroup, type PostingType } from "@/lib/posting/charge-tree";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 
-// Level 3 of the charge hierarchy. Classification is now a ChargeSubgroup FK, not the
-// free-text `category` string that had three mutually contradictory "authoritative"
-// lists (CHARGE_CODE_PLAN.md §1.4); `category` is still written, but only as a mirror
-// of the subgroup's group bucket so un-migrated readers stay truthful.
+// Level 3 of the charge hierarchy. Classification is a ChargeSubgroup FK — the
+// free-text `category` string it replaced (three mutually contradictory "authoritative"
+// lists, CHARGE_CODE_PLAN.md §1.4) was dropped in phase 4 once every reader was migrated.
 
 export const CHARGE_CODE_INCLUDE = {
   taxProfile: { include: { rates: { orderBy: { effectiveFrom: "desc" as const }, take: 1 } } },
@@ -85,7 +84,6 @@ export async function POST(request: Request) {
           code,
           description: body.description,
           chargeSubgroupId: subgroup.id,
-          category: legacyCategoryForSubgroup(subgroup.code),
           postingType,
           isActive: body.isActive !== undefined ? !!body.isActive : true,
           isSystem: false,

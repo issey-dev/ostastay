@@ -4,8 +4,6 @@ import { reportBucketOf, isLevyLine } from "@/lib/posting/report-bucket";
 import {
   CANONICAL_GROUPS,
   REPORT_BUCKETS,
-  LEGACY_CATEGORY_TO_SUBGROUP,
-  legacyCategoryForSubgroup,
   canGenerateTax,
   standardGenerates,
   STANDARD_CHARGE_CODES,
@@ -193,18 +191,15 @@ describe("generates: cycle guard", () => {
 });
 
 describe("report buckets", () => {
-  it("reads the bucket off the hierarchy when a code is classified", () => {
-    expect(reportBucketOf({ category: "OTHERS", chargeSubgroup: { chargeGroup: { reportBucket: "ROOM" } } })).toBe("ROOM");
+  it("reads the bucket off the hierarchy", () => {
+    expect(reportBucketOf({ chargeSubgroup: { chargeGroup: { reportBucket: "ROOM" } } })).toBe("ROOM");
+    expect(reportBucketOf({ chargeSubgroup: { chargeGroup: { reportBucket: "TRANSPORT" } } })).toBe("TRANSPORT");
   });
 
-  it("falls back to the deprecated category while a code is still unclassified", () => {
-    expect(reportBucketOf({ category: "TRANSPORTATION", chargeSubgroup: null })).toBe("TRANSPORT");
-    expect(reportBucketOf({ category: "NON_REVENUE", chargeSubgroup: null })).toBe("NON_REVENUE");
-  });
-
-  it("lands on OTHER for a code with neither", () => {
+  it("lands on OTHER for an unclassified code — there is no other classification left", () => {
     expect(reportBucketOf(null)).toBe("OTHER");
-    expect(reportBucketOf({ category: "SOMETHING_MADE_UP" })).toBe("OTHER");
+    expect(reportBucketOf({ chargeSubgroup: null })).toBe("OTHER");
+    expect(reportBucketOf({ chargeSubgroup: { chargeGroup: { reportBucket: "NOT_A_BUCKET" } } })).toBe("OTHER");
   });
 
   it("treats a TAX posting type as a levy — and still recognises a pre-migration GTX", () => {
@@ -224,19 +219,6 @@ describe("the canonical charge tree", () => {
   it("subgroup codes are unique across the whole tree — they're unique per enterprise in the schema", () => {
     const codes = CANONICAL_GROUPS.flatMap((g) => g.subgroups.map((s) => s.code));
     expect(new Set(codes).size).toBe(codes.length);
-  });
-
-  it("every legacy category maps to a subgroup that actually exists", () => {
-    const known = new Set(CANONICAL_GROUPS.flatMap((g) => g.subgroups.map((s) => s.code)));
-    for (const subgroupCode of Object.values(LEGACY_CATEGORY_TO_SUBGROUP)) {
-      expect(known).toContain(subgroupCode);
-    }
-  });
-
-  it("round-trips a subgroup back to the legacy category column it mirrors", () => {
-    expect(legacyCategoryForSubgroup("ROOM_REVENUE")).toBe("ROOM");
-    expect(legacyCategoryForSubgroup("GOVERNMENT_LEVY")).toBe("TAX");
-    expect(legacyCategoryForSubgroup("COMMISSION")).toBe("NON_REVENUE");
   });
 
   it("taxes and non-revenue are never counted as earned revenue", () => {

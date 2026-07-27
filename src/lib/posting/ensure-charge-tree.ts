@@ -5,9 +5,9 @@ import {
   STANDARD_CHARGE_CODES,
   SYSTEM_CHARGE_CODES,
   FEE_RULE_CODES,
+  PAYMENT_METHOD_CODES,
+  PAYMENT_METHOD_FALLBACK_CODE,
   standardGenerates,
-  LEGACY_CATEGORY_TO_SUBGROUP,
-  legacyCategoryForSubgroup,
 } from "@/lib/posting/charge-tree";
 
 // The idempotent seeder that puts the canonical chart of accounts (see charge-tree.ts)
@@ -25,10 +25,6 @@ export type EnsureChargeTreeResult = {
   subgroupsCreated: number;
   codesCreated: number;
   generatesCreated: number;
-  /** Existing codes that were adopted into a subgroup by their legacy `category`. */
-  codesClassified: number;
-  /** Codes whose legacy `category` didn't map to any known subgroup — logged, not guessed. */
-  unmapped: Array<{ code: string; category: string }>;
 };
 
 // Idempotent: safe to re-run on an enterprise that already has some or all of the chart.
@@ -42,8 +38,6 @@ export async function ensureChargeTree(
     subgroupsCreated: 0,
     codesCreated: 0,
     generatesCreated: 0,
-    codesClassified: 0,
-    unmapped: [],
   };
 
   // 1. Groups + subgroups. Both are unique on [enterpriseId, code], so an existing row
@@ -119,7 +113,6 @@ export async function ensureChargeTree(
             code: c.code,
             description: c.description,
             chargeSubgroupId: subgroupId,
-            category: legacyCategoryForSubgroup(c.subgroupCode),
             postingType: c.postingType,
             isSystem: c.isSystem ?? false,
             isActive: true,
@@ -134,23 +127,8 @@ export async function ensureChargeTree(
     codeIdByCode.set(c.code, row.id);
   }
 
-  // 3. Classify any pre-existing user codes that have no subgroup yet, from their
-  // legacy `category`. Unrecognized categories are reported, never guessed.
-  const unclassified = await client.chargeCode.findMany({
-    where: { enterpriseId, chargeSubgroupId: null },
-  });
-  for (const cc of unclassified) {
-    const subgroupCode = LEGACY_CATEGORY_TO_SUBGROUP[cc.category];
-    const subgroupId = subgroupCode ? subgroupIdByCode.get(subgroupCode) : undefined;
-    if (!subgroupId) {
-      result.unmapped.push({ code: cc.code, category: cc.category });
-      continue;
-    }
-    await client.chargeCode.update({ where: { id: cc.id }, data: { chargeSubgroupId: subgroupId } });
-    result.codesClassified += 1;
-  }
 
-  // 4. Generates: every revenue code routes its Service Charge and GST to its own
+  // 3. Generates: every revenue code routes its Service Charge and GST to its own
   // GROUP's tax codes, and accommodation levies Green Tax on top. Unique on
   // [generatorCodeId, generatedCodeId], so a re-run adopts the existing row rather than
   // stacking duplicates — and never overwrites one the property has since tuned.
@@ -176,7 +154,7 @@ export async function ensureChargeTree(
     result.generatesCreated += 1;
   }
 
-  // 5. Point the enterprise's roles at the seeded codes, unless it has already chosen
+  // 4. Point the enterprise's roles at the seeded codes, unless it has already chosen
   // its own. Without this the resolver still falls back by code string, but having the
   // pointers set means Controls > Cashiering > Posting Defaults shows the real answer
   // rather than "None".
@@ -194,13 +172,32 @@ export async function ensureChargeTree(
     });
   }
 
+  // 5. Link every Payment Method to the code its money posts against. Every financial
+  // posting is linked to a charge code — a payment as much as a charge (owner rule) — so
+  // a method without one is a settlement route that can't be identified in the ledger.
+  // Only fills a missing link; a method the property has re-pointed is left alone.
+  const methods = await client.paymentMethod.findMany({
+    where: { enterpriseId, chargeCodeId: null },
+    select: { id: true, type: true },
+  });
+  for (const m of methods) {
+    const codeId = codeIdByCode.get(PAYMENT_METHOD_CODES[m.type] ?? PAYMENT_METHOD_FALLBACK_CODE);
+    if (!codeId) continue;
+    await client.paymentMethod.update({ where: { id: m.id }, data: { chargeCodeId: codeId } });
+  }
+
   return result;
 }
 
 /**
- * Give every property in the enterprise a Deposit, Cancellation and No-Show fee rule
- * pointing at its own seeded charge code, so the three are wired end-to-end from
- * Controls > Finance > Deposit & Fee Rules the moment a property is onboarded.
+ * Give every property a Cancellation and No-Show fee rule pointing at its own seeded
+ * charge code, so both are wired end-to-end from Controls > Finance > Deposit & Fee Rules
+ * the moment a property is onboarded.
+ *
+ * DEPOSIT rules are deliberately not seeded: a deposit is an advance PAYMENT collected
+ * before arrival onto the reservation's folio, which check-in then reuses as the billing
+ * folio — it never posts a charge, and api/settings/fee-rules exempts it from needing a
+ * charge code. Seeding one would assert a link the flow never uses.
  *
  * Seeded INACTIVE with a zero amount: a fee that charges real money must be a deliberate
  * decision by the property, not something a seeder switches on. The WIRING is what's
@@ -215,7 +212,6 @@ export async function ensureFeeRules(client: Client, enterpriseId: string): Prom
   const codeIdByCode = new Map(codes.map((c) => [c.code, c.id]));
 
   const NAMES: Record<keyof typeof FEE_RULE_CODES, string> = {
-    DEPOSIT: "Standard Deposit",
     CANCELLATION: "Standard Cancellation Fee",
     NO_SHOW: "Standard No-Show Fee",
   };

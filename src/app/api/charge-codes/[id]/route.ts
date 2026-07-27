@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { POSTING_TYPES, legacyCategoryForSubgroup, type PostingType } from "@/lib/posting/charge-tree";
+import { POSTING_TYPES, type PostingType } from "@/lib/posting/charge-tree";
 import { CHARGE_CODE_INCLUDE } from "@/app/api/charge-codes/route";
 
 export async function PUT(
@@ -42,14 +42,12 @@ export async function PUT(
     }
 
     let chargeSubgroupId = existing.chargeSubgroupId;
-    let legacyCategory = existing.category;
     if (body.chargeSubgroupId && body.chargeSubgroupId !== existing.chargeSubgroupId) {
       const subgroup = await prisma.chargeSubgroup.findUnique({ where: { id: body.chargeSubgroupId } });
       if (!subgroup || subgroup.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: "Charge subgroup not found" }, { status: 404 });
       }
       chargeSubgroupId = subgroup.id;
-      legacyCategory = legacyCategoryForSubgroup(subgroup.code);
     }
 
     const postingType: PostingType = POSTING_TYPES.includes(body.postingType)
@@ -75,7 +73,6 @@ export async function PUT(
         code,
         description: body.description,
         chargeSubgroupId,
-        category: legacyCategory,
         postingType,
         isActive: body.isActive !== undefined ? !!body.isActive : existing.isActive,
         useDefaultTax,

@@ -17,6 +17,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const advanceBillRoute = await import("@/app/api/reservations/[id]/advance-bill/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -39,8 +40,8 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}` } });
-  await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room" } });
-  const accom = await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ACCOM", description: "Accommodation", category: "ROOM" } });
+  await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
+  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "ROOM_REVENUE" });
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "Best Available", chargeCodeId: accom.id } });
   await prisma.enterpriseSettings.create({ data: { enterpriseId: enterprise.id, greenTaxEnabled: false, defaultAccommodationChargeCodeId: accom.id } });
   const guest = await prisma.profile.create({ data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "G", lastName: "T" } });

@@ -5,6 +5,7 @@ const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 const { resolveChargeCode } = await import("@/lib/posting/resolve-charge-code");
 const { postCharge, chargeCodeInclude } = await import("@/lib/posting/post-charge");
 const { CANONICAL_GROUPS, STANDARD_CHARGE_CODES } = await import("@/lib/posting/charge-tree");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 // The seeder + the role resolver: the two pieces that closed the provisioning gap
 // (CHARGE_CODE_PLAN.md §1.3) and killed the `findFirst({ code: "ROOM" })` lookups.
@@ -103,13 +104,15 @@ describe("ensureChargeTree", () => {
     expect(fb.generatesFrom.some((g) => g.method === "GREEN_TAX")).toBe(false);
   });
 
-  it("gives cancellation and no-show fees GST but no service charge", async () => {
+  it("taxes cancellation and no-show fees as ordinary accommodation revenue", async () => {
+    // Owner ruling 2026-07-27: service charge AND GST, same as a room night. A property
+    // that disagrees deletes the Service Charge row in the Generates editor.
     for (const code of ["CXL", "NOSHW"]) {
       const row = await prisma.chargeCode.findUniqueOrThrow({
         where: { enterpriseId_code: { enterpriseId, code } },
         include: { generatesFrom: true },
       });
-      expect(row.generatesFrom.map((g) => g.method).sort(), code).toEqual(["GST"]);
+      expect(row.generatesFrom.map((g) => g.method).sort(), code).toEqual(["GST", "SERVICE_CHARGE"]);
     }
     // A deposit is a liability, not revenue — taxed nowhere.
     const dep = await prisma.chargeCode.findUniqueOrThrow({
@@ -131,42 +134,41 @@ describe("ensureChargeTree", () => {
   });
 });
 
-describe("ensureChargeTree over pre-existing codes (the backfill path)", () => {
-  it("classifies legacy codes from their `category` and reports the ones it can't", async () => {
-    const ent = await freshEnterprise("backfill");
+describe("ensureChargeTree alongside a property's own codes", () => {
+  it("leaves a code that isn't in the standard chart alone", async () => {
+    const ent = await freshEnterprise("coexist");
 
+    // Classification used to be inferred from a free-text `category` column; that column
+    // is gone, so a code outside the chart simply stays unclassified until someone puts
+    // it in a subgroup from Controls > Cashiering. The seeder must not guess.
     await prisma.chargeCode.createMany({
       data: [
-        { enterpriseId: ent.id, code: "RM", description: "Room", category: "ROOM" },
-        { enterpriseId: ent.id, code: "FB", description: "Food", category: "FOOD_BEVERAGE" },
-        { enterpriseId: ent.id, code: "TA", description: "Commission", category: "NON_REVENUE" },
-        { enterpriseId: ent.id, code: "WAT", description: "Mystery", category: "SOMETHING_ELSE" },
+        { enterpriseId: ent.id, code: "HOUSE", description: "House Special" },
+        { enterpriseId: ent.id, code: "WAT", description: "Mystery" },
       ],
     });
 
     const result = await ensureChargeTree(prisma, ent.id);
 
-    expect(result.codesClassified).toBe(3);
-    // Log-don't-guess: an unrecognized category is surfaced, never silently bucketed.
-    expect(result.unmapped).toEqual([{ code: "WAT", category: "SOMETHING_ELSE" }]);
-
-    const rm = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "RM" } },
-      include: { chargeSubgroup: { include: { chargeGroup: true } } },
-    });
-    expect(rm.chargeSubgroup?.chargeGroup.reportBucket).toBe("ROOM");
-
-    const wat = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "WAT" } },
-    });
-    expect(wat.chargeSubgroupId).toBeNull();
+    // The whole chart is created; neither pre-existing code is touched or duplicated.
+    expect(result.codesCreated).toBe(STANDARD_CHARGE_CODES.length);
+    for (const code of ["HOUSE", "WAT"]) {
+      const row = await prisma.chargeCode.findUniqueOrThrow({
+        where: { enterpriseId_code: { enterpriseId: ent.id, code } },
+      });
+      expect(row.chargeSubgroupId, code).toBeNull();
+      expect(row.isSystem, code).toBe(false);
+    }
   });
 
   it("adopts an existing ROOM/GTX code instead of colliding with it, keeping its tax config", async () => {
     const ent = await freshEnterprise("adopt");
     const profile = await prisma.taxProfile.create({ data: { enterpriseId: ent.id, name: "Legacy VAT" } });
+    // A raw create, deliberately NOT the test helper: the helper seeds the whole chart,
+    // and this test is specifically about what ensureChargeTree does when it meets a
+    // property's own pre-existing ROOM code for the first time.
     await prisma.chargeCode.create({
-      data: { enterpriseId: ent.id, code: "ROOM", description: "Our Own Room Code", category: "ROOM", useDefaultTax: false, taxProfileId: profile.id },
+      data: { enterpriseId: ent.id, code: "ROOM", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id },
     });
 
     const result = await ensureChargeTree(prisma, ent.id);
@@ -199,9 +201,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
       where: { enterpriseId_code: { enterpriseId: ent.id, code: "ROOM_REVENUE" } },
     });
-    const custom = await prisma.chargeCode.create({
-      data: { enterpriseId: ent.id, code: "ACCOM", description: "Accommodation", chargeSubgroupId: sub.id, category: "ROOM" },
-    });
+    const custom = await customChargeCode(ent.id, { code: "ACCOM", description: "Accommodation", chargeSubgroupId: sub.id, subgroupCode: "ROOM_REVENUE" });
     await prisma.enterpriseSettings.create({
       data: { enterpriseId: ent.id, defaultAccommodationChargeCodeId: custom.id },
     });
@@ -225,9 +225,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
       where: { enterpriseId_code: { enterpriseId: ent.id, code: "ROOM_REVENUE" } },
     });
-    const retired = await prisma.chargeCode.create({
-      data: { enterpriseId: ent.id, code: "OLDRM", description: "Retired", chargeSubgroupId: sub.id, isActive: false },
-    });
+    const retired = await customChargeCode(ent.id, { code: "OLDRM", description: "Retired", chargeSubgroupId: sub.id, isActive: false });
     await prisma.enterpriseSettings.create({
       data: { enterpriseId: ent.id, defaultAccommodationChargeCodeId: retired.id },
     });

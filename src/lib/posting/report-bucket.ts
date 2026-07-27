@@ -1,12 +1,12 @@
-import { REPORT_BUCKET_LABELS, LEGACY_CATEGORY_TO_SUBGROUP, CANONICAL_GROUPS, type ReportBucket } from "@/lib/posting/charge-tree";
+import { REPORT_BUCKET_LABELS, type ReportBucket } from "@/lib/posting/charge-tree";
 
 // The ONE way a report classifies a folio line. Every consumer that used to switch on
 // ChargeCode.category (or, worse, on ChargeCode.code === "ROOM"/"GTX") reads the
 // bucket through here instead — see CHARGE_CODE_PLAN.md §1.7.
 //
-// Falls back to the deprecated `category` string while the migration window is open, so
-// a code that hasn't been backfilled into a subgroup yet still reports sanely rather
-// than silently landing in OTHER.
+// A code with no subgroup reports as OTHER. That used to fall back to the deprecated
+// `category` string; that column was dropped in phase 4, so an unclassified code now has
+// no classification at all — which is exactly what OTHER says.
 
 // The prisma `include` fragment a caller needs so reportBucketOf() can resolve. Kept
 // here so the shape and the reader can never drift apart.
@@ -18,7 +18,6 @@ export const CHARGE_BUCKET_INCLUDE = {
 export const CHARGE_BUCKET_SELECT = {
   id: true,
   code: true,
-  category: true,
   postingType: true,
   chargeSubgroup: { select: { chargeGroup: { select: { reportBucket: true, isRevenue: true } } } },
 } as const;
@@ -31,22 +30,12 @@ export const LINE_BUCKET_INCLUDE = {
 } as const;
 
 type BucketBearingChargeCode = {
-  category?: string | null;
   chargeSubgroup?: { chargeGroup?: { reportBucket?: string | null } | null } | null;
 } | null | undefined;
-
-const LEGACY_CATEGORY_TO_BUCKET: Record<string, ReportBucket> = Object.fromEntries(
-  Object.entries(LEGACY_CATEGORY_TO_SUBGROUP).map(([category, subgroupCode]) => {
-    const group = CANONICAL_GROUPS.find((g) => g.subgroups.some((s) => s.code === subgroupCode))!;
-    return [category, group.reportBucket];
-  })
-) as Record<string, ReportBucket>;
 
 export function reportBucketOf(chargeCode: BucketBearingChargeCode): ReportBucket {
   const fromHierarchy = chargeCode?.chargeSubgroup?.chargeGroup?.reportBucket;
   if (fromHierarchy && fromHierarchy in REPORT_BUCKET_LABELS) return fromHierarchy as ReportBucket;
-  const legacy = chargeCode?.category;
-  if (legacy && LEGACY_CATEGORY_TO_BUCKET[legacy]) return LEGACY_CATEGORY_TO_BUCKET[legacy];
   return "OTHER";
 }
 

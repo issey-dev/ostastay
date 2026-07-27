@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { ensureOpenShift } from "@/lib/cashier-shift";
@@ -85,6 +86,10 @@ export async function POST(
           folioId: folio.id,
           paymentMethodId,
           shiftId: shift.id,
+          // A deposit is an advance PAYMENT on the reservation's folio, which check-in
+          // reuses as the billing folio — already on the bill, nothing to transfer. It
+          // still carries its method's charge code like any other payment.
+          chargeCodeId: await resolvePaymentChargeCodeId(tx, paymentMethodId),
           amount,
           referenceNumber: referenceNumber || null,
           depositPurpose: purpose,

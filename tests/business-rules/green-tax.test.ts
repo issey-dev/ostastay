@@ -21,6 +21,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -115,6 +116,9 @@ async function setupCheckedInReservation(opts: {
     await ensureChargeTree(prisma, enterprise.id);
   } else {
     for (const cc of opts.chargeCodes) {
+      // Raw create, NOT the chart helper: this branch exists to reproduce the
+      // pre-hierarchy shape — a property with a couple of bare codes and nothing else.
+      // Seeding the chart here would give it GTX and defeat the point.
       await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: cc.code, description: cc.code } });
     }
   }
@@ -225,7 +229,10 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       adults: 1,
       children: 0,
       infants: 0,
-      chargeCodes: [{ code: "ROOM" }], // no GTX code, but Green Tax is enabled below
+      // A bare ROOM code and nothing else — the pre-hierarchy shape, where no Green Tax
+      // code has ever been created. A property seeded with the standard chart always has
+      // GTX, so this only reaches the guard for an enterprise that predates it.
+      chargeCodes: [{ code: "ROOM" }],
       settings: { greenTaxEnabled: true },
     });
 
@@ -289,7 +296,7 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
       where: { enterpriseId_code: { enterpriseId, code: "GOVERNMENT_LEVY" } },
     });
     const bedTax = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, category: "TAX", postingType: "TAX" },
+      data: { enterpriseId, code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" },
     });
     const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "ROOM" } } });
     await prisma.chargeCodeGenerate.create({

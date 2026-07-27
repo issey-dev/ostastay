@@ -23,6 +23,7 @@ const { validateRateRanges, resolveLinkedAllocationIds, allocationAmountForNight
 const { materializeReservationAllocations } = await import("@/lib/allocations-server");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -88,12 +89,8 @@ async function setupWithAllocation(opts: {
     data: { propertyId: property.id, code: "STD", name: "Standard Rate" },
   });
 
-  const roomCode = await prisma.chargeCode.create({
-    data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room" },
-  });
-  const allocCode = await prisma.chargeCode.create({
-    data: { enterpriseId: enterprise.id, code: "BFC", description: "Breakfast Revenue", category: "FOOD_BEVERAGE" },
-  });
+  const roomCode = await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
+  const allocCode = await customChargeCode(enterprise.id, { code: "BFC", description: "Breakfast Revenue", subgroupCode: "RESTAURANT" });
 
   const today = new Date();
   const allocation = await prisma.allocation.create({
@@ -524,7 +521,7 @@ describe("Allocations: reservation materialization", () => {
 
     // A second allocation linked to the rate plan, and a third linked to a meal plan.
     const cc = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "TRF", description: "Transfers", category: "TRANSPORTATION" },
+      data: { enterpriseId, code: "TRF", description: "Transfers" },
     });
     const transfer = await prisma.allocation.create({
       data: {
@@ -582,7 +579,7 @@ describe("Allocations: reservation materialization", () => {
     await prisma.property.update({ where: { id: propertyId }, data: { allocationCalculationMode: "MEAL_PLAN" } });
 
     const cc = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "TRF2", description: "Transfers", category: "TRANSPORTATION" },
+      data: { enterpriseId, code: "TRF2", description: "Transfers" },
     });
     const transfer = await prisma.allocation.create({
       data: {

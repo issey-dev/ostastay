@@ -23,6 +23,7 @@ const foliosRoute = await import("@/app/api/folios/route");
 const folioPaymentsRoute = await import("@/app/api/folios/[id]/payments/route");
 const posChargeRoute = await import("@/app/api/pos/charge/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -112,9 +113,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
     reservationBId = reservationB.id;
     folioBId = reservationB.folios[0].id;
 
-    const chargeCodeA = await prisma.chargeCode.create({
-      data: { enterpriseId: enterpriseA.id, code: "ROOM", description: "Room Rate", category: "ROOM" },
-    });
+    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "ROOM", description: "Room Rate", subgroupCode: "ROOM_REVENUE" });
     chargeCodeAId = chargeCodeA.id;
 
     const paymentMethodA = await prisma.paymentMethod.create({
@@ -200,7 +199,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
 
   it("POST /api/pos/charge 404s when the charge code belongs to a different enterprise", async () => {
     const otherChargeCode = await prisma.chargeCode.create({
-      data: { enterpriseId: (await prisma.property.findUniqueOrThrow({ where: { id: propertyBId } })).enterpriseId, code: "MB", description: "Minibar", category: "FOOD_BEVERAGE" },
+      data: { enterpriseId: (await prisma.property.findUniqueOrThrow({ where: { id: propertyBId } })).enterpriseId, code: "MB", description: "Minibar" },
     });
     const res = await asUser(adminAId, () =>
       posChargeRoute.POST(

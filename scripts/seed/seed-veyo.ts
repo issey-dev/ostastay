@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data";
 import { expandScheduleDates } from "../../src/lib/excursions";
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
-import { legacyCategoryForSubgroup } from "../../src/lib/posting/charge-tree";
 
 const prisma = new PrismaClient();
 
@@ -190,26 +189,27 @@ async function main() {
       },
     });
   }
+  await ensureChargeTree(prisma, veyo.id);
+  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId: veyo.id } });
+  const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id;
+
   const rmCode = await prisma.chargeCode.upsert({
     where: { enterpriseId_code: { enterpriseId: veyo.id, code: "RM" } },
     update: {},
-    create: { enterpriseId: veyo.id, code: "RM", description: "Room Charge", category: "ROOM", taxProfileId: taxProfile.id },
+    create: { enterpriseId: veyo.id, code: "RM", description: "Room Charge", chargeSubgroupId: subgroupId("ROOM_REVENUE"), taxProfileId: taxProfile.id },
   });
   const fbCode = await prisma.chargeCode.upsert({
     where: { enterpriseId_code: { enterpriseId: veyo.id, code: "FB" } },
     update: {},
-    create: { enterpriseId: veyo.id, code: "FB", description: "Food & Beverage", category: "FOOD_BEVERAGE", taxProfileId: taxProfile.id },
+    create: { enterpriseId: veyo.id, code: "FB", description: "Food & Beverage", chargeSubgroupId: subgroupId("RESTAURANT"), taxProfileId: taxProfile.id },
   });
 
   // The canonical Charge Group -> Subgroup -> Code tree (the same one property
   // onboarding creates), including the system ROOM / GTX / COMM codes and the
   // ROOM -> Green Tax generate. Everything below classifies into it.
-  await ensureChargeTree(prisma, veyo.id);
-  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId: veyo.id } });
-  const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id;
 
   // Sample chart of charge codes, classified by Subgroup rather than the deprecated
-  // free-text `category` string. Spa now has a real home (OTHER / SPA) instead of being
+  // hierarchy. Spa has a real home (OTHER / SPA) instead of being
   // lumped into "OTHERS". All use the enterprise default tax engine. (No PAYMENT bucket
   // — payment types are Payment Methods, seeded below.)
   const sampleChargeCodes: Array<{ code: string; description: string; subgroup: string; postingType?: string }> = [
@@ -240,7 +240,6 @@ async function main() {
         code: cc.code,
         description: cc.description,
         chargeSubgroupId: subgroupId(cc.subgroup),
-        category: legacyCategoryForSubgroup(cc.subgroup),
         postingType: cc.postingType ?? "CHARGE",
       },
     });
@@ -597,7 +596,7 @@ async function main() {
     const created = await prisma.chargeCode.upsert({
       where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
       update: {},
-      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, category: "OTHERS" },
+      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, chargeSubgroupId: subgroupId("EXCURSION_TOUR") },
     });
     excursionChargeCodeByCode[cc.code] = created.id;
   }
@@ -726,7 +725,7 @@ async function main() {
     const created = await prisma.chargeCode.upsert({
       where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
       update: {},
-      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, category: "OTHERS" },
+      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, chargeSubgroupId: subgroupId("SPA_TREATMENT") },
     });
     spaChargeCodeByCode[cc.code] = created.id;
   }

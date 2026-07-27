@@ -24,6 +24,7 @@ const folioIdRoute = await import("@/app/api/folios/[id]/route");
 const lineItemsRoute = await import("@/app/api/folios/[id]/line-items/route");
 const paymentsRoute = await import("@/app/api/folios/[id]/payments/route");
 const invoiceDataRoute = await import("@/app/api/folios/[id]/invoice-data/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -92,9 +93,7 @@ describe("Walk-in folios (no reservation): tenant isolation", () => {
     });
     propertyBId = propertyB.id;
 
-    const chargeCodeA = await prisma.chargeCode.create({
-      data: { enterpriseId: enterpriseA.id, code: "WI-SPA", description: "Spa" },
-    });
+    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "WI-SPA", description: "Spa" });
     chargeCodeAId = chargeCodeA.id;
     const paymentMethodA = await prisma.paymentMethod.create({
       data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },

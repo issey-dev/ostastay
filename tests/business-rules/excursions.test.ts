@@ -68,6 +68,7 @@ const noShowRoute = await import("@/app/api/excursions/bookings/[id]/no-show/rou
 const cancelDepartureRoute = await import("@/app/api/excursions/departures/[id]/cancel/route");
 const moveBookingsRoute = await import("@/app/api/excursions/departures/[id]/move-bookings/route");
 const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -603,7 +604,7 @@ describe("Excursions: business rules", () => {
         body: JSON.stringify({ propertyId: propB.id, module: "EXCURSIONS", enabled: true }),
       }))
     );
-    const ccB = await prisma.chargeCode.create({ data: { enterpriseId: entB.id, code: "VBX", description: "B Excursion" } });
+    const ccB = await customChargeCode(entB.id, { code: "VBX", description: "B Excursion" });
     const typeB = await prisma.excursionType.create({ data: { propertyId: propB.id, code: `VB-${uniq().slice(-6)}`, name: "B Trip", chargeCodeId: ccB.id } });
     await prisma.excursionRate.create({ data: { excursionTypeId: typeB.id, adultPrice: 50, childPrice: 0, infantPrice: 0, effectiveFrom: new Date(2020, 0, 1) } });
     const sourceB = await prisma.excursionDeparture.create({ data: { excursionTypeId: typeB.id, departureDate: day(2), departureTime: "09:00", capacity: 10, status: "CANCELLED" } });

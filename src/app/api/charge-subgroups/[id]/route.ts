@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { legacyCategoryForSubgroup } from "@/lib/posting/charge-tree";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -55,15 +54,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : existing.sortOrder,
         },
       });
-      // Moving a subgroup between groups changes the reporting bucket of everything
-      // under it, so the deprecated `category` mirror has to move with it (it is kept in
-      // sync on write for the duration of the migration window — see schema.prisma).
-      if (chargeGroupId !== existing.chargeGroupId) {
-        await tx.chargeCode.updateMany({
-          where: { chargeSubgroupId: id },
-          data: { category: legacyCategoryForSubgroup(updated.code) },
-        });
-      }
+      // Moving a subgroup between groups re-buckets everything under it, which now
+      // needs no second write: the bucket is read through the group, and the deprecated
+      // `category` mirror that used to shadow it is gone.
       return updated;
     });
 

@@ -240,14 +240,29 @@ export const CANONICAL_GROUPS: SeedGroup[] = [
 export const CHARGE_CODE_ROLES = ["ACCOMMODATION", "GREEN_TAX", "COMMISSION"] as const;
 export type ChargeCodeRole = (typeof CHARGE_CODE_ROLES)[number];
 
-// The fee-rule roles wired through Controls > Finance > Deposit & Fee Rules. Each has a
-// seeded charge code so a fresh property can charge a cancellation, no-show or deposit
-// without hand-building one first.
-export const FEE_RULE_CODES: Record<"DEPOSIT" | "CANCELLATION" | "NO_SHOW", string> = {
-  DEPOSIT: "DEP",
+// The fee-rule types that POST a charge, each with a seeded code so a fresh property can
+// charge a cancellation or no-show without hand-building one first.
+//
+// DEPOSIT is deliberately absent: a deposit is collected as a Payment before arrival, not
+// posted as a charge, and api/settings/fee-rules exempts it from needing a charge code.
+// Seeding one would assert a link the flow never uses.
+export const FEE_RULE_CODES: Record<"CANCELLATION" | "NO_SHOW", string> = {
   CANCELLATION: "CXL",
   NO_SHOW: "NOSHW",
 };
+
+// Which charge code a Payment Method of each type settles against, so a freshly seeded
+// enterprise has every settlement route linked without anyone wiring it by hand. The
+// method's own chargeCodeId can be re-pointed afterwards; a Payment is stamped at
+// posting time, so changing it never rewrites settled history.
+export const PAYMENT_METHOD_CODES: Record<string, string> = {
+  CASH: "PAYCSH",
+  CARD: "PAYCRD",
+  TRANSFER: "PAYTRF",
+  CITY_LEDGER: "PAYCL",
+};
+/** Fallback for a method whose type isn't one of the four seeded routes. */
+export const PAYMENT_METHOD_FALLBACK_CODE = "PMTADJ";
 
 // ── Level 3: the standard chart of charge codes ───────────────────────────────────
 
@@ -271,10 +286,12 @@ export const STANDARD_CHARGE_CODES: SeedCode[] = [
   { code: "ROOMUP", description: "Accommodation Upgrade", subgroupCode: "ROOM_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
   { code: "XOCC", description: "Extra Occupancy", subgroupCode: "EXTRA_OCCUPANCY", postingType: "CHARGE", taxTreatment: "FULL" },
   { code: "PKG", description: "Package Component", subgroupCode: "PACKAGE", postingType: "CHARGE", taxTreatment: "FULL" },
-  // Penalties: GST-bearing, but no service charge — no service was rendered. Change it
-  // in Controls > Cashiering > Charge Codes > Generates if the property disagrees.
-  { code: "CXL", description: "Cancellation Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "GST_ONLY", isSystem: true },
-  { code: "NOSHW", description: "No-Show Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "GST_ONLY", isSystem: true },
+  // Penalties are taxed as ordinary accommodation revenue — Service Charge then GST
+  // (owner ruling 2026-07-27). The alternative, GST with no service charge on the
+  // grounds that no service was rendered, is still expressible per property by deleting
+  // the Service Charge row in Controls > Cashiering > Charge Codes > Generates.
+  { code: "CXL", description: "Cancellation Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
+  { code: "NOSHW", description: "No-Show Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
 
   // ── Food & Beverage outlet ──
   { code: "FBFOOD", description: "Restaurant — Food", subgroupCode: "RESTAURANT", postingType: "CHARGE", taxTreatment: "FULL" },
@@ -328,10 +345,25 @@ export const STANDARD_CHARGE_CODES: SeedCode[] = [
 
   // ── Non-revenue ──
   { code: "COMM", description: "Travel Agent Commission", subgroupCode: "COMMISSION", postingType: "CREDIT", taxTreatment: "NONE", isSystem: true, role: "COMMISSION" },
+  // A deposit is an ADVANCE PAYMENT, not a charge: it is collected before arrival as a
+  // Payment on the reservation's folio #1, and check-in simply reuses that folio — so it
+  // is already on the billing window with nothing to transfer (owner, 2026-07-27). These
+  // codes exist for a manual folio adjustment against a deposit, not for that flow, and
+  // the DEPOSIT fee rule deliberately carries no charge code at all.
   { code: "DEP", description: "Deposit", subgroupCode: "DEPOSIT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
   { code: "DEPAPP", description: "Deposit Applied", subgroupCode: "DEPOSIT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  // Settlement itself is a Payment against a Payment Method (see DECISIONS.md — payment
-  // TYPES are not charge codes). These are the money movements that post to a FOLIO.
+  // Money IN. Every financial posting is linked to a charge code, a payment just as
+  // much as a charge (owner rule, 2026-07-27) — so each settlement route has its own
+  // code and cash, card, transfer and city-ledger are identifiable in the ledger.
+  // A Payment Method points at one of these (PaymentMethod.chargeCodeId) and each
+  // Payment is stamped with it at posting time.
+  //
+  // NON_REVENUE, so canGenerateTax() refuses them: money being settled has already been
+  // taxed on the charge it settles, and taxing it again would double-count.
+  { code: "PAYCSH", description: "Payment — Cash", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "PAYCRD", description: "Payment — Card", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "PAYTRF", description: "Payment — Bank Transfer", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "PAYCL", description: "Payment — City Ledger", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
   { code: "PMTADJ", description: "Payment Adjustment", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
   { code: "REFADJ", description: "Refund Adjustment", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
   { code: "PAIDOUT", description: "Paid Out", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },

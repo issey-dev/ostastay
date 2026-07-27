@@ -595,16 +595,18 @@ model ChargeCode {
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code          String
   description   String
-  // Level 3 of the hierarchy — the real classification. Nullable only until the
-  // backfill (scripts/dev-tools/backfill-charge-hierarchy.ts) has run everywhere; every
-  // write path sets it. Read classification through
-  // chargeSubgroup.chargeGroup.reportBucket, never `category`.
+  // Level 3 of the hierarchy — the real classification, and now the ONLY one: the
+  // deprecated free-text `category` column it replaced was dropped once every reader was
+  // confirmed migrated (CHARGE_CODE_PLAN.md phase 4). Read classification through
+  // chargeSubgroup.chargeGroup.reportBucket.
+  //
+  // Still nullable. Making it NOT NULL is the rest of phase 4 and is a separate change:
+  // every write path already sets it, so the only thing the constraint would add is
+  // rejecting a hand-written insert — at the cost of touching every test fixture that
+  // creates a bare code. Left for its own commit rather than riding along with the
+  // column drop.
   chargeSubgroupId String?
   chargeSubgroup   ChargeSubgroup? @relation(fields: [chargeSubgroupId], references: [id])
-  // DEPRECATED — superseded by chargeSubgroup → chargeGroup.reportBucket. Kept in sync
-  // on write during the migration window so any un-migrated reader still sees a sane
-  // value; drop the column once §5 of CHARGE_CODE_PLAN.md is confirmed clean.
-  category      String      @default("OTHERS")
   // Posting semantics that used to be implied by the magic code string:
   // CHARGE (ordinary revenue) | TAX (a levy — excluded from the GST base, e.g. GTX) |
   // CREDIT (posts negative, e.g. TA commission) | NON_REVENUE (never earned revenue).
@@ -625,6 +627,11 @@ model ChargeCode {
   generatedBy   ChargeCodeGenerate[] @relation("GeneratedCode")
 
   folioLineItems FolioLineItem[]
+  // Money-IN postings. Every financial posting is linked to a charge code, a payment
+  // just as much as a charge (owner rule, 2026-07-27): `paymentMethods` are the methods
+  // that settle against this code, `payments` the settlements already made.
+  paymentMethods PaymentMethod[]
+  payments       Payment[]
   // The "shared pool" an Outlet curates from — a charge code is never owned by one
   // outlet, it can be exposed by any number of them (or none). See OutletChargeCode.
   outletCharges  OutletChargeCode[]
@@ -678,6 +685,16 @@ model PaymentMethod {
   name         String
   type         String // Replaces PaymentType
   isActive     Boolean    @default(true)
+
+  // EVERY financial posting is linked to a charge code — a payment just as much as a
+  // charge to the guest (owner rule, 2026-07-27). This supersedes the earlier
+  // "payment types are Payment Methods, not charge codes" decision: a method still
+  // decides HOW money is taken, and now also which code that movement posts against,
+  // so cash, card, transfer and city-ledger settlement are each identifiable in the
+  // ledger. Nullable only so a method can be created before its code is chosen; the
+  // API requires one before the method can be used.
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   payments Payment[]
 }
@@ -1293,6 +1310,12 @@ model Payment {
   paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
   shiftId         String
   shift           CashierShift  @relation(fields: [shiftId], references: [id])
+
+  // Stamped from the payment method at posting time rather than read through the
+  // method later, so a method being re-pointed never rewrites settled history — the
+  // same reason a folio line carries its own charge code.
+  chargeCodeId    String?
+  chargeCode      ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   amount          Float
   referenceNumber String?

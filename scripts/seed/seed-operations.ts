@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client"
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree"
-import { legacyCategoryForSubgroup } from "../../src/lib/posting/charge-tree"
 const prisma = new PrismaClient()
 
 async function main() {
@@ -59,7 +58,6 @@ async function main() {
       create: {
         enterpriseId, code, description,
         chargeSubgroupId: subgroupId(subgroup),
-        category: legacyCategoryForSubgroup(subgroup),
         taxProfileId: taxProfile.id,
       },
     })

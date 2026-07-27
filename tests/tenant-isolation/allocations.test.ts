@@ -22,6 +22,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const allocationsRoute = await import("@/app/api/allocations/route");
 const allocationIdRoute = await import("@/app/api/allocations/[id]/route");
 const ratePlanIdRoute = await import("@/app/api/rate-plans/[id]/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -76,14 +77,10 @@ describe("Allocations: tenant isolation", () => {
     propertyBId = propertyB.id;
 
     chargeCodeAId = (
-      await prisma.chargeCode.create({
-        data: { enterpriseId: enterpriseA.id, code: "AL-A", description: "Allocation Revenue A" },
-      })
+      await customChargeCode(enterpriseA.id, { code: "AL-A", description: "Allocation Revenue A" })
     ).id;
     chargeCodeBId = (
-      await prisma.chargeCode.create({
-        data: { enterpriseId: enterpriseB.id, code: "AL-B", description: "Allocation Revenue B" },
-      })
+      await customChargeCode(enterpriseB.id, { code: "AL-B", description: "Allocation Revenue B" })
     ).id;
 
     allocationAId = (
