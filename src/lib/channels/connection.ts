@@ -9,7 +9,48 @@ import {
   needsKeepAlive,
   toConnectionError,
   REFRESH_TOKEN_IDLE_DAYS,
+  type ChannelLogSink,
 } from "@/lib/channels/beds24";
+
+/**
+ * Build the sink that turns a Beds24 exchange into a ChannelSyncLog row.
+ *
+ * Entries arrive ALREADY REDACTED from the client (see src/lib/channels/redact.ts) — this
+ * only adds the scoping columns. Nothing here should ever re-introduce raw request or
+ * response data.
+ *
+ * connectionId is optional because the very first exchange (validating an invite code)
+ * happens before any row exists; those entries are still written, with the name the
+ * operator typed, so a failed setup is visible in the log rather than vanishing.
+ */
+export function makeLogSink(params: {
+  enterpriseId: string;
+  connectionName: string;
+  connectionId?: string | null;
+  /** Receives each written row id, so a caller can link entries afterwards. */
+  onWrite?: (logId: string) => void;
+}): ChannelLogSink {
+  return async (entry) => {
+    const row = await prisma.channelSyncLog.create({
+      data: {
+        enterpriseId: params.enterpriseId,
+        connectionId: params.connectionId ?? null,
+        connectionName: params.connectionName,
+        direction: entry.direction,
+        operation: entry.operation,
+        endpoint: entry.endpoint,
+        ok: entry.ok,
+        httpStatus: entry.httpStatus,
+        latencyMs: entry.latencyMs,
+        requestSummary: entry.requestSummary,
+        responseSummary: entry.responseSummary,
+        errorMessage: entry.errorMessage,
+      },
+      select: { id: true },
+    });
+    params.onWrite?.(row.id);
+  };
+}
 
 // Service layer between the Hub's API routes and the Beds24 client. Owns the two things
 // the routes must never do themselves: encryption-at-rest of the credentials, and keeping
@@ -90,7 +131,16 @@ export async function createConnection(params: {
 }): Promise<PublicConnection> {
   const { enterpriseId, name, inviteCode } = params;
 
-  const tokens = await exchangeInviteCode(inviteCode);
+  // Logged with no connectionId — the row does not exist yet, and a REJECTED invite code
+  // never creates one. Without this, the most common setup failure would leave no trace.
+  // The written ids are captured so a SUCCESSFUL setup can be linked to the connection it
+  // produced (below); otherwise a connection's own log would be missing the exchange that
+  // created it, which is the first thing anyone looks for.
+  const setupLogIds: string[] = [];
+  const tokens = await exchangeInviteCode(
+    inviteCode,
+    makeLogSink({ enterpriseId, connectionName: name, onWrite: (id) => setupLogIds.push(id) })
+  );
   const now = new Date();
 
   const created = await prisma.channelConnection.create({
@@ -107,6 +157,15 @@ export async function createConnection(params: {
       lastError: null,
     },
   });
+
+  // Adopt the setup entries now that there is a connection to attach them to. Best-effort:
+  // a failure here must not undo a connection that genuinely succeeded.
+  if (setupLogIds.length > 0) {
+    await prisma.channelSyncLog
+      .updateMany({ where: { id: { in: setupLogIds } }, data: { connectionId: created.id } })
+      .catch((e) => console.error("could not link setup logs to connection", e));
+  }
+
   return toPublicConnection(created);
 }
 
@@ -130,7 +189,10 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   if (!refreshToken) throw new Error("Connection has no stored credentials");
 
   try {
-    const fresh = await refreshAccessToken(refreshToken);
+    const fresh = await refreshAccessToken(
+      refreshToken,
+      makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
+    );
     await prisma.channelConnection.update({
       where: { id: connectionId },
       data: {
@@ -180,7 +242,10 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
 
   const refreshToken = decryptSecret(conn.refreshToken);
   try {
-    const fresh = await refreshAccessToken(refreshToken!);
+    const fresh = await refreshAccessToken(
+      refreshToken!,
+      makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
+    );
     const updated = await prisma.channelConnection.update({
       where: { id: connectionId },
       data: {
@@ -208,7 +273,17 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
 
 /** Replace the credentials on an existing connection with a fresh invite code. */
 export async function reauthorizeConnection(connectionId: string, inviteCode: string): Promise<PublicConnection> {
-  const tokens = await exchangeInviteCode(inviteCode);
+  const existing = await prisma.channelConnection.findUnique({ where: { id: connectionId } });
+  if (!existing) throw new Error("Connection not found");
+
+  const tokens = await exchangeInviteCode(
+    inviteCode,
+    makeLogSink({
+      enterpriseId: existing.enterpriseId,
+      connectionName: existing.name,
+      connectionId: existing.id,
+    })
+  );
   const now = new Date();
   const updated = await prisma.channelConnection.update({
     where: { id: connectionId },

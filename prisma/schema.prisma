@@ -32,6 +32,7 @@ model Enterprise {
   license               EnterpriseLicense?
   moduleAccessOverrides EnterpriseModuleAccess[]
   channelConnections    ChannelConnection[]
+  channelSyncLogs       ChannelSyncLog[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -2541,5 +2542,52 @@ model ChannelConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  syncLogs ChannelSyncLog[]
+
   @@unique([enterpriseId, name])
+}
+
+// Every exchange with the channel manager, inbound and outbound — the troubleshooting
+// record for the Hub's Logs screen. Deliberately built BEFORE the sync engine, so the
+// very first sync is debuggable rather than a black box.
+//
+// ⚠️ THIS TABLE MUST NEVER CONTAIN A CREDENTIAL. The requests being logged carry invite
+// codes, refresh tokens and access tokens in their headers; writing those here would
+// defeat the encryption-at-rest on ChannelConnection entirely, since this table is
+// plaintext and readable by anyone with Hub view access. Everything stored is passed
+// through redactForLog() in src/lib/channels/redact.ts first — see the tests, which
+// assert that a known secret never survives into a row.
+model ChannelSyncLog {
+  id String @id @default(uuid())
+  // Denormalised so the Logs screen can scope and page without a join, and so entries
+  // survive their connection being deleted (see connectionId below).
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  // SetNull, not Cascade: the logs explaining WHY a connection was removed are exactly
+  // the ones worth keeping afterwards. connectionName is snapshotted for the same reason,
+  // mirroring how UserActivityLog snapshots user identity.
+  connectionId   String?
+  connection     ChannelConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  connectionName String
+
+  // OUTBOUND (we called the channel manager) | INBOUND (it called us, e.g. a webhook).
+  direction String
+  // Coarse operation name, e.g. "auth.setup", "auth.token", "connection.test".
+  operation String
+  endpoint  String?
+
+  ok         Boolean
+  httpStatus Int?
+  latencyMs  Int?
+
+  // Redacted, truncated summaries — enough to troubleshoot, never enough to leak.
+  requestSummary  String?
+  responseSummary String?
+  errorMessage    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([enterpriseId, createdAt])
+  @@index([connectionId, createdAt])
 }

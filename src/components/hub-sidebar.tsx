@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, Building2 } from "@/components/icons"
+import { LayoutDashboard, ArrowLeftRight, Building2, FileText } from "@/components/icons"
 import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
@@ -25,6 +25,7 @@ import {
 const items = [
   { title: "Overview", url: "hub", icon: LayoutDashboard },
   { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
+  { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
 ]
 
 export async function HubSidebar({ slug }: { slug: string }) {
