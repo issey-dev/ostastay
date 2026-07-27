@@ -33,6 +33,7 @@ model Enterprise {
   moduleAccessOverrides EnterpriseModuleAccess[]
   channelConnections    ChannelConnection[]
   channelSyncLogs       ChannelSyncLog[]
+  jobRuns               JobRun[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -2590,4 +2591,41 @@ model ChannelSyncLog {
 
   @@index([enterpriseId, createdAt])
   @@index([connectionId, createdAt])
+}
+
+// One execution of a background job for one enterprise — see src/lib/jobs/.
+//
+// Next.js has no scheduler of its own, so jobs are driven by an EXTERNAL cron hitting
+// /api/jobs/run. That makes this table do double duty: it is both the audit trail (a
+// silently-failing cron is worse than no cron, so every run is recorded whatever the
+// outcome) and the mutual-exclusion lock.
+//
+// NOTE: a PARTIAL unique index `JobRun_one_running_per_job_enterprise` — UNIQUE
+// ("jobName","enterpriseId") WHERE "status" = 'RUNNING' — is created in raw SQL by the
+// migration, because Prisma cannot express a partial index. It is what makes overlapping
+// cron invocations safe: the second one's INSERT fails rather than running the job twice.
+// Same approach as CashierShift_one_open_per_user_property (audit finding A12).
+//
+// enterpriseId is deliberately NOT nullable: SQLite treats NULLs as distinct in a unique
+// index, so a nullable column would silently permit concurrent "global" runs — exactly the
+// case the lock exists to prevent. Every job today is per-enterprise anyway.
+model JobRun {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  jobName String
+  // RUNNING | SUCCEEDED | FAILED. RUNNING doubles as the lock (see the partial index).
+  status  String @default("RUNNING")
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  itemsProcessed Int     @default(0)
+  summary        String?
+  // Redacted before storage — job errors can quote a channel-manager response back.
+  error          String?
+
+  @@index([jobName, startedAt])
+  @@index([enterpriseId, startedAt])
 }
