@@ -31,6 +31,15 @@ export const MODULES = [
   // is a Controls tab gated by CONTROLS, this module only covers day-to-day
   // appointment booking/check-in/completion.
   "SPA",
+  // The FIRST enterprise-level (Hub) module — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+  // Unlike every module above it, this one is NOT property-operational: it gates the Hub
+  // shell (src/app/e/[slug]/hub), where channel-manager connectivity, credentials, sharing
+  // and sync logs live. It is deliberately in this same flat list rather than a separate
+  // enterprise-permission concept — reusing RolePermission's CRUD bits verbatim costs
+  // nothing and backfillMissingRolePermissions() self-heals existing roles. If the Hub
+  // grows past ~3 modules, revisit and split MODULES by scope level (PROPERTY|ENTERPRISE).
+  // Membership of the Hub is decided by HUB_MODULES in src/lib/scope.ts, not by this list.
+  "INTEGRATIONS",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -55,4 +64,5 @@ export const MODULE_LABELS: Record<Module, string> = {
   ACTIVITY_LOG: "Activity Log",
   EXCURSIONS: "Excursions",
   SPA: "Spa",
+  INTEGRATIONS: "Integrations",
 };

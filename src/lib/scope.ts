@@ -437,6 +437,47 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
   }
 }
 
+// ---------------------------------------------------------------------------
+// Hub (enterprise level) — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md
+// ---------------------------------------------------------------------------
+
+// The modules that live in the Hub shell (src/app/e/[slug]/hub) rather than the
+// property dashboard. The Hub is enterprise-level by definition — connectivity and
+// enterprise-wide configuration — and contains NO PMS functionality. Adding a module
+// here is what puts it in the Hub; MODULES itself stays a flat list.
+export const HUB_MODULES: readonly Module[] = ["INTEGRATIONS"] as const;
+
+// Non-throwing probe — use for navigation/visibility decisions (e.g. whether to show
+// the "Hub" link in the property sidebar). requireHubAccess() is the actual gate.
+export function hasHubAccess(ctx: AuthContext): boolean {
+  // A PROPERTY-scoped user is pinned to a single work location and has no business
+  // holding enterprise-wide OTA credentials — blocked outright, regardless of role
+  // bits, so granting INTEGRATIONS to a property-scoped user can never open the Hub.
+  if (ctx.scope === "PROPERTY") return false;
+  return HUB_MODULES.some((m) => hasPermission(ctx, m, "view"));
+}
+
+// The single gate every Hub route handler and the Hub layout must call — deliberately
+// ONE helper rather than the inline `if (!ctx.isInternal) return 403` pattern the
+// /api/osta/** routes repeat file-by-file. That duplication is exactly the shape of
+// audit finding S2 (a local guard that silently skipped a step); a Hub-wide rule change
+// must be a one-line edit here, not a sweep across every endpoint.
+export function requireHubAccess(ctx: AuthContext): void {
+  if (ctx.scope === "PROPERTY") {
+    throw new ForbiddenError("The Hub is enterprise-level and not available to property-scoped users");
+  }
+  if (!HUB_MODULES.some((m) => hasPermission(ctx, m, "view"))) {
+    throw new ForbiddenError("Not authorized for the Hub");
+  }
+}
+
+// True when the user has no property-operational access at all — i.e. a Hub-only
+// administrator. Such a user must land on the Hub, since every dashboard route would
+// bounce them or render an empty shell. See src/app/e/[slug]/dashboard/page.tsx.
+export function hasAnyPropertyModule(ctx: AuthContext): boolean {
+  return MODULES.some((m) => !HUB_MODULES.includes(m) && hasPermission(ctx, m, "view"));
+}
+
 // Shared shape for turning a thrown UnauthorizedError/ForbiddenError into a NextResponse
 // in a route handler's catch block: `const { status, body } = toErrorResponse(e);`
 export function toErrorResponse(e: unknown): { status: number; body: { error: string } } {
