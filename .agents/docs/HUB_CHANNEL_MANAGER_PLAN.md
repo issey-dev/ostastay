@@ -1,7 +1,11 @@
 # Hub Level + Channel Manager (Beds24) — Plan
 
-> Status: **DRAFT / design only — nothing implemented.** Written 2026-07-27.
-> Read [MASTER_PLAN.md](MASTER_PLAN.md) for architecture, [DECISIONS.md](DECISIONS.md) for prior rulings.
+> Status (2026-07-27): **Hub + everything up to the sync engine is BUILT.** Shipped as five
+> stacked PRs — Hub shell (#4), Connection (#5), Exchange Log (#6), Job runner (#7), Sharing (#8).
+> **The sync engine itself is NOT started** — that is all that remains of this plan.
+> Both open decisions are now closed: D-6 is moot, D-7 was ruled on by the owner (see below).
+> Written 2026-07-27. Read [MASTER_PLAN.md](MASTER_PLAN.md) for architecture,
+> [DECISIONS.md](DECISIONS.md) for prior rulings, and [TODO.md](TODO.md) for current status.
 
 Two separable pieces of work, deliberately kept apart:
 
@@ -234,10 +238,23 @@ PR #3.
 5. **Polling fallback** — `GET /bookings` since last-seen timestamp, on a schedule, to catch missed
    webhooks. Beds24 explicitly supports the combination.
 
-**Known tension to design against:** ostastay allows overbooking with confirmation and has
-soft-cap group blocks. Beds24 has its own inventory view. These *will* disagree. Decide
-explicitly which side is authoritative per scenario before Phase 3 — do not discover it in
-production.
+**RESOLVED — D-7, owner ruling 2026-07-27** (full text in [DECISIONS.md](DECISIONS.md)):
+
+- **Push actual available inventory. Never include overbooking allowance.** If a manual
+  overbook has driven the count negative, push `0` — never a negative, never "0 plus
+  headroom". The channel manager can therefore never *cause* an overbook.
+- **Overbooking stays a manual-only privilege** at the desk, with its existing confirmation
+  step. It is a deliberate act by someone who can see the whole picture, not an emergent
+  consequence of arithmetic in another system.
+- **Group-block held rooms are withheld until the block's `cutoffDate`, then released.**
+  No schema change needed — `cutoffDate` exists and `api/groups/[id]/pickup` already refuses
+  pickup past it, which is what makes releasing safe. ⚠️ `cutoffDate` is nullable: no cutoff
+  means hold indefinitely, never release immediately.
+- **Inbound race → accept and flag.** An OTA booking is already confirmed to the guest
+  before it reaches us, so refusing is not really available. Accept it and raise a visible
+  "channel overbook" alert so the desk learns days ahead rather than at the door. It must
+  NOT be folded in silently as though it were a deliberate manual overbook.
+- **Stop-sale must close the room type at the channel**, not merely push availability 0.
 
 ### Rollout phases
 
@@ -272,9 +289,11 @@ separable, and the Hub is the piece with long-term structural consequences.
 - **D-2** Confirm PROPERTY-scoped users are hard-blocked from the Hub.
 - **D-3** Confirm Hub-only admin = `scope=ENTERPRISE` + Hub-only role (no schema change).
 - **D-5** Does the Hub live at `/e/{slug}/hub` (recommended, same enterprise prefix) or top-level `/hub`?
-- **D-6** Beds24 account model: one Beds24 account per enterprise, or per property? Drives whether
-  `ChannelConnection` is truly enterprise-level or needs a per-property variant.
-- **D-7** Authority on inventory conflict: ostastay or Beds24?
+- ~~**D-6** Beds24 account model~~ — **MOOT.** `ChannelConnection` is deliberately not unique
+  per enterprise, so one-account-per-enterprise and one-per-property both work with no
+  schema change either way.
+- ~~**D-7** Authority on inventory conflict~~ — **ANSWERED 2026-07-27**, see the Outbound
+  sync section above and [DECISIONS.md](DECISIONS.md).
 
 ## Sources
 

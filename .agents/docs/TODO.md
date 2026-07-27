@@ -76,8 +76,48 @@ first has shipped, on branch `feature/hub-shell`.
     troubleshooting record.
   - Cursor paging, not offset — the table is written to continuously, so offset paging would
     skip or repeat rows as new entries arrive mid-page.
-- **Next (not started):** Sharing/mapping (property links + room-type/rate-plan mapping) → sync
-  engine, inbound read-only first.
+- **DONE — Sharing / mapping** (branch `feature/hub-sharing`, stacked on
+  `feature/hub-job-runner`). `ChannelPropertyLink` / `ChannelRoomTypeMap` /
+  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI at
+  `/e/{slug}/hub/channel-manager/sharing`. This is the "control what is shared" surface.
+  - ⚠️ **`ChannelPropertyLink.propertyId` is UNIQUE ACROSS ALL CONNECTIONS**, not per
+    connection. Linking one property through two channel-manager accounts would have both
+    pushing availability for the same rooms and both taking bookings — a **double-sell that
+    surfaces as an overbooked guest at the desk, never as an error in software**. One
+    property, one channel manager.
+  - **Readiness gate:** sharing cannot be turned ON while any *active, shared* room type is
+    unmapped — a half-mapped push is worse than none because it looks like it worked.
+    Inactive and deliberately-unshared room types do not block. A link with nothing shared is
+    never "ready". Rate plans are **optional** and deliberately do NOT gate readiness (a
+    property can push availability on a default rate long before per-plan mapping exists).
+    **Disabling is always allowed** — stopping must never be blocked.
+  - New links default `syncEnabled = false`: publishing inventory is an explicit act, never a
+    side effect of linking.
+  - Mappings are validated to belong to the link's own property, otherwise one property's
+    inventory could be published under another property's roof.
+  - **External IDs are typed in by hand for now.** A picker that reads the channel manager's
+    own property/room list needs a real Beds24 account to design the response parsing
+    against — deliberately not guessed. Manual entry is correct regardless and is what an
+    operator would do pre-certification.
+- **Next (not started): the sync engine.** Inbound read-only first (rollout Phase 1), then
+  one-way ARI push, then two-way on one OTA. **All blocking decisions are now closed** — D-6
+  is moot (see above) and D-7 was ruled on by the owner 2026-07-27.
+- **D-7 ruling — the rules the sync engine must implement** (full text in
+  [DECISIONS.md](DECISIONS.md)):
+  1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
+     if a manual overbook has driven it negative — never a negative, never "0 plus headroom".
+     The channel manager must never be able to *cause* an overbook.
+  2. **Overbooking stays manual-only** at the desk, via the existing confirmation step.
+  3. **Group-block held rooms are withheld until `GroupBlock.cutoffDate`, then released.**
+     No schema change needed — `cutoffDate` exists and `api/groups/[id]/pickup` already
+     refuses pickup past it, which is precisely what makes releasing safe.
+     ⚠️ `cutoffDate` is **nullable**: no cutoff means hold indefinitely, NOT release now.
+  4. **Inbound race → accept and flag.** An OTA booking is already confirmed to the guest
+     before it reaches us, so refusing is not really available. Accept it and raise a
+     visible **"channel overbook"** alert so the desk learns days ahead, not at the door.
+     Must NOT be folded in silently as if it were a deliberate manual overbook.
+  5. **Stop-sale must CLOSE the room type at the channel**, not merely push availability 0 —
+     some OTAs treat 0 as "temporarily sold out" and keep the listing live.
 - **DONE — Background job runner** (branch `feature/hub-job-runner`, stacked on
   `feature/hub-sync-logs`). Closes BOTH operational gaps above with one piece of shared
   infrastructure. `JobRun` model, `src/lib/jobs/` (runner + registry + cron auth),

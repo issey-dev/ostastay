@@ -2141,3 +2141,56 @@ Decisions taken (owner-confirmed via questions):
 - **Verification**: migration `20260726224317_stationery_property_branding` applied; `tsc`
   clean (only a pre-existing dev-tools script error remains); new
   `tests/business-rules/stationery-brand.test.ts` (6 tests) passing.
+
+## Channel manager: inventory & overbooking authority — owner ruling (2026-07-27)
+
+Answers plan decision **D-7** in [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md).
+
+**The rule:** what we push to the channel manager is the **actual available inventory**.
+Overbooking allowance is **never** included in that number.
+
+**Overbooking is a manual-only privilege** — it stays available to a human creating a
+reservation at the desk (with the existing confirmation step), and is never something an
+OTA booking can trigger.
+
+**Why this is the safe direction:** the channel manager can never *cause* an overbook,
+because we never advertise a room we do not have. Overbooking remains a deliberate act by
+someone who can see the whole picture and take responsibility for it, rather than an
+emergent consequence of inventory arithmetic happening in another system.
+
+**Consequences for the sync engine:**
+- Availability pushed = true sellable inventory. If a manual overbook has already pushed
+  the count negative, push **0** — never a negative number, and never "0 plus headroom".
+- The overbooking confirmation path in the reservation UI is unaffected; it is explicitly
+  the one place overbooking may still happen.
+- Stop-sale must close the room type at the channel, not merely push availability 0.
+
+### Group-block held rooms — owner ruling (2026-07-27)
+
+**Held-but-unpicked block rooms are withheld from the channel until the block's cutoff
+date, then released automatically.**
+
+Before cutoff: held rooms are subtracted from pushed availability (the group may still
+pick them up). After cutoff: they are released and sellable through the channel.
+
+**This needs no schema change and is already safe.** `GroupBlock.cutoffDate` exists, and
+`src/app/api/groups/[id]/pickup/route.ts` **already refuses pickup past the cutoff** — so
+a group cannot pick up rooms we have released, which is exactly what makes releasing them
+consistent with the no-channel-overbooking rule above.
+
+⚠️ `cutoffDate` is **nullable**. A block with no cutoff can be picked up at any time, so
+its held rooms must be withheld for the block's whole life — "no cutoff" means "hold
+indefinitely", never "release immediately".
+
+### Inbound overbooking race — owner ruling (2026-07-27)
+
+An OTA booking is **already confirmed to the guest** by the channel manager before it
+reaches us, so refusing it is not genuinely available to us.
+
+**Accept the booking, and raise a visible "channel overbook" alert for the desk.** The
+guest holds a confirmation either way; the only real choice is whether the desk finds out
+days ahead or at the door. It must be days ahead.
+
+This does not weaken the rule above — the desk never *chose* this overbook, so it must be
+surfaced as an exception needing resolution, not folded in silently as though it were a
+deliberate manual overbook.

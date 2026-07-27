@@ -312,6 +312,7 @@ model Property {
   roomTypes                    RoomType[]
   rooms                        Room[]
   ratePlans                    RatePlan[]
+  channelLink                  ChannelPropertyLink?
   mealPlans                    MealPlan[]
   reservations                 Reservation[]
   groupBlocks                  GroupBlock[]
@@ -398,6 +399,8 @@ model RoomType {
   // NOT auto-restore room status, since some rooms may have been OUT_OF_SERVICE for an
   // unrelated reason beforehand.
   isActive Boolean @default(true)
+
+  channelMap ChannelRoomTypeMap?
 
   // Pseudo room types represent a dummy/virtual category (e.g. day-use, overbooking
   // buffer). Rooms created under one skip Building/Floor assignment entirely (see
@@ -743,6 +746,7 @@ model RatePlan {
   id              String   @id @default(uuid())
   propertyId      String
   property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  channelMap      ChannelRatePlanMap?
   code            String
   name            String
   description     String?
@@ -2543,9 +2547,83 @@ model ChannelConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  syncLogs ChannelSyncLog[]
+  syncLogs      ChannelSyncLog[]
+  propertyLinks ChannelPropertyLink[]
 
   @@unique([enterpriseId, name])
+}
+
+// Which ostastay property a connection covers, and which channel-manager property it
+// corresponds to. This is the "what do we share" control — see
+// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+//
+// ⚠️ propertyId is UNIQUE ACROSS ALL CONNECTIONS, not merely unique per connection. Linking
+// one property through two channel-manager accounts would have both pushing availability for
+// the same rooms and both accepting bookings against them — a double-sell that surfaces as
+// an overbooked guest at the desk, not as an error anywhere in software. One property, one
+// channel manager.
+//
+// A link references properties as CONFIGURATION, which is why this still belongs in the Hub:
+// it is not an operation on a property, it is a statement about how that property is
+// connected.
+model ChannelPropertyLink {
+  id           String            @id @default(uuid())
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // The channel manager's own id for this property (Beds24 propertyId).
+  externalPropertyId String
+
+  // The master switch for this property's exchange. Deliberately defaults to FALSE: a newly
+  // linked property must not start pushing inventory the moment it is created — mapping has
+  // to be completed and reviewed first. Enabling is an explicit act.
+  syncEnabled Boolean @default(false)
+
+  roomTypeMaps ChannelRoomTypeMap[]
+  ratePlanMaps ChannelRatePlanMap[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, externalPropertyId])
+}
+
+// ostastay RoomType ↔ channel-manager room. The mapping table is where most of the real
+// integration work lives: everything downstream (availability push, inbound bookings) is
+// meaningless without it.
+model ChannelRoomTypeMap {
+  id     String              @id @default(uuid())
+  linkId String
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  roomTypeId String   @unique
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  externalRoomId String
+
+  // Per-room-type share control: a property can be connected while deliberately holding
+  // back individual room types (e.g. a suite sold only direct).
+  shared Boolean @default(true)
+
+  @@unique([linkId, externalRoomId])
+}
+
+// ostastay RatePlan ↔ channel-manager price/rate. Optional: a property can push availability
+// with a single default rate before rate mapping is set up, so this does not gate readiness.
+model ChannelRatePlanMap {
+  id     String              @id @default(uuid())
+  linkId String
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  ratePlanId String   @unique
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+
+  externalRateId String
+
+  @@unique([linkId, externalRateId])
 }
 
 // Every exchange with the channel manager, inbound and outbound — the troubleshooting
