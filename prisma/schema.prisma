@@ -908,6 +908,7 @@ model RatePlan {
 
   calendars       PriceCalendar[]
   RoomAssignment  RoomAssignment[]
+  channelBookingDefaults ChannelBookingDefaults[]
   // Which Allocations this plan carries as a package (see Allocation.mode for whether
   // each is carved out of or added on top of the room rate). A derived plan with no
   // links of its own inherits its parent's — see src/lib/allocations.ts.
@@ -2724,6 +2725,7 @@ model ChannelPropertyLink {
 
   roomTypeMaps ChannelRoomTypeMap[]
   ratePlanMaps ChannelRatePlanMap[]
+  bookingDefaults ChannelBookingDefaults?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2921,4 +2923,30 @@ model ChannelInboundBooking {
   @@unique([connectionId, externalBookingId])
   @@index([enterpriseId, receivedAt])
   @@index([enterpriseId, isOverbooking])
+}
+
+// Per-link defaults for converting a ChannelInboundBooking into a real Reservation — what to
+// pick when the channel manager's payload doesn't say. A channel booking confirms a stay and
+// a price; it does not name one of THIS property's rate plans or meal plans, so conversion
+// has nothing to attach the booking to without an operator having configured one. Configured
+// once per link (Hub > Mapping > Defaults tab), not guessed per booking.
+model ChannelBookingDefaults {
+  id     String              @id @default(uuid())
+  linkId String              @unique
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  // Which of this property's rate plans an inbound booking attaches to for
+  // allocation/Night Audit purposes. Null means conversion cannot proceed yet — see
+  // resolveBookingDefaults() in src/lib/channels/defaults.ts — so a booking with no
+  // configured default is flagged for the desk rather than guessed at.
+  ratePlanId String?
+  ratePlan   RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+
+  // Reservation.mealPlan is an untyped string defaulting to "NONE" everywhere else in the
+  // app (see POST /api/reservations) — this follows the same convention rather than
+  // inventing a stricter rule only for the channel path.
+  mealPlanCode String @default("NONE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
