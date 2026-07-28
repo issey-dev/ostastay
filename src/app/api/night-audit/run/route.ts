@@ -2,7 +2,9 @@ import { NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
-import { resolveChargeTax } from "@/lib/tax-calc"
+import { postCharge } from "@/lib/posting/post-charge"
+import { resolveChargeCode, MissingChargeCodeError } from "@/lib/posting/resolve-charge-code"
+import type { GenerateRow } from "@/lib/posting/run-generates"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
@@ -103,25 +105,14 @@ export async function POST(request: Request) {
 
     // Accommodation charge code the nightly room charge posts against, resolved per
     // reservation in the loop as: the reservation's rate plan's own chargeCode -> the
-    // enterprise default accommodation code (EnterpriseSettings) -> the legacy "ROOM"
-    // code. At least one enterprise-level fallback must exist so every reservation can
-    // resolve; a per-plan code is optional on top.
+    // role-resolved enterprise accommodation code. The role lookup replaces the old
+    // literal `code: "ROOM"` findFirst — see src/lib/posting/resolve-charge-code.ts.
     const taxInclude = { taxProfile: { include: { rates: true } } } as const
-    const defaultAccommodationCode = settings?.defaultAccommodationChargeCodeId
-      ? await prisma.chargeCode.findFirst({
-          where: { id: settings.defaultAccommodationChargeCodeId, enterpriseId: property.enterpriseId },
-          include: taxInclude,
-        })
-      : null
-    const legacyRoomCode = await prisma.chargeCode.findFirst({
-      where: { enterpriseId: property.enterpriseId, code: "ROOM" },
-      include: taxInclude,
-    })
-    const fallbackRoomCode = defaultAccommodationCode ?? legacyRoomCode
+    const fallbackRoomCode = await resolveChargeCode(property.enterpriseId, "ACCOMMODATION", { settings })
 
     if (!fallbackRoomCode) {
       return NextResponse.json(
-        { error: "No accommodation charge code configured. Set a default in Controls > Finance (or add a ROOM charge code)." },
+        { error: new MissingChargeCodeError("ACCOMMODATION").message },
         { status: 400 }
       )
     }
@@ -134,18 +125,39 @@ export async function POST(request: Request) {
 
     // Green Tax (Maldives): a flat per-adult/per-child nightly government levy, separate
     // from GST/service charge and unaffected by the property's tax-inclusive toggle.
-    // Infants (Reservation.infants) are exempt and not counted. Only require the GTX
-    // charge code to exist when Green Tax is actually enabled for this enterprise.
+    // Infants (Reservation.infants) are exempt and not counted.
+    //
+    // It is no longer a hardcoded branch below: it posts as a ChargeCodeGenerate off the
+    // room charge (CHARGE_CODE_PLAN.md §4), through the same postCharge path as every
+    // other line, so a property can add a bed tax or municipal levy in Controls without
+    // new code. The *rates* still come from the enterprise's Maldives Tax config — the
+    // GREEN_TAX generate method reads EnterpriseSettings.greenTax*, so Controls >
+    // Finance > Tax stays the one place they're edited.
+    //
+    // `impliedGreenTaxGenerate` covers accommodation codes that carry no Green Tax row
+    // of their own (a per-rate-plan code, or an enterprise seeded before the hierarchy):
+    // Green Tax is a rule about accommodation, not about one code, and a missing row
+    // must not silently drop the levy. A row stored on the code always wins.
     const greenTaxEnabled = settings?.greenTaxEnabled ?? false
     let gtxCode = null
     if (greenTaxEnabled) {
-      gtxCode = await prisma.chargeCode.findFirst({
-        where: { enterpriseId: property.enterpriseId, code: "GTX" }
-      })
+      gtxCode = await resolveChargeCode(property.enterpriseId, "GREEN_TAX", { settings })
       if (!gtxCode) {
-        return NextResponse.json({ error: "Missing GTX charge code in system settings." }, { status: 400 })
+        return NextResponse.json({ error: "Missing GTX charge code in system settings. Add a Green Tax charge code in Controls > Cashiering." }, { status: 400 })
       }
     }
+    const impliedGreenTaxGenerate: GenerateRow[] = gtxCode
+      ? [{
+          id: `implied-green-tax:${gtxCode.id}`,
+          generatedCodeId: gtxCode.id,
+          method: "GREEN_TAX",
+          value: 0,
+          calculateOn: "NET",
+          basisGenerateId: null,
+          sortOrder: 1000,
+          isActive: true,
+        }]
+      : []
 
     // 1. Fetch all currently checked-in reservations
     const activeReservations = await prisma.reservation.findMany({
@@ -215,6 +227,17 @@ export async function POST(request: Request) {
         noShowFees.push({ reservationId: r.id, confirmationNo: r.confirmationNo, fee, chargeCodeId: rule.chargeCodeId, folioId: openFolio?.id ?? null, hadFolio: !!openFolio })
       }
     }
+
+    // The fee rules' charge codes, in the postCharge shape, loaded once.
+    const noShowCodeMap = new Map(
+      (noShowFees.length
+        ? await prisma.chargeCode.findMany({
+            where: { id: { in: [...new Set(noShowFees.map((f) => f.chargeCodeId))] }, enterpriseId: property.enterpriseId },
+            include: taxInclude,
+          })
+        : []
+      ).map((c) => [c.id, c])
+    )
 
     let totalRoomRevenue = 0
     let totalTaxPosted = 0
@@ -445,29 +468,29 @@ export async function POST(request: Request) {
             .reduce((sum, a) => sum + a.grossInput, 0)
           const roomInputAfterCarveOut = Math.max(0, inputAmount - includeInRateGross)
 
-          const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
+          // The nightly room charge — and, through its generate rows, tonight's Green Tax
+          // and any other levy the property has declared on this code.
+          const roomPosting = await postCharge(tx, {
+            folioId: routeTo(res.id, roomCode.id, targetFolioId),
             chargeCode: roomCode,
             inputAmount: roomInputAfterCarveOut,
             settings,
-            pricesIncludeTaxes
+            pricesIncludeTaxes,
+            date: today,
+            description: "Nightly Room Charge",
+            roomAssignmentId: activeAssignment.id,
+            // One stay-night. Infants are deliberately absent — exempt, and not counted.
+            postingContext: { adults: res.adults, children: res.children, nights: 1 },
+            extraGenerates: impliedGreenTaxGenerate,
+            routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
           })
 
-          await tx.folioLineItem.create({
-            data: {
-              folioId: routeTo(res.id, roomCode.id, targetFolioId),
-              chargeCodeId: roomCode.id,
-              roomAssignmentId: activeAssignment.id,
-              amount: baseAmount,
-              taxAmount,
-              serviceChargeAmount,
-              description: "Nightly Room Charge",
-              date: today
-            }
-          })
-
-          totalRoomRevenue += baseAmount
-          totalTaxPosted += taxAmount + serviceChargeAmount
-          totalPostings += 1
+          totalRoomRevenue += roomPosting.baseAmount
+          // taxTotal already covers this charge's Service Charge and GST wherever they
+          // landed — in the parent's columns, or on their own routed tax lines. Levies
+          // (Green Tax and friends) are additional tax collected, never room revenue.
+          totalTaxPosted += roomPosting.taxTotal + roomPosting.leviesTotal
+          totalPostings += 1 + roomPosting.generated.length
 
           // 2a. Post an extra-occupancy surcharge — adults beyond RoomType.baseOccupancy
           // at today's calendar extraAdultPrice, plus every child at extraChildPrice (no
@@ -479,33 +502,31 @@ export async function POST(request: Request) {
             extraAdults * (calendarEntry?.extraAdultPrice ?? 0) + res.children * (calendarEntry?.extraChildPrice ?? 0)
 
           if (extraOccupancyInput > 0) {
-            const extraOccupancy = resolveChargeTax({
-              chargeCode: roomCode,
-              inputAmount: extraOccupancyInput,
-              settings,
-              pricesIncludeTaxes
-            })
-
             const parts = []
             if (extraAdults > 0) parts.push(`${extraAdults} extra adult${extraAdults > 1 ? "s" : ""}`)
             if (res.children > 0) parts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
 
-            await tx.folioLineItem.create({
-              data: {
-                folioId: routeTo(res.id, roomCode.id, targetFolioId),
-                chargeCodeId: roomCode.id,
-                roomAssignmentId: activeAssignment.id,
-                amount: extraOccupancy.baseAmount,
-                taxAmount: extraOccupancy.taxAmount,
-                serviceChargeAmount: extraOccupancy.serviceChargeAmount,
-                description: `Extra Occupancy Charge (${parts.join(", ")})`,
-                date: today
-              }
+            // Generates run here too — this line must carry its own Service Charge and
+            // GST like any other accommodation revenue. What it deliberately does NOT
+            // pass is a postingContext: the nightly per-person levies (Green Tax) were
+            // already levied on the room line for this same night, and a levy needs a
+            // headcount basis to produce an amount, so it correctly contributes nothing
+            // here rather than double-charging the night.
+            const extraOccupancy = await postCharge(tx, {
+              folioId: routeTo(res.id, roomCode.id, targetFolioId),
+              chargeCode: roomCode,
+              inputAmount: extraOccupancyInput,
+              settings,
+              pricesIncludeTaxes,
+              date: today,
+              description: `Extra Occupancy Charge (${parts.join(", ")})`,
+              roomAssignmentId: activeAssignment.id,
+              routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
             })
 
             totalRoomRevenue += extraOccupancy.baseAmount
-            totalTaxPosted += extraOccupancy.taxAmount + extraOccupancy.serviceChargeAmount
-            totalPostings += 1
+            totalTaxPosted += extraOccupancy.taxTotal + extraOccupancy.leviesTotal
+            totalPostings += 1 + extraOccupancy.generated.length
           }
 
           // 2a-bis. Post tonight's allocations (Breakfast, Transfers, Spa... — see
@@ -516,56 +537,29 @@ export async function POST(request: Request) {
           // materialized on the reservation at booking time, not re-resolved live.)
           for (const { reservationAllocation: ra, grossInput } of allocationsTonight) {
             const alloc = ra.allocation
-            const allocTax = resolveChargeTax({
-              chargeCode: alloc.chargeCode,
-              inputAmount: grossInput,
-              settings,
-              pricesIncludeTaxes
-            })
 
             const paxParts = []
             if (res.adults > 0) paxParts.push(`${res.adults} adult${res.adults > 1 ? "s" : ""}`)
             if (res.children > 0) paxParts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
 
-            await tx.folioLineItem.create({
-              data: {
-                folioId: routeTo(res.id, alloc.chargeCodeId, targetFolioId),
-                chargeCodeId: alloc.chargeCodeId,
-                amount: allocTax.baseAmount,
-                taxAmount: allocTax.taxAmount,
-                serviceChargeAmount: allocTax.serviceChargeAmount,
-                description: `${alloc.name} (${paxParts.join(", ")})`,
-                date: today
-              }
+            const allocPosting = await postCharge(tx, {
+              folioId: routeTo(res.id, alloc.chargeCodeId, targetFolioId),
+              chargeCode: alloc.chargeCode,
+              inputAmount: grossInput,
+              settings,
+              pricesIncludeTaxes,
+              date: today,
+              description: `${alloc.name} (${paxParts.join(", ")})`,
+              postingContext: { adults: res.adults, children: res.children, nights: 1 },
+              routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
             })
 
-            totalTaxPosted += allocTax.taxAmount + allocTax.serviceChargeAmount
-            totalPostings += 1
+            totalTaxPosted += allocPosting.taxTotal + allocPosting.leviesTotal
+            totalPostings += 1 + allocPosting.generated.length
           }
 
-          // 2b. Post nightly Green Tax — flat per adult/child, infants exempt.
-          if (greenTaxEnabled && gtxCode) {
-            const greenTaxAmount = Math.round(
-              (res.adults * (settings!.greenTaxAdultAmount) + res.children * (settings!.greenTaxChildAmount)) * 100
-            ) / 100
-
-            if (greenTaxAmount > 0) {
-              await tx.folioLineItem.create({
-                data: {
-                  folioId: routeTo(res.id, gtxCode.id, targetFolioId),
-                  chargeCodeId: gtxCode.id,
-                  amount: greenTaxAmount,
-                  taxAmount: 0,
-                  serviceChargeAmount: 0,
-                  description: "Green Tax",
-                  date: today
-                }
-              })
-
-              totalTaxPosted += greenTaxAmount
-              totalPostings += 1
-            }
-          }
+          // (2b. Green Tax was posted above as a generate off the room charge — see
+          // impliedGreenTaxGenerate. No hardcoded GTX branch remains.)
         }
 
         // 2b-bis. Post transport charges due for realization (see dueTransport above) —
@@ -576,23 +570,20 @@ export async function POST(request: Request) {
           if (!folio) continue // no open folio to bill (e.g. already checked out) — skipped
           const code = leg.chargeCodeId ? transportCodeMap.get(leg.chargeCodeId) : null
           if (!code) continue
-          const tx2 = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes })
           const dirLabel = leg.direction === "PICKUP" ? "Pickup" : "Dropoff"
-          const li = await tx.folioLineItem.create({
-            data: {
-              folioId: folio.id,
-              chargeCodeId: code.id,
-              amount: tx2.baseAmount,
-              taxAmount: tx2.taxAmount,
-              serviceChargeAmount: tx2.serviceChargeAmount,
-              description: `Transport – ${dirLabel}${leg.transportType ? ` (${leg.transportType})` : ""}`,
-              reference: leg.transportNo ?? leg.carrierCode ?? null,
-              date: today,
-            },
+          const posted = await postCharge(tx, {
+            folioId: folio.id,
+            chargeCode: code,
+            inputAmount: leg.chargeAmount!,
+            settings,
+            pricesIncludeTaxes,
+            date: today,
+            description: `Transport – ${dirLabel}${leg.transportType ? ` (${leg.transportType})` : ""}`,
+            reference: leg.transportNo ?? leg.carrierCode ?? null,
           })
-          await tx.reservationTransport.update({ where: { id: leg.id }, data: { chargedLineItemId: li.id } })
-          totalTaxPosted += tx2.taxAmount + tx2.serviceChargeAmount
-          totalPostings += 1
+          await tx.reservationTransport.update({ where: { id: leg.id }, data: { chargedLineItemId: posted.parent.id } })
+          totalTaxPosted += posted.taxTotal + posted.leviesTotal
+          totalPostings += 1 + posted.generated.length
           transportChargesPosted += 1
         }
 
@@ -607,6 +598,11 @@ export async function POST(request: Request) {
         // No-show charges: ALWAYS post to a folio (created if the reservation has none)
         // so the charge carries into billing. Each uses its own selected rule's charge
         // code, posted on the audit date.
+        //
+        // Posted through postCharge like everything else, so the fee's charge code taxes
+        // and generates normally. The rule's amount is treated the same way every other
+        // configured price in the app is — gross or net per the property's "Prices
+        // Include Taxes" setting.
         for (const nf of noShowFees) {
           let folioId = nf.folioId
           if (!folioId) {
@@ -615,16 +611,16 @@ export async function POST(request: Request) {
             })
             folioId = folio.id
           }
-          await tx.folioLineItem.create({
-            data: {
-              folioId,
-              chargeCodeId: nf.chargeCodeId,
-              date: auditDate,
-              description: "No-show charge",
-              amount: nf.fee,
-              taxAmount: 0,
-              serviceChargeAmount: 0,
-            },
+          const feeCode = noShowCodeMap.get(nf.chargeCodeId)
+          if (!feeCode) continue
+          await postCharge(tx, {
+            folioId,
+            chargeCode: feeCode,
+            inputAmount: nf.fee,
+            settings,
+            pricesIncludeTaxes,
+            date: auditDate,
+            description: "No-show charge",
           })
         }
 

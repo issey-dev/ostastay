@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
-import { resolveOutletChargeTax } from "@/lib/tax-calc"
+import { postCharge } from "@/lib/posting/post-charge"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { resolveRoutingTargetFolioId } from "@/lib/folio-routing"
 import { ensureOpenShift } from "@/lib/cashier-shift"
@@ -114,14 +114,6 @@ export async function POST(request: Request) {
       where: { enterpriseId: folio.property.enterpriseId }
     });
 
-    const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
-      chargeCode,
-      outlet,
-      inputAmount: chargeAmount,
-      settings,
-      pricesIncludeTaxes: folio.property.pricesIncludeTaxes
-    })
-
     const lineDescription = (typeof description === "string" && description.trim()) ? description.trim() : chargeCode.description
     // Reference is now its own field (was concatenated into the description before).
     const lineReference = typeof reference === "string" && reference.trim() ? reference.trim() : null
@@ -133,7 +125,7 @@ export async function POST(request: Request) {
     // Attribute to the caller's open drawer for the folio's property (auto-open if needed).
     const shift = await ensureOpenShift(ctx, folio.propertyId)
 
-    const lineItem = await prisma.$transaction(async (tx) => {
+    const { lineItem, baseAmount, taxAmount, serviceChargeAmount } = await prisma.$transaction(async (tx) => {
       let outletCheckId = existingOutletCheckId
       if (outlet && checkToCreateFolioId !== undefined) {
         const checkNumber = await allocateOutletCheckNumber(outlet.id, tx)
@@ -148,25 +140,36 @@ export async function POST(request: Request) {
         outletCheckId = created.id
       }
 
-      return tx.folioLineItem.create({
-        data: {
-          folioId: targetFolioId,
-          chargeCodeId,
-          outletId: outletId || null,
-          outletCheckId,
-          shiftId: shift.id,
-          amount: baseAmount,
-          taxAmount,
-          serviceChargeAmount,
-          description: lineDescription,
-          reference: lineReference,
-          date: resolveBusinessDate(folio.property)
-        },
-        include: {
-          chargeCode: true,
-          outletCheck: { select: { id: true, checkNumber: true } },
-        }
+      // Posts through the one posting service — which still applies the outlet's tax
+      // override via resolveOutletChargeTax, and additionally fires any generate rows
+      // the code declares (a levy on a POS item, e.g. a bed tax on a package sale).
+      const posted = await postCharge(tx, {
+        folioId: targetFolioId,
+        chargeCode,
+        inputAmount: chargeAmount,
+        settings,
+        pricesIncludeTaxes: folio.property.pricesIncludeTaxes,
+        date: resolveBusinessDate(folio.property),
+        description: lineDescription,
+        reference: lineReference,
+        outlet,
+        outletId: outletId || null,
+        outletCheckId,
+        shiftId: shift.id,
       })
+
+      return {
+        lineItem: await tx.folioLineItem.findUniqueOrThrow({
+          where: { id: posted.parent.id },
+          include: {
+            chargeCode: true,
+            outletCheck: { select: { id: true, checkNumber: true } },
+          },
+        }),
+        baseAmount: posted.baseAmount,
+        taxAmount: posted.parent.taxAmount,
+        serviceChargeAmount: posted.parent.serviceChargeAmount,
+      }
     })
 
     await logActivity({

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Printer, Receipt, ReceiptText } from "@/components/icons"
@@ -38,6 +39,8 @@ export function SalesHistory({
   onOpenWalkInBill: (folioId: string) => void
 }) {
   const [rows, setRows] = useState<SalesRow[]>([])
+  // Folio the print-style picker is open for (null = closed).
+  const [printFolioId, setPrintFolioId] = useState<string | null>(null)
   const [date, setDate] = useState("")
   const [loading, setLoading] = useState(true)
 
@@ -86,7 +89,7 @@ export function SalesHistory({
                 <Badge variant="outline" className="text-[10px]">{r.status.replace(/_/g, " ")}</Badge>
                 <span className="font-semibold text-foreground">{money(r.amount)}</span>
                 {r.folioId && (
-                  <Button size="sm" variant="outline" onClick={() => window.open(`/e/${slug}/dashboard/folios/${r.folioId}/print?type=tax`, "_blank")}>
+                  <Button size="sm" variant="outline" onClick={() => setPrintFolioId(r.folioId)}>
                     <Printer className="w-4 h-4 mr-1.5" /> Reprint
                   </Button>
                 )}
@@ -100,6 +103,18 @@ export function SalesHistory({
           ))}
         </div>
       )}
+
+      {/* Folio style picker — asked before the invoice is generated. */}
+      {printFolioId && (
+        <FolioPrintDialog
+          open
+          onOpenChange={(o) => { if (!o) setPrintFolioId(null) }}
+          folioId={printFolioId}
+          documentType="tax"
+          slug={slug}
+        />
+      )}
     </div>
   )
 }
+

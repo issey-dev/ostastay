@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client"
+import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree"
 const prisma = new PrismaClient()
 
 async function main() {
@@ -44,19 +45,25 @@ async function main() {
     })
   }
 
-  let rmCode = await prisma.chargeCode.findUnique({ where: { enterpriseId_code: { enterpriseId, code: "RM" } } })
-  if (!rmCode) {
-    rmCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "RM", description: "Room Charge", taxProfileId: taxProfile.id }
-    })
-  }
+  // The canonical charge tree first, so these codes land in a real subgroup rather than
+  // the unclassified state that used to make a seeded database fail Night Audit.
+  await ensureChargeTree(prisma, enterpriseId)
+  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId } })
+  const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id
 
-  let fbCode = await prisma.chargeCode.findUnique({ where: { enterpriseId_code: { enterpriseId, code: "FB" } } })
-  if (!fbCode) {
-    fbCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "FB", description: "Food & Beverage", taxProfileId: taxProfile.id }
+  const upsertCode = async (code: string, description: string, subgroup: string) =>
+    prisma.chargeCode.upsert({
+      where: { enterpriseId_code: { enterpriseId, code } },
+      update: { chargeSubgroupId: subgroupId(subgroup) },
+      create: {
+        enterpriseId, code, description,
+        chargeSubgroupId: subgroupId(subgroup),
+        taxProfileId: taxProfile.id,
+      },
     })
-  }
+
+  const rmCode = await upsertCode("RM", "Room Charge", "ROOM_REVENUE")
+  const fbCode = await upsertCode("FB", "Food & Beverage", "RESTAURANT")
 
   // Ensure Cash/Card Payment Methods exist
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId, type: "CARD" } })

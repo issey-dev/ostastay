@@ -1,15 +1,20 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { requireSession } from "@/lib/scope"
+import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
+import { ChannelConnectionManager } from "@/components/hub/channel-connection-manager"
 
-// Placeholder. The Hub shell ships first and deliberately carries no channel-manager
-// code — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md ("Recommended build order").
-// The three real screens land next, in this order:
-//   1. Connection — Beds24 credentials (encrypted at rest via src/lib/secret-crypto.ts),
-//      token refresh, connection health.
-//   2. Logs — built BEFORE the sync engine, so the first sync is debuggable on day one.
-//   3. Sharing — property links plus room-type / rate-plan mapping.
+// Channel Manager — the exchange interface between this enterprise and the booking
+// channels. See .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+//
+// Ships in the plan's order: Connection first (this screen), then Logs — deliberately
+// BEFORE the sync engine, so the first sync is debuggable — then Sharing/mapping.
 export default async function ChannelManagerPage() {
-  await requireSession()
+  const ctx = await requireSession()
+  // The Hub layout already gated the shell; re-asserting here keeps the page honest on
+  // its own terms rather than relying on an ancestor for authorization.
+  requireHubAccess(ctx)
+
+  // View-only users see the connection's health but none of the mutating controls. The
+  // API enforces this independently — this only avoids showing buttons that would 403.
+  const canManage = hasPermission(ctx, "INTEGRATIONS", "update")
 
   return (
     <div className="space-y-6">
@@ -20,21 +25,7 @@ export default async function ChannelManagerPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Not connected</CardTitle>
-          <CardDescription>
-            No channel-manager connection has been configured yet. Connection setup, sharing
-            controls and sync logs will appear here.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            See <code className="text-xs">.agents/docs/HUB_CHANNEL_MANAGER_PLAN.md</code> for the
-            rollout plan.
-          </p>
-        </CardContent>
-      </Card>
+      <ChannelConnectionManager canManage={canManage} />
     </div>
   )
 }

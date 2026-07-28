@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { resolveStationeryBrand } from "@/lib/stationery-brand"
+import { isLevyLine } from "@/lib/posting/report-bucket"
+import { buildFolioRows, isFolioStyle, FOLIO_STYLE_LABELS, type FolioStyle } from "@/lib/folio-presentation"
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { InvoiceDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, StationeryTotalLine, MetaItem } from "@/components/print/stationery/blocks"
@@ -15,6 +17,13 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const typeParam = searchParams.get("type")
   const documentTypeParam: "tax" | "proforma" | "interim" =
     typeParam === "proforma" ? "proforma" : typeParam === "interim" ? "interim" : "tax"
+  // How the charges are laid out (see src/lib/folio-presentation.ts). Detailed is the
+  // default: it shows every posted transaction, including each charge's own Service
+  // Charge and GST lines.
+  const styleParam = searchParams.get("view")
+  // Whose business identity heads the document — an outlet id, or "property". Passed
+  // straight through to the API, which resolves the default when it's absent.
+  const headerParam = searchParams.get("header")
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -23,7 +32,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const fetchInvoiceData = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/folios/${id}/invoice-data?type=${documentTypeParam}`)
+      const res = await fetch(`/api/folios/${id}/invoice-data?type=${documentTypeParam}${headerParam ? `&header=${encodeURIComponent(headerParam)}` : ""}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -42,12 +51,19 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     fetchInvoiceData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, documentTypeParam])
+  }, [id, documentTypeParam, headerParam])
 
   if (loading) return <PrintLoading label="Preparing printable invoice..." />
   if (error || !data) return <PrintError message={error || "Folio not found"} />
 
   const { folio, settings, documentType, outletHeader } = data
+  // An explicit ?view= wins; otherwise the property's configured default (Stationaries >
+  // Invoices), so a direct link with no style still prints the way the property expects.
+  const folioStyle: FolioStyle = isFolioStyle(styleParam)
+    ? styleParam
+    : isFolioStyle(settings?.defaultFolioStyle)
+      ? settings.defaultFolioStyle
+      : "detailed"
   const { reservation, payeeProfile } = folio
   // A walk-in/outlet-only folio has no reservation — fall back to the lightweight
   // guest info captured when the walk-in bill was opened.
@@ -65,7 +81,10 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
 
   folio.lineItems.forEach((i: any) => {
     if (!i.isVoid) {
-      if (i.chargeCode?.code === 'GTX' || i.description.includes('Green Tax')) {
+      // A government levy is broken out separately from base charges. Driven by the
+      // code's postingType now, so a bed tax or municipal levy lands in the same bucket
+      // instead of only a code literally named "GTX" (see report-bucket.ts's isLevyLine).
+      if (isLevyLine(i.chargeCode) || i.description.includes('Green Tax')) {
         totalGreenTax += i.amount
       } else {
         totalBaseCharges += i.amount
@@ -92,16 +111,17 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const documentNumber = isTax ? folio.taxInvoiceNumber : isInterim ? null : folio.proformaInvoiceNumber
   const displayTitle = isTax ? "Tax Invoice" : isInterim ? "Interim Bill" : "Proforma Invoice"
 
-  const chargeRows: StationeryRow[] = folio.lineItems
-    .filter((item: any) => !item.isVoid)
-    .map((item: any) => ({
-      date: format(parseISO(item.date), "dd-MMM-yy"),
-      description: item.description,
-      // The line's own Reference (operator-entered), then the outlet sales-check number
-      // for outlet charges, falling back to the charge code.
-      reference: item.reference || item.outletCheck?.checkNumber || item.chargeCode?.code,
-      amount: item.amount + (item.serviceChargeAmount || 0) + item.taxAmount,
-    }))
+  // Grouped per the chosen style. Every style totals to the same figure — the layout
+  // changes, never what is owed. Reference falls back to the outlet sales-check number
+  // then the charge code, as before.
+  const chargeRows: StationeryRow[] = buildFolioRows(folio.lineItems, folioStyle).map((row) => ({
+    date: format(parseISO(String(row.date)), "dd-MMM-yy"),
+    description: row.count > 1 && folioStyle !== "compact" && folioStyle !== "detailed"
+      ? `${row.description} (${row.count})`
+      : row.description,
+    reference: row.reference ?? undefined,
+    amount: row.total,
+  }))
 
   const paymentRows: StationeryRow[] = folio.payments.map((payment: any) => ({
     date: format(parseISO(payment.createdAt), "dd-MMM-yy"),

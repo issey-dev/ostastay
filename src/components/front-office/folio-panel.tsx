@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
+import { postableChargeCodes } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,6 +14,7 @@ import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle,
 import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
 
 type FolioPanelProps = {
   reservationId: string | null
@@ -42,6 +44,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
   // Payee State
   const [isPayeeDialogOpen, setIsPayeeDialogOpen] = useState(false)
+  // Which folio document the style picker is currently open for (null = closed).
+  const [printDocType, setPrintDocType] = useState<FolioDocumentType | null>(null)
   const [selectedPayeeId, setSelectedPayeeId] = useState<string>("")
 
   // Void Charge State — voiding flags the line isVoid (never deletes); requires a reason
@@ -539,7 +543,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=tax`, '_blank')}
+                          onClick={() => setPrintDocType("tax")}
                           className="h-9 shadow-sm border-border ml-2"
                         >
                           <Printer className="w-4 h-4 mr-2" /> Tax Invoice
@@ -547,7 +551,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=proforma`, '_blank')}
+                          onClick={() => setPrintDocType("proforma")}
                           className="h-9 shadow-sm border-border ml-2"
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
@@ -555,7 +559,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => window.open(`/e/${slug}/dashboard/folios/${activeFolio.id}/print?type=interim`, '_blank')}
+                          onClick={() => setPrintDocType("interim")}
                           className="h-9 shadow-sm border-border ml-2"
                           title="Information statement of charges posted so far — not a tax invoice"
                         >
@@ -734,7 +738,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              {chargeCodes.map(c => <SelectItem key={c.id} value={c.id}>{`${c.code} - ${c.description}`}</SelectItem>)}
+                              {postableChargeCodes(chargeCodes).map(c => <SelectItem key={c.id} value={c.id}>{`${c.code} - ${c.description}`}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -899,7 +903,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             <div className="space-y-1.5">
               <Label>Charge codes to route</Label>
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto border border-border rounded-md p-2">
-                {chargeCodes.map((c) => {
+                {postableChargeCodes(chargeCodes).map((c) => {
                   const on = routingCodeIds.includes(c.id)
                   return (
                     <button
@@ -1011,6 +1015,17 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Folio style picker — asked before any document is generated. */}
+      {activeFolio && printDocType && (
+        <FolioPrintDialog
+          open
+          onOpenChange={(o) => { if (!o) setPrintDocType(null) }}
+          folioId={activeFolio.id}
+          documentType={printDocType}
+          slug={slug}
+        />
+      )}
     </Dialog>
   )
 }

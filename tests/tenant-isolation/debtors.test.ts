@@ -31,6 +31,7 @@ const reservationsRoute = await import("@/app/api/reservations/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const checkOutRoute = await import("@/app/api/reservations/[id]/check-out/route");
 const paymentsRoute = await import("@/app/api/folios/[id]/payments/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -111,7 +112,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     });
     ratePlanAId = ratePlanA.id;
 
-    const roomCode = await prisma.chargeCode.create({ data: { enterpriseId: enterpriseA.id, code: "ROOM", description: "Room Charge" } });
+    const roomCode = await customChargeCode(enterpriseA.id, { code: "ROOM", description: "Room Charge" });
 
     const paymentMethodA = await prisma.paymentMethod.create({
       data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },

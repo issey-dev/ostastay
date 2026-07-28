@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
 import type { ReportOptionSource } from "@/lib/reports/types";
+import { REPORT_BUCKETS } from "@/lib/posting/charge-tree";
+import { reportBucketLabel } from "@/lib/posting/report-bucket";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,21 @@ export async function GET(request: Request) {
         options = (await prisma.profile.findMany({ where: { enterpriseId: ctx.enterpriseId, profileType: { in: ["TRAVEL_AGENT", "COMPANY"] } }, select: { upid: true, companyName: true, firstName: true }, orderBy: { companyName: "asc" }, take: 500 })).map((p) => ({ label: p.companyName ?? p.firstName, value: p.upid }));
         break;
       case "chargeCategories":
-        options = ["ROOM", "FOOD_BEVERAGE", "TRANSPORTATION", "OTHERS", "TAX", "SYSTEM"].map((c) => ({ label: c.replace("_", " "), value: c }));
+        // Driven by the enterprise's own ChargeGroups (deduped by reporting bucket) —
+        // not a literal array that drifts from the schema and the write validation, as
+        // the three contradictory lists in CHARGE_CODE_PLAN.md §1.4 did. Falls back to
+        // the canonical set for an enterprise whose tree hasn't been seeded yet.
+        {
+          const groups = await prisma.chargeGroup.findMany({
+            where: { enterpriseId: ctx.enterpriseId },
+            select: { reportBucket: true },
+            orderBy: { sortOrder: "asc" },
+          });
+          const buckets = groups.length > 0
+            ? [...new Set(groups.map((g) => g.reportBucket))]
+            : [...REPORT_BUCKETS];
+          options = buckets.map((b) => ({ label: reportBucketLabel(b), value: b }));
+        }
         break;
       case "reservationStatuses":
         options = ["RESERVED", "IN_HOUSE", "CHECKED_OUT", "NO_SHOW", "CANCELLED"].map((s) => ({ label: s.replace("_", " "), value: s }));

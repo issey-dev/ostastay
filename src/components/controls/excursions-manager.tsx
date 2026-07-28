@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useFieldArray } from "react-hook-form"
 import * as z from "zod"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Plus, Pencil, Trash2, X, CalendarClock } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -412,7 +413,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
                             value={field.value}
                             onChange={field.onChange}
                             placeholder="Select charge code..."
-                            options={chargeCodes.map((c) => ({ label: `${c.code} — ${c.description}`, value: c.id }))}
+                            options={chargeCodeOptions(chargeCodes, { buckets: ["OTHER", "TRANSPORT"] })}
                           />
                         </FormControl>
                         <FormMessage />

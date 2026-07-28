@@ -2,6 +2,124 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Charge Code hierarchy + posting service (2026-07-27) — DONE
+
+Full implementation of [/CHARGE_CODE_PLAN.md](../../CHARGE_CODE_PLAN.md) (all phases; see
+its §9 for the deltas decided during the build). Replaces the flat `ChargeCode.category`
+string with an Opera-modelled **ChargeGroup → ChargeSubgroup → ChargeCode** hierarchy, adds
+a declarative **generates** cascade, and routes every financial write site through one
+posting service.
+
+What landed:
+- **Schema + migration** `20260727051346_charge_code_hierarchy` — `ChargeGroup`,
+  `ChargeSubgroup`, `ChargeCodeGenerate`; `chargeSubgroupId` (nullable), `postingType`,
+  `isSystem`, `isActive` on `ChargeCode`; `EnterpriseSettings.defaultGreenTaxChargeCodeId`.
+- **`src/lib/posting/`** — `charge-tree.ts` (canonical tree; no Prisma import so client
+  components can read it), `ensure-charge-tree.ts` (idempotent seeder),
+  `resolve-charge-code.ts` (role lookup), `post-charge.ts` (the one write path),
+  `run-generates.ts` (pure cascade + cycle guard), `report-bucket.ts` (the one reader).
+- **Magic strings gone.** Every `findFirst({ code: "ROOM" })` / `"GTX"` replaced by
+  `resolveChargeCode(enterpriseId, role)`. Night Audit, Advance Bill, the quote engine,
+  invoice-data and the folio print page all resolve by role or by `postingType`.
+- **Provisioning gap closed** (plan §1.3) — `api/properties` POST seeds the tree, so a
+  freshly onboarded enterprise can run Night Audit immediately.
+- **Analytics `.code`-labelled-as-`category` bug fixed** (plan §1.7) —
+  `revenueByCategory` is now genuinely keyed by reporting bucket.
+- **Controls → Cashiering** — new panel: Charge Groups & Subgroups, Charge Codes (with the
+  Generates editor), Posting Defaults. Tax and Payment Methods stay in Finance; the old
+  "Posting & Settlement Defaults" card was split, with City Ledger settlement staying in
+  Finance next to Payment Methods.
+- **Backfill** `scripts/dev-tools/backfill-charge-hierarchy.ts` — idempotent, dry-run by
+  default, log-don't-guess on unmappable categories. Applied to dev.db.
+- **Tests** — 38 new (`charge-generates.test.ts`, `charge-hierarchy.test.ts`, plus 3 new
+  Night Audit cases in `green-tax.test.ts`). Suite: 588 passing.
+
+**Second pass (2026-07-27, owner):** tax attached at GROUP level and posted through
+generates; full standard chart seeded from a clean slate; advance bills now generate all
+defined taxes.
+- Each revenue group owns its Service Charge + GST charge codes (`SVCACM`/`GSTACM`,
+  `SVCFNB`/`GSTFNB`, …). New `SERVICE_CHARGE` / `GST` generate methods **route** the
+  amount `tax-calc.ts` already resolved rather than computing a second one — one rule,
+  distinct codes, no drift.
+- Tax now posts as its own folio line, keeping its amount in the same column it occupied
+  on the parent, so folio totals and every existing tax report are unchanged.
+- New `FolioLineItem.generatedFromLineItemId` (migration `20260727141747_...`) links a tax
+  line to the revenue that earned it, so reports attribute GST to Room / F&B / Spa instead
+  of stranding it under Tax.
+- `scripts/seed/seed-charge-codes.ts` — clean-slate chart of accounts. Dry-run by default;
+  refuses to drop a code with posted lines unless `--force`, and repoints rate plans,
+  allocations, spa treatments and excursion types onto the new chart *before* dropping the
+  old codes (Allocation/SpaTreatment/ExcursionType carry a REQUIRED chargeCodeId).
+- CXL / NOSHW / DEP codes exist and each property's fee rules are created pre-linked,
+  inactive at zero.
+
+**Third pass (2026-07-27, owner):** Rule #1 + folio presentation styles.
+- **Every posting path now goes through `postCharge`** — excursion bookings and moves,
+  spa appointments, the checkout commission credit, the cancellation fee and Night Audit's
+  no-show fee were all hand-building lines. `runGenerates: false` is gone from every call
+  site. Guard: `grep -rn "folioLineItem.create" src --include=*.ts | grep -v post-charge`
+  must stay empty.
+- Only a `CHARGE` posting type is taxable; TAX / CREDIT / NON_REVENUE post at face value.
+- **Cancellation / no-show fees are now taxed** (previously posted gross, untaxed) — the
+  open question from the last pass is closed: a fee amount follows the property's
+  "Prices Include Taxes" convention like every other configured price.
+- **`src/lib/folio-presentation.ts`** — 5 folio styles behind a picker shown before any
+  Proforma / Tax Invoice / Interim Bill is generated. Unit-tested invariant: every style
+  totals identically. The proforma projection emits the same tax split as a real posting.
+
+**Fifth pass (2026-07-28, owner):** payments linked to charge codes, `category` dropped,
+`chargeSubgroupId` NOT NULL, and a rebuilt demo seed.
+- **chargeSubgroupId is REQUIRED** — every code is properly linked group → subgroup →
+  code. `tests/helpers/charge-codes.ts` gives fixtures the real seeded chart, which is
+  how ~30 test files were migrated off hand-built stubs.
+- **`scripts/seed/seed-demo-data.ts`** — the demo dataset, called from seed-veyo.ts.
+  Business date pinned to **2026-08-01** on both properties and EVERY date derived from
+  it, so "arrivals today" stays true however long after seeding. Second property
+  (VEYO-LAGOON) with its own room types, rooms and outlets; the enterprise-level things
+  (chart, tax, payment methods, profiles) are deliberately shared. 20 reservations per
+  property across arrivals / in-house / departures / checked-out / cancelled / no-show /
+  future, plus a group block with pickups billing to a City Ledger master, housekeeping
+  tasks, maintenance tickets and an out-of-order room.
+- The seed's parallel numeric chart (10RV / 60RV / 50RV / 40RV) and the legacy RM/FB pair
+  are gone — the canonical chart is the only chart now.
+- **Analytics was filtering revenue on `createdAt`** (wall clock) while every other report
+  used the business `date`. A Night Audit run just after midnight therefore landed on the
+  wrong day there. Now agrees with the rest.
+- Room revenue reads 0 on a freshly seeded business date **by design** — Night Audit
+  hasn't run for it yet. Same-day outlet sales are seeded so the dashboard isn't empty.
+
+**Fourth pass (2026-07-27, owner):** VAT guard, default folio style, grouped pickers.
+- **Tax never generates on a non-sale.** `canGenerateTax()` — only `CHARGE` qualifies.
+  Refused by the generates API (create + edit, including a `PERCENT` disguised as a
+  non-tax method but targeting a tax code), filtered again inside `postCharge`, and not
+  offered in the Generates editor.
+- **`EnterpriseSettings.defaultFolioStyle`** (migration `20260727..._default_folio_style`)
+  set from Stationaries > Invoices; the print picker and a bare print URL both honour it.
+- **`src/lib/charge-code-options.ts`** — one filtered/grouped source for every charge-code
+  picker. Audit found all nine were showing the full 48-code chart including tax and
+  system codes; each now opts in explicitly to anything beyond active revenue codes.
+- **Outlet pool picker rebuilt** around Group → Subgroup → Code with tri-state select-all
+  at each level, search, and counts. `SearchableSelect` gained optional `group` headers.
+- EOD report now labels reporting buckets instead of printing `FOOD_BEVERAGE`.
+
+Follow-ups deliberately left open:
+- **Drop `ChargeCode.category`.** Still written as a mirror of the subgroup's bucket, per
+  the plan's "keep the column one release longer than the code change". Before the drop
+  migration, grep `\.category` on `ChargeCode` — should only hit
+  `ensure-charge-tree.ts` (backfill mapping) and `report-bucket.ts` (fallback).
+- **Deposit postings** (the Deposit module) were not in scope this pass — `DEP`/`DEPAPP`
+  codes exist and are wired to the fee rules, but the deposit collection flow itself still
+  records a Payment rather than posting a folio charge. Unchanged behaviour; flagged only
+  so the charge codes aren't mistaken for being in use.
+- **Fee amounts are now taxed — wants owner sign-off.** Cancellation and no-show fees
+  previously posted gross and untaxed; they now go through `postCharge` like everything
+  else, so the rule's amount follows the property's "Prices Include Taxes" convention and
+  is split into net + GST. Also: both carry GST but NO service charge (no service was
+  rendered) — a judgement call, changeable per property in the Generates editor.
+- **Backfill on production tenants** has not been run (dev.db only). Run it dry first;
+  any code it reports as unmappable needs a Subgroup assigned by hand in Controls →
+  Cashiering, then re-run.
+
 ## Hub level + Channel Manager (2026-07-27) — shell DONE, channel manager NOT STARTED
 
 Plan: [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md). Two separable pieces; only the
@@ -32,9 +150,181 @@ first has shipped, on branch `feature/hub-shell`.
   enterprise-level), and D-7 is which side is authoritative when ostastay's overbooking/soft-cap
   group blocks disagree with the channel manager's inventory. **D-7 must be answered before
   two-way sync (rollout Phase 3), not discovered in production.**
-- **Next (not started):** Connection screen (Beds24 credentials via the existing
-  `src/lib/secret-crypto.ts` pattern) → Logs screen (build BEFORE the sync engine so the first
-  sync is debuggable) → Sharing/mapping → sync engine, inbound read-only first.
+- **DONE — Connection screen** (branch `feature/hub-connection`, stacked on `feature/hub-shell`).
+  `ChannelConnection` model (enterprise-level, **deliberately not unique per enterprise** so
+  several accounts are allowed — this is what makes plan decision **D-6 moot**, no schema change
+  needed either way). `src/lib/channels/beds24.ts` (auth + the 30-day idle math),
+  `src/lib/channels/connection.ts` (service layer owning encryption + honest status),
+  `/api/hub/connections` (+ `[id]`, `[id]/test`), and the RHF+Zod UI at
+  `src/components/hub/channel-connection-manager.tsx`.
+  - Credentials use the existing `secret-crypto.ts` pattern. **There is deliberately no
+    "reveal" endpoint** — a channel-manager token can move real inventory and take real
+    bookings, so it is write-only from the browser's side. `PublicConnection` has no token
+    fields *at all* rather than masked ones.
+  - Health is **observed, never assumed** — status only becomes CONNECTED because a real Beds24
+    call just succeeded. A reachable-but-rejected connection returns 200 with `lastError`: the
+    check succeeded, the health is bad.
+  - The connection row is written **only after** the invite-code exchange succeeds; a
+    saved-but-unusable connection would report a credential it cannot authenticate with.
+  - `POST /api/hub/connections/[id]/test` doubles as the **keep-alive** (a successful refresh
+    resets Beds24's idle clock) and is gated on `update`, not `view` — it mutates and makes a
+    real outbound call.
+  - **Beds24 base URL + `/authentication/setup` are now VERIFIED LIVE** (2026-07-27): a real
+    call returned Beds24's own "Token not valid" for a bogus invite code. The invite-code header
+    name (`code`) is strongly indicated but not proven with a genuinely valid code.
+- **DONE — Exchange Log** (branch `feature/hub-sync-logs`, stacked on `feature/hub-connection`).
+  `ChannelSyncLog` model + `src/lib/channels/redact.ts` + `sync-log.ts` (read/prune) +
+  `/api/hub/sync-logs` + `src/components/hub/sync-log-viewer.tsx`, at
+  `/e/{slug}/hub/channel-manager/logs`. Built BEFORE the sync engine, deliberately, so the
+  first sync is debuggable rather than a black box.
+  - ⚠️ **`ChannelSyncLog` MUST NEVER CONTAIN A CREDENTIAL.** The table is plaintext and
+    readable by anyone with Hub view access, so a token landing in it would defeat the
+    encryption-at-rest on `ChannelConnection` entirely. `redact.ts` is **deny-by-default on
+    keys**: a value is masked unless its key is explicitly whitelisted, so a field Beds24
+    adds tomorrow is redacted automatically rather than leaked by omission. Header values are
+    masked unconditionally (no whitelist at all — that is where the credentials live).
+    Verified live: a real failed exchange logged `{"code":"[redacted]"}` while keeping the
+    diagnostic `{"success":false,"type":"error","code":401,"error":"Token not valid"}`.
+  - Logs use `onDelete: SetNull` + a snapshotted `connectionName`, so the entries explaining
+    **why** a connection was removed survive its deletion.
+  - A rejected invite code is logged even though no connection row is created — otherwise the
+    most common setup failure would leave no trace. On success those entries are then linked
+    to the connection they produced (a test caught that they were being orphaned).
+  - Read-only: no create/edit/delete endpoints. A log an operator can quietly erase is not a
+    troubleshooting record.
+  - Cursor paging, not offset — the table is written to continuously, so offset paging would
+    skip or repeat rows as new entries arrive mid-page.
+- **DONE — Sharing / mapping** (branch `feature/hub-sharing`, stacked on
+  `feature/hub-job-runner`). `ChannelPropertyLink` / `ChannelRoomTypeMap` /
+  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI at
+  `/e/{slug}/hub/channel-manager/sharing`. This is the "control what is shared" surface.
+  - ⚠️ **`ChannelPropertyLink.propertyId` is UNIQUE ACROSS ALL CONNECTIONS**, not per
+    connection. Linking one property through two channel-manager accounts would have both
+    pushing availability for the same rooms and both taking bookings — a **double-sell that
+    surfaces as an overbooked guest at the desk, never as an error in software**. One
+    property, one channel manager.
+  - **Readiness gate:** sharing cannot be turned ON while any *active, shared* room type is
+    unmapped — a half-mapped push is worse than none because it looks like it worked.
+    Inactive and deliberately-unshared room types do not block. A link with nothing shared is
+    never "ready". Rate plans are **optional** and deliberately do NOT gate readiness (a
+    property can push availability on a default rate long before per-plan mapping exists).
+    **Disabling is always allowed** — stopping must never be blocked.
+  - New links default `syncEnabled = false`: publishing inventory is an explicit act, never a
+    side effect of linking.
+  - Mappings are validated to belong to the link's own property, otherwise one property's
+    inventory could be published under another property's roof.
+  - **External IDs are typed in by hand for now.** A picker that reads the channel manager's
+    own property/room list needs a real Beds24 account to design the response parsing
+    against — deliberately not guessed. Manual entry is correct regardless and is what an
+    operator would do pre-certification.
+- **IN PROGRESS — sync engine.** First slice done on branch `feature/sync-availability`:
+  the outbound **availability calculation + preview**. It COMPUTES and EXPLAINS; it does not
+  push. The HTTP push is the next slice, on top of this.
+  - `perNightTypeAvailability()` was added to **`src/lib/availability.ts`, deliberately NOT
+    to the channels module** — beside `minTypeAvailability()`, sharing its constants and
+    group-hold logic. A separate copy of that arithmetic would eventually disagree with the
+    app's own Availability grid, and then OTAs would be told something the PMS contradicts.
+    **One definition, two callers — keep it that way.**
+  - Most of D-7 turned out to be **already implemented**: `outstandingBlockHolds()` already
+    drops holds past `cutoffDate` (the group-block ruling), and `minTypeAvailability()`
+    already clamps at 0. The work was per-night output plus the channel-facing filters.
+  - `src/lib/channels/sync.ts` adds what is channel-specific: excludes **pseudo** room types
+    (no physical rooms behind them — publishing one sells rooms that do not exist),
+    inactive, unmapped and held-back types, each with a stated reason; and marks stop-sale
+    nights `closed` **as well as** 0 (rule 5).
+  - ⚠️ **Group holds use BOTH `TENTATIVE` and `DEFINITE`**, matching the booking overbook
+    guard rather than the Availability grid (which shows DEFINITE only). A tentative block
+    is still a real claim until its cutoff, and publishing those rooms would let the block
+    firming up cause exactly the channel overbook rule 1 forbids. This deliberately
+    under-sells while a block is tentative — **owner may want to revisit**.
+  - ⚠️ Added `formatLocalDay()` rather than reusing `fmtDay()`: `fmtDay` does
+    `toISOString()` on a LOCAL midnight, so any timezone ahead of UTC (Maldives is UTC+5)
+    reports the **previous day**. Harmless in its current use (a conflict message) but a
+    day-shifted push would move real inventory onto the wrong night. `fmtDay` itself is
+    left alone — a separate, low-risk cleanup.
+  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Sharing screen,
+    available to **view-only** users too. Checking what would be sent is a read, and is the
+    last cheap moment to catch a mapping mistake — after sharing is on, the next thing to
+    notice a wrong number is an OTA.
+- **DONE — outbound push** (branch `feature/sync-push`). `src/lib/channels/payload.ts`
+  (pure transform) + `push.ts` (guards + send) + `POST /api/hub/property-links/[id]/push`
+  + a **Send now** button in the preview dialog + the `channel-ari-push` scheduled job.
+  **This is the first thing in the integration that actually reaches an OTA.**
+  - ⚠️ **The calendar payload SHAPE is NOT verified against a live account.** Beds24's
+    field names for `/inventory/rooms/calendar` are only in its account-gated Swagger.
+    Everything is arranged so being wrong is cheap: the transform is pure and fully tested
+    independently of the wire format, **dry-run returns the exact body without sending**,
+    and a wrong name is a one-line fix in `payload.ts` with nothing else moving.
+    **Confirm during the sandbox spike BEFORE enabling sharing on a real property.**
+  - **Guards (checked in the service, not just the UI):** refuses unless `syncEnabled`;
+    refuses with no credentials; refuses an empty payload (an empty push looks like success
+    while hiding a broken mapping). A job, a retry or any future caller cannot route around
+    `syncEnabled` — it is the operator's consent to publish.
+  - **Dry-run is allowed while sharing is OFF** — inspecting the body before it reaches an
+    OTA is the entire point. Gated on `view`; a real push needs `update`.
+  - **Ranges are compacted**: consecutive identical nights collapse into one inclusive
+    `from`/`to` entry. Note `to` is INCLUSIVE here, deliberately unlike the half-open
+    `[from, to)` used for stay dates everywhere else — conflating them would push one night
+    too many. A CLOSED night never merges with an equally-zero OPEN night; they mean
+    different things at the channel.
+  - **Excluded room types are OMITTED, never sent as 0** — sending 0 would actively close
+    inventory the operator only meant to stop managing from here.
+  - Push failures are returned, never thrown, so one property cannot abort a sweep.
+  - Pushing also refreshes the access token, which resets Beds24's 30-day idle clock — an
+    actively-syncing property keeps its own credentials alive without the keep-alive job.
+- **Next: inbound bookings.** Webhook + `GET /bookings` polling fallback, **idempotent on
+  the OTA booking id** (`ChannelReservationRef` from the plan — not yet built), handling
+  create/modify/cancel, with the **"channel overbook" alert** from D-7 rule 4.
+- **D-7 ruling — the rules the sync engine must implement** (full text in
+  [DECISIONS.md](DECISIONS.md)):
+  1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
+     if a manual overbook has driven it negative — never a negative, never "0 plus headroom".
+     The channel manager must never be able to *cause* an overbook.
+  2. **Overbooking stays manual-only** at the desk, via the existing confirmation step.
+  3. **Group-block held rooms are withheld until `GroupBlock.cutoffDate`, then released.**
+     No schema change needed — `cutoffDate` exists and `api/groups/[id]/pickup` already
+     refuses pickup past it, which is precisely what makes releasing safe.
+     ⚠️ `cutoffDate` is **nullable**: no cutoff means hold indefinitely, NOT release now.
+  4. **Inbound race → accept and flag.** An OTA booking is already confirmed to the guest
+     before it reaches us, so refusing is not really available. Accept it and raise a
+     visible **"channel overbook"** alert so the desk learns days ahead, not at the door.
+     Must NOT be folded in silently as if it were a deliberate manual overbook.
+  5. **Stop-sale must CLOSE the room type at the channel**, not merely push availability 0 —
+     some OTAs treat 0 as "temporarily sold out" and keep the listing live.
+- **DONE — Background job runner** (branch `feature/hub-job-runner`, stacked on
+  `feature/hub-sync-logs`). Closes BOTH operational gaps above with one piece of shared
+  infrastructure. `JobRun` model, `src/lib/jobs/` (runner + registry + cron auth),
+  `POST /api/jobs/run`, and a job-health card on the Hub overview.
+  - **Next.js has no scheduler**, so an EXTERNAL cron drives it:
+    `curl -X POST https://<host>/api/jobs/run -H "x-cron-secret: $CRON_SECRET"`. Hourly is a
+    sensible cadence — both jobs are cheap when nothing is due. An in-process `setInterval`
+    would be wrong: it dies with the process, and on >1 instance every job runs >1 time.
+  - **`CRON_SECRET` must be set per environment** (see `.env.example`). The endpoint
+    **FAILS CLOSED** — unset means it refuses every request (503) rather than running
+    unauthenticated. Compared via SHA-256 digests + `timingSafeEqual`, so neither the value
+    nor its length leaks through timing.
+  - **Mutual exclusion is a PARTIAL UNIQUE INDEX** `JobRun_one_running_per_job_enterprise`
+    — UNIQUE (jobName, enterpriseId) WHERE status = 'RUNNING' — created in raw SQL because
+    Prisma cannot express it (same approach as `CashierShift_one_open_per_user_property`,
+    audit finding A12). An overlapping cron invocation's INSERT fails and is skipped instead
+    of double-running. `JobRun.enterpriseId` is deliberately NOT nullable: SQLite treats
+    NULLs as distinct in a unique index, so a nullable column would silently allow
+    concurrent "global" runs.
+  - **Stale-lock recovery:** a RUNNING row older than 30 min is assumed dead and taken over
+    (marked FAILED, not deleted — a crash-looping job must stay visible). Without a lease,
+    one crash would wedge a job permanently.
+  - **Failure isolation:** the runner never throws. One enterprise failing must not stop the
+    rest, and a 500 from cron would not tell the operator which of N enterprises broke.
+  - Jobs run sequentially across enterprises on purpose — they make outbound channel-manager
+    calls, and firing all at once would burst into a provider rate limit.
+  - Jobs registered: `channel-keepalive` (only touches connections `needsKeepAlive()` says
+    are due) and `channel-log-prune` (retention `SYNC_LOG_RETENTION_DAYS = 60`).
+  - The Hub overview shows last-run status per job and flags a run **older than 24h as
+    Stale** — a cron that has quietly stopped firing is worse than no cron, since the
+    keep-alive looks fine right up until a credential lapses.
+- **Still outstanding for deployment:** actually schedule the cron in each environment and set
+  `CRON_SECRET` there. The mechanism now exists and is verified; the schedule is
+  environment configuration, not code.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +32,8 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   const [submitting, setSubmitting] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  // Folio the print-style picker is open for (null = closed).
+  const [printFolioId, setPrintFolioId] = useState<string | null>(null)
 
   const fetchFolio = useCallback(() => {
     if (!folioId) return
@@ -155,7 +158,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => window.open(`/e/${slug}/dashboard/folios/${folioId}/print?type=tax`, "_blank")}>
+                <Button size="sm" variant="outline" onClick={() => setPrintFolioId(folioId)}>
                   <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                 </Button>
                 {closed ? (
@@ -255,6 +258,18 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
           </div>
         )}
       </DialogContent>
+
+      {/* Folio style picker — asked before the bill is generated. */}
+      {printFolioId && (
+        <FolioPrintDialog
+          open
+          onOpenChange={(o) => { if (!o) setPrintFolioId(null) }}
+          folioId={printFolioId}
+          documentType="tax"
+          slug={slug}
+        />
+      )}
     </Dialog>
   )
 }
+

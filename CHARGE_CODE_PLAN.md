@@ -1,11 +1,30 @@
 # Charge Code System — Audit Findings & Redesign Plan
 
-**Status:** Planning only. Nothing in this document is implemented. No code or schema
-change has been made. This file captures the financial audit of the charge-code layer
-and proposes a three-level, Opera-modelled replacement.
+**Status: IMPLEMENTED** (2026-07-27). Everything in §2–§6 below has been built; §7's
+phases are all done except the deliberately-deferred `category` column drop (§4 of the
+rollout table — the column is still written as a mirror, one release longer than the code
+change, exactly as planned). §8 remains out of scope.
+
+The audit findings in §1 are kept as the historical record of *why* — read them as "what
+the code used to look like", not as a description of the code today. Where it matters,
+each subsection is annotated with what replaced it.
 
 **Scope:** the `ChargeCode` model, everything that posts a `FolioLineItem` against it,
 the tax resolution path, and every report/document that reads charge classification.
+
+**Where the code lives now:**
+
+| Concern | File |
+|---|---|
+| Canonical tree, buckets, posting types (no Prisma import — client-safe) | `src/lib/posting/charge-tree.ts` |
+| Idempotent seeder (onboarding + backfill) | `src/lib/posting/ensure-charge-tree.ts` |
+| Role → code resolution (killed the magic strings) | `src/lib/posting/resolve-charge-code.ts` |
+| The one posting entry point | `src/lib/posting/post-charge.ts` |
+| Generates engine (pure; cycle guard) | `src/lib/posting/run-generates.ts` |
+| Reporting-bucket reader for every report | `src/lib/posting/report-bucket.ts` |
+| Backfill script | `scripts/dev-tools/backfill-charge-hierarchy.ts` |
+| Admin UI | Controls → **Cashiering** (`src/components/controls/charge-*`) |
+| Tests | `tests/business-rules/charge-generates.test.ts`, `charge-hierarchy.test.ts`, `green-tax.test.ts` |
 
 ---
 
@@ -436,3 +455,196 @@ expressible without new code.
   category greps.
 - Any change to `PaymentMethod` / settlement flow.
 ```
+
+---
+
+## 9. What was built — deltas from the plan as written
+
+The plan was followed as specified. Five things were decided during implementation and
+are worth recording, because they are not obvious from §2–§6.
+
+### 9.0 Tax is attached at GROUP level, and posts as its own lines (2026-07-27, owner)
+
+Owner direction: *"attach the taxes on group level — each distinct group mentioned should
+generate distinct tax charge codes but same default rule"*, and *"the purpose of defining
+generates on charge codes is so that whenever main charge code is posted taxes are auto
+calculated and posted through the system."*
+
+Each revenue group in `CANONICAL_GROUPS` declares its own `taxCodes`, and every posting
+code in that group generates them:
+
+| Group | Service Charge | GST |
+|---|---|---|
+| Accommodation | `SVCACM` | `GSTACM` |
+| Food & Beverage | `SVCFNB` | `GSTFNB` |
+| Meal Plans | `SVCMPL` | `GSTMPL` |
+| Transport | `SVCTRN` | `GSTTRN` |
+| Spa | `SVCSPA` | `GSTSPA` |
+| Excursions | `SVCEXC` | `GSTEXC` |
+| Other Revenue | `SVCOTH` | `GSTOTH` |
+
+Two generate methods make this work — `SERVICE_CHARGE` and `GST` — and neither computes
+anything. `src/lib/tax-calc.ts` still resolves the charge exactly as before, and the
+generate only declares **where each already-resolved amount lands**. That is what makes
+"distinct codes, same default rule" true by construction: there is still one calculation,
+and only its destination differs per group.
+
+Mechanically (`postCharge`): the parent line posts its net, its Service Charge and GST are
+**moved** onto lines against the group's tax codes, and each of those keeps its amount in
+the **same column** it occupied on the parent (`serviceChargeAmount` / `taxAmount`, with
+`amount = 0`). Consequences:
+
+- a folio's total is **byte-identical** to before the change — tax moved, it wasn't added;
+- every report that sums those columns (GST return, EOD trial balance, shift summary) is
+  unaffected;
+- `FolioLineItem.generatedFromLineItemId` points each tax line back at the revenue that
+  earned it, so `lineReportBucket()` reports GST under Room / F&B / Spa rather than
+  stranding it all under Tax.
+
+A code with tax generates does **not** also carry tax in its own columns — `postCharge`
+moves the amount rather than duplicating it, so double-taxing is impossible by
+construction.
+
+### 9.1 Green Tax rates stay in the Tax config, not on the generate row
+
+The plan's `ChargeCodeGenerate.value` would have held the Green Tax amount, duplicating
+`EnterpriseSettings.greenTaxAdultAmount` / `greenTaxChildAmount` and inviting the two to
+drift. Instead there is a fourth generate **method, `GREEN_TAX`**, which reads the
+enterprise's existing Maldives Tax configuration at posting time (including
+`greenTaxEnabled`). Its `value` column is always `0`.
+
+Consequence: **Controls → Finance → Tax remains the single place a property edits Green
+Tax**, and Controls → Cashiering only decides *which charge code the levy lands on*
+(`EnterpriseSettings.defaultGreenTaxChargeCodeId`). Changing a rate takes effect on the
+next posting with no charge-code edit. The same holds for a Custom Tax profile: a charge
+code still attaches to one exactly as before (`useDefaultTax` / `taxProfileId`) — the
+generates engine never re-implements or bypasses `src/lib/tax-calc.ts`.
+
+### 9.2 Generated levies are posted at face value
+
+`computeGeneratedAmounts` returns `isFinal` on each row, true for `GREEN_TAX`. A final
+amount is written verbatim — no tax engine, no `pricesIncludeTaxes` — whatever the target
+code's own configuration says.
+
+This is not tidiness. An enterprise whose `GTX` code predates `postingType` still has it
+set to `CHARGE`/`useDefaultTax: true`; without `isFinal` the nightly levy would silently
+start being service-charged and GST'd the moment it started flowing through `postCharge`.
+(A regression test covers exactly this: `green-tax.test.ts`'s first case runs against a
+bare, un-migrated `GTX` code.)
+
+Codes with `postingType = "TAX"` are also posted at face value by `postCharge` directly —
+that is what replaced the hardcoded `code === "GTX"` exclusion from the GST base
+(`isLevyLine()` in `report-bucket.ts`).
+
+### 9.3 Green Tax is a rule about accommodation, not about one code
+
+A generate row is code-to-code, but the levy applies to *any* accommodation posting. Two
+mechanisms keep that true without reintroducing a hardcoded branch:
+
+- **`postCharge`'s `extraGenerates`** — Night Audit supplies an implied `GREEN_TAX` row
+  for whichever accommodation code it is posting against. A row actually stored on the
+  code always wins, so an explicit configuration (including a deliberately deleted one)
+  is never overridden.
+- **The charge-code create API** seeds a `GREEN_TAX` generate whenever a new code lands
+  in the `ROOM` bucket, so a per-rate-plan accommodation code behaves like `ROOM` from its
+  first posting.
+
+### 9.4 `postCharge` accepts pre-computed amounts
+
+Advance Bill posts the exact figures the reservation quote showed the guest. Re-running
+the tax engine over an already-net base would double-tax the bill, so `postCharge` takes
+either `inputAmount` (resolve tax) or `amounts` (post verbatim). Advance Bill uses
+`amounts` + `runGenerates: false` for the quote-derived lines — the quote already contains
+Green Tax — and plain `inputAmount` for transport legs, which are not part of the quote's
+totals.
+
+**Advance Bill runs generates** (fixed 2026-07-27, owner: *"advance bills should generate
+all defined taxes"*). Because `SERVICE_CHARGE` / `GST` only route figures rather than
+computing them, running the cascade over pre-computed amounts is safe: the advance bill and
+the nights it replaces produce identical totals split across identical codes. Green Tax
+rides on the first accommodation segment with `postingContext.nights` set to the whole
+billed window, so a split stay is levied once.
+
+### 9.5 Generates do not recurse
+
+A generated code's own generate rows do **not** fire. Cascading is expressed *within* one
+generator's row set via `calculateOn = "ANOTHER_GENERATE"` + `basisGenerateId`, which
+keeps every cascade finite by construction. `hasGenerateCycle()` additionally rejects a
+loop at the admin surface, so a mis-configured cascade can never reach the posting path.
+
+### 9.6 The `category` column
+
+Still present, still written — as a **mirror** of the subgroup's group bucket, on every
+create/update path (`legacyCategoryForSubgroup()`), and moved with a subgroup that changes
+group. `reportBucketOf()` falls back to it for any code not yet backfilled. Nothing reads
+it for a decision. Per §7's phase 4 it is dropped a release after this one; the grep to
+run before that migration is `\.category` on `ChargeCode`, which is now clean apart from
+`ensure-charge-tree.ts` (the backfill mapping) and `report-bucket.ts` (the fallback).
+
+---
+
+## 10. Rule #1 — a posting always posts its generates (2026-07-27, owner)
+
+> *"ALL POSTINGS THAT HAS GENERATES ENABLED MUST POST GENERATES — that is rule no 1 and
+> it should not falter no matter what the situation."*
+
+Enforced structurally: **no route builds a `FolioLineItem` by hand any more.** The grep
+that proves it, and that must stay clean:
+
+```bash
+grep -rn "folioLineItem.create" src --include=*.ts | grep -v "lib/posting/post-charge"
+```
+
+Routed through `postCharge` in this pass: excursion bookings, excursion move-bookings,
+spa appointments, the travel-agent commission credit at checkout, the cancellation fee,
+and Night Audit's no-show fee. `runGenerates: false` no longer appears at any call site.
+
+Two supporting changes made this safe:
+
+- **Only a `CHARGE` is a taxable event.** `TAX` (a levy), `CREDIT` (commission) and
+  `NON_REVENUE` (deposit, folio transfer, paid out) post at face value, and
+  `pricesIncludeTaxes` doesn't apply to them. That is what lets a commission credit go
+  through the same path as a room charge without acquiring GST.
+- **Fee amounts follow the property's own pricing convention.** A cancellation / no-show
+  rule's amount is passed as `inputAmount`, so it is gross or net per "Prices Include
+  Taxes" exactly like every other configured price. The guest is charged the amount that
+  was configured; it is now split into net + GST instead of posted untaxed.
+
+**Night Audit's extra-occupancy line** still posts against the same accommodation code as
+the room charge, and it *does* run generates — it just passes no `postingContext`. Green
+Tax was already levied on the room line for that night, and a per-person levy needs a
+headcount basis to produce an amount, so it contributes nothing here. Generates ran; the
+levy simply had no basis. That is the only place the distinction matters, and it is the
+reason `postingContext` is a separate input from the amount.
+
+**Generates still do not recurse.** A generated line does not re-run generates; cascading
+within one generator is expressed via `calculateOn = "ANOTHER_GENERATE"`, which keeps
+every cascade finite by construction. Rule #1 is about write *sites*, not recursion depth.
+
+---
+
+## 11. Folio presentation styles (2026-07-27, owner)
+
+> *"proforma and tax invoice before generating give two options detailed or summary …
+> include more styles depending on how its usually presented to guests"*
+
+`src/lib/folio-presentation.ts` — pure, no Prisma, no React, so the API, the print page
+and any future PDF path group identically. Five styles, offered in a picker before any
+folio document is generated (`FolioPrintDialog`, wired into the folio panel, walk-in bill
+and sales history):
+
+| Style | Layout |
+|---|---|
+| **Detailed** | Every posted transaction, with each charge's Service Charge and GST as their own lines against the group's tax codes |
+| **Detailed — taxes merged** | One line per charge, generated tax folded back into it — the usual guest-facing folio |
+| **Summary by charge code** | One line per code for the whole stay |
+| **Summary by date** | One line per date |
+| **Summary by check** | Outlet charges rolled onto their sales-check number, everything else by code |
+
+**The invariant, unit-tested for every style:** grouping never changes what is owed. A
+voided line is excluded from all of them, and a generated line whose parent was routed to
+another folio window is kept as its own row rather than silently dropped.
+
+The **proforma projection emits the same split** — its synthetic lines carry
+`generatedFromLineItemId` and route to the group's tax codes exactly as `postCharge`
+would — so an estimate and the bill it becomes read line for line the same.

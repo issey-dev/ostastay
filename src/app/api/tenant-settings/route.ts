@@ -4,6 +4,7 @@ import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope"
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { encryptSecret } from "@/lib/secret-crypto";
 import { logActivity } from "@/lib/activity-log";
+import { isFolioStyle } from "@/lib/folio-presentation";
 
 // Stored SMTP/SFTP passwords are never sent to the browser — GET (and the PATCH
 // response) replace a set password with this sentinel. The settings form round-trips
@@ -88,6 +89,12 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "The City Ledger settlement method must be a CITY_LEDGER payment method" }, { status: 400 });
       }
     }
+    if (body.defaultGreenTaxChargeCodeId) {
+      const cc = await prisma.chargeCode.findUnique({ where: { id: body.defaultGreenTaxChargeCodeId } });
+      if (!cc || cc.enterpriseId !== enterpriseId) {
+        return NextResponse.json({ error: "Green Tax charge code not found" }, { status: 400 });
+      }
+    }
     if (body.commissionChargeCodeId) {
       const cc = await prisma.chargeCode.findUnique({ where: { id: body.commissionChargeCodeId } });
       if (!cc || cc.enterpriseId !== enterpriseId) {
@@ -107,6 +114,7 @@ export async function PATCH(request: Request) {
         exchangeToCurrency: body.exchangeToCurrency !== undefined ? String(body.exchangeToCurrency).toUpperCase().slice(0, 8) : undefined,
 
         defaultAccommodationChargeCodeId: normalizeId(body.defaultAccommodationChargeCodeId),
+        defaultGreenTaxChargeCodeId: normalizeId(body.defaultGreenTaxChargeCodeId),
         cityLedgerPaymentMethodId: normalizeId(body.cityLedgerPaymentMethodId),
         commissionChargeCodeId: normalizeId(body.commissionChargeCodeId),
 
@@ -118,6 +126,7 @@ export async function PATCH(request: Request) {
         invoicePhone: body.invoicePhone !== undefined ? body.invoicePhone : undefined,
         invoiceEmail: body.invoiceEmail !== undefined ? body.invoiceEmail : undefined,
         invoiceAddress: body.invoiceAddress !== undefined ? body.invoiceAddress : undefined,
+        defaultFolioStyle: isFolioStyle(body.defaultFolioStyle) ? body.defaultFolioStyle : undefined,
         invoiceHeaderText: body.invoiceHeaderText !== undefined ? body.invoiceHeaderText : undefined,
         invoiceFooterText: body.invoiceFooterText !== undefined ? body.invoiceFooterText : undefined,
         invoicePaymentTerms: body.invoicePaymentTerms !== undefined ? body.invoicePaymentTerms : undefined,
@@ -164,6 +173,7 @@ export async function PATCH(request: Request) {
         exchangeToCurrency: body.exchangeToCurrency ? String(body.exchangeToCurrency).toUpperCase().slice(0, 8) : "MVR",
 
         defaultAccommodationChargeCodeId: body.defaultAccommodationChargeCodeId || null,
+        defaultGreenTaxChargeCodeId: body.defaultGreenTaxChargeCodeId || null,
         cityLedgerPaymentMethodId: body.cityLedgerPaymentMethodId || null,
         commissionChargeCodeId: body.commissionChargeCodeId || null,
 
@@ -175,6 +185,7 @@ export async function PATCH(request: Request) {
         invoicePhone: body.invoicePhone || "",
         invoiceEmail: body.invoiceEmail || "",
         invoiceAddress: body.invoiceAddress || "",
+        defaultFolioStyle: isFolioStyle(body.defaultFolioStyle) ? body.defaultFolioStyle : "detailed",
         invoiceHeaderText: body.invoiceHeaderText || "",
         invoiceFooterText: body.invoiceFooterText || "",
         invoicePaymentTerms: body.invoicePaymentTerms || "",

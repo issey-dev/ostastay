@@ -23,6 +23,7 @@ const propertiesRoute = await import("@/app/api/properties/route");
 const ratePlansRoute = await import("@/app/api/rate-plans/route");
 const ratePlansIdRoute = await import("@/app/api/rate-plans/[id]/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -119,9 +120,7 @@ describe("Base Rate Plan: lock enforcement", () => {
     const base = await prisma.ratePlan.create({
       data: { propertyId: property.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
     });
-    const chargeCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "BFC", description: "Breakfast" },
-    });
+    const chargeCode = await customChargeCode(enterpriseId, { code: "BFC", description: "Breakfast" });
     const allocation = await prisma.allocation.create({
       data: {
         propertyId: property.id, code: "BF", name: "Breakfast", chargeCodeId: chargeCode.id,
@@ -286,9 +285,7 @@ describe("Base Rate Plan: Night Audit fallback", () => {
       });
     }
 
-    const roomCode = await prisma.chargeCode.create({
-      data: { enterpriseId, code: "ROOM", description: "Room" },
-    });
+    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
     void roomCode;
 
     const guest = await prisma.profile.create({

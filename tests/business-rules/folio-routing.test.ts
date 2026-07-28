@@ -17,6 +17,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const routingRoute = await import("@/app/api/reservations/[id]/routing-rules/route");
 const lineItemsRoute = await import("@/app/api/folios/[id]/line-items/route");
 const moveRoute = await import("@/app/api/folios/line-items/move/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -69,7 +70,7 @@ describe("Folio routing + cross-folio move", () => {
     propertyId = p1.id;
     const p2 = await prisma.property.create({ data: { enterpriseId, name: "R2", code: `R2-${uniq()}`, legalName: "R LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
     otherPropertyId = p2.id;
-    const cc = await prisma.chargeCode.create({ data: { enterpriseId, code: "TRF", description: "Transfer" } });
+    const cc = await customChargeCode(enterpriseId, { code: "TRF", description: "Transfer" });
     chargeCodeId = cc.id;
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `rt-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "RT", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "vite-node -c vitest.config.ts scripts/seed/seed-osta.ts && vite-node -c vitest.config.ts scripts/seed/seed-veyo.ts",
+    "db:reset": "prisma migrate reset --force --skip-seed && npm run seed"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -12,6 +12,7 @@ vi.mock("next/headers", () => ({
 
 const { prisma } = await import("@/lib/db");
 const { computeReservationQuote } = await import("@/lib/reservation-quote-server");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -33,15 +34,11 @@ async function setup(opts?: { pricesIncludeTaxes?: boolean }) {
   const roomType = await prisma.roomType.create({
     data: { propertyId: property.id, name: "Standard", code: "STD", baseOccupancy: 2, maxOccupancy: 4 },
   });
-  const roomCode = await prisma.chargeCode.create({
-    data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room", category: "ROOM", useDefaultTax: true },
-  });
+  const roomCode = await customChargeCode(enterprise.id, { code: "ROOM", description: "Room", useDefaultTax: true, subgroupCode: "ROOM_REVENUE" });
   const customProfile = await prisma.taxProfile.create({
     data: { enterpriseId: enterprise.id, name: "Flat 5%", rates: { create: [{ name: "Handling Fee", ratePercent: 5, calculateOn: "BASE", order: 0, effectiveFrom: new Date("2020-01-01") }] } },
   });
-  const allocCode = await prisma.chargeCode.create({
-    data: { enterpriseId: enterprise.id, code: "TRF", description: "Transfer", category: "TRANSPORTATION", useDefaultTax: false, taxProfileId: customProfile.id },
-  });
+  const allocCode = await customChargeCode(enterprise.id, { code: "TRF", description: "Transfer", useDefaultTax: false, taxProfileId: customProfile.id, subgroupCode: "TRANSFERS" });
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "BAR", chargeCodeId: roomCode.id } });
   const allocation = await prisma.allocation.create({
     data: {

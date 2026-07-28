@@ -19,7 +19,10 @@ model Enterprise {
 
   properties            Property[]
   taxProfiles           TaxProfile[]
+  chargeGroups          ChargeGroup[]
+  chargeSubgroups       ChargeSubgroup[]
   chargeCodes           ChargeCode[]
+  chargeCodeGenerates   ChargeCodeGenerate[]
   paymentMethods        PaymentMethod[]
   profiles              Profile[]
   cashierShifts         CashierShift[]
@@ -31,6 +34,9 @@ model Enterprise {
   roomAttendants        RoomAttendant[]
   license               EnterpriseLicense?
   moduleAccessOverrides EnterpriseModuleAccess[]
+  channelConnections    ChannelConnection[]
+  channelSyncLogs       ChannelSyncLog[]
+  jobRuns               JobRun[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -309,6 +315,7 @@ model Property {
   roomTypes                    RoomType[]
   rooms                        Room[]
   ratePlans                    RatePlan[]
+  channelLink                  ChannelPropertyLink?
   mealPlans                    MealPlan[]
   reservations                 Reservation[]
   groupBlocks                  GroupBlock[]
@@ -395,6 +402,8 @@ model RoomType {
   // NOT auto-restore room status, since some rooms may have been OUT_OF_SERVICE for an
   // unrelated reason beforehand.
   isActive Boolean @default(true)
+
+  channelMap ChannelRoomTypeMap?
 
   // Pseudo room types represent a dummy/virtual category (e.g. day-use, overbooking
   // buffer). Rooms created under one skip Building/Floor assignment entirely (see
@@ -536,15 +545,70 @@ model TaxRate {
   effectiveTo   DateTime?
 }
 
+// Level 1 of the Opera-modelled Group → Subgroup → Code hierarchy. `reportBucket` is
+// THE canonical reporting classification — every revenue/EOD/analytics report reads it
+// (via ChargeCode.chargeSubgroup.chargeGroup) instead of the old free-text
+// ChargeCode.category string. See src/lib/posting/charge-tree.ts for the canonical set
+// seeded at onboarding.
+model ChargeGroup {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  code         String // ACCOMMODATION | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM
+  name         String
+  // ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM — the one
+  // closed list. Several groups may share a bucket; a bucket never spans meanings.
+  reportBucket String
+  // false for NON_REVENUE (commissions, deposits) and pass-through TAX buckets — these
+  // must never be counted as earned revenue.
+  isRevenue    Boolean    @default(true)
+  // System-managed: cannot be deleted or have its code/bucket changed from the UI.
+  isSystem     Boolean    @default(false)
+  sortOrder    Int        @default(0)
+
+  subgroups ChargeSubgroup[]
+
+  @@unique([enterpriseId, code])
+}
+
+// Level 2 — the reporting sub-classification inside a group (e.g. ROOM_REVENUE and
+// EXTRA_OCCUPANCY both under ACCOMMODATION).
+model ChargeSubgroup {
+  id            String      @id @default(uuid())
+  enterpriseId  String
+  enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  chargeGroupId String
+  chargeGroup   ChargeGroup @relation(fields: [chargeGroupId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  isSystem      Boolean     @default(false)
+  sortOrder     Int         @default(0)
+
+  chargeCodes ChargeCode[]
+
+  @@unique([enterpriseId, code])
+}
+
 model ChargeCode {
   id            String      @id @default(uuid())
   enterpriseId  String
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   code          String
   description   String
-  // Grouping for reporting only — ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX |
-  // SYSTEM. (PAYMENT was removed — payment types are Payment Methods, not charge codes.)
-  category      String      @default("OTHERS")
+  // Level 3 of the hierarchy — and the ONLY classification: the deprecated free-text
+  // `category` column it replaced was dropped once every reader was migrated
+  // (CHARGE_CODE_PLAN.md phase 4). REQUIRED — every code is properly linked
+  // group -> subgroup -> code, so nothing can post with no classification behind it.
+  // Read the reporting bucket through chargeSubgroup.chargeGroup.reportBucket.
+  chargeSubgroupId String
+  chargeSubgroup   ChargeSubgroup @relation(fields: [chargeSubgroupId], references: [id])
+  // Posting semantics that used to be implied by the magic code string:
+  // CHARGE (ordinary revenue) | TAX (a levy — excluded from the GST base, e.g. GTX) |
+  // CREDIT (posts negative, e.g. TA commission) | NON_REVENUE (never earned revenue).
+  postingType   String      @default("CHARGE")
+  // System-provisioned (accommodation, green tax, commission...): cannot be deleted.
+  isSystem      Boolean     @default(false)
+  isActive      Boolean     @default(true)
   // Whether this charge code applies the enterprise's own Maldives Tax config (Green
   // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
   // taxProfileId is only ever set when useDefaultTax is false.
@@ -552,7 +616,17 @@ model ChargeCode {
   taxProfileId  String?
   taxProfile    TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
+  // Opera's "generates" mechanism — posting this code automatically posts the derived
+  // codes on the other side of these rows (see ChargeCodeGenerate).
+  generatesFrom ChargeCodeGenerate[] @relation("GeneratorCode")
+  generatedBy   ChargeCodeGenerate[] @relation("GeneratedCode")
+
   folioLineItems FolioLineItem[]
+  // Money-IN postings. Every financial posting is linked to a charge code, a payment
+  // just as much as a charge (owner rule, 2026-07-27): `paymentMethods` are the methods
+  // that settle against this code, `payments` the settlements already made.
+  paymentMethods PaymentMethod[]
+  payments       Payment[]
   // The "shared pool" an Outlet curates from — a charge code is never owned by one
   // outlet, it can be exposed by any number of them (or none). See OutletChargeCode.
   outletCharges  OutletChargeCode[]
@@ -570,6 +644,34 @@ model ChargeCode {
   @@unique([enterpriseId, code])
 }
 
+// Declarative replacement for hardcoded "posting ROOM also posts GTX" logic: posting the
+// generator code automatically posts each generated code, in ascending sortOrder, through
+// the same tax engine. See src/lib/posting/run-generates.ts.
+model ChargeCodeGenerate {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  generatorCodeId String
+  generatorCode   ChargeCode @relation("GeneratorCode", fields: [generatorCodeId], references: [id], onDelete: Cascade)
+  generatedCodeId String
+  generatedCode   ChargeCode @relation("GeneratedCode", fields: [generatedCodeId], references: [id], onDelete: Cascade)
+
+  // PERCENT (of the basis) | FLAT (per posting) | PER_PERSON_PER_NIGHT (the Green-Tax
+  // shape — value × persons × nights, supplied by the caller's postingContext).
+  method String
+  value  Float
+  // What a PERCENT applies to: NET (the parent's pre-tax base), GROSS (base + tax +
+  // service charge), or ANOTHER_GENERATE (basisGenerateId's own output — cascading).
+  calculateOn     String  @default("NET")
+  basisGenerateId String?
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
+
+  @@unique([generatorCodeId, generatedCodeId])
+  @@index([enterpriseId, generatorCodeId])
+}
+
 // PaymentType: CASH, CARD, TRANSFER
 model PaymentMethod {
   id           String     @id @default(uuid())
@@ -578,6 +680,16 @@ model PaymentMethod {
   name         String
   type         String // Replaces PaymentType
   isActive     Boolean    @default(true)
+
+  // EVERY financial posting is linked to a charge code — a payment just as much as a
+  // charge to the guest (owner rule, 2026-07-27). This supersedes the earlier
+  // "payment types are Payment Methods, not charge codes" decision: a method still
+  // decides HOW money is taken, and now also which code that movement posts against,
+  // so cash, card, transfer and city-ledger settlement are each identifiable in the
+  // ledger. Nullable only so a method can be created before its code is chosen; the
+  // API requires one before the method can be used.
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   payments Payment[]
 }
@@ -740,6 +852,7 @@ model RatePlan {
   id              String   @id @default(uuid())
   propertyId      String
   property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  channelMap      ChannelRatePlanMap?
   code            String
   name            String
   description     String?
@@ -1092,6 +1205,16 @@ model FolioLineItem {
   taxAmount           Float           @default(0.0)
   serviceChargeAmount Float           @default(0.0)
   isVoid              Boolean         @default(false)
+  // Set on a line that a ChargeCodeGenerate produced (Service Charge, GST, Green Tax,
+  // any declared levy), pointing at the revenue line that generated it. Two things need
+  // it: a tax line must report under the bucket of the revenue that earned it — a GST
+  // line's own charge code sits in the TAX group, so without this every report would
+  // show tax detached from its source — and it makes a parent's derived lines findable
+  // as a set. SetNull rather than Cascade: losing the attribution must never silently
+  // delete a posted tax line.
+  generatedFromLineItemId String?
+  generatedFrom           FolioLineItem?  @relation("GeneratedLines", fields: [generatedFromLineItemId], references: [id], onDelete: SetNull)
+  generatedLines          FolioLineItem[] @relation("GeneratedLines")
 
   createdAt DateTime @default(now())
 
@@ -1182,6 +1305,12 @@ model Payment {
   paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
   shiftId         String
   shift           CashierShift  @relation(fields: [shiftId], references: [id])
+
+  // Stamped from the payment method at posting time rather than read through the
+  // method later, so a method being re-pointed never rewrites settled history — the
+  // same reason a folio line carries its own charge code.
+  chargeCodeId    String?
+  chargeCode      ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   amount          Float
   referenceNumber String?
@@ -1391,6 +1520,10 @@ model EnterpriseSettings {
   // CITY_LEDGER-type method) used to record a settlement payment when a City Ledger
   // folio transfers to a debtor account at checkout.
   defaultAccommodationChargeCodeId String?
+  // The ChargeCode the nightly Green Tax levy posts against, resolved by role instead of
+  // the old literal `code: "GTX"` lookup (see resolveChargeCode in
+  // src/lib/posting/resolve-charge-code.ts). Falls back to the system-seeded GTX code.
+  defaultGreenTaxChargeCodeId      String?
   cityLedgerPaymentMethodId        String?
   // The (typically NON_REVENUE-categorized) ChargeCode a Travel Agent commission posts
   // against as a credit line at checkout — see RatePlanAgentAccess.commissionRate.
@@ -1413,6 +1546,10 @@ model EnterpriseSettings {
   invoiceAddress      String?
 
   // Invoice document content (Proforma + Tax share everything but the header line).
+  // The folio layout a Proforma / Tax Invoice / Interim Bill opens on — one of
+  // src/lib/folio-presentation.ts's FOLIO_STYLES. The operator can still pick a
+  // different one for an individual document; this is only what the picker defaults to.
+  defaultFolioStyle   String  @default("detailed")
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
@@ -2490,4 +2627,213 @@ model SpaGuestTherapistPreference {
   updatedAt   DateTime     @updatedAt
 
   @@unique([profileId, propertyId])
+}
+
+// A connection to an external channel manager (Beds24 today) — the exchange interface
+// between this enterprise and the booking channels. Lives at the ENTERPRISE level, which
+// is why it is administered from the Hub and not the property dashboard. See
+// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+//
+// Deliberately NOT unique per enterprise. Beds24's own account model puts many properties
+// under one account, but some operators keep a separate account per property — allowing
+// several connections per enterprise supports both without a schema change, so the
+// "one account per enterprise or per property?" question (plan decision D-6) never has to
+// be answered up front. Which ostastay properties a connection covers is a separate
+// mapping concern (ChannelPropertyLink), landing with the Sharing screen.
+model ChannelConnection {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  // Only "BEDS24" today. A plain string rather than an enum to match the rest of this
+  // schema (see Property.status, ChargeCode.category) and to keep adding a provider a
+  // code-only change.
+  provider     String     @default("BEDS24")
+  // Operator-facing label, so several accounts stay tellable apart.
+  name         String
+
+  // The long-lived credential. ENCRYPTED AT REST via src/lib/secret-crypto.ts, exactly
+  // like the SMTP/SFTP secrets in EnterpriseSettings — encrypt on write, decrypt only at
+  // point of use, never returned to the client (the API redacts it with SECRET_MASK).
+  //
+  // Beds24 refresh tokens do not expire, BUT die if unused for 30 days — so a connection
+  // that is simply idle will silently break. lastTokenRefreshAt is what makes that
+  // visible before it happens; a keep-alive refresh must run well inside the window.
+  refreshToken       String?
+  lastTokenRefreshAt DateTime?
+
+  // Cached short-lived access token (Beds24: ~24h), so a burst of API calls re-mints once
+  // rather than per request. Also encrypted — it is a bearer credential in its own right.
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+
+  // NOT_CONNECTED | CONNECTED | ERROR. Health is observed, never assumed: it is set from
+  // real API outcomes (see src/lib/channels/beds24.ts), not from the fact that a
+  // credential was saved.
+  status            String    @default("NOT_CONNECTED")
+  lastHealthCheckAt DateTime?
+  // Operator-readable reason for the last failure; cleared on success.
+  lastError         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncLogs      ChannelSyncLog[]
+  propertyLinks ChannelPropertyLink[]
+
+  @@unique([enterpriseId, name])
+}
+
+// Which ostastay property a connection covers, and which channel-manager property it
+// corresponds to. This is the "what do we share" control — see
+// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+//
+// ⚠️ propertyId is UNIQUE ACROSS ALL CONNECTIONS, not merely unique per connection. Linking
+// one property through two channel-manager accounts would have both pushing availability for
+// the same rooms and both accepting bookings against them — a double-sell that surfaces as
+// an overbooked guest at the desk, not as an error anywhere in software. One property, one
+// channel manager.
+//
+// A link references properties as CONFIGURATION, which is why this still belongs in the Hub:
+// it is not an operation on a property, it is a statement about how that property is
+// connected.
+model ChannelPropertyLink {
+  id           String            @id @default(uuid())
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // The channel manager's own id for this property (Beds24 propertyId).
+  externalPropertyId String
+
+  // The master switch for this property's exchange. Deliberately defaults to FALSE: a newly
+  // linked property must not start pushing inventory the moment it is created — mapping has
+  // to be completed and reviewed first. Enabling is an explicit act.
+  syncEnabled Boolean @default(false)
+
+  roomTypeMaps ChannelRoomTypeMap[]
+  ratePlanMaps ChannelRatePlanMap[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, externalPropertyId])
+}
+
+// ostastay RoomType ↔ channel-manager room. The mapping table is where most of the real
+// integration work lives: everything downstream (availability push, inbound bookings) is
+// meaningless without it.
+model ChannelRoomTypeMap {
+  id     String              @id @default(uuid())
+  linkId String
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  roomTypeId String   @unique
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  externalRoomId String
+
+  // Per-room-type share control: a property can be connected while deliberately holding
+  // back individual room types (e.g. a suite sold only direct).
+  shared Boolean @default(true)
+
+  @@unique([linkId, externalRoomId])
+}
+
+// ostastay RatePlan ↔ channel-manager price/rate. Optional: a property can push availability
+// with a single default rate before rate mapping is set up, so this does not gate readiness.
+model ChannelRatePlanMap {
+  id     String              @id @default(uuid())
+  linkId String
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  ratePlanId String   @unique
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+
+  externalRateId String
+
+  @@unique([linkId, externalRateId])
+}
+
+// Every exchange with the channel manager, inbound and outbound — the troubleshooting
+// record for the Hub's Logs screen. Deliberately built BEFORE the sync engine, so the
+// very first sync is debuggable rather than a black box.
+//
+// ⚠️ THIS TABLE MUST NEVER CONTAIN A CREDENTIAL. The requests being logged carry invite
+// codes, refresh tokens and access tokens in their headers; writing those here would
+// defeat the encryption-at-rest on ChannelConnection entirely, since this table is
+// plaintext and readable by anyone with Hub view access. Everything stored is passed
+// through redactForLog() in src/lib/channels/redact.ts first — see the tests, which
+// assert that a known secret never survives into a row.
+model ChannelSyncLog {
+  id String @id @default(uuid())
+  // Denormalised so the Logs screen can scope and page without a join, and so entries
+  // survive their connection being deleted (see connectionId below).
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  // SetNull, not Cascade: the logs explaining WHY a connection was removed are exactly
+  // the ones worth keeping afterwards. connectionName is snapshotted for the same reason,
+  // mirroring how UserActivityLog snapshots user identity.
+  connectionId   String?
+  connection     ChannelConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  connectionName String
+
+  // OUTBOUND (we called the channel manager) | INBOUND (it called us, e.g. a webhook).
+  direction String
+  // Coarse operation name, e.g. "auth.setup", "auth.token", "connection.test".
+  operation String
+  endpoint  String?
+
+  ok         Boolean
+  httpStatus Int?
+  latencyMs  Int?
+
+  // Redacted, truncated summaries — enough to troubleshoot, never enough to leak.
+  requestSummary  String?
+  responseSummary String?
+  errorMessage    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([enterpriseId, createdAt])
+  @@index([connectionId, createdAt])
+}
+
+// One execution of a background job for one enterprise — see src/lib/jobs/.
+//
+// Next.js has no scheduler of its own, so jobs are driven by an EXTERNAL cron hitting
+// /api/jobs/run. That makes this table do double duty: it is both the audit trail (a
+// silently-failing cron is worse than no cron, so every run is recorded whatever the
+// outcome) and the mutual-exclusion lock.
+//
+// NOTE: a PARTIAL unique index `JobRun_one_running_per_job_enterprise` — UNIQUE
+// ("jobName","enterpriseId") WHERE "status" = 'RUNNING' — is created in raw SQL by the
+// migration, because Prisma cannot express a partial index. It is what makes overlapping
+// cron invocations safe: the second one's INSERT fails rather than running the job twice.
+// Same approach as CashierShift_one_open_per_user_property (audit finding A12).
+//
+// enterpriseId is deliberately NOT nullable: SQLite treats NULLs as distinct in a unique
+// index, so a nullable column would silently permit concurrent "global" runs — exactly the
+// case the lock exists to prevent. Every job today is per-enterprise anyway.
+model JobRun {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  jobName String
+  // RUNNING | SUCCEEDED | FAILED. RUNNING doubles as the lock (see the partial index).
+  status  String @default("RUNNING")
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  itemsProcessed Int     @default(0)
+  summary        String?
+  // Redacted before storage — job errors can quote a channel-manager response back.
+  error          String?
+
+  @@index([jobName, startedAt])
+  @@index([enterpriseId, startedAt])
 }

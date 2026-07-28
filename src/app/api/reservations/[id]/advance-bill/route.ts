@@ -3,7 +3,9 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
-import { resolveChargeTax } from "@/lib/tax-calc";
+import { postCharge, chargeCodeInclude, type PostableChargeCode } from "@/lib/posting/post-charge";
+import { resolveChargeCode, MissingChargeCodeError } from "@/lib/posting/resolve-charge-code";
+import type { GenerateRow } from "@/lib/posting/run-generates";
 import { logActivity } from "@/lib/activity-log";
 
 // Advance Bill — post the remaining stay (or a chosen number of its nights) UPFRONT so the
@@ -86,16 +88,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "No room nights fall in the selected range." }, { status: 400 });
     }
 
-    // Charge-code resolution mirrors Night Audit: per-plan accommodation code → enterprise
-    // default → legacy ROOM; Green Tax via the enterprise's GTX code.
+    // Charge-code resolution mirrors Night Audit, but by ROLE rather than by literal code
+    // string: per-plan accommodation code → the enterprise's ACCOMMODATION code; Green Tax
+    // via the GREEN_TAX role. See src/lib/posting/resolve-charge-code.ts.
     const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: reservation.property.enterpriseId } });
-    const fallbackRoom = settings?.defaultAccommodationChargeCodeId
-      ? await prisma.chargeCode.findFirst({ where: { id: settings.defaultAccommodationChargeCodeId, enterpriseId: reservation.property.enterpriseId } })
-      : await prisma.chargeCode.findFirst({ where: { enterpriseId: reservation.property.enterpriseId, code: "ROOM" } });
+    const fallbackRoom = await resolveChargeCode(reservation.property.enterpriseId, "ACCOMMODATION", { settings });
     if (!fallbackRoom) {
-      return NextResponse.json({ error: "No accommodation charge code configured. Set a default in Controls > Finance." }, { status: 400 });
+      return NextResponse.json({ error: new MissingChargeCodeError("ACCOMMODATION").message }, { status: 400 });
     }
-    const gtxCode = await prisma.chargeCode.findFirst({ where: { enterpriseId: reservation.property.enterpriseId, code: "GTX" } });
+    const gtxCode = await resolveChargeCode(reservation.property.enterpriseId, "GREEN_TAX", { settings });
 
     const quote = await computeReservationQuote({
       propertyId: reservation.propertyId,
@@ -113,19 +114,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       manualAllocationIds: reservation.allocations.map((m) => m.allocationId),
     });
 
-    // Allocation charge codes by allocationId (the quote returns codes, not ids).
-    const allocCodeMap = new Map<string, string>();
-    if (quote.allocations.length > 0) {
-      const allocs = await prisma.allocation.findMany({
-        where: { id: { in: quote.allocations.map((al) => al.allocationId) } },
-        select: { id: true, chargeCodeId: true },
-      });
-      allocs.forEach((al) => { if (al.chargeCodeId) allocCodeMap.set(al.id, al.chargeCodeId); });
+    // Every charge code this run can post against, loaded once in the postCharge shape
+    // (tax profile included) so the posting loop never issues a per-line lookup.
+    const allocRows = quote.allocations.length > 0
+      ? await prisma.allocation.findMany({
+          where: { id: { in: quote.allocations.map((al) => al.allocationId) } },
+          select: { id: true, chargeCodeId: true },
+        })
+      : [];
+    const neededCodeIds = [...new Set([
+      fallbackRoom.id,
+      ...(gtxCode ? [gtxCode.id] : []),
+      ...reservation.assignments.map((a) => a.ratePlan?.chargeCode?.id).filter((x): x is string => !!x),
+      ...allocRows.map((al) => al.chargeCodeId).filter((x): x is string => !!x),
+    ])];
+    const codeById = new Map(
+      (await prisma.chargeCode.findMany({
+        where: { id: { in: neededCodeIds }, enterpriseId: reservation.property.enterpriseId },
+        include: chargeCodeInclude(),
+      })).map((c) => [c.id, c])
+    );
+
+    const allocCodeMap = new Map<string, PostableChargeCode>();
+    for (const al of allocRows) {
+      const code = al.chargeCodeId ? codeById.get(al.chargeCodeId) : undefined;
+      if (code) allocCodeMap.set(al.id, code);
     }
 
-    const roomCodeForSeg = (roomTypeId: string, ratePlanId: string) => {
+    // The accommodation code for a segment: the assignment's rate plan's own code when it
+    // sets one, else the role-resolved enterprise accommodation code.
+    const codeForSeg = (roomTypeId: string, ratePlanId: string): PostableChargeCode => {
       const asg = reservation.assignments.find((a) => a.roomTypeId === roomTypeId && a.ratePlanId === ratePlanId);
-      return asg?.ratePlan?.chargeCode?.id ?? fallbackRoom.id;
+      const planCodeId = asg?.ratePlan?.chargeCode?.id;
+      return (planCodeId ? codeById.get(planCodeId) : undefined) ?? fallbackRoom;
     };
 
     let linesPosted = 0;
@@ -143,53 +164,98 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       if (claimed.count === 0) throw new AdvanceBillConflict();
 
+      // Every line below posts through postCharge with `amounts` (not `inputAmount`):
+      // the reservation quote is the authority here — these are the exact figures the
+      // guest was shown — so the tax engine must NOT re-derive them.
+      //
+      // Generates DO run. That is the whole point of declaring them: posting a charge
+      // code posts everything derived from it, on every path, not just at Night Audit.
+      // With pre-computed amounts, a SERVICE_CHARGE / GST generate simply routes the
+      // figures supplied here onto the group's own tax codes — nothing is recalculated,
+      // so an advance bill and the nights it replaces produce identical totals and
+      // identical per-code attribution.
+      const postPreComputed = async (args: {
+        chargeCode: PostableChargeCode; description: string;
+        baseAmount: number; taxAmount: number; serviceChargeAmount: number;
+        postingContext?: { adults: number; children: number; nights: number };
+        extraGenerates?: GenerateRow[];
+      }) => {
+        const posted = await postCharge(tx, {
+          folioId: folio.id,
+          chargeCode: args.chargeCode,
+          amounts: { baseAmount: args.baseAmount, taxAmount: args.taxAmount, serviceChargeAmount: args.serviceChargeAmount },
+          settings,
+          pricesIncludeTaxes: reservation.property.pricesIncludeTaxes,
+          date: businessDate,
+          description: args.description,
+          postingContext: args.postingContext ?? null,
+          extraGenerates: args.extraGenerates,
+        });
+        amountPosted += posted.grandTotal;
+        linesPosted += 1 + posted.generated.length;
+      };
+
+      // Green Tax rides on the FIRST accommodation segment, covering the whole billed
+      // window in one line — the same shape Night Audit posts per night, and the same
+      // figure the quote showed. Later segments (a room move mid-stay) suppress it so a
+      // split stay isn't levied twice. `impliedGreenTax` covers an accommodation code
+      // that carries no Green Tax row of its own, exactly as in Night Audit.
+      const impliedGreenTax: GenerateRow[] = gtxCode && quote.greenTax.enabled
+        ? [{
+            id: `implied-green-tax:${gtxCode.id}`,
+            generatedCodeId: gtxCode.id,
+            method: "GREEN_TAX",
+            value: 0,
+            calculateOn: "NET",
+            basisGenerateId: null,
+            sortOrder: 1000,
+            isActive: true,
+          }]
+        : [];
+      let greenTaxPending = quote.greenTax.enabled && quote.greenTax.total > 0.005;
+
       for (const seg of quote.segments) {
-        const codeId = roomCodeForSeg(seg.roomTypeId, seg.ratePlanId);
+        const code = codeForSeg(seg.roomTypeId, seg.ratePlanId);
         if (seg.roomBase > 0.005 || seg.roomTax > 0.005 || seg.roomServiceCharge > 0.005) {
-          await tx.folioLineItem.create({
-            data: {
-              folioId: folio.id, chargeCodeId: codeId,
-              amount: seg.roomBase, taxAmount: seg.roomTax, serviceChargeAmount: seg.roomServiceCharge,
-              description: `Advance — Accommodation (${seg.nights} night${seg.nights === 1 ? "" : "s"})`,
-              date: businessDate,
-            },
+          const levyThisSegment = greenTaxPending;
+          greenTaxPending = false;
+          await postPreComputed({
+            chargeCode: code,
+            description: `Advance — Accommodation (${seg.nights} night${seg.nights === 1 ? "" : "s"})`,
+            baseAmount: seg.roomBase, taxAmount: seg.roomTax, serviceChargeAmount: seg.roomServiceCharge,
+            // The levy covers every billed night in this run, not just this segment's.
+            ...(levyThisSegment
+              ? { postingContext: { adults: reservation.adults, children: reservation.children, nights }, extraGenerates: impliedGreenTax }
+              : {}),
           });
-          amountPosted += seg.roomBase + seg.roomTax + seg.roomServiceCharge; linesPosted++;
         }
         if (seg.extraOccupancyBase > 0.005) {
-          await tx.folioLineItem.create({
-            data: {
-              folioId: folio.id, chargeCodeId: codeId,
-              amount: seg.extraOccupancyBase, taxAmount: seg.extraOccupancyTax, serviceChargeAmount: seg.extraOccupancyServiceCharge,
-              description: "Advance — Extra Occupancy", date: businessDate,
-            },
+          await postPreComputed({
+            chargeCode: code,
+            description: "Advance — Extra Occupancy",
+            baseAmount: seg.extraOccupancyBase, taxAmount: seg.extraOccupancyTax, serviceChargeAmount: seg.extraOccupancyServiceCharge,
           });
-          amountPosted += seg.extraOccupancyBase + seg.extraOccupancyTax + seg.extraOccupancyServiceCharge; linesPosted++;
         }
       }
 
       for (const al of quote.allocations) {
-        const codeId = allocCodeMap.get(al.allocationId);
-        if (!codeId || (al.base <= 0.005 && al.tax <= 0.005 && al.serviceCharge <= 0.005)) continue;
-        await tx.folioLineItem.create({
-          data: {
-            folioId: folio.id, chargeCodeId: codeId,
-            amount: al.base, taxAmount: al.tax, serviceChargeAmount: al.serviceCharge,
-            description: `Advance — ${al.name}`, date: businessDate,
-          },
+        const code = allocCodeMap.get(al.allocationId);
+        if (!code || (al.base <= 0.005 && al.tax <= 0.005 && al.serviceCharge <= 0.005)) continue;
+        await postPreComputed({
+          chargeCode: code,
+          description: `Advance — ${al.name}`,
+          baseAmount: al.base, taxAmount: al.tax, serviceChargeAmount: al.serviceCharge,
         });
-        amountPosted += al.base + al.tax + al.serviceCharge; linesPosted++;
       }
 
-      if (quote.greenTax.enabled && quote.greenTax.total > 0.005 && gtxCode) {
-        await tx.folioLineItem.create({
-          data: {
-            folioId: folio.id, chargeCodeId: gtxCode.id,
-            amount: quote.greenTax.total, taxAmount: 0, serviceChargeAmount: 0,
-            description: "Advance — Green Tax", date: businessDate,
-          },
+      // Fallback for a stay whose accommodation lines were all zero (fully discounted,
+      // or a rate gap): the levy still applies, so post it directly rather than losing it.
+      if (greenTaxPending && gtxCode) {
+        await postPreComputed({
+          chargeCode: gtxCode,
+          description: "Advance — Green Tax",
+          baseAmount: quote.greenTax.total, taxAmount: 0, serviceChargeAmount: 0,
         });
-        amountPosted += quote.greenTax.total; linesPosted++;
       }
 
       // Uncharged, hotel-booked transport legs — posted here and flagged charged so Night
@@ -207,17 +273,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         for (const leg of legs) {
           const code = cmap.get(leg.chargeCodeId!);
           if (!code) continue;
-          const t = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes: reservation.property.pricesIncludeTaxes });
           const dir = leg.direction === "PICKUP" ? "Pickup" : "Dropoff";
-          const li = await tx.folioLineItem.create({
-            data: {
-              folioId: folio.id, chargeCodeId: code.id,
-              amount: t.baseAmount, taxAmount: t.taxAmount, serviceChargeAmount: t.serviceChargeAmount,
-              description: `Advance — Transport (${dir})`, date: businessDate,
-            },
+          // A transport leg's price is NOT part of the quote's pre-computed totals, so
+          // unlike the lines above this one does go through the tax engine.
+          const posted = await postCharge(tx, {
+            folioId: folio.id,
+            chargeCode: code,
+            inputAmount: leg.chargeAmount!,
+            settings,
+            pricesIncludeTaxes: reservation.property.pricesIncludeTaxes,
+            date: businessDate,
+            description: `Advance — Transport (${dir})`,
           });
-          await tx.reservationTransport.update({ where: { id: leg.id }, data: { chargedLineItemId: li.id } });
-          amountPosted += t.baseAmount + t.taxAmount + t.serviceChargeAmount; linesPosted++;
+          await tx.reservationTransport.update({ where: { id: leg.id }, data: { chargedLineItemId: posted.parent.id } });
+          amountPosted += posted.grandTotal; linesPosted += 1 + posted.generated.length;
         }
       }
 

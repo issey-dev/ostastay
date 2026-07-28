@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input"
 export interface SearchableSelectOption {
   label: string
   value: string
+  /** Optional heading this option sits under. Consecutive options sharing a group render
+   *  beneath one sticky header — pass options already sorted by group. */
+  group?: string
 }
 
 interface SearchableSelectProps {
@@ -107,9 +110,14 @@ export function SearchableSelect({
             </div>
           ) : (
             <div className="flex flex-col">
-              {filteredOptions.map((option) => (
+              {filteredOptions.map((option, index) => (
+                <React.Fragment key={option.value}>
+                {option.group && option.group !== filteredOptions[index - 1]?.group && (
+                  <div className="sticky top-0 z-10 bg-popover px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {option.group}
+                  </div>
+                )}
                 <div
-                  key={option.value}
                   className={cn(
                     "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-muted hover:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                     value === option.value ? "bg-muted text-foreground font-medium" : ""
@@ -128,6 +136,7 @@ export function SearchableSelect({
                   />
                   {option.label}
                 </div>
+                </React.Fragment>
               ))}
             </div>
           )}

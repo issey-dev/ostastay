@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { reportBucketLabel } from "@/lib/posting/report-bucket"
 import { useProperty } from "@/components/providers/property-provider"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -154,7 +155,7 @@ function TrialBalance({ d }: { d: any }) {
             {d.charges.byCategory.length === 0 && <tr><td colSpan={4}><Empty msg="No charges posted." /></td></tr>}
             {d.charges.byCategory.map((c: any) => (
               <tr key={c.category} className="border-b border-border/50">
-                <Td>{c.category}</Td><Td right>{n2(c.amount)}</Td><Td right>{n2(c.tax + c.serviceCharge)}</Td><Td right>{n2(c.total)}</Td>
+                <Td>{reportBucketLabel(c.category)}</Td><Td right>{n2(c.amount)}</Td><Td right>{n2(c.tax + c.serviceCharge)}</Td><Td right>{n2(c.total)}</Td>
               </tr>
             ))}
             <tr><Td bold>Total debits</Td><Td></Td><Td></Td><Td right bold>{n2(d.charges.total)}</Td></tr>
@@ -290,7 +291,7 @@ function ManagerFlash({ d }: { d: any }) {
             <tbody>
               {d.revenue.byCategory.length === 0 && <tr><td colSpan={2}><Empty msg="No revenue posted." /></td></tr>}
               {d.revenue.byCategory.map((c: any) => (
-                <tr key={c.category} className="border-b border-border/50"><Td>{c.category}</Td><Td right>{n2(c.total)}</Td></tr>
+                <tr key={c.category} className="border-b border-border/50"><Td>{reportBucketLabel(c.category)}</Td><Td right>{n2(c.total)}</Td></tr>
               ))}
               <tr><Td bold>Total revenue</Td><Td right bold>{n2(d.revenue.total)}</Td></tr>
             </tbody>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveChargeTax } from "@/lib/tax-calc";
+import { postCharge } from "@/lib/posting/post-charge";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { resolveRoutingTargetFolioId } from "@/lib/folio-routing";
 import { ensureOpenShift } from "@/lib/cashier-shift";
@@ -65,13 +65,6 @@ export async function POST(
       where: { enterpriseId: folio.property.enterpriseId }
     });
 
-    const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
-      chargeCode,
-      inputAmount,
-      settings,
-      pricesIncludeTaxes: folio.property.pricesIncludeTaxes
-    });
-
     // Description defaults to the charge code's own description; Reference is
     // separate free text printed on the invoice.
     const description = (typeof body.description === "string" && body.description.trim())
@@ -89,21 +82,27 @@ export async function POST(
     // property (auto-opening one if needed), so it shows up in their shift summary.
     const shift = await ensureOpenShift(ctx, folio.propertyId);
 
-    const lineItem = await prisma.folioLineItem.create({
-      data: {
+    // One posting service for every financial write site (CHARGE_CODE_PLAN.md §3):
+    // resolves tax through src/lib/tax-calc.ts exactly as before, and additionally fires
+    // any generate rows this code declares. Wrapped in a transaction so a generated levy
+    // can never survive a failed parent line.
+    const posted = await prisma.$transaction((tx) =>
+      postCharge(tx, {
         folioId: targetFolioId,
-        chargeCodeId: body.chargeCodeId,
-        shiftId: shift.id,
+        chargeCode,
+        inputAmount,
+        settings,
+        pricesIncludeTaxes: folio.property.pricesIncludeTaxes,
         date: resolveBusinessDate(folio.property),
         description,
         reference,
-        amount: baseAmount,
-        taxAmount,
-        serviceChargeAmount,
-      },
-      include: {
-        chargeCode: true
-      }
+        shiftId: shift.id,
+      })
+    );
+    const { baseAmount, taxTotal } = posted;
+    const lineItem = await prisma.folioLineItem.findUniqueOrThrow({
+      where: { id: posted.parent.id },
+      include: { chargeCode: true },
     });
 
     await logActivity({
@@ -112,7 +111,7 @@ export async function POST(
       action: "CREATE",
       entityType: "FolioLineItem",
       entityId: lineItem.id,
-      description: `Posted charge "${description}" (${chargeCode.code}, $${(baseAmount + taxAmount + serviceChargeAmount).toFixed(2)}) to folio #${folio.folioNumber}` +
+      description: `Posted charge "${description}" (${chargeCode.code}, $${(baseAmount + taxTotal).toFixed(2)}) to folio #${folio.folioNumber}` +
         (targetFolioId !== folioId ? " (auto-routed)" : ""),
     });
 

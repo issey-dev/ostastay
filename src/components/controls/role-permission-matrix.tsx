@@ -2,7 +2,17 @@
 
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { MODULES, MODULE_LABELS, type Module, type Action } from "@/lib/modules"
+import { Badge } from "@/components/ui/badge"
+import {
+  MODULES,
+  MODULE_LABELS,
+  MODULE_SCOPE_LABELS,
+  MODULE_SCOPE_DESCRIPTIONS,
+  moduleScope,
+  type Module,
+  type Action,
+  type ModuleScope,
+} from "@/lib/modules"
 
 export type PermissionMatrix = Record<Module, { canView: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean }>
 
@@ -12,6 +22,12 @@ export function emptyPermissionMatrix(): PermissionMatrix {
   ) as PermissionMatrix
 }
 
+/** True when this role grants any Hub module — used to warn before it is given to a
+ *  property-scoped user, who can never actually reach the Hub. */
+export function grantsHubAccess(value: PermissionMatrix): boolean {
+  return MODULES.some((m) => moduleScope(m) === "HUB" && value[m]?.canView)
+}
+
 const ACTIONS: { key: Action; label: string; field: keyof PermissionMatrix[Module] }[] = [
   { key: "view", label: "View", field: "canView" },
   { key: "create", label: "Create", field: "canCreate" },
@@ -19,6 +35,14 @@ const ACTIONS: { key: Action; label: string; field: keyof PermissionMatrix[Modul
   { key: "delete", label: "Delete", field: "canDelete" },
 ]
 
+const SCOPE_ORDER: ModuleScope[] = ["PROPERTY", "HUB"]
+
+// Grouped by scope level rather than listed flat, because the two are not
+// interchangeable: a Hub module gates the enterprise-wide shell (channel-manager
+// credentials, sharing, sync logs) and is unreachable for a user pinned to one property,
+// whatever their role says. Ticking Integrations for such a user used to save happily and
+// then do nothing — the grouping and the note below make that rule visible where the
+// decision is actually made.
 export function RolePermissionMatrix({
   value,
   onChange,
@@ -44,6 +68,25 @@ export function RolePermissionMatrix({
     })
   }
 
+  const setScope = (scope: ModuleScope, enabled: boolean) => {
+    if (disabled) return
+    const next = { ...value }
+    for (const m of MODULES) {
+      if (moduleScope(m) !== scope) continue
+      next[m] = { canView: enabled, canCreate: enabled, canUpdate: enabled, canDelete: enabled }
+    }
+    onChange(next)
+  }
+
+  const scopeState = (scope: ModuleScope) => {
+    const mods = MODULES.filter((m) => moduleScope(m) === scope)
+    const full = mods.filter((m) => {
+      const r = value[m]
+      return r.canView && r.canCreate && r.canUpdate && r.canDelete
+    }).length
+    return full === 0 ? "none" : full === mods.length ? "all" : "some"
+  }
+
   return (
     <div className="border rounded-md">
       <Table>
@@ -57,30 +100,60 @@ export function RolePermissionMatrix({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {MODULES.map((module) => {
-            const row = value[module]
-            const isFull = row.canView && row.canCreate && row.canUpdate && row.canDelete
-            return (
-              <TableRow key={module}>
-                <TableCell className="font-medium">{MODULE_LABELS[module]}</TableCell>
-                {ACTIONS.map((a) => (
-                  <TableCell key={a.key} className="text-center">
-                    <Checkbox
-                      checked={row[a.field]}
-                      onCheckedChange={() => toggle(module, a.field)}
-                      disabled={disabled}
-                    />
-                  </TableCell>
-                ))}
-                <TableCell className="text-center">
+          {SCOPE_ORDER.map((scope) => {
+            const mods = MODULES.filter((m) => moduleScope(m) === scope)
+            if (mods.length === 0) return null
+            const state = scopeState(scope)
+            return [
+              <TableRow key={`${scope}-header`} className="bg-muted/50 hover:bg-muted/50">
+                <TableCell colSpan={ACTIONS.length + 1} className="py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                      {MODULE_SCOPE_LABELS[scope]}
+                    </span>
+                    {scope === "HUB" && (
+                      <Badge variant="outline" className="font-normal">All-Properties users only</Badge>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                    {MODULE_SCOPE_DESCRIPTIONS[scope]}
+                  </p>
+                </TableCell>
+                <TableCell className="text-center align-top pt-3">
                   <Checkbox
-                    checked={isFull}
-                    onCheckedChange={(checked) => setFullRow(module, !!checked)}
+                    checked={state === "all"}
+                    indeterminate={state === "some"}
+                    onCheckedChange={() => setScope(scope, state !== "all")}
                     disabled={disabled}
                   />
                 </TableCell>
-              </TableRow>
-            )
+              </TableRow>,
+              ...mods.map((module) => {
+                const row = value[module]
+                const isFull = row.canView && row.canCreate && row.canUpdate && row.canDelete
+                return (
+                  <TableRow key={module}>
+                    <TableCell className="font-medium pl-6">{MODULE_LABELS[module]}</TableCell>
+                    {ACTIONS.map((a) => (
+                      <TableCell key={a.key} className="text-center">
+                        <Checkbox
+                          checked={row[a.field]}
+                          onCheckedChange={() => toggle(module, a.field)}
+                          disabled={disabled}
+                        />
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={isFull}
+                        onCheckedChange={(checked) => setFullRow(module, !!checked)}
+                        disabled={disabled}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+              }),
+            ]
           })}
         </TableBody>
       </Table>

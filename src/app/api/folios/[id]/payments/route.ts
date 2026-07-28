@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { ensureOpenShift } from "@/lib/cashier-shift";
@@ -55,6 +56,8 @@ export async function POST(
         folioId,
         paymentMethodId: body.paymentMethodId,
         shiftId: shift.id,
+        // Every financial posting carries a charge code — a payment as much as a charge.
+        chargeCodeId: await resolvePaymentChargeCodeId(prisma, body.paymentMethodId),
         amount,
         referenceNumber: body.referenceNumber || null,
         isRefund: body.isRefund || false,

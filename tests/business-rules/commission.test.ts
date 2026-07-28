@@ -51,6 +51,7 @@ const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const checkOutRoute = await import("@/app/api/reservations/[id]/check-out/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -82,8 +83,8 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `R${Math.floor(Math.random() * 9000 + 1000)}` } });
-  const roomCode = await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room Charge" } });
-  const commissionCode = await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "COMM", description: "TA Commission", category: "NON_REVENUE" } });
+  const roomCode = await customChargeCode(enterprise.id, { code: "ROOM", description: "Room Charge" });
+  const commissionCode = await customChargeCode(enterprise.id, { code: "COMM", description: "TA Commission", subgroupCode: "NON_REVENUE_OTHER" });
   const passwordHash = await bcrypt.hash("password123", 10);
   const admin = await prisma.user.create({
     data: {

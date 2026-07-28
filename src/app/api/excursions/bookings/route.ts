@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { resolveOutletChargeTax } from "@/lib/tax-calc";
+import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal, combineDepartureDateTime } from "@/lib/excursions";
@@ -240,12 +241,12 @@ export async function POST(request: Request) {
       include: { outlet: { include: { taxProfile: { include: { rates: true } } } } },
     });
     const excursionOutlet = excursionSettings?.outlet ?? null;
-    const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
-      chargeCode: excursionType.chargeCode,
-      outlet: excursionOutlet,
-      inputAmount: totalAmount,
-      settings,
-      pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
+    // Loaded in the postCharge shape so the excursion's charge code posts through the one
+    // posting service — which resolves tax exactly as before AND fires the code's
+    // generates, so the Excursions group's own SVC/GST codes post with it.
+    const postableCode = await prisma.chargeCode.findUniqueOrThrow({
+      where: { id: excursionType.chargeCodeId },
+      include: chargeCodeInclude(),
     });
 
     const headcountLabel = [
@@ -264,19 +265,25 @@ export async function POST(request: Request) {
     const shift = await ensureOpenShift(ctx, excursionType.propertyId);
 
     const booking = await prisma.$transaction(async (tx) => {
-      const lineItem = await tx.folioLineItem.create({
-        data: {
-          folioId: folioIdToCharge,
-          chargeCodeId: excursionType.chargeCodeId,
-          outletId: excursionOutlet?.id ?? null,
-          shiftId: shift.id,
-          amount: baseAmount,
-          taxAmount,
-          serviceChargeAmount,
-          description: `${excursionType.name} — ${headcountLabel} (${departure.departureDate.toISOString().slice(0, 10)} ${departure.departureTime})`,
-          date: resolveBusinessDate(excursionType.property),
-        },
+      const posted = await postCharge(tx, {
+        folioId: folioIdToCharge,
+        chargeCode: postableCode,
+        inputAmount: totalAmount,
+        settings,
+        pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
+        date: resolveBusinessDate(excursionType.property),
+        description: `${excursionType.name} — ${headcountLabel} (${departure.departureDate.toISOString().slice(0, 10)} ${departure.departureTime})`,
+        outlet: excursionOutlet,
+        outletId: excursionOutlet?.id ?? null,
+        shiftId: shift.id,
+        // Headcount so a per-person levy on this code has a basis. Infants are excluded
+        // for the same reason they are on a stay night — they are exempt.
+        postingContext: { adults: adultCount, children: childCount, nights: 1 },
       });
+      const lineItem = posted.parent;
+      // Settlement below must clear the WHOLE posting — the charge plus every line it
+      // generated — or a "charge & pay now" booking would leave the tax outstanding.
+      const grossPosted = posted.grandTotal;
 
       // Charge & pay now: settle the just-posted charge with a payment of the same gross
       // (base + tax + service), so this booking's folio impact is zero.
@@ -286,7 +293,8 @@ export async function POST(request: Request) {
             folioId: folioIdToCharge,
             paymentMethodId: settlement.paymentMethodId,
             shiftId: shift.id,
-            amount: baseAmount + taxAmount + serviceChargeAmount,
+            chargeCodeId: await resolvePaymentChargeCodeId(tx, settlement.paymentMethodId),
+            amount: grossPosted,
             referenceNumber: settlement.referenceNumber,
           },
         });

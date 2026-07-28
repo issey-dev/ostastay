@@ -19,6 +19,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
+const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 
 const buildingsRoute = await import("@/app/api/buildings/route");
 const chargeCodesRoute = await import("@/app/api/charge-codes/route");
@@ -42,6 +43,10 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
   let frontDeskAId: string;
   let taxProfileAId: string;
   let taxProfileBId: string;
+  // Charge codes are classified by ChargeSubgroup now, so each enterprise needs its own
+  // canonical tree — and the subgroup id a POST supplies must belong to it.
+  let subgroupAId: string;
+  let subgroupBId: string;
 
   beforeAll(async () => {
     // Reuses the same INTERNAL "Osta" enterprise row as tests/scope.test.ts (same slug) —
@@ -153,6 +158,17 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
       },
     });
     taxProfileBId = taxProfileB.id;
+
+    for (const [entId, assign] of [
+      [enterpriseA.id, (v: string) => { subgroupAId = v; }],
+      [enterpriseB.id, (v: string) => { subgroupBId = v; }],
+    ] as const) {
+      await ensureChargeTree(prisma, entId);
+      const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
+        where: { enterpriseId_code: { enterpriseId: entId, code: "GOVERNMENT_LEVY" } },
+      });
+      assign(sub.id);
+    }
   });
 
   it("GET /api/buildings 403s when propertyId belongs to a different enterprise", async () => {
@@ -209,7 +225,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat", description: "VAT", category: "TAX", useDefaultTax: false, taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ code: "vat", description: "VAT", chargeSubgroupId: subgroupAId, useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );
@@ -225,7 +241,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
           body: JSON.stringify({
             code: "vat-a",
             description: "VAT A",
-            category: "TAX",
+            chargeSubgroupId: subgroupAId,
             useDefaultTax: false,
             taxProfileId: taxProfileAId,
             enterpriseId: "some-other-enterprise-id",
@@ -245,7 +261,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat-b", description: "VAT B", category: "TAX", useDefaultTax: false, taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ code: "vat-b", description: "VAT B", chargeSubgroupId: subgroupBId, useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { resolveChargeTax } from "@/lib/tax-calc";
+import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
@@ -127,12 +127,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         childCount: original.childCount,
         infantCount: original.infantCount,
       });
-      const { baseAmount, taxAmount, serviceChargeAmount } = resolveChargeTax({
-        chargeCode: excursionType.chargeCode,
-        inputAmount: totalAmount,
-        settings,
-        pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
-      });
 
       const headcountLabel = [
         original.adultCount ? `${original.adultCount} adult${original.adultCount === 1 ? "" : "s"}` : null,
@@ -143,18 +137,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .join(", ");
 
       const newBooking = await prisma.$transaction(async (tx) => {
-        const lineItem = await tx.folioLineItem.create({
-          data: {
-            folioId: folioIdToCharge,
-            chargeCodeId: excursionType.chargeCodeId,
-            shiftId: shift.id,
-            amount: baseAmount,
-            taxAmount,
-            serviceChargeAmount,
-            description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
-            date: resolveBusinessDate(excursionType.property),
-          },
+        // Re-posted through the one posting service, so a moved booking is taxed and
+        // generates exactly like the original booking was.
+        const postableCode = await tx.chargeCode.findUniqueOrThrow({
+          where: { id: excursionType.chargeCodeId },
+          include: chargeCodeInclude(),
         });
+        const posted = await postCharge(tx, {
+          folioId: folioIdToCharge,
+          chargeCode: postableCode,
+          inputAmount: totalAmount,
+          settings,
+          pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
+          date: resolveBusinessDate(excursionType.property),
+          description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
+          shiftId: shift.id,
+          postingContext: { adults: original.adultCount, children: original.childCount, nights: 1 },
+        });
+        const lineItem = posted.parent;
         const created = await tx.excursionBooking.create({
           data: {
             departureId: targetDepartureId,
