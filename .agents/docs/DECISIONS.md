@@ -2315,3 +2315,28 @@ days ahead or at the door. It must be days ahead.
 This does not weaken the rule above — the desk never *chose* this overbook, so it must be
 surfaced as an exception needing resolution, not folded in silently as though it were a
 deliberate manual overbook.
+
+### End-of-Day force logout is keyed on location, not user scope — owner ruling (2026-07-28)
+
+**Any user with an active session in a property that has just run its End-of-Day roll is
+signed out — regardless of their scope, including the person who ran the audit.**
+
+The system therefore has to know *where* each session is working, not just who it belongs
+to. That "where" is `AuthContext.sessionPropertyId`: a PROPERTY-scoped user's fixed
+location, or an ENTERPRISE-scoped user's currently-selected property (the
+`current_property_id` cookie). `resolveCurrentPropertyId()` and the force-logout check now
+share one resolver, so the property a session is signed out of is always the property it
+was working in.
+
+The previous rule gated on `scope === "PROPERTY"`, which left enterprise admins holding a
+stale business date on screen and still able to post into a day the property had closed.
+
+Scope of the lockout is the property, not the enterprise: the same enterprise admin, with
+a different property selected, is unaffected.
+
+Because the notice matters as much as the logout, `requireSession()` throws a distinct
+`EodLockoutError` (`code: "EOD_ROLL"` on the wire) rather than a generic 401, and
+`/api/session/eod-status` is the **one route allowed to answer through the lockout**
+(`requireSession({ allowDuringEodLockout: true })`) — otherwise the browser could never
+explain why the user is being signed out. `EodSessionWatch` polls it: a banner while an
+EodRun is IN_PROGRESS, then a modal and a real sign-out when the date actually rolls.

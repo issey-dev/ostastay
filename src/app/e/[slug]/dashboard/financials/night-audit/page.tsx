@@ -73,6 +73,13 @@ export default function EndOfDayPage() {
       const data = await res.json()
       if (step === "post" && res.ok) setPostSummary(data.posting ?? null)
       if (!res.ok) setError(data.error || "Step failed.")
+      // Finalize invalidates every session on this property — including this one. Tell
+      // EodSessionWatch to check immediately rather than letting the operator sit on a
+      // dead page until its next poll, and skip the status refetch that would now 401.
+      if (step === "finalize" && res.ok) {
+        window.dispatchEvent(new Event("osta:eod-finalized"))
+        return { ok: true, status: null }
+      }
       const fresh = await fetchStatus()
       return { ok: res.ok, status: fresh }
     } catch {
@@ -415,7 +422,7 @@ export default function EndOfDayPage() {
     if (key === "finalize") {
       return (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Sign property staff out and close the business date. They&apos;ll sign back in on the new date.</p>
+          <p className="text-sm text-muted-foreground">Close the business date and sign out <strong>everyone</strong> working in this property &mdash; front desk, managers, and you. Everyone signs back in on the new date.</p>
           <Button variant="destructive" disabled={anyBusy} onClick={() => runStep("finalize")}>
             {busy === "finalize" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogOut className="w-4 h-4 mr-2" />}
             Roll &amp; close

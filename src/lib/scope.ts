@@ -15,6 +15,13 @@ export class UnauthorizedError extends Error {
 export class ForbiddenError extends Error {
   status = 403;
 }
+// Thrown when the session's working property has rolled its business date under the
+// user (End-of-Day finalize). A distinct subclass — and a `code` on the wire — so the
+// client can tell "your property closed the day" apart from an ordinary expired
+// session and show the EOD notice instead of a generic "please sign in again".
+export class EodLockoutError extends UnauthorizedError {
+  code = "EOD_ROLL";
+}
 
 type PermissionRow = {
   canView: boolean;
@@ -28,6 +35,11 @@ export type AuthContext = {
   enterpriseId: string; // resolved — home enterprise, or the support-grant target
   homeEnterpriseId: string; // always the user's own enterprise, regardless of support mode
   scope: "ENTERPRISE" | "PROPERTY";
+  // The property this session is actually working in — a PROPERTY user's fixed
+  // location, or an ENTERPRISE user's currently-selected one. This is the session's
+  // "where", and it's what End-of-Day force-logout is keyed on. Null only when the
+  // enterprise has no ACTIVE property at all.
+  sessionPropertyId: string | null;
   propertyId: string | null;
   roleId: string;
   permissions: Map<string, PermissionRow>;
@@ -200,7 +212,12 @@ async function computeLicensedModules(enterpriseId: string): Promise<Set<Module>
 // JWT, which carries identity only. If the user is an Osta/INTERNAL user with a live
 // "acting as" cookie backed by a still-APPROVED, unexpired SupportAccessGrant, the
 // returned enterpriseId is the grant's target — otherwise it's always the user's own.
-export async function requireSession(): Promise<AuthContext> {
+export async function requireSession(opts?: {
+  // Only /api/session/eod-status passes this — it has to stay reachable *after* the
+  // lockout in order to tell the client why it's being signed out. Every other caller
+  // must take the throw.
+  allowDuringEodLockout?: boolean;
+}): Promise<AuthContext> {
   const session = await getSession();
   const userId = session?.id;
   if (!userId || typeof userId !== "string") {
@@ -213,21 +230,6 @@ export async function requireSession(): Promise<AuthContext> {
   });
   if (!user || !user.isActive) {
     throw new UnauthorizedError("Session invalid or account disabled");
-  }
-
-  // End-of-Day force-logout: a PROPERTY-scoped user whose token was issued before
-  // their property's EOD-invalidation watermark is signed out (must re-login) so
-  // they can't keep posting while the business date rolls. Enterprise-scoped users
-  // are unaffected. `iat` is in seconds.
-  if (user.scope === "PROPERTY" && user.propertyId) {
-    const prop = await prisma.property.findUnique({
-      where: { id: user.propertyId },
-      select: { eodSessionsInvalidAt: true },
-    });
-    const iatMs = typeof session?.iat === "number" ? session.iat * 1000 : null;
-    if (prop?.eodSessionsInvalidAt && iatMs !== null && iatMs < prop.eodSessionsInvalidAt.getTime()) {
-      throw new UnauthorizedError("Signed out for End-of-Day processing — please sign in again.");
-    }
   }
 
   const ostaEnterpriseId = await getOstaEnterpriseId();
@@ -273,6 +275,28 @@ export async function requireSession(): Promise<AuthContext> {
     }
   }
 
+  // End-of-Day force-logout. Resolved AFTER the support-grant swap above, so a support
+  // session is evaluated against the property it's actually acting inside.
+  //
+  // The rule is location-based, not scope-based: ANY session working in a property that
+  // has just rolled its business date is signed out, whether the user is bound to that
+  // one property or an enterprise admin who happens to have it selected. Otherwise an
+  // enterprise-scoped user keeps a stale business date on screen and carries on posting
+  // into a day the property has already closed. `iat` is in seconds.
+  const sessionPropertyId = await resolveSessionPropertyId(user.scope, user.propertyId, enterpriseId);
+  if (!opts?.allowDuringEodLockout && sessionPropertyId) {
+    const prop = await prisma.property.findUnique({
+      where: { id: sessionPropertyId },
+      select: { eodSessionsInvalidAt: true },
+    });
+    const iatMs = typeof session?.iat === "number" ? session.iat * 1000 : null;
+    if (prop?.eodSessionsInvalidAt && iatMs !== null && iatMs < prop.eodSessionsInvalidAt.getTime()) {
+      throw new EodLockoutError(
+        "The End-of-Day business date roll has completed for this property. Please sign in again."
+      );
+    }
+  }
+
   // Computed against the resolved (possibly support-grant-target) enterpriseId, so a
   // support session correctly reflects the TARGET enterprise's own licensing, not Osta's.
   const licensedModules = await computeLicensedModules(enterpriseId);
@@ -283,6 +307,7 @@ export async function requireSession(): Promise<AuthContext> {
     homeEnterpriseId: user.enterpriseId,
     scope: user.scope as "ENTERPRISE" | "PROPERTY",
     propertyId: user.propertyId,
+    sessionPropertyId,
     roleId: user.roleId,
     permissions,
     isInternal,
@@ -315,17 +340,29 @@ const CURRENT_PROPERTY_COOKIE = "current_property_id";
 // is what actually gates access). For a PROPERTY-scoped user it's always their single
 // fixed work location, never the cookie.
 export async function resolveCurrentPropertyId(ctx: AuthContext): Promise<string | null> {
-  if (ctx.scope === "PROPERTY") return ctx.propertyId;
+  return ctx.sessionPropertyId;
+}
+
+// The same resolution, callable from inside requireSession() before an AuthContext
+// exists. Deliberately one implementation: the property EOD signs a session out of MUST
+// be the property that session was working in, or a user could be locked out of one
+// property while looking at another.
+async function resolveSessionPropertyId(
+  scope: string,
+  userPropertyId: string | null,
+  enterpriseId: string
+): Promise<string | null> {
+  if (scope === "PROPERTY") return userPropertyId;
 
   const cookieStore = await cookies();
   const cookiePropertyId = cookieStore.get(CURRENT_PROPERTY_COOKIE)?.value;
   if (cookiePropertyId) {
     const property = await prisma.property.findUnique({ where: { id: cookiePropertyId } });
-    if (property && property.enterpriseId === ctx.enterpriseId && property.status === "ACTIVE") return property.id;
+    if (property && property.enterpriseId === enterpriseId && property.status === "ACTIVE") return property.id;
   }
 
   const firstProperty = await prisma.property.findFirst({
-    where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" },
+    where: { enterpriseId, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
   });
   return firstProperty?.id ?? null;
@@ -479,7 +516,10 @@ export function hasAnyPropertyModule(ctx: AuthContext): boolean {
 
 // Shared shape for turning a thrown UnauthorizedError/ForbiddenError into a NextResponse
 // in a route handler's catch block: `const { status, body } = toErrorResponse(e);`
-export function toErrorResponse(e: unknown): { status: number; body: { error: string } } {
+export function toErrorResponse(e: unknown): { status: number; body: { error: string; code?: string } } {
+  if (e instanceof EodLockoutError) {
+    return { status: e.status, body: { error: e.message, code: e.code } };
+  }
   if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
     return { status: e.status, body: { error: e.message } };
   }
