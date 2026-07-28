@@ -272,9 +272,67 @@ first has shipped, on branch `feature/hub-shell`.
   - Push failures are returned, never thrown, so one property cannot abort a sweep.
   - Pushing also refreshes the access token, which resets Beds24's 30-day idle clock — an
     actively-syncing property keeps its own credentials alive without the keep-alive job.
-- **Next: inbound bookings.** Webhook + `GET /bookings` polling fallback, **idempotent on
-  the OTA booking id** (`ChannelReservationRef` from the plan — not yet built), handling
-  create/modify/cancel, with the **"channel overbook" alert** from D-7 rule 4.
+- **DONE — inbound bookings, PHASE 1** (branch `feature/sync-inbound`).
+  `ChannelInboundBooking` + `src/lib/channels/inbound/` (parse, ingest, poll) + the webhook
+  at `/api/channels/webhook/[token]` + the `channel-booking-poll` job + the Hub screen at
+  `/e/{slug}/hub/channel-manager/bookings`.
+  - ⚠️ **PHASE 1 RECEIVES AND RECORDS; IT DOES NOT CREATE RESERVATIONS.** Reservation
+    creation in this app is **408 lines inline in `POST /api/reservations`**, wiring in
+    allocations, special requests, availability and stop-sale conflicts, document sequences
+    and activity logging. Reimplementing that in the inbound path would miss something.
+    **Converting these rows should go through a properly EXTRACTED reservation service** —
+    that extraction is the next slice, and it is a refactor of a heavily-used, recently
+    audited path, so it wants its own change rather than being smuggled in here.
+  - **Idempotent on `(connectionId, externalBookingId)`.** Webhook delivery is at-least-once
+    and the poller deliberately re-reads an overlapping window, so the same booking arrives
+    repeatedly; every arrival after the first updates in place. A duplicate row is a
+    duplicate guest.
+  - **Overbooking is detected and FLAGGED, never refused** (D-7 rule 4). Re-flagging clears
+    a previous acknowledgement — acknowledging one state must not silence a later problem.
+  - **The RAW payload is always stored, even when parsing fails.** The Beds24 booking shape
+    is unverified, so the raw body is the only thing guaranteed correct; with it a mis-parse
+    is replayable rather than lost. A half-understood booking is kept with a `problem` note.
+  - **Webhook auth is a per-connection URL secret**, not a payload signature: Beds24's
+    signing scheme is not publicly documented, and guessing at a security mechanism is the
+    least acceptable place to guess. If a documented scheme exists, add it ON TOP.
+    Bad token returns a bare 404 — a webhook URL is a credential and must not be probeable.
+  - **The webhook returns 200 even for a payload it cannot read.** A non-2xx makes the
+    channel retry, and retrying cannot fix an unmapped room or a malformed body — it would
+    redeliver forever while the real problem stays invisible. The booking is stored with its
+    problem noted and resolved in the Hub instead.
+  - This is the first thing to write **INBOUND** exchange-log entries; until now that filter
+    could never match anything.
+- **DONE — wire formats VERIFIED** (branch `feature/sync-verified-fields`, 2026-07-28).
+  Beds24's **official OpenAPI spec** was obtained by reading the `@lionlai/beds24-v2-sdk`
+  npm package, which is generated from it. The account-gated Swagger is no longer a blocker.
+  - **Inbound was already correct.** `id`, `roomId`, `propertyId`, `status`, `arrival`,
+    `departure`, `numAdult`, `numChild`, `firstName`, `lastName`, `email`, `price`,
+    `referer`, `apiSource`, `channel` all confirmed. `status` is a closed enum —
+    `confirmed | request | new | cancelled | black | inquiry` — which is why both
+    "cancelled" and "black" count as cancellation.
+  - **Outbound had THREE errors, now fixed:**
+    1. `roomId` is a **number**, not a string. A non-numeric external id is now skipped
+       rather than coerced into addressing the wrong room.
+    2. A stop-sale is **`override: "blackout"`**, not a `closed` boolean. `override: "none"`
+       is sent explicitly on open dates so a previously blacked-out date is actively
+       re-opened.
+    3. Prices are **sixteen NUMBERED SLOTS** (`price1`..`price16`), not a map keyed by rate
+       id. `ChannelRatePlanMap.externalRateId` therefore holds a **slot number 1–16**,
+       validated on write; the Sharing UI labels it as such.
+  - ⚠️ **From Beds24's spec, worth not rediscovering:** *"If you change override from
+    blackout to none without setting numAvail, numAvail will change to the maximum
+    possible."* Every range we send carries an explicit `numAvail`, so lifting a blackout
+    cannot silently re-open a room type at full capacity. **Do not make `numAvail` optional.**
+  - Also noted: `numAvail` may legitimately be negative in Beds24 (an overbooked room), but
+    we never send one — D-7 says publish actual availability, clamped at 0.
+  - Rate limiting is real: responses carry `X-FiveMinCreditLimit`,
+    `X-FiveMinCreditLimit-Remaining` and `-ResetsIn` headers. **Not yet read or respected** —
+    worth handling before high-frequency pushing.
+  - The spec also exposes `minStay`, `maxStay`, `multiplier` (required, default 1) and
+    per-channel `maxBookings` on the calendar. None are used yet.
+- **Next: extract a reservation-creation service**, then convert inbound bookings through
+  it. A live sandbox account is still needed to exercise the integration end to end, but the
+  field names are no longer guesses.
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`

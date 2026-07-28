@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, Building2, FileText } from "@/components/icons"
+import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert } from "@/components/icons"
 import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
@@ -26,6 +26,7 @@ const items = [
   { title: "Overview", url: "hub", icon: LayoutDashboard },
   { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
   { title: "Sharing", url: "hub/channel-manager/sharing", icon: Building2 },
+  { title: "Inbound Bookings", url: "hub/channel-manager/bookings", icon: ShieldAlert },
   { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
 ]
 

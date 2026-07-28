@@ -34,24 +34,24 @@ describe("Channel push", () => {
     it("collapses consecutive identical nights into one inclusive range", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 3, closed: false },
-          { date: "2026-03-02", available: 3, closed: false },
-          { date: "2026-03-03", available: 3, closed: false },
+          { date: "2026-03-01", available: 3, closed: false, prices: {} },
+          { date: "2026-03-02", available: 3, closed: false, prices: {} },
+          { date: "2026-03-03", available: 3, closed: false, prices: {} },
         ])
-      ).toEqual([{ from: "2026-03-01", to: "2026-03-03", numAvail: 3 }]);
+      ).toEqual([{ from: "2026-03-01", to: "2026-03-03", numAvail: 3, override: "none" }]);
     });
 
     it("splits when the number changes", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 3, closed: false },
-          { date: "2026-03-02", available: 1, closed: false },
-          { date: "2026-03-03", available: 3, closed: false },
+          { date: "2026-03-01", available: 3, closed: false, prices: {} },
+          { date: "2026-03-02", available: 1, closed: false, prices: {} },
+          { date: "2026-03-03", available: 3, closed: false, prices: {} },
         ])
       ).toEqual([
-        { from: "2026-03-01", to: "2026-03-01", numAvail: 3 },
-        { from: "2026-03-02", to: "2026-03-02", numAvail: 1 },
-        { from: "2026-03-03", to: "2026-03-03", numAvail: 3 },
+        { from: "2026-03-01", to: "2026-03-01", numAvail: 3, override: "none" },
+        { from: "2026-03-02", to: "2026-03-02", numAvail: 1, override: "none" },
+        { from: "2026-03-03", to: "2026-03-03", numAvail: 3, override: "none" },
       ]);
     });
 
@@ -60,23 +60,23 @@ describe("Channel push", () => {
       // listing, 0 leaves it up as sold out. Merging them would silently discard the
       // distinction the D-7 ruling exists to preserve.
       const ranges = compactNights([
-        { date: "2026-03-01", available: 0, closed: false },
-        { date: "2026-03-02", available: 0, closed: true },
-        { date: "2026-03-03", available: 0, closed: false },
+        { date: "2026-03-01", available: 0, closed: false, prices: {} },
+        { date: "2026-03-02", available: 0, closed: true, prices: {} },
+        { date: "2026-03-03", available: 0, closed: false, prices: {} },
       ]);
       expect(ranges).toHaveLength(3);
-      expect(ranges[1]).toEqual({ from: "2026-03-02", to: "2026-03-02", numAvail: 0, closed: true });
-      // `closed` is omitted rather than sent as false on open nights.
-      expect("closed" in ranges[0]).toBe(false);
+      expect(ranges[1]).toEqual({ from: "2026-03-02", to: "2026-03-02", numAvail: 0, override: "blackout" });
+      // An open night is actively re-opened with "none" rather than left as-is.
+      expect(ranges[0].override).toBe("none");
     });
 
     it("merges consecutive closed nights with each other", () => {
       expect(
         compactNights([
-          { date: "2026-03-01", available: 0, closed: true },
-          { date: "2026-03-02", available: 0, closed: true },
+          { date: "2026-03-01", available: 0, closed: true, prices: {} },
+          { date: "2026-03-02", available: 0, closed: true, prices: {} },
         ])
-      ).toEqual([{ from: "2026-03-01", to: "2026-03-02", numAvail: 0, closed: true }]);
+      ).toEqual([{ from: "2026-03-01", to: "2026-03-02", numAvail: 0, override: "blackout" }]);
     });
 
     it("does NOT merge across a gap in dates", () => {
@@ -84,22 +84,22 @@ describe("Channel push", () => {
       // would be silently overwritten with a value never computed for it.
       expect(
         compactNights([
-          { date: "2026-03-01", available: 2, closed: false },
-          { date: "2026-03-05", available: 2, closed: false },
+          { date: "2026-03-01", available: 2, closed: false, prices: {} },
+          { date: "2026-03-05", available: 2, closed: false, prices: {} },
         ])
       ).toEqual([
-        { from: "2026-03-01", to: "2026-03-01", numAvail: 2 },
-        { from: "2026-03-05", to: "2026-03-05", numAvail: 2 },
+        { from: "2026-03-01", to: "2026-03-01", numAvail: 2, override: "none" },
+        { from: "2026-03-05", to: "2026-03-05", numAvail: 2, override: "none" },
       ]);
     });
 
     it("merges correctly across a month boundary", () => {
       expect(
         compactNights([
-          { date: "2026-03-31", available: 1, closed: false },
-          { date: "2026-04-01", available: 1, closed: false },
+          { date: "2026-03-31", available: 1, closed: false, prices: {} },
+          { date: "2026-04-01", available: 1, closed: false, prices: {} },
         ])
-      ).toEqual([{ from: "2026-03-31", to: "2026-04-01", numAvail: 1 }]);
+      ).toEqual([{ from: "2026-03-31", to: "2026-04-01", numAvail: 1, override: "none" }]);
     });
 
     it("handles an empty night list", () => {
@@ -122,11 +122,11 @@ describe("Channel push", () => {
           roomTypeId: "a",
           roomTypeName: "A",
           roomTypeCode: "A",
-          externalRoomId: "beds-a",
+          externalRoomId: "1001",
           nights: [
-            { date: "2026-03-01", available: 2, closed: false },
-            { date: "2026-03-02", available: 2, closed: false },
-            { date: "2026-03-03", available: 0, closed: true },
+            { date: "2026-03-01", available: 2, closed: false, prices: {} },
+            { date: "2026-03-02", available: 2, closed: false, prices: {} },
+            { date: "2026-03-03", available: 0, closed: true, prices: {} },
           ],
         },
       ],
@@ -136,10 +136,10 @@ describe("Channel push", () => {
       const payload = buildCalendarPayload(plan);
       expect(payload).toHaveLength(1);
       // Our own room type id must never appear — the channel only knows its own ids.
-      expect(payload[0].roomId).toBe("beds-a");
+      expect(payload[0].roomId).toBe(1001);
       expect(payload[0].calendar).toEqual([
-        { from: "2026-03-01", to: "2026-03-02", numAvail: 2 },
-        { from: "2026-03-03", to: "2026-03-03", numAvail: 0, closed: true },
+        { from: "2026-03-01", to: "2026-03-02", numAvail: 2, override: "none" },
+        { from: "2026-03-03", to: "2026-03-03", numAvail: 0, override: "blackout" },
       ]);
     });
 
@@ -148,7 +148,8 @@ describe("Channel push", () => {
       // Sending 0 for an excluded type would actively close inventory the operator only
       // meant to stop managing from here — absence and zero are not the same instruction.
       expect(JSON.stringify(payload)).not.toContain("gone");
-      expect(payload.every((r) => r.roomId !== "gone")).toBe(true);
+      // Only the one mapped, numeric room survives into the payload.
+      expect(payload).toHaveLength(1);
     });
 
     it("counts nights across compacted ranges", () => {
@@ -202,7 +203,7 @@ describe("Channel push", () => {
         data: { propertyId: property.id, roomTypeId: rt.id, roomNumber: "201", status: "AVAILABLE" },
       });
       await prisma.channelRoomTypeMap.create({
-        data: { linkId, roomTypeId: rt.id, externalRoomId: "beds-std", shared: true },
+        data: { linkId, roomTypeId: rt.id, externalRoomId: "2002", shared: true },
       });
     });
 
@@ -226,7 +227,7 @@ describe("Channel push", () => {
       const result = await pushAvailabilityForLink({ enterpriseId, linkId, dryRun: true, days: 3 });
 
       expect(result.status).toBe("DRY_RUN");
-      expect(result.payload?.[0].roomId).toBe("beds-std");
+      expect(result.payload?.[0].roomId).toBe(2002);
       expect(result.nightCount).toBe(3);
       // Inspecting the body before it reaches an OTA is the entire point of dry run.
       expect(spy).not.toHaveBeenCalled();
@@ -248,7 +249,7 @@ describe("Channel push", () => {
       expect(push).toBeTruthy();
       expect(push![1].method).toBe("POST");
       const body = JSON.parse(String(push![1].body));
-      expect(body[0].roomId).toBe("beds-std");
+      expect(body[0].roomId).toBe(2002);
     });
 
     it("records the push in the exchange log without leaking the access token", async () => {

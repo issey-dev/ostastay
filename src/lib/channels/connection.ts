@@ -81,6 +81,8 @@ export type PublicConnection = {
   lastTokenRefreshAt: string | null;
   lastHealthCheckAt: string | null;
   lastError: string | null;
+  /** Whether an inbound webhook URL has been generated. The token itself is never returned. */
+  hasWebhook: boolean;
   /** Null until the first refresh. Negative means the idle window has already lapsed. */
   daysUntilRefreshTokenExpiry: number | null;
   needsKeepAlive: boolean;
@@ -98,6 +100,7 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
     lastTokenRefreshAt: c.lastTokenRefreshAt?.toISOString() ?? null,
     lastHealthCheckAt: c.lastHealthCheckAt?.toISOString() ?? null,
     lastError: c.lastError,
+    hasWebhook: !!c.webhookToken,
     daysUntilRefreshTokenExpiry: daysUntilRefreshTokenExpiry(c.lastTokenRefreshAt),
     needsKeepAlive: !!c.refreshToken && needsKeepAlive(c.lastTokenRefreshAt),
     refreshTokenIdleDays: REFRESH_TOKEN_IDLE_DAYS,
