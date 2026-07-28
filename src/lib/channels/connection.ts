@@ -1,16 +1,8 @@
 import type { ChannelConnection } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { encryptSecret, decryptSecret } from "@/lib/secret-crypto";
-import {
-  exchangeInviteCode,
-  refreshAccessToken,
-  isAccessTokenStale,
-  daysUntilRefreshTokenExpiry,
-  needsKeepAlive,
-  toConnectionError,
-  REFRESH_TOKEN_IDLE_DAYS,
-  type ChannelLogSink,
-} from "@/lib/channels/beds24";
+import type { ChannelLogSink } from "@/lib/channels/beds24";
+import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/channels/providers/registry";
 
 /**
  * Build the sink that turns a Beds24 exchange into a ChannelSyncLog row.
@@ -91,6 +83,7 @@ export type PublicConnection = {
 };
 
 export function toPublicConnection(c: ChannelConnection): PublicConnection {
+  const provider = getProvider(c.provider);
   return {
     id: c.id,
     provider: c.provider,
@@ -101,9 +94,9 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
     lastHealthCheckAt: c.lastHealthCheckAt?.toISOString() ?? null,
     lastError: c.lastError,
     hasWebhook: !!c.webhookToken,
-    daysUntilRefreshTokenExpiry: daysUntilRefreshTokenExpiry(c.lastTokenRefreshAt),
-    needsKeepAlive: !!c.refreshToken && needsKeepAlive(c.lastTokenRefreshAt),
-    refreshTokenIdleDays: REFRESH_TOKEN_IDLE_DAYS,
+    daysUntilRefreshTokenExpiry: provider.daysUntilRefreshTokenExpiry(c.lastTokenRefreshAt),
+    needsKeepAlive: !!c.refreshToken && provider.needsKeepAlive(c.lastTokenRefreshAt),
+    refreshTokenIdleDays: provider.refreshTokenIdleDays,
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -131,8 +124,12 @@ export async function createConnection(params: {
   enterpriseId: string;
   name: string;
   inviteCode: string;
+  /** Which channel manager this connection talks to. Defaults to Beds24 — the only
+   *  provider registered today — but every caller is free to name another once one exists. */
+  provider?: string;
 }): Promise<PublicConnection> {
-  const { enterpriseId, name, inviteCode } = params;
+  const { enterpriseId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID } = params;
+  const provider = getProvider(providerId);
 
   // Logged with no connectionId — the row does not exist yet, and a REJECTED invite code
   // never creates one. Without this, the most common setup failure would leave no trace.
@@ -140,7 +137,7 @@ export async function createConnection(params: {
   // produced (below); otherwise a connection's own log would be missing the exchange that
   // created it, which is the first thing anyone looks for.
   const setupLogIds: string[] = [];
-  const tokens = await exchangeInviteCode(
+  const tokens = await provider.exchangeInviteCode(
     inviteCode,
     makeLogSink({ enterpriseId, connectionName: name, onWrite: (id) => setupLogIds.push(id) })
   );
@@ -149,7 +146,7 @@ export async function createConnection(params: {
   const created = await prisma.channelConnection.create({
     data: {
       enterpriseId,
-      provider: "BEDS24",
+      provider: provider.id,
       name,
       refreshToken: encryptSecret(tokens.refreshToken),
       accessToken: encryptSecret(tokens.accessToken || null),
@@ -183,8 +180,9 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   if (!conn) throw new Error("Connection not found");
   if (!conn.refreshToken) throw new Error("Connection has no stored credentials");
 
+  const provider = getProvider(conn.provider);
   const cached = decryptSecret(conn.accessToken);
-  if (cached && !isAccessTokenStale(conn.accessTokenExpiresAt)) {
+  if (cached && !provider.isAccessTokenStale(conn.accessTokenExpiresAt)) {
     return cached;
   }
 
@@ -192,7 +190,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   if (!refreshToken) throw new Error("Connection has no stored credentials");
 
   try {
-    const fresh = await refreshAccessToken(
+    const fresh = await provider.refreshAccessToken(
       refreshToken,
       makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
     );
@@ -214,7 +212,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
       where: { id: connectionId },
       data: {
         status: CONNECTION_STATUS.ERROR,
-        lastError: toConnectionError(e),
+        lastError: provider.toConnectionError(e),
         lastHealthCheckAt: new Date(),
       },
     });
@@ -243,9 +241,10 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
     return toPublicConnection(updated);
   }
 
+  const provider = getProvider(conn.provider);
   const refreshToken = decryptSecret(conn.refreshToken);
   try {
-    const fresh = await refreshAccessToken(
+    const fresh = await provider.refreshAccessToken(
       refreshToken!,
       makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
     );
@@ -267,7 +266,7 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
       data: {
         status: CONNECTION_STATUS.ERROR,
         lastHealthCheckAt: new Date(),
-        lastError: toConnectionError(e),
+        lastError: provider.toConnectionError(e),
       },
     });
     return toPublicConnection(updated);
@@ -279,7 +278,8 @@ export async function reauthorizeConnection(connectionId: string, inviteCode: st
   const existing = await prisma.channelConnection.findUnique({ where: { id: connectionId } });
   if (!existing) throw new Error("Connection not found");
 
-  const tokens = await exchangeInviteCode(
+  const provider = getProvider(existing.provider);
+  const tokens = await provider.exchangeInviteCode(
     inviteCode,
     makeLogSink({
       enterpriseId: existing.enterpriseId,

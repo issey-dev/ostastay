@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
-import { isValidPriceSlot, MAX_PRICE_SLOTS } from "@/lib/channels/payload";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // Sharing / mapping: which properties a channel-manager connection covers, and how this
 // system's room types and rate plans correspond to the channel manager's own.
@@ -220,13 +220,15 @@ export async function setRatePlanMapping(params: {
     throw new ForbiddenError("Rate plan does not belong to this property");
   }
 
-  // Beds24 exposes SIXTEEN NUMBERED PRICE SLOTS (price1..price16) rather than named rates,
-  // so this stores a slot number, not an arbitrary id. Verified against Beds24's official
-  // OpenAPI spec — see src/lib/channels/payload.ts. Rejected early because a slot that
-  // cannot be turned into `priceN` would silently never be sent.
+  // What counts as a valid external rate id is provider-specific — Beds24 exposes SIXTEEN
+  // NUMBERED PRICE SLOTS (price1..price16) rather than named rates, so a mapping stores a
+  // slot number there, not an arbitrary id (see src/lib/channels/payload.ts). Dispatched
+  // through the link's own connection so a differently-shaped provider validates by its own
+  // rule without this function needing to know about it.
+  const provider = getProvider(link.connection.provider);
   const trimmedRate = externalRateId.trim();
-  if (trimmedRate && !isValidPriceSlot(trimmedRate)) {
-    throw new ForbiddenError(`Price slot must be a number from 1 to ${MAX_PRICE_SLOTS}`);
+  if (trimmedRate && !provider.isValidRateId(trimmedRate)) {
+    throw new ForbiddenError(`Invalid ${provider.rateIdLabel.toLowerCase()}`);
   }
 
   if (!externalRateId.trim()) {

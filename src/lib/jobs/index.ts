@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { needsKeepAlive } from "@/lib/channels/beds24";
+import { getProvider } from "@/lib/channels/providers/registry";
 import { testConnection } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
 import { pushAllEnabledLinks } from "@/lib/channels/push";
@@ -34,10 +34,10 @@ export const channelKeepAliveJob: Job = {
   run: async (enterpriseId) => {
     const connections = await prisma.channelConnection.findMany({
       where: { enterpriseId, refreshToken: { not: null } },
-      select: { id: true, name: true, lastTokenRefreshAt: true },
+      select: { id: true, name: true, lastTokenRefreshAt: true, provider: true },
     });
 
-    const due = connections.filter((c) => needsKeepAlive(c.lastTokenRefreshAt));
+    const due = connections.filter((c) => getProvider(c.provider).needsKeepAlive(c.lastTokenRefreshAt));
     if (due.length === 0) {
       return { itemsProcessed: 0, summary: `${connections.length} connection(s), none due` };
     }

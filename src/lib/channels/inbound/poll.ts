@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/db";
-import { authHeader, toConnectionError } from "@/lib/channels/beds24";
 import { getValidAccessToken, makeLogSink } from "@/lib/channels/connection";
-import { extractBookings } from "@/lib/channels/inbound/parse";
 import { ingestBookings } from "@/lib/channels/inbound/ingest";
-import { redactForLog } from "@/lib/channels/redact";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // The polling half of inbound.
 //
@@ -16,8 +14,6 @@ import { redactForLog } from "@/lib/channels/redact";
 // overlap costs nothing because ingestion is idempotent on the channel's booking id, and it
 // covers the cases a watermark misses: clock skew between systems, a booking modified after
 // it was first seen, and anything that arrived during a deployment.
-
-const BEDS24_API_BASE = process.env.BEDS24_API_BASE_URL ?? "https://beds24.com/api/v2";
 
 /** How far back each poll looks. Generous on purpose — see the note above. */
 export const POLL_LOOKBACK_HOURS = 48;
@@ -43,7 +39,7 @@ export type PollResult = {
 export async function pollConnection(connectionId: string): Promise<PollResult> {
   const connection = await prisma.channelConnection.findUnique({
     where: { id: connectionId },
-    select: { id: true, enterpriseId: true, name: true, refreshToken: true },
+    select: { id: true, enterpriseId: true, name: true, refreshToken: true, provider: true },
   });
   if (!connection) throw new Error("Connection not found");
 
@@ -53,50 +49,25 @@ export async function pollConnection(connectionId: string): Promise<PollResult> 
     return { ...base, status: "SKIPPED", reason: "Connection has no credentials" };
   }
 
+  const provider = getProvider(connection.provider);
   const sink = makeLogSink({
     enterpriseId: connection.enterpriseId,
     connectionName: connection.name,
     connectionId: connection.id,
   });
   const since = new Date(Date.now() - POLL_LOOKBACK_HOURS * 60 * 60 * 1000);
-  const startedAt = Date.now();
 
   try {
     const accessToken = await getValidAccessToken(connection.id);
-    const url = `${BEDS24_API_BASE}/bookings?modifiedSince=${encodeURIComponent(since.toISOString())}`;
-
-    const res = await fetch(url, { method: "GET", headers: authHeader(accessToken) });
-    const body = await res.json().catch(() => null);
-
-    await prisma.channelSyncLog
-      .create({
-        data: {
-          enterpriseId: connection.enterpriseId,
-          connectionId: connection.id,
-          connectionName: connection.name,
-          direction: "INBOUND",
-          operation: "booking.poll",
-          endpoint: "/bookings",
-          ok: res.ok,
-          httpStatus: res.status,
-          latencyMs: Date.now() - startedAt,
-          requestSummary: redactForLog({ modifiedSince: since.toISOString() }),
-          responseSummary: redactForLog(body),
-          errorMessage: res.ok ? null : `Poll failed (HTTP ${res.status})`,
-        },
-      })
-      .catch((e) => console.error("could not log poll", e));
-
-    if (!res.ok) {
-      return { ...base, status: "FAILED", reason: `Beds24 returned HTTP ${res.status}` };
-    }
-
-    const bookings = extractBookings(body);
+    const body = await provider.fetchRecentBookings(accessToken, since, sink);
+    const bookings = provider.extractBookings(body);
     const results = await ingestBookings({
       enterpriseId: connection.enterpriseId,
       connectionId: connection.id,
       bookings,
       source: "POLL",
+      parse: provider.parseBooking,
+      isCancelled: provider.isCancelledStatus,
     });
 
     return {
@@ -109,8 +80,7 @@ export async function pollConnection(connectionId: string): Promise<PollResult> 
     };
   } catch (e) {
     // Never rethrows — one unreachable connection must not stop the sweep.
-    void sink;
-    return { ...base, status: "FAILED", reason: toConnectionError(e) };
+    return { ...base, status: "FAILED", reason: provider.toConnectionError(e) };
   }
 }
 

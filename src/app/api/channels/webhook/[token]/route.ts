@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db";
 import { ingestBookings } from "@/lib/channels/inbound/ingest";
-import { extractBookings } from "@/lib/channels/inbound/parse";
 import { redactForLog } from "@/lib/channels/redact";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // Inbound booking webhook — the channel manager calling US.
 //
@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const connection = token
     ? await prisma.channelConnection.findUnique({
         where: { webhookToken: token },
-        select: { id: true, enterpriseId: true, name: true, webhookToken: true },
+        select: { id: true, enterpriseId: true, name: true, webhookToken: true, provider: true },
       })
     : null;
 
@@ -51,7 +51,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     body = null;
   }
 
-  const bookings = extractBookings(body);
+  const provider = getProvider(connection.provider);
+  const bookings = provider.extractBookings(body);
   const results =
     bookings.length > 0
       ? await ingestBookings({
@@ -59,6 +60,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
           connectionId: connection.id,
           bookings,
           source: "WEBHOOK",
+          parse: provider.parseBooking,
+          isCancelled: provider.isCancelledStatus,
         })
       : [];
 

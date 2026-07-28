@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import type { Beds24RoomCalendar } from "@/lib/channels/payload";
 
 process.env.SECRETS_ENCRYPTION_KEY = "test-push-key";
 
@@ -227,7 +228,8 @@ describe("Channel push", () => {
       const result = await pushAvailabilityForLink({ enterpriseId, linkId, dryRun: true, days: 3 });
 
       expect(result.status).toBe("DRY_RUN");
-      expect(result.payload?.[0].roomId).toBe(2002);
+      // This connection is Beds24, so the opaque dry-run payload is its wire format.
+      expect((result.payload as Beds24RoomCalendar[] | undefined)?.[0].roomId).toBe(2002);
       expect(result.nightCount).toBe(3);
       // Inspecting the body before it reaches an OTA is the entire point of dry run.
       expect(spy).not.toHaveBeenCalled();
@@ -326,7 +328,7 @@ describe("Channel push", () => {
 
       const result = await pushAvailabilityForLink({ enterpriseId, linkId, dryRun: true, days: 2 });
       // One sellable room and nothing booked.
-      expect(result.payload![0].calendar[0]).toMatchObject({ from: d(0), numAvail: 1 });
+      expect((result.payload as Beds24RoomCalendar[])[0].calendar[0]).toMatchObject({ from: d(0), numAvail: 1 });
     });
   });
 });

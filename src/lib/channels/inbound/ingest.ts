@@ -85,9 +85,13 @@ export async function ingestBooking(opts: {
   connectionId: string;
   raw: unknown;
   source: IngestSource;
+  /** Defaults to Beds24's parser. Pass the connected provider's own when it differs. */
+  parse?: (raw: unknown) => ParsedBooking;
+  /** Defaults to Beds24's cancellation words. Pass the connected provider's own when it differs. */
+  isCancelled?: (status: string | null) => boolean;
 }): Promise<IngestResult> {
-  const { enterpriseId, connectionId, raw, source } = opts;
-  const parsed: ParsedBooking = parseBeds24Booking(raw);
+  const { enterpriseId, connectionId, raw, source, parse = parseBeds24Booking, isCancelled = isCancelledStatus } = opts;
+  const parsed: ParsedBooking = parse(raw);
   const rawPayload = safeStringify(raw);
 
   // Without a booking id there is no idempotency key, so storing it would risk duplicating
@@ -114,7 +118,7 @@ export async function ingestBooking(opts: {
   // Only meaningful for a live booking we can actually place. A cancellation cannot
   // overbook anything, and an unmapped one cannot be checked.
   let overbooking = { isOverbooking: false, note: null as string | null };
-  const cancelled = isCancelledStatus(parsed.channelStatus);
+  const cancelled = isCancelled(parsed.channelStatus);
   if (mapping && parsed.arrival && parsed.departure && !cancelled) {
     overbooking = await detectOverbooking({
       propertyId: mapping.propertyId,
@@ -188,6 +192,8 @@ export async function ingestBookings(opts: {
   connectionId: string;
   bookings: unknown[];
   source: IngestSource;
+  parse?: (raw: unknown) => ParsedBooking;
+  isCancelled?: (status: string | null) => boolean;
 }): Promise<IngestResult[]> {
   const results: IngestResult[] = [];
   for (const raw of opts.bookings) {
@@ -198,6 +204,8 @@ export async function ingestBookings(opts: {
           connectionId: opts.connectionId,
           raw,
           source: opts.source,
+          parse: opts.parse,
+          isCancelled: opts.isCancelled,
         })
       );
     } catch (e) {

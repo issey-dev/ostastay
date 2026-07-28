@@ -268,6 +268,55 @@ export async function pushCalendar(
   });
 }
 
+/**
+ * Fetch bookings modified since a given time. Returns the raw parsed JSON body —
+ * envelope shape is not assumed here; extractBookings() upstream tolerates the several
+ * plausible shapes Beds24 might return, since the exact one is unverified against a real
+ * webhook or poll response.
+ */
+export async function fetchBookings(accessToken: string, since: Date, sink?: ChannelLogSink): Promise<unknown> {
+  const startedAt = Date.now();
+  const endpoint = "/bookings";
+  const requestSummary = redactForLog({ modifiedSince: since.toISOString() });
+  const base = { direction: "INBOUND" as const, operation: "booking.poll", endpoint, requestSummary };
+
+  let res: Response;
+  try {
+    res = await fetch(`${BEDS24_API_BASE}${endpoint}?modifiedSince=${encodeURIComponent(since.toISOString())}`, {
+      method: "GET",
+      headers: authHeader(accessToken),
+    });
+  } catch (e) {
+    const message = `Could not reach Beds24: ${e instanceof Error ? e.message : "network error"}`;
+    await emit(sink, {
+      ...base,
+      ok: false,
+      httpStatus: null,
+      latencyMs: Date.now() - startedAt,
+      responseSummary: "",
+      errorMessage: redactErrorMessage(message),
+    });
+    throw new ChannelApiError(message, 0);
+  }
+
+  const latencyMs = Date.now() - startedAt;
+  const body = await res.json().catch(() => null);
+
+  await emit(sink, {
+    ...base,
+    ok: res.ok,
+    httpStatus: res.status,
+    latencyMs,
+    responseSummary: redactForLog(body),
+    errorMessage: res.ok ? null : `Poll failed (HTTP ${res.status})`,
+  });
+
+  if (!res.ok) {
+    throw new ChannelApiError(`Beds24 returned HTTP ${res.status}`, res.status);
+  }
+  return body;
+}
+
 /** True when the cached access token is missing or close enough to expiry to re-mint. */
 export function isAccessTokenStale(expiresAt: Date | null | undefined): boolean {
   if (!expiresAt) return true;
