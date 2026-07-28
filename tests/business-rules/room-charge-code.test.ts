@@ -20,6 +20,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -66,8 +67,8 @@ async function setup(opts: {
   });
 
   // Legacy ROOM code always present as the last-resort fallback.
-  await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room" } });
-  const accom = await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ACCOM", description: "Accommodation", category: "ROOM" } });
+  await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
+  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "ROOM_REVENUE" });
 
   const ratePlan = await prisma.ratePlan.create({
     data: {

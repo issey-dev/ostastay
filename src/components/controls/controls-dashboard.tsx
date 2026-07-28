@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Compass,
   Sparkles,
+  Receipt,
 } from "@/components/icons"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { GeneralSettingsManager } from "@/components/settings/general-settings-manager"
@@ -30,8 +31,10 @@ import { FacilityAmenitiesManager } from "@/components/settings/facility-ameniti
 import { OutletsManager } from "@/components/controls/outlets-manager"
 import { TaxManager } from "@/components/controls/tax-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
+import { ChargeGroupsManager } from "@/components/controls/charge-groups-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
 import { PostingDefaultsManager } from "@/components/controls/posting-defaults-manager"
+import { SettlementDefaultsManager } from "@/components/controls/settlement-defaults-manager"
 import { FeeRulesManager } from "@/components/controls/fee-rules-manager"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
@@ -169,21 +172,40 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       icon: Wallet,
       render: () => (
         <div className="space-y-6">
-          <ControlsCard title="Tax" description="Configure Maldives Tax (Green Tax, GST, Service Charge) and any Custom Tax profiles.">
+          <ControlsCard title="Tax" description="Configure Maldives Tax (Green Tax, GST, Service Charge) and any Custom Tax profiles. Which charge code each levy posts against is set under Cashiering > Posting Defaults.">
             <TaxManager />
-          </ControlsCard>
-          <ControlsCard title="Charge Codes" description="System-wide transaction codes, grouped by category for reporting — used by Night Audit and Cashiering.">
-            <ChargeCodesManager />
           </ControlsCard>
           <PaymentMethodsManager
             title="Payment Methods"
             description="Configure accepted payment methods like Cash, Credit Cards, Bank Transfers, or City Ledger."
           />
-          <ControlsCard title="Posting & Settlement Defaults" description="Which charge code the nightly room charge posts against, which City Ledger method settles debtor folios at checkout, and which charge code posts a Travel Agent commission credit.">
-            <PostingDefaultsManager />
+          <ControlsCard title="Settlement Defaults" description="Which City Ledger payment method settles a debtor folio at checkout.">
+            <SettlementDefaultsManager />
           </ControlsCard>
           <ControlsCard title="Deposit & Fee Rules" description="Per-property Deposit, Cancellation, and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
             <FeeRulesManager />
+          </ControlsCard>
+        </div>
+      ),
+    },
+    // Everything charge-code: the Group -> Subgroup -> Code hierarchy that classifies
+    // revenue, the generates cascade that posts derived levies, and the role -> code
+    // pointers billing resolves through. Tax rates and Payment Methods stay in Finance
+    // — a charge code only ever *references* those.
+    {
+      key: "cashiering",
+      label: "Cashiering",
+      icon: Receipt,
+      render: () => (
+        <div className="space-y-6">
+          <ControlsCard title="Charge Groups & Subgroups" description="The two levels above a charge code. A Group carries the reporting bucket every revenue, tax and EOD report rolls up into; a Subgroup splits it further for detail. The canonical set is system-managed — rename freely, and add your own alongside.">
+            <ChargeGroupsManager />
+          </ControlsCard>
+          <ControlsCard title="Charge Codes" description="The transaction codes everything posts against — Night Audit, POS, folios and billing. Each is classified by Subgroup (that's what reports group by), carries a posting type, and can automatically generate derived charges such as Green Tax.">
+            <ChargeCodesManager />
+          </ControlsCard>
+          <ControlsCard title="Posting Defaults" description="Which charge code plays each system role: the nightly room charge, the Green Tax levy, and the Travel Agent commission credit. Billing resolves these by role, never by a hardcoded code name.">
+            <PostingDefaultsManager />
           </ControlsCard>
         </div>
       ),

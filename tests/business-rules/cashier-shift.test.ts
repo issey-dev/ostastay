@@ -18,6 +18,7 @@ const lineItemsRoute = await import("@/app/api/folios/[id]/line-items/route");
 const paymentsRoute = await import("@/app/api/folios/[id]/payments/route");
 const statusRoute = await import("@/app/api/cashiering/status/route");
 const ensureRoute = await import("@/app/api/cashiering/ensure/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, propertyId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -49,8 +50,8 @@ describe("Cashier shift: per-user/property, auto-open, charge attribution", () =
     const rt = await prisma.roomType.create({ data: { propertyId, name: "Std", code: "STD", maxOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: "201", status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    roomCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: `ROOM-${uniq()}`, description: "Room", category: "ROOM" } })).id;
-    fbCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: `FB-${uniq()}`, description: "Food", category: "FOOD_BEVERAGE" } })).id;
+    roomCodeId = (await customChargeCode(enterpriseId, { code: `ROOM-${uniq()}`, description: "Room", subgroupCode: "ROOM_REVENUE" })).id;
+    fbCodeId = (await customChargeCode(enterpriseId, { code: `FB-${uniq()}`, description: "Food", subgroupCode: "RESTAURANT" })).id;
     cashMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } })).id;
     const passwordHash = await bcrypt.hash("password123", 10);
     const user = await prisma.user.create({ data: { enterpriseId, email: `cs-${uniq()}@test.local`, passwordHash, firstName: "Front", lastName: "Desk", roleId: roleIds["Front Desk"] ?? roleIds["Admin"], scope: "PROPERTY", propertyId } });

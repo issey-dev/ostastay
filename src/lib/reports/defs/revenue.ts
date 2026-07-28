@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { rangeBounds } from "@/lib/reports/params";
 import { guestName, propertyOrThrow } from "@/lib/reports/defs/_shared";
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
+import { LINE_BUCKET_INCLUDE, lineReportBucket } from "@/lib/posting/report-bucket";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -153,7 +154,7 @@ const production: ReportDef = {
       where: { propertyId, travelAgentId: { not: null }, checkInDate: { gte, lt } },
       include: {
         travelAgent: { select: { firstName: true, lastName: true, companyName: true, profileType: true } },
-        folios: { include: { lineItems: { include: { chargeCode: { select: { category: true, id: true } } } } } },
+        folios: { include: { lineItems: { include: LINE_BUCKET_INCLUDE } } },
       },
     });
 
@@ -170,7 +171,7 @@ const production: ReportDef = {
       for (const f of r.folios) {
         for (const li of f.lineItems) {
           if (li.isVoid) continue;
-          if (li.chargeCode?.category === "ROOM") row.roomRevenue += li.amount + li.taxAmount + (li.serviceChargeAmount || 0);
+          if (lineReportBucket(li) === "ROOM") row.roomRevenue += li.amount + li.taxAmount + (li.serviceChargeAmount || 0);
           if (settings?.commissionChargeCodeId && li.chargeCode?.id === settings.commissionChargeCodeId) row.commission += Math.abs(li.amount);
         }
       }

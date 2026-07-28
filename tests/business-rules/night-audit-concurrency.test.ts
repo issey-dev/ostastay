@@ -15,6 +15,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -52,7 +53,7 @@ describe("Night Audit concurrency — no double-post, no double-roll (A1)", () =
     const rt = await prisma.roomType.create({ data: { propertyId, name: "Std", code: "STD", maxOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: `N${uniq().slice(-4)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await prisma.chargeCode.create({ data: { enterpriseId: enterprise.id, code: "ROOM", description: "Room Revenue" } });
+    await customChargeCode(enterprise.id, { code: "ROOM", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `nac-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "NAC", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;

@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useFieldArray } from "react-hook-form"
 import * as z from "zod"
 import { Plus, Pencil, Trash2, X, DoorOpen, Sparkles } from "lucide-react"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -435,7 +436,7 @@ export function SpaTreatmentsManager({ categories, refreshKey }: { categories: S
                           value={field.value}
                           onChange={field.onChange}
                           placeholder="Select charge code..."
-                          options={chargeCodes.map((c) => ({ label: `${c.code} — ${c.description}`, value: c.id }))}
+                          options={chargeCodeOptions(chargeCodes, { buckets: ["OTHER"] })}
                         />
                       </FormControl>
                       <FormMessage />

@@ -5,6 +5,7 @@ import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/sco
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { resolveChargeTax } from "@/lib/tax-calc";
+import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 
 const INVOICE_INCLUDE = {
   lineItems: {
@@ -112,6 +113,7 @@ export async function GET(
         exchangeToCurrency: "MVR",
         systemDate: new Date(),
         defaultAccommodationChargeCodeId: null,
+        defaultGreenTaxChargeCodeId: null,
         cityLedgerPaymentMethodId: null,
         commissionChargeCodeId: null,
         invoiceBrandName: "Cozy Guest House",
@@ -122,6 +124,7 @@ export async function GET(
         invoicePhone: "",
         invoiceEmail: "",
         invoiceAddress: "",
+        defaultFolioStyle: "detailed",
         invoiceHeaderText: "",
         invoiceFooterText: "Thank you for staying with us!",
         invoicePaymentTerms: "Payment is due immediately upon check-out.",
@@ -191,37 +194,116 @@ export async function GET(
         const roomTypeName = new Map(reservation.assignments.map((a) => [a.roomTypeId, a.roomType?.name ?? "Accommodation"]));
         const proformaLines: any[] = [];
         let i = 0;
-        const line = (opts: { description: string; code: string; amount: number; tax?: number; sc?: number; date: Date }) => ({
-          id: `proforma-${i++}`,
-          date: opts.date,
-          description: opts.description,
-          reference: null,
-          amount: opts.amount,
-          taxAmount: opts.tax ?? 0,
-          serviceChargeAmount: opts.sc ?? 0,
-          isVoid: false,
-          chargeCode: { code: opts.code, description: opts.description },
+
+        // The proforma's lines are projections, not postings — but the code printed
+        // beside each must still be the property's real one, resolved by role rather
+        // than the literal "ROOM"/"GTX" this used to hardcode.
+        const [accommodationCode, greenTaxCode] = await Promise.all([
+          resolveChargeCode(enterpriseId, "ACCOMMODATION", { settings }),
+          resolveChargeCode(enterpriseId, "GREEN_TAX", { settings }),
+        ]);
+        const roomCodeLabel = accommodationCode?.code ?? "ROOM";
+        const greenTaxCodeLabel = greenTaxCode?.code ?? "GTX";
+
+        // Where each code's Service Charge and GST would post if this projection were
+        // actually posted (see src/lib/posting/charge-tree.ts — tax is attached at group
+        // level). The proforma has to split the same way the folio will, or the estimate
+        // and the eventual bill would read differently line for line.
+        const codesWithGenerates = await prisma.chargeCode.findMany({
+          where: { enterpriseId },
+          select: {
+            code: true,
+            generatesFrom: {
+              where: { isActive: true, method: { in: ["SERVICE_CHARGE", "GST"] } },
+              select: { method: true, generatedCode: { select: { code: true, description: true } } },
+            },
+          },
         });
+        const taxRoutesByCode = new Map(
+          codesWithGenerates.map((c) => [
+            c.code,
+            {
+              serviceCharge: c.generatesFrom.find((g) => g.method === "SERVICE_CHARGE")?.generatedCode ?? null,
+              gst: c.generatesFrom.find((g) => g.method === "GST")?.generatedCode ?? null,
+            },
+          ])
+        );
+
+        // Emits the projected charge plus, where the code routes them, its own Service
+        // Charge and GST lines — mirroring exactly what postCharge writes, including the
+        // generatedFromLineItemId link the folio styles group on.
+        const line = (opts: { description: string; code: string; amount: number; tax?: number; sc?: number; date: Date }) => {
+          const routes = taxRoutesByCode.get(opts.code);
+          const tax = opts.tax ?? 0;
+          const sc = opts.sc ?? 0;
+          const routedSc = routes?.serviceCharge && Math.abs(sc) > 0.005 ? sc : 0;
+          const routedGst = routes?.gst && Math.abs(tax) > 0.005 ? tax : 0;
+
+          const parentId = `proforma-${i++}`;
+          proformaLines.push({
+            id: parentId,
+            date: opts.date,
+            description: opts.description,
+            reference: null,
+            amount: opts.amount,
+            taxAmount: tax - routedGst,
+            serviceChargeAmount: sc - routedSc,
+            isVoid: false,
+            generatedFromLineItemId: null,
+            chargeCode: { code: opts.code, description: opts.description },
+          });
+          if (routedSc) {
+            proformaLines.push({
+              id: `proforma-${i++}`, date: opts.date,
+              description: routes!.serviceCharge!.description, reference: null,
+              amount: 0, taxAmount: 0, serviceChargeAmount: routedSc, isVoid: false,
+              generatedFromLineItemId: parentId,
+              chargeCode: routes!.serviceCharge!,
+            });
+          }
+          if (routedGst) {
+            proformaLines.push({
+              id: `proforma-${i++}`, date: opts.date,
+              description: routes!.gst!.description, reference: null,
+              amount: 0, taxAmount: routedGst, serviceChargeAmount: 0, isVoid: false,
+              generatedFromLineItemId: parentId,
+              chargeCode: routes!.gst!,
+            });
+          }
+        };
+
+        // quote.allocations carries the ALLOCATION's own code ("BF"), not a charge code,
+        // so map each to the code it actually posts against before looking up its taxes.
+        const allocationChargeCode = new Map<string, string>();
+        if (quote.allocations.length > 0) {
+          const allocRows = await prisma.allocation.findMany({
+            where: { id: { in: quote.allocations.map((al) => al.allocationId) } },
+            select: { id: true, chargeCode: { select: { code: true } } },
+          });
+          for (const row of allocRows) {
+            if (row.chargeCode?.code) allocationChargeCode.set(row.id, row.chargeCode.code);
+          }
+        }
 
         reservation.assignments.forEach((a) => {
           const seg = quote.segments.find((s) => s.roomTypeId === a.roomTypeId && s.ratePlanId === a.ratePlanId);
           if (!seg) return;
-          proformaLines.push(line({
+          line({
             description: `Accommodation — ${roomTypeName.get(a.roomTypeId)} (${seg.nights} night${seg.nights === 1 ? "" : "s"})`,
-            code: "ROOM", amount: seg.roomBase, tax: seg.roomTax, sc: seg.roomServiceCharge, date: a.startDate,
-          }));
+            code: roomCodeLabel, amount: seg.roomBase, tax: seg.roomTax, sc: seg.roomServiceCharge, date: a.startDate,
+          });
         });
         const extraBase = quote.totals.extraOccupancyBase;
         if (extraBase > 0.005) {
           const extraTax = quote.segments.reduce((s, x) => s + x.extraOccupancyTax, 0);
           const extraSc = quote.segments.reduce((s, x) => s + x.extraOccupancyServiceCharge, 0);
-          proformaLines.push(line({ description: "Extra Occupancy Charge", code: "ROOM", amount: extraBase, tax: extraTax, sc: extraSc, date: reservation.checkInDate }));
+          line({ description: "Extra Occupancy Charge", code: roomCodeLabel, amount: extraBase, tax: extraTax, sc: extraSc, date: reservation.checkInDate });
         }
         quote.allocations.forEach((al) => {
-          proformaLines.push(line({ description: al.name, code: al.code, amount: al.base, tax: al.tax, sc: al.serviceCharge, date: reservation.checkInDate }));
+          line({ description: al.name, code: allocationChargeCode.get(al.allocationId) ?? al.code, amount: al.base, tax: al.tax, sc: al.serviceCharge, date: reservation.checkInDate });
         });
         if (quote.greenTax.enabled && quote.greenTax.total > 0.005) {
-          proformaLines.push(line({ description: "Green Tax", code: "GTX", amount: quote.greenTax.total, date: reservation.checkInDate }));
+          line({ description: "Green Tax", code: greenTaxCodeLabel, amount: quote.greenTax.total, date: reservation.checkInDate });
         }
 
         // Hotel-booked transport — projected exactly like Daily Details so the proforma
@@ -242,10 +324,10 @@ export async function GET(
             const t = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes: folio.property.pricesIncludeTaxes });
             const dir = leg.direction === "PICKUP" ? "Pickup" : "Dropoff";
             const realizeDate = leg.transportTime ?? leg.carrierTime ?? (leg.direction === "PICKUP" ? reservation.checkInDate : reservation.checkOutDate);
-            proformaLines.push(line({
+            line({
               description: `Transport – ${dir}${leg.transportType ? ` (${leg.transportType})` : ""}`,
               code: code.code, amount: t.baseAmount, tax: t.taxAmount, sc: t.serviceChargeAmount, date: realizeDate,
-            }));
+            });
           }
         }
 
@@ -258,23 +340,56 @@ export async function GET(
       }
     }
 
-    // A walk-in bill raised "on behalf of" an outlet prints the outlet's own header
-    // (name/address/tax no) instead of the guest-house one, and shows the outlet check
-    // number as a reference. Only walk-in folios carry a check with folioId set (one
-    // check == one walk-in bill == one outlet). The legal document number is still the
-    // TAX_INVOICE number allocated above.
-    const outletCheck = await prisma.outletCheck.findFirst({
+    // WHOSE header the document prints under. An outlet carries its own business
+    // identity (name/address/contact/tax no — Controls > Outlets), so a bill for its
+    // trade can be raised on its behalf rather than the property's.
+    //
+    // Two ways an outlet is in the picture:
+    //   * the folio IS the outlet's — a walk-in bill, which carries a check with
+    //     folioId set (one check == one walk-in bill == one outlet). This still
+    //     defaults to the outlet's header, as before.
+    //   * the folio merely CONTAINS the outlet's charges — a guest's room folio with a
+    //     spa treatment on it. That defaults to the property, since the hotel is
+    //     billing, but the outlet is offered so a separate bill can be raised under it.
+    //
+    // `?header=` overrides either default with a specific outlet id, or "property".
+    // The legal document number is still the one allocated above, whichever header wins.
+    const walkInCheck = await prisma.outletCheck.findFirst({
       where: { folioId: folio.id },
-      include: { outlet: { select: { name: true, address: true, email: true, phone: true, taxNo: true } } },
+      include: { outlet: { select: { id: true, name: true, address: true, email: true, phone: true, taxNo: true } } },
     });
-    const outletHeader = outletCheck?.outlet
+
+    // Every outlet with activity on this folio, for the header picker.
+    const outletsOnFolio = await prisma.outlet.findMany({
+      where: {
+        propertyId: folio.propertyId,
+        OR: [
+          { folioLineItems: { some: { folioId: folio.id } } },
+          ...(walkInCheck?.outlet ? [{ id: walkInCheck.outlet.id }] : []),
+        ],
+      },
+      select: { id: true, name: true, address: true, email: true, phone: true, taxNo: true },
+      orderBy: { name: "asc" },
+    });
+
+    const headerParam = url.searchParams.get("header");
+    const chosenOutlet =
+      headerParam === "property"
+        ? null
+        : headerParam
+          ? outletsOnFolio.find((o) => o.id === headerParam) ?? null
+          : walkInCheck?.outlet ?? null; // no explicit choice — keep the walk-in default
+
+    const outletHeader = chosenOutlet
       ? {
-          name: outletCheck.outlet.name,
-          address: outletCheck.outlet.address,
-          email: outletCheck.outlet.email,
-          phone: outletCheck.outlet.phone,
-          taxNo: outletCheck.outlet.taxNo,
-          checkNumber: outletCheck.checkNumber,
+          id: chosenOutlet.id,
+          name: chosenOutlet.name,
+          address: chosenOutlet.address,
+          email: chosenOutlet.email,
+          phone: chosenOutlet.phone,
+          taxNo: chosenOutlet.taxNo,
+          // Only a walk-in bill has a check number to quote, and only its own.
+          checkNumber: walkInCheck && walkInCheck.outlet?.id === chosenOutlet.id ? walkInCheck.checkNumber : null,
         }
       : null;
 
@@ -282,7 +397,13 @@ export async function GET(
       folio: responseFolio,
       settings,
       documentType,
-      outletHeader
+      outletHeader,
+      // What the print dialog offers as header choices, and which one is in effect.
+      headerOptions: {
+        propertyName: folio.property.name,
+        outlets: outletsOnFolio.map((o) => ({ id: o.id, name: o.name })),
+        selected: chosenOutlet?.id ?? "property",
+      },
     });
 
   } catch (error) {

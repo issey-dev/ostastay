@@ -87,6 +87,9 @@
   cards under Finance (previously one combined `FinancialsManager`).
 - **Charge Code categories** (for reporting, not tax behavior):
   `ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | PAYMENT | SYSTEM`.
+  **Superseded 2026-07-27** by the Group → Subgroup → Code hierarchy — see "Charge Code
+  hierarchy, generates & the Cashiering panel" below. The flat category string survives
+  only as a deprecated mirror column.
 - Renamed "Maldives Tax Engine" → **"Maldives Tax"**, "Custom Tax Profiles" →
   **"Custom Tax"**.
 - **Maldives tax calculation order** (verbatim example given): base amount $100, SVC
@@ -168,6 +171,124 @@
 - **Charge code tax assignment**: when adding a Charge Code, the user picks **Default**
   (uses the Maldives Tax engine) or **Custom** (picks a specific Custom Tax profile).
   Modeled as `ChargeCode.useDefaultTax` (default `true`) + nullable `taxProfileId`.
+
+## Charge Code hierarchy, generates & the Cashiering panel (2026-07-27)
+
+Implements [/CHARGE_CODE_PLAN.md](../../CHARGE_CODE_PLAN.md). Supersedes the flat
+"Charge Code categories" list above.
+
+- **Three levels, Opera-modelled**: `ChargeGroup` → `ChargeSubgroup` → `ChargeCode`.
+  The **Group** carries `reportBucket`, the one closed reporting classification
+  (`ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM`) that every
+  revenue, tax, EOD and analytics report now rolls up into. The seven canonical groups
+  and their subgroups are system-seeded at property onboarding; a property may rename
+  them and add its own alongside, but cannot change a system group's code or bucket.
+- **Posting type on the code** (`CHARGE | TAX | CREDIT | NON_REVENUE`) makes explicit what
+  used to be implied by the code string. A `TAX` code is a **levy**: posted at face value,
+  never itself service-charged or GST'd, and excluded from the GST base on every report.
+  That is what replaced the hardcoded `code === "GTX"` special-cases.
+- **Nothing resolves a charge code by name any more.** Billing resolves by *role*
+  (`ACCOMMODATION` / `GREEN_TAX` / `COMMISSION`) through the enterprise's own pointers in
+  Controls → Cashiering → Posting Defaults, falling back to the system-seeded code.
+
+**Tax is attached at GROUP level** (owner, 2026-07-27): *"attach the taxes on group
+level — each distinct group mentioned should generate distinct tax charge codes but same
+default rule"*, and *"the purpose of defining generates on charge codes is so that
+whenever main charge code is posted taxes are auto calculated and posted through the
+system."*
+
+- Every revenue group owns a **Service Charge** and a **GST** charge code —
+  `SVCACM`/`GSTACM` for Accommodation, `SVCFNB`/`GSTFNB` for F&B, `SVCMPL`/`GSTMPL` for
+  Meal Plans, `SVCTRN`/`GSTTRN` for Transport, `SVCSPA`/`GSTSPA` for Spa,
+  `SVCEXC`/`GSTEXC` for Excursions, `SVCOTH`/`GSTOTH` for Other. Every posting code in a
+  group generates its group's pair, so tax attribution follows the revenue automatically.
+- **Same rule, different destination.** The `SERVICE_CHARGE` and `GST` generate methods
+  compute nothing: `src/lib/tax-calc.ts` resolves the charge exactly as before and the
+  generate only declares where each amount posts. One calculation, many codes — so the
+  groups cannot drift apart, and changing the GST rate in Finance > Tax moves all of them.
+- **Posting a charge posts its taxes.** The tax lands on its own folio line against the
+  group's code; the parent line keeps only its net. Each tax amount stays in the SAME
+  column it used to occupy on the parent (`serviceChargeAmount` / `taxAmount`), so folio
+  totals and every existing tax report are unchanged — the money moved, it wasn't added.
+- **Cancellation and no-show fees are GST-bearing but carry no service charge** — no
+  service was rendered. Changeable per property in the Generates editor.
+- **Deposits, commissions, payment and system codes are never taxed.**
+
+**Tax stays exactly where it was configured — this only chooses where it lands.** Owner
+direction, 2026-07-27: *"Tax Generates should work with the current tax configuration
+implemented — just make adjustments to define the charge codes alongside the default
+Maldives tax config or custom tax profile."*
+
+- The **generates** mechanism (posting one code auto-posts derived codes) has a
+  `GREEN_TAX` method that reads `EnterpriseSettings.greenTax*` at posting time. The rates
+  are **not** copied onto the generate row. So **Controls → Finance → Tax remains the one
+  place Green Tax amounts (and the on/off switch) are edited**, and a change there takes
+  effect on the next posting with no charge-code edit.
+- A charge code still attaches to the **Maldives Tax engine** or a **Custom Tax profile**
+  exactly as before (`useDefaultTax` / `taxProfileId`). The generates engine never
+  re-implements or bypasses `src/lib/tax-calc.ts`, which stays the single tax authority.
+- Green Tax is treated as a rule about **accommodation**, not about one code: any code in
+  the `ROOM` bucket levies it (a new one gets the generate row seeded on create, and Night
+  Audit supplies it implicitly for codes that predate the hierarchy). A generate row
+  actually stored on a code always wins, so deleting one sticks.
+
+**Standard chart of accounts** (owner, 2026-07-27 — *"clean slate"*): a property is
+seeded with 10 groups / 26 subgroups / 48 charge codes covering Accommodation, one F&B
+outlet, Meal Plans, Transport, Spa, Excursions, Other Revenue, all the per-group tax
+codes, Non-Revenue (commission, deposits, payment movements) and System. `CXL`, `NOSHW`
+and `DEP` each get their own code, and each property's Deposit / Cancellation / No-Show
+fee rule is created already linked to it — **inactive at zero**, because a fee that
+charges real money is the owner's decision, not a seeder's. Seeded by
+`scripts/seed/seed-charge-codes.ts` and, identically, at property onboarding.
+
+**RULE #1 — a posting always posts its generates** (owner, 2026-07-27, emphatic):
+*"ALL POSTINGS THAT HAS GENERATES ENABLED MUST POST GENERATES … it should not falter no
+matter what the situation."* Enforced structurally — no route builds a `FolioLineItem` by
+hand; everything goes through `postCharge`. The guard grep is in CHARGE_CODE_PLAN.md §10.
+Two consequences worth knowing:
+- **Only a CHARGE is a taxable event.** TAX / CREDIT / NON_REVENUE codes post at face
+  value, which is what lets a commission credit or a deposit share the posting path.
+- **Cancellation and no-show fees are now taxed.** A fee rule's amount is treated like
+  every other configured price — gross or net per the property's "Prices Include Taxes"
+  setting — so the guest is charged the configured amount, split into net + GST rather
+  than posted untaxed as before.
+
+**VAT/GST NEVER generates on a payment** (owner, 2026-07-27): *"VAT does not generate on
+any payments and is not allowed under any circumstances."* Only a `CHARGE` posting type is
+a taxable event — a payment, refund, paid-out, deposit, commission or system adjustment
+moves money that has already been taxed, so tax on it would be charging twice. Enforced in
+three places: the generates API refuses to create or edit such a row (including one
+disguised as a `PERCENT` targeting a tax code), `postCharge` filters it out at posting
+time so a hand-edited database still can't produce tax, and the Generates editor doesn't
+offer the tax methods or tax targets on a non-sale code. `canGenerateTax()` in
+charge-tree.ts is the single predicate.
+
+**Charge-code pickers are filtered and grouped** (2026-07-27): the standard chart is 48
+codes, most of which must never be hand-picked — the 15 tax codes are posted BY generates,
+the System codes are the app's own movements. `src/lib/charge-code-options.ts` is the one
+place that judgement lives; every picker in the app funnels through it and widens
+explicitly (`includeTax`, `includeNonRevenue`, `buckets`) rather than re-deciding locally.
+
+**Outlet charge codes are picked at Group / Subgroup / Code level** (owner, 2026-07-27):
+properties organise codes subgroup-wise per outlet, so an outlet's pool is selected by
+ticking a whole Group or Subgroup, with individual codes as the exception. Tax and System
+codes aren't listed at all — nothing sold over a counter.
+
+**Folio presentation styles** (owner, 2026-07-27): a Proforma / Tax Invoice / Interim Bill
+asks for a layout before it is generated — **Detailed** (every transaction, taxes as their
+own lines), **Detailed — taxes merged** (the usual guest folio), **Summary by charge
+code**, **Summary by date**, **Summary by check** (outlet charges rolled to their sales
+check). Every style totals to the same figure; grouping never changes what is owed. Lives
+in `src/lib/folio-presentation.ts`. The property's default is set in **Stationaries >
+Invoices > Default Folio Style** (`EnterpriseSettings.defaultFolioStyle`); the picker opens
+on it and front office can still override for one document.
+
+**Controls layout** (owner direction, 2026-07-27): a **new Cashiering panel** holds
+everything charge-code — Charge Groups & Subgroups, Charge Codes (incl. the Generates
+editor), and Posting Defaults. **Tax and Payment Methods stay in the Finance module.**
+The old combined "Posting & Settlement Defaults" card was split accordingly: the
+charge-code roles moved to Cashiering, and the City Ledger settlement *payment method*
+stayed in Finance beside Payment Methods.
 
 ## Folio Printing (2026-07-18)
 
@@ -2194,3 +2315,28 @@ days ahead or at the door. It must be days ahead.
 This does not weaken the rule above — the desk never *chose* this overbook, so it must be
 surfaced as an exception needing resolution, not folded in silently as though it were a
 deliberate manual overbook.
+
+### End-of-Day force logout is keyed on location, not user scope — owner ruling (2026-07-28)
+
+**Any user with an active session in a property that has just run its End-of-Day roll is
+signed out — regardless of their scope, including the person who ran the audit.**
+
+The system therefore has to know *where* each session is working, not just who it belongs
+to. That "where" is `AuthContext.sessionPropertyId`: a PROPERTY-scoped user's fixed
+location, or an ENTERPRISE-scoped user's currently-selected property (the
+`current_property_id` cookie). `resolveCurrentPropertyId()` and the force-logout check now
+share one resolver, so the property a session is signed out of is always the property it
+was working in.
+
+The previous rule gated on `scope === "PROPERTY"`, which left enterprise admins holding a
+stale business date on screen and still able to post into a day the property had closed.
+
+Scope of the lockout is the property, not the enterprise: the same enterprise admin, with
+a different property selected, is unaffected.
+
+Because the notice matters as much as the logout, `requireSession()` throws a distinct
+`EodLockoutError` (`code: "EOD_ROLL"` on the wire) rather than a generic 401, and
+`/api/session/eod-status` is the **one route allowed to answer through the lockout**
+(`requireSession({ allowDuringEodLockout: true })`) — otherwise the browser could never
+explain why the user is being signed out. `EodSessionWatch` polls it: a banner while an
+EodRun is IN_PROGRESS, then a modal and a real sign-out when the date actually rolls.

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { useProperty } from "@/components/providers/property-provider"
 import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, History } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -370,7 +371,7 @@ export default function POSDashboard() {
                   value={form.chargeCodeId}
                   onChange={(val) => setForm({ ...form, chargeCodeId: val ?? "" })}
                   placeholder="Select Outlet..."
-                  options={chargeCodes.map(c => ({ value: c.id, label: `${c.description} (${c.code})` }))}
+                  options={chargeCodeOptions(chargeCodes)}
                 />
               </div>
               <div className="space-y-2">

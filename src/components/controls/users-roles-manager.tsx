@@ -13,8 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield } from "@/components/icons"
-import { RolePermissionMatrix, emptyPermissionMatrix, type PermissionMatrix } from "./role-permission-matrix"
+import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info } from "@/components/icons"
+import { RolePermissionMatrix, emptyPermissionMatrix, grantsHubAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
 
 type Role = {
@@ -99,6 +99,11 @@ export function UsersRolesManager({
     firstName: "", lastName: "", email: "", password: "",
     roleId: "", scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
   })
+  // Whether the role currently chosen in the user dialog carries any Hub module.
+  const selectedRoleGrantsHub = (() => {
+    const role = roles.find((r) => r.id === userForm.roleId)
+    return role ? grantsHubAccess(matrixFromRole(role)) : false
+  })()
   const [userErrorMsg, setUserErrorMsg] = useState<string | null>(null)
   const [savingUser, setSavingUser] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
@@ -477,6 +482,26 @@ export function UsersRolesManager({
                 </div>
               )}
             </div>
+
+            {/* A property-pinned user is blocked from the Hub whatever their role grants
+                (hasHubAccess in src/lib/scope.ts). Saying so here is the difference
+                between a permission that quietly does nothing and one the admin
+                understands — the save still succeeds, this is guidance, not a block. */}
+            {selectedRoleGrantsHub && userForm.scope === "PROPERTY" && (
+              <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-muted/40 p-3 text-xs">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <p className="text-muted-foreground">
+                  <strong className="text-foreground">
+                    {roles.find((r) => r.id === userForm.roleId)?.name}
+                  </strong>{" "}
+                  grants Hub modules, but a user assigned to a single property can never reach
+                  the Hub — enterprise-wide credentials aren&apos;t held from one work location.
+                  Those permissions will have no effect. Set Access to{" "}
+                  <strong className="text-foreground">All Properties</strong> if this user needs
+                  the Hub.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>Cancel</Button>

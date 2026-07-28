@@ -16,6 +16,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const lineItemsRoute = await import("@/app/api/folios/[id]/line-items/route");
 const paymentsRoute = await import("@/app/api/folios/[id]/payments/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -78,7 +79,7 @@ describe("Folio posting rules: check-in gate, negatives, description/reference",
     roomTypeId = roomType.id;
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
     ratePlanId = ratePlan.id;
-    const chargeCode = await prisma.chargeCode.create({ data: { enterpriseId, code: "MINI", description: "Minibar" } });
+    const chargeCode = await customChargeCode(enterpriseId, { code: "MINI", description: "Minibar" });
     chargeCodeId = chargeCode.id;
     const pm = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
     paymentMethodId = pm.id;

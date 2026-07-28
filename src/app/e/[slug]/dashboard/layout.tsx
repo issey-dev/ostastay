@@ -9,6 +9,7 @@ import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { PropertyAccentScope } from "@/components/providers/property-accent-scope"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
+import { EodSessionWatch } from "@/components/providers/eod-session-watch"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
@@ -54,6 +55,10 @@ export default async function DashboardLayout({
 
           <div className="print:hidden sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
             <PropertyBannerBar />
+
+            {/* Announces an in-progress End-of-Day roll on the property this session is
+                working in, then signs the user out when the date actually rolls. */}
+            <EodSessionWatch loginPath={`/e/${enterprise.slug}/login`} />
 
             {ctx?.isActingAsSupport && enterprise && (
               <SupportSessionNotice

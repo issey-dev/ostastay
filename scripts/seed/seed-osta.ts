@@ -19,7 +19,7 @@
 //     every tenant enterprise's Users reference, not Osta-specific roles
 //   - Both SUPPORT_ROLE_DEFS roles (Osta Support: view-only Controls; Osta Support
 //     Admin: full access) — Osta's own internal roles
-//   - One clean login: admin@osta.internal (role Admin — full access to the
+//   - One clean login: osta@admin.mv (role Admin — full access to the
 //     /osta platform-admin console: Enterprises, Property Approvals, Licensing,
 //     Support Access, DB Health)
 
@@ -42,11 +42,11 @@ async function main() {
   await ensureRoles(prisma, osta.id, SUPPORT_ROLE_DEFS, true);
 
   await prisma.user.upsert({
-    where: { email: "admin@osta.internal" },
+    where: { email: "osta@admin.mv" },
     update: {},
     create: {
       enterpriseId: osta.id,
-      email: "admin@osta.internal",
+      email: "osta@admin.mv",
       passwordHash,
       firstName: "Osta",
       lastName: "Admin",
@@ -58,7 +58,7 @@ async function main() {
   console.log("\nOsta enterprise seeded successfully.");
   console.log(`Login URL: /e/${osta.slug}/login (or generic /login with Enterprise Code "${osta.slug}")`);
   console.log("User (password: password123):");
-  console.log("  admin@osta.internal (Admin — redirected straight to /osta after signing in)");
+  console.log("  osta@admin.mv (Admin — redirected straight to /osta after signing in)");
 }
 
 main()

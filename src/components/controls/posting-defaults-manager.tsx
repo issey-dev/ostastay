@@ -1,24 +1,33 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Save } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
 
-type ChargeCode = { id: string; code: string; description: string; category: string }
-type PaymentMethod = { id: string; name: string; type: string; isActive: boolean }
+type ChargeCode = {
+  id: string
+  code: string
+  description: string
+  isActive: boolean
+  postingType: string
+  chargeSubgroup?: { chargeGroup: { reportBucket: string } } | null
+}
 
-// Enterprise-wide posting & settlement defaults: which charge code a room charge posts
-// against when a rate plan doesn't specify its own, and which payment method settles a
-// City Ledger folio at checkout. See EnterpriseSettings.defaultAccommodationChargeCodeId
-// / cityLedgerPaymentMethodId and src/app/api/tenant-settings/route.ts.
+// The enterprise's role -> charge-code pointers (Controls > Cashiering). These are what
+// resolveChargeCode() reads before falling back to the system-seeded code, so this panel
+// is how a property redirects a role at its own codes without any literal code string
+// living in the runtime. See src/lib/posting/resolve-charge-code.ts.
+//
+// City Ledger settlement is deliberately NOT here — it selects a Payment Method, which
+// stays with Payment Methods under Finance (see SettlementDefaultsManager).
 export function PostingDefaultsManager() {
   const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [accommodationId, setAccommodationId] = useState("")
-  const [cityLedgerId, setCityLedgerId] = useState("")
+  const [greenTaxId, setGreenTaxId] = useState("")
   const [commissionId, setCommissionId] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -27,14 +36,12 @@ export function PostingDefaultsManager() {
   useEffect(() => {
     Promise.all([
       fetch("/api/charge-codes").then(r => r.json()),
-      fetch("/api/payment-methods").then(r => r.json()),
       fetch("/api/tenant-settings").then(r => r.json()),
     ])
-      .then(([cc, pm, settings]) => {
+      .then(([cc, settings]) => {
         if (Array.isArray(cc)) setChargeCodes(cc)
-        if (Array.isArray(pm)) setPaymentMethods(pm)
         setAccommodationId(settings?.defaultAccommodationChargeCodeId || "")
-        setCityLedgerId(settings?.cityLedgerPaymentMethodId || "")
+        setGreenTaxId(settings?.defaultGreenTaxChargeCodeId || "")
         setCommissionId(settings?.commissionChargeCodeId || "")
       })
       .finally(() => setLoading(false))
@@ -49,7 +56,7 @@ export function PostingDefaultsManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           defaultAccommodationChargeCodeId: accommodationId || "",
-          cityLedgerPaymentMethodId: cityLedgerId || "",
+          defaultGreenTaxChargeCodeId: greenTaxId || "",
           commissionChargeCodeId: commissionId || "",
         }),
       })
@@ -68,43 +75,38 @@ export function PostingDefaultsManager() {
     return <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
   }
 
-  const cityLedgerMethods = paymentMethods.filter(pm => pm.type === "CITY_LEDGER")
+  // Each role offers only codes that could legitimately play it: accommodation revenue,
+  // a tax/levy code, and a non-revenue credit respectively.
+  const NONE = { value: "", label: "None (use the system code)" }
 
   return (
     <div className="space-y-5 max-w-xl">
       <div className="space-y-2">
-        <Label>Default Accommodation Charge Code</Label>
+        <Label>Accommodation Charge Code</Label>
         <SearchableSelect
           value={accommodationId}
           onChange={setAccommodationId}
           placeholder="Select a room charge code..."
-          options={[
-            { value: "", label: "None" },
-            ...chargeCodes
-              .filter(c => c.category === "ROOM")
-              .map(c => ({ label: `${c.code} — ${c.description}`, value: c.id })),
-          ]}
+          options={[NONE, ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] })]}
         />
         <p className="text-xs text-muted-foreground">
-          The charge code Night Audit posts the nightly room charge against when a rate plan
+          What Night Audit posts the nightly room charge against when a rate plan
           doesn&apos;t set its own (Revenue &gt; Rate Plans).
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label>City Ledger Settlement Method</Label>
+        <Label>Green Tax Charge Code</Label>
         <SearchableSelect
-          value={cityLedgerId}
-          onChange={setCityLedgerId}
-          placeholder="Select a City Ledger payment method..."
-          options={[
-            { value: "", label: "None" },
-            ...cityLedgerMethods.map(pm => ({ label: pm.name, value: pm.id })),
-          ]}
+          value={greenTaxId}
+          onChange={setGreenTaxId}
+          placeholder="Select a Green Tax charge code..."
+          options={[NONE, ...chargeCodeOptions(chargeCodes, { includeTax: true, buckets: ["TAX"] })]}
         />
         <p className="text-xs text-muted-foreground">
-          The payment method used to settle a City Ledger folio when it transfers to a debtor
-          account at checkout. Must be a CITY_LEDGER-type Payment Method (add one above).
+          Where the nightly Green Tax levy posts. Its <em>rates</em> stay in Finance &gt; Tax
+          &gt; Maldives Tax — this only chooses the code they land on. Must be a Tax / Levy
+          code so it isn&apos;t itself service-charged or GST&apos;d.
         </p>
       </div>
 
@@ -116,14 +118,14 @@ export function PostingDefaultsManager() {
           placeholder="Select a commission charge code..."
           options={[
             { value: "", label: "None (disables commission posting)" },
-            ...chargeCodes.map(c => ({ label: `${c.code} — ${c.description}`, value: c.id })),
+            ...chargeCodeOptions(chargeCodes, { includeNonRevenue: true }),
           ]}
         />
         <p className="text-xs text-muted-foreground">
-          The charge code a Travel Agent commission credit posts against when a City Ledger
-          folio settles to a debtor account at checkout (Client Relations &gt; Negotiated Rates). Usually
-          categorized Non-Revenue (Charge Codes above) so it doesn&apos;t inflate room revenue
-          reporting. Leave unset to disable commission posting entirely.
+          Where a Travel Agent commission credit posts when a City Ledger folio settles to a
+          debtor account at checkout (Client Relations &gt; Negotiated Rates). Best kept under
+          a Non-Revenue group so it doesn&apos;t inflate revenue reporting. Leave unset to
+          disable commission posting entirely.
         </p>
       </div>
 

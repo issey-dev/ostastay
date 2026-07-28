@@ -25,6 +25,7 @@ const departuresRoute = await import("@/app/api/excursions/departures/route");
 const departureIdRoute = await import("@/app/api/excursions/departures/[id]/route");
 const bookingsRoute = await import("@/app/api/excursions/bookings/route");
 const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -117,13 +118,9 @@ describe("Excursions: tenant isolation", () => {
       );
     }
 
-    const chargeCodeA = await prisma.chargeCode.create({
-      data: { enterpriseId: enterpriseAId, code: "XC-A", description: "Excursion Charge A" },
-    });
+    const chargeCodeA = await customChargeCode(enterpriseAId, { code: "XC-A", description: "Excursion Charge A" });
     chargeCodeAId = chargeCodeA.id;
-    const chargeCodeB = await prisma.chargeCode.create({
-      data: { enterpriseId: enterpriseB.id, code: "XC-B", description: "Excursion Charge B" },
-    });
+    const chargeCodeB = await customChargeCode(enterpriseB.id, { code: "XC-B", description: "Excursion Charge B" });
     chargeCodeBId = chargeCodeB.id;
 
     const adminA = await prisma.user.create({

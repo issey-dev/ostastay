@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
+import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "@/components/icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
@@ -51,7 +52,13 @@ type RatePlan = {
   negotiatedForProfileIds?: string[]
 }
 
-type ChargeCodeOption = { id: string; code: string; description: string; category: string }
+type ChargeCodeOption = {
+  id: string
+  code: string
+  description: string
+  isActive?: boolean
+  chargeSubgroup?: { chargeGroup?: { reportBucket?: string } | null } | null
+}
 
 export default function RevenueDashboard() {
   const { slug } = useParams<{ slug: string }>()
@@ -318,14 +325,14 @@ export default function RevenueDashboard() {
                     placeholder="Enterprise default (Accommodation)"
                     options={[
                       { value: "", label: "Enterprise default (Accommodation)" },
-                      ...chargeCodes
-                        .filter(c => c.category === "ROOM")
-                        .map(c => ({ label: `${c.code} — ${c.description}`, value: c.id })),
+                      // Classification comes from the hierarchy now, not the deprecated
+                      // `category` string — see src/lib/charge-code-options.ts.
+                      ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] }),
                     ]}
                   />
                   <p className="text-xs text-muted-foreground">
                     The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
-                    default to use the enterprise-wide accommodation code (Controls &gt; Finance).
+                    default to use the enterprise-wide accommodation code (Controls &gt; Cashiering).
                   </p>
                 </div>
 

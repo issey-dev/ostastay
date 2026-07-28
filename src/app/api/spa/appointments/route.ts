@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { resolveOutletChargeTax } from "@/lib/tax-calc";
+import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { addMinutesToTime, rateForDate, computeAppointmentTotal } from "@/lib/spa";
 import { dayStart, getAvailableRooms, getAvailableTherapists, getCompatibleRoomIds } from "@/lib/spa-availability";
@@ -395,28 +396,30 @@ export async function POST(request: Request) {
         if (chargeTiming === "AT_BOOKING") {
           const enterpriseSettings = await tx.enterpriseSettings.findUnique({ where: { enterpriseId: treatment.property.enterpriseId } });
           // When a Spa Outlet is linked, the charge posts through it — the outlet's Tax
-          // Rule wins (resolveOutletChargeTax falls back to the treatment charge code's own
+          // Rule wins (postCharge falls back to the treatment charge code's own
           // tax when the outlet mode is NONE). Unlinked = identical to before.
-          const { baseAmount, taxAmount, serviceChargeAmount } = resolveOutletChargeTax({
-            chargeCode: treatment.chargeCode,
-            outlet: spaOutlet,
+          // Through the one posting service: the outlet's Tax Rule still wins, and the
+          // Spa group's own SVC/GST codes post alongside via this code's generates.
+          const postableCode = await tx.chargeCode.findUniqueOrThrow({
+            where: { id: treatment.chargeCodeId },
+            include: chargeCodeInclude(),
+          });
+          const posted = await postCharge(tx, {
+            folioId: billingFolioId,
+            chargeCode: postableCode,
             inputAmount: priceSnapshot,
             settings: enterpriseSettings,
             pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
+            date: resolveBusinessDate(treatment.property),
+            description: `${treatment.name} — ${appointmentDate} ${startTime}${partySize > 1 ? ` (${partySize} guests)` : ""}`,
+            outlet: spaOutlet,
+            outletId: spaOutlet?.id ?? null,
+            shiftId: chargeShiftId,
+            postingContext: { adults: partySize, children: 0, nights: 1 },
           });
-          const lineItem = await tx.folioLineItem.create({
-            data: {
-              folioId: billingFolioId,
-              chargeCodeId: treatment.chargeCodeId,
-              outletId: spaOutlet?.id ?? null,
-              shiftId: chargeShiftId,
-              amount: baseAmount,
-              taxAmount,
-              serviceChargeAmount,
-              description: `${treatment.name} — ${appointmentDate} ${startTime}${partySize > 1 ? ` (${partySize} guests)` : ""}`,
-              date: resolveBusinessDate(treatment.property),
-            },
-          });
+          const lineItem = posted.parent;
+          // Settling must clear the WHOLE posting — charge plus everything it generated.
+          const grossPosted = posted.grandTotal;
           folioId = billingFolioId;
           folioLineItemId = lineItem.id;
           paymentStatus = "POSTED_TO_FOLIO";
@@ -429,7 +432,8 @@ export async function POST(request: Request) {
                 folioId: billingFolioId,
                 paymentMethodId: settlement.paymentMethodId,
                 shiftId: settlement.shiftId,
-                amount: baseAmount + taxAmount + serviceChargeAmount,
+                chargeCodeId: await resolvePaymentChargeCodeId(tx, settlement.paymentMethodId),
+                amount: grossPosted,
                 referenceNumber: settlement.referenceNumber,
               },
             });

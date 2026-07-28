@@ -7,6 +7,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const { generateEodReports, snapshotEodReports, EOD_REPORT_TYPES } = await import("@/lib/eod-reports");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const BIZ = new Date(Date.UTC(2026, 3, 20)); // 2026-04-20
@@ -35,8 +36,8 @@ describe("EOD report snapshots", () => {
     rtId = (await prisma.roomType.create({ data: { propertyId, name: "Std", code: "STD", maxOccupancy: 2, isPseudo: false } })).id;
     pseudoRtId = (await prisma.roomType.create({ data: { propertyId, name: "Day", code: "DAY", maxOccupancy: 2, isPseudo: true } })).id;
     ratePlanId = (await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } })).id;
-    roomChargeCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: `ROOM-${uniq()}`, description: "Room Revenue", category: "ROOM" } })).id;
-    fbChargeCodeId = (await prisma.chargeCode.create({ data: { enterpriseId, code: `FB-${uniq()}`, description: "Restaurant", category: "FOOD_BEVERAGE" } })).id;
+    roomChargeCodeId = (await customChargeCode(enterpriseId, { code: `ROOM-${uniq()}`, description: "Room Revenue", subgroupCode: "ROOM_REVENUE" })).id;
+    fbChargeCodeId = (await customChargeCode(enterpriseId, { code: `FB-${uniq()}`, description: "Restaurant", subgroupCode: "RESTAURANT" })).id;
     cashMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } })).id;
     const cashier = await prisma.user.create({ data: { enterpriseId, email: `er-cash-${uniq()}@test.local`, passwordHash: "x", firstName: "Cash", lastName: "Ier", roleId: roleIds["Cashier"], scope: "PROPERTY", propertyId } });
     cashierUserId = cashier.id;

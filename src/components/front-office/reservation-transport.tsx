@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { postableChargeCodes } from "@/lib/charge-code-options"
 import { Compass, Pencil, ArrowRightCircle, ArrowLeftRight } from "@/components/icons"
 import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -111,7 +112,7 @@ export function ReservationTransport({
       .catch(() => {})
     fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((r) => (r.ok ? r.json() : []))
-      .then((rows: any[]) => Array.isArray(rows) && setChargeCodes(rows.filter((c) => c.category === "TRANSPORTATION")))
+      .then((rows: any[]) => Array.isArray(rows) && setChargeCodes(postableChargeCodes(rows, { buckets: ["TRANSPORT"] })))
       .catch(() => {})
   }, [propertyId])
 

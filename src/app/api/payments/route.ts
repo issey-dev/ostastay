@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, requirePropertyScope, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
         folioId: body.folioId,
         paymentMethodId: body.paymentMethodId,
         shiftId: body.shiftId,
+        chargeCodeId: await resolvePaymentChargeCodeId(prisma, body.paymentMethodId),
         amount: parseFloat(body.amount),
         referenceNumber: body.referenceNumber,
         isRefund: !!body.isRefund,

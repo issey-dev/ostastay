@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
 
 export async function GET() {
   try {
@@ -63,6 +64,17 @@ export async function POST(request: Request) {
     await prisma.ratePlan.create({
       data: { propertyId: newProperty.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
     });
+
+    // ...and the enterprise gets the canonical Charge Group/Subgroup/Code tree, incl.
+    // the system ROOM/GTX/COMM codes and the ROOM -> Green Tax generate. Charge codes
+    // are enterprise-scoped, so this is idempotent and a no-op for the second property
+    // onboarded — but without it a freshly onboarded enterprise couldn't run Night
+    // Audit at all (CHARGE_CODE_PLAN.md §1.3).
+    await ensureChargeTree(prisma, enterpriseId);
+    // ...and this property's Deposit / Cancellation / No-Show rules, each already linked
+    // to its own charge code. Seeded inactive at zero — the wiring is provisioned, the
+    // policy stays the owner's (Controls > Finance > Deposit & Fee Rules).
+    await ensureFeeRules(prisma, enterpriseId);
 
     await logActivity({
       ctx,

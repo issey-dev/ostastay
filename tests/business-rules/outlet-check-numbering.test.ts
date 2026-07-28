@@ -15,6 +15,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 
 const posChargeRoute = await import("@/app/api/pos/charge/route");
+const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -66,9 +67,9 @@ describe("Per-outlet sales-check numbering", () => {
     const property = await prisma.property.create({ data: { enterpriseId, name: "OC Prop", code: `OC-${uniq()}`, legalName: "OC LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
     propertyId = property.id;
 
-    const spaCode = await prisma.chargeCode.create({ data: { enterpriseId, code: `SPA${uniq()}`, description: "Spa Service" } });
+    const spaCode = await customChargeCode(enterpriseId, { code: `SPA${uniq()}`, description: "Spa Service" });
     spaChargeCodeId = spaCode.id;
-    const barCode = await prisma.chargeCode.create({ data: { enterpriseId, code: `BAR${uniq()}`, description: "Bar Drink" } });
+    const barCode = await customChargeCode(enterpriseId, { code: `BAR${uniq()}`, description: "Bar Drink" });
     barChargeCodeId = barCode.id;
 
     const spa = await prisma.outlet.create({ data: { propertyId, name: "Ocean Spa", code: "SPA", chargeCodes: { create: [{ chargeCodeId: spaChargeCodeId }] } } });
