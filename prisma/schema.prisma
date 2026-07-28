@@ -1052,6 +1052,7 @@ model Reservation {
   routingRules                 FolioRoutingRule[]
   guestRegistrations           GuestRegistration[]
   excursionBookings            ExcursionBooking[]
+  channelInboundBookings       ChannelInboundBooking[]
   transports                   ReservationTransport[]
   // A reservation can be the guest identity behind a Spa appointment participant —
   // see SpaAppointmentParticipant.reservationId (not SpaAppointment directly, since
@@ -2879,8 +2880,18 @@ model ChannelInboundBooking {
   // WEBHOOK | POLL — how it reached us. Useful when diagnosing a missed webhook.
   source String
 
-  // RECEIVED | CONVERTED | IGNORED | FAILED
+  // RECEIVED (not yet converted — includes one that failed a RETRIABLE check, such as no
+  // default rate plan configured yet; the conversion sweep keeps retrying these) |
+  // CONVERTED (see reservationId) | IGNORED (cancelled at the channel before conversion) |
+  // FAILED (an unexpected error, not one of the ordinary validation failures — kept out of
+  // the automatic retry sweep so a persistent unexpected fault doesn't spin every run).
   status String @default("RECEIVED")
+
+  // Set once this booking has been turned into a real Reservation — see
+  // src/lib/channels/inbound/convert.ts. SetNull rather than Cascade: if the reservation is
+  // later deleted, the record that it once arrived via this channel booking should survive.
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
 
   // Normalised fields. All nullable: a payload that fails to parse is still stored, and a
   // half-understood booking is more useful than a discarded one.

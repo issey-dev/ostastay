@@ -4,6 +4,7 @@ import { testConnection } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
 import { pushAllEnabledLinks } from "@/lib/channels/push";
 import { pollAllConnections } from "@/lib/channels/inbound/poll";
+import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
 import type { Job } from "@/lib/jobs/runner";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
@@ -151,11 +152,41 @@ export const channelBookingPollJob: Job = {
   },
 };
 
+/**
+ * Convert every RECEIVED inbound booking that is now eligible into a real Reservation.
+ *
+ * Runs right after the poll job in this list so a booking picked up this sweep gets a
+ * conversion attempt in the same pass, not a full cycle later — but it is not IN the poll
+ * job, because conversion also needs to retry bookings that failed for a reason an operator
+ * can fix in between runs (no default rate plan configured yet, a stop-sale that has since
+ * lifted), independent of whether anything new was polled.
+ */
+export const channelBookingConvertJob: Job = {
+  name: "channel-booking-convert",
+  description: "Convert eligible inbound channel bookings into reservations",
+  run: async (enterpriseId) => {
+    const results = await convertEligibleBookings(enterpriseId);
+    const converted = results.filter((r) => r.status === "CONVERTED");
+    const pending = results.filter((r) => r.status === "PENDING");
+    const failed = results.filter((r) => r.status === "FAILED");
+
+    const parts = [`${converted.length} converted`];
+    if (pending.length > 0) parts.push(`${pending.length} still pending`);
+    if (failed.length > 0) parts.push(`${failed.length} failed`);
+
+    return {
+      itemsProcessed: converted.length,
+      summary: results.length === 0 ? "No bookings awaiting conversion" : parts.join(", "),
+    };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
   channelAriPushJob,
   channelBookingPollJob,
+  channelBookingConvertJob,
 ];
 
 export function findJob(name: string): Job | undefined {
