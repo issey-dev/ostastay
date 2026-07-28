@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
-import { getValidAccessToken, makeLogSink } from "@/lib/channels/connection";
+import { getValidAccessToken, makeLogSink, isRateLimitPaused } from "@/lib/channels/connection";
 import { computeChannelAvailability, resolveWindow } from "@/lib/channels/sync";
 import { getProvider } from "@/lib/channels/providers/registry";
 
@@ -55,7 +55,18 @@ export async function pushAvailabilityForLink(opts: {
   const link = await prisma.channelPropertyLink.findUnique({
     where: { id: linkId },
     include: {
-      connection: { select: { id: true, enterpriseId: true, name: true, refreshToken: true, provider: true } },
+      connection: {
+        select: {
+          id: true,
+          enterpriseId: true,
+          name: true,
+          refreshToken: true,
+          provider: true,
+          rateLimitPauseThreshold: true,
+          rateLimitRemaining: true,
+          rateLimitResetsAt: true,
+        },
+      },
       property: { select: { name: true } },
     },
   });
@@ -72,6 +83,17 @@ export async function pushAvailabilityForLink(opts: {
   }
   if (!link.connection.refreshToken) {
     return { ...base, status: "SKIPPED", reason: "Connection has no credentials", roomTypeCount: 0, nightCount: 0 };
+  }
+  // A dry run computes only, never calls Beds24, so it never touches the shared credit pool
+  // and is exempt from the operator's self-throttle floor.
+  if (!dryRun && isRateLimitPaused(link.connection)) {
+    return {
+      ...base,
+      status: "SKIPPED",
+      reason: `Paused — Beds24 rate-limit credits at or below the configured threshold (${link.connection.rateLimitRemaining} remaining)`,
+      roomTypeCount: 0,
+      nightCount: 0,
+    };
   }
 
   const provider = getProvider(link.connection.provider);

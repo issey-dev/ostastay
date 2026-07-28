@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getValidAccessToken, makeLogSink } from "@/lib/channels/connection";
+import { getValidAccessToken, makeLogSink, isRateLimitPaused } from "@/lib/channels/connection";
 import { ingestBookings } from "@/lib/channels/inbound/ingest";
 import { getProvider } from "@/lib/channels/providers/registry";
 
@@ -39,7 +39,16 @@ export type PollResult = {
 export async function pollConnection(connectionId: string): Promise<PollResult> {
   const connection = await prisma.channelConnection.findUnique({
     where: { id: connectionId },
-    select: { id: true, enterpriseId: true, name: true, refreshToken: true, provider: true },
+    select: {
+      id: true,
+      enterpriseId: true,
+      name: true,
+      refreshToken: true,
+      provider: true,
+      rateLimitPauseThreshold: true,
+      rateLimitRemaining: true,
+      rateLimitResetsAt: true,
+    },
   });
   if (!connection) throw new Error("Connection not found");
 
@@ -47,6 +56,13 @@ export async function pollConnection(connectionId: string): Promise<PollResult> 
 
   if (!connection.refreshToken) {
     return { ...base, status: "SKIPPED", reason: "Connection has no credentials" };
+  }
+  if (isRateLimitPaused(connection)) {
+    return {
+      ...base,
+      status: "SKIPPED",
+      reason: `Paused — Beds24 rate-limit credits at or below the configured threshold (${connection.rateLimitRemaining} remaining)`,
+    };
   }
 
   const provider = getProvider(connection.provider);

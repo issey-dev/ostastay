@@ -2685,6 +2685,20 @@ model ChannelConnection {
   // Operator-readable reason for the last failure; cleared on success.
   lastError         String?
 
+  // Beds24's rate-limit state, as last observed from response headers (X-FiveMinCreditLimit,
+  // -Remaining, -ResetsIn — confirmed present on every response by the official OpenAPI
+  // spec). Captured passively on every real call rather than polled separately, so the
+  // number shown is always whatever the most recent call actually saw.
+  rateLimitTotal      Int?
+  rateLimitRemaining  Int?
+  rateLimitResetsAt   DateTime?
+  rateLimitObservedAt DateTime?
+  // Operator-configured safety margin: push/poll SKIP rather than call Beds24 once
+  // rateLimitRemaining is at or below this and the reset window hasn't passed yet. Null
+  // means no self-throttling — only Beds24's own limit applies, and a call is only ever
+  // skipped once Beds24 itself would already be rejecting it.
+  rateLimitPauseThreshold Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
