@@ -414,14 +414,34 @@ first has shipped, on branch `feature/hub-shell`.
     rest, and a 500 from cron would not tell the operator which of N enterprises broke.
   - Jobs run sequentially across enterprises on purpose — they make outbound channel-manager
     calls, and firing all at once would burst into a provider rate limit.
-  - Jobs registered: `channel-keepalive` (only touches connections `needsKeepAlive()` says
-    are due) and `channel-log-prune` (retention `SYNC_LOG_RETENTION_DAYS = 60`).
+  - Jobs registered (as of 2026-07-28): `channel-keepalive` (only touches connections
+    `needsKeepAlive()` says are due), `channel-log-prune` (retention
+    `SYNC_LOG_RETENTION_DAYS = 60`), `channel-ari-push` (availability+rates, now a full
+    **365-day** window — see PUSH_WINDOW_DAYS in `push.ts`), `channel-booking-poll` (fallback
+    behind the webhook), `channel-booking-convert` (sweeps RECEIVED bookings into
+    Reservations).
   - The Hub overview shows last-run status per job and flags a run **older than 24h as
     Stale** — a cron that has quietly stopped firing is worse than no cron, since the
     keep-alive looks fine right up until a credential lapses.
-- **Still outstanding for deployment:** actually schedule the cron in each environment and set
-  `CRON_SECRET` there. The mechanism now exists and is verified; the schedule is
-  environment configuration, not code.
+- **Still outstanding for deployment (self-hosted, 2026-07-28):** actually schedule the cron.
+  The mechanism exists and is verified (`POST /api/jobs/run`, optional `?job=<name>` to run
+  just one job instead of all of them); the schedule itself is environment configuration,
+  not code. The owner wants `channel-ari-push` specifically to run **once a day**, separate
+  from the rest — a year-long payload is too heavy to repeat hourly alongside the cheap
+  jobs. `?job=` only selects ONE job by name (no "all except X"), so the parameterless
+  hourly call must be dropped in favor of naming the four light jobs individually:
+  ```
+  # Hourly — each cheap when nothing is due; channel-ari-push deliberately absent here.
+  0 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-keepalive"        -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  5 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-log-prune"        -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  10 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-booking-poll"     -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  15 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-booking-convert"  -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+
+  # Daily, off-peak — the heavy 365-day availability+rates push, on its own.
+  0 2 * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-ari-push"          -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  ```
+  `CRON_SECRET` must be set in this environment (see `.env.example`) before any of these do
+  anything — the endpoint fails closed (503) rather than run unauthenticated.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull
