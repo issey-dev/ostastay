@@ -22,10 +22,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get("dryRun") === "1";
+    const days = Number.parseInt(searchParams.get("days") ?? "", 10);
 
     requirePermission(ctx, "INTEGRATIONS", dryRun ? "view" : "update");
 
-    const result = await pushAvailabilityForLink({ enterpriseId: ctx.enterpriseId, linkId: id, dryRun });
+    const result = await pushAvailabilityForLink({
+      enterpriseId: ctx.enterpriseId,
+      linkId: id,
+      dryRun,
+      days: Number.isFinite(days) ? days : undefined,
+      from: searchParams.get("from"),
+    });
 
     if (!dryRun && result.status === "PUSHED") {
       await logActivity({

@@ -1,9 +1,12 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useState } from "react"
+import { format } from "date-fns"
+import type { DateRange } from "react-day-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
 import { useConfirm } from "@/components/providers/confirm-provider"
@@ -14,6 +17,26 @@ import { toast } from "@/lib/toast"
 // This is the cheap moment to catch a mapping mistake. Once sharing is on, the next thing
 // that notices a wrong number is an OTA — and by then it has either sold a room that does
 // not exist or hidden one that does.
+//
+// Shared by both the Inventory tab (framed as "resync availability") and the Rate Plan tab
+// (framed as "send prices") — Beds24 has no separate rates endpoint; availability and prices
+// for a room always travel together in one calendar payload (src/lib/channels/payload.ts), so
+// there is genuinely one push to preview and send, not two.
+
+const DAY_MS = 86_400_000
+
+function defaultRange(): DateRange {
+  const from = new Date()
+  from.setHours(0, 0, 0, 0)
+  const to = new Date(from.getTime() + 13 * DAY_MS)
+  return { from, to }
+}
+
+/** Nights spanned by an inclusive [from, to] calendar selection. */
+function nightsIn(range: DateRange): number {
+  if (!range.from || !range.to) return 14
+  return Math.round((range.to.getTime() - range.from.getTime()) / DAY_MS) + 1
+}
 
 type Night = { date: string; available: number; closed: boolean; prices: Record<string, number> }
 type RoomTypePlan = {
@@ -53,24 +76,36 @@ export function AvailabilityPreview({
   canPush,
   open,
   onOpenChange,
+  title,
+  description,
+  actionLabel = "Send now",
 }: {
   linkId: string
   propertyName: string
   canPush: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Overrides for how the Rate Plan tab frames this as "send prices" rather than a generic
+   *  availability resync — same dialog, same push, different words for what the operator
+   *  is actually here to do. */
+  title?: string
+  description?: string
+  actionLabel?: string
 }) {
   const confirm = useConfirm()
+  const [range, setRange] = useState<DateRange>(defaultRange)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const [pushing, setPushing] = useState(false)
 
   const load = useCallback(async () => {
+    if (!range.from) return
     setLoading(true)
     setFailed(false)
     try {
-      const res = await fetch(`/api/hub/property-links/${linkId}/preview?days=14`)
+      const from = format(range.from, "yyyy-MM-dd")
+      const res = await fetch(`/api/hub/property-links/${linkId}/preview?from=${from}&days=${nightsIn(range)}`)
       if (!res.ok) throw new Error("failed")
       setPlan(await res.json())
     } catch {
@@ -78,25 +113,30 @@ export function AvailabilityPreview({
     } finally {
       setLoading(false)
     }
-  }, [linkId])
+  }, [linkId, range])
 
   useEffect(() => {
     if (open) void load()
   }, [open, load])
 
   const handlePush = async () => {
+    if (!range.from) return
     // Confirmed because this is the one control in the Hub whose effect is immediately
     // visible to the public — the numbers above go live on booking sites.
     const ok = await confirm({
       title: `Send this to the channel manager?`,
-      description: `Availability for ${propertyName} will be published to the connected booking channels straight away.`,
+      description: `${propertyName}'s ${plan?.roomTypes.length ? "availability and prices" : "data"} for the selected dates will be published to the connected booking channels straight away.`,
       confirmLabel: "Send now",
     })
     if (!ok) return
 
     setPushing(true)
     try {
-      const res = await fetch(`/api/hub/property-links/${linkId}/push`, { method: "POST" })
+      const from = format(range.from, "yyyy-MM-dd")
+      const res = await fetch(
+        `/api/hub/property-links/${linkId}/push?from=${from}&days=${nightsIn(range)}`,
+        { method: "POST" }
+      )
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast.error(data.error ?? "Could not push")
@@ -117,11 +157,13 @@ export function AvailabilityPreview({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>What would be sent — {propertyName}</DialogTitle>
+          <DialogTitle>{title ?? `What would be sent — ${propertyName}`}</DialogTitle>
           <DialogDescription>
-            The next 14 nights, computed from live inventory. Nothing is sent by opening this.
+            {description ?? "Pick a date range, computed from live inventory. Nothing is sent by opening this."}
           </DialogDescription>
         </DialogHeader>
+
+        <DateRangePicker value={range} onChange={(r) => r?.from && setRange(r)} />
 
         {loading && <Skeleton className="h-48 w-full" />}
         {failed && <ErrorState onRetry={() => void load()} />}
@@ -232,7 +274,7 @@ export function AvailabilityPreview({
                 confusing failure. */}
             {canPush && plan.syncEnabled && plan.roomTypes.length > 0 && (
               <Button onClick={() => void handlePush()} disabled={pushing}>
-                {pushing ? "Sending..." : "Send now"}
+                {pushing ? "Sending..." : actionLabel}
               </Button>
             )}
           </DialogFooter>

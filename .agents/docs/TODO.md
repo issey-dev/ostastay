@@ -196,8 +196,10 @@ first has shipped, on branch `feature/hub-shell`.
     skip or repeat rows as new entries arrive mid-page.
 - **DONE — Sharing / mapping** (branch `feature/hub-sharing`, stacked on
   `feature/hub-job-runner`). `ChannelPropertyLink` / `ChannelRoomTypeMap` /
-  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI at
-  `/e/{slug}/hub/channel-manager/sharing`. This is the "control what is shared" surface.
+  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI,
+  since renamed **Sharing → Mapping** and split into 5 tabs (Property, Room Type, Rate Plan,
+  Inventory, Defaults) at `/e/{slug}/hub/channel-manager/mapping`. This is the "control what
+  is shared" surface.
   - ⚠️ **`ChannelPropertyLink.propertyId` is UNIQUE ACROSS ALL CONNECTIONS**, not per
     connection. Linking one property through two channel-manager accounts would have both
     pushing availability for the same rooms and both taking bookings — a **double-sell that
@@ -242,10 +244,11 @@ first has shipped, on branch `feature/hub-shell`.
     reports the **previous day**. Harmless in its current use (a conflict message) but a
     day-shifted push would move real inventory onto the wrong night. `fmtDay` itself is
     left alone — a separate, low-risk cleanup.
-  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Sharing screen,
-    available to **view-only** users too. Checking what would be sent is a read, and is the
-    last cheap moment to catch a mapping mistake — after sharing is on, the next thing to
-    notice a wrong number is an OTA.
+  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Mapping screen's
+    Inventory/Rate Plan tabs (now with an operator-chosen date range, not just a fixed
+    14-night window), available to **view-only** users too. Checking what would be sent is
+    a read, and is the last cheap moment to catch a mapping mistake — after sharing is on,
+    the next thing to notice a wrong number is an OTA.
 - **DONE — outbound push** (branch `feature/sync-push`). `src/lib/channels/payload.ts`
   (pure transform) + `push.ts` (guards + send) + `POST /api/hub/property-links/[id]/push`
   + a **Send now** button in the preview dialog + the `channel-ari-push` scheduled job.
@@ -330,9 +333,45 @@ first has shipped, on branch `feature/hub-shell`.
     worth handling before high-frequency pushing.
   - The spec also exposes `minStay`, `maxStay`, `multiplier` (required, default 1) and
     per-channel `maxBookings` on the calendar. None are used yet.
-- **Next: extract a reservation-creation service**, then convert inbound bookings through
-  it. A live sandbox account is still needed to exercise the integration end to end, but the
-  field names are no longer guesses.
+- **DONE — provider abstraction, reservation-creation service, booking defaults, inbound
+  conversion, Sharing → Mapping rebuild** (2026-07-28, stacked on the wire-formats-verified
+  work above).
+  - **`ChannelProvider` interface** (`src/lib/channels/provider.ts`) — connection.ts, push.ts,
+    poll.ts, ingest.ts, the inbound webhook route, sharing.ts's rate-slot validation, and the
+    keep-alive job all resolve a provider by `ChannelConnection.provider` and call through
+    this interface rather than importing Beds24's client directly. `Beds24Provider`
+    (`providers/beds24-provider.ts`) is the only implementation; a second channel manager is
+    "implement the interface + register it in `providers/registry.ts`", with **no changes
+    needed above that seam**. This is what makes the connection genuinely swappable, per the
+    owner's explicit requirement.
+  - **`createReservation`** (`src/lib/reservations/create-reservation.ts`) — the ~300-line
+    inline body of `POST /api/reservations` extracted verbatim (same validation order, same
+    status codes, no behavior change), returning a plain result object rather than a
+    `NextResponse` so a non-HTTP caller (the conversion below) can use the exact same rules
+    a front-desk booking goes through.
+  - **`ChannelBookingDefaults`** model + `src/lib/channels/defaults.ts` — per-link default
+    rate plan + meal plan, since a channel booking never names one of ours. No default rate
+    plan configured = conversion deliberately blocked, not guessed.
+  - **`src/lib/channels/inbound/convert.ts`** — turns a `RECEIVED` `ChannelInboundBooking`
+    into a real `Reservation` via `createReservation`, using the defaults above. Cancelled →
+    `IGNORED`; missing mapping/dates or no configured default → stays `RECEIVED` with
+    `problem` set, retried by the new `channel-booking-convert` scheduled job; only an
+    unexpected thrown error → terminal `FAILED`. Forces `acknowledgeOverbook: true` — D-7 rule
+    4 says an over-availability channel booking is accepted and flagged, never refused, since
+    the channel already confirmed it to the guest.
+  - **Sharing UI renamed Mapping, split into 5 tabs** (`src/components/hub/mapping-manager.tsx`
+    + `mapping/room-type-tab.tsx` / `rate-plan-tab.tsx` / `inventory-tab.tsx` /
+    `defaults-tab.tsx`, route now `/e/{slug}/hub/channel-manager/mapping`): Property (link
+    list, sync toggle, link/unlink), Room Type (unchanged mapping table), Rate Plan (mapping
+    table + "send prices for a date range"), Inventory ("resync availability" for a date
+    range), Defaults (new — the rate plan/meal plan UI above). Rate Plan's "send prices" and
+    Inventory's "resync" are the **same underlying push** (`AvailabilityPreview`, now
+    date-range-capable via `@/components/ui/date-range-picker` instead of a fixed 14 nights)
+    — Beds24 has no separate rates endpoint; availability and prices always travel together
+    in one calendar payload.
+  - Still open: a live sandbox account to exercise inbound conversion end to end (see the
+    Veyo Lagoon Retreat connection already set up for this), and the Beds24 rate-limit
+    headers noted above are still unread.
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`

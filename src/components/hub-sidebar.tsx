@@ -25,7 +25,7 @@ import {
 const items = [
   { title: "Overview", url: "hub", icon: LayoutDashboard },
   { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
-  { title: "Sharing", url: "hub/channel-manager/sharing", icon: Building2 },
+  { title: "Mapping", url: "hub/channel-manager/mapping", icon: Building2 },
   { title: "Inbound Bookings", url: "hub/channel-manager/bookings", icon: ShieldAlert },
   { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
 ]

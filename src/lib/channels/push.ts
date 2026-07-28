@@ -46,6 +46,9 @@ export async function pushAvailabilityForLink(opts: {
   linkId: string;
   dryRun?: boolean;
   days?: number;
+  /** Window start, same format resolveWindow() already accepts. Null/omitted means today —
+   *  the on-demand Hub actions (Rate Plan/Inventory tabs) pass an operator-chosen range. */
+  from?: string | null;
 }): Promise<PushResult> {
   const { enterpriseId, linkId, dryRun = false } = opts;
 
@@ -72,7 +75,7 @@ export async function pushAvailabilityForLink(opts: {
   }
 
   const provider = getProvider(link.connection.provider);
-  const { from, to } = resolveWindow(null, opts.days ?? PUSH_WINDOW_DAYS);
+  const { from, to } = resolveWindow(opts.from ?? null, opts.days ?? PUSH_WINDOW_DAYS);
   const plan = await computeChannelAvailability({ enterpriseId, linkId, from, to });
   const { payload, roomTypeCount, nightCount } = provider.buildAvailabilityPayload(plan);
 
