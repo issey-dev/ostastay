@@ -158,7 +158,13 @@ describe("Channel rates", () => {
     const rates = await resolveRatesForLink({ propertyId, linkId, roomTypeIds: [roomTypeId], from: day(0), to: day(1) });
     expect(rates.get(roomTypeId)!.some((r) => r.ratePlanId === unmapped.id)).toBe(false);
     // 999 must appear nowhere — an unmapped plan has no channel rate to be sent as.
-    expect(JSON.stringify([...rates.values()])).not.toContain("999");
+    // Checked via the externalRateId field, not a stringified blob: ratePlanId is a
+    // random UUID and can incidentally contain the substring "999".
+    for (const perPlan of rates.values()) {
+      for (const plan of perPlan) {
+        expect(plan.externalRateId).not.toBe("999");
+      }
+    }
   });
 
   it("keys published prices by the CHANNEL's price slot, not our rate-plan id", async () => {
