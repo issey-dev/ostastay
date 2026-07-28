@@ -10,9 +10,10 @@ import { getProvider } from "@/lib/channels/providers/registry";
 // a mistake is visible to guests, so the guards below are not defensive padding, they are
 // the feature.
 
-// How far ahead inventory is published. Long enough to cover normal booking lead time,
-// short enough that one push stays small and a mistake has a bounded blast radius.
-export const PUSH_WINDOW_DAYS = 60;
+// How far ahead inventory is published by default. A full year — the owner wants the
+// channel manager carrying a year of availability at all times, refreshed daily by
+// channelAriPushJob (src/lib/jobs/index.ts) rather than the 60-day window this used to be.
+export const PUSH_WINDOW_DAYS = 365;
 
 export type PushResult = {
   linkId: string;

@@ -361,7 +361,8 @@ describe("Channel availability (outbound sync)", () => {
   });
 
   it("resolveWindow clamps the requested span", () => {
-    expect(resolveWindow(null, 500).to.getTime() - resolveWindow(null, 500).from.getTime()).toBe(90 * DAY_MS);
+    // 366, not 365 — a full year must never be clipped short by landing on a leap year.
+    expect(resolveWindow(null, 500).to.getTime() - resolveWindow(null, 500).from.getTime()).toBe(366 * DAY_MS);
     expect(resolveWindow(null, 0).to.getTime() - resolveWindow(null, 0).from.getTime()).toBe(DAY_MS);
     // A junk date falls back to today rather than producing an Invalid Date window.
     expect(Number.isNaN(resolveWindow("not-a-date", 7).from.getTime())).toBe(false);
