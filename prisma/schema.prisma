@@ -37,6 +37,7 @@ model Enterprise {
   channelConnections    ChannelConnection[]
   channelSyncLogs       ChannelSyncLog[]
   jobRuns               JobRun[]
+  eRegistrationLinks    ERegistrationLink[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -349,6 +350,7 @@ model Property {
   spaAppointments              SpaAppointment[]
   spaSettings                  SpaSettings?
   spaGuestTherapistPreferences SpaGuestTherapistPreference[]
+  eRegistrationLinks           ERegistrationLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -765,6 +767,7 @@ model Profile {
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
   negotiatedRateAccess     RatePlanAgentAccess[]
   spaTherapistPreferences  SpaGuestTherapistPreference[]
+  eRegistrationSlots       ERegistrationGuestSlot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -830,6 +833,11 @@ model ProfileDocument {
   issueDate        DateTime?
   expiryDate       DateTime?
   documentImageUrl String?
+  // Relative path under the private, gitignored upload storage directory (see
+  // src/lib/eregistration/storage.ts) — distinct from documentImageUrl above, which
+  // stays a plain external-URL field. Set when an eRegistration submission's ID photo
+  // is applied here; the same file is never copied, just pointed at from both places.
+  documentImageStoragePath String?
   isPrimary        Boolean   @default(true)
 
   createdAt DateTime @default(now())
@@ -1053,6 +1061,8 @@ model Reservation {
   // see SpaAppointmentParticipant.reservationId (not SpaAppointment directly, since
   // guest identity is per-participant under the multi-resource design).
   spaAppointmentParticipations SpaAppointmentParticipant[]
+  eRegistrationLinks           ERegistrationLink[]
+  eRegistrationSlots           ERegistrationGuestSlot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1589,6 +1599,15 @@ model EnterpriseSettings {
   registrationCardMessage String?
   registrationCardTerms   String?
 
+  // eRegistration (guest self check-in via a shareable temp link — see
+  // src/app/eregistration/[token]/page.tsx and src/lib/eregistration/). The guest fills
+  // in their own registration-card data; front desk still reviews/applies it and runs
+  // the actual check-in unchanged. `eRegistrationExpiryHours` is the validity window
+  // applied to every newly generated/regenerated link.
+  eRegistrationEnabled      Boolean @default(true)
+  eRegistrationExpiryHours  Int     @default(72)
+  eRegistrationMessage      String?
+
   // Maldives Green Tax Settings — charged per person per night, split by age band;
   // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
   greenTaxEnabled     Boolean @default(true)
@@ -1673,6 +1692,107 @@ model AccompanyingGuest {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, profileId])
+}
+
+// eRegistration — a shareable, unauthenticated temp link letting a guest fill in their
+// own registration-card data before/at arrival. Scoped to exactly one of a single
+// reservation OR a whole GroupBlock (the block's organizer fills slots across every
+// current pickup) — app code enforces "exactly one is set", not a DB constraint.
+//
+// The raw token is never stored, only its SHA-256 hash (tokenHash) — a link is a bearer
+// credential to submit/view guest PII, so a DB dump alone must never yield a usable
+// guest-facing URL. The plaintext is returned once, in the generate response, and
+// nowhere else afterward (see src/lib/eregistration/token.ts).
+model ERegistrationLink {
+  id            String       @id @default(uuid())
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  groupBlockId  String?
+  groupBlock    GroupBlock?  @relation(fields: [groupBlockId], references: [id], onDelete: Cascade)
+  // Denormalized, same reasoning as ExcursionBooking.propertyId — every eRegistration
+  // route scopes directly off this row without a multi-hop join.
+  propertyId    String
+  property      Property     @relation(fields: [propertyId], references: [id])
+  enterpriseId  String
+  enterprise    Enterprise   @relation(fields: [enterpriseId], references: [id])
+
+  tokenHash       String    @unique
+  status          String    @default("ACTIVE") // ACTIVE | COMPLETED | EXPIRED | REVOKED
+  expiresAt       DateTime
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  revokedAt       DateTime?
+  revokedByUserId String?
+  lastAccessedAt  DateTime?
+
+  slots ERegistrationGuestSlot[]
+
+  @@index([reservationId])
+  @@index([groupBlockId])
+}
+
+// One guest's own slot on a link. Always tagged with its OWN reservationId even under a
+// group-scoped link (which fans out across several pickups) — review/apply never needs
+// to join through the link to find which reservation a slot belongs to.
+//
+// The submitted fields are a permanent compliance snapshot: once finalized (status
+// SUBMITTED) they are never silently overwritten — a guest re-submitting requires an
+// explicit staff "reopen", and staff "apply" copies this snapshot into the live
+// Profile/ProfileDocument records rather than the slot ever being edited to match them.
+model ERegistrationGuestSlot {
+  id                String            @id @default(uuid())
+  linkId            String
+  link              ERegistrationLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  reservationId     String
+  reservation       Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  slotIndex         Int // 0 = that reservation's primary guest, 1..n = additional adults
+  isPrimary         Boolean           @default(false)
+  // Set when this slot maps to a Profile already on the reservation at generation time
+  // (the primary guest, or an already-linked accompanying guest). Null = a new guest not
+  // yet on the reservation — they type their own name.
+  existingProfileId String?
+  existingProfile   Profile?          @relation(fields: [existingProfileId], references: [upid])
+
+  status String @default("PENDING") // PENDING | SUBMITTED | APPLIED
+
+  firstName          String?
+  middleName         String?
+  lastName           String?
+  dateOfBirth        DateTime?
+  nationality        String?
+  gender             String?
+  email              String?
+  mobile             String?
+  addressFull        String?
+  addressCity        String?
+  addressCountry     String?
+  documentType       String?
+  documentNumber     String?
+  issuingCountry     String?
+  documentIssueDate  DateTime?
+  documentExpiryDate DateTime?
+  // Relative path under the private, gitignored upload directory — never a public URL.
+  idPhotoPath        String?
+  idPhotoMimeType    String?
+  // PNG data URL of a live hand-drawn signature — required to finalize (government
+  // compliance requirement: a live signature, not a typed name or checkbox).
+  signatureDataUrl   String?
+
+  submittedAt        DateTime?
+  submittedIp        String?
+  submittedUserAgent String?
+  appliedAt          DateTime?
+  appliedByUserId    String?
+
+  // Declared minors traveling with THIS reservation's party (name + DOB only — no ID/
+  // signature; minors don't sign a registration card). Only meaningful on the primary
+  // (isPrimary) slot — kept per-reservation rather than per-link so it stays well-
+  // defined under a group-scoped link, which can span several reservations at once.
+  // Bounded JSON-in-text, same convention as ChannelBooking.rawPayload.
+  childrenInfo String?
+
+  @@unique([reservationId, slotIndex])
 }
 
 model RoomAssignment {
@@ -1763,6 +1883,9 @@ model GroupBlock {
   masterFolios Folio[]
   // Per-room-type rooms held for the block. totalRoomsHeld is kept in sync as the sum.
   roomHolds    GroupBlockRoom[]
+  // A group-scoped eRegistration link: sent to the block's organizer (payeeProfile),
+  // fanning out to every current pickup's own reservation-level slots.
+  eRegistrationLinks ERegistrationLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

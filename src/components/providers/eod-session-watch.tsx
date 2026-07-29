@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2, LogOut } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import {
@@ -34,14 +33,15 @@ type EodStatus = {
 }
 
 export function EodSessionWatch({ loginPath }: { loginPath: string }) {
-  const router = useRouter()
   const [status, setStatus] = useState<EodStatus | null>(null)
   const [signingOut, setSigningOut] = useState(false)
   // Once the roll is seen, stop polling and hold the modal open — further requests are
   // pointless (the session is dead) and would only race the sign-out below.
   const lockedOut = status?.forcedLogout === true
   const lockedOutRef = useRef(false)
-  lockedOutRef.current = lockedOut
+  useEffect(() => {
+    lockedOutRef.current = lockedOut
+  }, [lockedOut])
 
   const check = useCallback(() => {
     if (lockedOutRef.current) return

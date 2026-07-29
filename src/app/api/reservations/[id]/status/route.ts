@@ -233,6 +233,17 @@ export async function PATCH(
           where: { reservationId: id, isClosed: false },
           data: { isClosed: true },
         });
+        // A cancelled stay has nothing left to self check-in for — revoke any active
+        // eRegistration link so an already-open guest tab stops accepting submissions.
+        await tx.eRegistrationLink.updateMany({
+          where: { reservationId: id, status: "ACTIVE" },
+          data: { status: "REVOKED", revokedAt: new Date(), revokedByUserId: ctx.userId },
+        });
+      } else if (body.status === "NO_SHOW") {
+        await tx.eRegistrationLink.updateMany({
+          where: { reservationId: id, status: "ACTIVE" },
+          data: { status: "REVOKED", revokedAt: new Date(), revokedByUserId: ctx.userId },
+        });
       } else if (body.status === "RESERVED") {
         await tx.folio.updateMany({
           where: { reservationId: id, isDebtorAccount: false },

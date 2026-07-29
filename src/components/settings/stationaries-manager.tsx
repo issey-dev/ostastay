@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info } from "@/components/icons"
+import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info, Send } from "@/components/icons"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { useProperty } from "@/components/providers/property-provider"
@@ -44,9 +44,22 @@ type StationeryTab = "invoices" | "receipts" | "letter" | "regcard" | "statement
 // logo, tax id, contact, address), accent colour and font all come from the property's own
 // General profile + Appearance (Controls > General), so this manager never edits them; it
 // only reads the property to render a faithful live preview.
-type FormData = StationeryContent & { registrationCardEnabled: boolean; defaultFolioStyle: FolioStyle }
+type FormData = StationeryContent & {
+  registrationCardEnabled: boolean
+  defaultFolioStyle: FolioStyle
+  eRegistrationEnabled: boolean
+  eRegistrationExpiryHours: number
+  eRegistrationMessage: string
+}
 
-const EMPTY_FORM: FormData = { ...EMPTY_STATIONERY_CONTENT, registrationCardEnabled: true, defaultFolioStyle: "detailed" }
+const EMPTY_FORM: FormData = {
+  ...EMPTY_STATIONERY_CONTENT,
+  registrationCardEnabled: true,
+  defaultFolioStyle: "detailed",
+  eRegistrationEnabled: true,
+  eRegistrationExpiryHours: 72,
+  eRegistrationMessage: "",
+}
 
 export function StationariesManager() {
   const { currentProperty } = useProperty()
@@ -85,6 +98,9 @@ export function StationariesManager() {
           registrationCardMessage: data.registrationCardMessage || "",
           registrationCardTerms: data.registrationCardTerms || "",
           registrationCardEnabled: data.registrationCardEnabled ?? true,
+          eRegistrationEnabled: data.eRegistrationEnabled ?? true,
+          eRegistrationExpiryHours: data.eRegistrationExpiryHours ?? 72,
+          eRegistrationMessage: data.eRegistrationMessage || "",
         })
       }
     } catch (e) {
@@ -304,6 +320,41 @@ export function StationariesManager() {
             <div className="space-y-2">
               <Label>Terms &amp; Conditions</Label>
               <Textarea rows={8} value={formData.registrationCardTerms} onChange={(e) => set("registrationCardTerms", e.target.value)} placeholder="Printed above the signature line. Leave blank to use the default wording." />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <Label className="flex items-center gap-1.5"><Send className="h-4 w-4" /> eRegistration</Label>
+              <p className="text-xs text-muted-foreground">
+                Lets a guest fill in their own registration card via a shareable temp link — front desk
+                still reviews and applies it during check-in, which stays unchanged.
+              </p>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label>Allow eRegistration links</Label>
+                  <p className="text-xs text-muted-foreground">Generate/Send eRegistration becomes available on reservations and group blocks.</p>
+                </div>
+                <Switch checked={formData.eRegistrationEnabled} onCheckedChange={(v) => set("eRegistrationEnabled", !!v)} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Link Validity (hours)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={formData.eRegistrationExpiryHours}
+                    onChange={(e) => set("eRegistrationExpiryHours", Math.max(1, parseInt(e.target.value) || 72))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Guest Email Message</Label>
+                <Textarea
+                  rows={2}
+                  value={formData.eRegistrationMessage}
+                  onChange={(e) => set("eRegistrationMessage", e.target.value)}
+                  placeholder="Please complete your registration details ahead of arrival — it only takes a few minutes."
+                />
+              </div>
             </div>
           </TabsContent>
 

@@ -24,6 +24,7 @@ import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
+import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { useProperty } from "@/components/providers/property-provider"
 import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
 
@@ -723,6 +724,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           }}
           onNotify={setNotification}
         />
+
+        <ERegistrationPanel reservationId={id} />
 
         {/* 4. Billing */}
         <Card className="shadow-elevation-1">

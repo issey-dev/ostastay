@@ -16,7 +16,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
-import { Key, BedDouble, Contact, ReceiptText, CheckCircle2, AlertTriangle, Printer } from "@/components/icons"
+import { EregistrationReviewDialog } from "@/components/front-office/eregistration-review-dialog"
+import { Key, BedDouble, Contact, ReceiptText, CheckCircle2, AlertTriangle, Printer, Send } from "@/components/icons"
 
 type WizardProps = {
   reservationId: string | null
@@ -66,6 +67,11 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   const [idEdits, setIdEdits] = useState<Record<string, { dateOfBirth: string | null; nationality: string | null; docCount: number; hasExpired: boolean }>>({})
   const [savingId, setSavingId] = useState(false)
   const [regCollected, setRegCollected] = useState<Set<string>>(new Set())
+  // eRegistration submissions for this reservation (any status) — surfaced as a review
+  // banner per matching guest in the Identification step, and as a "new self-registered
+  // guest" card for slots not yet linked to any Profile.
+  const [eregSlots, setEregSlots] = useState<any[]>([])
+  const [reviewSlot, setReviewSlot] = useState<any | null>(null)
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     mode: "onChange",
@@ -89,10 +95,41 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   // The arrival segment (earliest) — what a room is assigned to for check-in.
   const activeAssignment = reservation?.assignments?.[0]
 
+  // Every eRegistration slot for this reservation (any status) — refetched after apply
+  // so a just-applied guest immediately shows APPLIED instead of the stale SUBMITTED
+  // banner. Failure is non-blocking: eRegistration is an optional add-on to check-in.
+  const refetchEregSlots = () => {
+    fetch(`/api/reservations/${reservationId}/eregistration-link`)
+      .then((r) => r.json())
+      .then((d) => setEregSlots(Array.isArray(d?.slots) ? d.slots : []))
+      .catch(() => {})
+  }
+
+  const refetchGuestData = () => {
+    fetch(`/api/reservations/${reservationId}/registration-card-data`)
+      .then((r) => r.json())
+      .then((d) => {
+        setData(d)
+        const seed: typeof idEdits = {}
+        const people = [d.reservation.primaryGuest, ...(d.reservation.accompanyingGuests ?? []).map((a: any) => a.profile)]
+        for (const p of people) {
+          seed[p.upid] = {
+            dateOfBirth: p.dateOfBirth ?? null,
+            nationality: p.nationality ?? null,
+            docCount: (p.documents ?? []).length,
+            hasExpired: (p.documents ?? []).some((doc: any) => isExpired(doc.expiryDate)),
+          }
+        }
+        setIdEdits((prev) => ({ ...prev, ...seed }))
+      })
+      .catch(() => {})
+  }
+
   useEffect(() => {
     if (!isOpen || !reservationId) return
     setLoading(true); setError(null); setStep("room"); setGuestIdx(0); setRegCollected(new Set())
     paymentForm.reset({ methodId: "", amount: "", reference: "" })
+    refetchEregSlots()
     fetch(`/api/reservations/${reservationId}/registration-card-data`)
       .then((r) => r.json())
       .then((d) => {
@@ -291,8 +328,25 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
               const upid = g.profile.upid
               const e = idEdits[upid]
               const status = guestStatus(upid)
+              // Submitted-but-not-yet-applied eRegistration for THIS guest.
+              const eregSlot = eregSlots.find((s) => s.existingProfileId === upid && s.status === "SUBMITTED")
+              // Self-registered guests not yet linked to any Profile on this reservation —
+              // shown once, above the per-guest loop, regardless of which guest is showing.
+              const newEregSlots = guestIdx === 0 ? eregSlots.filter((s) => !s.existingProfileId && s.status === "SUBMITTED") : []
               return (
                 <div className="space-y-4">
+                  {newEregSlots.length > 0 && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                      <p className="text-sm font-medium flex items-center gap-1.5"><Send className="w-4 h-4" /> {newEregSlots.length} self-registered guest{newEregSlots.length > 1 ? "s" : ""} not yet on this reservation</p>
+                      {newEregSlots.map((s) => (
+                        <div key={s.id} className="flex items-center justify-between text-sm">
+                          <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || "Unnamed guest"}</span>
+                          <Button size="sm" variant="outline" onClick={() => setReviewSlot(s)}>Add &amp; review</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h4 className="font-semibold">{profName(g.profile)}</h4>
@@ -300,6 +354,13 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                     </div>
                     <span className="text-xs text-muted-foreground">Guest {guestIdx + 1} of {guests.length}</span>
                   </div>
+
+                  {eregSlot && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+                      <p className="text-sm flex items-center gap-1.5"><Send className="w-4 h-4" /> This guest completed eRegistration{eregSlot.submittedAt ? ` on ${new Date(eregSlot.submittedAt).toLocaleDateString()}` : ""}.</p>
+                      <Button size="sm" onClick={() => setReviewSlot(eregSlot)}>Review &amp; Apply</Button>
+                    </div>
+                  )}
 
                   {status.complete ? (
                     <p className="text-sm text-success flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> On file — confirm the details below are current.{status.hasExpired && <span className="text-destructive ml-1">(an ID has expired — please update)</span>}</p>
@@ -333,6 +394,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
             {step === "regcard" && guests[guestIdx] && (() => {
               const g = guests[guestIdx]
               const upid = g.profile.upid
+              const signedSlot = eregSlots.find((s) => s.existingProfileId === upid && s.signatureDataUrl)
               return (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -342,13 +404,22 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                     </div>
                     <span className="text-xs text-muted-foreground">Guest {guestIdx + 1} of {guests.length}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Print the registration card for the guest to complete and physically sign.</p>
+
+                  {signedSlot ? (
+                    <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-3">
+                      <p className="text-sm flex items-center gap-1.5"><Send className="w-4 h-4" /> Signed digitally via eRegistration{signedSlot.submittedAt ? ` on ${new Date(signedSlot.submittedAt).toLocaleDateString()}` : ""} — no need to print and re-sign.</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={signedSlot.signatureDataUrl} alt={`${profName(g.profile)} signature`} className="h-20 rounded border bg-white object-contain" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Print the registration card for the guest to complete and physically sign.</p>
+                  )}
                   <Button variant="outline" onClick={() => window.open(`/e/${slug}/dashboard/reservations/${reservationId}/registration-card?guest=${upid}`, "_blank")}>
                     <Printer className="w-4 h-4 mr-2" /> Print Registration Card
                   </Button>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox checked={regCollected.has(upid)} onCheckedChange={(v) => setRegCollected((prev) => { const n = new Set(prev); if (v) n.add(upid); else n.delete(upid); return n })} />
-                    Printed &amp; signed card collected
+                    <Checkbox checked={regCollected.has(upid) || !!signedSlot} onCheckedChange={(v) => setRegCollected((prev) => { const n = new Set(prev); if (v) n.add(upid); else n.delete(upid); return n })} />
+                    {signedSlot ? "Digitally signed card on file" : "Printed & signed card collected"}
                   </label>
                 </div>
               )
@@ -417,6 +488,13 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
           </div>
         </DialogFooter>
       </DialogContent>
+
+      <EregistrationReviewDialog
+        reservationId={reservationId ?? ""}
+        slot={reviewSlot}
+        onClose={() => setReviewSlot(null)}
+        onApplied={() => { setReviewSlot(null); refetchEregSlots(); refetchGuestData() }}
+      />
     </Dialog>
   )
 }
