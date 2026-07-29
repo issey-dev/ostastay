@@ -6,7 +6,8 @@ import type { DateRange } from "react-day-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { DatePicker } from "@/components/ui/date-picker"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
 import { useConfirm } from "@/components/providers/confirm-provider"
@@ -119,6 +120,13 @@ export function AvailabilityPreview({
     if (open) void load()
   }, [open, load])
 
+  // Parsed with an explicit local midnight — a bare "yyyy-MM-dd" parses as UTC and can
+  // land on the wrong calendar day once shifted to the browser's local time.
+  const handleFromChange = (v: string) =>
+    setRange((r) => ({ ...r, from: v ? new Date(`${v}T00:00:00`) : undefined }))
+  const handleToChange = (v: string) =>
+    setRange((r) => ({ ...r, to: v ? new Date(`${v}T00:00:00`) : undefined }))
+
   const handlePush = async () => {
     if (!range.from) return
     // Confirmed because this is the one control in the Hub whose effect is immediately
@@ -155,120 +163,133 @@ export function AvailabilityPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85vh] w-full max-w-7xl sm:max-w-7xl flex-col gap-0 p-0">
+        <DialogHeader className="p-4 pb-0">
           <DialogTitle>{title ?? `What would be sent — ${propertyName}`}</DialogTitle>
           <DialogDescription>
             {description ?? "Pick a date range, computed from live inventory. Nothing is sent by opening this."}
           </DialogDescription>
         </DialogHeader>
 
-        <DateRangePicker value={range} onChange={(r) => r?.from && setRange(r)} />
+        <div className="flex flex-wrap items-end gap-3 p-4 pb-0">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">From</Label>
+            <DatePicker value={range.from} onChange={handleFromChange} maxDate={range.to} className="w-[160px]" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">To</Label>
+            <DatePicker value={range.to} onChange={handleToChange} minDate={range.from} className="w-[160px]" />
+          </div>
+        </div>
 
-        {loading && <Skeleton className="h-48 w-full" />}
-        {failed && <ErrorState onRetry={() => void load()} />}
+        {/* The only scrolling region — header, date fields, and the send action stay put
+            regardless of how many nights or room types the table ends up with. */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          {loading && <Skeleton className="h-48 w-full" />}
+          {failed && <ErrorState onRetry={() => void load()} />}
 
-        {!loading && !failed && plan && (
-          <div className="space-y-4">
-            {!plan.syncEnabled && (
-              <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
-                Sharing is currently off for this property — this is what would be sent once it is on.
-              </p>
-            )}
+          {!loading && !failed && plan && (
+            <div className="space-y-4">
+              {!plan.syncEnabled && (
+                <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
+                  Sharing is currently off for this property — this is what would be sent once it is on.
+                </p>
+              )}
 
-            {plan.roomTypes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No room types would be published.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="p-2 text-left font-medium">Room type</th>
-                      {plan.roomTypes[0].nights.map((n) => (
-                        <th key={n.date} className="p-2 text-center font-medium tabular-nums">
-                          {shortDate(n.date)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plan.roomTypes.map((rt) => (
-                      <Fragment key={rt.roomTypeId}>
-                        <tr className="border-b border-border">
-                          <td className="p-2">
-                            <span className="font-medium">{rt.roomTypeName}</span>
-                            <span className="ml-2 font-mono text-xs text-muted-foreground">
-                              → {rt.externalRoomId}
-                            </span>
-                          </td>
-                          {rt.nights.map((n) => (
-                            <td
-                              key={n.date}
-                              className={`p-2 text-center tabular-nums ${
-                                n.closed
-                                  ? "bg-destructive-muted font-semibold text-destructive"
-                                  : n.available === 0
-                                    ? "text-muted-foreground"
-                                    : ""
-                              }`}
-                              // Closed and zero look different on purpose — they mean
-                              // different things at the channel.
-                              title={n.closed ? "Stop-sale — room type closed at the channel" : undefined}
-                            >
-                              {n.closed ? "×" : n.available}
-                            </td>
-                          ))}
-                        </tr>
-                        {/* One row per rate actually being sent for this room type. An
-                            unpriced night shows "—" because nothing is sent for it — the
-                            channel keeps whatever price it already has. */}
-                        {rateIdsFor(rt).map((rateId) => (
-                          <tr key={`${rt.roomTypeId}-${rateId}`} className="border-b border-border last:border-0">
-                            <td className="py-1 pl-6 pr-2">
-                              <span className="font-mono text-xs text-muted-foreground">{rateId}</span>
+              {plan.roomTypes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No room types would be published.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="p-2 text-left font-medium">Room type</th>
+                        {plan.roomTypes[0].nights.map((n) => (
+                          <th key={n.date} className="p-2 text-center font-medium tabular-nums">
+                            {shortDate(n.date)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plan.roomTypes.map((rt) => (
+                        <Fragment key={rt.roomTypeId}>
+                          <tr className="border-b border-border">
+                            <td className="p-2">
+                              <span className="font-medium">{rt.roomTypeName}</span>
+                              <span className="ml-2 font-mono text-xs text-muted-foreground">
+                                → {rt.externalRoomId}
+                              </span>
                             </td>
                             {rt.nights.map((n) => (
                               <td
                                 key={n.date}
-                                className="py-1 px-2 text-center text-xs tabular-nums text-muted-foreground"
+                                className={`p-2 text-center tabular-nums ${
+                                  n.closed
+                                    ? "bg-destructive-muted font-semibold text-destructive"
+                                    : n.available === 0
+                                      ? "text-muted-foreground"
+                                      : ""
+                                }`}
+                                // Closed and zero look different on purpose — they mean
+                                // different things at the channel.
+                                title={n.closed ? "Stop-sale — room type closed at the channel" : undefined}
                               >
-                                {n.prices[rateId] != null ? n.prices[rateId] : "—"}
+                                {n.closed ? "×" : n.available}
                               </td>
                             ))}
                           </tr>
-                        ))}
-                      </Fragment>
+                          {/* One row per rate actually being sent for this room type. An
+                              unpriced night shows "—" because nothing is sent for it — the
+                              channel keeps whatever price it already has. */}
+                          {rateIdsFor(rt).map((rateId) => (
+                            <tr key={`${rt.roomTypeId}-${rateId}`} className="border-b border-border last:border-0">
+                              <td className="py-1 pl-6 pr-2">
+                                <span className="font-mono text-xs text-muted-foreground">{rateId}</span>
+                              </td>
+                              {rt.nights.map((n) => (
+                                <td
+                                  key={n.date}
+                                  className="py-1 px-2 text-center text-xs tabular-nums text-muted-foreground"
+                                >
+                                  {n.prices[rateId] != null ? n.prices[rateId] : "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-destructive">×</span> = stop-sale, closed at the channel
+                (distinct from 0, which means sold out but still listed). Indented rows are prices per channel
+                rate; <span className="font-mono">—</span> means no price is sent for that night, so the channel
+                keeps whatever it already has.
+              </p>
+
+              {plan.excluded.length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold">Not published</h4>
+                  <ul className="space-y-1">
+                    {plan.excluded.map((e) => (
+                      <li key={e.roomTypeId} className="flex items-center gap-2 text-sm">
+                        <Badge variant="secondary">{e.roomTypeName}</Badge>
+                        <span className="text-muted-foreground">{e.reason}</span>
+                      </li>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <p className="text-xs text-muted-foreground">
-              <span className="font-semibold text-destructive">×</span> = stop-sale, closed at the channel (distinct
-              from 0, which means sold out but still listed). Indented rows are prices per channel rate;{" "}
-              <span className="font-mono">—</span> means no price is sent for that night, so the channel keeps
-              whatever it already has.
-            </p>
-
-            {plan.excluded.length > 0 && (
-              <div>
-                <h4 className="mb-2 text-sm font-semibold">Not published</h4>
-                <ul className="space-y-1">
-                  {plan.excluded.map((e) => (
-                    <li key={e.roomTypeId} className="flex items-center gap-2 text-sm">
-                      <Badge variant="secondary">{e.roomTypeName}</Badge>
-                      <span className="text-muted-foreground">{e.reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {!loading && !failed && plan && (
-          <DialogFooter>
+          <DialogFooter className="border-t border-border p-4">
             {/* Sending is only offered when the operator has already turned sharing on —
                 the push itself refuses otherwise, so offering it would just produce a
                 confusing failure. */}
