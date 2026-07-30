@@ -1,16 +1,8 @@
 import type { ChannelConnection } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { encryptSecret, decryptSecret } from "@/lib/secret-crypto";
-import {
-  exchangeInviteCode,
-  refreshAccessToken,
-  isAccessTokenStale,
-  daysUntilRefreshTokenExpiry,
-  needsKeepAlive,
-  toConnectionError,
-  REFRESH_TOKEN_IDLE_DAYS,
-  type ChannelLogSink,
-} from "@/lib/channels/beds24";
+import type { ChannelLogSink, RateLimitInfo } from "@/lib/channels/beds24";
+import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/channels/providers/registry";
 
 /**
  * Build the sink that turns a Beds24 exchange into a ChannelSyncLog row.
@@ -29,6 +21,11 @@ export function makeLogSink(params: {
   connectionId?: string | null;
   /** Receives each written row id, so a caller can link entries afterwards. */
   onWrite?: (logId: string) => void;
+  /** Receives a rate-limit reading seen while connectionId is unset (the setup exchange),
+   *  so a caller like createConnection can write it in directly once the row exists —
+   *  mirrors onWrite's own reason for existing: nothing observed before the row exists
+   *  should just be lost. */
+  onRateLimit?: (info: RateLimitInfo) => void;
 }): ChannelLogSink {
   return async (entry) => {
     const row = await prisma.channelSyncLog.create({
@@ -49,6 +46,27 @@ export function makeLogSink(params: {
       select: { id: true },
     });
     params.onWrite?.(row.id);
+
+    // Passively captured off whichever call happened to carry it — there is no separate
+    // "check the rate limit" request. Any exchange that didn't report it (e.g. a network
+    // failure that never reached Beds24) simply has nothing to read.
+    if (!entry.rateLimit) return;
+    if (params.connectionId) {
+      const { total, remaining, resetsInSec } = entry.rateLimit;
+      await prisma.channelConnection
+        .update({
+          where: { id: params.connectionId },
+          data: {
+            rateLimitTotal: total,
+            rateLimitRemaining: remaining,
+            rateLimitResetsAt: new Date(Date.now() + resetsInSec * 1000),
+            rateLimitObservedAt: new Date(),
+          },
+        })
+        .catch((e) => console.error("could not record rate-limit state", e));
+    } else {
+      params.onRateLimit?.(entry.rateLimit);
+    }
   };
 }
 
@@ -81,14 +99,24 @@ export type PublicConnection = {
   lastTokenRefreshAt: string | null;
   lastHealthCheckAt: string | null;
   lastError: string | null;
+  /** Whether an inbound webhook URL has been generated. The token itself is never returned. */
+  hasWebhook: boolean;
   /** Null until the first refresh. Negative means the idle window has already lapsed. */
   daysUntilRefreshTokenExpiry: number | null;
   needsKeepAlive: boolean;
   refreshTokenIdleDays: number;
   createdAt: string;
+  /** Last-observed Beds24 rate-limit state — null until the first real API call. */
+  rateLimitTotal: number | null;
+  rateLimitRemaining: number | null;
+  rateLimitResetsAt: string | null;
+  rateLimitObservedAt: string | null;
+  /** Operator-configured self-throttle floor. Null means disabled. */
+  rateLimitPauseThreshold: number | null;
 };
 
 export function toPublicConnection(c: ChannelConnection): PublicConnection {
+  const provider = getProvider(c.provider);
   return {
     id: c.id,
     provider: c.provider,
@@ -98,10 +126,16 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
     lastTokenRefreshAt: c.lastTokenRefreshAt?.toISOString() ?? null,
     lastHealthCheckAt: c.lastHealthCheckAt?.toISOString() ?? null,
     lastError: c.lastError,
-    daysUntilRefreshTokenExpiry: daysUntilRefreshTokenExpiry(c.lastTokenRefreshAt),
-    needsKeepAlive: !!c.refreshToken && needsKeepAlive(c.lastTokenRefreshAt),
-    refreshTokenIdleDays: REFRESH_TOKEN_IDLE_DAYS,
+    hasWebhook: !!c.webhookToken,
+    daysUntilRefreshTokenExpiry: provider.daysUntilRefreshTokenExpiry(c.lastTokenRefreshAt),
+    needsKeepAlive: !!c.refreshToken && provider.needsKeepAlive(c.lastTokenRefreshAt),
+    refreshTokenIdleDays: provider.refreshTokenIdleDays,
     createdAt: c.createdAt.toISOString(),
+    rateLimitTotal: c.rateLimitTotal,
+    rateLimitRemaining: c.rateLimitRemaining,
+    rateLimitResetsAt: c.rateLimitResetsAt?.toISOString() ?? null,
+    rateLimitObservedAt: c.rateLimitObservedAt?.toISOString() ?? null,
+    rateLimitPauseThreshold: c.rateLimitPauseThreshold,
   };
 }
 
@@ -128,25 +162,39 @@ export async function createConnection(params: {
   enterpriseId: string;
   name: string;
   inviteCode: string;
+  /** Which channel manager this connection talks to. Defaults to Beds24 — the only
+   *  provider registered today — but every caller is free to name another once one exists. */
+  provider?: string;
 }): Promise<PublicConnection> {
-  const { enterpriseId, name, inviteCode } = params;
+  const { enterpriseId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID } = params;
+  const provider = getProvider(providerId);
 
   // Logged with no connectionId — the row does not exist yet, and a REJECTED invite code
   // never creates one. Without this, the most common setup failure would leave no trace.
   // The written ids are captured so a SUCCESSFUL setup can be linked to the connection it
   // produced (below); otherwise a connection's own log would be missing the exchange that
-  // created it, which is the first thing anyone looks for.
+  // created it, which is the first thing anyone looks for. The rate-limit reading is
+  // captured the same way, for the same reason — it is real data this exchange saw, and
+  // would otherwise be silently lost for having arrived one step too early.
   const setupLogIds: string[] = [];
-  const tokens = await exchangeInviteCode(
+  let setupRateLimit: RateLimitInfo | null = null;
+  const tokens = await provider.exchangeInviteCode(
     inviteCode,
-    makeLogSink({ enterpriseId, connectionName: name, onWrite: (id) => setupLogIds.push(id) })
+    makeLogSink({
+      enterpriseId,
+      connectionName: name,
+      onWrite: (id) => setupLogIds.push(id),
+      onRateLimit: (info) => {
+        setupRateLimit = info;
+      },
+    })
   );
   const now = new Date();
 
   const created = await prisma.channelConnection.create({
     data: {
       enterpriseId,
-      provider: "BEDS24",
+      provider: provider.id,
       name,
       refreshToken: encryptSecret(tokens.refreshToken),
       accessToken: encryptSecret(tokens.accessToken || null),
@@ -165,6 +213,22 @@ export async function createConnection(params: {
       .updateMany({ where: { id: { in: setupLogIds } }, data: { connectionId: created.id } })
       .catch((e) => console.error("could not link setup logs to connection", e));
   }
+  if (setupRateLimit) {
+    const { total, remaining, resetsInSec } = setupRateLimit;
+    await prisma.channelConnection
+      .update({
+        where: { id: created.id },
+        data: {
+          rateLimitTotal: total,
+          rateLimitRemaining: remaining,
+          rateLimitResetsAt: new Date(now.getTime() + resetsInSec * 1000),
+          rateLimitObservedAt: now,
+        },
+      })
+      .catch((e) => console.error("could not record setup rate-limit state", e));
+    // `created` predates this update — re-read so the returned shape reflects it.
+    return toPublicConnection(await prisma.channelConnection.findUniqueOrThrow({ where: { id: created.id } }));
+  }
 
   return toPublicConnection(created);
 }
@@ -180,8 +244,9 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   if (!conn) throw new Error("Connection not found");
   if (!conn.refreshToken) throw new Error("Connection has no stored credentials");
 
+  const provider = getProvider(conn.provider);
   const cached = decryptSecret(conn.accessToken);
-  if (cached && !isAccessTokenStale(conn.accessTokenExpiresAt)) {
+  if (cached && !provider.isAccessTokenStale(conn.accessTokenExpiresAt)) {
     return cached;
   }
 
@@ -189,7 +254,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   if (!refreshToken) throw new Error("Connection has no stored credentials");
 
   try {
-    const fresh = await refreshAccessToken(
+    const fresh = await provider.refreshAccessToken(
       refreshToken,
       makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
     );
@@ -211,7 +276,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
       where: { id: connectionId },
       data: {
         status: CONNECTION_STATUS.ERROR,
-        lastError: toConnectionError(e),
+        lastError: provider.toConnectionError(e),
         lastHealthCheckAt: new Date(),
       },
     });
@@ -240,9 +305,10 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
     return toPublicConnection(updated);
   }
 
+  const provider = getProvider(conn.provider);
   const refreshToken = decryptSecret(conn.refreshToken);
   try {
-    const fresh = await refreshAccessToken(
+    const fresh = await provider.refreshAccessToken(
       refreshToken!,
       makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
     );
@@ -264,7 +330,7 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
       data: {
         status: CONNECTION_STATUS.ERROR,
         lastHealthCheckAt: new Date(),
-        lastError: toConnectionError(e),
+        lastError: provider.toConnectionError(e),
       },
     });
     return toPublicConnection(updated);
@@ -276,7 +342,8 @@ export async function reauthorizeConnection(connectionId: string, inviteCode: st
   const existing = await prisma.channelConnection.findUnique({ where: { id: connectionId } });
   if (!existing) throw new Error("Connection not found");
 
-  const tokens = await exchangeInviteCode(
+  const provider = getProvider(existing.provider);
+  const tokens = await provider.exchangeInviteCode(
     inviteCode,
     makeLogSink({
       enterpriseId: existing.enterpriseId,
@@ -298,4 +365,36 @@ export async function reauthorizeConnection(connectionId: string, inviteCode: st
     },
   });
   return toPublicConnection(updated);
+}
+
+/**
+ * Set (or clear) the operator's self-throttle floor. A negative or non-integer value is
+ * rejected — the field means "pause once remaining credits reach this many", so anything
+ * else could never actually be reached and would silently disable the feature.
+ */
+export async function setRateLimitPauseThreshold(connectionId: string, threshold: number | null): Promise<PublicConnection> {
+  if (threshold !== null && (!Number.isInteger(threshold) || threshold < 0)) {
+    throw new Error("Pause threshold must be a non-negative whole number, or null to disable");
+  }
+  const updated = await prisma.channelConnection.update({
+    where: { id: connectionId },
+    data: { rateLimitPauseThreshold: threshold },
+  });
+  return toPublicConnection(updated);
+}
+
+/**
+ * Should a real Beds24 call be skipped right now to protect the account's shared credit
+ * pool? Only true while the LAST OBSERVED reset window is still in the future — once it has
+ * passed, Beds24 itself would have replenished the credits, so an old "remaining" number
+ * must not keep pausing calls indefinitely.
+ */
+export function isRateLimitPaused(c: {
+  rateLimitPauseThreshold: number | null;
+  rateLimitRemaining: number | null;
+  rateLimitResetsAt: Date | null;
+}): boolean {
+  if (c.rateLimitPauseThreshold == null || c.rateLimitRemaining == null || !c.rateLimitResetsAt) return false;
+  if (c.rateLimitResetsAt.getTime() <= Date.now()) return false;
+  return c.rateLimitRemaining <= c.rateLimitPauseThreshold;
 }

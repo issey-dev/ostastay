@@ -196,8 +196,10 @@ first has shipped, on branch `feature/hub-shell`.
     skip or repeat rows as new entries arrive mid-page.
 - **DONE — Sharing / mapping** (branch `feature/hub-sharing`, stacked on
   `feature/hub-job-runner`). `ChannelPropertyLink` / `ChannelRoomTypeMap` /
-  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI at
-  `/e/{slug}/hub/channel-manager/sharing`. This is the "control what is shared" surface.
+  `ChannelRatePlanMap` + `src/lib/channels/sharing.ts` + `/api/hub/property-links` + the UI,
+  since renamed **Sharing → Mapping** and split into 5 tabs (Property, Room Type, Rate Plan,
+  Inventory, Defaults) at `/e/{slug}/hub/channel-manager/mapping`. This is the "control what
+  is shared" surface.
   - ⚠️ **`ChannelPropertyLink.propertyId` is UNIQUE ACROSS ALL CONNECTIONS**, not per
     connection. Linking one property through two channel-manager accounts would have both
     pushing availability for the same rooms and both taking bookings — a **double-sell that
@@ -242,10 +244,11 @@ first has shipped, on branch `feature/hub-shell`.
     reports the **previous day**. Harmless in its current use (a conflict message) but a
     day-shifted push would move real inventory onto the wrong night. `fmtDay` itself is
     left alone — a separate, low-risk cleanup.
-  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Sharing screen,
-    available to **view-only** users too. Checking what would be sent is a read, and is the
-    last cheap moment to catch a mapping mistake — after sharing is on, the next thing to
-    notice a wrong number is an OTA.
+  - Preview at `/api/hub/property-links/[id]/preview` + a dialog on the Mapping screen's
+    Inventory/Rate Plan tabs (now with an operator-chosen date range, not just a fixed
+    14-night window), available to **view-only** users too. Checking what would be sent is
+    a read, and is the last cheap moment to catch a mapping mistake — after sharing is on,
+    the next thing to notice a wrong number is an OTA.
 - **DONE — outbound push** (branch `feature/sync-push`). `src/lib/channels/payload.ts`
   (pure transform) + `push.ts` (guards + send) + `POST /api/hub/property-links/[id]/push`
   + a **Send now** button in the preview dialog + the `channel-ari-push` scheduled job.
@@ -272,9 +275,103 @@ first has shipped, on branch `feature/hub-shell`.
   - Push failures are returned, never thrown, so one property cannot abort a sweep.
   - Pushing also refreshes the access token, which resets Beds24's 30-day idle clock — an
     actively-syncing property keeps its own credentials alive without the keep-alive job.
-- **Next: inbound bookings.** Webhook + `GET /bookings` polling fallback, **idempotent on
-  the OTA booking id** (`ChannelReservationRef` from the plan — not yet built), handling
-  create/modify/cancel, with the **"channel overbook" alert** from D-7 rule 4.
+- **DONE — inbound bookings, PHASE 1** (branch `feature/sync-inbound`).
+  `ChannelInboundBooking` + `src/lib/channels/inbound/` (parse, ingest, poll) + the webhook
+  at `/api/channels/webhook/[token]` + the `channel-booking-poll` job + the Hub screen at
+  `/e/{slug}/hub/channel-manager/bookings`.
+  - ⚠️ **PHASE 1 RECEIVES AND RECORDS; IT DOES NOT CREATE RESERVATIONS.** Reservation
+    creation in this app is **408 lines inline in `POST /api/reservations`**, wiring in
+    allocations, special requests, availability and stop-sale conflicts, document sequences
+    and activity logging. Reimplementing that in the inbound path would miss something.
+    **Converting these rows should go through a properly EXTRACTED reservation service** —
+    that extraction is the next slice, and it is a refactor of a heavily-used, recently
+    audited path, so it wants its own change rather than being smuggled in here.
+  - **Idempotent on `(connectionId, externalBookingId)`.** Webhook delivery is at-least-once
+    and the poller deliberately re-reads an overlapping window, so the same booking arrives
+    repeatedly; every arrival after the first updates in place. A duplicate row is a
+    duplicate guest.
+  - **Overbooking is detected and FLAGGED, never refused** (D-7 rule 4). Re-flagging clears
+    a previous acknowledgement — acknowledging one state must not silence a later problem.
+  - **The RAW payload is always stored, even when parsing fails.** The Beds24 booking shape
+    is unverified, so the raw body is the only thing guaranteed correct; with it a mis-parse
+    is replayable rather than lost. A half-understood booking is kept with a `problem` note.
+  - **Webhook auth is a per-connection URL secret**, not a payload signature: Beds24's
+    signing scheme is not publicly documented, and guessing at a security mechanism is the
+    least acceptable place to guess. If a documented scheme exists, add it ON TOP.
+    Bad token returns a bare 404 — a webhook URL is a credential and must not be probeable.
+  - **The webhook returns 200 even for a payload it cannot read.** A non-2xx makes the
+    channel retry, and retrying cannot fix an unmapped room or a malformed body — it would
+    redeliver forever while the real problem stays invisible. The booking is stored with its
+    problem noted and resolved in the Hub instead.
+  - This is the first thing to write **INBOUND** exchange-log entries; until now that filter
+    could never match anything.
+- **DONE — wire formats VERIFIED** (branch `feature/sync-verified-fields`, 2026-07-28).
+  Beds24's **official OpenAPI spec** was obtained by reading the `@lionlai/beds24-v2-sdk`
+  npm package, which is generated from it. The account-gated Swagger is no longer a blocker.
+  - **Inbound was already correct.** `id`, `roomId`, `propertyId`, `status`, `arrival`,
+    `departure`, `numAdult`, `numChild`, `firstName`, `lastName`, `email`, `price`,
+    `referer`, `apiSource`, `channel` all confirmed. `status` is a closed enum —
+    `confirmed | request | new | cancelled | black | inquiry` — which is why both
+    "cancelled" and "black" count as cancellation.
+  - **Outbound had THREE errors, now fixed:**
+    1. `roomId` is a **number**, not a string. A non-numeric external id is now skipped
+       rather than coerced into addressing the wrong room.
+    2. A stop-sale is **`override: "blackout"`**, not a `closed` boolean. `override: "none"`
+       is sent explicitly on open dates so a previously blacked-out date is actively
+       re-opened.
+    3. Prices are **sixteen NUMBERED SLOTS** (`price1`..`price16`), not a map keyed by rate
+       id. `ChannelRatePlanMap.externalRateId` therefore holds a **slot number 1–16**,
+       validated on write; the Sharing UI labels it as such.
+  - ⚠️ **From Beds24's spec, worth not rediscovering:** *"If you change override from
+    blackout to none without setting numAvail, numAvail will change to the maximum
+    possible."* Every range we send carries an explicit `numAvail`, so lifting a blackout
+    cannot silently re-open a room type at full capacity. **Do not make `numAvail` optional.**
+  - Also noted: `numAvail` may legitimately be negative in Beds24 (an overbooked room), but
+    we never send one — D-7 says publish actual availability, clamped at 0.
+  - Rate limiting is real: responses carry `X-FiveMinCreditLimit`,
+    `X-FiveMinCreditLimit-Remaining` and `-ResetsIn` headers. **Not yet read or respected** —
+    worth handling before high-frequency pushing.
+  - The spec also exposes `minStay`, `maxStay`, `multiplier` (required, default 1) and
+    per-channel `maxBookings` on the calendar. None are used yet.
+- **DONE — provider abstraction, reservation-creation service, booking defaults, inbound
+  conversion, Sharing → Mapping rebuild** (2026-07-28, stacked on the wire-formats-verified
+  work above).
+  - **`ChannelProvider` interface** (`src/lib/channels/provider.ts`) — connection.ts, push.ts,
+    poll.ts, ingest.ts, the inbound webhook route, sharing.ts's rate-slot validation, and the
+    keep-alive job all resolve a provider by `ChannelConnection.provider` and call through
+    this interface rather than importing Beds24's client directly. `Beds24Provider`
+    (`providers/beds24-provider.ts`) is the only implementation; a second channel manager is
+    "implement the interface + register it in `providers/registry.ts`", with **no changes
+    needed above that seam**. This is what makes the connection genuinely swappable, per the
+    owner's explicit requirement.
+  - **`createReservation`** (`src/lib/reservations/create-reservation.ts`) — the ~300-line
+    inline body of `POST /api/reservations` extracted verbatim (same validation order, same
+    status codes, no behavior change), returning a plain result object rather than a
+    `NextResponse` so a non-HTTP caller (the conversion below) can use the exact same rules
+    a front-desk booking goes through.
+  - **`ChannelBookingDefaults`** model + `src/lib/channels/defaults.ts` — per-link default
+    rate plan + meal plan, since a channel booking never names one of ours. No default rate
+    plan configured = conversion deliberately blocked, not guessed.
+  - **`src/lib/channels/inbound/convert.ts`** — turns a `RECEIVED` `ChannelInboundBooking`
+    into a real `Reservation` via `createReservation`, using the defaults above. Cancelled →
+    `IGNORED`; missing mapping/dates or no configured default → stays `RECEIVED` with
+    `problem` set, retried by the new `channel-booking-convert` scheduled job; only an
+    unexpected thrown error → terminal `FAILED`. Forces `acknowledgeOverbook: true` — D-7 rule
+    4 says an over-availability channel booking is accepted and flagged, never refused, since
+    the channel already confirmed it to the guest.
+  - **Sharing UI renamed Mapping, split into 5 tabs** (`src/components/hub/mapping-manager.tsx`
+    + `mapping/room-type-tab.tsx` / `rate-plan-tab.tsx` / `inventory-tab.tsx` /
+    `defaults-tab.tsx`, route now `/e/{slug}/hub/channel-manager/mapping`): Property (link
+    list, sync toggle, link/unlink), Room Type (unchanged mapping table), Rate Plan (mapping
+    table + "send prices for a date range"), Inventory ("resync availability" for a date
+    range), Defaults (new — the rate plan/meal plan UI above). Rate Plan's "send prices" and
+    Inventory's "resync" are the **same underlying push** (`AvailabilityPreview`, now
+    date-range-capable via `@/components/ui/date-range-picker` instead of a fixed 14 nights)
+    — Beds24 has no separate rates endpoint; availability and prices always travel together
+    in one calendar payload.
+  - Still open: a live sandbox account to exercise inbound conversion end to end (see the
+    Veyo Lagoon Retreat connection already set up for this), and the Beds24 rate-limit
+    headers noted above are still unread.
 - **D-7 ruling — the rules the sync engine must implement** (full text in
   [DECISIONS.md](DECISIONS.md)):
   1. **Push actual available inventory; never include overbooking allowance.** Clamp to `0`
@@ -317,14 +414,34 @@ first has shipped, on branch `feature/hub-shell`.
     rest, and a 500 from cron would not tell the operator which of N enterprises broke.
   - Jobs run sequentially across enterprises on purpose — they make outbound channel-manager
     calls, and firing all at once would burst into a provider rate limit.
-  - Jobs registered: `channel-keepalive` (only touches connections `needsKeepAlive()` says
-    are due) and `channel-log-prune` (retention `SYNC_LOG_RETENTION_DAYS = 60`).
+  - Jobs registered (as of 2026-07-28): `channel-keepalive` (only touches connections
+    `needsKeepAlive()` says are due), `channel-log-prune` (retention
+    `SYNC_LOG_RETENTION_DAYS = 60`), `channel-ari-push` (availability+rates, now a full
+    **365-day** window — see PUSH_WINDOW_DAYS in `push.ts`), `channel-booking-poll` (fallback
+    behind the webhook), `channel-booking-convert` (sweeps RECEIVED bookings into
+    Reservations).
   - The Hub overview shows last-run status per job and flags a run **older than 24h as
     Stale** — a cron that has quietly stopped firing is worse than no cron, since the
     keep-alive looks fine right up until a credential lapses.
-- **Still outstanding for deployment:** actually schedule the cron in each environment and set
-  `CRON_SECRET` there. The mechanism now exists and is verified; the schedule is
-  environment configuration, not code.
+- **Still outstanding for deployment (self-hosted, 2026-07-28):** actually schedule the cron.
+  The mechanism exists and is verified (`POST /api/jobs/run`, optional `?job=<name>` to run
+  just one job instead of all of them); the schedule itself is environment configuration,
+  not code. The owner wants `channel-ari-push` specifically to run **once a day**, separate
+  from the rest — a year-long payload is too heavy to repeat hourly alongside the cheap
+  jobs. `?job=` only selects ONE job by name (no "all except X"), so the parameterless
+  hourly call must be dropped in favor of naming the four light jobs individually:
+  ```
+  # Hourly — each cheap when nothing is due; channel-ari-push deliberately absent here.
+  0 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-keepalive"        -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  5 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-log-prune"        -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  10 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-booking-poll"     -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  15 * * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-booking-convert"  -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+
+  # Daily, off-peak — the heavy 365-day availability+rates push, on its own.
+  0 2 * * * curl -fsS -X POST "https://<host>/api/jobs/run?job=channel-ari-push"          -H "x-cron-secret: $CRON_SECRET" >> /var/log/ostastay-jobs.log 2>&1
+  ```
+  `CRON_SECRET` must be set in this environment (see `.env.example`) before any of these do
+  anything — the endpoint fails closed (503) rather than run unauthenticated.
 - **Beds24 API facts worth not re-deriving:** access token 24h; refresh token dies if unused for
   **30 days** (needs a keep-alive job — this is what the Hub's health monitor is for);
   `POST /inventory/rooms/calendar` pushes ARI, `GET /bookings` + booking webhooks pull

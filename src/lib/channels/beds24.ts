@@ -78,6 +78,15 @@ type Beds24TokenResponse = {
 // these through a sink rather than writing them itself, so this module keeps no database
 // dependency and stays trivially testable — src/lib/channels/connection.ts supplies the
 // sink that turns them into ChannelSyncLog rows.
+// Beds24's account-wide API credit limit, read straight off every response's headers
+// (confirmed present by the official OpenAPI spec — see .agents/docs/TODO.md). Not queried
+// separately: whatever the most recent real call saw IS the current state.
+export type RateLimitInfo = {
+  total: number;
+  remaining: number;
+  resetsInSec: number;
+};
+
 export type ChannelCallLog = {
   direction: "OUTBOUND" | "INBOUND";
   operation: string;
@@ -88,9 +97,37 @@ export type ChannelCallLog = {
   requestSummary: string;
   responseSummary: string;
   errorMessage: string | null;
+  /** Absent when the response carried no rate-limit headers (e.g. a network failure never
+   *  reached Beds24 at all, so there is nothing to read). */
+  rateLimit?: RateLimitInfo | null;
 };
 
 export type ChannelLogSink = (entry: ChannelCallLog) => void | Promise<void>;
+
+const RATE_LIMIT_HEADER = "X-FiveMinCreditLimit";
+const RATE_LIMIT_REMAINING_HEADER = "X-FiveMinCreditLimit-Remaining";
+const RATE_LIMIT_RESETS_HEADER = "X-FiveMinCreditLimit-ResetsIn";
+
+/** Reads Beds24's rate-limit headers off a response. Null when any are missing/unparseable
+ *  — a partial reading is worse than none, since it could be silently wrong. Also guards
+ *  against a `headers`-less response object, since not every fetch stand-in provides one. */
+function extractRateLimit(res: Response): RateLimitInfo | null {
+  if (typeof res.headers?.get !== "function") return null;
+  const totalRaw = res.headers.get(RATE_LIMIT_HEADER);
+  const remainingRaw = res.headers.get(RATE_LIMIT_REMAINING_HEADER);
+  const resetsInRaw = res.headers.get(RATE_LIMIT_RESETS_HEADER);
+  // A missing header comes back as null from .get() — checked BEFORE coercing to Number,
+  // since Number(null) is 0, not NaN, and would otherwise be misread as a real zero credit.
+  if (totalRaw === null || remainingRaw === null || resetsInRaw === null) return null;
+
+  const total = Number(totalRaw);
+  const remaining = Number(remainingRaw);
+  const resetsInSec = Number(resetsInRaw);
+  if (!Number.isFinite(total) || !Number.isFinite(remaining) || !Number.isFinite(resetsInSec)) {
+    return null;
+  }
+  return { total, remaining, resetsInSec };
+}
 
 // A logging failure must never break the call it describes — the same rule logActivity()
 // follows. Swallow and carry on.
@@ -154,6 +191,7 @@ async function requestJson(
   }
 
   const latencyMs = Date.now() - startedAt;
+  const rateLimit = extractRateLimit(res);
 
   let body: Beds24TokenResponse;
   try {
@@ -167,6 +205,7 @@ async function requestJson(
       latencyMs,
       responseSummary: "",
       errorMessage: redactErrorMessage(message),
+      rateLimit,
     });
     throw new ChannelApiError(message, res.status);
   }
@@ -186,6 +225,7 @@ async function requestJson(
     latencyMs,
     responseSummary,
     errorMessage: errorMessage ? redactErrorMessage(errorMessage) : null,
+    rateLimit,
   });
 
   if (!res.ok) {
@@ -266,6 +306,57 @@ export async function pushCalendar(
     method: "POST",
     body: payload,
   });
+}
+
+/**
+ * Fetch bookings modified since a given time. Returns the raw parsed JSON body —
+ * envelope shape is not assumed here; extractBookings() upstream tolerates the several
+ * plausible shapes Beds24 might return, since the exact one is unverified against a real
+ * webhook or poll response.
+ */
+export async function fetchBookings(accessToken: string, since: Date, sink?: ChannelLogSink): Promise<unknown> {
+  const startedAt = Date.now();
+  const endpoint = "/bookings";
+  const requestSummary = redactForLog({ modifiedSince: since.toISOString() });
+  const base = { direction: "INBOUND" as const, operation: "booking.poll", endpoint, requestSummary };
+
+  let res: Response;
+  try {
+    res = await fetch(`${BEDS24_API_BASE}${endpoint}?modifiedSince=${encodeURIComponent(since.toISOString())}`, {
+      method: "GET",
+      headers: authHeader(accessToken),
+    });
+  } catch (e) {
+    const message = `Could not reach Beds24: ${e instanceof Error ? e.message : "network error"}`;
+    await emit(sink, {
+      ...base,
+      ok: false,
+      httpStatus: null,
+      latencyMs: Date.now() - startedAt,
+      responseSummary: "",
+      errorMessage: redactErrorMessage(message),
+    });
+    throw new ChannelApiError(message, 0);
+  }
+
+  const latencyMs = Date.now() - startedAt;
+  const body = await res.json().catch(() => null);
+  const rateLimit = extractRateLimit(res);
+
+  await emit(sink, {
+    ...base,
+    ok: res.ok,
+    httpStatus: res.status,
+    latencyMs,
+    responseSummary: redactForLog(body),
+    errorMessage: res.ok ? null : `Poll failed (HTTP ${res.status})`,
+    rateLimit,
+  });
+
+  if (!res.ok) {
+    throw new ChannelApiError(`Beds24 returned HTTP ${res.status}`, res.status);
+  }
+  return body;
 }
 
 /** True when the cached access token is missing or close enough to expiry to re-mint. */

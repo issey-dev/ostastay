@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
-import { pushCalendar, toConnectionError } from "@/lib/channels/beds24";
-import { getValidAccessToken, makeLogSink } from "@/lib/channels/connection";
+import { getValidAccessToken, makeLogSink, isRateLimitPaused } from "@/lib/channels/connection";
 import { computeChannelAvailability, resolveWindow } from "@/lib/channels/sync";
-import { buildCalendarPayload, countNights, type Beds24RoomCalendar } from "@/lib/channels/payload";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // The outbound push — the first thing in this integration that actually reaches an OTA.
 //
@@ -11,9 +10,10 @@ import { buildCalendarPayload, countNights, type Beds24RoomCalendar } from "@/li
 // a mistake is visible to guests, so the guards below are not defensive padding, they are
 // the feature.
 
-// How far ahead inventory is published. Long enough to cover normal booking lead time,
-// short enough that one push stays small and a mistake has a bounded blast radius.
-export const PUSH_WINDOW_DAYS = 60;
+// How far ahead inventory is published by default. A full year — the owner wants the
+// channel manager carrying a year of availability at all times, refreshed daily by
+// channelAriPushJob (src/lib/jobs/index.ts) rather than the 60-day window this used to be.
+export const PUSH_WINDOW_DAYS = 365;
 
 export type PushResult = {
   linkId: string;
@@ -22,8 +22,9 @@ export type PushResult = {
   reason?: string;
   roomTypeCount: number;
   nightCount: number;
-  /** Only populated for a dry run — the exact body that WOULD be sent. */
-  payload?: Beds24RoomCalendar[];
+  /** Only populated for a dry run — the exact body that WOULD be sent, in the connected
+   *  provider's own wire format (opaque here by design; see src/lib/channels/provider.ts). */
+  payload?: unknown;
 };
 
 /**
@@ -46,13 +47,27 @@ export async function pushAvailabilityForLink(opts: {
   linkId: string;
   dryRun?: boolean;
   days?: number;
+  /** Window start, same format resolveWindow() already accepts. Null/omitted means today —
+   *  the on-demand Hub actions (Rate Plan/Inventory tabs) pass an operator-chosen range. */
+  from?: string | null;
 }): Promise<PushResult> {
   const { enterpriseId, linkId, dryRun = false } = opts;
 
   const link = await prisma.channelPropertyLink.findUnique({
     where: { id: linkId },
     include: {
-      connection: { select: { id: true, enterpriseId: true, name: true, refreshToken: true } },
+      connection: {
+        select: {
+          id: true,
+          enterpriseId: true,
+          name: true,
+          refreshToken: true,
+          provider: true,
+          rateLimitPauseThreshold: true,
+          rateLimitRemaining: true,
+          rateLimitResetsAt: true,
+        },
+      },
       property: { select: { name: true } },
     },
   });
@@ -70,12 +85,24 @@ export async function pushAvailabilityForLink(opts: {
   if (!link.connection.refreshToken) {
     return { ...base, status: "SKIPPED", reason: "Connection has no credentials", roomTypeCount: 0, nightCount: 0 };
   }
+  // A dry run computes only, never calls Beds24, so it never touches the shared credit pool
+  // and is exempt from the operator's self-throttle floor.
+  if (!dryRun && isRateLimitPaused(link.connection)) {
+    return {
+      ...base,
+      status: "SKIPPED",
+      reason: `Paused — Beds24 rate-limit credits at or below the configured threshold (${link.connection.rateLimitRemaining} remaining)`,
+      roomTypeCount: 0,
+      nightCount: 0,
+    };
+  }
 
-  const { from, to } = resolveWindow(null, opts.days ?? PUSH_WINDOW_DAYS);
+  const provider = getProvider(link.connection.provider);
+  const { from, to } = resolveWindow(opts.from ?? null, opts.days ?? PUSH_WINDOW_DAYS);
   const plan = await computeChannelAvailability({ enterpriseId, linkId, from, to });
-  const payload = buildCalendarPayload(plan);
+  const { payload, roomTypeCount, nightCount } = provider.buildAvailabilityPayload(plan);
 
-  if (payload.length === 0) {
+  if (roomTypeCount === 0) {
     return {
       ...base,
       status: "SKIPPED",
@@ -84,9 +111,6 @@ export async function pushAvailabilityForLink(opts: {
       nightCount: 0,
     };
   }
-
-  const roomTypeCount = payload.length;
-  const nightCount = countNights(payload);
 
   if (dryRun) {
     return { ...base, status: "DRY_RUN", roomTypeCount, nightCount, payload };
@@ -100,16 +124,16 @@ export async function pushAvailabilityForLink(opts: {
 
   try {
     // getValidAccessToken re-mints from the refresh token when needed, and doing so also
-    // resets Beds24's 30-day idle clock — so a property that is actively syncing keeps its
+    // resets the provider's idle clock — so a property that is actively syncing keeps its
     // own credentials alive without the keep-alive job having to.
     const accessToken = await getValidAccessToken(link.connection.id);
-    await pushCalendar(accessToken, payload, sink);
+    await provider.pushAvailability(accessToken, payload, sink);
     return { ...base, status: "PUSHED", roomTypeCount, nightCount };
   } catch (e) {
     // Never rethrows: a push failure for one property must not abort a job sweeping the
-    // rest, and the exchange log already carries the detail. pushCalendar's own sink has
-    // recorded the failed exchange before this point.
-    return { ...base, status: "FAILED", reason: toConnectionError(e), roomTypeCount, nightCount };
+    // rest, and the exchange log already carries the detail. pushAvailability's own sink
+    // has recorded the failed exchange before this point.
+    return { ...base, status: "FAILED", reason: provider.toConnectionError(e), roomTypeCount, nightCount };
   }
 }
 

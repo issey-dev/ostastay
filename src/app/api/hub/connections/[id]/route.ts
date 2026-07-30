@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { reauthorizeConnection } from "@/lib/channels/connection";
+import { reauthorizeConnection, setRateLimitPauseThreshold } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
 // Confirms the connection exists AND belongs to the caller's enterprise. One generic
@@ -16,9 +16,13 @@ async function assertConnectionInEnterprise(id: string, enterpriseId: string) {
   return connection;
 }
 
-// Replace the stored credentials with a fresh invite code — the recovery path when a
-// refresh token has lapsed past Beds24's 30-day idle window, which cannot be repaired by
-// refreshing (the token is already dead) and needs a new code from the control panel.
+// Two distinct edits, dispatched by which field is present — same pattern as the
+// property-links PATCH:
+//   { inviteCode }               — replace the stored credentials with a fresh invite code
+//                                   (the recovery path when a refresh token has lapsed past
+//                                   the provider's idle window and cannot be repaired by
+//                                   refreshing, since the token is already dead).
+//   { rateLimitPauseThreshold }  — the operator's self-throttle floor (null disables it).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -32,6 +36,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const body = await request.json().catch(() => null);
+
+    if (body && typeof body === "object" && "rateLimitPauseThreshold" in body) {
+      const raw = body.rateLimitPauseThreshold;
+      const threshold = raw === null ? null : Number(raw);
+      if (threshold !== null && !Number.isFinite(threshold)) {
+        return NextResponse.json({ error: "Pause threshold must be a number or null" }, { status: 400 });
+      }
+      const connection = await setRateLimitPauseThreshold(id, threshold);
+      return NextResponse.json({ connection });
+    }
+
     const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";
     if (!inviteCode) {
       return NextResponse.json({ error: "An invite code is required" }, { status: 400 });

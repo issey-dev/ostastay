@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,6 +35,11 @@ type Connection = {
   needsKeepAlive: boolean
   refreshTokenIdleDays: number
   createdAt: string
+  rateLimitTotal: number | null
+  rateLimitRemaining: number | null
+  rateLimitResetsAt: string | null
+  rateLimitObservedAt: string | null
+  rateLimitPauseThreshold: number | null
 }
 
 const connectSchema = z.object({
@@ -149,6 +155,22 @@ export function ChannelConnectionManager({ canManage }: { canManage: boolean }) 
     } finally {
       setBusyId(null)
     }
+  }
+
+  const handleSetPauseThreshold = async (connectionId: string, threshold: number | null) => {
+    const res = await fetch(`/api/hub/connections/${connectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rateLimitPauseThreshold: threshold }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? "Could not save")
+      return false
+    }
+    toast.success(threshold === null ? "Self-throttle disabled" : `Will pause at ${threshold} credits remaining`)
+    await load()
+    return true
   }
 
   const handleDelete = async (c: Connection) => {
@@ -282,6 +304,8 @@ export function ChannelConnectionManager({ canManage }: { canManage: boolean }) 
                     <span className="font-medium">Last error:</span> {c.lastError}
                   </p>
                 )}
+
+                <RateLimitPanel c={c} canManage={canManage} onSave={(v) => handleSetPauseThreshold(c.id, v)} />
               </CardContent>
             </Card>
           ))}
@@ -377,6 +401,93 @@ export function ChannelConnectionManager({ canManage }: { canManage: boolean }) 
           </Form>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Beds24's account-wide API credit pool, as last observed off response headers (see
+// src/lib/channels/beds24.ts) — not polled separately, so "not yet observed" just means no
+// real call has happened yet. The threshold below is the operator's own safety margin:
+// push/poll skip a real call once remaining credits reach it, rather than waiting for
+// Beds24 itself to start rejecting requests.
+function RateLimitPanel({
+  c,
+  canManage,
+  onSave,
+}: {
+  c: Connection
+  canManage: boolean
+  onSave: (threshold: number | null) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState(c.rateLimitPauseThreshold?.toString() ?? "")
+  // Whether display alone is "paused" depends on the current wall-clock time, which a
+  // component body must not read directly during render (React treats Date.now() as an
+  // impure read) — so it is computed in an effect instead, same as any other read of
+  // outside-the-render-tree state.
+  const [paused, setPaused] = useState(false)
+
+  useEffect(() => {
+    setDraft(c.rateLimitPauseThreshold?.toString() ?? "")
+  }, [c.rateLimitPauseThreshold])
+
+  useEffect(() => {
+    const resetsAt = c.rateLimitResetsAt ? new Date(c.rateLimitResetsAt) : null
+    setPaused(
+      c.rateLimitPauseThreshold != null &&
+        c.rateLimitRemaining != null &&
+        resetsAt !== null &&
+        resetsAt.getTime() > Date.now() &&
+        c.rateLimitRemaining <= c.rateLimitPauseThreshold
+    )
+  }, [c.rateLimitPauseThreshold, c.rateLimitRemaining, c.rateLimitResetsAt])
+
+  const resetsAt = c.rateLimitResetsAt ? new Date(c.rateLimitResetsAt) : null
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium">Rate limit</span>
+        {paused && <Badge variant="destructive">Self-paused</Badge>}
+      </div>
+
+      {c.rateLimitTotal === null ? (
+        <p className="text-sm text-muted-foreground">Not yet observed — shown after the next real API call.</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {c.rateLimitRemaining} / {c.rateLimitTotal} credits remaining
+          {resetsAt && `, resets ${resetsAt.toLocaleTimeString()}`}
+          {c.rateLimitObservedAt && ` (as of ${formatDateTime(c.rateLimitObservedAt)})`}
+        </p>
+      )}
+
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor={`rate-limit-pause-${c.id}`} className="text-xs text-muted-foreground">
+            Pause syncing at or below
+          </Label>
+          <Input
+            id={`rate-limit-pause-${c.id}`}
+            type="number"
+            min={0}
+            step={1}
+            value={draft}
+            placeholder="Off"
+            className="h-8 w-24"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              const trimmed = draft.trim()
+              const parsed = trimmed === "" ? null : Number(trimmed)
+              if (parsed !== null && (!Number.isInteger(parsed) || parsed < 0)) {
+                setDraft(c.rateLimitPauseThreshold?.toString() ?? "")
+                return
+              }
+              if (parsed === (c.rateLimitPauseThreshold ?? null)) return
+              void onSave(parsed)
+            }}
+          />
+          <span className="text-xs text-muted-foreground">credits (blank = never self-pause)</span>
+        </div>
+      )}
     </div>
   )
 }

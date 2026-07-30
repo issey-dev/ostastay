@@ -206,11 +206,12 @@ export async function computeChannelAvailability(opts: {
   };
 }
 
-/** Clamp a requested preview window to something sane. */
+/** Clamp a requested preview/push window to something sane. 366 (not 365) so a full year
+ *  is never clipped short by falling on a leap year. */
 export function resolveWindow(fromParam: string | null, days: number): { from: Date; to: Date } {
   const base = fromParam ? new Date(fromParam) : new Date();
   const start = Number.isNaN(base.getTime()) ? new Date() : base;
   const from = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const clampedDays = Math.min(Math.max(days, 1), 90);
+  const clampedDays = Math.min(Math.max(days, 1), 366);
   return { from, to: new Date(from.getTime() + clampedDays * DAY_MS) };
 }

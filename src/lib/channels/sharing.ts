@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // Sharing / mapping: which properties a channel-manager connection covers, and how this
 // system's room types and rate plans correspond to the channel manager's own.
@@ -217,6 +218,17 @@ export async function setRatePlanMapping(params: {
   const ratePlan = await prisma.ratePlan.findUnique({ where: { id: ratePlanId } });
   if (!ratePlan || ratePlan.propertyId !== link.propertyId) {
     throw new ForbiddenError("Rate plan does not belong to this property");
+  }
+
+  // What counts as a valid external rate id is provider-specific — Beds24 exposes SIXTEEN
+  // NUMBERED PRICE SLOTS (price1..price16) rather than named rates, so a mapping stores a
+  // slot number there, not an arbitrary id (see src/lib/channels/payload.ts). Dispatched
+  // through the link's own connection so a differently-shaped provider validates by its own
+  // rule without this function needing to know about it.
+  const provider = getProvider(link.connection.provider);
+  const trimmedRate = externalRateId.trim();
+  if (trimmedRate && !provider.isValidRateId(trimmedRate)) {
+    throw new ForbiddenError(`Invalid ${provider.rateIdLabel.toLowerCase()}`);
   }
 
   if (!externalRateId.trim()) {

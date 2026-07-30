@@ -36,6 +36,7 @@ model Enterprise {
   moduleAccessOverrides EnterpriseModuleAccess[]
   channelConnections    ChannelConnection[]
   channelSyncLogs       ChannelSyncLog[]
+  channelInboundBookings ChannelInboundBooking[]
   jobRuns               JobRun[]
   eRegistrationLinks    ERegistrationLink[]
 
@@ -317,6 +318,7 @@ model Property {
   rooms                        Room[]
   ratePlans                    RatePlan[]
   channelLink                  ChannelPropertyLink?
+  inboundBookings              ChannelInboundBooking[]
   mealPlans                    MealPlan[]
   reservations                 Reservation[]
   groupBlocks                  GroupBlock[]
@@ -406,6 +408,7 @@ model RoomType {
   isActive Boolean @default(true)
 
   channelMap ChannelRoomTypeMap?
+  inboundBookings ChannelInboundBooking[]
 
   // Pseudo room types represent a dummy/virtual category (e.g. day-use, overbooking
   // buffer). Rooms created under one skip Building/Floor assignment entirely (see
@@ -913,6 +916,7 @@ model RatePlan {
 
   calendars       PriceCalendar[]
   RoomAssignment  RoomAssignment[]
+  channelBookingDefaults ChannelBookingDefaults[]
   // Which Allocations this plan carries as a package (see Allocation.mode for whether
   // each is carved out of or added on top of the room rate). A derived plan with no
   // links of its own inherits its parent's — see src/lib/allocations.ts.
@@ -1056,6 +1060,7 @@ model Reservation {
   routingRules                 FolioRoutingRule[]
   guestRegistrations           GuestRegistration[]
   excursionBookings            ExcursionBooking[]
+  channelInboundBookings       ChannelInboundBooking[]
   transports                   ReservationTransport[]
   // A reservation can be the guest identity behind a Spa appointment participant —
   // see SpaAppointmentParticipant.reservationId (not SpaAppointment directly, since
@@ -2792,16 +2797,37 @@ model ChannelConnection {
   // NOT_CONNECTED | CONNECTED | ERROR. Health is observed, never assumed: it is set from
   // real API outcomes (see src/lib/channels/beds24.ts), not from the fact that a
   // credential was saved.
+  // Secret that authenticates this connection's inbound webhook URL. Generated on
+  // demand, shown to the operator once, and compared timing-safely. Deliberately a
+  // per-connection URL secret rather than a payload signature: Beds24's signing scheme is
+  // not documented publicly, and a URL secret works regardless of whether it has one.
+  webhookToken      String?   @unique
+
   status            String    @default("NOT_CONNECTED")
   lastHealthCheckAt DateTime?
   // Operator-readable reason for the last failure; cleared on success.
   lastError         String?
 
+  // Beds24's rate-limit state, as last observed from response headers (X-FiveMinCreditLimit,
+  // -Remaining, -ResetsIn — confirmed present on every response by the official OpenAPI
+  // spec). Captured passively on every real call rather than polled separately, so the
+  // number shown is always whatever the most recent call actually saw.
+  rateLimitTotal      Int?
+  rateLimitRemaining  Int?
+  rateLimitResetsAt   DateTime?
+  rateLimitObservedAt DateTime?
+  // Operator-configured safety margin: push/poll SKIP rather than call Beds24 once
+  // rateLimitRemaining is at or below this and the reset window hasn't passed yet. Null
+  // means no self-throttling — only Beds24's own limit applies, and a call is only ever
+  // skipped once Beds24 itself would already be rejecting it.
+  rateLimitPauseThreshold Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  syncLogs      ChannelSyncLog[]
-  propertyLinks ChannelPropertyLink[]
+  syncLogs         ChannelSyncLog[]
+  propertyLinks    ChannelPropertyLink[]
+  inboundBookings  ChannelInboundBooking[]
 
   @@unique([enterpriseId, name])
 }
@@ -2837,6 +2863,7 @@ model ChannelPropertyLink {
 
   roomTypeMaps ChannelRoomTypeMap[]
   ratePlanMaps ChannelRatePlanMap[]
+  bookingDefaults ChannelBookingDefaults?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2959,4 +2986,115 @@ model JobRun {
 
   @@index([jobName, startedAt])
   @@index([enterpriseId, startedAt])
+}
+
+// A booking received FROM the channel manager.
+//
+// Phase 1 of inbound (see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md): receive, normalise,
+// detect problems and record — but do NOT create a Reservation yet. Reservation creation in
+// this app is 408 lines inline in POST /api/reservations, wiring in allocations, special
+// requests, availability and stop-sale conflicts, document sequences and activity logging.
+// Reimplementing that here would miss something; converting these rows should go through a
+// properly extracted service, which is the next slice.
+//
+// The RAW payload is always stored, even when parsing fails. The Beds24 booking shape is
+// not verified against a live account, so the raw body is the only thing guaranteed to be
+// correct — with it, a mis-parse is replayable rather than lost.
+model ChannelInboundBooking {
+  id           String            @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise        @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // The channel manager's own booking id. THE idempotency key — webhook delivery is
+  // at-least-once and the poller re-reads overlapping windows, so the same booking arrives
+  // repeatedly and must be a no-op after the first time.
+  externalBookingId String
+  // Which OTA it originated from (Booking.com, Airbnb, ...), as reported by the channel.
+  channelName       String?
+
+  // WEBHOOK | POLL — how it reached us. Useful when diagnosing a missed webhook.
+  source String
+
+  // RECEIVED (not yet converted — includes one that failed a RETRIABLE check, such as no
+  // default rate plan configured yet; the conversion sweep keeps retrying these) |
+  // CONVERTED (see reservationId) | IGNORED (cancelled at the channel before conversion) |
+  // FAILED (an unexpected error, not one of the ordinary validation failures — kept out of
+  // the automatic retry sweep so a persistent unexpected fault doesn't spin every run).
+  status String @default("RECEIVED")
+
+  // Set once this booking has been turned into a real Reservation — see
+  // src/lib/channels/inbound/convert.ts. SetNull rather than Cascade: if the reservation is
+  // later deleted, the record that it once arrived via this channel booking should survive.
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  // Normalised fields. All nullable: a payload that fails to parse is still stored, and a
+  // half-understood booking is more useful than a discarded one.
+  externalRoomId String?
+  roomTypeId     String?
+  roomType       RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+  propertyId     String?
+  property       Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  guestFirstName String?
+  guestLastName  String?
+  guestEmail     String?
+  arrival        DateTime?
+  departure      DateTime?
+  adults         Int?
+  children       Int?
+  totalAmount    Float?
+  currency       String?
+  // The channel's own status word (new, modified, cancelled, ...) as received.
+  channelStatus  String?
+
+  // Set when the booking could not be placed — unmapped room, unparseable dates, and so on.
+  problem String?
+
+  // TRUE when accepting this booking exceeds real availability for its room type and dates.
+  // Per D-7 rule 4 the booking is still accepted — the channel manager already confirmed it
+  // to the guest, so refusing is not genuinely available to us — but it must be surfaced as
+  // an exception the desk resolves, NOT folded in silently as a deliberate manual overbook.
+  isOverbooking    Boolean   @default(false)
+  overbookingNote  String?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+
+  // Exactly as received. Never redacted: a booking payload carries guest details, not
+  // credentials, and the raw body is what makes a mis-parse recoverable.
+  rawPayload String
+
+  receivedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([connectionId, externalBookingId])
+  @@index([enterpriseId, receivedAt])
+  @@index([enterpriseId, isOverbooking])
+}
+
+// Per-link defaults for converting a ChannelInboundBooking into a real Reservation — what to
+// pick when the channel manager's payload doesn't say. A channel booking confirms a stay and
+// a price; it does not name one of THIS property's rate plans or meal plans, so conversion
+// has nothing to attach the booking to without an operator having configured one. Configured
+// once per link (Hub > Mapping > Defaults tab), not guessed per booking.
+model ChannelBookingDefaults {
+  id     String              @id @default(uuid())
+  linkId String              @unique
+  link   ChannelPropertyLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  // Which of this property's rate plans an inbound booking attaches to for
+  // allocation/Night Audit purposes. Null means conversion cannot proceed yet — see
+  // resolveBookingDefaults() in src/lib/channels/defaults.ts — so a booking with no
+  // configured default is flagged for the desk rather than guessed at.
+  ratePlanId String?
+  ratePlan   RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+
+  // Reservation.mealPlan is an untyped string defaulting to "NONE" everywhere else in the
+  // app (see POST /api/reservations) — this follows the same convention rather than
+  // inventing a stricter rule only for the channel path.
+  mealPlanCode String @default("NONE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
