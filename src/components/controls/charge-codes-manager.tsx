@@ -41,18 +41,15 @@ export type ChargeCodeRow = {
   generatesFrom?: Array<{ id: string; method: string; generatedCode: { code: string } }>
 }
 
-// What the Tax column says. Only a CHARGE code is ever taxed, and when its group's tax
-// codes are wired as generates that — not `useDefaultTax` — is where its tax actually
-// comes from, so say so rather than showing a mode that no longer decides anything.
-function taxLabel(cc: ChargeCodeRow): string {
-  if (cc.postingType === "TAX") return "Face value (levy)"
-  if (cc.postingType !== "CHARGE") return "Not taxed"
-  const routes = (cc.generatesFrom ?? []).filter((g) => g.method === "SERVICE_CHARGE" || g.method === "GST")
-  if (routes.length > 0) {
-    const parts = routes.map((g) => (g.method === "SERVICE_CHARGE" ? "Service Charge" : "GST"))
-    return `${parts.join(" + ")} → group codes`
-  }
-  return cc.useDefaultTax ? "Default (Maldives Tax)" : cc.taxProfile?.name || "Custom Tax"
+// One compact Tax cell instead of the old Tax + Generates pair (which said almost the
+// same thing on every row): the generated-code chips ARE the tax story — 7000/8000
+// (+8500 on accommodation) — plus the rate source only when it's not the default rule.
+function taxSummary(cc: ChargeCodeRow): { chips: string[]; note: string | null } {
+  if (cc.postingType === "TAX") return { chips: [], note: "Face value" }
+  if (cc.postingType !== "CHARGE") return { chips: [], note: null }
+  const chips = (cc.generatesFrom ?? []).map((g) => g.generatedCode.code)
+  const note = cc.useDefaultTax ? null : cc.taxProfile?.name || "Custom Tax"
+  return { chips, note }
 }
 
 const BLANK_FORM = {
@@ -210,59 +207,58 @@ export function ChargeCodesManager() {
               <TableHead>Group / Subgroup</TableHead>
               <TableHead>Posting</TableHead>
               <TableHead>Tax</TableHead>
-              <TableHead>Generates</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((cc) => (
+            {sorted.map((cc) => {
+              const tax = taxSummary(cc)
+              return (
               <TableRow key={cc.id} className={`hover:bg-muted/50 ${cc.isActive ? "" : "opacity-60"}`}>
-                <TableCell className="font-mono font-medium text-foreground">
+                <TableCell className="py-1.5 font-mono font-medium text-foreground whitespace-nowrap">
                   {cc.code}
-                  {cc.isSystem && <Badge variant="secondary" className="ml-2 font-normal">System</Badge>}
-                  {!cc.isActive && <Badge variant="outline" className="ml-2 font-normal">Inactive</Badge>}
+                  {cc.isSystem && <Badge variant="secondary" className="ml-1.5 px-1 text-[10px] font-normal" title="System code — billing resolves against it">Sys</Badge>}
+                  {!cc.isActive && <Badge variant="outline" className="ml-1.5 px-1 text-[10px] font-normal">Off</Badge>}
                 </TableCell>
-                <TableCell>{cc.description}</TableCell>
-                <TableCell>
+                <TableCell className="py-1.5 text-sm">{cc.description}</TableCell>
+                <TableCell className="py-1.5 whitespace-nowrap">
                   {cc.chargeSubgroup ? (
-                    <span className="text-sm">
-                      {cc.chargeSubgroup.chargeGroup.name}
-                      <span className="text-muted-foreground"> / {cc.chargeSubgroup.name}</span>
+                    <span className="text-xs">
+                      <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
+                      <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
                     </span>
                   ) : (
                     <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
                   )}
                 </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="font-normal">
+                <TableCell className="py-1.5">
+                  <Badge variant="outline" className="px-1.5 text-[11px] font-normal whitespace-nowrap">
                     {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="font-normal">{taxLabel(cc)}</Badge>
-                </TableCell>
-                <TableCell>
-                  {cc.generatesFrom && cc.generatesFrom.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {cc.generatesFrom.map((g) => (
-                        <Badge key={g.id} variant="outline" className="font-mono text-[11px] font-normal">{g.generatedCode.code}</Badge>
+                <TableCell className="py-1.5 whitespace-nowrap">
+                  {tax.chips.length > 0 || tax.note ? (
+                    <span className="inline-flex items-center gap-1">
+                      {tax.chips.map((code, i) => (
+                        <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
                       ))}
-                    </div>
+                      {tax.note && <span className="text-xs text-muted-foreground">{tax.note}</span>}
+                    </span>
                   ) : (
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right px-6">
-                  <div className="flex gap-1 justify-end">
-                    <Button variant="ghost" size="sm" title="Generates" onClick={() => setGeneratesFor(cc)}>
+                <TableCell className="py-1 text-right px-4">
+                  <div className="flex gap-0.5 justify-end">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Generates" onClick={() => setGeneratesFor(cc)}>
                       <ArrowRightCircle className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-primary hover:bg-muted" onClick={() => openEdit(cc)}>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-primary hover:bg-muted" title="Edit" onClick={() => openEdit(cc)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost" size="sm"
-                      className="text-destructive hover:bg-destructive-muted disabled:opacity-30"
+                      className="h-7 w-7 p-0 text-destructive hover:bg-destructive-muted disabled:opacity-30"
                       disabled={cc.isSystem}
                       title={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
                       onClick={() => setDeleting(cc)}
@@ -272,10 +268,11 @@ export function ChargeCodesManager() {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              )
+            })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-0">
+                <TableCell colSpan={6} className="py-0">
                   <EmptyState icon={Receipt} title="No charge codes configured" />
                 </TableCell>
               </TableRow>
