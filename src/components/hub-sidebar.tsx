@@ -1,7 +1,8 @@
 import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert } from "@/components/icons"
-import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope"
+import { requireSession, hasHubAccess, hasAnyPropertyModule, resolveCurrentPropertyId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
+import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -21,7 +22,8 @@ import {
 //
 // Note this cannot reuse SidebarUserMenu (src/components/ui/sidebar-user-menu.tsx) —
 // that component calls useProperty(), which by design does not exist in the Hub. The
-// simpler identity footer below matches OstaSidebar's.
+// property list below instead comes down as server-rendered props (see
+// HubPropertySwitcher); the identity footer itself matches OstaSidebar's.
 const items = [
   { title: "Overview", url: "hub", icon: LayoutDashboard },
   { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
@@ -44,6 +46,16 @@ export async function HubSidebar({ slug }: { slug: string }) {
   // A Hub-only administrator has nowhere to go back to — only offer the return link
   // when the user actually holds a property-operational module.
   const canReturnToProperty = hasAnyPropertyModule(ctx)
+  const [properties, currentPropertyId] = canReturnToProperty
+    ? await Promise.all([
+        prisma.property.findMany({
+          where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" },
+          select: { id: true, name: true, bannerColor: true },
+          orderBy: { createdAt: "asc" },
+        }),
+        resolveCurrentPropertyId(ctx),
+      ])
+    : [[], null]
 
   return (
     <Sidebar collapsible="icon">
@@ -64,18 +76,11 @@ export async function HubSidebar({ slug }: { slug: string }) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {canReturnToProperty && (
+        {canReturnToProperty && properties.length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel>Property</SidebarGroupLabel>
+            <SidebarGroupLabel>Switch to a property</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton tooltip="Back to Property" render={<a href={`/e/${slug}/dashboard`} />}>
-                    <Building2 className="h-4 w-4" />
-                    <span>Back to Property</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
+              <HubPropertySwitcher slug={slug} properties={properties} currentPropertyId={currentPropertyId} />
             </SidebarGroupContent>
           </SidebarGroup>
         )}
