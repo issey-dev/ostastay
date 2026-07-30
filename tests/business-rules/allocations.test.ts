@@ -89,8 +89,8 @@ async function setupWithAllocation(opts: {
     data: { propertyId: property.id, code: "STD", name: "Standard Rate" },
   });
 
-  const roomCode = await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
-  const allocCode = await customChargeCode(enterprise.id, { code: "BFC", description: "Breakfast Revenue", subgroupCode: "RESTAURANT" });
+  const roomCode = await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
+  const allocCode = await customChargeCode(enterprise.id, { code: "BFC", description: "Breakfast Revenue", subgroupCode: "20RV" });
 
   const today = new Date();
   const allocation = await prisma.allocation.create({
@@ -395,7 +395,7 @@ describe("Allocations: Night Audit posting", () => {
     expect(bf!.description).toContain("Breakfast");
 
     // Room line unchanged by an additive allocation (no settings row → no tax backing-out).
-    const roomLine = lines.find((l) => l.chargeCode.code === "ROOM" && l.description === "Nightly Room Charge");
+    const roomLine = lines.find((l) => l.chargeCode.code === "1000" && l.description === "Nightly Room Charge");
     expect(roomLine!.amount).toBe(100);
   });
 
@@ -411,7 +411,7 @@ describe("Allocations: Night Audit posting", () => {
     const lines = await folioLines(folioId);
 
     const bf = lines.find((l) => l.chargeCode.code === "BFC");
-    const roomLine = lines.find((l) => l.chargeCode.code === "ROOM" && l.description === "Nightly Room Charge");
+    const roomLine = lines.find((l) => l.chargeCode.code === "1000" && l.description === "Nightly Room Charge");
     expect(bf!.amount).toBe(25);
     expect(roomLine!.amount).toBe(75); // 100 − 25 carve-out
     // Attribution moved, total preserved.
@@ -430,7 +430,7 @@ describe("Allocations: Night Audit posting", () => {
     const lines = await folioLines(folioId);
 
     const bf = lines.find((l) => l.chargeCode.code === "BFC");
-    const roomLine = lines.find((l) => l.chargeCode.code === "ROOM" && l.description === "Nightly Room Charge");
+    const roomLine = lines.find((l) => l.chargeCode.code === "1000" && l.description === "Nightly Room Charge");
     expect(bf!.amount).toBe(10 * 20 + 5 * 10); // 250 — posts in full
     expect(roomLine!.amount).toBe(0); // clamped, never negative
   });

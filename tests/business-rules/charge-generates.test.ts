@@ -204,7 +204,7 @@ describe("report buckets", () => {
 
   it("treats a TAX posting type as a levy — and still recognises a pre-migration GTX", () => {
     expect(isLevyLine({ postingType: "TAX", code: "BEDTAX" })).toBe(true);
-    expect(isLevyLine({ postingType: "CHARGE", code: "GTX" })).toBe(true);
+    expect(isLevyLine({ postingType: "CHARGE", code: "8500" })).toBe(true);
     expect(isLevyLine({ postingType: "CHARGE", code: "RM" })).toBe(false);
   });
 });
@@ -223,7 +223,7 @@ describe("the canonical charge tree", () => {
 
   it("taxes and non-revenue are never counted as earned revenue", () => {
     const notRevenue = CANONICAL_GROUPS.filter((g) => !g.isRevenue).map((g) => g.code);
-    expect(notRevenue).toEqual(expect.arrayContaining(["TAX", "NON_REVENUE", "SYSTEM"]));
+    expect(notRevenue).toEqual(expect.arrayContaining(["TAX", "NRV", "SYS"]));
   });
 });
 
@@ -254,7 +254,7 @@ describe("tax never generates on a non-sale", () => {
   });
 
   it("the payment subgroup's codes are all non-revenue and generate nothing", () => {
-    const payment = STANDARD_CHARGE_CODES.filter((c) => c.subgroupCode === "PAYMENT");
+    const payment = STANDARD_CHARGE_CODES.filter((c) => c.subgroupCode === "95PY");
     expect(payment.length).toBeGreaterThan(0);
     for (const c of payment) {
       expect(c.postingType, c.code).toBe("NON_REVENUE");

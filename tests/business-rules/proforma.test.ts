@@ -50,8 +50,8 @@ describe("Proforma = full projected stay", () => {
     const roomType = await prisma.roomType.create({ data: { propertyId, name: "Deluxe", code: "DLX", maxOccupancy: 3, baseOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
-    await customChargeCode(enterpriseId, { code: "GTX", description: "Green Tax" });
+    await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
+    await customChargeCode(enterpriseId, { code: "8500", description: "Green Tax" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `pf-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "PF", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;
@@ -81,7 +81,7 @@ describe("Proforma = full projected stay", () => {
     // level now, so the room line carries only its net and the Service Charge / GST sit
     // on their own lines against SVCACM / GSTACM — the same split a real posting makes.
     // The projection must total the same $300 the guest was quoted.
-    const roomLine = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "ROOM");
+    const roomLine = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "1000");
     expect(roomLine).toBeTruthy();
     const roomFamily = pf.folio.lineItems.filter(
       (l: any) => l.id === roomLine.id || l.generatedFromLineItemId === roomLine.id
@@ -92,7 +92,7 @@ describe("Proforma = full projected stay", () => {
     );
     expect(roomGross).toBeCloseTo(300, 1);
     // Green Tax projected: 2 adults × $12 × 2 nights = $48.
-    const gtx = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "GTX");
+    const gtx = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "8500");
     expect(gtx).toBeTruthy();
     expect(gtx.amount).toBeCloseTo(48, 1);
     // Nothing paid on a quote.

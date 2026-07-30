@@ -56,7 +56,7 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
     const roomA = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: `A${uniq().slice(-4)}`, status: "CLEAN" } });
     const roomB = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: `B${uniq().slice(-4)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await customChargeCode(enterpriseId, { code: "ROOM", description: "Room Revenue" });
+    await customChargeCode(enterpriseId, { code: "1000", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `ew-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EW", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
     adminId = admin.id;

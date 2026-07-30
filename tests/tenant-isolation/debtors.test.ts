@@ -112,7 +112,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     });
     ratePlanAId = ratePlanA.id;
 
-    const roomCode = await customChargeCode(enterpriseA.id, { code: "ROOM", description: "Room Charge" });
+    const roomCode = await customChargeCode(enterpriseA.id, { code: "1000", description: "Room Charge" });
 
     const paymentMethodA = await prisma.paymentMethod.create({
       data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },
@@ -212,7 +212,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
   }
 
   async function postCharge(folioId: string, amount: number) {
-    const chargeCode = await prisma.chargeCode.findFirst({ where: { enterpriseId: enterpriseAId, code: "ROOM" } });
+    const chargeCode = await prisma.chargeCode.findFirst({ where: { enterpriseId: enterpriseAId, code: "1000" } });
     return prisma.folioLineItem.create({
       data: { folioId, chargeCodeId: chargeCode!.id, amount, taxAmount: 0, serviceChargeAmount: 0, description: "Room Charge", date: new Date() },
     });
@@ -324,7 +324,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     expect(res.status).toBe(200);
 
     const ownFolioItems = await prisma.folioLineItem.findMany({ where: { folioId: ownFolioId }, include: { chargeCode: true } });
-    expect(ownFolioItems.some((i) => i.chargeCode.code === "ROOM" && i.description === "Nightly Room Charge")).toBe(true);
+    expect(ownFolioItems.some((i) => i.chargeCode.code === "1000" && i.description === "Nightly Room Charge")).toBe(true);
 
     // Still in-house — this City-Ledger folio must not have been finalized or
     // become visible in the Debtors module yet.

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/rbac-seed-data";
 import { expandScheduleDates } from "../../src/lib/excursions";
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
+import { generatesForTreatment } from "../../src/lib/posting/charge-tree";
 import { seedDemoData, seedSpaAndExcursionBookings, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
 
 const prisma = new PrismaClient();
@@ -195,6 +196,37 @@ async function main() {
   const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId: veyo.id } });
   const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id;
 
+  // A revenue code beyond the standard template (per-treatment spa codes, per-tour
+  // excursion codes), created inside its band subgroup and wired to the global Service
+  // Charge + GST generates exactly as Controls > Cashiering would.
+  const ensureRevenueCode = async (code: string, description: string, subgroupCode: string): Promise<string> => {
+    const existing = await prisma.chargeCode.findUnique({
+      where: { enterpriseId_code: { enterpriseId: veyo.id, code } },
+    });
+    if (existing) return existing.id;
+    const created = await prisma.chargeCode.create({
+      data: { enterpriseId: veyo.id, code, description, chargeSubgroupId: subgroupId(subgroupCode), postingType: "CHARGE", useDefaultTax: true },
+    });
+    for (const gen of generatesForTreatment(code, "FULL")) {
+      const target = await prisma.chargeCode.findUnique({
+        where: { enterpriseId_code: { enterpriseId: veyo.id, code: gen.generatedCode } },
+      });
+      if (!target) continue;
+      await prisma.chargeCodeGenerate.create({
+        data: {
+          enterpriseId: veyo.id,
+          generatorCodeId: created.id,
+          generatedCodeId: target.id,
+          method: gen.method,
+          value: gen.value,
+          calculateOn: gen.calculateOn,
+          sortOrder: gen.sortOrder,
+        },
+      });
+    }
+    return created.id;
+  };
+
   // The canonical chart is the ONLY chart. This used to seed a parallel numeric one
   // (10RV / 60RV / 50RV / 40RV) alongside it, which meant two codes for every real
   // concept and two answers to "what does accommodation post against". Everything below
@@ -202,7 +234,7 @@ async function main() {
   const chartCodes = await prisma.chargeCode.findMany({ where: { enterpriseId: veyo.id }, select: { id: true, code: true } });
   const chargeCodeByCode: Record<string, string> = Object.fromEntries(chartCodes.map((c) => [c.code, c.id]));
   const gtxCode = await prisma.chargeCode.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId: veyo.id, code: "GTX" } },
+    where: { enterpriseId_code: { enterpriseId: veyo.id, code: "8500" } },
   });
 
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CARD" } });
@@ -220,7 +252,7 @@ async function main() {
   await prisma.enterpriseSettings.update({
     where: { enterpriseId: veyo.id },
     data: {
-      defaultAccommodationChargeCodeId: chargeCodeByCode["ROOM"],
+      defaultAccommodationChargeCodeId: chargeCodeByCode["1000"],
       defaultGreenTaxChargeCodeId: gtxCode.id,
       cityLedgerPaymentMethodId: pmCityLedger.id,
     },
@@ -256,11 +288,11 @@ async function main() {
       },
     });
   };
-  const bfAllocation = await seedAllocation({ code: "BF", name: "Breakfast", type: "FNB", chargeCode: "MPBF", postingRhythm: "EVERY_NIGHT", adultPrice: 10, childPrice: 5 });
-  const lnAllocation = await seedAllocation({ code: "LN", name: "Lunch", type: "FNB", chargeCode: "MPLN", postingRhythm: "EVERY_NIGHT", sellSeparate: true, adultPrice: 20, childPrice: 10 });
-  const dnAllocation = await seedAllocation({ code: "DN", name: "Dinner", type: "FNB", chargeCode: "MPDN", postingRhythm: "EVERY_NIGHT", adultPrice: 30, childPrice: 15 });
-  await seedAllocation({ code: "TRF-AIR", name: "Airport Transfer", type: "TRANSFER", chargeCode: "TRFAIR", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 40, childPrice: 20 });
-  await seedAllocation({ code: "TRF-SB", name: "Speedboat Transfer", type: "TRANSFER", chargeCode: "TRFSPD", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 50, childPrice: 25 });
+  const bfAllocation = await seedAllocation({ code: "BF", name: "Breakfast", type: "FNB", chargeCode: "2901", postingRhythm: "EVERY_NIGHT", adultPrice: 10, childPrice: 5 });
+  const lnAllocation = await seedAllocation({ code: "LN", name: "Lunch", type: "FNB", chargeCode: "2902", postingRhythm: "EVERY_NIGHT", sellSeparate: true, adultPrice: 20, childPrice: 10 });
+  const dnAllocation = await seedAllocation({ code: "DN", name: "Dinner", type: "FNB", chargeCode: "2903", postingRhythm: "EVERY_NIGHT", adultPrice: 30, childPrice: 15 });
+  await seedAllocation({ code: "TRF-AIR", name: "Airport Transfer", type: "TRANSFER", chargeCode: "5001", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 40, childPrice: 20 });
+  await seedAllocation({ code: "TRF-SB", name: "Speedboat Transfer", type: "TRANSFER", chargeCode: "5002", postingRhythm: "ARRIVAL_NIGHT", sellSeparate: true, adultPrice: 50, childPrice: 25 });
   void lnAllocation;
 
   const bbPlan = await prisma.mealPlan.upsert({
@@ -432,18 +464,13 @@ async function main() {
   });
 
   const excursionChargeCodes: Array<{ code: string; description: string }> = [
-    { code: "70RV", description: "Snorkelling Trip Revenue" },
-    { code: "71RV", description: "Island Hopping Revenue" },
-    { code: "72RV", description: "Night Fishing Revenue" },
+    { code: "4003", description: "Snorkelling Trip" },
+    { code: "4004", description: "Island Hopping" },
+    { code: "4005", description: "Night Fishing" },
   ];
   const excursionChargeCodeByCode: Record<string, string> = {};
   for (const cc of excursionChargeCodes) {
-    const created = await prisma.chargeCode.upsert({
-      where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
-      update: {},
-      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, chargeSubgroupId: subgroupId("EXCURSION_TOUR") },
-    });
-    excursionChargeCodeByCode[cc.code] = created.id;
+    excursionChargeCodeByCode[cc.code] = await ensureRevenueCode(cc.code, cc.description, "40RV");
   }
 
   const excursionDefs: Array<{
@@ -463,13 +490,13 @@ async function main() {
   }> = [
     {
       code: "SNORK", name: "Snorkelling Trip", description: "Guided reef snorkelling excursion",
-      chargeCode: "70RV", cutoffHours: 24, adultPrice: 50, childPrice: 25,
+      chargeCode: "4003", cutoffHours: 24, adultPrice: 50, childPrice: 25,
       daysOfWeek: "MON,WED,FRI", departureTime: "09:00", meetingTime: "08:45", meetingPoint: "Main Jetty",
       capacity: 12, minCapacity: 4,
     },
     {
       code: "ISLE", name: "Island Hopping", description: "Half-day tour of neighbouring islands",
-      chargeCode: "71RV", cutoffHours: 24, adultPrice: 75, childPrice: 35,
+      chargeCode: "4004", cutoffHours: 24, adultPrice: 75, childPrice: 35,
       daysOfWeek: "TUE,SAT", departureTime: "10:00", meetingTime: "09:45", meetingPoint: "Main Jetty",
       capacity: 16, minCapacity: 6,
     },
@@ -477,7 +504,7 @@ async function main() {
       // Shorter cutoff than the others — a same-evening trip, so a same-day booking
       // shouldn't be blocked by a 24h window the way the daytime trips are.
       code: "NFISH", name: "Night Fishing", description: "Traditional evening hand-line fishing trip",
-      chargeCode: "72RV", cutoffHours: 12, adultPrice: 60, childPrice: 30,
+      chargeCode: "4005", cutoffHours: 12, adultPrice: 60, childPrice: 30,
       daysOfWeek: "THU,SAT", departureTime: "18:00", meetingTime: "17:45", meetingPoint: "Main Jetty",
       capacity: 10, minCapacity: 4,
     },
@@ -561,18 +588,13 @@ async function main() {
   });
 
   const spaChargeCodes: Array<{ code: string; description: string }> = [
-    { code: "SPA", description: "Spa Massage Revenue" },
-    { code: "SPA-FAC", description: "Spa Facial Revenue" },
-    { code: "SPA-CPL", description: "Spa Couple Treatment Revenue" },
+    { code: "3003", description: "Spa Massage" },
+    { code: "3004", description: "Spa Facial" },
+    { code: "3005", description: "Spa Couple Treatment" },
   ];
   const spaChargeCodeByCode: Record<string, string> = {};
   for (const cc of spaChargeCodes) {
-    const created = await prisma.chargeCode.upsert({
-      where: { enterpriseId_code: { enterpriseId: veyo.id, code: cc.code } },
-      update: {},
-      create: { enterpriseId: veyo.id, code: cc.code, description: cc.description, chargeSubgroupId: subgroupId("SPA_TREATMENT") },
-    });
-    spaChargeCodeByCode[cc.code] = created.id;
+    spaChargeCodeByCode[cc.code] = await ensureRevenueCode(cc.code, cc.description, "30RV");
   }
 
   const spaCategoryDefs: Array<{ name: string; description: string }> = [
@@ -667,14 +689,14 @@ async function main() {
     chargeCode: string; price: number; maxParticipants?: number; pricingMode?: string;
     therapists: string[];
   }> = [
-    { name: "Swedish Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "SPA", price: 80, therapists: ["Aisha Rahman", "Noor Hassan"] },
-    { name: "Deep Tissue Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "SPA", price: 90, therapists: ["Aisha Rahman"] },
-    { name: "Balinese Massage", category: "Massage", duration: 90, prep: 10, cleanup: 15, chargeCode: "SPA", price: 120, therapists: ["Fatima Ali"] },
-    { name: "Foot Massage", category: "Massage", duration: 30, prep: 5, cleanup: 10, chargeCode: "SPA", price: 40, therapists: ["Fatima Ali", "Aisha Rahman"] },
-    { name: "Facial Treatment", category: "Facial", duration: 45, prep: 10, cleanup: 15, chargeCode: "SPA-FAC", price: 70, therapists: ["Noor Hassan"] },
+    { name: "Swedish Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "3003", price: 80, therapists: ["Aisha Rahman", "Noor Hassan"] },
+    { name: "Deep Tissue Massage", category: "Massage", duration: 60, prep: 10, cleanup: 15, chargeCode: "3003", price: 90, therapists: ["Aisha Rahman"] },
+    { name: "Balinese Massage", category: "Massage", duration: 90, prep: 10, cleanup: 15, chargeCode: "3003", price: 120, therapists: ["Fatima Ali"] },
+    { name: "Foot Massage", category: "Massage", duration: 30, prep: 5, cleanup: 10, chargeCode: "3003", price: 40, therapists: ["Fatima Ali", "Aisha Rahman"] },
+    { name: "Facial Treatment", category: "Facial", duration: 45, prep: 10, cleanup: 15, chargeCode: "3004", price: 70, therapists: ["Noor Hassan"] },
     {
       name: "Couple Massage", category: "Couple Treatments", duration: 60, prep: 10, cleanup: 20,
-      chargeCode: "SPA-CPL", price: 180, maxParticipants: 2, pricingMode: "FLAT",
+      chargeCode: "3005", price: 180, maxParticipants: 2, pricingMode: "FLAT",
       therapists: ["Aisha Rahman", "Fatima Ali"],
     },
   ];

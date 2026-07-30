@@ -2340,3 +2340,32 @@ Because the notice matters as much as the logout, `requireSession()` throws a di
 (`requireSession({ allowDuringEodLockout: true })`) — otherwise the browser could never
 explain why the user is being signed out. `EodSessionWatch` polls it: a banner while an
 EodRun is IN_PROGRESS, then a modal and a real sign-out when the date actually rolls.
+
+### Numeric transaction-code standard — owner ruling (2026-07-30)
+
+The chart of accounts follows the Opera-style numeric standard (owner's "Transaction
+Code Standardization" doc): **Group (AAA) → Subgroup (nnAA) → 4-digit code whose leading
+digits align with the subgroup number.**
+
+Groups: ACC 10RV · FNB 20–28RV per outlet + 29RV Meal Plans · SPA 30–39RV per outlet ·
+EXC 40–49RV per outlet · TRP 50RV · OTH 60RV · TAX (70SC/80TX/85GT) · NRV (90NR/95PY) ·
+SYS 99SY. Owner confirmed 4-digit codes and the 70SC/80TX/85GT tax block explicitly.
+
+**SINGLE TAX CODES (supersedes the 2026-07-27 per-group tax pairs):** one Service Charge
+code (7000), one GST (8000), one Green Tax (8500). There is no need to link each charge
+code to its own tax codes as long as the ORIGIN of every tax line is trackable — and it
+is, structurally: every generated line carries FolioLineItem.generatedFromLineItemId
+pointing at the main code's line, and lineReportBucket() attributes it to the parent's
+bucket in every report.
+
+**Outlet-wise subgroups:** each F&B/Spa/Excursion/Transport/Retail outlet owns its own
+nnRV subgroup (ChargeSubgroup.outletId), auto-provisioned from its group's band on
+outlet creation with template codes (nn01, nn02…) wired to the global tax generates.
+The band's first number (20RV/30RV/40RV…) is seeded as an unowned default; the first
+outlet of each kind ADOPTS it instead of burning a number. 29RV is reserved for Meal
+Plans and never allocated to an outlet. Numbering increments enterprise-wide (the chart
+is enterprise-scoped; outlets are property-scoped).
+
+Payments were explicitly excluded from the Opera doc's 90CA/90CL scheme ("ignore
+payments") but still carry codes (95PY: 9500–9510) — the ALL-POSTINGS-LINKED rule from
+2026-07-27 stands.

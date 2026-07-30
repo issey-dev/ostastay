@@ -285,7 +285,7 @@ describe("Base Rate Plan: Night Audit fallback", () => {
       });
     }
 
-    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
+    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
     void roomCode;
 
     const guest = await prisma.profile.create({

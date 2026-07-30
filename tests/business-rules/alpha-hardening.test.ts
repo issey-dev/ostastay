@@ -132,7 +132,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     });
     ratePlanId = ratePlan.id;
 
-    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room Revenue" });
+    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room Revenue" });
     roomCodeId = roomCode.id;
 
     const paymentMethod = await prisma.paymentMethod.create({
@@ -656,7 +656,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     // One room charge — which since tax moved to group level is a family of lines: the
     // net on ROOM plus its Service Charge and GST on the Accommodation group's own
     // codes. What must not happen is a SECOND room charge from a re-run.
-    expect(currentItems.filter((i: { chargeCode: { code: string } }) => i.chargeCode.code === "ROOM").length).toBe(1);
+    expect(currentItems.filter((i: { chargeCode: { code: string } }) => i.chargeCode.code === "1000").length).toBe(1);
     expect(currentItems[0].date.getTime()).toBe(bizDate.getTime()); // stamped with the business date
     const overstayItems = await prisma.folioLineItem.findMany({ where: { folioId: overstay.folios[0].id } });
     expect(overstayItems.length).toBe(0); // no unbounded accrual

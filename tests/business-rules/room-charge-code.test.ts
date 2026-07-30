@@ -37,7 +37,7 @@ async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
 
 // Builds a checked-in reservation whose nightly room price comes from an overrideRate
 // (so pricing is fixed), varying only which accommodation charge code should win. Seeds
-// a "ROOM" legacy code, an "ACCOM" code, and optionally sets it as the plan's own code
+// a "1000" legacy code, an "ACCOM" code, and optionally sets it as the plan's own code
 // and/or the enterprise default.
 async function setup(opts: {
   slug: string;
@@ -67,8 +67,8 @@ async function setup(opts: {
   });
 
   // Legacy ROOM code always present as the last-resort fallback.
-  await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
-  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "ROOM_REVENUE" });
+  await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
+  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
 
   const ratePlan = await prisma.ratePlan.create({
     data: {
@@ -153,6 +153,6 @@ describe("Night Audit: room charge code resolution", () => {
   it("falls back to the legacy ROOM code when neither plan nor default is set", async () => {
     const { propertyId, folioId, adminId } = await setup({ slug: "test-rcc-legacy", planChargeCode: null, defaultChargeCode: null });
     await runNightAudit(adminId, propertyId);
-    expect(await roomChargeCode(folioId)).toBe("ROOM");
+    expect(await roomChargeCode(folioId)).toBe("1000");
   });
 });

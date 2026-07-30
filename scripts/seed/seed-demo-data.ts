@@ -1,5 +1,7 @@
 import { PrismaClient, Prisma } from "@prisma/client"
 import { ensureChargeTree, ensureFeeRules } from "../../src/lib/posting/ensure-charge-tree"
+import { provisionOutletSubgroup } from "../../src/lib/posting/outlet-subgroup"
+import { TAX_CODES } from "../../src/lib/posting/charge-tree"
 
 // The demo dataset: a SECOND property under Veyo, and a full spread of reservations
 // across both so every module has something real to show.
@@ -143,21 +145,18 @@ async function seedLagoonProperty(prisma: Tx, enterpriseId: string) {
 // Different per property — the resort runs a restaurant and a spa, the retreat a beach
 // grill and a dive shop — so an outlet-scoped bill, the POS charge-code pool and the
 // per-outlet check numbering all have something distinct to show on each.
-const OUTLETS: Record<string, Array<{ code: string; name: string; type: string; email: string; phone: string; taxNo: string; codes: string[] }>> = {
+const OUTLETS: Record<string, Array<{ code: string; name: string; type: string; email: string; phone: string; taxNo: string }>> = {
   "VEYO-MAIN": [
-    { code: "REST", name: "Coral Restaurant", type: "RESTAURANT", email: "dining@veyo.com", phone: "+960 555 0110", taxNo: "GST-REST-1001", codes: ["FBFOOD", "FBBEV", "FBRSVC"] },
-    { code: "SPA", name: "Serenity Spa", type: "SPA", email: "spa@veyo.com", phone: "+960 555 0120", taxNo: "GST-SPA-1002", codes: ["SPATRT", "SPAPRD"] },
+    { code: "REST", name: "Coral Restaurant", type: "RESTAURANT", email: "dining@veyo.com", phone: "+960 555 0110", taxNo: "GST-REST-1001" },
+    { code: "SPA", name: "Serenity Spa", type: "SPA", email: "spa@veyo.com", phone: "+960 555 0120", taxNo: "GST-SPA-1002" },
   ],
   "VEYO-LAGOON": [
-    { code: "GRILL", name: "Lagoon Beach Grill", type: "RESTAURANT", email: "grill@veyolagoon.com", phone: "+960 555 0210", taxNo: "GST-GRILL-2001", codes: ["FBFOOD", "FBBEV"] },
-    { code: "DIVE", name: "Blue Water Dive Centre", type: "RECREATION", email: "dive@veyolagoon.com", phone: "+960 555 0220", taxNo: "GST-DIVE-2002", codes: ["EXCTUR", "EXCOTH", "TRFSPD"] },
+    { code: "GRILL", name: "Lagoon Beach Grill", type: "RESTAURANT", email: "grill@veyolagoon.com", phone: "+960 555 0210", taxNo: "GST-GRILL-2001" },
+    { code: "DIVE", name: "Blue Water Dive Centre", type: "RECREATION", email: "dive@veyolagoon.com", phone: "+960 555 0220", taxNo: "GST-DIVE-2002" },
   ],
 }
 
 async function seedOutlets(prisma: Tx, enterpriseId: string, propertyId: string, propertyCode: string) {
-  const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
-  const codeId = (c: string) => codes.find((x) => x.code === c)?.id
-
   for (const def of OUTLETS[propertyCode] ?? []) {
     const outlet = await prisma.outlet.upsert({
       where: { propertyId_code: { propertyId, code: def.code } },
@@ -173,16 +172,15 @@ async function seedOutlets(prisma: Tx, enterpriseId: string, propertyId: string,
         address: propertyCode === "VEYO-MAIN" ? "North Male Atoll, Maldives" : "Raa Atoll, Maldives",
       },
     })
-    // The outlet's curated pool — which of the enterprise's codes it sells.
-    for (const c of def.codes) {
-      const id = codeId(c)
-      if (!id) continue
-      await prisma.outletChargeCode.upsert({
-        where: { outletId_chargeCodeId: { outletId: outlet.id, chargeCodeId: id } },
-        update: {},
-        create: { outletId: outlet.id, chargeCodeId: id },
-      })
-    }
+    // Outlet-wise subgroups: each outlet owns its own nnRV subgroup with its own 4-digit
+    // codes (the first outlet of each kind adopts the seeded band default), exactly as
+    // creating the outlet from Controls would.
+    await provisionOutletSubgroup(prisma, {
+      enterpriseId,
+      outletId: outlet.id,
+      outletName: outlet.name,
+      outletType: def.type,
+    })
   }
 }
 
@@ -216,13 +214,13 @@ async function postSeedCharge(
   if (!taxed) return parent
   const svc = Math.round(net * 0.1 * 100) / 100
   const gst = Math.round((net + svc) * 0.17 * 100) / 100
-  // Which group's tax codes the charge routes to — the whole point of group-level tax.
-  const group = chargeCode.startsWith("FB") ? "FNB" : chargeCode.startsWith("SPA") ? "SPA" : chargeCode.startsWith("EXC") ? "EXC" : chargeCode.startsWith("TRF") ? "TRN" : "ACM"
+  // The single global tax codes — WHICH main code produced each tax line is carried by
+  // generatedFromLineItemId, not by the tax code's identity.
   await prisma.folioLineItem.create({
-    data: { folioId, chargeCodeId: codeId(`SVC${group}`), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+    data: { folioId, chargeCodeId: codeId(TAX_CODES.serviceCharge), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
   })
   await prisma.folioLineItem.create({
-    data: { folioId, chargeCodeId: codeId(`GST${group}`), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+    data: { folioId, chargeCodeId: codeId(TAX_CODES.gst), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
   })
   return parent
 }
@@ -330,6 +328,17 @@ export async function seedDemoData(
 
   const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
   const codeId = (c: string) => codes.find((x) => x.code === c)!.id
+  // Each outlet's own nnRV subgroup was just provisioned — resolve a property's outlet
+  // code by type + template suffix (21RV restaurant -> dinner 2103), falling back to the
+  // band default when the property has no outlet of that kind.
+  const outletSubgroups = await prisma.chargeSubgroup.findMany({
+    where: { enterpriseId, outletId: { not: null } },
+    select: { code: true, outlet: { select: { propertyId: true, outletType: true } } },
+  })
+  const outletCode = (propertyId: string, outletType: string, suffix: string, fallback: string) => {
+    const sg = outletSubgroups.find((x) => x.outlet?.propertyId === propertyId && x.outlet?.outletType === outletType)
+    return sg ? `${sg.code.slice(0, 2)}${suffix}` : fallback
+  }
   const methods = await prisma.paymentMethod.findMany({ where: { enterpriseId } })
   const cardMethod = methods.find((m) => m.type === "CARD") ?? methods[0]
 
@@ -414,20 +423,20 @@ export async function seedDemoData(
       const postedNights = Math.min(nights, Math.max(0, -spec.inOff))
       for (let n = 0; n < postedNights; n++) {
         const date = bizPlus(spec.inOff + n)
-        await post("ROOM", "Nightly Room Charge", roomNet, date)
+        await post("1000", "Nightly Room Charge", roomNet, date)
         // Green Tax is a levy: face value, never itself taxed.
-        await post("GTX", "Green Tax", 12 * spec.adults + 6 * (spec.children ?? 0), date, false)
+        await post("8500", "Green Tax", 12 * spec.adults + 6 * (spec.children ?? 0), date, false)
       }
 
       // Outlet sales, by contrast, are posted by front office DURING the day — so an
       // in-house guest has some dated today. Without these the dashboard's revenue tiles
       // read zero on a freshly seeded database and look broken rather than pre-audit.
       if (spec.status === "IN_HOUSE") {
-        await post("FBFOOD", "Dinner — restaurant", 85 + spec.adults * 15, BUSINESS_DATE)
-        if (spec.adults > 1) await post("FBBEV", "Bar tab", 42, BUSINESS_DATE)
-        if ((spec.children ?? 0) > 0) await post("SPATRT", "Massage — 60 min", 120, BUSINESS_DATE)
+        await post(outletCode(property.id, "RESTAURANT", "03", "2003"), "Dinner — restaurant", 85 + spec.adults * 15, BUSINESS_DATE)
+        if (spec.adults > 1) await post(outletCode(property.id, "RESTAURANT", "04", "2004"), "Bar tab", 42, BUSINESS_DATE)
+        if ((spec.children ?? 0) > 0) await post(outletCode(property.id, "SPA", "01", "3001"), "Massage — 60 min", 120, BUSINESS_DATE)
       } else if (postedNights > 0) {
-        await post("FBFOOD", "Dinner — restaurant", 85, bizPlus(spec.inOff))
+        await post(outletCode(property.id, "RESTAURANT", "03", "2003"), "Dinner — restaurant", 85, bizPlus(spec.inOff))
       }
 
       if (settled) {
@@ -549,7 +558,7 @@ async function seedGroupBlock(
 
   // One charge already on the master so the block bill isn't empty.
   await prisma.folioLineItem.create({
-    data: { folioId: master.id, chargeCodeId: codeId("MISC"), date: BUSINESS_DATE, description: "Conference room hire", amount: 400, taxAmount: 0, serviceChargeAmount: 0 },
+    data: { folioId: master.id, chargeCodeId: codeId("6002"), date: BUSINESS_DATE, description: "Conference room hire", amount: 400, taxAmount: 0, serviceChargeAmount: 0 },
   })
 }
 
@@ -608,6 +617,17 @@ export async function seedSpaAndExcursionBookings(
 
   const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
   const codeId = (c: string) => codes.find((x) => x.code === c)!.id
+  // Each outlet's own nnRV subgroup was just provisioned — resolve a property's outlet
+  // code by type + template suffix (21RV restaurant -> dinner 2103), falling back to the
+  // band default when the property has no outlet of that kind.
+  const outletSubgroups = await prisma.chargeSubgroup.findMany({
+    where: { enterpriseId, outletId: { not: null } },
+    select: { code: true, outlet: { select: { propertyId: true, outletType: true } } },
+  })
+  const outletCode = (propertyId: string, outletType: string, suffix: string, fallback: string) => {
+    const sg = outletSubgroups.find((x) => x.outlet?.propertyId === propertyId && x.outlet?.outletType === outletType)
+    return sg ? `${sg.code.slice(0, 2)}${suffix}` : fallback
+  }
 
   // In-house guests with an open folio — the only ones a room-posted booking can bill to.
   const inHouse = await prisma.reservation.findMany({
@@ -655,7 +675,7 @@ export async function seedSpaAndExcursionBookings(
           ? await postSeedCharge(prisma, {
               folioId: folio.id,
               codeId,
-              chargeCode: "SPATRT",
+              chargeCode: outletCode(propertyId, "SPA", "01", "3001"),
               description: `${treatment.name} — ${date.toISOString().slice(0, 10)} ${p.time}`,
               net: price,
               date,
@@ -727,7 +747,7 @@ export async function seedSpaAndExcursionBookings(
         ? await postSeedCharge(prisma, {
             folioId: folio.id,
             codeId,
-            chargeCode: "EXCTUR",
+            chargeCode: outletCode(propertyId, "RECREATION", "01", "4001"),
             description: `${departure.excursionType.name} — ${departure.departureDate.toISOString().slice(0, 10)} ${departure.departureTime}`,
             net: total,
             date: bizPlus(0),

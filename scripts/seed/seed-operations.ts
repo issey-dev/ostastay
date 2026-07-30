@@ -62,8 +62,8 @@ async function main() {
       },
     })
 
-  const rmCode = await upsertCode("RM", "Room Charge", "ROOM_REVENUE")
-  const fbCode = await upsertCode("FB", "Food & Beverage", "RESTAURANT")
+  const rmCode = await upsertCode("RM", "Room Charge", "10RV")
+  const fbCode = await upsertCode("FB", "Food & Beverage", "20RV")
 
   // Ensure Cash/Card Payment Methods exist
   let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId, type: "CARD" } })

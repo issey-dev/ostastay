@@ -165,7 +165,7 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       adults: 2,
       children: 1,
       infants: 1,
-      chargeCodes: [{ code: "ROOM" }, { code: "GTX" }],
+      chargeCodes: [{ code: "1000" }, { code: "8500" }],
       settings: { greenTaxEnabled: true, greenTaxAdultAmount: 10, greenTaxChildAmount: 5 },
     });
 
@@ -184,7 +184,7 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       where: { folioId },
       include: { chargeCode: true },
     });
-    const gtxItem = lineItems.find((i) => i.chargeCode.code === "GTX");
+    const gtxItem = lineItems.find((i) => i.chargeCode.code === "8500");
     expect(gtxItem).toBeDefined();
     // 2 adults * $10 + 1 child * $5 = $25. The 1 infant contributes nothing.
     expect(gtxItem!.amount).toBe(25);
@@ -198,7 +198,7 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       adults: 2,
       children: 1,
       infants: 0,
-      chargeCodes: [{ code: "ROOM" }], // deliberately no GTX code
+      chargeCodes: [{ code: "1000" }], // deliberately no GTX code
       settings: { greenTaxEnabled: false },
     });
 
@@ -217,7 +217,7 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       where: { folioId },
       include: { chargeCode: true },
     });
-    expect(lineItems.some((i) => i.chargeCode.code === "GTX")).toBe(false);
+    expect(lineItems.some((i) => i.chargeCode.code === "8500")).toBe(false);
   });
 
   it("400s with a clear error when Green Tax is enabled but no GTX charge code exists", async () => {
@@ -226,7 +226,7 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
       adults: 1,
       children: 0,
       infants: 0,
-      chargeCodes: [{ code: "ROOM" }],
+      chargeCodes: [{ code: "1000" }],
       settings: { greenTaxEnabled: true },
     });
 
@@ -235,9 +235,9 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
     // Green Tax code was deleted while the levy is still switched on.
     const prop = await prisma.property.findUniqueOrThrow({ where: { id: propertyId } });
     await prisma.chargeCodeGenerate.deleteMany({
-      where: { generatedCode: { enterpriseId: prop.enterpriseId, code: "GTX" } },
+      where: { generatedCode: { enterpriseId: prop.enterpriseId, code: "8500" } },
     });
-    await prisma.chargeCode.deleteMany({ where: { enterpriseId: prop.enterpriseId, code: "GTX" } });
+    await prisma.chargeCode.deleteMany({ where: { enterpriseId: prop.enterpriseId, code: "8500" } });
     await prisma.enterpriseSettings.updateMany({
       where: { enterpriseId: prop.enterpriseId },
       data: { defaultGreenTaxChargeCodeId: null },
@@ -280,7 +280,7 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     expect(res.status).toBe(200);
 
     const lines = await prisma.folioLineItem.findMany({ where: { folioId }, include: { chargeCode: true } });
-    const gtx = lines.filter((l) => l.chargeCode.code === "GTX");
+    const gtx = lines.filter((l) => l.chargeCode.code === "8500");
     expect(gtx).toHaveLength(1);
     expect(gtx[0].amount).toBe(24);
     expect(gtx[0].taxAmount).toBe(0);
@@ -300,10 +300,10 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     const property = await prisma.property.findFirstOrThrow({ where: { id: propertyId } });
     const enterpriseId = property.enterpriseId;
     const levySubgroup = await prisma.chargeSubgroup.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "GOVERNMENT_LEVY" } },
+      where: { enterpriseId_code: { enterpriseId, code: "85GT" } },
     });
     const bedTax = await customChargeCode(enterpriseId, { code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" });
-    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "ROOM" } } });
+    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "1000" } } });
     await prisma.chargeCodeGenerate.create({
       data: {
         enterpriseId, generatorCodeId: room.id, generatedCodeId: bedTax.id,
@@ -327,7 +327,7 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     expect(levy[0].taxAmount).toBe(0);
     expect(levy[0].serviceChargeAmount).toBe(0);
     // Green Tax is off, so nothing from that generate.
-    expect(lines.some((l) => l.chargeCode.code === "GTX")).toBe(false);
+    expect(lines.some((l) => l.chargeCode.code === "8500")).toBe(false);
   });
 
   it("levies once per night even when an extra-occupancy line rides on the same room code", async () => {
@@ -354,7 +354,7 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     expect(lines.filter((l) => l.description.startsWith("Extra Occupancy"))).toHaveLength(1);
     expect(lines.filter((l) => l.description === "Nightly Room Charge")).toHaveLength(1);
     // ...but the nightly levy fired exactly once, for 3 adults.
-    const gtx = lines.filter((l) => l.chargeCode.code === "GTX");
+    const gtx = lines.filter((l) => l.chargeCode.code === "8500");
     expect(gtx).toHaveLength(1);
     expect(gtx[0].amount).toBe(36);
   });
@@ -387,9 +387,9 @@ describe("group-level tax codes posted through generates", () => {
       include: { chargeCode: true, generatedFrom: { include: { chargeCode: true } } },
     });
 
-    const room = lines.find((l) => l.chargeCode.code === "ROOM")!;
-    const svc = lines.find((l) => l.chargeCode.code === "SVCACM");
-    const gst = lines.find((l) => l.chargeCode.code === "GSTACM");
+    const room = lines.find((l) => l.chargeCode.code === "1000")!;
+    const svc = lines.find((l) => l.chargeCode.code === "7000");
+    const gst = lines.find((l) => l.chargeCode.code === "8000");
     expect(svc, "accommodation service charge line").toBeDefined();
     expect(gst, "accommodation GST line").toBeDefined();
 
@@ -416,8 +416,8 @@ describe("group-level tax codes posted through generates", () => {
 
     // And each tax line points back at the revenue that earned it, so reports can
     // attribute it to Room rather than stranding it under Tax.
-    expect(svc!.generatedFrom?.chargeCode.code).toBe("ROOM");
-    expect(gst!.generatedFrom?.chargeCode.code).toBe("ROOM");
+    expect(svc!.generatedFrom?.chargeCode.code).toBe("1000");
+    expect(gst!.generatedFrom?.chargeCode.code).toBe("1000");
   });
 
   it("keeps a tax line out of the GST base — a tax is never itself taxed", async () => {
@@ -443,7 +443,7 @@ describe("group-level tax codes posted through generates", () => {
       expect(derived, `${l.chargeCode.code} generated ${derived.length} line(s)`).toHaveLength(0);
     }
     // Green Tax posts at face value alongside the routed SVC/GST.
-    const gtx = lines.find((l) => l.chargeCode.code === "GTX")!;
+    const gtx = lines.find((l) => l.chargeCode.code === "8500")!;
     expect(gtx.amount).toBe(12);
     expect(gtx.taxAmount).toBe(0);
     expect(gtx.serviceChargeAmount).toBe(0);

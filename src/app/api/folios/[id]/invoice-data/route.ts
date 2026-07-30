@@ -205,8 +205,8 @@ export async function GET(
           resolveChargeCode(enterpriseId, "ACCOMMODATION", { settings }),
           resolveChargeCode(enterpriseId, "GREEN_TAX", { settings }),
         ]);
-        const roomCodeLabel = accommodationCode?.code ?? "ROOM";
-        const greenTaxCodeLabel = greenTaxCode?.code ?? "GTX";
+        const roomCodeLabel = accommodationCode?.code ?? "1000";
+        const greenTaxCodeLabel = greenTaxCode?.code ?? "8500";
 
         // Where each code's Service Charge and GST would post if this projection were
         // actually posted (see src/lib/posting/charge-tree.ts — tax is attached at group

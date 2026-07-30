@@ -576,8 +576,8 @@ model ChargeGroup {
   @@unique([enterpriseId, code])
 }
 
-// Level 2 — the reporting sub-classification inside a group (e.g. ROOM_REVENUE and
-// EXTRA_OCCUPANCY both under ACCOMMODATION).
+// Level 2 — the reporting sub-classification inside a group (e.g. 10RV Room Revenue
+// under ACC; one nnRV subgroup per outlet under FNB/SPA/EXC).
 model ChargeSubgroup {
   id            String      @id @default(uuid())
   enterpriseId  String
@@ -588,6 +588,12 @@ model ChargeSubgroup {
   name          String
   isSystem      Boolean     @default(false)
   sortOrder     Int         @default(0)
+  // Outlet-wise subgroups (owner ruling 2026-07-30): an F&B/Spa/Excursion outlet owns
+  // its own nnRV subgroup, provisioned with the outlet from its group's numeric band —
+  // see src/lib/posting/outlet-subgroup.ts. Null = a general (non-outlet) subgroup.
+  // SetNull so deleting an outlet keeps the subgroup and its posted history intact.
+  outletId String?
+  outlet   Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
   chargeCodes ChargeCode[]
 
@@ -1453,6 +1459,8 @@ model Outlet {
   chargeCodes       OutletChargeCode[]
   folioLineItems    FolioLineItem[]
   checks            OutletCheck[]
+  // The outlet's own nnRV charge subgroup(s) — see ChargeSubgroup.outletId.
+  chargeSubgroups   ChargeSubgroup[]
   // Module-level links (see SpaSettings.outlet / ExcursionSettings.outlet). Array-typed
   // back-relations though in practice each property links at most one outlet per module.
   spaSettings       SpaSettings[]       @relation("SpaOutlet")

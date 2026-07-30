@@ -32,10 +32,10 @@ const STANDARD_CODES = new Set(STANDARD_CHARGE_CODES.map((c) => c.code))
 // and ExcursionType carry a REQUIRED chargeCodeId, so they can't simply be detached —
 // each has to land on a real code in the new chart.
 const ALLOCATION_CODE_BY_TYPE: Record<string, string> = {
-  FNB: "MPBF",
-  TRANSFER: "TRFAIR",
-  SPA: "SPATRT",
-  EXCURSION: "EXCTUR",
+  FNB: "2901", // Meal Plan — Breakfast
+  TRANSFER: "5001", // Airport Transfer
+  SPA: "3001", // Spa Treatments
+  EXCURSION: "4001", // Excursion Tours
 }
 
 /**
@@ -73,7 +73,7 @@ async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[])
     })).count
   }
   // Named meal allocations get their own specific code where the name makes it obvious.
-  for (const [needle, code] of [["lunch", "MPLN"], ["dinner", "MPDN"]] as const) {
+  for (const [needle, code] of [["lunch", "2902"], ["dinner", "2903"]] as const) {
     const target = id(code)
     if (!target) continue
     const rows = await tx.allocation.findMany({
@@ -86,7 +86,7 @@ async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[])
   }
   // Anything still on a retired code falls back to Miscellaneous rather than blocking
   // the wipe — visible in Controls, and never a dangling FK.
-  const misc = id("MISC")
+  const misc = id("6002")
   if (misc) {
     counts.allocations += (await tx.allocation.updateMany({
       where: { propertyId: { in: propertyIds }, ...retired },
@@ -94,14 +94,14 @@ async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[])
     })).count
   }
 
-  const spaTarget = id("SPATRT")
+  const spaTarget = id("3001")
   if (spaTarget) {
     counts.spa = (await tx.spaTreatment.updateMany({
       where: { propertyId: { in: propertyIds }, ...retired },
       data: { chargeCodeId: spaTarget },
     })).count
   }
-  const excTarget = id("EXCTUR")
+  const excTarget = id("4001")
   if (excTarget) {
     counts.excursions = (await tx.excursionType.updateMany({
       where: { propertyId: { in: propertyIds }, ...retired },
@@ -112,7 +112,7 @@ async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[])
   // Transport legs: nullable. Point hotel-booked legs at the transfer code.
   counts.transport = (await tx.reservationTransport.updateMany({
     where: { reservation: { propertyId: { in: propertyIds } }, ...retired },
-    data: { chargeCodeId: id("TRFAIR") },
+    data: { chargeCodeId: id("5001") },
   })).count
 
   // An outlet's curated pool and any standing routing rules are pure config —
@@ -148,8 +148,10 @@ async function dropRetired(tx: Tx, enterpriseId: string, retiredIds: string[], f
 
   const canonicalSubgroups = new Set(CANONICAL_GROUPS.flatMap((g) => g.subgroups.map((s) => s.code)))
   const canonicalGroups = new Set(CANONICAL_GROUPS.map((g) => g.code))
+  // Outlet-owned nnRV subgroups (ChargeSubgroup.outletId) are legitimate chart members
+  // outside the canonical seed — provisioned per outlet, never dropped here.
   const subgroupsDropped = (await tx.chargeSubgroup.deleteMany({
-    where: { enterpriseId, code: { notIn: [...canonicalSubgroups] }, chargeCodes: { none: {} } },
+    where: { enterpriseId, code: { notIn: [...canonicalSubgroups] }, outletId: null, chargeCodes: { none: {} } },
   })).count
   const groupsDropped = (await tx.chargeGroup.deleteMany({
     where: { enterpriseId, code: { notIn: [...canonicalGroups] }, subgroups: { none: {} } },
@@ -181,9 +183,11 @@ async function main() {
   for (const ent of enterprises) {
     const existing = await prisma.chargeCode.findMany({
       where: { enterpriseId: ent.id },
-      select: { id: true, code: true },
+      select: { id: true, code: true, chargeSubgroup: { select: { outletId: true } } },
     })
-    const retired = existing.filter((c) => !STANDARD_CODES.has(c.code))
+    // A code living in an outlet-owned nnRV subgroup is part of the standard by
+    // construction (provisioned per outlet) — never retired by the canonical wipe.
+    const retired = existing.filter((c) => !STANDARD_CODES.has(c.code) && !c.chargeSubgroup.outletId)
     const retiredPostings = retired.length
       ? await prisma.folioLineItem.count({ where: { chargeCodeId: { in: retired.map((c) => c.id) } } })
       : 0

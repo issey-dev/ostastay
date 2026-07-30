@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
+import { provisionOutletSubgroup } from "@/lib/posting/outlet-subgroup";
 
 export const OUTLET_TYPES = ["SPA", "RESTAURANT", "BAR", "RETAIL", "TRANSPORT", "RECREATION", "OTHER"];
 export const TAX_OVERRIDE_MODES = ["NONE", "DEFAULT_ENGINE", "CUSTOM"];
@@ -80,22 +81,35 @@ export async function POST(request: Request) {
       }
     }
 
-    const newOutlet = await prisma.outlet.create({
-      data: {
-        propertyId: body.propertyId,
-        name: body.name,
-        code,
-        address: body.address?.trim() || null,
-        email: body.email?.trim() || null,
-        phone: body.phone?.trim() || null,
-        taxNo: body.taxNo?.trim() || null,
-        description: body.description || null,
+    const { newOutlet, provisioned } = await prisma.$transaction(async (tx) => {
+      const created = await tx.outlet.create({
+        data: {
+          propertyId: body.propertyId,
+          name: body.name,
+          code,
+          address: body.address?.trim() || null,
+          email: body.email?.trim() || null,
+          phone: body.phone?.trim() || null,
+          taxNo: body.taxNo?.trim() || null,
+          description: body.description || null,
+          outletType,
+          taxOverrideMode,
+          taxProfileId,
+          chargeCodes: chargeCodeIds.length > 0 ? { create: chargeCodeIds.map((id) => ({ chargeCodeId: id })) } : undefined,
+        },
+      });
+
+      // Outlet-wise subgroups: the outlet gets its own nnRV charge subgroup + template
+      // posting codes from its group's numeric band (owner ruling 2026-07-30).
+      const provisioned = await provisionOutletSubgroup(tx, {
+        enterpriseId: ctx.enterpriseId,
+        outletId: created.id,
+        outletName: created.name,
         outletType,
-        taxOverrideMode,
-        taxProfileId,
-        chargeCodes: chargeCodeIds.length > 0 ? { create: chargeCodeIds.map((id) => ({ chargeCodeId: id })) } : undefined,
-      },
-      include: OUTLET_INCLUDE,
+      });
+
+      const newOutlet = await tx.outlet.findUniqueOrThrow({ where: { id: created.id }, include: OUTLET_INCLUDE });
+      return { newOutlet, provisioned };
     });
 
     await logActivity({
@@ -104,10 +118,11 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "Outlet",
       entityId: newOutlet.id,
-      description: `Created outlet "${newOutlet.name}" (${outletType})`,
+      description: `Created outlet "${newOutlet.name}" (${outletType})` +
+        (provisioned ? ` — charge subgroup ${provisioned.subgroupCode}` : ""),
     });
 
-    return NextResponse.json(newOutlet, { status: 201 });
+    return NextResponse.json({ ...newOutlet, provisionedSubgroup: provisioned?.subgroupCode ?? null }, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
