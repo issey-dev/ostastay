@@ -233,14 +233,21 @@ export async function POST(request: Request) {
     const settings = await prisma.enterpriseSettings.findUnique({
       where: { enterpriseId: excursionType.property.enterpriseId },
     });
-    // Module-level Excursion Outlet link (if any) with its tax profile. When set, the
-    // charge posts through the outlet and its Tax Rule wins; unlinked = identical to
-    // before (resolveOutletChargeTax falls back to the charge code's own tax).
-    const excursionSettings = await prisma.excursionSettings.findUnique({
-      where: { propertyId: excursionType.propertyId },
-      include: { outlet: { include: { taxProfile: { include: { rates: true } } } } },
+    // The hub-wide Excursion Outlet (EnterpriseSettings.excursionOutletId) with its tax
+    // profile — shared by every property, possibly homed at a different one
+    // (cross-property posting is deliberate). An excursion booking ALWAYS posts its
+    // charge, so no outlet means no booking-with-charge at all (owner rule 2026-07-30).
+    const moduleLink = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId: excursionType.property.enterpriseId },
+      select: { excursionOutlet: { include: { taxProfile: { include: { rates: true } } } } },
     });
-    const excursionOutlet = excursionSettings?.outlet ?? null;
+    const excursionOutlet = moduleLink?.excursionOutlet ?? null;
+    if (!excursionOutlet) {
+      return NextResponse.json(
+        { error: "No Excursion Outlet is linked — link one under Controls > Excursions (it applies to every property) before posting excursion charges." },
+        { status: 400 }
+      );
+    }
     // Loaded in the postCharge shape so the excursion's charge code posts through the one
     // posting service — which resolves tax exactly as before AND fires the code's
     // generates, so the Excursions group's own SVC/GST codes post with it.

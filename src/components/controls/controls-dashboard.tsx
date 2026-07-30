@@ -47,7 +47,7 @@ import { SequenceManager } from "@/components/controls/sequence-manager"
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 import { AllocationCalculationManager } from "@/components/controls/allocation-calculation-manager"
 import { ExcursionsManager } from "@/components/controls/excursions-manager"
-import { ExcursionSettingsForm } from "@/components/controls/excursion-settings-form"
+import { ModuleOutletPicker } from "@/components/controls/module-outlet-picker"
 import { SpaCatalogManager } from "@/components/controls/spa-manager"
 import { SpaTherapistsManager } from "@/components/controls/spa-therapists-manager"
 import { SpaRoomsManager } from "@/components/controls/spa-rooms-manager"
@@ -231,13 +231,13 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       icon: Compass,
       render: () => (
         <div className="space-y-6">
+          <ControlsCard title="Excursion Outlet" description="One outlet, shared across every property in the Hub — all excursion sales post through it and follow its Tax Rule. Posting is blocked until one is linked.">
+            <ModuleOutletPicker module="EXCURSIONS" />
+          </ControlsCard>
           <ExcursionsManager
             title="Excursions"
             description="Bookable activities sold to guests from Front Office — catalog, pricing, and recurring schedules. Requires the Excursions add-on, enabled per property by Osta."
           />
-          <ControlsCard title="Excursion Settings" description="Optionally link an outlet so excursion sales attribute to it and follow its Tax Rule.">
-            <ExcursionSettingsForm />
-          </ControlsCard>
         </div>
       ),
     },
@@ -247,6 +247,9 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       icon: Sparkles,
       render: () => (
         <div className="space-y-6">
+          <ControlsCard title="Spa Outlet" description="One outlet, shared across every property in the Hub — all spa charges post through it and follow its Tax Rule. Posting is blocked until one is linked.">
+            <ModuleOutletPicker module="SPA" />
+          </ControlsCard>
           <ControlsCard title="Treatment Catalog" description="Categories, treatments, and pricing sold to guests from the Spa scheduler. Requires the Spa add-on, enabled per property by Osta.">
             <SpaCatalogManager />
           </ControlsCard>
@@ -256,7 +259,7 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
           <ControlsCard title="Treatment Rooms" description="Rooms available for spa treatments, including couple-capable rooms and maintenance/cleaning closures.">
             <SpaRoomsManager />
           </ControlsCard>
-          <ControlsCard title="Spa Settings" description="Operating hours, booking defaults, charge timing, and cancellation/no-show policy for this property.">
+          <ControlsCard title="Spa Settings" description="Operating hours, booking defaults, charge timing, and cancellation/no-show policy for this property (the Spa Outlet above is hub-wide).">
             <SpaSettingsForm />
           </ControlsCard>
         </div>

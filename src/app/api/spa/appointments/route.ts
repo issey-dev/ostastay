@@ -254,17 +254,29 @@ export async function POST(request: Request) {
       primaryWalkInIdentity = { walkInGuestName: folio.walkInGuestName ?? "Walk-in guest", walkInGuestContact: folio.walkInGuestContact };
     }
 
-    const settings = await prisma.spaSettings.findUnique({
-      where: { propertyId },
-      // Include the module-level Outlet link (if any) with its tax profile so an
-      // AT_BOOKING charge can attribute to the outlet and follow its Tax Rule.
-      include: { outlet: { include: { taxProfile: { include: { rates: true } } } } },
+    const settings = await prisma.spaSettings.findUnique({ where: { propertyId } });
+    // The hub-wide Spa Outlet (EnterpriseSettings.spaOutletId) with its tax profile —
+    // shared by every property, possibly homed at a different one (cross-property
+    // posting is deliberate). REQUIRED for any folio posting from this module.
+    const moduleLink = await prisma.enterpriseSettings.findUnique({
+      where: { enterpriseId: treatment.property.enterpriseId },
+      select: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
     });
-    const spaOutlet = settings?.outlet ?? null;
+    const spaOutlet = moduleLink?.spaOutlet ?? null;
     const allowAutoAssignment = settings?.allowAutoAssignment ?? true;
     const requireRoomAtBooking = settings?.requireRoomAtBooking ?? true;
     const requireTherapistAtBooking = settings?.requireTherapistAtBooking ?? true;
     const chargeTiming = settings?.chargeTiming ?? "AT_BOOKING";
+
+    // No outlet, no posting (owner rule 2026-07-30): the booking flow that would post a
+    // charge right now is refused until the hub-wide Spa Outlet is linked. AT_COMPLETION
+    // bookings can still be created — their posting is blocked at completion instead.
+    if (chargeTiming === "AT_BOOKING" && !spaOutlet) {
+      return NextResponse.json(
+        { error: "No Spa Outlet is linked — link one under Controls > Spa (it applies to every property) before posting spa charges." },
+        { status: 400 }
+      );
+    }
 
     // Optional "charge & pay now" for in-house bookings: post the charge to the room
     // folio AND record a payment of the same amount in one go, so the item nets to zero

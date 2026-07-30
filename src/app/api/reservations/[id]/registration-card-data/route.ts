@@ -78,6 +78,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         confirmationLetterMessage: null,
         registrationCardEnabled: true,
         eRegistrationEnabled: true,
+        spaOutletId: null,
+        excursionOutletId: null,
         eRegistrationExpiryHours: 72,
         eRegistrationMessage: null,
         registrationCardMessage: null,

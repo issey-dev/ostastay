@@ -177,6 +177,15 @@ describe("Spa booking: business rules", () => {
     const chargeCode = await customChargeCode(enterpriseId, { code: "SPA", description: "Spa Charge" });
     chargeCodeId = chargeCode.id;
 
+    // Hub-wide Spa Outlet link — AT_BOOKING posting is refused without one (owner rule
+    // 2026-07-30), so every appointment test needs it wired.
+    const spaOutlet = await prisma.outlet.create({ data: { propertyId, name: "BR Spa", code: "BRSP", outletType: "SPA" } });
+    await prisma.enterpriseSettings.upsert({
+      where: { enterpriseId },
+      update: { spaOutletId: spaOutlet.id },
+      create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id },
+    });
+
     const admin = await prisma.user.create({
       data: {
         enterpriseId, email: `spa-br-admin-${uniq()}@test.local`, passwordHash,

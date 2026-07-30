@@ -2369,3 +2369,23 @@ is enterprise-scoped; outlets are property-scoped).
 Payments were explicitly excluded from the Opera doc's 90CA/90CL scheme ("ignore
 payments") but still carry codes (95PY: 9500–9510) — the ALL-POSTINGS-LINKED rule from
 2026-07-27 stands.
+
+### Hub-wide Spa/Excursion outlet links — owner ruling (2026-07-30)
+
+**Spa and Excursions each post through ONE outlet, shared across every property in the
+enterprise** (EnterpriseSettings.spaOutletId / excursionOutletId, managed via
+/api/module-outlets and the pickers placed FIRST in Controls > Spa / Excursions). The
+outlet may be homed at any property — cross-property posting is deliberate ("excursion
+and spa can be posted cross property-wise"). Scope confirmed: the OUTLET LINK ONLY is
+hub-wide; operational Spa settings (hours, booking policy) stay per-property. The two
+modules link independently.
+
+**No outlet, no posting:** while a module's link is null, any folio posting FROM that
+module is refused with a clear "link one under Controls" error — bookings themselves can
+still be created (AT_COMPLETION spa bookings), only the charge posting is blocked.
+Enforced in spa/appointments (AT_BOOKING), excursions/bookings (always posts) and
+departures move-bookings (re-posts; this route previously also failed to attribute the
+outlet at all — fixed in the same change).
+
+The old per-property links (SpaSettings.outletId / ExcursionSettings) are gone —
+ExcursionSettings held nothing else and was dropped entirely.

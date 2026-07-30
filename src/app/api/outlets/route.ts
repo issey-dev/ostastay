@@ -19,9 +19,18 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
 
+    // Without a propertyId: every outlet across the enterprise, with its home property —
+    // for hub-wide pickers (the Spa/Excursion module outlet links are deliberately
+    // cross-property). Scoped to the session's own enterprise, never a client param.
     if (!propertyId) {
-      return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
+      const outlets = await prisma.outlet.findMany({
+        where: { property: { enterpriseId: ctx.enterpriseId } },
+        include: { ...OUTLET_INCLUDE, property: { select: { id: true, name: true } } },
+        orderBy: [{ property: { name: "asc" } }, { name: "asc" }],
+      });
+      return NextResponse.json(outlets);
     }
+
     await assertPropertyAccess(ctx, propertyId);
 
     const outlets = await prisma.outlet.findMany({

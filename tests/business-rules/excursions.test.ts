@@ -143,6 +143,15 @@ describe("Excursions: business rules", () => {
     const chargeCode = await customChargeCode(enterpriseId, { code: "XBR", description: "Excursion BR Charge" });
     chargeCodeId = chargeCode.id;
 
+    // Hub-wide Excursion Outlet link — posting from the module is refused without one
+    // (owner rule 2026-07-30), so every booking test needs it wired.
+    const excOutlet = await prisma.outlet.create({ data: { propertyId, name: "BR Dive", code: "BRDV", outletType: "RECREATION" } });
+    await prisma.enterpriseSettings.upsert({
+      where: { enterpriseId },
+      update: { excursionOutletId: excOutlet.id },
+      create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: excOutlet.id },
+    });
+
     const admin = await prisma.user.create({
       data: {
         enterpriseId, email: `excursions-br-admin-${uniq()}@test.local`, passwordHash,

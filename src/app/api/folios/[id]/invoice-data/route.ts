@@ -139,6 +139,8 @@ export async function GET(
         confirmationLetterMessage: null,
         registrationCardEnabled: true,
         eRegistrationEnabled: true,
+        spaOutletId: null,
+        excursionOutletId: null,
         eRegistrationExpiryHours: 72,
         eRegistrationMessage: null,
         registrationCardMessage: null,

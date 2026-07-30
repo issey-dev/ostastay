@@ -341,7 +341,6 @@ model Property {
   // bookings sold through one, if purchased.
   moduleAccessOverrides        PropertyModuleAccess[]
   excursionTypes               ExcursionType[]
-  excursionSettings            ExcursionSettings?
   excursionBookings            ExcursionBooking[]
   // Spa Booking add-on (see SPA_PLAN.md) — same per-property add-on shape as
   // Excursions above, gated through the same moduleAccessOverrides.
@@ -1461,10 +1460,10 @@ model Outlet {
   checks            OutletCheck[]
   // The outlet's own nnRV charge subgroup(s) — see ChargeSubgroup.outletId.
   chargeSubgroups   ChargeSubgroup[]
-  // Module-level links (see SpaSettings.outlet / ExcursionSettings.outlet). Array-typed
-  // back-relations though in practice each property links at most one outlet per module.
-  spaSettings       SpaSettings[]       @relation("SpaOutlet")
-  excursionSettings ExcursionSettings[] @relation("ExcursionOutlet")
+  // Hub-wide module links (see EnterpriseSettings.spaOutlet / excursionOutlet) —
+  // array-typed back-relations though each enterprise links at most one per module.
+  spaModuleLinks       EnterpriseSettings[] @relation("EnterpriseSpaOutlet")
+  excursionModuleLinks EnterpriseSettings[] @relation("EnterpriseExcursionOutlet")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1573,6 +1572,16 @@ model EnterpriseSettings {
   // src/lib/folio-presentation.ts's FOLIO_STYLES. The operator can still pick a
   // different one for an individual document; this is only what the picker defaults to.
   defaultFolioStyle   String  @default("detailed")
+
+  // Hub-wide module outlet links (owner ruling 2026-07-30): Spa and Excursions each
+  // post through ONE outlet shared across every property in the enterprise — a spa
+  // appointment at property A may bill through an outlet homed at property B. While a
+  // module's link is null, folio posting FROM that module is refused (bookings can
+  // still be created); the pickers live first in Controls > Spa / Excursions.
+  spaOutletId       String?
+  spaOutlet         Outlet? @relation("EnterpriseSpaOutlet", fields: [spaOutletId], references: [id])
+  excursionOutletId String?
+  excursionOutlet   Outlet? @relation("EnterpriseExcursionOutlet", fields: [excursionOutletId], references: [id])
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
@@ -2227,16 +2236,6 @@ model PropertyModuleAccess {
 // charges post through that outlet (revenue attribution + the outlet's Tax Rule via
 // resolveOutletChargeTax); null keeps the current behavior (the excursion type's own
 // charge code and tax).
-model ExcursionSettings {
-  propertyId String   @id
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  outletId String?
-  outlet   Outlet? @relation("ExcursionOutlet", fields: [outletId], references: [id])
-
-  updatedAt DateTime @updatedAt
-}
-
 // Property-scoped catalog entry for a bookable activity (Snorkelling Trip, Island
 // Hopping, Night Fishing...) — same scoping convention as RatePlan/Allocation/Outlet:
 // the offering differs per property, but the linked ChargeCode stays enterprise-wide.
@@ -2597,12 +2596,8 @@ model SpaSettings {
   propertyId String   @id
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  // Optional module-level Outlet link. When set, every Spa charge posts through this
-  // outlet — attributing its revenue and applying the outlet's Tax Rule (see
-  // resolveOutletChargeTax). Null = unlinked; Spa keeps working exactly as before,
-  // posting under the treatment's own charge code and tax.
-  outletId String?
-  outlet   Outlet? @relation("SpaOutlet", fields: [outletId], references: [id])
+  // NOTE: the Spa Outlet link moved to EnterpriseSettings.spaOutletId (hub-wide,
+  // owner ruling 2026-07-30) — this model keeps only per-property operational policy.
 
   defaultOpeningTime              String  @default("09:00")
   defaultClosingTime              String  @default("18:00")

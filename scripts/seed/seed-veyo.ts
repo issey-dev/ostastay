@@ -451,6 +451,17 @@ async function main() {
   });
   const lagoon = demo.lagoon;
 
+  // Hub-wide module outlet links (owner rule 2026-07-30): ONE Spa outlet and ONE
+  // Excursion outlet shared across both properties — cross-property by design (the spa
+  // module runs on the Lagoon while Serenity Spa is homed at the Resort), and posting
+  // from either module is refused without its link.
+  const serenitySpa = await prisma.outlet.findFirst({ where: { name: "Serenity Spa" } });
+  const diveCentre = await prisma.outlet.findFirst({ where: { name: "Blue Water Dive Centre" } });
+  await prisma.enterpriseSettings.update({
+    where: { enterpriseId: veyo.id },
+    data: { spaOutletId: serenitySpa?.id ?? null, excursionOutletId: diveCentre?.id ?? null },
+  });
+
   // 11. Excursions Booking add-on (see .agents/docs/EXCURSIONS_PLAN.md) — Osta-enabled
   // for this property (defaults OFF everywhere else, same as a real customer would need
   // it turned on via /osta/properties/[id]), a small chart of excursion types with
