@@ -2,6 +2,7 @@ import { requireSession, resolveCurrentPropertyId, hasHubAccess, type Module } f
 import { prisma } from "@/lib/db"
 import { ArrowLeftRight } from "@/components/icons"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
+import { APP_VERSION } from "@/lib/app-version"
 import { AppSidebarNav } from "@/components/app-sidebar-nav"
 // NAV_MODULES comes from the neutral config module, not from the "use client" nav —
 // a server component reading a value out of a client module gets a reference proxy.
@@ -90,7 +91,7 @@ export async function AppSidebar() {
       </SidebarContent>
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
-          <SidebarUserMenu name={name} roleName={roleName} email={user?.email} />
+          <SidebarUserMenu name={name} roleName={roleName} email={user?.email} version={APP_VERSION} />
         </SidebarMenu>
       </div>
     </Sidebar>

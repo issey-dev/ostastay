@@ -24,10 +24,12 @@ export function SidebarUserMenu({
   name,
   roleName,
   email,
+  version,
 }: {
   name: string
   roleName: string
   email?: string | null
+  version?: string
 }) {
   const { currentProperty, properties, isLocked, loading } = useProperty()
   const [open, setOpen] = useState(false)
@@ -132,6 +134,9 @@ export function SidebarUserMenu({
               {loggingOut ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
               Log out
             </Button>
+            {version && (
+              <p className="mt-3 text-center text-[0.65rem] text-muted-foreground">Osta v{version}</p>
+            )}
           </div>
         </DialogContent>
       </Dialog>

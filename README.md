@@ -5,6 +5,14 @@ open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
 for what's done and what's left, kept in-repo so any contributor (human or agent) can
 pick up the project's progress without needing prior chat history.
 
+## Version
+
+Current release: **v5.6.0**.
+
+The version lives in `package.json` and is shown to users in the sidebar **Account**
+dialog. Each release is tagged `vX.Y.Z` on `master` — bump `package.json` and tag the
+release commit together so the two never drift.
+
 ## Quick start
 
 Three commands, in order:
