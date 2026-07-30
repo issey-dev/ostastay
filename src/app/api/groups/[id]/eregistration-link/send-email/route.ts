@@ -1,0 +1,108 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { hashEregistrationToken } from "@/lib/eregistration/token";
+import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
+import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
+import { primaryEmail } from "@/lib/profile-communications";
+import { logActivity } from "@/lib/activity-log";
+
+// Same "token only exists in this session" constraint as the reservation-level sibling —
+// see src/app/api/reservations/[id]/eregistration-link/send-email/route.ts.
+function buildGroupEregistrationEmailHtml(params: { group: any; settings: any; brandColor: string; url: string; expiresAt: Date; pickupCount: number }): string {
+  const { group, settings, brandColor, url, expiresAt, pickupCount } = params;
+  const brandName = settings.invoiceBrandName || group.property.name;
+  const organizerName = group.payeeProfile?.companyName || [group.payeeProfile?.firstName, group.payeeProfile?.lastName].filter(Boolean).join(" ") || "there";
+  const message = settings.eRegistrationMessage || `Please complete registration details for your group's guests ahead of arrival — ${pickupCount} room${pickupCount > 1 ? "s" : ""} to fill in.`;
+
+  return `
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+  <div style="border-bottom: 3px solid ${brandColor}; padding-bottom: 16px; margin-bottom: 24px;">
+    ${settings.invoiceLogoUrl
+      ? `<img src="${settings.invoiceLogoUrl}" alt="${brandName}" style="max-height: 56px; max-width: 220px;" />`
+      : `<div style="font-size: 22px; font-weight: bold; color: ${brandColor};">${brandName}</div>`
+    }
+  </div>
+  <p style="font-size: 14px;">Dear ${organizerName},</p>
+  <p style="font-size: 14px; line-height: 1.6;">On behalf of group <strong>${group.name}</strong> (${group.code}): ${message}</p>
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="${url}" style="background: ${brandColor}; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: bold;">Complete Group eRegistration</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280;">This link expires on ${expiresAt.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} and is personal to your group — please don't forward it.</p>
+  <p style="font-size: 14px; margin-top: 24px;">We look forward to welcoming your group.</p>
+  <p style="font-size: 14px;">Warm regards,<br/>${brandName} Reservations Team</p>
+</div>`.trim();
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "update");
+    const { id } = await params;
+    const body = await request.json().catch(() => ({}));
+    if (!body.token || typeof body.token !== "string") {
+      return NextResponse.json({ error: "Missing token" }, { status: 400 });
+    }
+
+    const group = await prisma.groupBlock.findUnique({
+      where: { id },
+      include: { property: true, payeeProfile: { include: { communications: true } } },
+    });
+    if (!group) return NextResponse.json({ error: "Group block not found" }, { status: 404 });
+    await assertPropertyAccess(ctx, group.propertyId);
+
+    if (!group.payeeProfile) {
+      return NextResponse.json({ error: "This group has no organizer (payee) profile on file to email — copy the link and share it manually instead." }, { status: 400 });
+    }
+
+    const tokenHash = hashEregistrationToken(body.token);
+    const link = await prisma.eRegistrationLink.findFirst({ where: { tokenHash, groupBlockId: id, status: "ACTIVE" } });
+    if (!link) return NextResponse.json({ error: "This link is no longer valid — regenerate it first." }, { status: 400 });
+    if (link.expiresAt.getTime() < Date.now()) return NextResponse.json({ error: "This link has expired — regenerate it first." }, { status: 400 });
+
+    const organizerEmail = primaryEmail(group.payeeProfile.communications);
+    if (!organizerEmail) {
+      return NextResponse.json({ error: "The group's organizer profile has no email address on file." }, { status: 400 });
+    }
+
+    const pickupCount = await prisma.reservation.count({ where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW", "CHECKED_OUT"] } } });
+    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: group.property.enterpriseId } });
+    const brandColor = resolveInvoiceBrandColor(settings?.invoiceBrandColor ?? null);
+    const url = `${process.env.APP_URL ?? "http://localhost:3000"}/eregistration/${body.token}`;
+    const html = buildGroupEregistrationEmailHtml({
+      group,
+      settings: settings ?? { invoiceBrandName: null, invoiceLogoUrl: null, eRegistrationMessage: null },
+      brandColor,
+      url,
+      expiresAt: link.expiresAt,
+      pickupCount,
+    });
+
+    try {
+      await sendMail({
+        settings: settings ?? { smtpHost: null, smtpPort: null, smtpUsername: null, smtpPassword: null, smtpFromAddress: null, smtpUseTls: true },
+        to: organizerEmail,
+        subject: `Complete your group's eRegistration — ${group.code} | ${group.property.name}`,
+        html,
+      });
+    } catch (mailError) {
+      if (mailError instanceof SmtpNotConfiguredError) return NextResponse.json({ error: mailError.message }, { status: 400 });
+      console.error("Failed to send group eRegistration email:", mailError);
+      return NextResponse.json({ error: "Failed to send the email — check the SMTP settings and try again." }, { status: 502 });
+    }
+
+    await logActivity({
+      ctx,
+      module: "RESERVATIONS",
+      action: "EREGISTRATION_GROUP_LINK_EMAIL",
+      entityType: "GroupBlock",
+      entityId: id,
+      description: `Emailed the group eRegistration link for ${group.code} to ${organizerEmail}`,
+    });
+
+    return NextResponse.json({ success: true, sentTo: organizerEmail });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
