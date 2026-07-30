@@ -23,7 +23,7 @@ export async function ensureChart(enterpriseId: string): Promise<void> {
 
 /**
  * A charge code from the enterprise's canonical chart, seeding the chart if needed.
- * `code` is a code from STANDARD_CHARGE_CODES — "ROOM", "GTX", "FBFOOD", "MPBF"…
+ * `code` is a code from STANDARD_CHARGE_CODES — "1000", "8500", "2001", "2901"…
  */
 export async function chargeCode(enterpriseId: string, code: string) {
   await ensureChart(enterpriseId);
@@ -51,7 +51,7 @@ export async function customChargeCode(
   await ensureChart(enterpriseId);
   const { code, description, subgroupCode, ...rest } = data;
   const subgroup = await prisma.chargeSubgroup.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId, code: subgroupCode ?? "MISCELLANEOUS" } },
+    where: { enterpriseId_code: { enterpriseId, code: subgroupCode ?? "60RV" } },
   });
   return prisma.chargeCode.upsert({
     where: { enterpriseId_code: { enterpriseId, code } },

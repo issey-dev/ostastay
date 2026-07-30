@@ -16,7 +16,7 @@ const line = (over: Partial<PresentableLine> & { id: string }): PresentableLine 
   serviceChargeAmount: 0,
   isVoid: false,
   generatedFromLineItemId: null,
-  chargeCode: { code: "MISC", description: "Miscellaneous" },
+  chargeCode: { code: "6002", description: "Miscellaneous" },
   outletCheck: null,
   ...over,
 });
@@ -24,18 +24,18 @@ const line = (over: Partial<PresentableLine> & { id: string }): PresentableLine 
 // A realistic folio after the group-level tax change: two room nights and one F&B sale,
 // each with its own routed Service Charge and GST lines, plus a Green Tax levy.
 const FOLIO: PresentableLine[] = [
-  line({ id: "room1", date: D1, description: "Nightly Room Charge", amount: 77.7, chargeCode: { code: "ROOM", description: "Accommodation" } }),
-  line({ id: "room1-svc", date: D1, description: "Service Charge — Accommodation", serviceChargeAmount: 7.77, generatedFromLineItemId: "room1", chargeCode: { code: "SVCACM", description: "Service Charge — Accommodation" } }),
-  line({ id: "room1-gst", date: D1, description: "GST — Accommodation", taxAmount: 14.53, generatedFromLineItemId: "room1", chargeCode: { code: "GSTACM", description: "GST — Accommodation" } }),
-  line({ id: "gtx1", date: D1, description: "Green Tax", amount: 12, generatedFromLineItemId: "room1", chargeCode: { code: "GTX", description: "Green Tax" } }),
+  line({ id: "room1", date: D1, description: "Nightly Room Charge", amount: 77.7, chargeCode: { code: "1000", description: "Accommodation" } }),
+  line({ id: "room1-svc", date: D1, description: "Service Charge — Accommodation", serviceChargeAmount: 7.77, generatedFromLineItemId: "room1", chargeCode: { code: "7000", description: "Service Charge — Accommodation" } }),
+  line({ id: "room1-gst", date: D1, description: "GST — Accommodation", taxAmount: 14.53, generatedFromLineItemId: "room1", chargeCode: { code: "8000", description: "GST — Accommodation" } }),
+  line({ id: "gtx1", date: D1, description: "Green Tax", amount: 12, generatedFromLineItemId: "room1", chargeCode: { code: "8500", description: "Green Tax" } }),
 
-  line({ id: "room2", date: D2, description: "Nightly Room Charge", amount: 77.7, chargeCode: { code: "ROOM", description: "Accommodation" } }),
-  line({ id: "room2-svc", date: D2, description: "Service Charge — Accommodation", serviceChargeAmount: 7.77, generatedFromLineItemId: "room2", chargeCode: { code: "SVCACM", description: "Service Charge — Accommodation" } }),
-  line({ id: "room2-gst", date: D2, description: "GST — Accommodation", taxAmount: 14.53, generatedFromLineItemId: "room2", chargeCode: { code: "GSTACM", description: "GST — Accommodation" } }),
+  line({ id: "room2", date: D2, description: "Nightly Room Charge", amount: 77.7, chargeCode: { code: "1000", description: "Accommodation" } }),
+  line({ id: "room2-svc", date: D2, description: "Service Charge — Accommodation", serviceChargeAmount: 7.77, generatedFromLineItemId: "room2", chargeCode: { code: "7000", description: "Service Charge — Accommodation" } }),
+  line({ id: "room2-gst", date: D2, description: "GST — Accommodation", taxAmount: 14.53, generatedFromLineItemId: "room2", chargeCode: { code: "8000", description: "GST — Accommodation" } }),
 
-  line({ id: "fb", date: D2, description: "Restaurant — Food", amount: 38.85, chargeCode: { code: "FBFOOD", description: "Restaurant — Food" }, outletCheck: { checkNumber: "REST-00012" } }),
-  line({ id: "fb-svc", date: D2, description: "Service Charge — Food & Beverage", serviceChargeAmount: 3.89, generatedFromLineItemId: "fb", chargeCode: { code: "SVCFNB", description: "Service Charge — F&B" }, outletCheck: { checkNumber: "REST-00012" } }),
-  line({ id: "fb-gst", date: D2, description: "GST — Food & Beverage", taxAmount: 7.26, generatedFromLineItemId: "fb", chargeCode: { code: "GSTFNB", description: "GST — F&B" }, outletCheck: { checkNumber: "REST-00012" } }),
+  line({ id: "fb", date: D2, description: "Restaurant — Food", amount: 38.85, chargeCode: { code: "2001", description: "Restaurant — Food" }, outletCheck: { checkNumber: "REST-00012" } }),
+  line({ id: "fb-svc", date: D2, description: "Service Charge — Food & Beverage", serviceChargeAmount: 3.89, generatedFromLineItemId: "fb", chargeCode: { code: "7000", description: "Service Charge — F&B" }, outletCheck: { checkNumber: "REST-00012" } }),
+  line({ id: "fb-gst", date: D2, description: "GST — Food & Beverage", taxAmount: 7.26, generatedFromLineItemId: "fb", chargeCode: { code: "8000", description: "GST — F&B" }, outletCheck: { checkNumber: "REST-00012" } }),
 
   line({ id: "voided", date: D2, description: "Cancelled item", amount: 999, isVoid: true }),
 ];

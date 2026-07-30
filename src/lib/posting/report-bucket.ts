@@ -1,4 +1,4 @@
-import { REPORT_BUCKET_LABELS, type ReportBucket } from "@/lib/posting/charge-tree";
+import { REPORT_BUCKET_LABELS, TAX_CODES, type ReportBucket } from "@/lib/posting/charge-tree";
 
 // The ONE way a report classifies a folio line. Every consumer that used to switch on
 // ChargeCode.category (or, worse, on ChargeCode.code === "ROOM"/"GTX") reads the
@@ -63,11 +63,11 @@ export function reportBucketLabel(bucket: string): string {
 }
 
 // True when a line is a government levy posted at face value (Green Tax and friends).
-// Replaces the hardcoded `chargeCode?.code === "GTX"` checks in the GST reports: a levy
-// is never service-charged or GST'd, so it must stay out of the GST base.
+// Replaces the old hardcoded code-string checks in the GST reports: a levy is never
+// service-charged or GST'd, so it must stay out of the GST base.
 export function isLevyLine(chargeCode: { postingType?: string | null; code?: string | null } | null | undefined): boolean {
   if (!chargeCode) return false;
   if (chargeCode.postingType === "TAX") return true;
-  // Migration-window fallback for a GTX row that predates postingType.
-  return chargeCode.code === "GTX";
+  // Migration-window fallback for a Green Tax row that predates postingType.
+  return chargeCode.code === TAX_CODES.greenTax;
 }

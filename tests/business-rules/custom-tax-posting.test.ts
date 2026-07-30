@@ -81,7 +81,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
 
     // A charge code left on the default engine — proves it's unaffected by the
     // presence of custom profiles elsewhere in the enterprise.
-    const defaultCode = await customChargeCode(enterprise.id, { code: "MB", description: "Minibar", useDefaultTax: true, subgroupCode: "RESTAURANT" });
+    const defaultCode = await customChargeCode(enterprise.id, { code: "MB", description: "Minibar", useDefaultTax: true, subgroupCode: "20RV" });
     defaultChargeCodeId = defaultCode.id;
 
     // A multi-line Custom Tax profile (State Tax flat on subtotal, Local Fee compound
@@ -98,7 +98,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
         },
       },
     });
-    const customCode = await customChargeCode(enterprise.id, { code: "SPA", description: "Spa Treatment", useDefaultTax: false, taxProfileId: taxProfile.id, subgroupCode: "MISCELLANEOUS" });
+    const customCode = await customChargeCode(enterprise.id, { code: "SPA", description: "Spa Treatment", useDefaultTax: false, taxProfileId: taxProfile.id, subgroupCode: "60RV" });
     customChargeCodeId = customCode.id;
 
     const passwordHash = await bcrypt.hash("password123", 10);

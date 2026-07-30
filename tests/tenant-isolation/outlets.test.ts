@@ -174,7 +174,9 @@ describe("Outlets: tenant isolation", () => {
     const res = await asUser(adminAId, () => outletIdRoute.GET(new Request("http://localhost"), { params: Promise.resolve({ id: outletAId }) }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.chargeCodes.map((oc: any) => oc.chargeCodeId)).toEqual([chargeCodeAId]);
+    // The pool holds the explicitly attached code PLUS the outlet's own provisioned
+    // template codes (outlet-wise subgroups) — membership, not an exact list.
+    expect(body.chargeCodes.map((oc: any) => oc.chargeCodeId)).toContain(chargeCodeAId);
   });
 
   it("GET /api/outlets?propertyId= 403s for a different enterprise's admin", async () => {

@@ -52,23 +52,9 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: `noShowChargeType must be one of ${CHARGE_TYPES.join(", ")}` }, { status: 400 });
     }
 
-    // Optional module-level Outlet link. Accept an outlet of the same property, or null to
-    // unlink. `undefined` (field absent) leaves the current link untouched on update.
-    let outletId: string | null | undefined = undefined;
-    if (body.outletId !== undefined) {
-      if (body.outletId === null || body.outletId === "") {
-        outletId = null;
-      } else {
-        const outlet = await prisma.outlet.findUnique({ where: { id: body.outletId } });
-        if (!outlet || outlet.propertyId !== body.propertyId) {
-          return NextResponse.json({ error: "Outlet not found for this property" }, { status: 404 });
-        }
-        outletId = outlet.id;
-      }
-    }
-
+    // The Spa Outlet link is hub-wide (EnterpriseSettings.spaOutletId, managed via
+    // /api/module-outlets) — this route now carries only per-property policy.
     const data = {
-      outletId,
       defaultOpeningTime: body.defaultOpeningTime ?? undefined,
       defaultClosingTime: body.defaultClosingTime ?? undefined,
       slotIntervalMinutes: body.slotIntervalMinutes !== undefined ? parseInt(body.slotIntervalMinutes) : undefined,

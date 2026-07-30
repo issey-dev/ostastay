@@ -113,7 +113,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
     reservationBId = reservationB.id;
     folioBId = reservationB.folios[0].id;
 
-    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "ROOM", description: "Room Rate", subgroupCode: "ROOM_REVENUE" });
+    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "1000", description: "Room Rate", subgroupCode: "10RV" });
     chargeCodeAId = chargeCodeA.id;
 
     const paymentMethodA = await prisma.paymentMethod.create({

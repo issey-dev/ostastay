@@ -298,7 +298,7 @@ describe("Profile: origin property + stay history", () => {
     });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: "101" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "Best Available" } });
-    const roomCode = await customChargeCode(enterpriseId, { code: "ROOM", description: "Room" });
+    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
     const fbCode = await customChargeCode(enterpriseId, { code: "FB", description: "F&B" });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Stay" } });
 
@@ -344,7 +344,7 @@ describe("Profile: origin property + stay history", () => {
     expect(past.id).toBe(pastRes.id);
     expect(past.revenueTotal).toBe(275); // 200+20+50+5
     const byCode = Object.fromEntries(past.revenueBreakdown.map((b: { code: string; amount: number }) => [b.code, b.amount]));
-    expect(byCode.ROOM).toBe(220);
+    expect(byCode["1000"]).toBe(220);
     expect(byCode.FB).toBe(55);
   });
 });

@@ -165,7 +165,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
     ] as const) {
       await ensureChargeTree(prisma, entId);
       const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-        where: { enterpriseId_code: { enterpriseId: entId, code: "GOVERNMENT_LEVY" } },
+        where: { enterpriseId_code: { enterpriseId: entId, code: "85GT" } },
       });
       assign(sub.id);
     }

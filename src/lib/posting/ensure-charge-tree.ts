@@ -130,8 +130,8 @@ export async function ensureChargeTree(
   }
 
 
-  // 3. Generates: every revenue code routes its Service Charge and GST to its own
-  // GROUP's tax codes, and accommodation levies Green Tax on top. Unique on
+  // 3. Generates: every revenue code routes its Service Charge and GST to the single
+  // global tax codes (7000/8000), and accommodation levies Green Tax on top. Unique on
   // [generatorCodeId, generatedCodeId], so a re-run adopts the existing row rather than
   // stacking duplicates — and never overwrites one the property has since tuned.
   for (const gen of standardGenerates()) {

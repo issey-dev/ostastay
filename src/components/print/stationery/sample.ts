@@ -85,11 +85,11 @@ export function buildSampleInvoice(
       { label: "Rooms", value: "TBA" },
     ],
     charges: [
-      { date: "23 Jul", description: "Accommodation — Deluxe Beach Villa (2 nights)", reference: "ROOM", amount: 359.0 },
-      { date: "23 Jul", description: "Dinner", reference: "DN", amount: 140.0 },
-      { date: "23 Jul", description: "Breakfast", reference: "BF", amount: 48.0 },
-      { date: "23 Jul", description: "Green Tax", reference: "GTX", amount: 48.0 },
-      { date: "24 Jul", description: "Transport — Pickup (SPD-PVT)", reference: "3000", amount: 50.0 },
+      { date: "23 Jul", description: "Accommodation — Deluxe Beach Villa (2 nights)", reference: "1000", amount: 359.0 },
+      { date: "23 Jul", description: "Dinner", reference: "2003", amount: 140.0 },
+      { date: "23 Jul", description: "Breakfast", reference: "2001", amount: 48.0 },
+      { date: "23 Jul", description: "Green Tax", reference: "8500", amount: 48.0 },
+      { date: "24 Jul", description: "Transport — Pickup (SPD-PVT)", reference: "5002", amount: 50.0 },
     ],
     payments: [],
     totals: [

@@ -40,8 +40,8 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}` } });
-  await customChargeCode(enterprise.id, { code: "ROOM", description: "Room" });
-  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "ROOM_REVENUE" });
+  await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
+  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "Best Available", chargeCodeId: accom.id } });
   await prisma.enterpriseSettings.create({ data: { enterpriseId: enterprise.id, greenTaxEnabled: false, defaultAccommodationChargeCodeId: accom.id } });
   const guest = await prisma.profile.create({ data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "G", lastName: "T" } });
@@ -151,7 +151,7 @@ describe("Advance Bill: generates post all defined taxes", () => {
     });
     // Bill against the charted accommodation code so the group's tax codes apply.
     const room = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: property.enterpriseId, code: "ROOM" } },
+      where: { enterpriseId_code: { enterpriseId: property.enterpriseId, code: "1000" } },
     });
     await prisma.ratePlan.updateMany({ where: { propertyId: base.propertyId }, data: { chargeCodeId: room.id } });
     return base;
@@ -163,13 +163,13 @@ describe("Advance Bill: generates post all defined taxes", () => {
     expect(resp.status).toBe(200);
 
     const lines = await prisma.folioLineItem.findMany({ where: { folioId }, include: { chargeCode: true } });
-    const svc = lines.find((l) => l.chargeCode.code === "SVCACM");
-    const gst = lines.find((l) => l.chargeCode.code === "GSTACM");
+    const svc = lines.find((l) => l.chargeCode.code === "7000");
+    const gst = lines.find((l) => l.chargeCode.code === "8000");
     expect(svc, "advance bill must post the group's service charge code").toBeDefined();
     expect(gst, "advance bill must post the group's GST code").toBeDefined();
 
     // 2 nights at a tax-inclusive 100 = 200 gross, backed out to 155.40 / 15.54 / 29.06.
-    const room = lines.find((l) => l.chargeCode.code === "ROOM")!;
+    const room = lines.find((l) => l.chargeCode.code === "1000")!;
     expect(room.amount).toBeCloseTo(155.4, 1);
     expect(room.taxAmount).toBe(0);
     expect(room.serviceChargeAmount).toBe(0);
@@ -188,7 +188,7 @@ describe("Advance Bill: generates post all defined taxes", () => {
     expect(resp.status).toBe(200);
 
     const gtx = await prisma.folioLineItem.findMany({
-      where: { folioId, chargeCode: { code: "GTX" } },
+      where: { folioId, chargeCode: { code: "8500" } },
     });
     expect(gtx).toHaveLength(1);
     // 1 adult x $12 x 3 nights.

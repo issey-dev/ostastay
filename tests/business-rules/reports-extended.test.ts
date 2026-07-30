@@ -26,15 +26,15 @@ describe("Reporting engine — Revenue / Financial / Housekeeping", () => {
     enterpriseId = ent.id;
     ctx.enterpriseId = ent.id;
     const roleIds = await ensureRoles(prisma, enterpriseId, SYSTEM_ROLE_DEFS, true);
-    const commissionCode = await customChargeCode(enterpriseId, { code: `COMM-${uniq()}`, description: "Commission", subgroupCode: "SYSTEM_OTHER" });
+    const commissionCode = await customChargeCode(enterpriseId, { code: `COMM-${uniq()}`, description: "Commission", subgroupCode: "99SY" });
     await prisma.enterpriseSettings.create({ data: { enterpriseId, greenTaxAdultAmount: 12, greenTaxChildAmount: 6, commissionChargeCodeId: commissionCode.id } });
     const property = await prisma.property.create({ data: { enterpriseId, name: "X Prop", code: `X-${uniq()}`, legalName: "X LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: BIZ } });
     propertyId = property.id;
     const rt = await prisma.roomType.create({ data: { propertyId, name: "Std", code: "STD", maxOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: "401", status: "DIRTY" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    const roomCode = await customChargeCode(enterpriseId, { code: `ROOM-${uniq()}`, description: "Room", subgroupCode: "ROOM_REVENUE" });
-    const gtxCode = await customChargeCode(enterpriseId, { code: "GTX", description: "Green Tax", subgroupCode: "GOVERNMENT_LEVY" });
+    const roomCode = await customChargeCode(enterpriseId, { code: `ROOM-${uniq()}`, description: "Room", subgroupCode: "10RV" });
+    const gtxCode = await customChargeCode(enterpriseId, { code: "8500", description: "Green Tax", subgroupCode: "85GT" });
     const method = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Nat", lastName: "Ional", nationality: "GB" } });
 

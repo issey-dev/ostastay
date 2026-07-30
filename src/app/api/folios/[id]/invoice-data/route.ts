@@ -139,6 +139,8 @@ export async function GET(
         confirmationLetterMessage: null,
         registrationCardEnabled: true,
         eRegistrationEnabled: true,
+        spaOutletId: null,
+        excursionOutletId: null,
         eRegistrationExpiryHours: 72,
         eRegistrationMessage: null,
         registrationCardMessage: null,
@@ -205,8 +207,8 @@ export async function GET(
           resolveChargeCode(enterpriseId, "ACCOMMODATION", { settings }),
           resolveChargeCode(enterpriseId, "GREEN_TAX", { settings }),
         ]);
-        const roomCodeLabel = accommodationCode?.code ?? "ROOM";
-        const greenTaxCodeLabel = greenTaxCode?.code ?? "GTX";
+        const roomCodeLabel = accommodationCode?.code ?? "1000";
+        const greenTaxCodeLabel = greenTaxCode?.code ?? "8500";
 
         // Where each code's Service Charge and GST would post if this projection were
         // actually posted (see src/lib/posting/charge-tree.ts — tax is attached at group

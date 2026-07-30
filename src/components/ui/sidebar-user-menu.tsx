@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, ChevronsUpDown, Loader2, LogOut } from "@/components/icons"
+import { ArrowLeftRight, Check, ChevronsUpDown, Loader2, LogOut } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
@@ -24,10 +24,15 @@ export function SidebarUserMenu({
   name,
   roleName,
   email,
+  hubHref,
 }: {
   name: string
   roleName: string
   email?: string | null
+  /** Present only when this user has enterprise Hub access — renders a "Hub" row
+   *  above the property switcher so leaving the property is as discoverable as
+   *  switching between properties, without needing its own permanent sidebar slot. */
+  hubHref?: string
 }) {
   const { currentProperty, properties, isLocked, loading } = useProperty()
   const [open, setOpen] = useState(false)
@@ -87,6 +92,22 @@ export function SidebarUserMenu({
               {email && <div className="text-xs text-muted-foreground truncate">{email}</div>}
             </div>
           </div>
+
+          {/* Hub */}
+          {hubHref && (
+            <div className="space-y-2">
+              <div className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                Enterprise
+              </div>
+              <a
+                href={hubHref}
+                className="flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+              >
+                <ArrowLeftRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 truncate text-sm font-medium">Hub</span>
+              </a>
+            </div>
+          )}
 
           {/* Property */}
           <div className="space-y-2">

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { POSTING_TYPES, groupTaxCodesForSubgroup, type PostingType } from "@/lib/posting/charge-tree";
+import { POSTING_TYPES, TAX_CODES, type PostingType } from "@/lib/posting/charge-tree";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 
 // Level 3 of the charge hierarchy. Classification is a ChargeSubgroup FK — the
@@ -92,17 +92,16 @@ export async function POST(request: Request) {
         },
       });
 
-      // Tax is attached at GROUP level: a new revenue code inherits its group's own
-      // Service Charge and GST codes automatically, so it can never be added and
-      // silently post untaxed. Nothing is calculated here — the generate only routes
-      // whatever the default Maldives rule resolves (see run-generates.ts).
+      // Every new revenue code inherits the global Service Charge + GST generates
+      // automatically, so it can never be added and silently post untaxed. Which code
+      // produced a tax line stays traceable structurally (generatedFromLineItemId), so
+      // one destination per tax is enough. Nothing is calculated here — the generate
+      // only routes whatever the default Maldives rule resolves (see run-generates.ts).
       if (postingType === "CHARGE") {
-        const taxCodes = groupTaxCodesForSubgroup(subgroup.code);
-        const wanted: Array<{ code: string; method: string; sortOrder: number }> = [];
-        if (taxCodes) {
-          wanted.push({ code: taxCodes.serviceCharge, method: "SERVICE_CHARGE", sortOrder: 10 });
-          wanted.push({ code: taxCodes.gst, method: "GST", sortOrder: 20 });
-        }
+        const wanted: Array<{ code: string; method: string; sortOrder: number }> = [
+          { code: TAX_CODES.serviceCharge, method: "SERVICE_CHARGE", sortOrder: 10 },
+          { code: TAX_CODES.gst, method: "GST", sortOrder: 20 },
+        ];
         for (const w of wanted) {
           const target = await tx.chargeCode.findUnique({
             where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code: w.code } },

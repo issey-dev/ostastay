@@ -83,8 +83,8 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `R${Math.floor(Math.random() * 9000 + 1000)}` } });
-  const roomCode = await customChargeCode(enterprise.id, { code: "ROOM", description: "Room Charge" });
-  const commissionCode = await customChargeCode(enterprise.id, { code: "COMM", description: "TA Commission", subgroupCode: "NON_REVENUE_OTHER" });
+  const roomCode = await customChargeCode(enterprise.id, { code: "1000", description: "Room Charge" });
+  const commissionCode = await customChargeCode(enterprise.id, { code: "9100", description: "TA Commission", subgroupCode: "90NR" });
   const passwordHash = await bcrypt.hash("password123", 10);
   const admin = await prisma.user.create({
     data: {

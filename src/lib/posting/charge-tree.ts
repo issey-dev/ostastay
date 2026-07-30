@@ -8,22 +8,30 @@
 // the closed bucket set — the seeder that writes this chart to an enterprise lives in
 // src/lib/posting/ensure-charge-tree.ts.
 //
-// Structure mirrors Opera's transaction-code hierarchy:
-//   ChargeGroup    — the reporting bucket (what a revenue report sums into)
-//   ChargeSubgroup — the sub-classification inside it
-//   ChargeCode     — the actual posting code
+// NUMBERING STANDARD (owner ruling 2026-07-30, modeled on the Opera transaction-code
+// standardization doc):
+//   ChargeGroup    — three-letter alpha (ACC, FNB, SPA, EXC, TRP, OTH, TAX, NRV, SYS)
+//   ChargeSubgroup — two digits + two letters (10RV, 20RV, 70SC, 90NR, 99SY); the
+//                    letters classify (RV revenue, SC service charge, TX tax, GT green
+//                    tax, NR non-revenue, PY payment, SY system)
+//   ChargeCode     — four digits whose leading digits align with the subgroup number
+//                    (10RV -> 1000..., 20RV -> 2001..., 90NR -> 9100...)
 //
-// TAX IS ATTACHED AT GROUP LEVEL. Each revenue group declares its own Service Charge and
-// GST charge codes (`taxCodes`), and every posting code in that group generates them. So
-// Accommodation posts SVCACM/GSTACM, F&B posts SVCFNB/GSTFNB, Spa posts SVCSPA/GSTSPA —
-// distinct codes per group, but all computed by the ONE default Maldives Tax rule in
-// src/lib/tax-calc.ts. The generate only decides where each amount lands; it never
-// calculates a rate of its own, so the groups can never drift apart.
+// OUTLET-WISE SUBGROUPS: each F&B / Spa / Excursion outlet owns its own nnRV subgroup
+// inside its group's band (FNB 20–28, SPA 30–39, EXC 40–49...), holding that outlet's
+// posting codes. See OUTLET_SUBGROUP_BANDS below and src/lib/posting/outlet-subgroup.ts.
+//
+// SINGLE TAX CODES (supersedes the 2026-07-27 per-group tax pairs): ONE Service Charge
+// code (7000), ONE GST code (8000), ONE Green Tax code (8500). Which main code produced
+// a tax line is tracked structurally — every generated line carries
+// FolioLineItem.generatedFromLineItemId pointing at its parent — so per-group tax codes
+// added nothing but chart noise. The generate still only decides where the amount lands;
+// the ONE default Maldives rule in src/lib/tax-calc.ts computes it.
 
 // The closed set of reporting buckets. Every ChargeGroup carries one; every report
 // that used to switch on ChargeCode.category now switches on this. Several groups may
-// share a bucket (Meal Plans and the F&B outlet both report as Food & Beverage; Spa and
-// Excursions both as Other) — a bucket never spans meanings.
+// share a bucket (Spa and Excursions both report as Other) — a bucket never spans
+// meanings.
 export const REPORT_BUCKETS = [
   "ROOM",
   "FOOD_BEVERAGE",
@@ -76,15 +84,25 @@ export function canGenerateTax(postingType: string | null | undefined): boolean 
 }
 
 /**
- * How a posting code is taxed, which decides the generates the seeder wires to its
- * group's tax codes.
+ * How a posting code is taxed, which decides the generates the seeder wires to the
+ * global tax codes.
  *   FULL     — Service Charge + GST (ordinary revenue)
- *   GST_ONLY — GST but no service charge. Cancellation and no-show penalties: no service
- *              was rendered, so a service charge on them is not defensible.
+ *   GST_ONLY — GST but no service charge (expressible per code where no service was
+ *              rendered)
  *   NONE     — taxes, deposits, commissions, system movements
  */
 export const TAX_TREATMENTS = ["FULL", "GST_ONLY", "NONE"] as const;
 export type TaxTreatment = (typeof TAX_TREATMENTS)[number];
+
+// ── The single global tax codes ───────────────────────────────────────────────────
+
+// One destination per tax, chart-wide. Attribution to the selling code is structural
+// (generatedFromLineItemId), never encoded in the tax code identity.
+export const TAX_CODES = {
+  serviceCharge: "7000",
+  gst: "8000",
+  greenTax: "8500",
+} as const;
 
 // ── Level 1 + 2: groups and their subgroups ───────────────────────────────────────
 
@@ -96,102 +114,66 @@ type SeedGroup = {
   isRevenue: boolean;
   sortOrder: number;
   subgroups: SeedSubgroup[];
-  /**
-   * This group's own tax charge codes. Every FULL/GST_ONLY posting code in the group
-   * generates them. Absent on the tax, non-revenue and system groups — those are never
-   * themselves taxed.
-   */
-  taxCodes?: { serviceCharge: string; gst: string };
 };
 
 export const CANONICAL_GROUPS: SeedGroup[] = [
   {
-    code: "ACCOMMODATION",
+    code: "ACC",
     name: "Accommodation",
     reportBucket: "ROOM",
     isRevenue: true,
     sortOrder: 10,
-    taxCodes: { serviceCharge: "SVCACM", gst: "GSTACM" },
-    subgroups: [
-      { code: "ROOM_REVENUE", name: "Room Revenue", sortOrder: 10 },
-      { code: "EXTRA_OCCUPANCY", name: "Extra Occupancy", sortOrder: 20 },
-      { code: "PACKAGE", name: "Packages & Allocations", sortOrder: 30 },
-      { code: "ACCOM_PENALTY", name: "Cancellation & No-Show", sortOrder: 40 },
-    ],
+    subgroups: [{ code: "10RV", name: "Room Revenue", sortOrder: 10 }],
   },
   {
-    // The property's food & beverage outlet.
-    code: "FOOD_BEVERAGE",
+    // Outlet band 20–28: each F&B outlet owns its own nnRV subgroup. 20RV is seeded as
+    // the default so a fresh enterprise can post F&B before any outlet exists; the first
+    // F&B outlet adopts it (renaming it to the outlet), the next gets 21RV, and so on.
+    // 29RV holds meal-plan revenue — sold with the room, reported separately from outlet
+    // F&B, still rolling into the F&B bucket.
+    code: "FNB",
     name: "Food & Beverage",
     reportBucket: "FOOD_BEVERAGE",
     isRevenue: true,
     sortOrder: 20,
-    taxCodes: { serviceCharge: "SVCFNB", gst: "GSTFNB" },
     subgroups: [
-      { code: "RESTAURANT", name: "Restaurant", sortOrder: 10 },
-      { code: "BAR", name: "Bar", sortOrder: 20 },
-      { code: "MINIBAR", name: "Minibar", sortOrder: 30 },
-      { code: "ROOM_SERVICE", name: "Room Service", sortOrder: 40 },
+      { code: "20RV", name: "Restaurant", sortOrder: 20 },
+      { code: "29RV", name: "Meal Plans", sortOrder: 29 },
     ],
   },
   {
-    // Its own group, not an F&B subgroup: meal-plan revenue is sold with the room and
-    // reported separately from outlet F&B, while still rolling into the F&B bucket.
-    code: "MEAL_PLAN",
-    name: "Meal Plans",
-    reportBucket: "FOOD_BEVERAGE",
-    isRevenue: true,
-    sortOrder: 30,
-    taxCodes: { serviceCharge: "SVCMPL", gst: "GSTMPL" },
-    subgroups: [{ code: "MEAL_PLAN_REVENUE", name: "Meal Plan Revenue", sortOrder: 10 }],
-  },
-  {
-    code: "TRANSPORT",
-    name: "Transport",
-    reportBucket: "TRANSPORT",
-    isRevenue: true,
-    sortOrder: 40,
-    taxCodes: { serviceCharge: "SVCTRN", gst: "GSTTRN" },
-    subgroups: [
-      { code: "TRANSFERS", name: "Airport & Jetty Transfers", sortOrder: 10 },
-      { code: "TRANSPORT_OTHER", name: "Other Transport", sortOrder: 20 },
-    ],
-  },
-  {
+    // Outlet band 30–39; 30RV seeded as the default spa outlet subgroup.
     code: "SPA",
     name: "Spa",
     reportBucket: "OTHER",
     isRevenue: true,
-    sortOrder: 50,
-    taxCodes: { serviceCharge: "SVCSPA", gst: "GSTSPA" },
-    subgroups: [
-      { code: "SPA_TREATMENT", name: "Treatments", sortOrder: 10 },
-      { code: "SPA_PRODUCT", name: "Retail Products", sortOrder: 20 },
-    ],
+    sortOrder: 30,
+    subgroups: [{ code: "30RV", name: "Spa", sortOrder: 30 }],
   },
   {
-    code: "EXCURSION",
+    // Outlet band 40–49; 40RV seeded as the default excursion outlet subgroup.
+    code: "EXC",
     name: "Excursions",
     reportBucket: "OTHER",
     isRevenue: true,
-    sortOrder: 60,
-    taxCodes: { serviceCharge: "SVCEXC", gst: "GSTEXC" },
-    subgroups: [
-      { code: "EXCURSION_TOUR", name: "Tours & Activities", sortOrder: 10 },
-      { code: "EXCURSION_OTHER", name: "Excursion Extras", sortOrder: 20 },
-    ],
+    sortOrder: 40,
+    subgroups: [{ code: "40RV", name: "Excursions", sortOrder: 40 }],
   },
   {
-    code: "OTHER",
-    name: "Other Revenue",
+    code: "TRP",
+    name: "Transport",
+    reportBucket: "TRANSPORT",
+    isRevenue: true,
+    sortOrder: 50,
+    subgroups: [{ code: "50RV", name: "Transport", sortOrder: 50 }],
+  },
+  {
+    code: "OTH",
+    name: "Others",
     reportBucket: "OTHER",
     isRevenue: true,
-    sortOrder: 70,
-    taxCodes: { serviceCharge: "SVCOTH", gst: "GSTOTH" },
-    subgroups: [
-      { code: "LAUNDRY", name: "Laundry", sortOrder: 10 },
-      { code: "MISCELLANEOUS", name: "Miscellaneous", sortOrder: 20 },
-    ],
+    sortOrder: 60,
+    subgroups: [{ code: "60RV", name: "Other Revenue", sortOrder: 60 }],
   },
   {
     code: "TAX",
@@ -199,38 +181,108 @@ export const CANONICAL_GROUPS: SeedGroup[] = [
     reportBucket: "TAX",
     // Pass-through to the government — collected, never earned.
     isRevenue: false,
-    sortOrder: 80,
+    sortOrder: 70,
     subgroups: [
-      { code: "SERVICE_CHARGE", name: "Service Charge", sortOrder: 10 },
-      { code: "SALES_TAX", name: "GST", sortOrder: 20 },
-      { code: "GOVERNMENT_LEVY", name: "Government Levies", sortOrder: 30 },
+      { code: "70SC", name: "Service Charge", sortOrder: 70 },
+      { code: "80TX", name: "GST", sortOrder: 80 },
+      { code: "85GT", name: "Green Tax", sortOrder: 85 },
     ],
   },
   {
-    code: "NON_REVENUE",
+    code: "NRV",
     name: "Non-Revenue",
     reportBucket: "NON_REVENUE",
     isRevenue: false,
     sortOrder: 90,
     subgroups: [
-      { code: "COMMISSION", name: "Commissions", sortOrder: 10 },
-      { code: "DEPOSIT", name: "Deposits & Prepayments", sortOrder: 20 },
-      { code: "PAYMENT", name: "Payments & Settlement", sortOrder: 30 },
-      { code: "NON_REVENUE_OTHER", name: "Other Non-Revenue", sortOrder: 40 },
+      { code: "90NR", name: "Non-Revenue", sortOrder: 90 },
+      { code: "95PY", name: "Payments", sortOrder: 95 },
     ],
   },
   {
-    code: "SYSTEM",
+    code: "SYS",
     name: "System",
     reportBucket: "SYSTEM",
     isRevenue: false,
-    sortOrder: 100,
-    subgroups: [
-      { code: "ADJUSTMENT", name: "Adjustments & Corrections", sortOrder: 10 },
-      { code: "SYSTEM_OTHER", name: "Other System", sortOrder: 20 },
-    ],
+    sortOrder: 99,
+    subgroups: [{ code: "99SY", name: "System", sortOrder: 99 }],
   },
 ];
+
+// ── Outlet subgroup bands & templates ─────────────────────────────────────────────
+
+// Which two-digit range an outlet's own nnRV subgroup is allocated from, by outlet
+// type (see src/app/api/outlets/route.ts OUTLET_TYPES). The band's first number is the
+// seeded default subgroup, adopted by the first outlet of that kind instead of burning
+// a fresh number. 29 is excluded from the FNB band — it's reserved for Meal Plans.
+export const OUTLET_SUBGROUP_BANDS: Record<string, { groupCode: string; from: number; to: number }> = {
+  RESTAURANT: { groupCode: "FNB", from: 20, to: 28 },
+  BAR: { groupCode: "FNB", from: 20, to: 28 },
+  SPA: { groupCode: "SPA", from: 30, to: 39 },
+  RECREATION: { groupCode: "EXC", from: 40, to: 49 },
+  TRANSPORT: { groupCode: "TRP", from: 50, to: 59 },
+  RETAIL: { groupCode: "OTH", from: 60, to: 69 },
+  OTHER: { groupCode: "OTH", from: 60, to: 69 },
+};
+
+// The posting codes a freshly provisioned outlet subgroup starts with. `suffix` is
+// appended to the subgroup's two-digit number: outlet 21RV -> 2101, 2102...
+export const OUTLET_CODE_TEMPLATES: Record<string, { suffix: string; description: string }[]> = {
+  RESTAURANT: [
+    { suffix: "01", description: "Breakfast" },
+    { suffix: "02", description: "Lunch" },
+    { suffix: "03", description: "Dinner" },
+    { suffix: "04", description: "Beverage" },
+  ],
+  BAR: [
+    { suffix: "01", description: "Beverage" },
+    { suffix: "02", description: "Food" },
+  ],
+  SPA: [
+    { suffix: "01", description: "Treatments" },
+    { suffix: "02", description: "Products" },
+  ],
+  RECREATION: [
+    { suffix: "01", description: "Tours" },
+    { suffix: "02", description: "Other" },
+  ],
+  TRANSPORT: [
+    { suffix: "01", description: "Transfers" },
+    { suffix: "02", description: "Other" },
+  ],
+  RETAIL: [
+    { suffix: "01", description: "Sales" },
+    { suffix: "02", description: "Other" },
+  ],
+  OTHER: [
+    { suffix: "01", description: "Sales" },
+    { suffix: "02", description: "Other" },
+  ],
+};
+
+/**
+ * Pick the subgroup number a new outlet gets, given every subgroup code that already
+ * exists in the enterprise. Pure so it's unit-testable: returns
+ *  - `{ adopt: "20RV" }` when the band's seeded default exists and no outlet owns it yet
+ *    (the caller checks ownership — this function only sees codes), or
+ *  - `{ create: "21RV" }` for the next free number in the band, or
+ *  - `null` when the band is exhausted (caller falls back to no subgroup).
+ */
+export function nextOutletSubgroupCode(
+  outletType: string,
+  existingSubgroupCodes: string[],
+  adoptableCodes: string[]
+): { adopt: string } | { create: string } | null {
+  const band = OUTLET_SUBGROUP_BANDS[outletType];
+  if (!band) return null;
+  const existing = new Set(existingSubgroupCodes);
+  for (let n = band.from; n <= band.to; n++) {
+    const code = `${n}RV`;
+    if (adoptableCodes.includes(code)) return { adopt: code };
+    if (!existing.has(code)) return { create: code };
+  }
+  return null;
+}
 
 // ── Roles ─────────────────────────────────────────────────────────────────────────
 
@@ -247,8 +299,8 @@ export type ChargeCodeRole = (typeof CHARGE_CODE_ROLES)[number];
 // posted as a charge, and api/settings/fee-rules exempts it from needing a charge code.
 // Seeding one would assert a link the flow never uses.
 export const FEE_RULE_CODES: Record<"CANCELLATION" | "NO_SHOW", string> = {
-  CANCELLATION: "CXL",
-  NO_SHOW: "NOSHW",
+  CANCELLATION: "1050",
+  NO_SHOW: "1060",
 };
 
 // Which charge code a Payment Method of each type settles against, so a freshly seeded
@@ -256,13 +308,13 @@ export const FEE_RULE_CODES: Record<"CANCELLATION" | "NO_SHOW", string> = {
 // method's own chargeCodeId can be re-pointed afterwards; a Payment is stamped at
 // posting time, so changing it never rewrites settled history.
 export const PAYMENT_METHOD_CODES: Record<string, string> = {
-  CASH: "PAYCSH",
-  CARD: "PAYCRD",
-  TRANSFER: "PAYTRF",
-  CITY_LEDGER: "PAYCL",
+  CASH: "9501",
+  CARD: "9502",
+  TRANSFER: "9503",
+  CITY_LEDGER: "9504",
 };
 /** Fallback for a method whose type isn't one of the four seeded routes. */
-export const PAYMENT_METHOD_FALLBACK_CODE = "PMTADJ";
+export const PAYMENT_METHOD_FALLBACK_CODE = "9500";
 
 // ── Level 3: the standard chart of charge codes ───────────────────────────────────
 
@@ -281,98 +333,84 @@ export type SeedCode = {
 };
 
 export const STANDARD_CHARGE_CODES: SeedCode[] = [
-  // ── Accommodation ──
-  { code: "ROOM", description: "Accommodation", subgroupCode: "ROOM_REVENUE", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true, role: "ACCOMMODATION", levyGreenTax: true },
-  { code: "ROOMUP", description: "Accommodation Upgrade", subgroupCode: "ROOM_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "XOCC", description: "Extra Occupancy", subgroupCode: "EXTRA_OCCUPANCY", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "PKG", description: "Package Component", subgroupCode: "PACKAGE", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── ACC / 10RV Room Revenue ──
+  { code: "1000", description: "Accommodation", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true, role: "ACCOMMODATION", levyGreenTax: true },
+  { code: "1010", description: "Room Upgrade", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "1020", description: "Extra Occupancy", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "1030", description: "Package Component", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL" },
   // Penalties are taxed as ordinary accommodation revenue — Service Charge then GST
   // (owner ruling 2026-07-27). The alternative, GST with no service charge on the
   // grounds that no service was rendered, is still expressible per property by deleting
   // the Service Charge row in Controls > Cashiering > Charge Codes > Generates.
-  { code: "CXL", description: "Cancellation Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
-  { code: "NOSHW", description: "No-Show Fee", subgroupCode: "ACCOM_PENALTY", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
+  { code: "1050", description: "Cancellation Fee", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
+  { code: "1060", description: "No Show Fee", subgroupCode: "10RV", postingType: "CHARGE", taxTreatment: "FULL", isSystem: true },
 
-  // ── Food & Beverage outlet ──
-  { code: "FBFOOD", description: "Restaurant — Food", subgroupCode: "RESTAURANT", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "FBBEV", description: "Bar — Beverage", subgroupCode: "BAR", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "FBMINI", description: "Minibar", subgroupCode: "MINIBAR", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "FBRSVC", description: "Room Service", subgroupCode: "ROOM_SERVICE", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── FNB / 20RV default F&B outlet (adopted/renamed by the first real outlet) ──
+  { code: "2001", description: "Breakfast", subgroupCode: "20RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2002", description: "Lunch", subgroupCode: "20RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2003", description: "Dinner", subgroupCode: "20RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2004", description: "Beverage", subgroupCode: "20RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Meal plans ──
-  { code: "MPBF", description: "Meal Plan — Breakfast", subgroupCode: "MEAL_PLAN_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "MPLN", description: "Meal Plan — Lunch", subgroupCode: "MEAL_PLAN_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "MPDN", description: "Meal Plan — Dinner", subgroupCode: "MEAL_PLAN_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "MPAI", description: "Meal Plan — All Inclusive", subgroupCode: "MEAL_PLAN_REVENUE", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── FNB / 29RV Meal Plans (sold with the room, kept out of the outlet band) ──
+  { code: "2901", description: "Meal Plan — Breakfast", subgroupCode: "29RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2902", description: "Meal Plan — Lunch", subgroupCode: "29RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2903", description: "Meal Plan — Dinner", subgroupCode: "29RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "2904", description: "Meal Plan — All Inclusive", subgroupCode: "29RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Transport ──
-  { code: "TRFAIR", description: "Airport Transfer", subgroupCode: "TRANSFERS", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "TRFSPD", description: "Speedboat Transfer", subgroupCode: "TRANSFERS", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "TRFOTH", description: "Other Transport", subgroupCode: "TRANSPORT_OTHER", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── SPA / 30RV default spa outlet ──
+  { code: "3001", description: "Spa Treatments", subgroupCode: "30RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "3002", description: "Spa Products", subgroupCode: "30RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Spa outlet ──
-  { code: "SPATRT", description: "Spa Treatment", subgroupCode: "SPA_TREATMENT", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "SPAPRD", description: "Spa Retail Product", subgroupCode: "SPA_PRODUCT", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── EXC / 40RV default excursion outlet ──
+  { code: "4001", description: "Excursion Tours", subgroupCode: "40RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "4002", description: "Excursion Other", subgroupCode: "40RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Excursions ──
-  { code: "EXCTUR", description: "Excursion", subgroupCode: "EXCURSION_TOUR", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "EXCOTH", description: "Excursion Extra", subgroupCode: "EXCURSION_OTHER", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── TRP / 50RV Transport ──
+  { code: "5001", description: "Airport Transfer", subgroupCode: "50RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "5002", description: "Speedboat Transfer", subgroupCode: "50RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "5003", description: "Other Transport", subgroupCode: "50RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Other revenue ──
-  { code: "LNDRY", description: "Laundry", subgroupCode: "LAUNDRY", postingType: "CHARGE", taxTreatment: "FULL" },
-  { code: "MISC", description: "Miscellaneous", subgroupCode: "MISCELLANEOUS", postingType: "CHARGE", taxTreatment: "FULL" },
+  // ── OTH / 60RV Other Revenue ──
+  { code: "6001", description: "Laundry", subgroupCode: "60RV", postingType: "CHARGE", taxTreatment: "FULL" },
+  { code: "6002", description: "Miscellaneous", subgroupCode: "60RV", postingType: "CHARGE", taxTreatment: "FULL" },
 
-  // ── Taxes: one Service Charge + one GST code per revenue group, all driven by the
-  //    single default Maldives rule. Posted at face value (postingType TAX), so they are
-  //    never themselves service-charged or GST'd and stay out of the GST base. ──
-  { code: "SVCACM", description: "Service Charge — Accommodation", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCFNB", description: "Service Charge — Food & Beverage", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCMPL", description: "Service Charge — Meal Plans", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCTRN", description: "Service Charge — Transport", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCSPA", description: "Service Charge — Spa", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCEXC", description: "Service Charge — Excursions", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "SVCOTH", description: "Service Charge — Other", subgroupCode: "SERVICE_CHARGE", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
+  // ── TAX: the three global tax codes. Posted at face value (postingType TAX), so they
+  //    are never themselves service-charged or GST'd and stay out of the GST base. ──
+  { code: TAX_CODES.serviceCharge, description: "Service Charge", subgroupCode: "70SC", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
+  { code: TAX_CODES.gst, description: "GST", subgroupCode: "80TX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
+  { code: TAX_CODES.greenTax, description: "Green Tax", subgroupCode: "85GT", postingType: "TAX", taxTreatment: "NONE", isSystem: true, role: "GREEN_TAX" },
 
-  { code: "GSTACM", description: "GST — Accommodation", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTFNB", description: "GST — Food & Beverage", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTMPL", description: "GST — Meal Plans", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTTRN", description: "GST — Transport", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTSPA", description: "GST — Spa", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTEXC", description: "GST — Excursions", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-  { code: "GSTOTH", description: "GST — Other", subgroupCode: "SALES_TAX", postingType: "TAX", taxTreatment: "NONE", isSystem: true },
-
-  { code: "GTX", description: "Green Tax", subgroupCode: "GOVERNMENT_LEVY", postingType: "TAX", taxTreatment: "NONE", isSystem: true, role: "GREEN_TAX" },
-
-  // ── Non-revenue ──
-  { code: "COMM", description: "Travel Agent Commission", subgroupCode: "COMMISSION", postingType: "CREDIT", taxTreatment: "NONE", isSystem: true, role: "COMMISSION" },
+  // ── NRV / 90NR Non-Revenue ──
+  { code: "9100", description: "Travel Agent Commission", subgroupCode: "90NR", postingType: "CREDIT", taxTreatment: "NONE", isSystem: true, role: "COMMISSION" },
   // A deposit is an ADVANCE PAYMENT, not a charge: it is collected before arrival as a
   // Payment on the reservation's folio #1, and check-in simply reuses that folio — so it
   // is already on the billing window with nothing to transfer (owner, 2026-07-27). These
   // codes exist for a manual folio adjustment against a deposit, not for that flow, and
   // the DEPOSIT fee rule deliberately carries no charge code at all.
-  { code: "DEP", description: "Deposit", subgroupCode: "DEPOSIT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "DEPAPP", description: "Deposit Applied", subgroupCode: "DEPOSIT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  // Money IN. Every financial posting is linked to a charge code, a payment just as
-  // much as a charge (owner rule, 2026-07-27) — so each settlement route has its own
-  // code and cash, card, transfer and city-ledger are identifiable in the ledger.
-  // A Payment Method points at one of these (PaymentMethod.chargeCodeId) and each
-  // Payment is stamped with it at posting time.
-  //
-  // NON_REVENUE, so canGenerateTax() refuses them: money being settled has already been
-  // taxed on the charge it settles, and taxing it again would double-count.
-  { code: "PAYCSH", description: "Payment — Cash", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "PAYCRD", description: "Payment — Card", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "PAYTRF", description: "Payment — Bank Transfer", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "PAYCL", description: "Payment — City Ledger", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "PMTADJ", description: "Payment Adjustment", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  { code: "REFADJ", description: "Refund Adjustment", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  { code: "PAIDOUT", description: "Paid Out", subgroupCode: "PAYMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  { code: "9200", description: "Deposit", subgroupCode: "90NR", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9210", description: "Deposit Applied", subgroupCode: "90NR", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  { code: "9300", description: "Rebate / Correction", subgroupCode: "90NR", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  { code: "9400", description: "Paid Out", subgroupCode: "90NR", postingType: "NON_REVENUE", taxTreatment: "NONE" },
 
-  // ── System ──
-  { code: "ADJ", description: "Adjustment", subgroupCode: "ADJUSTMENT", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
-  { code: "REBATE", description: "Rebate / Correction", subgroupCode: "ADJUSTMENT", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  { code: "OPENBAL", description: "Opening Balance", subgroupCode: "SYSTEM_OTHER", postingType: "NON_REVENUE", taxTreatment: "NONE" },
-  { code: "FTRANS", description: "Folio Transfer", subgroupCode: "SYSTEM_OTHER", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  // ── NRV / 95PY Payments. Money IN: every financial posting is linked to a charge
+  //    code, a payment just as much as a charge (owner rule, 2026-07-27) — so each
+  //    settlement route has its own code and cash, card, transfer and city-ledger are
+  //    identifiable in the ledger. A Payment Method points at one of these
+  //    (PaymentMethod.chargeCodeId) and each Payment is stamped with it at posting time.
+  //
+  //    NON_REVENUE, so canGenerateTax() refuses them: money being settled has already
+  //    been taxed on the charge it settles, and taxing it again would double-count. ──
+  { code: "9500", description: "Payment Adjustment", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  { code: "9501", description: "Payment — Cash", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9502", description: "Payment — Credit Card", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9503", description: "Payment — Bank Transfer", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9504", description: "Payment — City Ledger", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9510", description: "Refund Adjustment", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+
+  // ── SYS / 99SY System ──
+  { code: "9901", description: "Internal Adjustment", subgroupCode: "99SY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
+  { code: "9902", description: "Balance Brought Forward", subgroupCode: "99SY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  { code: "9903", description: "Folio Transfer", subgroupCode: "99SY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
 ];
 
 // The role -> seeded code mapping the resolver falls back to.
@@ -392,77 +430,38 @@ export type SeedGenerate = {
 };
 
 /**
- * Every generate implied by the chart: each posting code routes its Service Charge and
- * GST to its OWN GROUP's tax codes, and accommodation additionally levies Green Tax.
- *
- * Derived rather than hand-listed so a code can never be added to a group and silently
- * miss its tax — the group owns the tax codes, and membership is the whole rule.
+ * The generates a posting code with the given tax treatment should carry: Service
+ * Charge and GST route to the single global codes; accommodation additionally levies
+ * Green Tax. The one rule every code shares — the generate only names the destination,
+ * src/lib/tax-calc.ts computes the amounts once per posting.
  */
-export function standardGenerates(): SeedGenerate[] {
-  const groupOfSubgroup = new Map<string, SeedGroup>();
-  for (const g of CANONICAL_GROUPS) {
-    for (const s of g.subgroups) groupOfSubgroup.set(s.code, g);
-  }
-
+export function generatesForTreatment(
+  generatorCode: string,
+  taxTreatment: TaxTreatment,
+  levyGreenTax?: boolean
+): SeedGenerate[] {
   const out: SeedGenerate[] = [];
-  for (const code of STANDARD_CHARGE_CODES) {
-    const group = groupOfSubgroup.get(code.subgroupCode);
-    if (!group?.taxCodes || code.taxTreatment === "NONE") continue;
-
-    if (code.taxTreatment === "FULL") {
-      out.push({ generatorCode: code.code, generatedCode: group.taxCodes.serviceCharge, method: "SERVICE_CHARGE", value: 0, calculateOn: "NET", sortOrder: 10 });
-    }
-    out.push({ generatorCode: code.code, generatedCode: group.taxCodes.gst, method: "GST", value: 0, calculateOn: "NET", sortOrder: 20 });
-    if (code.levyGreenTax) {
-      out.push({ generatorCode: code.code, generatedCode: "GTX", method: "GREEN_TAX", value: 0, calculateOn: "NET", sortOrder: 30 });
-    }
+  if (taxTreatment === "FULL") {
+    out.push({ generatorCode, generatedCode: TAX_CODES.serviceCharge, method: "SERVICE_CHARGE", value: 0, calculateOn: "NET", sortOrder: 10 });
+  }
+  if (taxTreatment !== "NONE") {
+    out.push({ generatorCode, generatedCode: TAX_CODES.gst, method: "GST", value: 0, calculateOn: "NET", sortOrder: 20 });
+  }
+  if (levyGreenTax) {
+    out.push({ generatorCode, generatedCode: TAX_CODES.greenTax, method: "GREEN_TAX", value: 0, calculateOn: "NET", sortOrder: 30 });
   }
   return out;
 }
 
-/** The tax codes belonging to the group that owns `subgroupCode`, or null. */
-export function groupTaxCodesForSubgroup(subgroupCode: string): { serviceCharge: string; gst: string } | null {
-  const group = CANONICAL_GROUPS.find((g) => g.subgroups.some((s) => s.code === subgroupCode));
-  return group?.taxCodes ?? null;
+/** Every generate implied by the standard chart. */
+export function standardGenerates(): SeedGenerate[] {
+  return STANDARD_CHARGE_CODES.flatMap((code) =>
+    generatesForTreatment(code.code, code.taxTreatment, code.levyGreenTax)
+  );
 }
 
-/** Whether this subgroup's group levies Green Tax on its accommodation postings. */
+/** Whether this subgroup's group levies Green Tax on its postings (accommodation). */
 export function isAccommodationSubgroup(subgroupCode: string): boolean {
   const group = CANONICAL_GROUPS.find((g) => g.subgroups.some((s) => s.code === subgroupCode));
   return group?.reportBucket === "ROOM";
-}
-
-// ── Legacy mapping ────────────────────────────────────────────────────────────────
-
-// The old free-text ChargeCode.category -> the subgroup a backfilled code lands in.
-// Anything not listed here is logged rather than guessed (CHARGE_CODE_PLAN.md §6.3).
-export const LEGACY_CATEGORY_TO_SUBGROUP: Record<string, string> = {
-  ROOM: "ROOM_REVENUE",
-  FOOD_BEVERAGE: "RESTAURANT",
-  TRANSPORTATION: "TRANSFERS",
-  TRANSPORT: "TRANSFERS",
-  OTHERS: "MISCELLANEOUS",
-  OTHER: "MISCELLANEOUS",
-  TAX: "GOVERNMENT_LEVY",
-  NON_REVENUE: "NON_REVENUE_OTHER",
-  SYSTEM: "SYSTEM_OTHER",
-};
-
-// The reverse view: the deprecated `category` string kept in sync on write so any
-// un-migrated reader still sees a sane value during the migration window.
-export const BUCKET_TO_LEGACY_CATEGORY: Record<ReportBucket, string> = {
-  ROOM: "ROOM",
-  FOOD_BEVERAGE: "FOOD_BEVERAGE",
-  TRANSPORT: "TRANSPORTATION",
-  OTHER: "OTHERS",
-  TAX: "TAX",
-  NON_REVENUE: "NON_REVENUE",
-  SYSTEM: "SYSTEM",
-};
-
-// The deprecated `category` value a code in this subgroup should carry, so the column
-// stays truthful for any reader not yet migrated to reportBucket.
-export function legacyCategoryForSubgroup(subgroupCode: string): string {
-  const group = CANONICAL_GROUPS.find((g) => g.subgroups.some((s) => s.code === subgroupCode));
-  return group ? BUCKET_TO_LEGACY_CATEGORY[group.reportBucket] : "OTHERS";
 }

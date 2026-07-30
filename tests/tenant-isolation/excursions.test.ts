@@ -123,6 +123,17 @@ describe("Excursions: tenant isolation", () => {
     const chargeCodeB = await customChargeCode(enterpriseB.id, { code: "XC-B", description: "Excursion Charge B" });
     chargeCodeBId = chargeCodeB.id;
 
+    // Hub-wide Excursion Outlet per enterprise — posting is refused without one
+    // (owner rule 2026-07-30).
+    for (const [entId, propId, code] of [[enterpriseAId, propertyAId, "XOA"], [enterpriseB.id, propertyBId, "XOB"]] as const) {
+      const outlet = await prisma.outlet.create({ data: { propertyId: propId, name: `Dive ${code}`, code, outletType: "RECREATION" } });
+      await prisma.enterpriseSettings.upsert({
+        where: { enterpriseId: entId },
+        update: { excursionOutletId: outlet.id },
+        create: { enterpriseId: entId, resConfirmPrefix: "", resConfirmLength: 6, excursionOutletId: outlet.id },
+      });
+    }
+
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseAId, email: `excursions-admin-a-${uniq()}@test.local`, passwordHash,

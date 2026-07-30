@@ -187,7 +187,7 @@ export function OutletsManager() {
               <Plus className="w-4 h-4 mr-2" /> Add Outlet
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="max-w-7xl sm:max-w-7xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{isEditMode ? "Edit Outlet" : "Add Outlet"}</DialogTitle>
               <DialogDescription>

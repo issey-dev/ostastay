@@ -52,6 +52,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "No price is configured for the replacement departure's date" }, { status: 400 });
     }
     const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: excursionType.property.enterpriseId } });
+    // The hub-wide Excursion Outlet — a moved booking re-posts its charge, and the same
+    // no-outlet-no-posting rule applies (this route previously didn't attribute the
+    // outlet at all, so a moved booking silently lost its outlet attribution — fixed).
+    const excursionOutlet = settings?.excursionOutletId
+      ? await prisma.outlet.findUnique({
+          where: { id: settings.excursionOutletId },
+          include: { taxProfile: { include: { rates: true } } },
+        })
+      : null;
+    if (!excursionOutlet) {
+      return NextResponse.json(
+        { error: "No Excursion Outlet is linked — link one under Controls > Excursions before moving bookings (the move re-posts their charges)." },
+        { status: 400 }
+      );
+    }
     // Re-posted charges follow the same discipline as every other charge route:
     // business-date stamped and attributed to the caller's open cashier drawer.
     const shift = await ensureOpenShift(ctx, excursionType.propertyId);
@@ -151,6 +166,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
           date: resolveBusinessDate(excursionType.property),
           description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
+          outlet: excursionOutlet,
+          outletId: excursionOutlet.id,
           shiftId: shift.id,
           postingContext: { adults: original.adultCount, children: original.childCount, nights: 1 },
         });
