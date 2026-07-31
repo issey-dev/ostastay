@@ -51,3 +51,5 @@ next-env.d.ts
 # eRegistration ID photo uploads — private, never served statically (see
 # src/lib/eregistration/storage.ts)
 /storage/eregistration-uploads/
+
+__pycache__/
