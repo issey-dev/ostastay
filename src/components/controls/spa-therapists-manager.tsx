@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { Plus, Pencil, Trash2, ListChecks, Clock, CalendarOff, Users } from "lucide-react"
+import { Plus, Pencil, Trash2, ListChecks, Clock, CalendarOff, Users } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -250,10 +250,10 @@ export function SpaTherapistsManager() {
                   <Button variant="outline" size="sm" onClick={() => setExceptionsFor(t)}>
                     <CalendarOff className="h-4 w-4 mr-1.5" /> Exceptions
                   </Button>
-                  <Button variant="outline" size="icon" onClick={() => openEdit(t)}>
+                  <Button variant="outline" size="icon" aria-label="Edit therapist" onClick={() => openEdit(t)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                  <Button variant="outline" size="icon" aria-label="Delete therapist" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -617,7 +617,7 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
                   <Badge variant="outline" className="ml-2">{e.exceptionType.replace(/_/g, " ")}</Badge>
                   {e.reason && <span className="text-muted-foreground ml-2">{e.reason}</span>}
                 </div>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => remove(e.id)}>
+                <Button variant="ghost" size="icon" aria-label="Delete exception" className="text-destructive hover:text-destructive" onClick={() => remove(e.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

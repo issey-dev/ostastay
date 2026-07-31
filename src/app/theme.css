@@ -7,55 +7,70 @@
        the entire application's color palette!
     ========================================= */
     
+    /* NEUTRALS CARRY A WARM CAST. Every neutral below is a warm off-neutral (hue ~40°,
+       very low saturation) rather than the cool slate ramp this app started on — paper
+       rather than glass. It is deliberately subtle: the shift is meant to read as
+       temperature, not as a beige theme, and it never costs contrast (every pair was
+       measured against the old cool values before landing — see DESIGN_PLAN.md §2.1).
+       No cool greys anywhere; that consistency IS the effect. */
+
     /* 1. PRIMARY — the app's everyday interactive color (buttons, links, focus rings,
        active nav state). Fixed monochromatic neutral, same for every property, both
        modes — NOT a property's own banner accent (see PropertyBannerBar), which is a
        raw per-property color stored on Property.bannerColor, not a shared CSS token. */
-    --primary: #0F172A; /* Neutral 900 */
+    --primary: #1C1917; /* Warm near-black — never #000000 */
     --primary-foreground: #ffffff;
-    
+
     /* 2. BACKGROUND & TEXT */
-    --background: #F8FAFC; /* Soft Blue-Gray */
-    --foreground: #0F172A; /* Slate 900 */
-    
-    /* 3. CARDS & PANELS */
-    --card: #ffffff;
-    --card-foreground: #0F172A;
-    --popover: #ffffff;
-    --popover-foreground: #0F172A;
-    
+    --background: #FAF9F6; /* Warm off-white, the "paper" floor — never #FFFFFF */
+    --foreground: #1C1917; /* Warm near-black ink */
+
+    /* 3. CARDS & PANELS — one step brighter than the background, so a card reads as a
+       sheet laid on the desk rather than a hole cut in it. */
+    --card: #FFFEFB;
+    --card-foreground: #1C1917;
+    --popover: #FFFEFB;
+    --popover-foreground: #1C1917;
+
     /* 4. SECONDARY & MUTED ELEMENTS */
-    --secondary: #F1F5F9;
-    --secondary-foreground: #0F172A;
-    --muted: #F1F5F9;
-    --muted-foreground: #64748B;
-    --accent: #F1F5F9;
-    --accent-foreground: #0F172A;
-    
+    --secondary: #F3F1EB;
+    --secondary-foreground: #1C1917;
+    --muted: #F3F1EB;
+    --muted-foreground: #6B6459; /* 5.55:1 on --background, up from 4.55:1 when cool */
+    --accent: #F3F1EB;
+    --accent-foreground: #1C1917;
+
     /* 5. ALERTS & STATUS COLORS
        Semantic status tokens — the only place a status color is defined. Components
        must reference these (via bg-success, text-warning, etc.), never a raw Tailwind
        palette class. --destructive is shadcn's own prop name (kept for compatibility
-       with generated component variants) and doubles as the "danger" status tone. */
-    --destructive: #EF4444; /* Red */
+       with generated component variants) and doubles as the "danger" status tone.
+
+       These are deeper and less neon than the Tailwind defaults they replace, for two
+       reasons: they sit inside the warm neutral system, and the bright originals failed
+       AA as text on a card (success 3.30:1, warning 2.94:1, danger 3.76:1). Every value
+       here clears 4.5:1 on --card, on --background, and on its own -muted tint — status
+       text is frequently rendered in the status color on the tinted pill (see
+       src/lib/status-tone.ts toneMutedClasses), so all three matter. */
+    --destructive: #B4402C; /* Brick red — 5.61:1 on card */
     --destructive-foreground: #ffffff;
-    --destructive-muted: #FEF2F2;
+    --destructive-muted: #FBF0EC;
 
-    --success: #16A34A;
+    --success: #3F7A52; /* Muted fern — 5.06:1 on card */
     --success-foreground: #ffffff;
-    --success-muted: #F0FDF4;
+    --success-muted: #EFF5F0;
 
-    --warning: #CA8A04;
-    --warning-foreground: #1E293B;
-    --warning-muted: #FEFCE8;
+    --warning: #8F6618; /* Amber-brown — 5.10:1 on card */
+    --warning-foreground: #ffffff;
+    --warning-muted: #FAF4E6;
 
-    --info: #2563EB;
+    --info: #1F5C99; /* Deep sea blue — 6.83:1 on card */
     --info-foreground: #ffffff;
-    --info-muted: #EFF6FF;
+    --info-muted: #EDF3F9;
 
     /* 6. BORDERS & INPUTS */
-    --border: #E2E8F0;
-    --input: #E2E8F0;
+    --border: #E6E2DA; /* Warm hairline rule */
+    --input: #E6E2DA;
     --ring: var(--primary); /* Focus rings match primary */
 
     /* 7. CORNER ROUNDNESS — 0 everywhere, no curves anywhere in the app. This single
@@ -74,21 +89,24 @@
     --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.06); /* sticky header */
 
     /* 8. SIDEBAR SPECIFIC THEME */
-    --sidebar-background: #ffffff;
-    --sidebar-foreground: #334155;
+    --sidebar-background: #FFFEFB;
+    --sidebar-foreground: #3C3833;
     --sidebar-primary: var(--primary);
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #F1F5F9;
-    --sidebar-accent-foreground: #0F172A;
-    --sidebar-border: #E2E8F0;
+    --sidebar-accent: #F3F1EB;
+    --sidebar-accent-foreground: #1C1917;
+    --sidebar-border: #E6E2DA;
     --sidebar-ring: var(--primary);
 
-    /* Charts */
-    --chart-1: #F97316;
-    --chart-2: #14B8A6;
-    --chart-3: #0F766E;
-    --chart-4: #EAB308;
-    --chart-5: #F97316;
+    /* Charts — drawn from the same Maldives palette as the property banner presets
+       (src/lib/themePresets.ts) so a chart never introduces a hue the rest of the app
+       doesn't already use. Five distinct hues: previously --chart-5 duplicated
+       --chart-1, which made two series of a five-series chart indistinguishable. */
+    --chart-1: #1A5CA0; /* Ocean  */
+    --chart-2: #107880; /* Lagoon */
+    --chart-3: #B55018; /* Sunset */
+    --chart-4: #2F6B45; /* Palm   */
+    --chart-5: #C43E63; /* Coral  */
   }
 
   /* Z-INDEX LAYERS — named stacking order, consumed via arbitrary-value utilities
@@ -109,42 +127,46 @@
      neutral (the classic monochrome "high-contrast" button — dark-on-light in light
      mode, light-on-dark in dark mode) rather than chasing the light palette's hue. */
   .dark {
-    --primary: #F5F5F5;         /* Neutral 100 */
-    --primary-foreground: #171717; /* Neutral 900 */
+    /* Same warm cast as light mode, mirrored: a warm charcoal with a brown undertone
+       rather than a true-black/cool-slate dark. Still very dark — this is a subtle
+       temperature shift, not a brown theme — but never pure #000000. */
+    --primary: #F5F2EB;         /* Warm cream */
+    --primary-foreground: #1A1917;
 
-    --background: #0A0A0A;      /* Neutral 950 */
-    --foreground: #F5F5F5;      /* Neutral 100 */
+    --background: #0F0E0C;      /* Warm near-black */
+    --foreground: #F5F2EB;      /* Warm cream — never pure white */
 
-    --card: #171717;            /* Neutral 900 */
-    --card-foreground: #F5F5F5;
-    --popover: #171717;
-    --popover-foreground: #F5F5F5;
+    --card: #1A1917;
+    --card-foreground: #F5F2EB;
+    --popover: #1A1917;
+    --popover-foreground: #F5F2EB;
 
-    --secondary: #262626;       /* Neutral 800 */
-    --secondary-foreground: #F5F5F5;
-    --muted: #262626;
-    --muted-foreground: #A3A3A3; /* Neutral 400 */
-    --accent: #262626;
-    --accent-foreground: #F5F5F5;
+    --secondary: #272521;
+    --secondary-foreground: #F5F2EB;
+    --muted: #272521;
+    --muted-foreground: #A5A096;
+    --accent: #272521;
+    --accent-foreground: #F5F2EB;
 
-    --destructive: #EF4444;
-    --destructive-foreground: #ffffff;
-    --destructive-muted: rgb(239 68 68 / 0.12);
+    /* Brightened for dark surfaces, same roles as light. All clear 4.5:1 on --card. */
+    --destructive: #E2795F;
+    --destructive-foreground: #1A1917;
+    --destructive-muted: rgb(226 121 95 / 0.12);
 
-    --success: #22C55E;
-    --success-foreground: #052e16;
-    --success-muted: rgb(34 197 94 / 0.12);
+    --success: #6BAF83;
+    --success-foreground: #1A1917;
+    --success-muted: rgb(107 175 131 / 0.12);
 
-    --warning: #EAB308;
-    --warning-foreground: #171717; /* Neutral 900 */
-    --warning-muted: rgb(234 179 8 / 0.12);
+    --warning: #D9A63F;
+    --warning-foreground: #1A1917;
+    --warning-muted: rgb(217 166 63 / 0.12);
 
-    --info: #3B82F6;
-    --info-foreground: #ffffff;
-    --info-muted: rgb(59 130 246 / 0.12);
+    --info: #5AA0D8;
+    --info-foreground: #1A1917;
+    --info-muted: rgb(90 160 216 / 0.12);
 
-    --border: #404040;          /* Neutral 700 */
-    --input: #404040;
+    --border: #4A463D;
+    --input: #4A463D;
     --ring: var(--primary);
 
     /* Elevation reads darker/more diffuse against dark surfaces to still register as "lifted". */

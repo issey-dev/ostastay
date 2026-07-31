@@ -158,7 +158,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back">
+          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>

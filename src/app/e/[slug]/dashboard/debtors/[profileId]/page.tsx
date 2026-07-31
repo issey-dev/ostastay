@@ -116,7 +116,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-3">
           <Link href={`/e/${slug}/dashboard/debtors`}>
-            <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
+            <Button variant="ghost" size="icon" aria-label="Back"><ArrowLeft className="w-4 h-4" /></Button>
           </Link>
           <div>
             <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">

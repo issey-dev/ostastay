@@ -333,8 +333,8 @@ export function TapeChartGrid() {
         <div className="w-32 shrink-0 border-r border-border p-2 flex items-center justify-between font-semibold text-foreground bg-muted z-30 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
           Rooms
           <div className="flex gap-1">
-            <Button variant="outline" size="icon" className="h-5 w-5" onClick={() => setStartDate(d => addDays(d, -7))}>&lt;</Button>
-            <Button variant="outline" size="icon" className="h-5 w-5" onClick={() => setStartDate(d => addDays(d, 7))}>&gt;</Button>
+            <Button variant="outline" size="icon" className="h-5 w-5" onClick={() => setStartDate(d => addDays(d, -7))} aria-label="Previous week">&lt;</Button>
+            <Button variant="outline" size="icon" className="h-5 w-5" onClick={() => setStartDate(d => addDays(d, 7))} aria-label="Next week">&gt;</Button>
           </div>
         </div>
         <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${daysToShow}, minmax(80px, 1fr))` }}>

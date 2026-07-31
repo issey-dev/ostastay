@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { KeyRound, Hotel } from "@/components/icons"
+import { KeyRound, Hotel, Eye, EyeOff } from "@/components/icons"
 import { toast } from "@/lib/toast"
 
 // Shared by the generic /login (asks for an Enterprise Code) and each enterprise's own
@@ -22,6 +22,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   const [code, setCode] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -104,6 +105,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   placeholder="admin@hotel.com"
                   required
                   value={email}
@@ -115,13 +117,25 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                   <Label htmlFor="password">Password</Label>
                   <a href="#" className="text-xs text-primary font-medium hover:underline">Forgot password?</a>
                 </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    className="pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute inset-y-0 right-0 flex w-10 cursor-pointer items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-4">

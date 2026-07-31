@@ -81,7 +81,7 @@ export function AttachmentsManager({ upid }: { upid: string }) {
                 {r.label} <ExternalLink className="h-3 w-3 shrink-0" />
               </a>
               <span className="text-xs text-muted-foreground shrink-0">{new Date(r.createdAt).toLocaleDateString()}</span>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => handleDelete(r.id)}>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => handleDelete(r.id)} aria-label="Delete attachment">
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>

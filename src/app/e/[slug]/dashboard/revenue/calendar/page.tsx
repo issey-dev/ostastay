@@ -216,7 +216,7 @@ function PriceCalendarPageContent() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4">
         <Link href={`/e/${slug}/dashboard/revenue`}>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>

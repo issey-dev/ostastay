@@ -325,12 +325,13 @@ export function ExcursionsManager({ title, description }: { title: string; descr
                       <Button variant="outline" size="sm" onClick={() => setSchedulingFor(t)}>
                         <CalendarClock className="h-4 w-4 mr-1.5" /> Schedule
                       </Button>
-                      <Button variant="outline" size="icon" onClick={() => openEdit(t)}>
+                      <Button variant="outline" size="icon" aria-label="Edit excursion" onClick={() => openEdit(t)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label="Delete excursion"
                         className="text-destructive hover:text-destructive"
                         onClick={() => setDeleting(t)}
                       >
@@ -557,6 +558,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="Remove rate"
                           className={idx === 0 ? "mt-6" : ""}
                           disabled={ratesArray.fields.length === 1}
                           onClick={() => ratesArray.remove(idx)}

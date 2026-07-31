@@ -139,7 +139,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
       {/* Header — mirrors the Edit form's sticky header */}
       <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={goBack} title="Back">
+          <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>

@@ -157,7 +157,7 @@ export default function TaskSheetPage() {
     <div className="max-w-2xl mx-auto space-y-6 pb-16">
       <div className="flex items-center gap-3">
         <Link href={`/e/${slug}/dashboard/housekeeping`}>
-          <Button variant="outline" size="icon" className="shrink-0">
+          <Button variant="outline" size="icon" className="shrink-0" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
@@ -167,7 +167,7 @@ export default function TaskSheetPage() {
           </h2>
           <p className="text-sm text-muted-foreground">Assigned rooms in cleaning order.</p>
         </div>
-        <Button variant="outline" size="icon" onClick={() => fetchRooms()} title="Refresh">
+        <Button variant="outline" size="icon" onClick={() => fetchRooms()} title="Refresh" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
         </Button>
       </div>

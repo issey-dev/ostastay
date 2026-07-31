@@ -661,6 +661,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                     variant="ghost"
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                     title="Void Charge"
+                                    aria-label="Void Charge"
                                     onClick={() => { setVoidTarget(item); setVoidReason("") }}
                                   >
                                     <Ban className="w-3.5 h-3.5" />
@@ -685,6 +686,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                   variant="ghost"
                                   className="h-7 w-7"
                                   title="Print Payment Receipt"
+                                  aria-label="Print Payment Receipt"
                                   onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
                                 >
                                   <Printer className="w-3.5 h-3.5" />

@@ -151,10 +151,10 @@ export function ExcursionScheduleManager({
               </div>
               <div className="flex items-center gap-2">
                 {!s.isActive && <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>}
-                <Button variant="ghost" size="icon" onClick={() => startEdit(s)}>
+                <Button variant="ghost" size="icon" aria-label="Edit schedule" onClick={() => startEdit(s)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => deleteSchedule(s.id)}>
+                <Button variant="ghost" size="icon" aria-label="Delete schedule" className="text-destructive hover:text-destructive" onClick={() => deleteSchedule(s.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

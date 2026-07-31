@@ -506,7 +506,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   return (
     <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
       <div className="flex items-center gap-4">
-        <Button type="button" variant="outline" size="icon" onClick={() => router.push(exitUrl)}>
+        <Button type="button" variant="outline" size="icon" onClick={() => router.push(exitUrl)} aria-label="Back">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">

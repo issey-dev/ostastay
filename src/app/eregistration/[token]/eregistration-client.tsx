@@ -423,7 +423,7 @@ function SlotFormView({
                   <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
                     <Input placeholder="Child's name" value={child.name} onChange={(e) => updateChild(i, { name: e.target.value })} />
                     <DatePicker value={child.dateOfBirth ?? undefined} onChange={(v) => updateChild(i, { dateOfBirth: v })} placeholder="Date of birth" />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeChild(i)}><Trash2 className="h-4 w-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Remove child" onClick={() => removeChild(i)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
                 <Button type="button" variant="outline" size="sm" onClick={addChild}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add child</Button>

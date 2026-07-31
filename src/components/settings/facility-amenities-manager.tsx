@@ -113,7 +113,7 @@ export function FacilityAmenitiesManager() {
                     <TableCell className="font-medium">{f.name}</TableCell>
                     <TableCell>{f.description || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="text-destructive">
+                      <Button variant="ghost" size="icon" aria-label="Delete amenity" className="text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>

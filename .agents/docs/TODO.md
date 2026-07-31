@@ -886,6 +886,24 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 
 ## Known non-blocking issues / things to flag, not silently fix
 
+- **The z-index token scale is documented but not enforced** (found 2026-07-31 while
+  reconciling the design system). `theme.css` defines `--z-base`…`--z-toast` (0/10/15/20/
+  30/40/50) and DESIGN_PLAN §2.7 documents them, but the shadcn/base-ui primitives —
+  `dialog`, `sheet`, `popover`, `select`, `dropdown-menu`, `tooltip`, `alert-dialog` —
+  all hardcode `z-50` instead of consuming the tokens, and `tape-chart-grid.tsx:462` and
+  `availability-grid.tsx:362` each use a raw `z-50` as well. Because `--z-toast` is also
+  `50`, **a toast raised while a modal is open has undefined stacking** — paint order
+  decides which wins. Fix by migrating the primitives to `z-[var(--z-modal)]` /
+  `z-[var(--z-overlay)]` / `z-[var(--z-dropdown)]` and the two grids to
+  `z-[var(--z-sticky)]`, not by renumbering the tokens. Low user impact today (toasts are
+  short-lived and modals rarely coincide), which is why it's here and not in the
+  release-blocking list.
+- **Input borders don't meet WCAG 1.4.11 non-text contrast.** `--border`/`--input` are
+  `#E6E2DA` on `#FAF9F6` (1.23:1) and `#4A463D` on `#0F0E0C` (2.05:1); the boundary of a
+  form control is supposed to clear 3:1. This predates the warm-cast change (the old cool
+  values were 1.18:1 and 1.91:1, i.e. slightly worse) and fixing it means visibly darker
+  field borders app-wide — a design call for the app owner, not a silent change. A
+  narrower fix is a dedicated `--input-border` token darker than the divider `--border`.
 - **SMTP settings are still stored in plaintext (`EnterpriseSettings.smtpPassword`)** —
   the Confirmation Letter feature (2026-07-19) now does real SMTP sending via
   `src/lib/mailer.ts` on top of this, per explicit app-owner instruction ("printable and

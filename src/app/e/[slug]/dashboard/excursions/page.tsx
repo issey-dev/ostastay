@@ -469,6 +469,7 @@ export default function ExcursionsPage() {
                         size="icon"
                         variant="ghost"
                         title="View manifest"
+                        aria-label="View manifest"
                         onClick={() => setManifestDepartureId(selectedDeparture.id)}
                       >
                         <ClipboardList className="w-4 h-4" />

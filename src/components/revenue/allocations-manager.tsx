@@ -350,12 +350,13 @@ export function AllocationsManager() {
                       )}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" onClick={() => openEdit(a)}>
+                      <Button variant="outline" size="icon" aria-label="Edit allocation" onClick={() => openEdit(a)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label="Delete allocation"
                         className="text-destructive hover:text-destructive"
                         onClick={() => setDeleting(a)}
                       >
@@ -618,6 +619,7 @@ export function AllocationsManager() {
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label="Remove rate"
                           className={idx === 0 ? "mt-6" : ""}
                           disabled={ratesArray.fields.length === 1}
                           onClick={() => ratesArray.remove(idx)}

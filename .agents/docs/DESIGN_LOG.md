@@ -365,3 +365,88 @@
   browser screenshot verification was not possible — the Browser pane renderer was
   frozen this session (screenshots timed out, inline style mutations didn't take effect),
   an environment issue, not a code one.
+
+---
+
+## 2026-07-31
+
+- **Warm cast across all neutrals.** The app's neutral ramp moved from cool slate to a
+  warm off-neutral (hue ~40°, very low saturation) in both modes: light background
+  `#F8FAFC`→`#FAF9F6`, card `#ffffff`→`#FFFEFB`, ink `#0F172A`→`#1C1917`, border
+  `#E2E8F0`→`#E6E2DA`; dark background `#0A0A0A`→`#0F0E0C`, card `#171717`→`#1A1917`,
+  text `#F5F5F5`→`#F5F2EB` (cream, not white), border `#404040`→`#4A463D`. Paper rather
+  than glass — deliberately subtle, meant to read as temperature, not as a beige theme.
+  All in `theme.css`. Rationale and the "no cool greys" rule now in DESIGN_PLAN §0.
+
+  **Contrast was measured pair-by-pair against the old cool values before landing, and
+  nothing regressed.** Body text stays 16.6:1 (light) / 17.3:1 (dark); muted text
+  *improved* 4.55→5.55:1; all four border pairs improved slightly.
+
+- **Status colors deepened — fixes a real AA failure.** `--success`/`--warning`/
+  `--destructive` were bright Tailwind defaults that **failed AA as text on a card**
+  (3.30:1, 2.94:1, 3.76:1 respectively). Replaced with warm, deeper equivalents:
+  success `#3F7A52`, warning `#8F6618`, destructive `#B4402C`, info `#1F5C99` — 5.06,
+  5.10, 5.61 and 6.83:1 on card. Each was checked against three surfaces, not one: on
+  `--card`, on `--background`, and on its own `-muted` tint, because
+  `status-tone.ts toneMutedClasses()` renders status text in the status color on that
+  tint. Dark-mode set brightened to match. `--warning-foreground` moved to `#ffffff`.
+
+- **Property accent presets rewritten for the Maldives** (`lib/themePresets.ts`). The
+  nine generic shadcn colors (indigo/zinc/red/rose/orange/green/blue/yellow/violet) are
+  replaced by six named for the landscape: Ocean `#1A5CA0` (new default, replaces
+  indigo), Lagoon `#107880`, Palm `#2F6B45`, Beach `#87703F`, Sunset `#B55018`, Coral
+  `#C43E63`. Every one clears 4.5:1 with white label text, stays ≤80% saturation, and
+  stays visible as a banner line on both light and dark backgrounds — re-check all three
+  before adding a preset. No data migration needed: `bannerColor` is null on every
+  seeded property, and it stores a raw hex, so nothing referenced the old preset names.
+
+- **`--chart-5` was a duplicate of `--chart-1`** (both `#F97316`), so two series of any
+  five-series chart were indistinguishable. All five chart slots now draw from the
+  Maldives palette: Ocean / Lagoon / Sunset / Palm / Coral.
+
+- **`font-mono` was dead.** `globals.css` mapped `--font-mono` to `--font-geist-mono`,
+  which is defined nowhere in the repo — every `font-mono` call site (spa page, property
+  page, others) was silently resolving to an undefined variable. Fixed by pointing it at
+  the sans stack. Also made the sans stack explicit: `--font-sans: var(--font-inter),
+  "Helvetica Neue", Helvetica, Arial, sans-serif` — Helvetica ahead of the generic
+  fallback as the grotesque Inter descends from. Still one webfont; numeric alignment
+  continues to come from `tabular-nums`, not a mono face.
+
+- **Last five direct `lucide-react` imports migrated to the icons adapter**
+  (`spa/page.tsx`, `spa-treatments-manager`, `spa-therapists-manager`,
+  `spa-rooms-manager`, `spa-categories-manager`) — all Spa files added after the original
+  mx-icons migration. Added `CalendarOff` → `CalendarRemoveOutline` to
+  `components/icons.tsx`; the other 14 icons already existed. `src/` now has zero direct
+  lucide imports outside the adapter itself.
+
+- **"5.6 Design System Master.md" deleted; DESIGN_PLAN.md is the single source.** An
+  untracked draft design system had appeared in `.agents/docs/`. Reviewed, and the parts
+  worth keeping were folded into DESIGN_PLAN §0 (visual language, house rules) and §2
+  (tokens). Four of its proposals reversed already-logged decisions and were **not**
+  adopted — 6px/8px radii and pill chips (vs the standing `--radius: 0px` no-curves
+  request), JetBrains Mono as a second face, a single fixed product accent (vs the
+  per-property one), and bottom-right toasts (they're top-right). Those are recorded in
+  DESIGN_PLAN §0.4 so they don't get re-proposed. Also corrected while reconciling:
+  §2.7's `--z-banner` documented as `45` when the code says `15`, and §3.3's claim that
+  the accent has exactly one consumer (the card-header edge and sidebar wash were added
+  later and are now listed).
+
+- **UI/UX audit pass (ui-ux-pro-max skill, DESIGN_PLAN.md authoritative).** The skill is
+  now installed at `.claude/skills/ui-ux-pro-max/` (its generated style/palette/font
+  suggestions are reference-only — where they conflict with DESIGN_PLAN.md, the plan
+  wins; its priority checklist is what was applied). Fixes landed:
+  - **61 `aria-label`s added to icon-only buttons** across 37 files (back/edit/delete/
+    refresh/more-actions/pagination buttons had no accessible name — the app's biggest
+    WCAG gap). Buttons with an sr-only span (dialog/sheet/sidebar close, toggle) were
+    already fine and left alone.
+  - **`cursor-pointer` added to the shared Button base** (`ui/button.tsx`) — Tailwind v4
+    preflight leaves buttons at `cursor: default`.
+  - **Login: password show/hide toggle** (Eye/EyeOff, with aria-label) **+
+    `autoComplete="email"` / `"current-password"`** on the fields (`auth/login-form.tsx`).
+  Verified fine already, no action: focus rings (ring-3 tokens), toast timing (4s/6s +
+  top-right), `aria-sort` via the shared table-sort hook, skeleton/empty-state coverage
+  (59/63 files), reduced-motion global collapse, sidebar active state, `min-h-screen`
+  only (no bare `h-screen`). Deliberate deviations from the skill's defaults: 32px
+  button height (desktop-first density, DESIGN_PLAN), 14px body text (same), print
+  stationery keeps cool slate (separate print surface). Flagged, not fixed: dead
+  "Forgot password?" link (`href="#"`, no reset flow exists); no skip-to-content link.

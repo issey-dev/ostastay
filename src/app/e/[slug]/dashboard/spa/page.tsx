@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useParams } from "next/navigation"
-import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, ClipboardList } from "lucide-react"
+import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, ClipboardList } from "@/components/icons"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SpaSchedule } from "@/components/front-office/spa-schedule"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
@@ -675,7 +675,7 @@ export default function SpaPage() {
                             <p className="font-medium text-sm text-foreground">{slot.value.guestName}</p>
                             <p className="text-xs text-muted-foreground">Room {slot.value.roomNumber}</p>
                           </div>
-                          <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
+                          <Button type="button" size="icon" variant="ghost" aria-label="Clear guest" onClick={() => clearSlot(i)}>
                             <X className="w-4 h-4" />
                           </Button>
                         </div>
@@ -684,7 +684,7 @@ export default function SpaPage() {
                           <p className="font-medium text-sm text-foreground">
                             {slot.value.guestName} <span className="text-muted-foreground text-xs">(companion)</span>
                           </p>
-                          <Button type="button" size="icon" variant="ghost" onClick={() => clearSlot(i)}>
+                          <Button type="button" size="icon" variant="ghost" aria-label="Remove companion" onClick={() => clearSlot(i)}>
                             <X className="w-4 h-4" />
                           </Button>
                         </div>

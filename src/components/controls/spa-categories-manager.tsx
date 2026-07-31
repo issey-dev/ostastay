@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { Plus, Pencil, Trash2, Sparkles } from "lucide-react"
+import { Plus, Pencil, Trash2, Sparkles } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -159,10 +159,10 @@ export function SpaCategoriesManager({ onChanged }: { onChanged?: () => void }) 
                   )}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="icon" onClick={() => openEdit(c)}>
+                  <Button variant="outline" size="icon" aria-label="Edit category" onClick={() => openEdit(c)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                  <Button variant="outline" size="icon" aria-label="Delete category" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>

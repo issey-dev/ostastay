@@ -8,7 +8,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-mono: var(--font-geist-mono);
+
+  /* TYPOGRAPHY — one family, Inter (loaded once in layout.tsx via next/font), with
+     Helvetica ahead of the generic sans fallback: the Swiss grotesque Inter descends
+     from, so the page degrades to a near-identical shape if the webfont is slow.
+     There is deliberately no second face and no separate monospace webfont.
+
+     --font-mono resolves to the same stack rather than a mono family. Numeric column
+     alignment comes from the `tabular-nums` utility (Inter ships proper tabular
+     figures), which is how the app already aligns money and date columns. This token
+     previously pointed at --font-geist-mono, which is defined nowhere in the repo — so
+     every `font-mono` call site was silently resolving to an undefined variable. */
+  --font-sans: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

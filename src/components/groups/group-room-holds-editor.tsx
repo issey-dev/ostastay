@@ -83,7 +83,7 @@ export function GroupRoomHoldsEditor({
                 value={row.quantity}
                 onChange={(e) => update(i, { quantity: parseInt(e.target.value) || 0 })}
               />
-              <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)} title="Remove">
+              <Button type="button" variant="ghost" size="icon" onClick={() => remove(i)} title="Remove" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-destructive" />
               </Button>
             </div>

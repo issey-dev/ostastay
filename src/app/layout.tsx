@@ -42,7 +42,11 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={`${inter.className} antialiased bg-background text-foreground`} suppressHydrationWarning>
+      {/* `inter.variable`, not `inter.className`: className sets font-family directly on
+          the body and would outrank the --font-sans stack, cutting Helvetica out of the
+          chain. Exposing the variable instead lets `html { @apply font-sans }` resolve to
+          Inter → next/font's metric-matched fallback → Helvetica → Arial (globals.css). */}
+      <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
         <DarkModeProvider>{children}</DarkModeProvider>
         <Toaster />
       </body>

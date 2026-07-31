@@ -525,6 +525,7 @@ export default function HousekeepingDashboard() {
             size="icon"
             onClick={() => setSelectedRooms([])}
             className="ml-2 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-none"
+            aria-label="Clear selection"
           >
             <X className="w-5 h-5" />
           </Button>

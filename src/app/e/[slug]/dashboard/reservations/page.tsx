@@ -405,7 +405,7 @@ export default function ReservationsDashboard() {
           </Button>
         )}
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8 relative" title="More actions" />}>
+          <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8 relative" title="More actions" aria-label="More actions" />}>
             <MoreHorizontal className="h-4 w-4" />
             {canRequest && getActiveTasks(res).length > 0 && (
               <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-destructive" />

@@ -95,10 +95,10 @@ export function NotesPanel({ upid }: { upid: string }) {
                 <p className="text-sm whitespace-pre-wrap flex-1">{n.noteText}</p>
                 <div className="flex items-center gap-1 shrink-0">
                   {n.isPinned && <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Pinned</Badge>}
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePin(n)}>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePin(n)} aria-label={n.isPinned ? "Unpin note" : "Pin note"}>
                     {n.isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                   </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(n.id)}>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(n.id)} aria-label="Delete note">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>

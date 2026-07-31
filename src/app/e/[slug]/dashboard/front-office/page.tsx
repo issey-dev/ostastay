@@ -489,7 +489,7 @@ export default function FrontOfficeDashboard() {
                                 </Button>
                               )}
                               <DropdownMenu>
-                                <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                                <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
                                   <MoreHorizontal className="h-4 w-4" />
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-44">
@@ -552,7 +552,7 @@ export default function FrontOfficeDashboard() {
                               <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "..." : "Check Out"}
                             </Button>
                             <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="w-44">
@@ -610,7 +610,7 @@ export default function FrontOfficeDashboard() {
                               <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Move
                             </Button>
                             <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" />}>
+                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="w-44">

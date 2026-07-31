@@ -159,10 +159,10 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(method)}>
+                    <Button variant="ghost" size="icon" aria-label="Edit payment method" onClick={() => handleOpenDialog(method)}>
                       <Edit2 className="w-4 h-4 text-muted-foreground" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(method.id)}>
+                    <Button variant="ghost" size="icon" aria-label="Delete payment method" onClick={() => handleDelete(method.id)}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </TableCell>

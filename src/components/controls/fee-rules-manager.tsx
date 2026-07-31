@@ -204,6 +204,7 @@ export function FeeRulesManager() {
                         className="text-destructive border-destructive/40 hover:bg-destructive-muted hover:text-destructive"
                         onClick={() => remove(rule)}
                         title="Delete rule"
+                        aria-label="Delete rule"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

@@ -259,10 +259,10 @@ export default function ProfilesDashboard() {
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
                       <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" className="text-primary" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
+                        <Button variant="ghost" size="icon-sm" className="text-primary" aria-label="Edit profile" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => {
+                        <Button variant="ghost" size="icon-sm" className="text-destructive" aria-label="Delete profile" onClick={() => {
                           setDeletingUpid(p.upid)
                           setIsDeleteDialogOpen(true)
                         }}>

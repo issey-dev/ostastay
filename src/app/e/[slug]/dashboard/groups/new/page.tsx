@@ -80,7 +80,7 @@ export default function NewGroupBlock() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
         <Link href={`/e/${slug}/dashboard/groups`}>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>

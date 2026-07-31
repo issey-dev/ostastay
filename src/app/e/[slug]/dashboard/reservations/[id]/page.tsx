@@ -384,7 +384,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back">
+          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -866,6 +866,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                   size="icon"
                   className={`h-7 w-7 ${showSummary ? "text-primary" : "text-muted-foreground"}`}
                   title="Charge summary"
+                  aria-label="Charge summary"
                   onClick={() => setShowSummary((s) => !s)}
                 >
                   <Info className="w-4 h-4" />

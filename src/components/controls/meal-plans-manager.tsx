@@ -167,10 +167,10 @@ export function MealPlansManager({ title, description }: { title: string; descri
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openDialog(mp)}>
+                      <Button variant="ghost" size="icon" aria-label="Edit meal plan" onClick={() => openDialog(mp)}>
                         <Edit2 className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(mp.id)}>
+                      <Button variant="ghost" size="icon" aria-label="Delete meal plan" onClick={() => handleDelete(mp.id)}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </TableCell>

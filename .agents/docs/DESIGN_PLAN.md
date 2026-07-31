@@ -9,7 +9,80 @@ against current code before assuming any specific finding/gap listed in §1 is s
 open. See [`.agents/docs/DECISIONS.md`](.agents/docs/DECISIONS.md) for a short summary
 and the per-property banner correction.
 Audience: a coding agent executing this phase-by-phase.
-Scope: `D:\Osta\ostastay` (Next.js 16 / React 19 App Router, "Guest House PMS").
+Scope: `D:\OstaStay` (Next.js 16 / React 19 App Router, "Guest House PMS").
+
+**2026-07-31 — this file is now the single source of truth for the design system.** A
+separate "5.6 Design System Master" draft briefly existed alongside it; everything in it
+that survived review has been folded into §0 (visual language) and §2 (tokens), and the
+draft has been deleted so there is only one place to look. Where the draft conflicted
+with a decision already taken, the decision won — see §0.4 for the list, so nobody
+re-proposes the same reversals later.
+
+---
+
+## 0. Visual language
+
+What the app should feel like. §1–§8 are the mechanics; this is the intent behind them.
+
+### 0.1 The idea
+
+Swiss-modernist discipline, warmed up. Strict grid, clear typographic hierarchy and
+mathematical spacing — but printed on paper rather than rendered on glass. Both modes
+carry a subtle warm cast: light mode is a warm off-white, dark mode a warm charcoal
+rather than a cool slate or OLED black.
+
+The warmth is a **temperature, not a costume**. It lives entirely in the neutrals. There
+is no retro styling on top of it: no scanlines, no CRT glow, no pixel fonts, no film
+grain, no vintage badges. Someone should notice the app doesn't feel cold, without being
+able to say why.
+
+This is a **work tool** for guesthouse operators. Density flexes by surface — ordinary
+app screens run medium, data grids (tape chart, rate/availability calendar) run dense —
+but always on the same tokens and the same baseline.
+
+### 0.2 House rules
+
+- **No pure white and no pure black.** `#FAF9F6` is the light floor, `#0F0E0C` the dark
+  one; ink is `#1C1917`, never `#000000`.
+- **No cool greys.** Every neutral carries the warm cast — that consistency *is* the
+  effect. One cool grey in the middle of it reads as a bug.
+- **One accent at a time**, and it belongs to the property (§2.1, §3.3). Status colors
+  are status-only, never decoration.
+- **Never signal with color alone.** Status always carries a label, and a dot or icon
+  where it needs to read at a glance — channel-sync and reservation states have to be
+  legible to colorblind operators.
+- **Saturation cap 80%.** No neon, no purple/pink "AI" gradients, no gradients on
+  surfaces at all.
+- **Icons come from `@/components/icons`**, never `lucide-react` directly (§5.2). No
+  emoji in the UI.
+- **Numeric columns use `tabular-nums`** so figures align down the column (§2.2).
+- **Realistic demo data** — "Beach Villa 01", real MVR/USD amounts, plausible guest and
+  channel names. Never lorem ipsum.
+- **No AI copywriting clichés** in UI copy: "Elevate", "Seamless", "Unleash", "Next-Gen",
+  "Revolutionize".
+- **`min-h-*`, never `h-screen`** — mobile browser chrome makes `100vh` wrong.
+
+### 0.3 Density targets
+
+| Surface | Density | Notes |
+|---|---|---|
+| Ordinary app screens | medium | Standard card/table rhythm, §2.3 |
+| Data grids (tape chart, availability, rate calendar) | dense | 36–40px rows, sticky first column + header row |
+
+### 0.4 Settled — do not re-propose
+
+These came up in the 5.6 draft and were decided against. Each reverses a deliberate,
+logged choice, so reopening one needs the app owner, not a design argument.
+
+- **Square corners stay.** `--radius: 0px` (§2.4) is a standing "no curves" request from
+  2026-07-18, enforced across ~22 files. The draft's 6px/8px radii and 999px pill chips
+  are not adopted.
+- **One typeface stays.** Inter, with Helvetica ahead of the generic fallback (§2.2). The
+  draft's second face (JetBrains Mono for data) is not adopted — `tabular-nums` solves
+  column alignment without a second webfont.
+- **The accent stays per-property.** The draft proposed one fixed teal for the whole
+  product; the accent is chosen per property in Controls (§2.1, §3.3).
+- **Toasts stay top-right** (`toaster.tsx`), not bottom-right as the draft specified.
 
 ---
 
@@ -111,62 +184,102 @@ The gap is not the mechanism, it's **adoption**: a large fraction of components 
 
 Single source of truth: `src/app/theme.css` (values) + `src/app/globals.css` `@theme inline` block (Tailwind mapping), extended as below. All values are CSS custom properties; nothing is hardcoded in component files after migration.
 
-### 2.1 Color — monochromatic base scale
+### 2.1 Color — warm monochrome base + per-property accent
 
-Base hue: **slate** (already the dominant palette in the audit — cheapest migration path, zero perceptual change for the majority of the UI). Expressed as a 12-step neutral ramp, light and dark pairs:
-
-```
---neutral-0   (page background, light)   #F8FAFC
---neutral-25                             #F1F5F9
---neutral-50                             #E2E8F0
---neutral-100                            #CBD5E1
---neutral-200                            #94A3B8
---neutral-300                            #64748B
---neutral-400                            #475569
---neutral-500                            #334155
---neutral-600                            #1E293B
---neutral-700                            #0F172A
---neutral-800  (near-black, dark bg)     #020617
---neutral-950  (true black, reserved)    #000000
-```
-
-Semantic tokens are **derived from this ramp only** (plus the reserved accent slot below) — no component ever references `--neutral-*` directly, only the semantic names:
+Monochromatic, as before, but the neutrals carry a **warm cast** (hue ~40°, very low
+saturation) instead of the cool slate ramp the app started on. Paper, not glass — see
+§0.1. Values live in `src/app/theme.css`.
 
 ```
---background        neutral-0 (light) / neutral-800 (dark)
---foreground         neutral-700 (light) / neutral-25 (dark)
---card               #fff (light) / neutral-600 (dark)
---card-foreground    = --foreground
---popover            = --card
---popover-foreground = --foreground
---muted              neutral-25 (light) / neutral-600 (dark)
---muted-foreground   neutral-300 (light) / neutral-200 (dark)
---secondary          = --muted
---secondary-foreground = --foreground
---border             neutral-50 (light) / neutral-500 (dark)
---input              = --border
+                        light        dark
+--background            #FAF9F6      #0F0E0C     warm off-white / warm near-black
+--foreground            #1C1917      #F5F2EB     warm ink / warm cream
+--card, --popover       #FFFEFB      #1A1917     one step off the background, so a card
+--card-foreground       = --foreground           reads as a sheet on a desk
+--muted, --secondary    #F3F1EB      #272521
+--accent  (shadcn's)    = --muted    = --muted
+--muted-foreground      #6B6459      #A5A096
+--border, --input       #E6E2DA      #4A463D     warm hairline rule
+--primary               #1C1917      #F5F2EB     fixed neutral, same for every property
+--primary-foreground    #ffffff      #1A1917
 ```
 
-This is a **relabeling of the existing `theme.css` values**, not a redesign — every hex above is the current slate value already in the file, just given an explicit position on a documented ramp so "which gray do I use" has one answer.
+The shift is deliberately subtle and it **costs no contrast** — every pair was measured
+against the previous cool values before landing. Body text stays far above AA in both
+modes (16.6:1 light, 17.3:1 dark) and muted text actually improved, 4.55:1 → 5.55:1.
 
-**Status colors** (new — closes finding C), also fixed hues, not accent-dependent, defined once and consumed via semantic name only:
+**Status colors** — fixed hues, never accent-dependent, consumed by semantic name only
+(and only ever via `src/lib/status-tone.ts`, never a raw Tailwind palette class):
 
 ```
---success        #16A34A   --success-foreground #ffffff   --success-muted #F0FDF4
---warning         #CA8A04   --warning-foreground #1E293B   --warning-muted #FEFCE8
---danger          #DC2626   --danger-foreground  #ffffff   --danger-muted  #FEF2F2
---info            #2563EB   --info-foreground    #ffffff   --info-muted    #EFF6FF
+                 light      dark       on card (light)
+--destructive    #B4402C    #E2795F    5.61:1    brick red
+--success        #3F7A52    #6BAF83    5.06:1    muted fern
+--warning        #8F6618    #D9A63F    5.10:1    amber-brown
+--info           #1F5C99    #5AA0D8    6.83:1    deep sea blue
 ```
 
-(`--destructive` stays as an alias of `--danger` for backward compatibility with existing shadcn component variants — do not rename the shadcn-generated prop name, just point it at the new token.)
+Each has `-foreground` and `-muted` companions. These are deeper and less neon than the
+Tailwind defaults they replaced, for two reasons: they sit inside the warm system, and
+**the bright originals failed AA as text on a card** — success 3.30:1, warning 2.94:1,
+danger 3.76:1. When changing any of them, check three ratios, not one: on `--card`, on
+`--background`, and on the token's own `-muted` tint, because `toneMutedClasses()`
+renders status text in the status color on that tint.
 
-**Reserved accent slot** (the escape hatch, see §3.3 — **superseded**: this is *not* a shared CSS token. `Property.bannerColor` is a raw hex stored per property in Prisma and read client-side by `PropertyBannerBar`, not injected as a `--accent-*` custom property):
+`--destructive` keeps shadcn's prop name and doubles as the "danger" tone — don't rename it.
 
-Note: `--accent` (shadcn's own hover/muted-surface token, mapped to `--muted`) is unrelated to the property banner accent and must not be conflated — keep shadcn's `--accent`/`--accent-foreground` as-is (they're structural, not brand color).
+**The accent is per-property and chosen in Controls.** There is no single product accent.
+Each property picks one in *Controls › General › Appearance*; it is stored as a raw hex on
+`Property.bannerColor` and surfaces as the `PropertyBannerBar` line plus a small number of
+CSS rules via `--property-accent` (§3.3). "No accent" is a valid, common choice.
+
+The curated presets are named for the Maldivian landscape rather than a generic UI palette
+(`src/lib/themePresets.ts`):
+
+| Preset | Hex | White text | Saturation |
+|---|---|---|---|
+| **Ocean** (default) | `#1A5CA0` | 6.81:1 | 72% |
+| **Lagoon** | `#107880` | 5.22:1 | 78% |
+| **Palm** | `#2F6B45` | 6.34:1 | 39% |
+| **Beach** | `#87703F` | 4.75:1 | 36% |
+| **Sunset** | `#B55018` | 5.09:1 | 77% |
+| **Coral** | `#C43E63` | 4.98:1 | 53% |
+
+Three constraints bind every preset, and a new one has to satisfy all three: white label
+text clears AA (≥4.5:1) because the picker and any solid accent fill put text on it;
+saturation stays ≤80% per §0.2; and lightness stays mid-range so the banner line is
+visible against both `--background` values.
+
+Note: shadcn's `--accent` (a hover/muted-surface token, mapped to `--muted`) is unrelated
+to the property accent and must not be conflated with it.
+
+**Charts** (`--chart-1..5`) draw from the same six hues — Ocean, Lagoon, Sunset, Palm,
+Coral — so a chart never introduces a hue the rest of the app doesn't use. All five are
+distinct; `--chart-5` previously duplicated `--chart-1`, which made two series of a
+five-series chart indistinguishable.
 
 ### 2.2 Typography scale
 
-One family, loaded once. **Decision**: drop `font-outfit`/`font-heading` rather than adding a second font — the audit found no design rationale for a second family, and a monochromatic, restrained system reads better with one voice. Load Inter for both body and headings; delete the dead `font-outfit` class from the 5 files that reference it and repoint `font-heading` (in `CardTitle`) to the default sans stack. (If a future rebrand wants a distinct display face, that's a one-line change to add a second `next/font` and a `--font-heading` token — the scale below doesn't need to change for it.)
+One family, loaded once. **Decision**: drop `font-outfit`/`font-heading` rather than adding a second font — the audit found no design rationale for a second family, and a monochromatic, restrained system reads better with one voice. Load Inter for both body and headings; delete the dead `font-outfit` class from the 5 files that reference it and repoint `font-heading` (in `CardTitle`) to the default sans stack.
+
+**The stack** (`globals.css`), reaffirmed 2026-07-31 — one webfont, no second face:
+
+```
+--font-sans: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
+--font-mono: var(--font-sans);
+```
+
+Inter is loaded once via `next/font` in `layout.tsx`. Helvetica sits ahead of the generic
+fallback deliberately: it's the Swiss grotesque Inter descends from, so the page degrades
+to a near-identical shape if the webfont is slow.
+
+**There is no monospace webfont, by design.** Numeric column alignment comes from the
+`tabular-nums` utility — Inter ships proper tabular figures — applied to money, date,
+count and confirmation-number columns. Use it anywhere digits stack vertically; a folio or
+rate grid where the columns don't line up is a bug. `--font-mono` resolves to the sans
+stack so existing `font-mono` call sites stay valid; it previously pointed at
+`--font-geist-mono`, which is defined nowhere in the repo, so every one of those call
+sites was silently resolving to an undefined variable.
 
 ```
 --text-xs    0.75rem / 1rem      — meta labels, table cell secondary text
@@ -198,17 +311,23 @@ Component-internal spacing rhythm (documents current implicit convention):
 
 ### 2.4 Radii
 
-Keep the existing derived scale in `globals.css` (it's already correct in mechanism) but pin explicit usage per component category so `rounded-xl` vs `rounded-2xl` stops being arbitrary:
+**`--radius: 0px`. No curves anywhere in the app.** This is a standing request from the
+app owner (2026-07-18) and it supersedes the `0.75rem` scale this section originally
+specified — see [`DESIGN_LOG.md`](DESIGN_LOG.md).
 
-```
---radius: 0.75rem   (base, unchanged)
---radius-sm   (0.45rem) → inputs, checkboxes, small controls, table row hover
---radius-md   (0.6rem)  → buttons (sm/xs sizes already use this), badges
---radius-lg   (0.75rem) → buttons (default), dropdowns, popovers, tooltips
---radius-xl   (1.05rem) → dialogs, sheets
---radius-2xl  (1.35rem) → cards (fixes finding H — Card moves from hardcoded `rounded-2xl` to `rounded-[var(--radius-2xl)]`)
---radius-full → avatars, status dots, pills/badges, icon-only circular buttons
-```
+The derived scale in `globals.css` is still the right *mechanism*: `--radius-sm` through
+`--radius-4xl` are all `calc()`-ed off `--radius`, so this single line squares every
+component at once. Per-category radius assignments are therefore moot — there is one
+value and it is zero.
+
+Two things are **not** derived from the token and are squared off individually at each
+call site, so they need watching in review:
+
+- `rounded-full` — avatars, status dots, pills, switch track/thumb (~22 files swept).
+- Hardcoded pixel radii (`rounded-[4px]`, `rounded-[2px]`) — these don't auto-zero either.
+
+If a curve is ever wanted back, change the one token; don't reintroduce per-component
+radii. See §0.4 — this has already been proposed and declined once.
 
 ### 2.5 Elevation (shadow) scale
 
@@ -244,17 +363,28 @@ Mapping to Tailwind prefixes (no new Tailwind config needed — v4's defaults al
 
 ### 2.7 Z-index layers
 
-Named scale replacing raw numbers (finding G):
+Named scale replacing raw numbers (finding G). As implemented in `theme.css`:
 
 ```
 --z-base:      0     (page content)
---z-sticky:    10    (sticky header — matches current header usage)
+--z-sticky:    10    (sticky header, sticky grid header/first column)
+--z-banner:    15    (enterprise/support-session banner — above content, below menus)
 --z-dropdown:  20    (dropdown/select/popover menus)
 --z-overlay:   30    (sheet/dialog backdrop)
 --z-modal:     40    (dialog/sheet content)
---z-banner:    45    (enterprise/support-session banner — must sit above page content, below toast)
---z-toast:     50    (toast/notification — matches current highest usage)
+--z-toast:     50    (toast/notification)
 ```
+
+(`--z-banner` is `15`, not the `45` this section originally specified — the banner is
+page chrome and belongs below menus, not just below toasts.)
+
+⚠️ **Known gap — the scale is documented but not enforced.** The shadcn/base-ui
+primitives (`dialog`, `sheet`, `popover`, `select`, `dropdown-menu`, `tooltip`,
+`alert-dialog`) all hardcode `z-50` rather than consuming these tokens, and
+`tape-chart-grid.tsx` and `availability-grid.tsx` each use a raw `z-50` too. Since
+`--z-toast` is also `50`, a toast raised over an open modal has undefined stacking —
+paint order decides. Tracked in [`TODO.md`](TODO.md); migrate the primitives to
+`z-[var(--z-modal)]` etc. rather than adjusting the numbers.
 
 ### 2.8 Motion tokens
 
@@ -300,11 +430,16 @@ This is the one deliberate exception to "monochromatic everywhere," and it must 
 2. `PropertyBannerBar` (`src/components/ui/property-banner-bar.tsx`) is a client component reading `useProperty().currentProperty.bannerColor` and rendering a `h-1` full-width line with that color via inline `style`, or nothing if unset. It lives inside `DashboardLayout`, above the header.
 3. Because it reads from the client-side `PropertyProvider` context (not a server-injected CSS variable), it updates live when the user switches properties via `PropertySwitcher` — no page reload, no per-property CSS variable needed at all.
 4. `--primary` (used by `Button`'s default variant, links, focus rings, form field focus states, the "brand color" throughout the interactive UI) stays a **fixed neutral**, same for every property, every enterprise, light and dark mode — this is the actual "monochromatic base" requirement: the app's everyday interactive chrome never picks up a property's or enterprise's brand color.
-5. `Property.bannerColor` is consumed by **exactly one component**: `PropertyBannerBar`. No button, link, badge, chart, or table ever reads it. The picker that sets it — `PropertyBannerColorManager` (Controls > General > Appearance) — operates on `useProperty().currentProperty`, never an enterprise-wide setting.
+5. The picker that sets it — `PropertyBannerColorManager` (Controls > General > Appearance) — operates on `useProperty().currentProperty`, never an enterprise-wide setting. The preset list is in `src/lib/themePresets.ts` (§2.1), and "No accent" is a first-class, common choice: with `bannerColor` unset, nothing anywhere is accented and the UI is fully monochromatic.
+6. For CSS-only consumers, `PropertyAccentScope` injects the hex as `--property-accent`, scoped to the dashboard content area, so shared components can pick it up without each one calling the `PropertyProvider` hook. Dialogs and popovers portal *outside* that scope and therefore never inherit the accent — intentional.
 
 **Sanctioned accent surfaces** (exhaustive list — nothing else may use it):
-- `PropertyBannerBar` — the thin top-of-page line, sourced from `Property.bannerColor`.
-- Nothing else. Explicitly **not** sanctioned: buttons, active nav item highlight, focus rings, links, chart series colors, status/badge colors, the login page (property isn't known pre-login). If a future request wants the accent somewhere else, that's a scope change to this document, not a silent expansion.
+- `PropertyBannerBar` — the thin top-of-page line, read directly from `Property.bannerColor`.
+- **Card headers** — a 2px inset edge beside the title only, via `--property-accent`. A short edge on the header, deliberately not a full-height rail down the card.
+- **The active sidebar item** — a low-alpha `color-mix` wash (12% light / 20% dark), not a filled pill.
+- Nothing else. Explicitly **not** sanctioned: buttons, focus rings, links, chart series colors, status/badge colors, the login page (the property isn't known pre-login). If a future request wants the accent somewhere else, that's a scope change to this document, not a silent expansion.
+
+(The original plan said the accent had exactly one consumer. Two quiet CSS surfaces were added since — the card-header edge and the sidebar wash — and are listed above. Both stay within "a quiet touch": neither carries text, so neither introduces a contrast dependency on the chosen color.)
 
 **Separately**: the "support session acting-as" indicator (`SupportSessionNotice`, `src/components/ui/support-session-notice.tsx`) is *not* part of this accent system — it's a security notice, styled with the fixed `warning` status tone so it's never recolored to something low-contrast or easy to miss, regardless of which property's banner color happens to be active.
 

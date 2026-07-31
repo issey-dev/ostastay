@@ -230,7 +230,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
         {/* Sticky Header */}
         <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()}>
+            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>

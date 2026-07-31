@@ -23,6 +23,7 @@ import {
   CalculatorOutline,
   Calendar1Outline,
   CalendarTickOutline,
+  CalendarRemoveOutline,
   CalendarOutline,
   CardOutline,
   CategoryOutline,
@@ -136,6 +137,7 @@ export const Calendar = outline(CalendarOutline)
 export const CalendarCheck = outline(CalendarTickOutline)
 export const CalendarClock = outline(Calendar1Outline)
 export const CalendarDays = outline(Calendar1Outline)
+export const CalendarOff = outline(CalendarRemoveOutline)
 export const Check = outline(TickSquareOutline)
 export const CheckCircle = outline(TickCircleOutline)
 export const CheckCircle2 = outline(TickCircleOutline)

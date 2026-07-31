@@ -436,6 +436,7 @@ export default function CashieringPage() {
                         variant="ghost"
                         className="h-8 w-8"
                         title="Print Exchange Receipt"
+                        aria-label="Print Exchange Receipt"
                         onClick={() => window.open(`/e/${slug}/dashboard/cashiering/exchange/${exchange.id}/receipt`, '_blank')}
                       >
                         <Printer className="w-4 h-4" />

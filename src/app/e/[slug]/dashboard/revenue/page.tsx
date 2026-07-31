@@ -577,11 +577,11 @@ export default function RevenueDashboard() {
                           <CalendarDays className="mr-2 h-3 w-3" /> Calendar
                         </Button>
                       </Link>
-                      <Button variant="outline" size="icon" onClick={() => handleEdit(plan)}>
+                      <Button variant="outline" size="icon" aria-label="Edit rate plan" onClick={() => handleEdit(plan)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       {!plan.isLocked && (
-                        <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeletePrompt(plan)}>
+                        <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       )}

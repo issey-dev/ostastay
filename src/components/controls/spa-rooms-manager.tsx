@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { Plus, Pencil, Trash2, CalendarOff, DoorOpen } from "lucide-react"
+import { Plus, Pencil, Trash2, CalendarOff, DoorOpen } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -187,10 +187,10 @@ export function SpaRoomsManager() {
                   <Button variant="outline" size="sm" onClick={() => setExceptionsFor(r)}>
                     <CalendarOff className="h-4 w-4 mr-1.5" /> Closures
                   </Button>
-                  <Button variant="outline" size="icon" onClick={() => openEdit(r)}>
+                  <Button variant="outline" size="icon" aria-label="Edit spa room" onClick={() => openEdit(r)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleting(r)}>
+                  <Button variant="outline" size="icon" aria-label="Delete spa room" className="text-destructive hover:text-destructive" onClick={() => setDeleting(r)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -384,7 +384,7 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
                   <Badge variant="outline" className="ml-2">{e.exceptionType.replace(/_/g, " ")}</Badge>
                   {e.reason && <span className="text-muted-foreground ml-2">{e.reason}</span>}
                 </div>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => remove(e.id)}>
+                <Button variant="ghost" size="icon" aria-label="Delete closure" className="text-destructive hover:text-destructive" onClick={() => remove(e.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

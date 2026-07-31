@@ -104,7 +104,7 @@ export function CommunicationsManager({ upid }: { upid: string }) {
               >
                 <Star className={cn("h-4 w-4", r.isPrimary && "fill-current")} />
               </button>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => handleDelete(r.id)}>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => handleDelete(r.id)} aria-label="Delete contact">
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
