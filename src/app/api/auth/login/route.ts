@@ -5,6 +5,7 @@ import { createSession } from "@/lib/auth";
 import { lockoutRemainingSeconds, recordLoginFailure, recordLoginSuccess } from "@/lib/login-rate-limit";
 import { logAuthActivity } from "@/lib/activity-log";
 import { getOstaEnterpriseId } from "@/lib/scope";
+import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 
 const GENERIC_ERROR = "Incorrect enterprise code, email, or password.";
 
@@ -73,6 +74,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 });
     }
 
+    // License gate — AFTER the password check (so this never becomes an enumeration
+    // oracle) and BEFORE the session is created. EXPIRED (past grace) and REVOKED block
+    // sign-in outright; GRACE signs in but carries a warning for the client to surface.
+    // Osta's own users are exempt — they must always be able to reach the console.
+    const ostaId = await getOstaEnterpriseId();
+    let licenseWarning: string | null = null;
+    if (user.enterpriseId !== ostaId) {
+      const { state, graceEndsAt } = await getLicenseStatus(user.enterpriseId);
+      if (!isLicenseUsable(state)) {
+        await logAuthActivity({
+          action: "LOGIN_FAILED",
+          email,
+          description: `Failed sign-in: license ${state.toLowerCase()}`,
+          userId: user.id,
+          enterpriseId: user.enterpriseId,
+        });
+        return NextResponse.json(
+          {
+            error:
+              state === "REVOKED"
+                ? "This enterprise's license has been revoked. Contact Osta to restore access."
+                : "This enterprise's license has expired. Contact Osta to renew access.",
+          },
+          { status: 403 }
+        );
+      }
+      if (state === "GRACE") {
+        licenseWarning = `This enterprise's license has expired. Access ends ${graceEndsAt ? graceEndsAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "soon"} unless payment is received.`;
+      }
+    }
+
     recordLoginSuccess(email);
     await createSession(user.id);
     await logAuthActivity({
@@ -95,6 +127,7 @@ export async function POST(request: Request) {
       },
       enterpriseSlug: user.enterprise.slug,
       isInternal,
+      licenseWarning,
     });
 
   } catch (error) {

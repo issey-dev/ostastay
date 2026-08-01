@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { OstaSidebar } from "@/components/osta-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { SkipToContent } from "@/components/ui/skip-to-content"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -21,9 +22,16 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
 
   return (
     <SidebarProvider>
-      <OstaSidebar />
-      <main className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden">
-        <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
+      {/* First focusable element in the shell — must stay ahead of OstaSidebar. */}
+      <SkipToContent />
+      {/* print:hidden mirrors the tenant dashboard layout — the license-invoice print
+          page (/osta/license-invoices/[id]/print) lives inside this shell, and the
+          sidebar/header must not appear on the printed document. */}
+      <div className="print:hidden">
+        <OstaSidebar />
+      </div>
+      <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible outline-none">
+        <header className="print:hidden h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>
             <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight">OstaStay</h1>
@@ -33,8 +41,8 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
             <ThemeToggle />
           </div>
         </header>
-        <div className="flex-1 p-4 md:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto w-full">
+        <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
+          <div className="max-w-7xl mx-auto w-full print:max-w-none">
             {children}
           </div>
         </div>

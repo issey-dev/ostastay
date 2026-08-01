@@ -37,6 +37,8 @@ const PRINT_DOCUMENT_FILES = [
   // them. Consumed by both the print pages and the Stationaries configurator preview.
   "src/components/print/stationery/blocks.tsx",
   "src/components/print/stationery/documents.tsx",
+  // Osta's license tax invoice — platform paper, same palette-fixed rationale.
+  "src/components/print/stationery/license-invoice.tsx",
   "src/app/e/[slug]/dashboard/payments/[id]/receipt/page.tsx",
   "src/app/e/[slug]/dashboard/cashiering/exchange/[id]/receipt/page.tsx",
   // Guest/AR documents that render as fixed "paper" for print, same rationale as the

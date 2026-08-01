@@ -3,12 +3,10 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
-// Per-property add-on gate — the property-scoped sibling of
-// src/app/api/licenses/enterprise-modules/route.ts. Unlike that route (an override on
-// top of an otherwise-enabled-by-default module), a missing PropertyModuleAccess row
-// here means "not purchased" — there is no tier-default fallback to report, so this
-// always returns a plain boolean per module rather than enterprise-modules' tri-state
-// (override / null-falls-back-to-tier).
+// Per-property SELLABLE ADD-ON gate (Spa, Excursions). Distinct from the removed
+// enterprise-level module gating (TierModuleAccess/EnterpriseModuleAccess, dropped
+// 2026-07-31) and deliberately kept: a missing PropertyModuleAccess row means
+// "not purchased", so this returns a plain boolean per module with no fallback chain.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();

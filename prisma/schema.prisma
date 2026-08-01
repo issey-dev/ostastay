@@ -33,7 +33,7 @@ model Enterprise {
   systemCodes           SystemCode[]
   roomAttendants        RoomAttendant[]
   license               EnterpriseLicense?
-  moduleAccessOverrides EnterpriseModuleAccess[]
+  licenseInvoices       LicenseInvoice[]
   channelConnections    ChannelConnection[]
   channelSyncLogs       ChannelSyncLog[]
   channelInboundBookings ChannelInboundBooking[]
@@ -49,42 +49,88 @@ model EnterpriseLicense {
   id            String     @id @default(uuid())
   enterpriseId  String     @unique
   enterprise    Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  // VESTIGIAL (2026-07-31, owner decisions): tiers price nothing (manual monthlyPrice
+  // below) and, with TierModuleAccess removed, gate nothing either. The column survives
+  // only because many rows/tests reference it; drop in a later cleanup migration. Do
+  // not surface it anywhere or key any behaviour off it.
   tier          String     @default("STANDARD")
   maxProperties Int        @default(1)
   notes         String?
 
+  // SaaS lifecycle. status: ACTIVE | REVOKED (revoke is an explicit Osta act, distinct
+  // from expiry). Validity = status ACTIVE && (expiresAt null || now <= expiresAt);
+  // between expiresAt and expiresAt+graceDays users may still sign in but see a payment
+  // warning; after grace they are locked out at login AND at requireSession (so live
+  // sessions die too). Osta/internal users and a missing license row are exempt — the
+  // row is created lazily and absence must not brick a tenant (same fail-open stance as
+  // TierModuleAccess).
+  status     String    @default("ACTIVE")
+  validFrom  DateTime?
+  expiresAt  DateTime?
+  graceDays  Int       @default(7)
+  // Manual monthly price (owner decision: no formula) — the four attribute caps
+  // (maxProperties above + PropertyLicenseAllowance) restrict, they don't price.
+  monthlyPrice  Float?
+  priceCurrency String @default("USD")
+
   updatedAt DateTime @updatedAt
 }
 
-// Scaffold only: seeded so STANDARD has every module enabled; PRO/MAX left empty until
-// the real feature split is decided. Falls back to true (enabled) when no row matches
-// (tier, module) — this is only the LAST resort in the fallback chain now that
-// EnterpriseModuleAccess exists; see computeLicensedModules() in src/lib/scope.ts.
-model TierModuleAccess {
-  id      String  @id @default(uuid())
-  tier    String
-  module  String
-  enabled Boolean @default(true)
+// Per-property attribute caps (owner decision 2026-07-31: allowances are per property,
+// not enterprise totals). Null = unlimited for that attribute; 0 = attribute disallowed.
+// Pseudo (PM) room types and their rooms NEVER count against these caps, and PM room
+// types are refused channel mapping outright — see src/lib/license.ts.
+model PropertyLicenseAllowance {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  @@unique([tier, module])
+  maxRoomTypes Int?
+  maxRooms     Int?
+  maxChannels  Int?
+
+  updatedAt DateTime @updatedAt
 }
 
-// Real, enforced per-enterprise override — takes precedence over TierModuleAccess. A
-// row's absence means "no override, fall back to the tier default." Written/read only
-// by Osta's Licensing screen (Controls > per-enterprise "Module Access"); enforced in
-// requirePermission() via AuthContext.licensedModules (src/lib/scope.ts). CONTROLS and
-// ACTIVITY_LOG are never actually gated by this regardless of what's stored here — a
-// locked-out enterprise still needs to reach Controls and its own audit trail.
-model EnterpriseModuleAccess {
+// A licensing invoice Osta issues to a client enterprise (the platform's own paper —
+// branded via /osta/controls, NOT any property's stationery). status: ISSUED | PAID |
+// VOID. Marking paid stamps paidAt + receiptNo, which is what the payment receipt
+// document renders from — one row is both the invoice and, once settled, its receipt.
+model LicenseInvoice {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  module       String
-  enabled      Boolean    @default(true)
-  updatedAt    DateTime   @updatedAt
 
-  @@unique([enterpriseId, module])
+  invoiceNo   String   @unique
+  periodStart DateTime
+  periodEnd   DateTime
+  // amount is the NET payable after discount; discountAmount is shown on the printed
+  // invoice as goodwill (list price = amount + discountAmount). Display-only — no
+  // percentage math anywhere.
+  amount         Float
+  discountAmount Float  @default(0)
+  currency       String @default("USD")
+  status      String   @default("ISSUED")
+  issuedAt    DateTime @default(now())
+  dueAt       DateTime?
+
+  paidAt           DateTime?
+  paymentReference String?
+  receiptNo        String? @unique
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enterpriseId, issuedAt])
 }
+
+// REMOVED 2026-07-31 (owner): TierModuleAccess and EnterpriseModuleAccess are gone —
+// which modules a tenant uses "is not controlled by us." Module availability is now the
+// tenant's own role-permission matrix; Osta's control surface is the license itself
+// (validity, price, per-property attribute caps — see EnterpriseLicense and
+// PropertyLicenseAllowance). Per-PROPERTY sellable add-ons (Spa, Excursions) are a
+// different mechanism and remain — see PropertyModuleAccess.
 
 // A Role always belongs to a real Enterprise — system/default roles belong to the one
 // INTERNAL "Osta" enterprise (isSystem = true) rather than a nullable enterpriseId, so
@@ -318,6 +364,7 @@ model Property {
   rooms                        Room[]
   ratePlans                    RatePlan[]
   channelLink                  ChannelPropertyLink?
+  licenseAllowance             PropertyLicenseAllowance?
   inboundBookings              ChannelInboundBooking[]
   mealPlans                    MealPlan[]
   reservations                 Reservation[]

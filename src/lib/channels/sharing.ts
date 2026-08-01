@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
+import { assertChannelCapacity } from "@/lib/license";
 import { getProvider } from "@/lib/channels/providers/registry";
 
 // Sharing / mapping: which properties a channel-manager connection covers, and how this
@@ -170,6 +171,10 @@ export async function createPropertyLink(params: {
     throw new ForbiddenError("This property is already linked to a channel manager");
   }
 
+  // License cap — the per-property channel allowance gates linking, the moment a
+  // property actually joins a channel manager.
+  await assertChannelCapacity(propertyId);
+
   return prisma.channelPropertyLink.create({
     data: { connectionId, propertyId, externalPropertyId, syncEnabled: false },
   });
@@ -192,6 +197,13 @@ export async function setRoomTypeMapping(params: {
   const roomType = await prisma.roomType.findUnique({ where: { id: roomTypeId } });
   if (!roomType || roomType.propertyId !== link.propertyId) {
     throw new ForbiddenError("Room type does not belong to this property");
+  }
+
+  // PM (pseudo) room types are unsupported at the channel level by licensing rule —
+  // they are billing constructs with no physical inventory, so publishing them to a
+  // channel manager would sell rooms that don't exist.
+  if (roomType.isPseudo) {
+    throw new ForbiddenError("PM (pseudo) room types are not supported on channels and cannot be mapped");
   }
 
   if (!externalRoomId.trim()) {

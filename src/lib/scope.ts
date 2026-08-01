@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { setRequestTenantContext } from "@/lib/request-context";
+import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 import { MODULES, MODULE_LABELS, HUB_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
@@ -46,7 +48,8 @@ export type AuthContext = {
   isInternal: boolean; // true when the user's home enterprise is Osta (type INTERNAL)
   isActingAsSupport: boolean;
   supportGrantId?: string;
-  // Modules actually enabled for ctx.enterpriseId right now — see computeLicensedModules().
+  // Modules enabled for ctx.enterpriseId — always the full set since 2026-07-31 (see
+  // ALL_MODULES_LICENSED); kept as a field so gating has one seam if it ever returns.
   // requirePermission() denies access to anything missing here regardless of role.
   licensedModules: Set<Module>;
 };
@@ -181,31 +184,15 @@ async function backfillMissingRolePermissions(
 
 // CONTROLS and ACTIVITY_LOG are never actually gated by licensing — a locked-out
 // enterprise still needs to reach Controls (to understand why) and its own audit trail.
-const ALWAYS_LICENSED: ReadonlySet<Module> = new Set(["CONTROLS", "ACTIVITY_LOG"]);
-
-// Real, enforced per-enterprise module gating (replaces the old requireModuleLicensed,
-// which only checked TierModuleAccess and explicitly failed open/unused). Fallback
-// chain per module, most-specific wins: EnterpriseModuleAccess override > TierModuleAccess
-// tier default > enabled-by-default. Computed once per request in requireSession() and
-// stashed on ctx.licensedModules, so requirePermission() can check it synchronously with
-// no extra I/O at the call site.
-async function computeLicensedModules(enterpriseId: string): Promise<Set<Module>> {
-  const [overrides, license] = await Promise.all([
-    prisma.enterpriseModuleAccess.findMany({ where: { enterpriseId } }),
-    prisma.enterpriseLicense.findUnique({ where: { enterpriseId } }),
-  ]);
-  const tier = license?.tier ?? "STANDARD";
-  const tierRows = await prisma.tierModuleAccess.findMany({ where: { tier } });
-  const overrideMap = new Map(overrides.map((o) => [o.module, o.enabled]));
-  const tierMap = new Map(tierRows.map((r) => [r.module, r.enabled]));
-
-  const result = new Set<Module>();
-  for (const m of MODULES) {
-    const enabled = ALWAYS_LICENSED.has(m) ? true : overrideMap.get(m) ?? tierMap.get(m) ?? true;
-    if (enabled) result.add(m);
-  }
-  return result;
-}
+// 2026-07-31 (owner): enterprise-level module gating REMOVED — which modules a tenant
+// uses "is not controlled by us." TierModuleAccess and EnterpriseModuleAccess are gone
+// from the schema; every module is licensed for every enterprise, and access control is
+// the tenant's own role-permission matrix. Osta's levers are the license lifecycle and
+// the per-property attribute caps (src/lib/license.ts). ctx.licensedModules is kept as
+// a field (requirePermission/hasHubAccess still consult it) so the per-PROPERTY add-on
+// gate (PropertyModuleAccess — Spa/Excursions, a separate sellable-add-on mechanism)
+// and any future re-introduction have a single seam to plug back into.
+const ALL_MODULES_LICENSED: ReadonlySet<Module> = new Set(MODULES);
 
 // The single entry point every route handler must call. Re-fetches the live User row
 // (role, enterpriseId, propertyId, isActive) on every request rather than trusting the
@@ -275,6 +262,22 @@ export async function requireSession(opts?: {
     }
   }
 
+  // License lockout — an enterprise whose license is EXPIRED (past grace) or REVOKED
+  // loses not just new sign-ins (blocked in /api/auth/login) but LIVE sessions too:
+  // every request lands here, so revoking takes effect on the next click, not the next
+  // login. Internal (Osta) users are exempt, including when acting as support — support
+  // access into a locked-out enterprise is exactly how it gets un-stuck.
+  if (!isInternal) {
+    const { state: licenseState } = await getLicenseStatus(enterpriseId);
+    if (!isLicenseUsable(licenseState)) {
+      throw new ForbiddenError(
+        licenseState === "REVOKED"
+          ? "This enterprise's license has been revoked. Contact Osta to restore access."
+          : "This enterprise's license has expired. Contact Osta to renew access."
+      );
+    }
+  }
+
   // End-of-Day force-logout. Resolved AFTER the support-grant swap above, so a support
   // session is evaluated against the property it's actually acting inside.
   //
@@ -297,9 +300,14 @@ export async function requireSession(opts?: {
     }
   }
 
-  // Computed against the resolved (possibly support-grant-target) enterpriseId, so a
-  // support session correctly reflects the TARGET enterprise's own licensing, not Osta's.
-  const licensedModules = await computeLicensedModules(enterpriseId);
+  // Every module is licensed for every enterprise since the 2026-07-31 removal of
+  // enterprise-level module gating — see ALL_MODULES_LICENSED above.
+  const licensedModules = ALL_MODULES_LICENSED as Set<Module>;
+
+  // Tag the rest of this request's async execution with the resolved tenant, so the
+  // Prisma operation recorder (src/lib/db.ts) can attribute DB load per
+  // enterprise/property on the Osta DB Health dashboard.
+  setRequestTenantContext({ enterpriseId, propertyId: sessionPropertyId });
 
   return {
     userId: user.id,

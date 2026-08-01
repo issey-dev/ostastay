@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { RoomStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { assertRoomCapacity } from "@/lib/license";
 import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
     }
     if (!roomType.isActive) {
       return NextResponse.json({ error: "Cannot add a room to an inactive room type" }, { status: 400 });
+    }
+
+    // License cap — rooms of a pseudo (PM) room type are outside the licensed count.
+    if (!roomType.isPseudo) {
+      await assertRoomCapacity(body.propertyId);
     }
 
     // A Pseudo room type has no physical location — Building/Floor are skipped

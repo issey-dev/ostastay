@@ -884,20 +884,69 @@ fallback audit, and housekeepingEnabled enforcement, all closed 2026-07-18)_
 - Transaction-level tax inclusive/exclusive override (property-level toggle exists;
   user said "we will think of something" for per-transaction override — not scoped yet).
 
+## Osta platform level — SaaS licensing rework (BUILT 2026-07-31, follow-ups open)
+
+Owner brief: Osta (managing enterprise) invoices client enterprises for licensing.
+Tier pricing (STANDARD/PRO/MAX) is dropped. Owner answered the scoping questions
+2026-07-31: **price is manual per enterprise** (the counted attributes are caps only),
+**caps are per-property allowances**, **expiry = grace period (default 7d) with warning,
+then login lockout**. Pseudo (PM) room types/rooms are excluded from counts AND
+unsupported for channel mapping.
+
+Built (see prisma migration `20260731142040_saas_licensing_lifecycle`):
+- `EnterpriseLicense` + status/validFrom/expiresAt/graceDays/monthlyPrice/priceCurrency
+  (`tier` retained ONLY as the module-defaults fallback key); `PropertyLicenseAllowance`
+  (maxRoomTypes/maxRooms/maxChannels, null=unlimited, 0=disallowed); `LicenseInvoice`
+  (LIC-YYYY-NNNN, ISSUED|PAID|VOID, markPaid stamps paidAt + RCP-YYYY-NNNN receipt).
+- `src/lib/license.ts` — pure `computeLicenseState` + capacity asserts. Missing license
+  row = UNLICENSED = usable (fail-open, flagged in UI), consistent with module gating.
+- Enforcement: login route (403 EXPIRED/REVOKED, `licenseWarning` in GRACE),
+  requireSession (live sessions die on next request; internal/support exempt),
+  room-type POST, rooms POST, `createPropertyLink`, and `setRoomTypeMapping`
+  (PM mapping refused outright).
+- Enterprise-level module gating removed entirely 2026-07-31 (owner: "not controlled by us") — see DECISIONS.md; Licensing screen now shows license + allowances + invoices only.
+- Osta UI: Licensing page reworked (lifecycle card + revoke/reactivate, per-property
+  allowances table with usage, invoice issue/markPaid/void/print); print page at
+  `/osta/license-invoices/[id]/print` using Osta's own stationery (see /osta/controls);
+  /osta layout got the print:hidden treatment.
+- Tests: `tests/business-rules/license-limits.test.ts` (11 tests, green).
+
+Follow-ups NOT built yet:
+- Overview page portfolio/revenue dashboard (sum of monthly prices, upcoming expiries,
+  unpaid invoices) — owner brief mentions it, needs a design pass.
+- Enterprise detail page (/osta/enterprises/[id]) still shows only the property count —
+  should surface license state + invoices inline per the brief.
+- Client-side: login form does not yet display the GRACE `licenseWarning` payload field.
+- Tenant-facing "my license / my invoices" read-only view.
+- `tests/business-rules/channel-connection.test.ts` "token expiry days" assertion is
+  flaky under a fully loaded suite run (time-boundary math; passes in isolation) —
+  unrelated to licensing, worth a clamp fix.
+
+Already built toward this (2026-07-31):
+- `/osta/controls` — platform invoicing/receipt stationery (brand identity + invoice
+  payment instructions + receipt terms, live preview). Stores on Osta's own
+  EnterpriseSettings row via the existing enterprise-scoped `/api/tenant-settings`;
+  the deprecated-for-tenants `invoiceBrand*` columns are deliberately repurposed as
+  the platform's identity fields.
+- `/osta/db-health` reworked into tabs: **Storage** (PRAGMA page accounting + dbstat
+  per-table bytes, guarded when unavailable), **Queries** (NEW per-tenant attribution:
+  `request-context.ts` AsyncLocalStorage set in requireSession → Prisma `$extends`
+  operation recorder in db.ts → enterprise/property filterable stats; raw SQL stats
+  remain tenant-blind by nature), **API & Channels** (persisted ChannelSyncLog 7-day
+  aggregates by operation/enterprise + JobRun summaries + recent failures).
+
 ## Known non-blocking issues / things to flag, not silently fix
 
-- **The z-index token scale is documented but not enforced** (found 2026-07-31 while
-  reconciling the design system). `theme.css` defines `--z-base`…`--z-toast` (0/10/15/20/
-  30/40/50) and DESIGN_PLAN §2.7 documents them, but the shadcn/base-ui primitives —
-  `dialog`, `sheet`, `popover`, `select`, `dropdown-menu`, `tooltip`, `alert-dialog` —
-  all hardcode `z-50` instead of consuming the tokens, and `tape-chart-grid.tsx:462` and
-  `availability-grid.tsx:362` each use a raw `z-50` as well. Because `--z-toast` is also
-  `50`, **a toast raised while a modal is open has undefined stacking** — paint order
-  decides which wins. Fix by migrating the primitives to `z-[var(--z-modal)]` /
-  `z-[var(--z-overlay)]` / `z-[var(--z-dropdown)]` and the two grids to
-  `z-[var(--z-sticky)]`, not by renumbering the tokens. Low user impact today (toasts are
-  short-lived and modals rarely coincide), which is why it's here and not in the
-  release-blocking list.
+- ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
+  (v5.7)**, and it was a genuine bug, not just untidiness: `--z-toast` and the primitives'
+  hardcoded `z-50` were equal, and since `<Toaster />` mounts with the root layout (early
+  `<body>` child) while dialogs portal later, **toasts were reliably drawn behind an open
+  dialog** — not "undefined", just losing. Fixed via a new `--z-portal: 50` shared by all
+  portaled layers, with `--z-toast` raised to `60`. ⚠️ **This entry's own prescribed fix
+  was wrong** — migrating the primitives to distinct `--z-dropdown`(20)/`--z-modal`(40)
+  numbers would render a `Select` listbox behind the `Dialog` containing it, which is 20+
+  files here. Portaled siblings must share one level so mount order decides. `--z-dropdown`
+  removed (zero consumers). See DESIGN_LOG 2026-08-01 and DESIGN_PLAN §2.7.
 - **Input borders don't meet WCAG 1.4.11 non-text contrast.** `--border`/`--input` are
   `#E6E2DA` on `#FAF9F6` (1.23:1) and `#4A463D` on `#0F0E0C` (2.05:1); the boundary of a
   form control is supposed to clear 3:1. This predates the warm-cast change (the old cool

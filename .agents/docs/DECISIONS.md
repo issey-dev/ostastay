@@ -2389,3 +2389,41 @@ outlet at all — fixed in the same change).
 
 The old per-property links (SpaSettings.outletId / ExcursionSettings) are gone —
 ExcursionSettings held nothing else and was dropped entirely.
+
+## 2026-07-31 — SaaS licensing model (owner)
+
+- **No tier pricing.** License price is entered MANUALLY per enterprise
+  (EnterpriseLicense.monthlyPrice + priceCurrency). The counted attributes
+  (properties / room types / rooms / channels) are hard CAPS, not price inputs.
+  `tier` survives only as the module-defaults fallback key.
+- **Caps are per-property allowances** (PropertyLicenseAllowance), not enterprise
+  totals. Blank = unlimited, 0 = disallowed.
+- **PM (pseudo) room types and their rooms never count** toward any cap, and PM room
+  types are refused channel mapping outright ("PM room types will not be supported for
+  Channel levels").
+- **Expiry behaviour: grace then lockout.** Default 7 grace days (configurable per
+  license): users still sign in with a payment warning during grace; after it (or on
+  revoke) they are blocked at login AND live sessions die at requireSession. Osta and
+  support-access sessions are exempt.
+- **Invoicing is in-app + manual payment marking** (no gateway): LicenseInvoice rows,
+  printable under Osta's own stationery (/osta/controls), markPaid stamps a receipt.
+
+## 2026-07-31 — Enterprise-level module gating REMOVED (owner)
+
+"This is not controlled by us." The Module Access cards on Osta's Licensing screen —
+tier-wide defaults (TierModuleAccess) and per-enterprise overrides
+(EnterpriseModuleAccess) — are removed front AND back: UI cards, API routes
+(/api/licenses/tier-modules, /api/licenses/enterprise-modules), both Prisma models
+(migration `drop_enterprise_module_gating`), and the requireSession fallback chain.
+Every module is now licensed for every enterprise; which modules a tenant's users see
+is the tenant's own role-permission matrix. Osta's levers are the license lifecycle
+and the per-property attribute caps.
+
+Consequences, deliberate:
+- **Hub access is no longer grantable/revocable per enterprise** — it follows the role
+  matrix (INTEGRATIONS permission) alone; actual channel usage is capped by
+  PropertyLicenseAllowance.maxChannels.
+- `EnterpriseLicense.tier` is now fully vestigial (kept only to avoid a wide data
+  migration; drop later).
+- Per-PROPERTY sellable add-ons (Spa/Excursions via PropertyModuleAccess) are a
+  DIFFERENT mechanism and remain untouched.

@@ -6,7 +6,7 @@ export default function OstaLicensingPage() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Licensing</h2>
         <p className="text-muted-foreground">
-          Control how many properties each enterprise may create, and which modules their plan tier includes.
+          Each enterprise&apos;s license: validity and price, per-property attribute caps, invoices, and module access.
         </p>
       </div>
       <LicensingManager />

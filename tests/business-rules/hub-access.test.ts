@@ -205,27 +205,6 @@ describe("Hub access (enterprise level)", () => {
     await destroySession();
   });
 
-  it("disabling INTEGRATIONS for the enterprise revokes Hub access regardless of role", async () => {
-    await prisma.enterpriseModuleAccess.upsert({
-      where: { enterpriseId_module: { enterpriseId, module: "INTEGRATIONS" } },
-      update: { enabled: false },
-      create: { enterpriseId, module: "INTEGRATIONS", enabled: false },
-    });
-
-    cookieJar.clear();
-    await createSession(adminUserId);
-    const ctx = await requireSession();
-    expect(hasHubAccess(ctx)).toBe(false);
-    expect(() => requireHubAccess(ctx)).toThrow(ForbiddenError);
-    await destroySession();
-
-    // Re-enable so the other assertions in this file stay independent of ordering.
-    await prisma.enterpriseModuleAccess.update({
-      where: { enterpriseId_module: { enterpriseId, module: "INTEGRATIONS" } },
-      data: { enabled: true },
-    });
-  });
-
   it("every HUB_MODULES entry is a real module, and Hub modules are excluded from the property-module check", () => {
     for (const m of HUB_MODULES) {
       expect(SRC_MODULES).toContain(m);

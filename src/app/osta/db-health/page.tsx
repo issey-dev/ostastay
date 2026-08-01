@@ -5,7 +5,7 @@ export default function OstaDbHealthPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Database Health</h2>
-        <p className="text-muted-foreground">Row counts, migration status, and live query performance.</p>
+        <p className="text-muted-foreground">Storage statistics, per-tenant query load, and channel-manager API performance.</p>
       </div>
       <DbHealthDashboard />
     </div>

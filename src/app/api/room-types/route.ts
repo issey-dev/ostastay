@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
+import { assertRoomTypeCapacity } from '@/lib/license'
 import { logActivity } from '@/lib/activity-log'
 
 const featureSchema = z.object({
@@ -54,6 +55,12 @@ export async function POST(request: Request) {
     const json = await request.json()
     const { features, ...data } = createSchema.parse(json)
     await assertPropertyAccess(ctx, data.propertyId)
+
+    // License cap — pseudo (PM) room types are outside the licensed count by rule,
+    // so only a real room type consumes an allowance slot.
+    if (!data.isPseudo) {
+      await assertRoomTypeCapacity(data.propertyId)
+    }
 
     const roomType = await prisma.roomType.create({
       data: {

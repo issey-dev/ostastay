@@ -41,6 +41,9 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
       const data = await res.json()
 
       if (res.ok) {
+        // Grace-period licensing warning — the account signs in, but payment is
+        // overdue and access has a hard end date (see /api/auth/login).
+        if (data.licenseWarning) toast.error(data.licenseWarning)
         router.push(data.isInternal ? "/osta" : `/e/${data.enterpriseSlug}/dashboard`)
         router.refresh()
       } else {
@@ -115,7 +118,12 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <a href="#" className="text-xs text-primary font-medium hover:underline">Forgot password?</a>
+                  {/* Deliberately NOT a link. There is no self-service password-reset flow
+                      in this app — users are provisioned and reset by an administrator in
+                      Controls > Users & Roles. This was an <a href="#"> that looked
+                      actionable, focused like a link and did nothing when clicked. Static
+                      text is the honest control until a reset flow actually exists. */}
+                  <span className="text-xs text-muted-foreground">Forgot it? Ask your administrator</span>
                 </div>
                 <div className="relative">
                   <Input

@@ -21,7 +21,7 @@ type LogInput = {
   entityId?: string;
   metadata?: unknown; // JSON-serialized if present
   // Platform-admin actions (an Osta user acting on a TENANT's own record — e.g.
-  // approving/rejecting a property, editing an EnterpriseModuleAccess override) land
+  // approving/rejecting a property, changing its license or allowances) land
   // in Osta's own trail by default (ctx.enterpriseId), which is invisible to the
   // tenant. Pass the tenant's enterprise id here to ALSO write a copy into their
   // trail, so their own admin can see "your property was approved, by whom, why."
