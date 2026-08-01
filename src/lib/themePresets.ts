@@ -19,7 +19,10 @@ export type ThemeColorName =
   | "palm"
   | "beach"
   | "sunset"
-  | "coral";
+  | "coral"
+  | "coconut"
+  | "orchid"
+  | "bougainvillea";
 
 type ThemeColorPreset = {
   label: string;
@@ -28,7 +31,7 @@ type ThemeColorPreset = {
 };
 
 export const THEME_COLOR_PRESETS: Record<ThemeColorName, ThemeColorPreset> = {
-  // Deep water off the reef edge. The default — the most neutral of the six.
+  // Deep water off the reef edge. The default — the most neutral of the nine.
   ocean: { label: "Ocean (Default)", primary: "#1A5CA0", primaryForeground: "#ffffff" },
   // The turquoise shallows inside the reef.
   lagoon: { label: "Lagoon", primary: "#107880", primaryForeground: "#ffffff" },
@@ -40,6 +43,12 @@ export const THEME_COLOR_PRESETS: Record<ThemeColorName, ThemeColorPreset> = {
   sunset: { label: "Sunset", primary: "#B55018", primaryForeground: "#ffffff" },
   // Reef coral.
   coral: { label: "Coral", primary: "#C43E63", primaryForeground: "#ffffff" },
+  // Husk brown — darker and richer than Beach so the two browns read apart.
+  coconut: { label: "Coconut", primary: "#7E5327", primaryForeground: "#ffffff" },
+  // Island orchid — the violet one.
+  orchid: { label: "Orchid", primary: "#7D4A9E", primaryForeground: "#ffffff" },
+  // The magenta bracts spilling over guesthouse walls.
+  bougainvillea: { label: "Bougainvillea", primary: "#9C3A8E", primaryForeground: "#ffffff" },
 };
 
 export const THEME_COLOR_NAMES = Object.keys(THEME_COLOR_PRESETS) as ThemeColorName[];

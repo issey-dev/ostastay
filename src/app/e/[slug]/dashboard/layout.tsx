@@ -9,6 +9,7 @@ import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { PropertyAccentScope } from "@/components/providers/property-accent-scope"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
+import { SkipToContent } from "@/components/ui/skip-to-content"
 import { EodSessionWatch } from "@/components/providers/eod-session-watch"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
 import { requireSession } from "@/lib/scope"
@@ -48,10 +49,12 @@ export default async function DashboardLayout({
   return (
     <PropertyProvider>
       <SidebarProvider>
+        {/* First focusable element in the shell — must stay ahead of AppSidebar. */}
+        <SkipToContent />
         <div className="print:hidden">
           <AppSidebar />
         </div>
-        <main className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible">
+        <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible outline-none">
 
           <div className="print:hidden sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
             <PropertyBannerBar />

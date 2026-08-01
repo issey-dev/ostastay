@@ -244,6 +244,9 @@ The curated presets are named for the Maldivian landscape rather than a generic 
 | **Beach** | `#87703F` | 4.75:1 | 36% |
 | **Sunset** | `#B55018` | 5.09:1 | 77% |
 | **Coral** | `#C43E63` | 4.98:1 | 53% |
+| **Coconut** | `#7E5327` | 6.66:1 | 53% |
+| **Orchid** | `#7D4A9E` | 6.28:1 | 36% |
+| **Bougainvillea** | `#9C3A8E` | 6.16:1 | 46% |
 
 Three constraints bind every preset, and a new one has to satisfy all three: white label
 text clears AA (≥4.5:1) because the picker and any solid accent fill put text on it;
@@ -369,22 +372,38 @@ Named scale replacing raw numbers (finding G). As implemented in `theme.css`:
 --z-base:      0     (page content)
 --z-sticky:    10    (sticky header, sticky grid header/first column)
 --z-banner:    15    (enterprise/support-session banner — above content, below menus)
---z-dropdown:  20    (dropdown/select/popover menus)
---z-overlay:   30    (sheet/dialog backdrop)
---z-modal:     40    (dialog/sheet content)
---z-toast:     50    (toast/notification)
+--z-overlay:   30    (in-page scrims)
+--z-modal:     40    (in-page fixed chrome: housekeeping bulk bar, grid loading overlay)
+--z-portal:    50    (ALL portaled floating layers — see below)
+--z-toast:     60    (toast/notification)
 ```
 
 (`--z-banner` is `15`, not the `45` this section originally specified — the banner is
 page chrome and belongs below menus, not just below toasts.)
 
-⚠️ **Known gap — the scale is documented but not enforced.** The shadcn/base-ui
-primitives (`dialog`, `sheet`, `popover`, `select`, `dropdown-menu`, `tooltip`,
-`alert-dialog`) all hardcode `z-50` rather than consuming these tokens, and
-`tape-chart-grid.tsx` and `availability-grid.tsx` each use a raw `z-50` too. Since
-`--z-toast` is also `50`, a toast raised over an open modal has undefined stacking —
-paint order decides. Tracked in [`TODO.md`](TODO.md); migrate the primitives to
-`z-[var(--z-modal)]` etc. rather than adjusting the numbers.
+**✅ Enforced as of 2026-08-01 (v5.7).** There are no raw `z-50` values left in `src/`
+(the sole exception is a `kbd` chip scoped inside the tooltip's own `isolate` context).
+
+**The scale has two bands, and the split is deliberate:**
+
+- **In-page chrome** (`--z-base` … `--z-modal`) stacks by number. These are siblings in
+  normal document flow, so their order is fixed by the layout.
+- **Portaled floating layers** — `dialog`, `sheet`, `alert-dialog`, `dropdown-menu`,
+  `popover`, `select`, `tooltip` — **all share `--z-portal`**. They are portaled to
+  `<body>`, so they are siblings whose paint order is decided by **mount order**, which
+  is precisely the semantics wanted: the thing opened most recently sits on top.
+
+⚠️ **This section previously prescribed giving the primitives distinct numbers
+(`--z-dropdown: 20` … `--z-modal: 40`). Do not do that — it is wrong.** A `Select`
+listbox at 20 inside a `Dialog` at 40 renders *behind the dialog that contains it*, and
+this app has 20+ files pairing a Select/SearchableSelect with a Dialog. `--z-dropdown`
+was removed rather than left as a trap; it had zero consumers.
+
+**`--z-toast` must stay numerically above `--z-portal`.** The `Toaster` mounts once in
+the root layout, so it is an early `<body>` child; at an equal z-index a later-mounted
+dialog portal wins on paint order and swallows the toast confirming the very action the
+user just took inside that dialog. That was a real, shipped bug (both sat at `50`), fixed
+in v5.7 by raising toast to `60`. It must not rely on mount order.
 
 ### 2.8 Motion tokens
 

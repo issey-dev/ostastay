@@ -31,12 +31,16 @@ export function ControlsCard({
 }) {
   return (
     <Card className={cn(className)}>
-      <CardHeader className="pb-0">
+      {/* No pb override: CardHeader's own symmetric py keeps the accent-edged header
+          box balanced (equal space above the title and below the description). The
+          content's pt-0 compensates, so the total title→content rhythm matches the
+          rest of the app's cards. */}
+      <CardHeader>
         <CardTitle className="text-lg">{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
-      <CardContent className="p-6 pt-4">{children}</CardContent>
+      <CardContent className="p-6 pt-0">{children}</CardContent>
     </Card>
   )
 }

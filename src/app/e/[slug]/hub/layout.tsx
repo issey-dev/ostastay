@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { HubSidebar } from "@/components/hub-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { requireSession, hasHubAccess } from "@/lib/scope"
 import { prisma } from "@/lib/db"
@@ -56,8 +57,10 @@ export default async function HubLayout({
 
   return (
     <SidebarProvider>
+      {/* First focusable element in the shell — must stay ahead of HubSidebar. */}
+      <SkipToContent />
       <HubSidebar slug={enterprise.slug} />
-      <main className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden">
+      <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden outline-none">
         <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div className="min-w-0">

@@ -52,7 +52,12 @@ export function Toaster() {
   return (
     <Toast.Provider toastManager={toastManager}>
       <Toast.Portal>
-        <Toast.Viewport className="fixed top-4 right-4 z-[var(--z-toast,100)] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none">
+        {/* --z-toast (60) sits above --z-portal (50), which every dialog/sheet/popover
+            shares. That gap is load-bearing: this viewport mounts with the root layout,
+            so it is an early <body> child, and at an equal z-index a dialog portal
+            mounted later would paint over the toast confirming the very action taken
+            inside it. No fallback value — the token is defined in theme.css. */}
+        <Toast.Viewport className="fixed top-4 right-4 z-[var(--z-toast)] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none">
           <ToastList />
         </Toast.Viewport>
       </Toast.Portal>

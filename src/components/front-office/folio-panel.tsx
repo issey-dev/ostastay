@@ -537,7 +537,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                       </div>
 
                       <div className="flex items-center gap-3 mt-1">
-                        <p className={`text-4xl font-bold ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
+                        <p className={`text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
                         <Button

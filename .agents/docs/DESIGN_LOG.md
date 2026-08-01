@@ -450,3 +450,104 @@
   button height (desktop-first density, DESIGN_PLAN), 14px body text (same), print
   stationery keeps cool slate (separate print surface). Flagged, not fixed: dead
   "Forgot password?" link (`href="#"`, no reset flow exists); no skip-to-content link.
+
+- **Three more accent presets** (owner request): Coconut `#7E5327`, Orchid `#7D4A9E`,
+  Bougainvillea `#9C3A8E` — a deep husk brown plus the violet→magenta arc the first six left empty, all
+  validated against the same three constraints (white-text AA, ≤80% sat, banner-line
+  visibility on both backgrounds). Nine total.
+
+- **CardHeader symmetric padding** (owner request): `pt-(--card-spacing)` →
+  `py-(--card-spacing)` in `ui/card.tsx`, so the header box (and the per-property accent
+  edge inset on it) gets equal breathing room above and below the title/description.
+  The conditional `[.border-b]:pb-(--card-spacing)` rule became redundant and was removed.
+
+- **ControlsCard header padding matched to the rest of the app.** Controls sections
+  looked different from other pages after the symmetric-header change because
+  `controls-card.tsx` forced `pb-0` on its CardHeader and compensated with `pt-4` on
+  content. Now the header keeps its symmetric `py` and content uses `pt-0` — the total
+  title→content rhythm (32px) is unchanged, but the accent-edged header box is balanced.
+
+---
+
+## 2026-08-01 — release polish for **v5.7.0**
+
+Final design pass before tagging 5.7.0 (`package.json` 5.5.0 → 5.7.0). Scoped to real
+defects rather than restyling: two functional bugs, one a11y gap, three house-rule
+violations. The `ui-ux-pro-max` skill was re-run for this pass; as in the 2026-07-31
+entry its generated *style/palette/font* output (an operational-green palette, Fira
+Code/Fira Sans, "Exaggerated Minimalism" with `clamp(3rem, 10vw, 12rem)` headings) was
+**not** adopted — it contradicts DESIGN_PLAN §0/§2 on every axis, and the plan wins. Its
+**priority checklist** is what was applied.
+
+- **Toasts rendered behind dialogs — a real, shipped bug.** `--z-toast` was `50` and
+  every portaled primitive hardcoded `z-50`, so the two tied and paint order decided.
+  `<Toaster />` mounts once in the root layout and is therefore an early `<body>` child,
+  while a dialog portal mounts later — so **a toast confirming an action taken inside a
+  dialog was drawn underneath that dialog**, which is exactly when confirmation matters
+  most. Fixed by splitting the scale into an in-page band and a portal band: new
+  `--z-portal: 50` (shared by `dialog`, `sheet`, `alert-dialog`, `dropdown-menu`,
+  `popover`, `select`, `tooltip`) and `--z-toast` raised to `60`.
+
+  **DESIGN_PLAN §2.7 prescribed the opposite fix and it was wrong** — it said to give the
+  primitives distinct numbers (`--z-dropdown: 20` … `--z-modal: 40`). That would put a
+  `Select` listbox *behind the Dialog containing it*, and 20+ files in this app pair a
+  Select/SearchableSelect with a Dialog. Portaled layers must share one level so **mount
+  order** decides, which is the correct semantics (most-recently-opened on top). §2.7 has
+  been rewritten to say so, and the now-removed `--z-dropdown` (zero consumers) is called
+  out so nobody reintroduces it. `--z-overlay` kept for in-page scrims.
+
+  Also swept: the two grid loading overlays (`tape-chart-grid.tsx`,
+  `availability-grid.tsx`) moved from raw `z-50` to `--z-modal` (40) — above the grids'
+  own sticky header/column layers (max 30), below any dialog. **`src/` now has zero raw
+  `z-50`**, the one exception being a `kbd` chip scoped inside the tooltip's own
+  `isolate` context.
+
+- **Skip-to-content link added** (`ui/skip-to-content.tsx`) — the app's biggest remaining
+  WCAG gap, flagged but not fixed on 2026-07-31 (**WCAG 2.4.1 Bypass Blocks**). All three
+  authenticated shells (`dashboard`, `hub`, `osta` layouts) render a full nav sidebar
+  ahead of `<main>`, so a keyboard or screen-reader user tabbed through every nav item on
+  every page before reaching content. Rendered as the **first child of each shell** —
+  before the sidebar, since being first in the DOM is the whole mechanism, not merely
+  being positioned above. `sr-only` → `focus:not-sr-only` (deliberately not
+  `display: none`, which would drop it from the tab order and defeat the point); each
+  `<main>` gained `id="main-content"` + `tabIndex={-1}` so focus actually lands there in
+  every browser.
+
+- **Dead "Forgot password?" link removed** (`auth/login-form.tsx`) — also flagged on
+  2026-07-31. It was `<a href="#">`: it looked actionable, took focus like a link, and did
+  nothing. There is no self-service reset flow (users are provisioned and reset by an admin
+  in Controls → Users & Roles), so it is now static muted text, "Forgot it? Ask your
+  administrator". A broken control on the product's front door is not acceptable in a
+  release build; honest text is, until a reset flow actually exists.
+
+- **Three house-rule violations fixed:**
+  - `app/layout.tsx` metadata described the product as a "**Next-Generation** Property
+    Management System" — DESIGN_PLAN §0.2 explicitly bans that vocabulary from UI copy.
+    This string is the product's share preview and browser-tab companion, so it was the
+    single most visible instance of a rule the rest of the app follows. Now "Property
+    management for guesthouses and resorts".
+  - `folio-panel.tsx` balance figure `text-4xl` → `text-3xl` (§2.2 caps the scale at
+    `3xl` for KPI hero numbers and drops `4xl`; this was the last occurrence). Added
+    `tabular-nums` while there so the figure doesn't reflow as payments post.
+  - `ui/tabs.tsx` `p-[3px]` → `p-1` — the one arbitrary spacing value §2.3 forbids, and
+    the exact fix §2.3 prescribes.
+
+  **Verified:** `tsc --noEmit` clean for `src/` (3 remaining errors are in the generated
+  `.next/types/validator.ts`, referencing API routes deleted by the concurrent licensing
+  work — pre-existing, unrelated, regenerated by a fresh build); `eslint` 0 errors and
+  **0 design-rule violations**; `npm run build` clean; full suite **734/734 passing**
+  (87 files). Live runtime verification against a dev server on the same tree confirmed
+  the tokens resolve as intended (`--z-toast` 60 > `--z-portal` 50 > `--z-modal` 40 >
+  `--z-sticky` 10), that all four `z-[var(--z-*)]` utilities actually compute to those
+  values, that the login copy change is live, and — read out of the *compiled* stylesheet
+  — that every `focus:` utility the skip link relies on is generated and that
+  `.focus\:not-sr-only:focus` is emitted **before** `focus:fixed`/`top-4`/`left-4`/
+  `px-4`/`py-2`, so its `position:static`/`padding:0` resets are correctly overridden
+  rather than clobbering the revealed link.
+
+  **Not verified visually:** the skip link under real keyboard focus. The Browser pane
+  would not composite frames this session (screenshots time out — the same environment
+  issue logged on 2026-07-22), and in an unfocused window `:focus` never matches, so
+  `document.activeElement` was the link while `a.matches(':focus')` stayed `false`. The
+  cascade evidence above is strong but is not a substitute for tabbing to it — **worth a
+  30-second keyboard check on the first authenticated page next session.**

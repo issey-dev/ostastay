@@ -8,7 +8,10 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "OstaStay",
-  description: "Next-Generation Property Management System",
+  // Plain description on purpose — "Next-Generation" was here, and DESIGN_PLAN §0.2
+  // bans that vocabulary ("Next-Gen", "Seamless", "Unleash", "Elevate", "Revolutionize")
+  // from UI copy. This string is the browser tab title's companion and the share preview.
+  description: "Property management for guesthouses and resorts",
 };
 
 // Applies the persisted dark/light preference to <html> before first paint, so there's

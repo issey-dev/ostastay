@@ -111,15 +111,32 @@
 
   /* Z-INDEX LAYERS — named stacking order, consumed via arbitrary-value utilities
      (e.g. z-[var(--z-sticky)]), same pattern already used for shadow-[var(--sidebar-border)]
-     elsewhere in this codebase. Same values in light and dark mode. */
+     elsewhere in this codebase. Same values in light and dark mode.
+
+     Two bands, and the distinction matters:
+
+     - IN-PAGE chrome (--z-base .. --z-modal) stacks by number, because these elements are
+       siblings in the normal document flow and their order is fixed by the layout.
+
+     - PORTALED floating layers (dialog, sheet, alert-dialog, dropdown, popover, select,
+       tooltip) ALL share --z-portal deliberately. They are portaled to <body>, so they are
+       siblings whose paint order is decided by MOUNT order — which is exactly the semantics
+       wanted: the thing you opened most recently sits on top. Giving them distinct numbers
+       (dropdown 20 < modal 40) would put a Select's listbox BEHIND the Dialog that contains
+       it, which is 20+ real call sites in this app. Do not "fix" the shared value.
+
+     - --z-toast sits ABOVE the portal band on purpose. The Toaster mounts once in the root
+       layout, so it is an early <body> child; at an equal z-index a later-mounted dialog
+       portal wins on paint order and swallows the toast confirming the action you just took
+       inside that dialog. It must out-rank --z-portal numerically, not rely on order. */
   :root {
     --z-base: 0;
     --z-sticky: 10;
     --z-banner: 15;
-    --z-dropdown: 20;
     --z-overlay: 30;
     --z-modal: 40;
-    --z-toast: 50;
+    --z-portal: 50;
+    --z-toast: 60;
   }
 
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see

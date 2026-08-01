@@ -66,7 +66,7 @@ const tabsListVariants = cva(
   // another (e.g. the Controls sidebar's vertical Tabs wrapping a section's own
   // horizontal Tabs) — both instances share the same CSS group name "tabs", so the
   // group selector matches any ancestor with it, not just the nearest one.
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground data-horizontal:h-8 data-vertical:h-fit data-vertical:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-1 text-muted-foreground data-horizontal:h-8 data-vertical:h-fit data-vertical:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {

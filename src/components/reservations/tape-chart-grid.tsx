@@ -459,7 +459,7 @@ export function TapeChartGrid() {
       ))}
       
       {isLoading && (
-         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
+         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-[var(--z-modal)] flex items-center justify-center">
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
          </div>
       )}
