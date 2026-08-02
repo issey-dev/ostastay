@@ -15,6 +15,11 @@ import { SupportSessionExitButton } from "@/components/controls/support-session-
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
+// Reads live tenant data per request — never prerender. `next build` would otherwise
+// run these Prisma queries at build time (failing the Docker build, since no database
+// exists then) and freeze the results into static HTML.
+export const dynamic = "force-dynamic"
+
 export default async function DashboardLayout({
   children,
   params,

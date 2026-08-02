@@ -2,8 +2,16 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// PostgreSQL since 2026-08-02. SQLite serialises every write behind a single lock,
+// which is the wrong shape for a PMS where several front-desk users post charges at
+// once; Postgres also gives real online backups (pg_dump) and row-level concurrency.
+//
+// The move required squashing the 90 SQLite migrations into the single baseline in
+// prisma/migrations/: their DDL was SQLite-specific and could never replay here. The
+// old history is preserved in git (see the commit that introduced this line), and no
+// deployment had data at the time of the switch.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

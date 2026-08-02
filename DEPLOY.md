@@ -1,0 +1,263 @@
+# Deploying OstaStay with Docker
+
+Three containers: a shared edge proxy (Caddy) that owns 80/443 for every project on the
+host, the app (Node 22), and PostgreSQL 17 — plus volumes for the database and the
+eRegistration ID photos.
+
+Neither the app nor Postgres publishes a host port. The app is reachable only through
+the proxy, so nothing can bypass its TLS, security headers, or rate limits; Postgres is
+reachable only from the app container.
+
+Target host: `192.99.167.15` (`vps-9d96501a.vps.ovh.ca`), user `ubuntu`.
+Live at **https://vps-9d96501a.vps.ovh.ca**.
+
+---
+
+## 1. Install Docker on the server
+
+Once per machine. Ubuntu:
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER && newgrp docker
+```
+
+Verify: `docker run --rm hello-world`
+
+---
+
+## 2. Get the code onto the server
+
+```bash
+git clone https://github.com/issey-dev/ostastay.git ~/ostastay && cd ~/ostastay
+```
+
+For later updates, see [Updating](#updating-to-a-new-version).
+
+---
+
+## 3. Configure
+
+```bash
+cp .env.production.example .env
+openssl rand -hex 32   # run three times, one value per secret below
+nano .env
+```
+
+Fill in `POSTGRES_PASSWORD`, `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY`, and `CRON_SECRET`,
+and confirm `APP_URL` matches how guests will actually reach the app. `APP_URL` is what
+gets embedded in the eRegistration links emailed to guests — if it is wrong, those links
+point nowhere.
+
+Set `POSTGRES_PASSWORD` **before the first start**: it is baked into the database volume
+when that volume is created, so changing it later means an `ALTER USER` inside the
+running container, not just an edit here.
+
+`DATABASE_URL` is intentionally absent from `.env` — compose builds it from
+`POSTGRES_PASSWORD` so the app and the database can never disagree about credentials.
+
+---
+
+## 4. Start the shared proxy (once per host)
+
+The proxy owns ports 80/443 and serves every project on this machine. The app publishes
+no host port at all — it is reached through here, which is what stops projects colliding
+on port 3000 and gives each one HTTPS automatically.
+
+```bash
+docker network create edge
+```
+
+```bash
+cd ~/ostastay/deploy/proxy && docker compose up -d --build
+```
+
+Caddy obtains a Let's Encrypt certificate on first start. Colleagues adding their own
+projects should read [`deploy/proxy/sites.d/README.md`](deploy/proxy/sites.d/README.md)
+— they drop one file in `sites.d/` and never edit the shared `Caddyfile`.
+
+## 5. Start the app
+
+```bash
+cd ~/ostastay && docker compose up -d --build
+```
+
+First build takes a few minutes. The container applies all database migrations on every
+boot before the server starts, so there is no separate migrate step.
+
+Watch it come up:
+
+```bash
+docker compose logs -f
+```
+
+---
+
+## 6. Create the first admin account
+
+A freshly migrated database has no users, and the app needs its internal "Osta"
+enterprise row to exist before any request can be served. This one command creates both.
+Run it once, after the first successful start:
+
+```bash
+docker compose exec \
+  -e ADMIN_EMAIL=you@example.com \
+  -e ADMIN_PASSWORD='a-long-random-password' \
+  app node dist-scripts/scripts/bootstrap-admin.js
+```
+
+The password is passed per-invocation rather than stored in `.env`, so it never lands in
+a file or in the image. Minimum 12 characters.
+
+Then sign in at `https://vps-9d96501a.vps.ovh.ca` with:
+
+- **Enterprise code:** `osta`
+- **Email / password:** what you just set
+
+From there, create your hotel's own enterprise and its properties through the app.
+
+> Re-running the same command with a different `ADMIN_PASSWORD` resets that account's
+> password. That is the recovery path if you get locked out.
+
+---
+
+## 7. Schedule the background jobs
+
+The job runner keeps channel-manager credentials alive (Beds24 refresh tokens expire
+after 30 days idle) and prunes the exchange log. Nothing calls it automatically — add a
+host cron entry, using the same `CRON_SECRET` you put in `.env`:
+
+```bash
+crontab -e
+```
+
+```cron
+# OstaStay background jobs — hourly
+0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://vps-9d96501a.vps.ovh.ca/api/jobs/run > /dev/null 2>&1
+```
+
+If you skip this, the app still works; channel-manager tokens will eventually expire.
+
+---
+
+## Everyday operations
+
+| Task | Command |
+| --- | --- |
+| Status | `docker compose ps` |
+| Logs (live) | `docker compose logs -f` |
+| Restart | `docker compose restart` |
+| Stop | `docker compose down` (volumes survive) |
+| Shell inside | `docker compose exec app sh` |
+
+---
+
+## Backups
+
+The `osta-db` volume is the entire business: every reservation, folio, payment, and
+guest profile. `osta-uploads` holds guest ID photos.
+
+`pg_dump` is safe to run against a live database — it takes a consistent snapshot
+without blocking anyone:
+
+```bash
+mkdir -p ~/backups
+docker compose exec -T db pg_dump -U osta -d ostastay --clean --if-exists \
+  | gzip > ~/backups/osta-$(date +%F).sql.gz
+docker run --rm -v ostastay_osta-uploads:/src -v ~/backups:/out alpine \
+  tar czf /out/uploads-$(date +%F).tar.gz -C /src .
+```
+
+Copy those files off the server — a backup that only exists on the same VPS is not a
+backup.
+
+Automate it daily with `crontab -e`:
+
+```cron
+30 3 * * * cd ~/ostastay && docker compose exec -T db pg_dump -U osta -d ostastay --clean --if-exists | gzip > ~/backups/osta-$(date +\%F).sql.gz
+```
+
+To restore into a running stack:
+
+```bash
+gunzip -c ~/backups/osta-2026-08-02.sql.gz | docker compose exec -T db psql -U osta -d ostastay
+```
+
+---
+
+## Updating to a new version
+
+```bash
+cd ~/ostastay
+git pull
+docker compose up -d --build
+```
+
+Migrations apply automatically on boot. Take a backup first if the release includes
+schema changes.
+
+---
+
+## Scaling
+
+The app service has no fixed container name and no host port, so it scales directly:
+
+```bash
+docker compose up -d --scale app=3
+```
+
+Caddy load-balances across every replica automatically — it proxies to the `app`
+**service** name, and Docker's DNS returns all replica addresses. Sessions are stateless
+JWTs, so no sticky sessions are needed.
+
+**Read this before going past one replica:**
+
+- **Guest ID photos are written to a local volume**
+  (`src/lib/eregistration/storage.ts`). On *this* host that is fine: every replica mounts
+  the same `osta-uploads` volume. Spreading replicas across *several machines* would need
+  object storage (S3/MinIO) behind that module first — it is written as the seam for
+  exactly that swap.
+- **Each replica gets its own resource limits** (2 CPUs / 2 GB). Three replicas is
+  6 CPUs on a 4-CPU box, which is oversubscribed. Check `docker stats` and the allocation
+  table in [`deploy/proxy/sites.d/README.md`](deploy/proxy/sites.d/README.md).
+- **The DB Health storage panel becomes per-replica.** `src/lib/db-metrics.ts` is an
+  in-process ring buffer, so the Osta dashboard shows whichever replica served the
+  request. Cosmetic, not a correctness problem.
+- **One replica is almost certainly enough.** Front-desk traffic is a handful of requests
+  per minute. Postgres will be the ceiling long before the app tier is, and it scales
+  vertically for a long time. Scale when something measured tells you to.
+
+---
+
+## Troubleshooting
+
+**Container restarts in a loop.** `docker compose logs app`. The most common cause is a
+missing `JWT_SECRET` — the app refuses to boot in production without one rather than
+fall back to a well-known development secret.
+
+**"No INTERNAL (Osta) enterprise found".** The bootstrap in step 6 has not been run yet.
+
+**Can't reach it from a browser.** Check in this order:
+
+1. `docker compose ps` in `~/ostastay` — is the app healthy?
+2. `cd ~/ostastay/deploy/proxy && docker compose logs proxy` — certificate problems show
+   up here. A failed ACME challenge usually means DNS does not point at this host, or
+   port 80 is blocked upstream.
+3. `docker network inspect edge` — the app and the proxy must both be attached.
+
+**Certificate won't issue.** Port 80 must be reachable from the internet for the ACME
+challenge, even though the site itself runs on 443. Let's Encrypt also rate-limits
+repeated failures, so fix the cause before retrying in a loop; the `caddy-data` volume
+persists issued certificates across restarts precisely to avoid that.
+
+**Emails aren't sending.** SMTP is configured per-enterprise inside the app under
+Controls → Stationaries, not in `.env`.
+
+**The build is killed partway through, or dies with "JavaScript heap out of memory".**
+`next build` is the memory-hungry step and small VPS plans often have too little RAM.
+Add swap once and rebuild:
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```

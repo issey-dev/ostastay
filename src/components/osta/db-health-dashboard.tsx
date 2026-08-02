@@ -228,12 +228,13 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Storage by Table</CardTitle>
-              <CardDescription>Bytes actually used per table (indexes listed separately), from SQLite&apos;s dbstat.</CardDescription>
+              <CardDescription>Bytes actually used per table, with indexes listed separately.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.storage.tables === null ? (
                 <p className="text-sm text-muted-foreground italic">
-                  Per-table breakdown unavailable — this SQLite build doesn&apos;t expose the dbstat virtual table.
+                  Per-table breakdown unavailable on PostgreSQL — the storage probe still reads SQLite&apos;s dbstat
+                  table. See the PostgreSQL follow-ups in TODO.md.
                 </p>
               ) : (
                 <table className="w-full text-sm">

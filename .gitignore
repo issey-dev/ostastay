@@ -19,6 +19,9 @@
 
 # production
 /build
+# Compiled operator scripts (tsconfig.scripts.json) — built inside the Docker image, and
+# locally only as a side effect of testing that build. Never a source artefact.
+/dist-scripts
 
 # misc
 .DS_Store

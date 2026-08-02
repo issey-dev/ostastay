@@ -1,0 +1,40 @@
+# Build context exclusions. Keep this in sync with .gitignore where it matters —
+# anything listed here is invisible to the Docker build, so never exclude prisma/
+# (migrations run at boot) or public/ (static assets).
+
+# Installed and rebuilt inside the image for the correct platform — copying the host's
+# node_modules would ship Windows/macOS native bindings into a Linux container.
+node_modules
+.next
+dist-scripts
+
+# Secrets and local data must never enter the image. The container gets its
+# configuration from docker-compose's env_file at RUNTIME instead.
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.db
+*.db-journal
+storage/
+
+# Guest ID photos live in a named volume, never in the image.
+storage/eregistration-uploads
+
+.git
+.gitignore
+coverage
+tests
+vitest.config.ts
+vitest.global-setup.ts
+
+# Team documentation and vendored tooling — large, and not needed to run the app.
+.agents
+.claude
+AUDIT_REPORT.md
+
+Dockerfile
+.dockerignore
+docker-compose*.yml
+README.md
+npm-debug.log*

@@ -2443,3 +2443,68 @@ checks the caller enterprise's addon row.
 Also 2026-08-02 (owner): eRegistration must be reachable wherever the Reg Card
 option is offered — added an eReg button + dialog on Front Office arrival rows
 (the reservation detail page already had the panel).
+
+## 2026-08-02 — PostgreSQL replaces SQLite (owner)
+
+Requested for the first real server deployment: "install and use postgres — I need the
+migrations to be clean and nice."
+
+Prisma allows exactly ONE datasource provider, so this is not a production-only change:
+dev, test, and production all run PostgreSQL 17 now. That removes the dev/prod engine
+mismatch rather than introducing one, and it fixes the real operational limit — SQLite
+serialises every write behind a single lock, which is wrong for a PMS where several
+front-desk users post charges concurrently.
+
+Consequences, deliberate:
+- **The 90 SQLite migrations were squashed into one baseline**
+  (`prisma/migrations/00000000000000_init`). Their DDL was SQLite-specific and could
+  never replay on Postgres, so squashing was required, not merely tidier. The old
+  history is preserved in git. Safe because NO deployment had data at the time.
+- **Local dev and CI now need a running Postgres.** `docker compose -f
+  docker-compose.dev.yml up -d` provides it and creates two databases: `ostastay` for
+  working data and `ostastay_test`, which `vitest.global-setup.ts` drops and rebuilds on
+  every run so tests can never destroy a developer's data.
+- **`getStorageStats()` in src/lib/db-health.ts returns nulls.** It reads SQLite PRAGMAs
+  and the `dbstat` virtual table; it was already written to degrade to null on a
+  non-SQLite engine, so nothing breaks, but the Osta DB Health storage panel is blank
+  until Postgres equivalents (pg_database_size / pg_total_relation_size) are added.
+  Tracked in TODO.md.
+- `better-sqlite3`, `@prisma/adapter-better-sqlite3`, and `@libsql/client` are now dead
+  dependencies (nothing sets driverAdapters). Left in package.json for now; removing
+  them would drop the C toolchain from the Docker build and cut build time noticeably.
+
+Also 2026-08-02: DB-backed admin segments (`/osta/*`, `/e/[slug]/dashboard`,
+`/e/[slug]/hub`, `/e/[slug]/login`, `/dashboard`) now declare
+`export const dynamic = "force-dynamic"`. They ran Prisma queries with no dynamic marker,
+so `next build` tried to PRERENDER them — which failed the Docker build outright (P2021,
+no database at build time) and would otherwise have frozen build-time counts into static
+HTML. The Osta overview's enterprise/approval/grant counters were the visible symptom.
+
+### Bugs the PostgreSQL move exposed (2026-08-02)
+
+Three real defects that SQLite had been hiding. None were introduced by the migration —
+all were latent, and would have shipped to the first production deployment.
+
+1. **Every search box in the app was silently case-sensitive.** All 13 `contains:`
+   filters lacked `mode: "insensitive"` (Fast Post guest search, Profiles, Reservations,
+   Activity Log). SQLite's `LIKE` is case-insensitive for ASCII, so they appeared to
+   work; Postgres `LIKE` is case-sensitive. `/api/pos/search` even lower-cased the needle
+   first, which made the bug look handled while guaranteeing zero matches against any
+   capitalised guest name. Fixed by adding `mode: "insensitive"` to all 13.
+
+2. **Two partial unique indexes were nearly lost in the squash.**
+   `JobRun_one_running_per_job_enterprise` and
+   `CashierShift_one_open_per_user_property` are concurrency guards written in raw SQL
+   because Prisma cannot express a partial index — so
+   `migrate diff --to-schema-datamodel` did not regenerate them. They are re-added
+   explicitly at the end of the baseline migration. **Anyone squashing migrations again
+   must re-check for hand-written DDL**; the schema is not the whole story.
+
+3. **The job-runner lock is weaker than its test claimed.** The partial index prevents
+   CONCURRENT double-runs (verified: a genuinely overlapping claim still gets P2002 ->
+   SKIPPED_LOCKED). It does not prevent a second SEQUENTIAL run when the first job
+   finishes before the second INSERT lands, because the completed row leaves the
+   `WHERE status = 'RUNNING'` index. That is in contract — `Job.run` is documented as
+   "must be safe to run repeatedly" — but the test asserted a call count that only held
+   because SQLite serialises all writes. It now asserts peak concurrency, which is the
+   real invariant. A session-scoped advisory lock would be strictly stronger; see TODO.

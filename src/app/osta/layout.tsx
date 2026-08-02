@@ -6,6 +6,11 @@ import { SkipToContent } from "@/components/ui/skip-to-content"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
+// Reads live tenant data per request — never prerender. `next build` would otherwise
+// run these Prisma queries at build time (failing the Docker build, since no database
+// exists then) and freeze the results into static HTML.
+export const dynamic = "force-dynamic"
+
 // The Osta platform-admin console — a completely separate shell from the tenant
 // dashboard (src/app/e/[slug]/dashboard/layout.tsx): no PropertyProvider/property
 // switcher/banner, since Osta has no operational property of its own. Only reachable

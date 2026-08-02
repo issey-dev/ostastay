@@ -2,6 +2,26 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## PostgreSQL migration follow-ups (2026-08-02) — OPEN
+
+The engine moved from SQLite to PostgreSQL 17 (see [DECISIONS.md](DECISIONS.md)). Left
+open deliberately, none of it blocking:
+
+- **DB Health storage panel is blank.** `getStorageStats()` in `src/lib/db-health.ts`
+  reads SQLite `PRAGMA page_size/page_count/freelist_count` and the `dbstat` virtual
+  table. It already degrades to null on a non-SQLite engine, so nothing crashes — but
+  the Osta storage breakdown shows nothing until Postgres equivalents are written
+  (`pg_database_size()` for the total, `pg_total_relation_size()` per table). The
+  migration-drift half of that file needs no change: `_prisma_migrations` exists on
+  Postgres too.
+- **Dead SQLite dependencies.** `better-sqlite3`, `@prisma/adapter-better-sqlite3`, and
+  `@libsql/client` are unused (nothing enables `driverAdapters`). Removing them also
+  removes the python3/make/g++ layer from the Docker build, which is the slowest part of
+  a cold build on a small VPS.
+- **`docker compose exec app ... bootstrap-admin.js` is the only way to create the first
+  operator.** Fine for one deployment; if OstaStay is ever self-serve, this needs a real
+  onboarding flow.
+
 ## Charge Code hierarchy + posting service (2026-07-27) — DONE
 
 Full implementation of [/CHARGE_CODE_PLAN.md](../../CHARGE_CODE_PLAN.md) (all phases; see

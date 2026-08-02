@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/db"
 import { LoginForm } from "@/components/auth/login-form"
 
+// Reads live tenant data per request — never prerender. `next build` would otherwise
+// run these Prisma queries at build time (failing the Docker build, since no database
+// exists then) and freeze the results into static HTML.
+export const dynamic = "force-dynamic"
+
 export default async function EnterpriseLoginPage({
   params,
 }: {
