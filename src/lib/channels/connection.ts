@@ -148,6 +148,30 @@ export async function listConnections(enterpriseId: string): Promise<PublicConne
   return rows.map(toPublicConnection);
 }
 
+// The Osta console's cross-tenant shape: a PublicConnection plus which enterprise owns
+// it. Same no-token-fields guarantee — going through toPublicConnection is the point.
+export type PlatformConnection = PublicConnection & {
+  enterprise: { id: string; name: string; slug: string };
+};
+
+/**
+ * Every connection on the platform, across all enterprises — DELIBERATELY unscoped.
+ *
+ * Exists for the master-account topology (.agents/docs/DECISIONS.md, 2026-08-02): the
+ * app owner runs one Beds24 account whose per-enterprise connections all drain a single
+ * shared API credit pool, so the platform side needs to see and manage them in one
+ * place. Only the Osta console may call this — every route in front of it must have
+ * already verified ctx.isInternal, exactly like the cross-tenant property list in
+ * /api/osta/properties. Tenant-facing code uses listConnections() and never this.
+ */
+export async function listAllConnections(): Promise<PlatformConnection[]> {
+  const rows = await prisma.channelConnection.findMany({
+    include: { enterprise: { select: { id: true, name: true, slug: true } } },
+    orderBy: [{ enterprise: { name: "asc" } }, { createdAt: "asc" }],
+  });
+  return rows.map((r) => ({ ...toPublicConnection(r), enterprise: r.enterprise }));
+}
+
 /**
  * Create a connection from a one-time Beds24 invite code.
  *

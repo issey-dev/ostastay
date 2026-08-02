@@ -994,6 +994,46 @@ way; the channel webhook was the remaining plaintext holdout that
   attack) gets a 404**; generating returns a plaintext that authenticates while the token
   it replaced stops working.
 
+## Osta-console channel administration (2026-08-02) — DONE (branch `feature/beds24-master-account`)
+
+Platform-side channel-manager tooling for the master-account topology (see the DECISIONS.md
+entry of the same date): the app owner runs ONE Beds24 account and drives every customer
+enterprise's setup/monitoring from the Osta console instead of touring tenant Hubs under
+support grants.
+
+- **New Osta console page `/osta/channel-manager`** (sidebar entry "Channel Manager"):
+  every enterprise's connection in one place — status, health-check/keep-alive button,
+  refresh-token expiry countdown, webhook generate/replace (show-once dialog), rate-limit
+  pause threshold, connect-new (enterprise picker + invite code), re-authorize, delete.
+  A "Shared API credit pool" card surfaces the most recently observed rate-limit reading,
+  because under one master account every tenant drains the same budget.
+- **New API `/api/osta/channels/connections`** (+ `[id]`, `[id]/test`, `[id]/webhook`) —
+  the cross-tenant counterpart of `/api/hub/connections`. Every handler requires
+  `ctx.isInternal` FIRST and then `INTEGRATIONS` bits (not CONTROLS like other /api/osta
+  routes — it's channel work and the permission should say so). Deliberately no
+  enterprise scoping on lookups: cross-tenant reach is the point, and isInternal is the
+  entire access control. Creating a connection on the INTERNAL enterprise itself is
+  refused (404, same rule as support-access grants).
+- **Every action on a tenant's connection logs into THAT tenant's activity trail**
+  (`logActivity targetEnterpriseId`), with the Osta admin's identity snapshotted — the
+  enterprise being acted on is the one whose auditors need to see it.
+- **`listAllConnections()`** in `src/lib/channels/connection.ts` — the one deliberately
+  unscoped connection query; goes through `toPublicConnection` so no token fields can
+  ride along. Tenant code keeps using `listConnections()`.
+- **Room-type/rate MAPPING deliberately absent** from the Osta page — the owner's call is
+  that mapping stays in each enterprise's own Hub.
+- The tenant Hub component now exports its `Connection` type + `StatusBadge` +
+  `RateLimitPanel` + `formatDateTime` for reuse; `hasWebhook` was added to that type.
+- **Fixed in passing: the Osta layout had no `ConfirmProvider`** — any Osta page using
+  `useConfirm()` would 500. Found by live browser verification, mounted in
+  `src/app/osta/layout.tsx` mirroring the tenant shells.
+- Tests: `tests/business-rules/osta-channel-admin.test.ts` — tenant admin refused even
+  with full INTEGRATIONS (the block is isInternal, not the permission bit); cross-tenant
+  list carries enterprise info and no credential fields; create-for-tenant (stubbed
+  Beds24) lands encrypted in the tenant with a tenant-trail entry; INTERNAL-enterprise
+  create refused; cross-tenant threshold set; webhook mint is show-once/hash-at-rest and
+  authenticates on the public route; delete logs to the tenant trail.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

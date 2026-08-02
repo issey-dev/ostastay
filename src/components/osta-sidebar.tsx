@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, ClipboardCheck, KeyRound, ShieldCheck, Activity, Settings } from "@/components/icons"
+import { LayoutDashboard, Building2, ClipboardCheck, KeyRound, ShieldCheck, Activity, Settings, ArrowLeftRight } from "@/components/icons"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
@@ -24,6 +24,7 @@ const items = [
   { title: "Property Approvals", url: "/osta/properties", icon: ClipboardCheck },
   { title: "Licensing", url: "/osta/licensing", icon: KeyRound },
   { title: "Support Access", url: "/osta/support-access", icon: ShieldCheck },
+  { title: "Channel Manager", url: "/osta/channel-manager", icon: ArrowLeftRight },
   { title: "DB Health", url: "/osta/db-health", icon: Activity },
   { title: "Controls", url: "/osta/controls", icon: Settings },
 ]
