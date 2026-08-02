@@ -6,42 +6,42 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
-type PropertyModuleRow = { module: string; enabled: boolean }
+type AddonRow = { module: string; enabled: boolean }
 
-// Modules that are never sold as a per-property add-on — core operational modules a
-// property already gets through its enterprise's own RBAC/licensing, plus the two that
-// are never gated at all (see the ALWAYS_LICENSED set in src/lib/scope.ts). Only
-// modules genuinely built as opt-in add-ons (today: EXCURSIONS, SPA) belong here —
-// this list grows one entry at a time as new add-ons ship, never by removing the
-// exclusion.
+// Modules that are never sold as an add-on — core operational modules an enterprise
+// already gets through its own RBAC/licensing, plus the two that are never gated at
+// all (see the ALWAYS_LICENSED set in src/lib/scope.ts). Only modules genuinely built
+// as opt-in add-ons (today: EXCURSIONS, SPA) belong here — this list grows one entry
+// at a time as new add-ons ship, never by removing the exclusion. Must stay in sync
+// with the ADD_ON_MODULES set in src/components/app-sidebar.tsx.
 const ADD_ON_MODULES = MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA")
 
-// The property-scoped sibling of LicensingManager's enterprise-module-override card —
-// see /api/licenses/property-modules. Simpler than the enterprise version: there is no
-// tier-default fallback to fall back to, a missing row always means "not purchased," so
-// each add-on is a plain on/off Switch rather than a three-way override.
-export function PropertyModuleAccessManager({ propertyId, propertyName }: { propertyId: string; propertyName: string }) {
-  const [rows, setRows] = useState<PropertyModuleRow[]>([])
+// Enterprise-scoped since 2026-08-02 (owner decision) — an add-on is sold to the
+// enterprise and, once enabled, applies to every property in it. See
+// /api/licenses/enterprise-addons. A missing row always means "not purchased," so
+// each add-on is a plain on/off Switch.
+export function EnterpriseAddonAccessManager({ enterpriseId, enterpriseName }: { enterpriseId: string; enterpriseName: string }) {
+  const [rows, setRows] = useState<AddonRow[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchRows = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/licenses/property-modules?propertyId=${propertyId}`)
+      const res = await fetch(`/api/licenses/enterprise-addons?enterpriseId=${enterpriseId}`)
       if (res.ok) setRows(await res.json())
     } finally {
       setLoading(false)
     }
-  }, [propertyId])
+  }, [enterpriseId])
 
   useEffect(() => { fetchRows() }, [fetchRows])
 
   const toggle = async (module: string, enabled: boolean) => {
     setRows((prev) => prev.map((r) => (r.module === module ? { ...r, enabled } : r)))
-    await fetch("/api/licenses/property-modules", {
+    await fetch("/api/licenses/enterprise-addons", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ propertyId, module, enabled }),
+      body: JSON.stringify({ enterpriseId, module, enabled }),
     })
   }
 
@@ -54,10 +54,10 @@ export function PropertyModuleAccessManager({ propertyId, propertyName }: { prop
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Add-ons — {propertyName}</CardTitle>
+        <CardTitle className="text-lg">Add-ons — {enterpriseName}</CardTitle>
         <CardDescription>
-          Sold and enabled per property, independent of the enterprise&apos;s own license/tier. Off by default for every
-          property — a missing toggle here means it was never purchased.
+          Sold and enabled per enterprise, independent of its license/tier — once enabled, the add-on is available to
+          every property in the enterprise. Off by default — a missing toggle here means it was never purchased.
         </CardDescription>
       </CardHeader>
       <CardContent>

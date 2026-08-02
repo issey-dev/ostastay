@@ -463,15 +463,15 @@ async function main() {
   });
 
   // 11. Excursions Booking add-on (see .agents/docs/EXCURSIONS_PLAN.md) — Osta-enabled
-  // for this property (defaults OFF everywhere else, same as a real customer would need
-  // it turned on via /osta/properties/[id]), a small chart of excursion types with
-  // dated pricing, one recurring schedule each, and departures generated ~60 days out —
-  // so the feature has real, clickable data immediately after seeding, not just an
-  // empty Controls tab.
-  await prisma.propertyModuleAccess.upsert({
-    where: { propertyId_module: { propertyId: lagoon.id, module: "EXCURSIONS" } },
+  // for the Veyo enterprise (defaults OFF everywhere else, same as a real customer
+  // would need it turned on via /osta/enterprises/[id]), a small chart of excursion
+  // types with dated pricing, one recurring schedule each, and departures generated
+  // ~60 days out — so the feature has real, clickable data immediately after seeding,
+  // not just an empty Controls tab.
+  await prisma.enterpriseAddonAccess.upsert({
+    where: { enterpriseId_module: { enterpriseId: veyo.id, module: "EXCURSIONS" } },
     update: { enabled: true },
-    create: { propertyId: lagoon.id, module: "EXCURSIONS", enabled: true },
+    create: { enterpriseId: veyo.id, module: "EXCURSIONS", enabled: true },
   });
 
   const excursionChargeCodes: Array<{ code: string; description: string }> = [
@@ -592,10 +592,10 @@ async function main() {
   // only seeds catalog data (types/schedules/departures) and leaves actual bookings
   // to be created by walking through the real booking flow, rather than
   // hand-fabricating FolioLineItem/Payment state for fake historical transactions.
-  await prisma.propertyModuleAccess.upsert({
-    where: { propertyId_module: { propertyId: lagoon.id, module: "SPA" } },
+  await prisma.enterpriseAddonAccess.upsert({
+    where: { enterpriseId_module: { enterpriseId: veyo.id, module: "SPA" } },
     update: { enabled: true },
-    create: { propertyId: lagoon.id, module: "SPA", enabled: true },
+    create: { enterpriseId: veyo.id, module: "SPA", enabled: true },
   });
 
   const spaChargeCodes: Array<{ code: string; description: string }> = [

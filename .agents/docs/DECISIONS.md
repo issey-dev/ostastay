@@ -2427,3 +2427,19 @@ Consequences, deliberate:
   migration; drop later).
 - Per-PROPERTY sellable add-ons (Spa/Excursions via PropertyModuleAccess) are a
   DIFFERENT mechanism and remain untouched.
+
+## 2026-08-02 — Spa/Excursions add-ons are ENTERPRISE-level (owner)
+
+Sellable add-ons (Spa, Excursions) are sold to the ENTERPRISE, not per property:
+once enabled, the add-on applies to every property in the enterprise.
+`PropertyModuleAccess` is replaced by `EnterpriseAddonAccess` (migration
+`enterprise_addon_access`, carrying data over: an enterprise is enabled if ANY of
+its properties was). The Osta toggle moved from /osta/properties/[id] to
+/osta/enterprises/[id]; the API moved from /api/licenses/property-modules to
+/api/licenses/enterprise-addons. `assertPropertyModuleAccess()` keeps its name and
+propertyId parameter (callers still need the property-scoping 403 first) but now
+checks the caller enterprise's addon row.
+
+Also 2026-08-02 (owner): eRegistration must be reachable wherever the Reg Card
+option is offered — added an eReg button + dialog on Front Office arrival rows
+(the reservation detail page already had the panel).

@@ -1,4 +1,4 @@
-import { requireSession, resolveCurrentPropertyId, hasHubAccess, type Module } from "@/lib/scope"
+import { requireSession, hasHubAccess, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
 import { AppSidebarNav } from "@/components/app-sidebar-nav"
@@ -24,23 +24,21 @@ export async function AppSidebar() {
   const roleName = user?.role.name ?? "";
   const enterprisePrefix = enterprise ? `/e/${enterprise.slug}` : "";
 
-  // Modules sold as a per-property add-on (see PropertyModuleAccess) need an extra
-  // check beyond the usual role/enterprise-tier licensing below: the CURRENT property
-  // must actually have it enabled, not just the enterprise. Grows one entry at a time
-  // as new add-ons ship — see src/components/osta/property-module-access-manager.tsx's
-  // own ADD_ON_MODULES list, which must stay in sync with this one.
+  // Modules sold as an add-on (see EnterpriseAddonAccess) need an extra check beyond
+  // the usual role licensing below: the enterprise must actually have purchased it.
+  // Enterprise-scoped since 2026-08-02 (owner decision) — enabled means every property
+  // in the enterprise sees it. Grows one entry at a time as new add-ons ship — see
+  // src/components/osta/enterprise-addon-access-manager.tsx's own ADD_ON_MODULES list,
+  // which must stay in sync with this one.
   const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA"]);
-  const currentPropertyId = await resolveCurrentPropertyId(ctx);
-  const enabledAddOns = currentPropertyId
-    ? new Set(
-        (
-          await prisma.propertyModuleAccess.findMany({
-            where: { propertyId: currentPropertyId, enabled: true },
-            select: { module: true },
-          })
-        ).map((r) => r.module)
-      )
-    : new Set<string>();
+  const enabledAddOns = new Set(
+    (
+      await prisma.enterpriseAddonAccess.findMany({
+        where: { enterpriseId: ctx.enterpriseId, enabled: true },
+        select: { module: true },
+      })
+    ).map((r) => r.module)
+  );
 
   // Menu ordering/grouping and the active-route highlight live in AppSidebarNav (a
   // client component — it needs usePathname). This stays the sole authority on

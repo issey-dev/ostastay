@@ -67,7 +67,7 @@ const cancelBookingRoute = await import("@/app/api/excursions/bookings/[id]/canc
 const noShowRoute = await import("@/app/api/excursions/bookings/[id]/no-show/route");
 const cancelDepartureRoute = await import("@/app/api/excursions/departures/[id]/cancel/route");
 const moveBookingsRoute = await import("@/app/api/excursions/departures/[id]/move-bookings/route");
-const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const enterpriseAddonsRoute = await import("@/app/api/licenses/enterprise-addons/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -131,11 +131,11 @@ describe("Excursions: business rules", () => {
     propertyId = property.id;
 
     await asUser(ostaAdminId, () =>
-      propertyModulesRoute.PATCH(
-        new Request("http://localhost/api/licenses/property-modules", {
+      enterpriseAddonsRoute.PATCH(
+        new Request("http://localhost/api/licenses/enterprise-addons", {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ propertyId, module: "EXCURSIONS", enabled: true }),
+          body: JSON.stringify({ enterpriseId, module: "EXCURSIONS", enabled: true }),
         })
       )
     );
@@ -606,9 +606,9 @@ describe("Excursions: business rules", () => {
     const entB = await prisma.enterprise.create({ data: { name: "Victim B", slug: `test-victim-${uniq()}`, type: "STANDARD" } });
     const propB = await prisma.property.create({ data: { enterpriseId: entB.id, name: "B Prop", code: `VB-${uniq()}`, legalName: "B LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
     await asUser(ostaAdminId, () =>
-      propertyModulesRoute.PATCH(new Request("http://localhost/api/licenses/property-modules", {
+      enterpriseAddonsRoute.PATCH(new Request("http://localhost/api/licenses/enterprise-addons", {
         method: "PATCH", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ propertyId: propB.id, module: "EXCURSIONS", enabled: true }),
+        body: JSON.stringify({ enterpriseId: entB.id, module: "EXCURSIONS", enabled: true }),
       }))
     );
     const ccB = await customChargeCode(entB.id, { code: "VBX", description: "B Excursion" });
