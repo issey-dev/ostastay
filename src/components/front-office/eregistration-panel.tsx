@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,12 +105,12 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm">
                 {link ? (
                   <>
                     <Badge variant={STATUS_VARIANT[link.status] ?? "outline"}>{STATUS_LABEL[link.status] ?? link.status}</Badge>
-                    {link.status === "ACTIVE" && <span className="text-muted-foreground">expires {new Date(link.expiresAt).toLocaleString()}</span>}
+                    {link.status === "ACTIVE" && <span className="text-muted-foreground">expires {format(new Date(link.expiresAt), "dd MMM yyyy, h:mm a")}</span>}
                   </>
                 ) : (
                   <span className="text-muted-foreground">Not sent yet</span>
@@ -129,12 +130,14 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
             </div>
 
             {activeAndUsable && (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2.5">
-                <code className="flex-1 min-w-0 truncate text-xs text-muted-foreground">{sessionUrl}</code>
-                <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy Link</Button>
-                <Button size="sm" variant="outline" onClick={sendEmail} disabled={busy === "email"}>
-                  {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send via Email
-                </Button>
+              <div className="space-y-2.5 rounded-lg border bg-muted/40 p-3">
+                <code className="block break-all text-xs leading-relaxed text-muted-foreground">{sessionUrl}</code>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy Link</Button>
+                  <Button size="sm" variant="outline" onClick={sendEmail} disabled={busy === "email"}>
+                    {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send via Email
+                  </Button>
+                </div>
               </div>
             )}
             {link?.status === "ACTIVE" && !sessionToken && (
@@ -144,7 +147,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
             )}
 
             {slots.length > 0 && (
-              <div className="space-y-1 pt-1">
+              <div className="space-y-2 border-t pt-3">
                 {slots.map((s) => (
                   <div key={s.id} className="flex items-center justify-between text-sm">
                     <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}{s.isPrimary && <Badge variant="outline" className="ml-2 text-[10px] uppercase">Lead</Badge>}</span>
@@ -164,7 +167,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
     </>
   )
 
-  if (embedded) return <div className="space-y-3">{body}</div>
+  if (embedded) return <div className="space-y-4 pt-2">{body}</div>
 
   return (
     <Card>

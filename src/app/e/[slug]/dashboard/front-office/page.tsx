@@ -731,7 +731,7 @@ export default function FrontOfficeDashboard() {
 
       {/* eRegistration — the same panel as the reservation detail page, in a dialog */}
       <Dialog open={!!eRegRes} onOpenChange={(open) => !open && setERegRes(null)}>
-        <DialogContent className="max-w-xl sm:max-w-xl">
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4" /> eRegistration — {guestDisplayName(eRegRes?.primaryGuest)} ({eRegRes?.confirmationNo})
