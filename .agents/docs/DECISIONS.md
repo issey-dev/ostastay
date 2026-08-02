@@ -2508,3 +2508,29 @@ all were latent, and would have shipped to the first production deployment.
    "must be safe to run repeatedly" — but the test asserted a call count that only held
    because SQLite serialises all writes. It now asserts peak concurrency, which is the
    real invariant. A session-scoped advisory lock would be strictly stronger; see TODO.
+
+## Beds24 topology — ONE master account, per-enterprise connections (2026-08-02)
+
+App-owner decision on how Beds24 is bought and wired, verbatim intent: there will be
+**one Beds24 master account** owned by the app owner — customers agreed to this, so
+nobody pays Beds24 for multiple accounts. Properties are **created in Beds24 by the app
+owner** under that master account; each is then linked into OstaStay by its **Beds24
+property id**, and everything about the link — property linking, room-type mapping, rate
+mapping, the connection itself — is managed **in the Hub of the property's own
+enterprise**, not centrally.
+
+How this maps onto the existing schema (no code change needed — this is a wiring
+pattern, not a feature):
+
+- `ChannelConnection` is enterprise-scoped and MUST stay that way — inbound bookings are
+  attributed by `connection.enterpriseId`, so one connection row can never serve
+  properties across customer enterprises. "One connection" in the owner's phrasing means
+  **one Beds24 ACCOUNT**, not one row.
+- The pattern is: one invite code **per customer enterprise**, generated in the master
+  account and scoped to just that customer's properties (invite codes are free and
+  unlimited; Beds24 bills per account/property, not per code) → one `ChannelConnection`
+  in that enterprise's Hub → `ChannelPropertyLink` by `externalPropertyId` +
+  `ChannelRoomTypeMap` in that same Hub. Each connection has its own webhook URL.
+- ⚠️ **The API credit pool is per Beds24 ACCOUNT**, so under this topology every tenant
+  shares one rate-limit budget. `rateLimitPauseThreshold` exists per connection exactly
+  for this — set it once several tenants are live, or one busy property starves the rest.
