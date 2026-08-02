@@ -2,6 +2,11 @@ import { redirect } from "next/navigation"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
+// Reads live tenant data per request — never prerender. `next build` would otherwise
+// run these Prisma queries at build time (failing the Docker build, since no database
+// exists then) and freeze the results into static HTML.
+export const dynamic = "force-dynamic"
+
 // Backward-compat for any old bare /dashboard/... link (bookmarks, hardcoded
 // redirect()s elsewhere in the app) — forwards to the same page under the
 // enterprise-scoped /e/{slug}/dashboard/... URL, preserving the sub-path.
