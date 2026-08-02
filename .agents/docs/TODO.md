@@ -319,6 +319,7 @@ first has shipped, on branch `feature/hub-shell`.
     signing scheme is not publicly documented, and guessing at a security mechanism is the
     least acceptable place to guess. If a documented scheme exists, add it ON TOP.
     Bad token returns a bare 404 — a webhook URL is a credential and must not be probeable.
+    **The secret is stored SHA-256-hashed since 2026-08-02** — see the entry below.
   - **The webhook returns 200 even for a payload it cannot read.** A non-2xx makes the
     channel retry, and retrying cannot fix an unmapped room or a malformed body — it would
     redeliver forever while the real problem stays invisible. The booking is stored with its
@@ -954,6 +955,44 @@ Already built toward this (2026-07-31):
   operation recorder in db.ts → enterprise/property filterable stats; raw SQL stats
   remain tenant-blind by nature), **API & Channels** (persisted ChannelSyncLog 7-day
   aggregates by operation/enterprise + JobRun summaries + recent failures).
+
+## Channel webhook token hashed at rest (2026-08-02) — DONE
+
+`ChannelConnection.webhookToken` held a **write-capable bearer credential in plaintext**:
+possession of the URL is authority to POST bookings into a tenant's PMS, so anyone with
+database read access (a `pg_dump`, a backup, a support query, a leaked snapshot) held a
+live, usable webhook URL. The app's own eRegistration tokens already solved this the right
+way; the channel webhook was the remaining plaintext holdout that
+`src/lib/eregistration/token.ts` used to name as such.
+
+- **`webhookToken` → `webhookTokenHash`** (migration
+  `20260802094500_hash_channel_webhook_token`). New `src/lib/channels/webhook-token.ts`
+  mirrors `src/lib/eregistration/token.ts` — `generateWebhookToken()` (still 32 random
+  bytes, so **the URL shape handed to Beds24 is unchanged**) and `hashWebhookToken()`.
+- ⚠️ **EXISTING TOKENS ARE DESTROYED, NOT CONVERTED, AND ANY LIVE CONNECTION MUST
+  REGENERATE.** The plaintext *could* have been hashed in place (the existing URL would
+  have kept working), but by the premise of the change it must be treated as already
+  exposed in every dump taken while the column was readable — hashing a leaked token does
+  not un-leak it, rotating it does. **Operator action after deploying: regenerate the
+  webhook URL in the Hub for every connection that had one and paste the new URL into the
+  channel manager.** Until that is done the old URL 404s; inbound bookings still arrive
+  via `channel-booking-poll`, so nothing is permanently lost in the gap. **This includes
+  the live Veyo Lagoon Retreat Beds24 test account — coordinate before deploying.**
+- **The webhook route now authenticates BY the lookup** —
+  `findUnique({ where: { webhookTokenHash: hashWebhookToken(token) } })`. The old
+  post-lookup `timingSafeEqual` was **removed, not ported**: once the lookup is by hash, a
+  returned row already IS the equality check, so the compare would compare that hash to
+  itself. `src/lib/eregistration/token.ts` explains this at length and omits it for the
+  same reason.
+- **Show-once is now enforced by the storage, not by restraint.** The generate endpoint
+  already returned the path once and there was never a reveal endpoint or UI (`hasWebhook`
+  is a boolean and `PublicConnection` carries no token field) — but before this, the
+  plaintext was still sitting in the row for anything to read. It no longer exists after
+  the generate response.
+- Tests in `tests/business-rules/channel-inbound.test.ts` — the row holds the hash and the
+  plaintext appears nowhere on it; **presenting the STORED value (the dump-holder's
+  attack) gets a 404**; generating returns a plaintext that authenticates while the token
+  it replaced stops working.
 
 ## Known non-blocking issues / things to flag, not silently fix
 
