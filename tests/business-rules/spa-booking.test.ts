@@ -58,7 +58,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
-const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const enterpriseAddonsRoute = await import("@/app/api/licenses/enterprise-addons/route");
 const appointmentsRoute = await import("@/app/api/spa/appointments/route");
 const availabilityRoute = await import("@/app/api/spa/appointments/availability/route");
 const therapistsForTreatmentRoute = await import("@/app/api/spa/treatments/[id]/therapists/route");
@@ -165,11 +165,11 @@ describe("Spa booking: business rules", () => {
     propertyId = property.id;
 
     await asUser(ostaAdminId, () =>
-      propertyModulesRoute.PATCH(
-        new Request("http://localhost/api/licenses/property-modules", {
+      enterpriseAddonsRoute.PATCH(
+        new Request("http://localhost/api/licenses/enterprise-addons", {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ propertyId, module: "SPA", enabled: true }),
+          body: JSON.stringify({ enterpriseId, module: "SPA", enabled: true }),
         })
       )
     );

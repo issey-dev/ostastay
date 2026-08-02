@@ -28,12 +28,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         select: { name: true, code: true },
         orderBy: { name: "asc" },
       }),
-      // Which sellable add-ons the enterprise has enabled anywhere — mentioned on the
+      // Which sellable add-ons the enterprise has enabled — mentioned on the
       // invoice's single description line ("… — Spa add-on enabled").
-      prisma.propertyModuleAccess.findMany({
-        where: { enabled: true, property: { enterpriseId: invoice.enterpriseId } },
+      prisma.enterpriseAddonAccess.findMany({
+        where: { enabled: true, enterpriseId: invoice.enterpriseId },
         select: { module: true },
-        distinct: ["module"],
       }),
     ]);
 

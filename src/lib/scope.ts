@@ -189,8 +189,8 @@ async function backfillMissingRolePermissions(
 // from the schema; every module is licensed for every enterprise, and access control is
 // the tenant's own role-permission matrix. Osta's levers are the license lifecycle and
 // the per-property attribute caps (src/lib/license.ts). ctx.licensedModules is kept as
-// a field (requirePermission/hasHubAccess still consult it) so the per-PROPERTY add-on
-// gate (PropertyModuleAccess — Spa/Excursions, a separate sellable-add-on mechanism)
+// a field (requirePermission/hasHubAccess still consult it) so the sellable add-on
+// gate (EnterpriseAddonAccess — Spa/Excursions, a separate sellable-add-on mechanism)
 // and any future re-introduction have a single seam to plug back into.
 const ALL_MODULES_LICENSED: ReadonlySet<Module> = new Set(MODULES);
 
@@ -426,22 +426,24 @@ export async function assertProfileAccess(ctx: AuthContext, upid: string) {
   return profile;
 }
 
-// The property-scoped sibling of the enterprise-level `licensedModules` check above —
-// for a module sold as a per-property add-on (see PropertyModuleAccess in schema.prisma
-// and .agents/docs/EXCURSIONS_PLAN.md), a role permission alone isn't enough: the
-// specific property must also have actually purchased/been granted the add-on. Callers
-// use this ALONGSIDE requirePermission(), never instead of it — this checks "is the
-// add-on turned on for this property," requirePermission() checks "is this user allowed
-// to use it." Always call assertPropertyAccess() (or this, which does it internally)
-// before this, since a property that isn't even in the caller's enterprise should 403
-// with "Property not found," not a module-access message that leaks its existence.
+// The add-on sibling of the `licensedModules` check above — for a module sold as a
+// sellable add-on (see EnterpriseAddonAccess in schema.prisma and
+// .agents/docs/EXCURSIONS_PLAN.md), a role permission alone isn't enough: the
+// enterprise must also have actually purchased/been granted the add-on. Enterprise-
+// scoped since 2026-08-02 (owner decision): enabling Spa/Excursions applies to every
+// property in the enterprise. The propertyId parameter stays because callers still
+// need the property-scoping 403 first — a property that isn't even in the caller's
+// enterprise should 403 with "Property not found," not a module-access message that
+// leaks its existence. Callers use this ALONGSIDE requirePermission(), never instead
+// of it — this checks "is the add-on turned on," requirePermission() checks "is this
+// user allowed to use it."
 export async function assertPropertyModuleAccess(ctx: AuthContext, propertyId: string, module: Module): Promise<void> {
   await assertPropertyAccess(ctx, propertyId);
-  const access = await prisma.propertyModuleAccess.findUnique({
-    where: { propertyId_module: { propertyId, module } },
+  const access = await prisma.enterpriseAddonAccess.findUnique({
+    where: { enterpriseId_module: { enterpriseId: ctx.enterpriseId, module } },
   });
   if (!access?.enabled) {
-    throw new ForbiddenError(`${MODULE_LABELS[module] ?? module} is not enabled for this property`);
+    throw new ForbiddenError(`${MODULE_LABELS[module] ?? module} is not enabled for this enterprise`);
   }
 }
 

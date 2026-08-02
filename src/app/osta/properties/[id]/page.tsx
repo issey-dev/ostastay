@@ -3,7 +3,6 @@ import Link from "next/link"
 import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { PropertyModuleAccessManager } from "@/components/osta/property-module-access-manager"
 
 export default async function OstaPropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -37,7 +36,15 @@ export default async function OstaPropertyDetailPage({ params }: { params: Promi
         </CardContent>
       </Card>
 
-      <PropertyModuleAccessManager propertyId={property.id} propertyName={property.name} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Add-ons</CardTitle>
+          <CardDescription>
+            Add-ons (Spa, Excursions) are sold and enabled per enterprise — manage them on{" "}
+            <Link href={`/osta/enterprises/${property.enterprise.id}`} className="underline">{property.enterprise.name}</Link>.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     </div>
   )
 }

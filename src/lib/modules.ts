@@ -19,15 +19,15 @@ export const MODULES = [
   "CONTROLS",
   "ACTIVITY_LOG",
   // Booking/managing Excursions (see .agents/docs/EXCURSIONS_PLAN.md). Deliberately
-  // separate from FRONT_DESK — this is a per-property PAID ADD-ON (gated additionally
-  // by PropertyModuleAccess, not just this permission), so a property without it
+  // separate from FRONT_DESK — this is a PAID ADD-ON (gated additionally by
+  // EnterpriseAddonAccess, not just this permission), so an enterprise without it
   // purchased shouldn't see the nav item regardless of role. Catalog/schedule
   // management (ExcursionType/Rate/Schedule) is a Controls tab gated by CONTROLS, not
   // this module — this module only covers day-to-day bookings.
   "EXCURSIONS",
   // Booking/managing Spa appointments (see .agents/docs/SPA_PLAN.md). Same shape as
-  // EXCURSIONS above — a per-property PAID ADD-ON gated additionally by
-  // PropertyModuleAccess, catalog/setup (treatments/rates/therapists/rooms/schedules)
+  // EXCURSIONS above — a PAID ADD-ON gated additionally by
+  // EnterpriseAddonAccess, catalog/setup (treatments/rates/therapists/rooms/schedules)
   // is a Controls tab gated by CONTROLS, this module only covers day-to-day
   // appointment booking/check-in/completion.
   "SPA",

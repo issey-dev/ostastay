@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
+import { EnterpriseAddonAccessManager } from "@/components/osta/enterprise-addon-access-manager"
 
 export default async function OstaEnterpriseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -36,6 +37,8 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
           <Badge variant="outline">{enterprise.license?.tier ?? "STANDARD"}</Badge>
         </CardContent>
       </Card>
+
+      <EnterpriseAddonAccessManager enterpriseId={enterprise.id} enterpriseName={enterprise.name} />
 
       <Card>
         <CardHeader>

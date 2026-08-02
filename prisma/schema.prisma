@@ -39,6 +39,7 @@ model Enterprise {
   channelInboundBookings ChannelInboundBooking[]
   jobRuns               JobRun[]
   eRegistrationLinks    ERegistrationLink[]
+  addonAccess           EnterpriseAddonAccess[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -129,8 +130,8 @@ model LicenseInvoice {
 // which modules a tenant uses "is not controlled by us." Module availability is now the
 // tenant's own role-permission matrix; Osta's control surface is the license itself
 // (validity, price, per-property attribute caps — see EnterpriseLicense and
-// PropertyLicenseAllowance). Per-PROPERTY sellable add-ons (Spa, Excursions) are a
-// different mechanism and remain — see PropertyModuleAccess.
+// PropertyLicenseAllowance). Sellable add-ons (Spa, Excursions) are a different
+// mechanism and remain, enterprise-scoped since 2026-08-02 — see EnterpriseAddonAccess.
 
 // A Role always belongs to a real Enterprise — system/default roles belong to the one
 // INTERNAL "Osta" enterprise (isSystem = true) rather than a nullable enterpriseId, so
@@ -384,13 +385,12 @@ model Property {
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles          Profile[]
-  // Per-property add-on gates (see PropertyModuleAccess) and the Excursions catalog/
-  // bookings sold through one, if purchased.
-  moduleAccessOverrides        PropertyModuleAccess[]
+  // The Excursions catalog/bookings sold through the enterprise-level add-on gate
+  // (see EnterpriseAddonAccess), if purchased.
   excursionTypes               ExcursionType[]
   excursionBookings            ExcursionBooking[]
-  // Spa Booking add-on (see SPA_PLAN.md) — same per-property add-on shape as
-  // Excursions above, gated through the same moduleAccessOverrides.
+  // Spa Booking add-on (see SPA_PLAN.md) — same add-on shape as Excursions above,
+  // gated through the same enterprise-level EnterpriseAddonAccess.
   spaTreatmentCategories       SpaTreatmentCategory[]
   spaTreatments                SpaTreatment[]
   spaTherapists                SpaTherapist[]
@@ -2259,22 +2259,22 @@ model ReservationAllocation {
 // design and the rationale behind every decision below.
 // ---------------------------------------------------------------------------
 
-// Generic per-property add-on gate — the property-scoped sibling of
-// EnterpriseModuleAccess. EXCURSIONS is the first real consumer, but this table is
-// intentionally generic so any future add-on reuses it without a new migration.
-model PropertyModuleAccess {
-  id         String   @id @default(uuid())
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  module     String
-  // Defaults false (opt-in add-on) — the opposite default of EnterpriseModuleAccess,
-  // which defaults true because it's an override that force-disables an otherwise-
-  // enabled module. A missing row here means "not purchased," which is every
-  // property's starting state.
-  enabled    Boolean  @default(false)
-  updatedAt  DateTime @updatedAt
+// Generic sellable add-on gate, ENTERPRISE-scoped (owner decision 2026-08-02: add-ons
+// like Spa/Excursions are sold to the enterprise, and once enabled apply to every
+// property in it — replaced the per-property PropertyModuleAccess table). EXCURSIONS
+// was the first real consumer; the table stays generic so any future add-on reuses it
+// without a new migration.
+model EnterpriseAddonAccess {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  module       String
+  // Defaults false (opt-in add-on). A missing row means "not purchased," which is
+  // every enterprise's starting state.
+  enabled      Boolean    @default(false)
+  updatedAt    DateTime   @updatedAt
 
-  @@unique([propertyId, module])
+  @@unique([enterpriseId, module])
 }
 
 // Property-level Excursions settings — currently just the optional module-level Outlet
@@ -2449,9 +2449,9 @@ model ExcursionBooking {
 
 // ---------------------------------------------------------------------------
 // Spa Booking add-on — see .agents/docs/SPA_PLAN.md for the full design and the
-// rationale behind every decision below. Second consumer of PropertyModuleAccess
-// (the generic mechanism Excursions introduced above) — reused as-is, no schema
-// changes to that model.
+// rationale behind every decision below. Second consumer of the generic add-on gate
+// Excursions introduced above (EnterpriseAddonAccess since 2026-08-02) — reused
+// as-is, no schema changes to that model.
 // ---------------------------------------------------------------------------
 
 model SpaTreatmentCategory {

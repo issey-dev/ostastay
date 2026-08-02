@@ -24,7 +24,7 @@ const typeIdRoute = await import("@/app/api/excursions/types/[id]/route");
 const departuresRoute = await import("@/app/api/excursions/departures/route");
 const departureIdRoute = await import("@/app/api/excursions/departures/[id]/route");
 const bookingsRoute = await import("@/app/api/excursions/bookings/route");
-const propertyModulesRoute = await import("@/app/api/licenses/property-modules/route");
+const enterpriseAddonsRoute = await import("@/app/api/licenses/enterprise-addons/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -104,19 +104,20 @@ describe("Excursions: tenant isolation", () => {
     });
     propertyBId = propertyB.id;
 
-    // The add-on defaults OFF — every property under test must explicitly enable it,
-    // same as a real Osta support-admin would via /osta/properties/[id].
-    for (const propertyId of [propertyAId, propertyA2Id, propertyBId]) {
-      await asUser(ostaAdminId, () =>
-        propertyModulesRoute.PATCH(
-          new Request("http://localhost/api/licenses/property-modules", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ propertyId, module: "EXCURSIONS", enabled: true }),
-          })
-        )
-      );
-    }
+    // The add-on defaults OFF and is enterprise-scoped (2026-08-02) — enable it for
+    // Enterprise A only, same as a real Osta support-admin would via
+    // /osta/enterprises/[id]. Enterprise B deliberately stays OFF: its admin is only
+    // ever used for cross-tenant 403 checks, and the defaults-OFF test below relies
+    // on B never having the add-on.
+    await asUser(ostaAdminId, () =>
+      enterpriseAddonsRoute.PATCH(
+        new Request("http://localhost/api/licenses/enterprise-addons", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enterpriseId: enterpriseAId, module: "EXCURSIONS", enabled: true }),
+        })
+      )
+    );
 
     const chargeCodeA = await customChargeCode(enterpriseAId, { code: "XC-A", description: "Excursion Charge A" });
     chargeCodeAId = chargeCodeA.id;
@@ -245,27 +246,28 @@ describe("Excursions: tenant isolation", () => {
     expect([403, 404]).toContain(res.status);
   });
 
-  it("catalog and booking routes 403 when the add-on isn't enabled for the property (defaults OFF)", async () => {
-    const propertyC = await prisma.property.create({
-      data: {
-        enterpriseId: enterpriseAId, name: "No Add-on Property", code: `XC-${uniq()}`,
-        legalName: "No Add-on LLC", defaultCurrency: "USD", timeZone: "UTC",
-        checkInTime: "14:00", checkOutTime: "11:00",
-      },
-    });
-    // Deliberately never enabled via property-modules — should still 403.
-    const res = await asUser(adminAId, () => typesRoute.GET(new Request(`http://localhost/api/excursions/types?propertyId=${propertyC.id}`)));
+  it("catalog and booking routes 403 when the add-on isn't enabled for the enterprise (defaults OFF)", async () => {
+    // Enterprise B never enabled EXCURSIONS — its own admin, on its own property,
+    // passes the property-access check but must still be stopped at the add-on gate.
+    const res = await asUser(adminBId, () => typesRoute.GET(new Request(`http://localhost/api/excursions/types?propertyId=${propertyBId}`)));
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toMatch(/not enabled for this property/i);
+    expect((await res.json()).error).toMatch(/not enabled for this enterprise/i);
   });
 
-  it("only Osta staff can toggle a property's add-on access", async () => {
+  it("enabling the add-on lights it up for EVERY property in the enterprise", async () => {
+    // Enterprise A was enabled once at the enterprise level — its second property (A2)
+    // never got an individual toggle, yet the add-on must work there too.
+    const res = await asUser(adminAId, () => typesRoute.GET(new Request(`http://localhost/api/excursions/types?propertyId=${propertyA2Id}`)));
+    expect(res.status).toBe(200);
+  });
+
+  it("only Osta staff can toggle an enterprise's add-on access", async () => {
     const res = await asUser(adminAId, () =>
-      propertyModulesRoute.PATCH(
-        new Request("http://localhost/api/licenses/property-modules", {
+      enterpriseAddonsRoute.PATCH(
+        new Request("http://localhost/api/licenses/enterprise-addons", {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ propertyId: propertyAId, module: "EXCURSIONS", enabled: false }),
+          body: JSON.stringify({ enterpriseId: enterpriseAId, module: "EXCURSIONS", enabled: false }),
         })
       )
     );
