@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       ...(moduleParam ? { module: moduleParam } : {}),
       ...(action ? { action } : {}),
       ...(userId ? { userId } : {}),
-      ...(q ? { description: { contains: q } } : {}),
+      ...(q ? { description: { contains: q, mode: "insensitive" } } : {}),
       ...(from || to
         ? {
             createdAt: {

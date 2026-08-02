@@ -7,6 +7,12 @@ export async function GET(request: Request) {
     const ctx = await requireSession()
     const { searchParams } = new URL(request.url)
     const propertyId = searchParams.get("propertyId")
+    // Case-insensitivity comes from `mode: "insensitive"` on the filters below, NOT from
+    // this normalisation. Lower-casing alone silently stopped working when the database
+    // moved to Postgres (2026-08-02): SQLite's LIKE is case-insensitive for ASCII, so
+    // comparing a lower-cased needle against a capitalised name happened to match, while
+    // Postgres LIKE is case-sensitive and matched nothing — every guest name has a
+    // capital letter, so Fast Post search returned no results at all.
     const query = searchParams.get("query")?.toLowerCase()
 
     if (!propertyId || !query) {
@@ -25,8 +31,8 @@ export async function GET(request: Request) {
           {
             primaryGuest: {
               OR: [
-                { lastName: { contains: query } },
-                { firstName: { contains: query } }
+                { lastName: { contains: query, mode: "insensitive" } },
+                { firstName: { contains: query, mode: "insensitive" } }
               ]
             }
           },
@@ -34,7 +40,7 @@ export async function GET(request: Request) {
             assignments: {
               some: {
                 room: {
-                  roomNumber: { contains: query }
+                  roomNumber: { contains: query, mode: "insensitive" }
                 }
               }
             }

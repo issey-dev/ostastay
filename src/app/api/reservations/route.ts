@@ -31,10 +31,10 @@ export async function GET(request: Request) {
         ...(search
           ? {
               OR: [
-                { confirmationNo: { contains: search } },
-                { primaryGuest: { firstName: { contains: search } } },
-                { primaryGuest: { lastName: { contains: search } } },
-                { primaryGuest: { companyName: { contains: search } } },
+                { confirmationNo: { contains: search, mode: "insensitive" } },
+                { primaryGuest: { firstName: { contains: search, mode: "insensitive" } } },
+                { primaryGuest: { lastName: { contains: search, mode: "insensitive" } } },
+                { primaryGuest: { companyName: { contains: search, mode: "insensitive" } } },
               ],
             }
           : {}),

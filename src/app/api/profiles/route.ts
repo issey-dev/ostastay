@@ -25,11 +25,11 @@ export async function GET(request: Request) {
         enterpriseId: ctx.enterpriseId,
         profileType: profileType ? profileType : undefined,
         OR: search ? [
-          { firstName: { contains: search } },
-          { lastName: { contains: search } },
-          { companyName: { contains: search } },
-          { communications: { some: { value: { contains: search } } } },
-          { addresses: { some: { fullAddress: { contains: search } } } },
+          { firstName: { contains: search, mode: "insensitive" } },
+          { lastName: { contains: search, mode: "insensitive" } },
+          { companyName: { contains: search, mode: "insensitive" } },
+          { communications: { some: { value: { contains: search, mode: "insensitive" } } } },
+          { addresses: { some: { fullAddress: { contains: search, mode: "insensitive" } } } },
         ] : undefined
       },
       include: {
