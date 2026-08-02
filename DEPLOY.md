@@ -1,10 +1,15 @@
 # Deploying OstaStay with Docker
 
-Two containers — the app (Node 22, port 3000) and PostgreSQL 17 — plus two volumes for
-the database and the eRegistration ID photos. Postgres is not published to the network:
-only the app container can reach it.
+Three containers: a shared edge proxy (Caddy) that owns 80/443 for every project on the
+host, the app (Node 22), and PostgreSQL 17 — plus volumes for the database and the
+eRegistration ID photos.
+
+Neither the app nor Postgres publishes a host port. The app is reachable only through
+the proxy, so nothing can bypass its TLS, security headers, or rate limits; Postgres is
+reachable only from the app container.
 
 Target host: `192.99.167.15` (`vps-9d96501a.vps.ovh.ca`), user `ubuntu`.
+Live at **https://vps-9d96501a.vps.ovh.ca**.
 
 ---
 
@@ -52,10 +57,28 @@ running container, not just an edit here.
 
 ---
 
-## 4. Start it
+## 4. Start the shared proxy (once per host)
+
+The proxy owns ports 80/443 and serves every project on this machine. The app publishes
+no host port at all — it is reached through here, which is what stops projects colliding
+on port 3000 and gives each one HTTPS automatically.
 
 ```bash
-docker compose up -d --build
+docker network create edge
+```
+
+```bash
+cd ~/ostastay/deploy/proxy && docker compose up -d --build
+```
+
+Caddy obtains a Let's Encrypt certificate on first start. Colleagues adding their own
+projects should read [`deploy/proxy/sites.d/README.md`](deploy/proxy/sites.d/README.md)
+— they drop one file in `sites.d/` and never edit the shared `Caddyfile`.
+
+## 5. Start the app
+
+```bash
+cd ~/ostastay && docker compose up -d --build
 ```
 
 First build takes a few minutes. The container applies all database migrations on every
@@ -69,7 +92,7 @@ docker compose logs -f
 
 ---
 
-## 5. Create the first admin account
+## 6. Create the first admin account
 
 A freshly migrated database has no users, and the app needs its internal "Osta"
 enterprise row to exist before any request can be served. This one command creates both.
@@ -85,7 +108,7 @@ docker compose exec \
 The password is passed per-invocation rather than stored in `.env`, so it never lands in
 a file or in the image. Minimum 12 characters.
 
-Then sign in at `http://192.99.167.15:3000` with:
+Then sign in at `https://vps-9d96501a.vps.ovh.ca` with:
 
 - **Enterprise code:** `osta`
 - **Email / password:** what you just set
@@ -97,7 +120,7 @@ From there, create your hotel's own enterprise and its properties through the ap
 
 ---
 
-## 6. Schedule the background jobs
+## 7. Schedule the background jobs
 
 The job runner keeps channel-manager credentials alive (Beds24 refresh tokens expire
 after 30 days idle) and prunes the exchange log. Nothing calls it automatically — add a
@@ -109,7 +132,7 @@ crontab -e
 
 ```cron
 # OstaStay background jobs — hourly
-0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" http://127.0.0.1:3000/api/jobs/run > /dev/null 2>&1
+0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://vps-9d96501a.vps.ovh.ca/api/jobs/run > /dev/null 2>&1
 ```
 
 If you skip this, the app still works; channel-manager tokens will eventually expire.
@@ -174,24 +197,34 @@ schema changes.
 
 ---
 
-## Adding HTTPS later
+## Scaling
 
-The app currently serves plain HTTP. Guests submit passport and ID photos through
-eRegistration, so those submissions — and every staff login — travel unencrypted, and
-browsers will mark the site "Not Secure". Switching is one command once DNS is ready:
-
-1. Point a DNS A record at `192.99.167.15`, or use `vps-9d96501a.vps.ovh.ca`, which
-   already resolves there.
-2. In `.env`, add `DOMAIN=your.domain` and change `APP_URL` to `https://your.domain`.
-3. Open ports 80 and 443 (port 80 is required for the certificate challenge).
-4. Start with the TLS overlay:
+The app service has no fixed container name and no host port, so it scales directly:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+docker compose up -d --scale app=3
 ```
 
-Caddy fetches and renews the Let's Encrypt certificate on its own, and the app stops
-being reachable directly on port 3000.
+Caddy load-balances across every replica automatically — it proxies to the `app`
+**service** name, and Docker's DNS returns all replica addresses. Sessions are stateless
+JWTs, so no sticky sessions are needed.
+
+**Read this before going past one replica:**
+
+- **Guest ID photos are written to a local volume**
+  (`src/lib/eregistration/storage.ts`). On *this* host that is fine: every replica mounts
+  the same `osta-uploads` volume. Spreading replicas across *several machines* would need
+  object storage (S3/MinIO) behind that module first — it is written as the seam for
+  exactly that swap.
+- **Each replica gets its own resource limits** (2 CPUs / 2 GB). Three replicas is
+  6 CPUs on a 4-CPU box, which is oversubscribed. Check `docker stats` and the allocation
+  table in [`deploy/proxy/sites.d/README.md`](deploy/proxy/sites.d/README.md).
+- **The DB Health storage panel becomes per-replica.** `src/lib/db-metrics.ts` is an
+  in-process ring buffer, so the Osta dashboard shows whichever replica served the
+  request. Cosmetic, not a correctness problem.
+- **One replica is almost certainly enough.** Front-desk traffic is a handful of requests
+  per minute. Postgres will be the ceiling long before the app tier is, and it scales
+  vertically for a long time. Scale when something measured tells you to.
 
 ---
 
@@ -201,11 +234,20 @@ being reachable directly on port 3000.
 missing `JWT_SECRET` — the app refuses to boot in production without one rather than
 fall back to a well-known development secret.
 
-**"No INTERNAL (Osta) enterprise found".** The bootstrap in step 5 has not been run yet.
+**"No INTERNAL (Osta) enterprise found".** The bootstrap in step 6 has not been run yet.
 
-**Can't reach it from a browser.** Confirm the container is healthy
-(`docker compose ps`), then check the provider firewall — OVH instances commonly block
-inbound ports by default. On the host: `sudo ufw allow 3000/tcp`.
+**Can't reach it from a browser.** Check in this order:
+
+1. `docker compose ps` in `~/ostastay` — is the app healthy?
+2. `cd ~/ostastay/deploy/proxy && docker compose logs proxy` — certificate problems show
+   up here. A failed ACME challenge usually means DNS does not point at this host, or
+   port 80 is blocked upstream.
+3. `docker network inspect edge` — the app and the proxy must both be attached.
+
+**Certificate won't issue.** Port 80 must be reachable from the internet for the ACME
+challenge, even though the site itself runs on 443. Let's Encrypt also rate-limits
+repeated failures, so fix the cause before retrying in a loop; the `caddy-data` volume
+persists issued certificates across restarts precisely to avoid that.
 
 **Emails aren't sending.** SMTP is configured per-enterprise inside the app under
 Controls → Stationaries, not in `.env`.

@@ -1,0 +1,101 @@
+# Shared edge proxy for every project on this host.
+#
+# Owns ports 80/443. No application container should publish a host port ever again —
+# they attach to the `edge` Docker network and are reached here by service name. That is
+# what stops projects colliding on port 3000/3001/3002 and lets each one have its own
+# hostname.
+
+{
+	# Where Let's Encrypt sends expiry warnings. Change to a monitored address.
+	email ehaab787shareef@gmail.com
+
+	# Rate-limiting module (compiled in via this directory's Dockerfile).
+	order rate_limit before basic_auth
+}
+
+# Applied to every site below. Kept as a snippet so a new project gets the same baseline
+# by writing one `import security_headers` line.
+(security_headers) {
+	header {
+		# The app is HTTPS-only from here on; tell browsers to refuse plaintext for a
+		# year. Note this is sticky — a browser that has seen it will not fall back to
+		# http:// for this hostname until it expires.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# A PMS shows guest PII; never let it be framed by another origin.
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Nothing in this app needs a camera, microphone, or geolocation.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		# Do not advertise the server software.
+		-Server
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OstaStay
+# ─────────────────────────────────────────────────────────────────────────────
+vps-9d96501a.vps.ovh.ca {
+	import security_headers
+
+	# Guest ID photos are capped at 10MB in the app (MAX_UPLOAD_BYTES); this stops a
+	# larger body being buffered at all rather than reading it and rejecting it later.
+	request_body {
+		max_size 12MB
+	}
+
+	# --- Rate limits on the three credential-checking / unauthenticated paths --------
+	# These endpoints are reachable by anyone on the internet and each one either checks
+	# a secret or writes to disk, so they are the ones worth bounding here.
+
+	# Sign-in. The app also throttles per-email after 5 failures, but that counter is
+	# per-process; this one is per-IP and independent of replica count.
+	@login path /api/auth/login
+	rate_limit @login {
+		zone login {
+			key {remote_host}
+			events 10
+			window 1m
+		}
+	}
+
+	# Channel-manager webhook. Authenticated by a secret in the URL, so it is
+	# brute-forceable in principle; Beds24 pushes nowhere near this volume.
+	@webhook path /api/channels/webhook/*
+	rate_limit @webhook {
+		zone webhook {
+			key {remote_host}
+			events 60
+			window 1m
+		}
+	}
+
+	# Public eRegistration — unauthenticated apart from the link token, and it accepts
+	# file uploads, so it is the one endpoint that can consume disk on demand.
+	@eregistration path /api/eregistration/* /eregistration/*
+	rate_limit @eregistration {
+		zone eregistration {
+			key {remote_host}
+			events 60
+			window 1m
+		}
+	}
+
+	# `app` is the compose service name, not a container name — Docker's DNS returns
+	# every replica's address, so this load-balances automatically across however many
+	# are running. Sessions are stateless JWTs, so no sticky sessions are needed.
+	reverse_proxy app:3000 {
+		lb_policy least_conn
+		health_uri /login
+		health_interval 15s
+		health_timeout 5s
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Other projects on this host
+#
+# Each project drops ONE file into sites.d/ — nobody edits this file, so a mistake in
+# one project cannot take down everyone else's site. See sites.d/README.md.
+# ─────────────────────────────────────────────────────────────────────────────
+import /etc/caddy/sites.d/*.caddy

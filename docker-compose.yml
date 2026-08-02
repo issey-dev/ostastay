@@ -1,8 +1,15 @@
 # OstaStay — production stack: app + PostgreSQL.
 #
-# Serves plain HTTP on port 3000 (chosen 2026-08-02). To put HTTPS in front later:
-#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
-# See DEPLOY.md.
+# Publishes NO host ports. The shared edge proxy (deploy/proxy/) owns 80/443 and reaches
+# the app by service name over the `edge` network, which is what lets several projects
+# share this host without fighting over port 3000. Start the proxy first — see DEPLOY.md.
+#
+# The app service is scale-ready: `docker compose up -d --scale app=3` works because it
+# has neither a fixed container_name nor a host port binding, and Caddy load-balances
+# across every replica via Docker's DNS. Sessions are stateless JWTs, so no sticky
+# sessions are required. Read the scaling notes in DEPLOY.md before going past one
+# replica — guest ID photos live on a shared volume, which is fine on ONE host and needs
+# object storage across several.
 
 services:
   db:
@@ -27,6 +34,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+    # This host is shared with other projects. Without a ceiling, a heavy query or a
+    # runaway build can consume all 4 CPUs and starve everyone else. Postgres is also
+    # given a matching shared_buffers below its memory cap.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=100
+
     logging:
       driver: json-file
       options:
@@ -38,7 +61,8 @@ services:
       context: .
       dockerfile: Dockerfile
     image: ostastay:latest
-    container_name: ostastay
+    # No container_name: it must stay unset for `--scale app=N` to be possible, since
+    # Docker cannot give N containers the same name.
     restart: unless-stopped
 
     depends_on:
@@ -56,12 +80,16 @@ services:
       # Composed here rather than in .env so the credentials can never drift out of sync
       # with the db service above. "db" is the service name, resolved by Docker's
       # internal DNS; 5432 is container-internal and not published to the host.
-      DATABASE_URL: "postgresql://osta:${POSTGRES_PASSWORD}@db:5432/ostastay?schema=public"
+      # connection_limit is pinned rather than left to Prisma's default of
+      # (cpu_count * 2 + 1), which would be ~9 per replica: three replicas would open 27
+      # connections against Postgres's 100 without anyone choosing that number. At 5 per
+      # replica the arithmetic stays obvious as replicas are added.
+      DATABASE_URL: "postgresql://osta:${POSTGRES_PASSWORD}@db:5432/ostastay?schema=public&connection_limit=5"
 
-    ports:
-      # Bound to all interfaces because this instance is reached directly over HTTP.
-      # The TLS overlay changes this to 127.0.0.1 so only the reverse proxy can reach it.
-      - "3000:3000"
+    # No `ports:` — deliberately. The app is reached only through the edge proxy, so
+    # nothing can bypass the TLS, security headers, or rate limits by hitting :3000
+    # directly, and the port is free for other projects on this host. Publishing a host
+    # port would also make `--scale app=N` impossible.
 
     volumes:
       # eRegistration ID photos (passport/ID scans) are written to local disk, not to the
@@ -84,12 +112,34 @@ services:
       retries: 3
       start_period: 60s
 
+    # Per-replica ceiling on a host shared with other projects. With `--scale app=3`
+    # this becomes 3 x these numbers, so check `docker stats` and the table in
+    # deploy/proxy/sites.d/README.md before scaling up.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+    networks:
+      # `default` reaches the database; `edge` is how the proxy reaches this app. The
+      # db service is deliberately NOT on `edge`, so nothing outside this stack can
+      # reach Postgres even by name.
+      - default
+      - edge
+
     logging:
       # Without this, container logs grow without bound and eventually fill the VPS disk.
       driver: json-file
       options:
         max-size: "10m"
         max-file: "5"
+
+networks:
+  edge:
+    # Created once with `docker network create edge` and shared with the proxy stack and
+    # every other project on this host.
+    external: true
 
 volumes:
   osta-db:

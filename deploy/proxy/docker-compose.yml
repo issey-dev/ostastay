@@ -1,0 +1,57 @@
+# Shared edge proxy. Runs ONCE per host and serves every project on it.
+#
+#   cd ~/ostastay/deploy/proxy
+#   docker network create edge          # once, if it does not exist
+#   docker compose up -d --build
+#
+# Deliberately a separate stack from the app: restarting or rebuilding OstaStay must not
+# take every other project on this host offline with it.
+
+services:
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: edge-proxy:latest
+    container_name: edge-proxy
+    restart: unless-stopped
+
+    ports:
+      # The only host ports bound on this machine. 80 is required for the ACME
+      # certificate challenge as well as the redirect to HTTPS.
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Per-project site configs. Each project owns one file here.
+      - ./sites.d:/etc/caddy/sites.d:ro
+      # Certificates and the ACME account key. Persisting these is what keeps Let's
+      # Encrypt's rate limits from being hit on every redeploy.
+      - caddy-data:/data
+      - caddy-config:/config
+
+    networks:
+      - edge
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  edge:
+    # Created once by hand (`docker network create edge`) and shared by every project's
+    # stack, so the proxy can reach their containers by service name.
+    external: true
+
+volumes:
+  caddy-data:
+  caddy-config:
