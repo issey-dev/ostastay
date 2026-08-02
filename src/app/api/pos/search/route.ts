@@ -31,8 +31,8 @@ export async function GET(request: Request) {
           {
             primaryGuest: {
               OR: [
-                { lastName: { contains: query, mode: "insensitive" } },
-                { firstName: { contains: query, mode: "insensitive" } }
+                { lastName: { contains: query, mode: "insensitive" as const } },
+                { firstName: { contains: query, mode: "insensitive" as const } }
               ]
             }
           },
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
             assignments: {
               some: {
                 room: {
-                  roomNumber: { contains: query, mode: "insensitive" }
+                  roomNumber: { contains: query, mode: "insensitive" as const }
                 }
               }
             }
