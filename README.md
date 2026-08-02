@@ -1,5 +1,5 @@
 **OstaStay — Guest House PMS.** A multi-tenant property management system (Next.js 16 /
-React 19, Prisma + SQLite). For project status, the architecture retrofit plan, and
+React 19, Prisma + PostgreSQL). For project status, the architecture retrofit plan, and
 open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
 [`.agents/docs/TODO.md`](.agents/docs/TODO.md) — that's the up-to-date source of truth
 for what's done and what's left, kept in-repo so any contributor (human or agent) can
@@ -7,11 +7,21 @@ pick up the project's progress without needing prior chat history.
 
 ## Quick start
 
-Three commands, in order:
+Requires Docker (for the database) and Node 22.
 
 ```bash
 npm install
 ```
+
+Start Postgres. This creates both the dev database and the separate one the tests wipe,
+and only needs doing once — the container restarts with Docker after that:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Copy `.env.example` to `.env` (the default `DATABASE_URL` already points at the
+container), then:
 
 ```bash
 npm run db:reset
@@ -27,8 +37,14 @@ Then open [http://localhost:3000](http://localhost:3000).
 seed. If the database is already set up and you only want to re-seed on top of it, run
 `npm run seed` instead — the seed is idempotent, so it's safe to re-run any time.
 
-> **The dev server holds a lock on `dev.db`.** Stop it before running `db:reset` or the
-> reset fails with "device or resource busy".
+> **Moved from SQLite to PostgreSQL on 2026-08-02.** Prisma allows only one datasource
+> provider, so dev, test, and production all run Postgres now — which also removes the
+> old dev/prod engine mismatch. If you have an old `dev.db` lying around it is no longer
+> used; start the container above and run `db:reset`. The 90 SQLite migrations were
+> squashed into a single baseline (still in git history).
+
+To wipe the database and its container entirely:
+`docker compose -f docker-compose.dev.yml down -v`
 
 ## Credentials
 

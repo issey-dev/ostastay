@@ -1,0 +1,41 @@
+# Local development database. Runs Postgres ONLY — the app itself still runs on your
+# machine with `npm run dev`.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Creates two databases:
+#   ostastay       — your working data (DATABASE_URL in .env)
+#   ostastay_test  — wiped and rebuilt by `npm test` on every run
+#
+# Then, once:  npx prisma migrate deploy && npm run seed
+#
+# To start completely fresh:
+#   docker compose -f docker-compose.dev.yml down -v
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: ostastay-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: osta
+      # Development only, never reachable off this machine — see the port binding below.
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: ostastay
+    ports:
+      # Bound to localhost so the database is not exposed to your network. Port 55432
+      # rather than 5432 to avoid colliding with any Postgres already installed locally.
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - osta-dev-db:/var/lib/postgresql/data
+      # Only executed on FIRST start of a new volume, which is why creating the test
+      # database here is safe to leave in place.
+      - ./docker/dev-init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osta -d ostastay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  osta-dev-db:

@@ -83,14 +83,33 @@ describe("Background job runner", () => {
   // Mutual exclusion — the partial unique index is what makes overlapping cron safe.
   // ---------------------------------------------------------------------------
 
-  it("a second concurrent run of the same job is skipped, not run twice", async () => {
-    let started = 0;
+  // What the partial index actually guarantees is that the job never executes CONCURRENTLY
+  // with itself for one enterprise — that is what would double-post charges. It does not
+  // guarantee "at most one execution per pair of cron hits".
+  //
+  // The distinction was invisible under SQLite, which serialises every write globally: the
+  // second INSERT was always attempted while the first row was still RUNNING, so it always
+  // lost. On Postgres the two claims are genuinely independent, and if the first job
+  // finishes before the second INSERT lands, that row is already SUCCEEDED and no longer in
+  // the partial index (WHERE status = 'RUNNING'), so the second claim legitimately succeeds
+  // and the job runs again — sequentially, never overlapping. That is explicitly in
+  // contract: `Job.run` is documented as "must be safe to run repeatedly — cron delivery is
+  // at-least-once".
+  //
+  // So this asserts peak concurrency rather than a call count, which is both the real
+  // invariant and robust to scheduling. Verified separately that a genuinely overlapping
+  // claim is still rejected with P2002 -> SKIPPED_LOCKED.
+  it("never runs the same job concurrently for one enterprise", async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
     const slowJob = {
       name: `slow-${Date.now()}`,
       description: "test",
       run: async () => {
-        started += 1;
-        await new Promise((r) => setTimeout(r, 60));
+        inFlight += 1;
+        peakInFlight = Math.max(peakInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 250));
+        inFlight -= 1;
         return { itemsProcessed: 1, summary: "done" };
       },
     };
@@ -100,10 +119,12 @@ describe("Background job runner", () => {
       runJobForEnterprise(slowJob, enterpriseId),
     ]);
 
-    // Exactly one ran; the other saw the lock. This is the whole point of the partial index.
-    expect(started).toBe(1);
-    const statuses = [a.status, b.status].sort();
-    expect(statuses).toEqual(["SKIPPED_LOCKED", "SUCCEEDED"]);
+    // The one that matters: the two executions never overlapped.
+    expect(peakInFlight).toBe(1);
+    // Neither invocation may fail; each either ran or saw the lock.
+    for (const status of [a.status, b.status]) {
+      expect(["SUCCEEDED", "SKIPPED_LOCKED"]).toContain(status);
+    }
   });
 
   it("the same job CAN run concurrently for different enterprises", async () => {
