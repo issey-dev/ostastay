@@ -2855,11 +2855,16 @@ model ChannelConnection {
   // NOT_CONNECTED | CONNECTED | ERROR. Health is observed, never assumed: it is set from
   // real API outcomes (see src/lib/channels/beds24.ts), not from the fact that a
   // credential was saved.
-  // Secret that authenticates this connection's inbound webhook URL. Generated on
-  // demand, shown to the operator once, and compared timing-safely. Deliberately a
+  // Secret that authenticates this connection's inbound webhook URL. Deliberately a
   // per-connection URL secret rather than a payload signature: Beds24's signing scheme is
   // not documented publicly, and a URL secret works regardless of whether it has one.
-  webhookToken      String?   @unique
+  //
+  // The raw token is never stored, only its SHA-256 hash — the URL is a WRITE-CAPABLE
+  // bearer credential (holding it is authority to post bookings into this enterprise), so
+  // a DB dump alone must never yield a working one. The plaintext is returned once, by
+  // the generate endpoint, and nowhere else afterwards; if it is lost, regenerate and
+  // re-paste it into the channel manager. See src/lib/channels/webhook-token.ts.
+  webhookTokenHash  String?   @unique
 
   status            String    @default("NOT_CONNECTED")
   lastHealthCheckAt DateTime?

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { createHash, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db";
 import { ingestBookings } from "@/lib/channels/inbound/ingest";
 import { redactForLog } from "@/lib/channels/redact";
 import { getProvider } from "@/lib/channels/providers/registry";
+import { hashWebhookToken } from "@/lib/channels/webhook-token";
 
 // Inbound booking webhook — the channel manager calling US.
 //
@@ -16,29 +16,28 @@ import { getProvider } from "@/lib/channels/providers/registry";
 // mechanism — the one place a guess is least acceptable. A high-entropy URL secret is
 // verifiable today and works regardless of what signing Beds24 does or does not offer. If a
 // documented signature scheme turns out to exist, it should be added ON TOP of this.
+//
+// The secret is stored ONLY as a SHA-256 hash (see src/lib/channels/webhook-token.ts), so
+// this route hashes what arrives and looks the connection up by that. A database dump
+// therefore yields hashes, not working webhook URLs.
 export const dynamic = "force-dynamic";
-
-// Constant-time compare over digests, so neither the token nor its length leaks by timing.
-function tokenMatches(provided: string, expected: string): boolean {
-  const a = createHash("sha256").update(provided).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
-}
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const startedAt = Date.now();
   const { token } = await params;
 
-  // Looked up by unique token, then re-compared in constant time. The lookup alone would be
-  // enough functionally; the compare removes the timing signal from the index probe.
+  // The lookup IS the authentication: a row only comes back when the stored hash equals
+  // the hash of the token just presented. Nothing further to compare — see the closing
+  // note in src/lib/channels/webhook-token.ts for why the old post-lookup timing-safe
+  // compare is not merely redundant here but tautological.
   const connection = token
     ? await prisma.channelConnection.findUnique({
-        where: { webhookToken: token },
-        select: { id: true, enterpriseId: true, name: true, webhookToken: true, provider: true },
+        where: { webhookTokenHash: hashWebhookToken(token) },
+        select: { id: true, enterpriseId: true, name: true, provider: true },
       })
     : null;
 
-  if (!connection?.webhookToken || !tokenMatches(token, connection.webhookToken)) {
+  if (!connection) {
     // Deliberately terse and identical for a bad token and an unknown one — a webhook URL
     // is a credential, and a distinguishable response would let it be probed.
     return NextResponse.json({ error: "Not found" }, { status: 404 });

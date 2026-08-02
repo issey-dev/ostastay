@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import bcrypt from "bcryptjs";
 
 process.env.SECRETS_ENCRYPTION_KEY = "test-inbound-key";
 
+// A real in-memory cookie jar rather than the no-op one this file used to carry: the
+// webhook GENERATE endpoint is a session route, and minting a webhook URL end to end is
+// the only way to prove the plaintext is shown once and never persisted. Same fake as
+// tests/business-rules/hub-access.test.ts.
+const cookieJar = new Map<string, string>();
 vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {} }),
+  cookies: async () => ({
+    get: (name: string) => (cookieJar.has(name) ? { value: cookieJar.get(name)! } : undefined),
+    set: (name: string, value: string) => {
+      cookieJar.set(name, value);
+    },
+    delete: (name: string) => {
+      cookieJar.delete(name);
+    },
+  }),
 }));
 
 const { prisma } = await import("@/lib/db");
@@ -11,7 +25,10 @@ const { parseBeds24Booking, extractBookings, isCancelledStatus } = await import(
   "@/lib/channels/inbound/parse"
 );
 const { ingestBooking, ingestBookings } = await import("@/lib/channels/inbound/ingest");
+const { generateWebhookToken, hashWebhookToken } = await import("@/lib/channels/webhook-token");
+const { createSession, destroySession } = await import("@/lib/auth");
 const webhookRoute = await import("@/app/api/channels/webhook/[token]/route");
+const generateWebhookRoute = await import("@/app/api/hub/connections/[id]/webhook/route");
 
 function day(offset: number): Date {
   const n = new Date();
@@ -127,8 +144,18 @@ describe("Inbound bookings", () => {
     let propertyId: string;
     let roomTypeId: string;
     let webhookToken: string;
+    let hubUserId: string;
 
     beforeAll(async () => {
+      // requireSession resolves the INTERNAL enterprise on every call, so the generate
+      // endpoint needs one to exist. Upserted, same as hub-access.test.ts — test files
+      // share one database.
+      await prisma.enterprise.upsert({
+        where: { slug: "test-osta" },
+        update: {},
+        create: { name: "Osta", slug: "test-osta", type: "INTERNAL" },
+      });
+
       const ent = await prisma.enterprise.create({
         data: { name: `In Ent ${Date.now()}`, slug: `test-in-${Date.now()}`, type: "STANDARD" },
       });
@@ -149,17 +176,44 @@ describe("Inbound bookings", () => {
       });
       propertyId = property.id;
 
-      webhookToken = `tok-${Date.now()}`;
+      // The fixture holds the PLAINTEXT so tests can present it at the door; the row only
+      // ever gets the hash, exactly as the generate endpoint writes it.
+      webhookToken = generateWebhookToken();
       const connection = await prisma.channelConnection.create({
         data: {
           enterpriseId,
           provider: "BEDS24",
           name: `In Conn ${Date.now()}`,
           refreshToken: "x",
-          webhookToken,
+          webhookTokenHash: hashWebhookToken(webhookToken),
         },
       });
       connectionId = connection.id;
+
+      // An ENTERPRISE-scoped user holding INTEGRATIONS — the shape that may mint a
+      // webhook URL (Hub access + INTEGRATIONS update).
+      const hubRole = await prisma.role.create({
+        data: {
+          enterpriseId,
+          name: `In Hub ${Date.now()}`,
+          isSystem: false,
+          permissions: {
+            create: { module: "INTEGRATIONS", canView: true, canCreate: true, canUpdate: true, canDelete: false },
+          },
+        },
+      });
+      const hubUser = await prisma.user.create({
+        data: {
+          enterpriseId,
+          email: `in-hub-${Date.now()}@test.local`,
+          passwordHash: await bcrypt.hash("password123", 10),
+          firstName: "In",
+          lastName: "Hub",
+          roleId: hubRole.id,
+          scope: "ENTERPRISE",
+        },
+      });
+      hubUserId = hubUser.id;
 
       const link = await prisma.channelPropertyLink.create({
         data: { connectionId, propertyId, externalPropertyId: "ext-in", syncEnabled: true },
@@ -403,6 +457,100 @@ describe("Inbound bookings", () => {
       // A non-2xx makes the channel retry, and retrying cannot fix a malformed payload —
       // it would redeliver forever while the real problem stays invisible.
       expect(res.status).toBe(200);
+    });
+
+    // -------------------------------------------------------------------------
+    // Webhook token at rest — the URL is a WRITE-CAPABLE bearer credential, so a
+    // database dump must not contain a working one. Mirrors the eRegistration link
+    // (tests/business-rules/eregistration-link-lifecycle.test.ts).
+    // -------------------------------------------------------------------------
+
+    it("stores only the hash — the plaintext token appears nowhere in the row", async () => {
+      const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId } });
+
+      expect(row.webhookTokenHash).toBe(hashWebhookToken(webhookToken));
+      expect(row.webhookTokenHash).not.toBe(webhookToken);
+      // Not just "the token column doesn't hold it" — nothing on the row does. A dump is
+      // the whole row, not the one field someone remembered to check.
+      expect(JSON.stringify(row)).not.toContain(webhookToken);
+    });
+
+    it("a caller holding the STORED value — i.e. a database dump — cannot post", async () => {
+      const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId } });
+
+      const res = await webhookRoute.POST(
+        new Request("http://localhost", { method: "POST", body: JSON.stringify([booking("BK-DUMP")]) }),
+        { params: Promise.resolve({ token: row.webhookTokenHash! }) }
+      );
+
+      // This is the whole point of the change: before it, the column held the token, so
+      // read access to the database WAS a live webhook URL. Now the stored value is one
+      // hash short of useless — presenting it just gets hashed again and matches nothing.
+      expect(res.status).toBe(404);
+      expect(await prisma.channelInboundBooking.count({ where: { externalBookingId: "BK-DUMP" } })).toBe(0);
+    });
+
+    it("hashing is deterministic, and distinct tokens do not collide", async () => {
+      const a = generateWebhookToken();
+      const b = generateWebhookToken();
+
+      expect(hashWebhookToken(a)).toBe(hashWebhookToken(a));
+      expect(hashWebhookToken(a)).not.toBe(hashWebhookToken(b));
+      // 32 random bytes, hex — the URL shape Beds24 already holds is unchanged by this
+      // move, only the storage is.
+      expect(a).toMatch(/^[0-9a-f]{64}$/);
+      expect(hashWebhookToken(a)).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("generating a URL returns the plaintext ONCE and persists only its hash", async () => {
+      cookieJar.clear();
+      await createSession(hubUserId);
+
+      const res = await generateWebhookRoute.POST(new Request("http://localhost", { method: "POST" }), {
+        params: Promise.resolve({ id: connectionId }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { path: string; regenerated: boolean };
+
+      const minted = body.path.replace("/api/channels/webhook/", "");
+      expect(minted).toMatch(/^[0-9a-f]{64}$/);
+      // This connection already had one (the fixture), so this is a regeneration.
+      expect(body.regenerated).toBe(true);
+
+      const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId } });
+      expect(row.webhookTokenHash).toBe(hashWebhookToken(minted));
+      expect(JSON.stringify(row)).not.toContain(minted);
+
+      // Shown once means shown once: nothing the Hub can read afterwards carries it. The
+      // list shape reports only that a URL exists.
+      const { toPublicConnection } = await import("@/lib/channels/connection");
+      const publicShape = toPublicConnection(row);
+      expect(publicShape.hasWebhook).toBe(true);
+      expect(JSON.stringify(publicShape)).not.toContain(minted);
+      expect(JSON.stringify(publicShape)).not.toContain(row.webhookTokenHash!);
+
+      // The freshly minted URL really does authenticate...
+      const ok = await webhookRoute.POST(
+        new Request("http://localhost", { method: "POST", body: JSON.stringify([booking("BK-MINT")]) }),
+        { params: Promise.resolve({ token: minted }) }
+      );
+      expect(ok.status).toBe(200);
+      expect(await prisma.channelInboundBooking.count({ where: { externalBookingId: "BK-MINT" } })).toBe(1);
+
+      // ...and the one it replaced does not. Regeneration is a rotation, which is why the
+      // operator must re-paste the new URL into the channel manager.
+      const stale = await webhookRoute.POST(
+        new Request("http://localhost", { method: "POST", body: JSON.stringify([booking("BK-STALE")]) }),
+        { params: Promise.resolve({ token: webhookToken }) }
+      );
+      expect(stale.status).toBe(404);
+      expect(await prisma.channelInboundBooking.count({ where: { externalBookingId: "BK-STALE" } })).toBe(0);
+
+      // Later tests in this file must not keep using the now-dead fixture token.
+      webhookToken = minted;
+
+      await destroySession();
+      cookieJar.clear();
     });
   });
 });
