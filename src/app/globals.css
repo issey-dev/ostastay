@@ -3,6 +3,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Tailwind v4 auto-scans every non-gitignored file for class names; docs and
+   vendored skills contain class-shaped strings (e.g. `z-[var(--z-*)]` in
+   DESIGN_LOG.md) that compile into invalid CSS. */
+@source not "../../.agents";
+@source not "../../.claude";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
