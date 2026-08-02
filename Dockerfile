@@ -67,6 +67,11 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/dist-scripts ./dist-scripts
+# bcryptjs is bundled INTO Next's server chunks, so standalone tracing leaves it out of
+# node_modules entirely. The app is fine; the bootstrap script is not, because it runs as
+# its own plain-node process and resolves its imports the normal way. Dependency-free
+# pure JS, so copying the package directory alone is sufficient.
+COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
 # Strip any CR before chmod: this repo is developed on Windows, and a checkout that
