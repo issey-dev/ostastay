@@ -1,0 +1,17 @@
+{
+  // Compiles the operator scripts that must run INSIDE the runtime image, which has no
+  // TypeScript and no vite-node. The app itself is compiled by `next build`; this covers
+  // only the standalone scripts, emitting plain CommonJS that `node` can run directly.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "outDir": "dist-scripts",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["scripts/bootstrap-admin.ts", "prisma/rbac-seed-data.ts"]
+}

@@ -1,0 +1,6 @@
+# This repo is developed on Windows but its containers run Linux. Shell scripts must
+# keep LF endings on checkout, or the shebang resolves to "/bin/sh\r" inside the image
+# and the container exits with "no such file or directory".
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf

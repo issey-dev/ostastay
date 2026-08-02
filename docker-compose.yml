@@ -1,0 +1,96 @@
+# OstaStay — production stack: app + PostgreSQL.
+#
+# Serves plain HTTP on port 3000 (chosen 2026-08-02). To put HTTPS in front later:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+# See DEPLOY.md.
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: ostastay-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: osta
+      POSTGRES_DB: ostastay
+      # No default on purpose: compose refuses to start rather than silently bring up a
+      # database with a blank or guessable password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set — copy .env.production.example to .env and fill it in}
+    volumes:
+      # THE most important thing on this host. Every reservation, folio, payment, and
+      # guest profile lives here. See the backup section of DEPLOY.md.
+      - osta-db:/var/lib/postgresql/data
+    # Deliberately NO `ports:` — the database is reachable only from the app container
+    # over the internal Docker network, never from the internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osta -d ostastay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ostastay:latest
+    container_name: ostastay
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        # Waits for pg_isready, not merely for the container to exist — the entrypoint
+        # runs migrations immediately and would fail against a half-started database.
+        condition: service_healthy
+
+    # Secrets and settings come from .env at runtime — never from the image.
+    # Copy .env.production.example to .env and fill it in before the first start.
+    env_file:
+      - .env
+
+    environment:
+      # Composed here rather than in .env so the credentials can never drift out of sync
+      # with the db service above. "db" is the service name, resolved by Docker's
+      # internal DNS; 5432 is container-internal and not published to the host.
+      DATABASE_URL: "postgresql://osta:${POSTGRES_PASSWORD}@db:5432/ostastay?schema=public"
+
+    ports:
+      # Bound to all interfaces because this instance is reached directly over HTTP.
+      # The TLS overlay changes this to 127.0.0.1 so only the reverse proxy can reach it.
+      - "3000:3000"
+
+    volumes:
+      # eRegistration ID photos (passport/ID scans) are written to local disk, not to the
+      # database — so they need their own volume and their own backup.
+      - osta-uploads:/app/storage
+
+    healthcheck:
+      # Node 22 has global fetch, so this needs no extra package in the image. Hits the
+      # login page: cheap, unauthenticated, and it exercises the full render path rather
+      # than just proving the port is open.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      # Without this, container logs grow without bound and eventually fill the VPS disk.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  osta-db:
+  osta-uploads:

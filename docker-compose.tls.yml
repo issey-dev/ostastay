@@ -1,0 +1,45 @@
+# OPTIONAL HTTPS overlay — not used by default.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Adds Caddy in front of the app. Caddy obtains and renews a Let's Encrypt certificate
+# automatically; there is no certbot step and no cron renewal to forget.
+#
+# Before enabling:
+#   1. Point a DNS A record at this host (or use the OVH hostname, which already resolves).
+#   2. Set DOMAIN in .env, e.g.  DOMAIN=vps-9d96501a.vps.ovh.ca
+#   3. Change APP_URL in .env to https://<that domain>  — otherwise the eRegistration
+#      links emailed to guests keep pointing at the old plain-HTTP address.
+#   4. Open ports 80 and 443 in the firewall; 80 is required for the ACME challenge.
+
+services:
+  app:
+    ports:
+      # Stop publishing the app directly: with a proxy in front, port 3000 should only
+      # be reachable from inside the Docker network, not from the public internet.
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ostastay-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN:?set DOMAIN in .env before using the TLS overlay}"
+    # Two lines of Caddyfile, written inline so there is no extra file to keep in sync.
+    # max_size guards the eRegistration photo endpoint (10MB cap in the app itself).
+    command: |
+      sh -c 'printf "%s {\n\treverse_proxy app:3000\n\trequest_body {\n\t\tmax_size 12MB\n\t}\n}\n" "$$DOMAIN" > /etc/caddy/Caddyfile && exec caddy run --config /etc/caddy/Caddyfile'
+    volumes:
+      # Certificates and ACME account keys. Persisting these across restarts is what
+      # keeps Let's Encrypt's rate limits from being hit on every redeploy.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
