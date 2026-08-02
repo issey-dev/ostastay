@@ -81,14 +81,28 @@ vps-9d96501a.vps.ovh.ca {
 		}
 	}
 
-	# `app` is the compose service name, not a container name — Docker's DNS returns
-	# every replica's address, so this load-balances automatically across however many
-	# are running. Sessions are stateless JWTs, so no sticky sessions are needed.
-	reverse_proxy app:3000 {
+	reverse_proxy {
+		# `dynamic a` rather than a plain `reverse_proxy app:3000`, which resolves the
+		# name once and pins every request to a single container. Verified on this host:
+		# with three replicas running, a lookup of `app` returned only 172.19.0.3, so a
+		# static upstream would have sent all traffic to replica 1 while replicas 2 and 3
+		# sat idle — scaling that silently does nothing is worse than not scaling.
+		#
+		# This re-resolves on a timer and load-balances across EVERY address returned,
+		# so `docker compose up -d --scale app=N` is picked up without touching config.
+		# Sessions are stateless JWTs, so no sticky sessions are needed.
+		dynamic a {
+			name app
+			port 3000
+			refresh 5s
+		}
 		lb_policy least_conn
-		health_uri /login
-		health_interval 15s
-		health_timeout 5s
+
+		# Passive health checking: pull an upstream out of rotation for 30s once it has
+		# failed 3 times. Active checks are not used with dynamic upstreams — DNS
+		# already stops advertising a container that compose has removed.
+		fail_duration 30s
+		max_fails 3
 	}
 }
 
