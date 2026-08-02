@@ -22,7 +22,9 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 // in the same browser session as the most recent Generate/Regenerate: the server never
 // stores the plaintext token (only its hash), so once this component unmounts or a page
 // reload happens, the only way to get a sendable link again is to regenerate.
-export function ERegistrationPanel({ reservationId }: { reservationId: string }) {
+// embedded: rendered inside a host that already provides its own chrome/title (e.g. the
+// Front Office row dialog) — skips the Card wrapper and header.
+export function ERegistrationPanel({ reservationId, embedded = false }: { reservationId: string; embedded?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [link, setLink] = useState<LinkStatus>(null)
   const [slots, setSlots] = useState<Slot[]>([])
@@ -96,13 +98,8 @@ export function ERegistrationPanel({ reservationId }: { reservationId: string })
 
   const activeAndUsable = link?.status === "ACTIVE" && sessionToken
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Send className="h-4 w-4" /> eRegistration</CardTitle>
-        <CardDescription>A shareable link for the guest to fill in their own registration details.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+  const body = (
+    <>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
@@ -164,7 +161,18 @@ export function ERegistrationPanel({ reservationId }: { reservationId: string })
             )}
           </>
         )}
-      </CardContent>
+    </>
+  )
+
+  if (embedded) return <div className="space-y-3">{body}</div>
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Send className="h-4 w-4" /> eRegistration</CardTitle>
+        <CardDescription>A shareable link for the guest to fill in their own registration details.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">{body}</CardContent>
     </Card>
   )
 }

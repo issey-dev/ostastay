@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { format } from "date-fns"
-import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal } from "@/components/icons"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
+import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 
 // ── Shared row helpers ───────────────────────────────────────────────────────
 const guestDisplayName = (g: any) =>
@@ -90,6 +91,7 @@ export default function FrontOfficeDashboard() {
   const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
   const [checkInRes, setCheckInRes] = useState<any>(null)
   const [noShowRes, setNoShowRes] = useState<any>(null)
+  const [eRegRes, setERegRes] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
   
   // Folio Modal State
@@ -483,6 +485,9 @@ export default function FrontOfficeDashboard() {
                               <Button size="sm" variant="outline" className="h-8" onClick={() => openRegCard(res.id)} title="Print registration card">
                                 <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg Card
                               </Button>
+                              <Button size="sm" variant="outline" className="h-8" onClick={() => setERegRes(res)} title="Send the guest a link to fill in their own registration details">
+                                <Send className="h-3.5 w-3.5 mr-1.5" /> eReg
+                              </Button>
                               {canCheckIn(res.status, res.checkInDate, bd) && (
                                 <Button size="sm" variant="outline" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
                                   <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
@@ -721,6 +726,19 @@ export default function FrontOfficeDashboard() {
               Mark No-Show
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* eRegistration — the same panel as the reservation detail page, in a dialog */}
+      <Dialog open={!!eRegRes} onOpenChange={(open) => !open && setERegRes(null)}>
+        <DialogContent className="max-w-xl sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4" /> eRegistration — {guestDisplayName(eRegRes?.primaryGuest)} ({eRegRes?.confirmationNo})
+            </DialogTitle>
+            <DialogDescription>A shareable link for the guest to fill in their own registration details.</DialogDescription>
+          </DialogHeader>
+          {eRegRes && <ERegistrationPanel reservationId={eRegRes.id} embedded />}
         </DialogContent>
       </Dialog>
 
