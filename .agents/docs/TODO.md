@@ -1137,6 +1137,30 @@ create the enterprise, its properties, and the INITIAL USER ONLY from the platfo
 - Tests `tests/business-rules/osta-onboarding.test.ts`; live-verified end to end on dev,
   including a real `/api/auth/login` with the generated handover credentials.
 
+## Temporary handover password, enforced (2026-08-03) — DONE (branch `feature/temp-password`)
+
+App-owner requirement following the initial-user feature: the generated handover
+password must be TEMPORARY — the client has to set their own at first login.
+
+- **`User.mustChangePassword`** (default false; migration
+  `20260803120000_must_change_password`), set by the initial-user endpoint.
+- **Enforced at the door, not in the UI**: `/api/auth/login` refuses to mint a session
+  while the flag is set (returns `{ mustChangePassword: true }`, no cookie, after the
+  password + license checks) — so the temp credential cannot operate the app OR the API;
+  it can only replace itself.
+- **New `/api/auth/change-password`** (not a session route — by design no session exists
+  yet): same per-email throttle AND THE SAME COUNTER as login, so it is not a cheaper
+  brute-force surface; generic login error for every failure mode including "account not
+  in the temporary state" (the endpoint serves the handover flow only, not general
+  password change); new password min 12 chars (matches bootstrap-admin), must differ
+  from the temp one. Deliberately does NOT mint a session — the client signs in again
+  through the normal login route so the license gate and logging apply in one place.
+- Login form gains the "Set your password" step (new + confirm), then auto-signs-in with
+  the new password.
+- Tests `tests/business-rules/temp-password.test.ts` — flag set on creation; temp login
+  yields no cookie; wrong/short/reused rejections; happy path kills the temp password;
+  non-flagged accounts get the generic error.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

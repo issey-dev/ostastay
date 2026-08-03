@@ -25,6 +25,19 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  // Set once login answers mustChangePassword: the account holds a TEMPORARY password
+  // and no session exists yet — the form switches to "set your own password" mode.
+  const [mustChange, setMustChange] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  const routeAfterLogin = (data: { isInternal?: boolean; enterpriseSlug?: string; licenseWarning?: string | null }) => {
+    // Grace-period licensing warning — the account signs in, but payment is
+    // overdue and access has a hard end date (see /api/auth/login).
+    if (data.licenseWarning) toast.error(data.licenseWarning)
+    router.push(data.isInternal ? "/osta" : `/e/${data.enterpriseSlug}/dashboard`)
+    router.refresh()
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,14 +54,61 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
       const data = await res.json()
 
       if (res.ok) {
-        // Grace-period licensing warning — the account signs in, but payment is
-        // overdue and access has a hard end date (see /api/auth/login).
-        if (data.licenseWarning) toast.error(data.licenseWarning)
-        router.push(data.isInternal ? "/osta" : `/e/${data.enterpriseSlug}/dashboard`)
-        router.refresh()
+        if (data.mustChangePassword) {
+          setMustChange(true)
+          return
+        }
+        routeAfterLogin(data)
       } else {
         setError(data.error || "Login failed")
       }
+    } catch {
+      setError("An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    if (newPassword !== confirmPassword) {
+      setError("The passwords do not match")
+      return
+    }
+    setIsLoading(true)
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          enterpriseSlug: enterpriseSlug ?? code,
+          currentPassword: password,
+          newPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Could not set the password")
+        return
+      }
+      // The temp password is gone; sign in properly with the new one so every gate on
+      // the login route (license, logging) applies in its one place.
+      const login = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: newPassword, enterpriseSlug: enterpriseSlug ?? code }),
+      })
+      const loginData = await login.json()
+      if (!login.ok) {
+        setError(loginData.error || "Password set — sign in with your new password")
+        setMustChange(false)
+        setPassword("")
+        return
+      }
+      toast.success("Your password is set")
+      routeAfterLogin(loginData)
     } catch {
       setError("An unexpected error occurred")
     } finally {
@@ -74,6 +134,59 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
           <p className="text-muted-foreground mt-2">Sign in to your property management system</p>
         </div>
 
+        {mustChange ? (
+          <Card className="border-0 shadow-xl ring-1 ring-border">
+            <CardHeader className="pb-4">
+              <CardTitle>Set your password</CardTitle>
+              <CardDescription>
+                You signed in with a temporary password. Choose your own (at least 12 characters) to continue —
+                the temporary one stops working immediately.
+              </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleChangePassword}>
+              <CardContent className="space-y-4">
+                {error && (
+                  <div className="p-3 bg-destructive-muted text-destructive text-sm rounded-md border border-destructive/30 font-medium">
+                    {error}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm new password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </CardContent>
+              <CardFooter className="flex-col gap-4">
+                <Button type="submit" className="w-full h-11" disabled={isLoading}>
+                  {isLoading ? "Saving..." : (
+                    <>
+                      <KeyRound className="mr-2 w-4 h-4" /> Set password and continue
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        ) : (
         <Card className="border-0 shadow-xl ring-1 ring-border">
           <CardHeader className="pb-4">
             <CardTitle>Welcome back</CardTitle>
@@ -162,6 +275,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
             </CardFooter>
           </form>
         </Card>
+        )}
       </div>
     </div>
   )
