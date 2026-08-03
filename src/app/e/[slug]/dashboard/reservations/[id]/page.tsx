@@ -26,7 +26,14 @@ import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { useProperty } from "@/components/providers/property-provider"
-import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
+import {
+  deriveReservationState,
+  reservationStateLabel,
+  canCheckIn,
+  canReinstate,
+  canReverseCheckOut,
+  canEditReservation,
+} from "@/lib/reservation-state"
 
 // Property business date (UTC midnight ms) vs a reservation date, both date-only.
 const dayMs = (d?: string | null) => (d ? Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), new Date(d).getUTCDate()) : NaN)
@@ -270,6 +277,36 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     }
   }
 
+  // Reinstate a cancelled booking / late-arriving no-show back to Reserved. The server
+  // re-checks availability (the rooms may have been resold), so failures are real and
+  // must be shown rather than swallowed.
+  const handleReinstate = async () => {
+    if (!(await confirm({
+      title: reservation.status === "NO_SHOW" ? "Reinstate this no-show?" : "Reinstate this reservation?",
+      description: "The booking goes back to Reserved and its folios reopen. The rooms must still be available for the stay dates.",
+      confirmLabel: "Reinstate",
+    }))) return
+    setReversing(true)
+    try {
+      const res = await fetch(`/api/reservations/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESERVED" }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setNotification({ title: "Reservation Reinstated", message: "The booking is back to Reserved." })
+        fetchReservation()
+      } else {
+        setNotification({ title: "Reinstate Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred reinstating the reservation.", isError: true })
+    } finally {
+      setReversing(false)
+    }
+  }
+
   const handleReverseCheckOut = async () => {
     const reason = window.prompt("Reverse this check-out and return the guest to In-House?\n\nOptional reason (recorded on the reservation):", "")
     if (reason === null) return
@@ -390,11 +427,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">{guestName}</h1>
-              <StatusBadge
-                label={reservationStateLabel(derivedState)}
-                status={derivedState}
-                className={reservation.status === "CANCELLED" ? "line-through opacity-70" : ""}
-              />
+              <StatusBadge label={reservationStateLabel(derivedState)} status={derivedState} />
             </div>
             <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
               {reservation.confirmationNo}
@@ -467,7 +500,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </>
             )
           })()}
-          {reservation.status === "CHECKED_OUT" && (
+          {/* Reverse check-out is a same-day correction only — after the departure day
+              closes, a departed stay is view + folio-reprint only. */}
+          {canReverseCheckOut(reservation.status, reservation.checkOutDate, currentProperty?.businessDate, reservation.checkedOutAt) && (
             <Button
               variant="outline"
               className="text-warning border-warning/40 hover:bg-warning-muted hover:text-warning"
@@ -475,6 +510,12 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               disabled={reversing}
             >
               <RotateCcw className="w-4 h-4 mr-2" /> {reversing ? "Reversing..." : "Reverse Check-out"}
+            </Button>
+          )}
+          {/* Cancelled / no-show can come back while the stay dates still allow it. */}
+          {canReinstate(reservation.status, reservation.checkInDate, reservation.checkOutDate, currentProperty?.businessDate) && (
+            <Button variant="outline" onClick={handleReinstate} disabled={reversing}>
+              <RotateCcw className="w-4 h-4 mr-2" /> {reversing ? "Reinstating..." : "Reinstate"}
             </Button>
           )}
           {(reservation.status === "RESERVED" || reservation.status === "IN_HOUSE") && (
@@ -493,11 +534,14 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </Button>
             </>
           )}
-          <Link href={`/e/${slug}/dashboard/reservations/${id}/edit`}>
-            <Button variant="outline">
-              <Pencil className="w-4 h-4 mr-2" /> Edit
-            </Button>
-          </Link>
+          {/* A departed stay is settled — it's viewable, never editable. */}
+          {canEditReservation(reservation.status) && (
+            <Link href={`/e/${slug}/dashboard/reservations/${id}/edit`}>
+              <Button variant="outline">
+                <Pencil className="w-4 h-4 mr-2" /> Edit
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 

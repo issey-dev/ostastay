@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -29,10 +29,20 @@ import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
 import { format } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
+import {
+  deriveReservationState,
+  reservationStateLabel,
+  canCheckIn,
+  canReinstate,
+  canReverseCheckOut,
+  canEditReservation,
+  isClosedReservation,
+  reservationRowToneClass,
+} from "@/lib/reservation-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 
 type Reservation = {
   id: string
@@ -42,6 +52,7 @@ type Reservation = {
   status: string
   checkInDate: string
   checkOutDate: string
+  checkedOutAt?: string | null
   adults: number
   children: number
   infants: number
@@ -395,6 +406,63 @@ export default function ReservationsDashboard() {
     }
   }
 
+  // Reinstate: CANCELLED / NO_SHOW → RESERVED. The server re-runs the availability
+  // guard (the rooms may have been resold in the meantime), so a clean-looking row can
+  // still come back with a conflict — surface it rather than swallowing it.
+  const handleReinstate = async (res: Reservation) => {
+    if (!(await confirm({
+      title: res.status === "NO_SHOW" ? "Reinstate this no-show?" : "Reinstate this reservation?",
+      description: "The booking goes back to Reserved and its folios reopen. The rooms must still be available for the stay dates.",
+      confirmLabel: "Reinstate",
+    }))) return
+    try {
+      const resp = await fetch(`/api/reservations/${res.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESERVED" }),
+      })
+      const data = await resp.json()
+      if (resp.ok) {
+        setNotification({ title: "Reservation Reinstated", message: `${res.confirmationNo} is back to Reserved.` })
+        fetchData()
+      } else {
+        setNotification({ title: "Reinstate Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred reinstating the reservation.", isError: true })
+    }
+  }
+
+  // Reverse check-out — same-day only (see canReverseCheckOut). Reopens the folios and
+  // puts the guest back In-House.
+  const handleReverseCheckOut = async (res: Reservation) => {
+    if (!(await confirm({
+      title: "Reverse this check-out?",
+      description: "The guest goes back to In-House, the folios reopen and the departure clean is cancelled.",
+      confirmLabel: "Reverse check-out",
+      destructive: true,
+    }))) return
+    try {
+      const resp = await fetch(`/api/reservations/${res.id}/reverse-check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const data = await resp.json()
+      if (resp.ok) {
+        const extra = data.debtorInvoicesReversed > 0
+          ? ` ${data.debtorInvoicesReversed} debtor invoice(s) un-finalized.`
+          : ""
+        setNotification({ title: "Check-out Reversed", message: `${res.confirmationNo} is back In-House.${extra}` })
+        fetchData()
+      } else {
+        setNotification({ title: "Reverse Failed", message: data.error || "Unknown error", isError: true })
+      }
+    } catch {
+      setNotification({ title: "Error", message: "An error occurred reversing the check-out.", isError: true })
+    }
+  }
+
   const openFolio = (res: Reservation) => {
     setFolioPanelResId(res.id)
     setIsFolioPanelOpen(true)
@@ -405,7 +473,61 @@ export default function ReservationsDashboard() {
   // Keeping this constant-width (regardless of status) is what stops the table
   // columns from jumping around row to row.
   const renderRowActions = (res: Reservation) => {
-    const hasFolio = res.status === "IN_HOUSE" || res.status === "CHECKED_OUT" || (res.folios?.length ?? 0) > 0
+    const businessDate = currentProperty?.businessDate
+
+    // Closed bookings (cancelled / no-show / checked out) are historical records, not
+    // operational ones — they get a short, explicit action list instead of the live
+    // cluster below. See isClosedReservation() in src/lib/reservation-state.ts for the
+    // rules and why each one exists.
+    if (isClosedReservation(res.status)) {
+      const reinstatable = canReinstate(res.status, res.checkInDate, res.checkOutDate, businessDate)
+      const reversible = canReverseCheckOut(res.status, res.checkOutDate, businessDate, res.checkedOutAt)
+      const departed = res.status === "CHECKED_OUT"
+      return (
+        <div className="flex items-center justify-end gap-1.5">
+          {/* One verb for the whole column — "bring this booking back" — even though the
+              mechanism differs by status (status transition vs. reverse check-out). */}
+          {reinstatable && (
+            <Button size="sm" className="h-8" variant="outline" title="Put this booking back to Reserved" onClick={() => handleReinstate(res)}>
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reinstate
+            </Button>
+          )}
+          {reversible && (
+            <Button size="sm" className="h-8" variant="outline" title="Reverse the check-out — the guest goes back In-House" onClick={() => handleReverseCheckOut(res)}>
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reinstate
+            </Button>
+          )}
+          {/* A departed stay keeps its folio for reprinting — read-only, nothing posts. */}
+          {departed && !reversible && (
+            <Button size="sm" className="h-8" variant="outline" onClick={() => openFolio(res)}>
+              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-48">
+              <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                <FileText className="h-4 w-4 mr-2" /> View details
+              </DropdownMenuItem>
+              {departed && reversible && (
+                <DropdownMenuItem className="cursor-pointer" onClick={() => openFolio(res)}>
+                  <ReceiptText className="h-4 w-4 mr-2" /> Folio
+                </DropdownMenuItem>
+              )}
+              {canEditReservation(res.status) && (
+                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}/edit`)}>
+                  <Pencil className="h-4 w-4 mr-2" /> Edit
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )
+    }
+
+    const hasFolio = res.status === "IN_HOUSE" || (res.folios?.length ?? 0) > 0
     const canRequest = res.status === "RESERVED" || res.status === "IN_HOUSE"
     const canLetter = res.status === "RESERVED" || res.status === "IN_HOUSE"
     return (
@@ -418,11 +540,6 @@ export default function ReservationsDashboard() {
         {res.status === "IN_HOUSE" && (
           <Button size="sm" className="h-8" variant="outline" onClick={() => handleCheckOut(res)}>
             <LogOut className="h-3.5 w-3.5 mr-1.5" /> Check Out
-          </Button>
-        )}
-        {res.status === "CHECKED_OUT" && (
-          <Button size="sm" className="h-8" variant="outline" onClick={() => openFolio(res)}>
-            <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
           </Button>
         )}
         <DropdownMenu>
@@ -442,7 +559,7 @@ export default function ReservationsDashboard() {
                 <Wallet className="h-4 w-4 mr-2" /> Collect deposit
               </DropdownMenuItem>
             )}
-            {hasFolio && res.status !== "CHECKED_OUT" && (
+            {hasFolio && (
               <DropdownMenuItem className="cursor-pointer" onClick={() => openFolio(res)}>
                 <ReceiptText className="h-4 w-4 mr-2" /> Folio
               </DropdownMenuItem>
@@ -657,11 +774,16 @@ export default function ReservationsDashboard() {
                   <div
                     key={res.id}
                     onClick={() => router.push(viewUrl(res.id))}
-                    className="bg-card border border-border rounded-lg p-4 shadow-elevation-1 cursor-pointer active:bg-muted/50"
+                    className={cn(
+                      "bg-card border border-border rounded-lg p-4 shadow-elevation-1 cursor-pointer active:bg-muted/50",
+                      // Closed bookings read as a tint, not a strikethrough — see
+                      // reservationRowToneClass().
+                      reservationRowToneClass(res.status)
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className={`font-medium text-foreground inline-flex items-center gap-1.5 ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}>
+                        <div className="font-medium text-foreground inline-flex items-center gap-1.5">
                           <span className="truncate">{guestName}</span>
                           {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                         </div>
@@ -673,7 +795,7 @@ export default function ReservationsDashboard() {
                       <StatusBadge
                         label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
                         status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
-                        className={`shrink-0 ${res.status === 'CANCELLED' ? 'line-through opacity-70' : ''}`}
+                        className="shrink-0"
                       />
                     </div>
                     <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border">
@@ -731,17 +853,18 @@ export default function ReservationsDashboard() {
                     const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
                     const first = res.assignments?.[0]
                     const extraRooms = (res.assignments?.length ?? 0) > 1 ? (res.assignments!.length - 1) : 0
-                    const cancelled = res.status === 'CANCELLED'
 
                     return (
                       <TableRow
                         key={res.id}
                         onClick={() => router.push(viewUrl(res.id))}
-                        className="cursor-pointer"
+                        // Cancelled / no-show / departed rows carry a subtle tint instead
+                        // of a strikethrough — the text stays fully legible.
+                        className={cn("cursor-pointer", reservationRowToneClass(res.status))}
                       >
                         {/* Guest + conf# */}
                         <TableCell className="align-middle">
-                          <div className={`font-medium flex items-center gap-1.5 ${cancelled ? 'line-through opacity-70' : ''}`}>
+                          <div className="font-medium flex items-center gap-1.5">
                             <span className="truncate">{guestName}</span>
                             {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </div>
@@ -786,7 +909,6 @@ export default function ReservationsDashboard() {
                           <StatusBadge
                             label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
                             status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
-                            className={cancelled ? 'line-through opacity-70' : ''}
                           />
                         </TableCell>
 
