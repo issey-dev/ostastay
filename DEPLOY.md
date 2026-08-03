@@ -189,6 +189,26 @@ gunzip -c ~/backups/osta-2026-08-02.sql.gz | docker compose exec -T db psql -U o
 
 ## Updating to a new version
 
+**Normally you never do this by hand** — every push to `master` deploys itself via
+GitHub Actions (`.github/workflows/deploy.yml`): the full test suite runs against a real
+PostgreSQL first, and only a green suite reaches the server, which then does exactly the
+manual procedure below. The team workflow is: develop on a feature branch, push/merge to
+`master` when it is ready for production.
+
+One-time setup for the pipeline:
+
+1. GitHub → the repo's **Settings → Secrets and variables → Actions → New repository
+   secret**, named `VPS_SSH_KEY`, containing the PRIVATE deploy key whose public half is
+   in `ubuntu@vps`'s `~/.ssh/authorized_keys` (the `id_ed25519_ostastay_deploy` key).
+   Never commit this key; until the secret exists the deploy job fails with an auth
+   error and the server is simply not touched.
+2. Nothing on the server: the pipeline runs the same `git pull` + `docker compose build`
+   + `up -d` a human would, and refuses (`--ff-only`) if the server's checkout has
+   diverged from GitHub — if that happens, someone edited files on the server; resolve
+   it there, deliberately.
+
+The manual fallback (works whether or not the pipeline exists):
+
 ```bash
 cd ~/ostastay
 git pull

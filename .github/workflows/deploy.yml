@@ -1,0 +1,119 @@
+# Deploys every push to master to the production VPS — the pipeline behind the team's
+# branch workflow: develop on a feature branch, merge/push to master when ready for
+# production, and the server updates itself.
+#
+# Two stages, deliberately:
+#   1. test  — the full vitest suite against a real PostgreSQL 17, exactly like local
+#              dev. A push that fails the suite NEVER reaches the server.
+#   2. deploy — SSH to the VPS and run the same update procedure DEPLOY.md documents for
+#              a human: git pull, rebuild the app image, restart. Building ON the server
+#              keeps the existing deployment model (no registry, no image auth); the old
+#              container keeps serving until the new image is built, and migrations +
+#              the platform-enterprise ensure run on boot via docker-entrypoint.sh.
+#
+# One secret is required (GitHub → Settings → Secrets and variables → Actions):
+#   VPS_SSH_KEY — the PRIVATE key whose public half is in ubuntu@vps's authorized_keys
+#                 (the ostastay deploy key). Until it is set, the deploy job fails with
+#                 an auth error and the server is simply not touched.
+name: Deploy to production
+
+on:
+  push:
+    branches: [master]
+
+# Never run two deploys at once; a push during a deploy queues rather than cancels, so
+# the newest master always lands last.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  VPS_HOST: vps-9d96501a.vps.ovh.ca
+  VPS_USER: ubuntu
+  APP_DIR: /home/ubuntu/ostastay
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: osta
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: ostastay_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U osta"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Same URL shape as docker-compose.dev.yml, so vitest.global-setup.ts's default
+      # works unchanged.
+      TEST_DATABASE_URL: postgresql://osta:devpass@localhost:55432/ostastay_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Trust-on-first-use per run. To pin instead, replace with a KNOWN_HOSTS secret.
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Pull, rebuild, restart
+        run: |
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/ostastay
+
+          echo "→ Updating working tree to origin/master"
+          git fetch origin master
+          # ff-only: the server's checkout must never diverge from GitHub. If this
+          # fails, someone edited files on the server — resolve there, deliberately.
+          git checkout master
+          git merge --ff-only origin/master
+
+          echo "→ Building the new app image (old container keeps serving meanwhile)"
+          docker compose build app
+
+          echo "→ Restarting with the new image"
+          docker compose up -d app
+
+          echo "→ Pruning dangling images"
+          docker image prune -f >/dev/null
+
+          echo "→ Deployed $(git rev-parse --short HEAD)"
+          REMOTE
+
+      - name: Health check
+        run: |
+          echo "Waiting for the app to answer through the proxy..."
+          for i in $(seq 1 30); do
+            # /login is unauthenticated and served by the app itself (not a redirect),
+            # so a 200 here proves the new container is actually up behind Caddy.
+            status=$(curl -s -o /dev/null -w '%{http_code}' "https://$VPS_HOST/login" || true)
+            if [ "$status" = "200" ]; then
+              echo "Healthy (HTTP $status)"
+              exit 0
+            fi
+            echo "  attempt $i: HTTP $status — retrying in 5s"
+            sleep 5
+          done
+          echo "App did not come up healthy after the deploy" >&2
+          exit 1

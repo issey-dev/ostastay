@@ -1161,6 +1161,26 @@ password must be TEMPORARY — the client has to set their own at first login.
   yields no cookie; wrong/short/reused rejections; happy path kills the temp password;
   non-flagged accounts get the generic error.
 
+## GitHub → VPS deployment pipeline (2026-08-03) — DONE (branch `feature/deploy-pipeline`)
+
+App-owner workflow decision: develop on feature branches; a push to `master` IS the
+production deploy. `.github/workflows/deploy.yml`:
+
+- **test job first**: `npm ci` + `prisma generate` + `tsc --noEmit` + the FULL vitest
+  suite against a real PostgreSQL 17 service container (same URL shape as
+  docker-compose.dev.yml, so vitest.global-setup.ts works unchanged). A red suite never
+  reaches the server.
+- **deploy job**: SSH as `ubuntu@vps-9d96501a.vps.ovh.ca`, then exactly the manual
+  DEPLOY.md procedure — `git merge --ff-only origin/master` (refuses if the server's
+  checkout diverged; that means someone edited files on the server), `docker compose
+  build app` (old container serves meanwhile), `up -d`, image prune, then a health check
+  polling `https://<host>/login` for a real 200 through the proxy.
+- Concurrency group `production-deploy`, `cancel-in-progress: false` — deploys queue,
+  newest master lands last.
+- **Requires one GitHub Actions secret: `VPS_SSH_KEY`** (the private ostastay deploy
+  key). Until set, the deploy job fails on auth and the server is untouched. Deliberately
+  no registry — the image builds on the server, keeping the existing deployment model.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
