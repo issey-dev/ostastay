@@ -34,11 +34,15 @@ export async function POST(request: Request) {
     if (!folio) return NextResponse.json({ error: "Folio not found" }, { status: 404 })
     await assertPropertyAccess(ctx, folio.propertyId)
     if (folio.isClosed) return NextResponse.json({ error: "Cannot post charges to a closed folio" }, { status: 400 })
-    // Reservation folios accept charges only once the guest is checked in (a
-    // deliberate pre-arrival fee opts in with preArrivalFee:true); walk-in outlet
-    // folios (no reservation) are always billable.
-    if (folio.reservation && folio.reservation.status !== "IN_HOUSE" && body.preArrivalFee !== true) {
-      return NextResponse.json({ error: "Charges can only be posted after check-in. (For a cancellation/no-show fee, use the pre-arrival fee action.)" }, { status: 400 })
+    // Reservation folios accept NOTHING before the guest is checked in — no outlet
+    // charge, and no pre-arrival fee either (owner rule, 2026-08-03). Money taken
+    // before arrival is a DEPOSIT: it goes through the Deposit action, which records a
+    // payment against the reservation rather than opening the billing window early.
+    // The `preArrivalFee` opt-out this route used to honour is gone; the folio
+    // line-item route never honoured it, so the two are now consistent.
+    // Walk-in outlet folios (no reservation) are always billable.
+    if (folio.reservation && folio.reservation.status !== "IN_HOUSE") {
+      return NextResponse.json({ error: "Charges can only be posted after the guest is checked in. Take money before arrival as a deposit instead." }, { status: 400 })
     }
 
     const chargeCode = await prisma.chargeCode.findUnique({

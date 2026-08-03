@@ -89,10 +89,14 @@ export function buildFolioRows(lines: PresentableLine[], style: FolioStyle): Pre
       return foldGeneratedIntoParent(live);
 
     case "by-code":
-      // Group on the charge code, dropping the date — a summary folio is about "what was
-      // bought", not when. Generated tax is folded into its parent first so a group's tax
-      // sits with the revenue that earned it rather than in a separate GST row.
-      return group(foldGeneratedIntoParent(live), (r) => r.description, {
+      // Group on the charge code WITHIN a day. The day is part of the key on purpose: a
+      // folio line carries one date, so a row that merged Monday's and Wednesday's
+      // restaurant charges would print a single date next to a figure that isn't that
+      // day's — the guest cannot reconcile it against their stay (owner rule,
+      // 2026-08-03). Grouping compresses repetition inside a day, never across days.
+      // Generated tax is folded into its parent first so a group's tax sits with the
+      // revenue that earned it rather than in a separate GST row.
+      return group(foldGeneratedIntoParent(live), (r) => `${dayKey(r.date)}|${r.description}`, {
         date: (rows) => rows[0].date,
         reference: () => null,
       });
@@ -107,9 +111,12 @@ export function buildFolioRows(lines: PresentableLine[], style: FolioStyle): Pre
     case "by-check": {
       const folded = foldGeneratedIntoParent(live);
       // A line's check number when it has one, else its own description — so outlet sales
-      // roll to their check and room/front-desk charges still summarise sensibly.
+      // roll to their check and room/front-desk charges still summarise sensibly. The
+      // fallback is day-scoped for the same reason as by-code; a real check number is
+      // already single-day, so keying on it alone would be safe, but scoping both keeps
+      // the "a row is one day" invariant true by construction rather than by luck.
       const checkOf = new Map(live.map((l) => [l.id, l.outletCheck?.checkNumber ?? null]));
-      return group(folded, (r) => checkOf.get(r.key) ?? `code:${r.description}`, {
+      return group(folded, (r) => `${dayKey(r.date)}|${checkOf.get(r.key) ?? `code:${r.description}`}`, {
         date: (rows) => rows[0].date,
         description: (rows) => {
           const check = checkOf.get(rows[0].key);

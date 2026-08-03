@@ -192,13 +192,12 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     if (!activeFolioId) return
 
     try {
-      // Before check-in, a folio charge is only permitted as a deliberate
-      // pre-arrival (cancellation/no-show) fee.
-      const preArrivalFee = !!(activeFolio?.reservation && activeFolio.reservation.status !== "IN_HOUSE")
+      // Nothing posts to a reservation folio before check-in — the form is disabled
+      // above, and the API refuses it regardless. Pre-arrival money is a deposit.
       const res = await fetch(`/api/folios/${activeFolioId}/line-items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...chargeForm, preArrivalFee })
+        body: JSON.stringify(chargeForm)
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
@@ -443,6 +442,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
   const balance = (totalBaseCharges + totalServiceCharges + totalTaxes) - totalPayments
 
+  // A reservation folio that hasn't opened yet: the guest hasn't arrived, so nothing can
+  // be posted and no fiscal document exists to raise. A walk-in/outlet folio (no
+  // reservation) is never pre-arrival. Owner rule, 2026-08-03.
+  const preArrival = !!activeFolio?.reservation && activeFolio.reservation.status !== "IN_HOUSE"
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto">
@@ -540,31 +544,41 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         <p className={`text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPrintDocType("tax")}
-                          className="h-9 shadow-sm border-border ml-2"
-                        >
-                          <Printer className="w-4 h-4 mr-2" /> Tax Invoice
-                        </Button>
+                        {/* Before arrival the only document that exists is a quote. A tax
+                            invoice and an interim bill both report POSTED charges, and
+                            nothing can be posted yet — a tax invoice would also burn a
+                            fiscal sequence number against a stay that may never happen.
+                            So pre-arrival offers Proforma only. */}
+                        {!preArrival && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPrintDocType("tax")}
+                            className="h-9 shadow-sm border-border ml-2"
+                          >
+                            <Printer className="w-4 h-4 mr-2" /> Tax Invoice
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setPrintDocType("proforma")}
                           className="h-9 shadow-sm border-border ml-2"
+                          title={preArrival ? "Quoted charges for the stay — not a tax invoice" : undefined}
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPrintDocType("interim")}
-                          className="h-9 shadow-sm border-border ml-2"
-                          title="Information statement of charges posted so far — not a tax invoice"
-                        >
-                          <Printer className="w-4 h-4 mr-2" /> Interim Bill
-                        </Button>
+                        {!preArrival && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPrintDocType("interim")}
+                            className="h-9 shadow-sm border-border ml-2"
+                            title="Information statement of charges posted so far — not a tax invoice"
+                          >
+                            <Printer className="w-4 h-4 mr-2" /> Interim Bill
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -716,11 +730,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     </TabsList>
                     
                     <TabsContent value="charge" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
-                      {activeFolio.reservation && activeFolio.reservation.status !== "IN_HOUSE" && (
+                      {preArrival && (
                         <div className="mb-4 text-xs rounded-md bg-warning-muted text-warning border border-warning/20 p-2.5">
-                          Guest not checked in — post a cancellation/no-show fee only. Deposits go through Post Payment.
+                          Guest not checked in — nothing can be posted to this folio yet, including
+                          cancellation and no-show fees. Money taken before arrival is a <strong>deposit</strong>;
+                          it is recorded against the reservation and appears here once the guest checks in.
                         </div>
                       )}
+                      <fieldset disabled={preArrival} className="contents">
                       <form onSubmit={handlePostCharge} className="grid gap-5">
                         <div className="space-y-2">
                           <Label>Charge Code <span className="text-destructive">*</span></Label>
@@ -759,10 +776,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <Label>Reference</Label>
                           <Input placeholder="Prints on the invoice (optional)" value={chargeForm.reference} onChange={e => setChargeForm(p => ({...p, reference: e.target.value}))} />
                         </div>
-                        <Button type="submit" className="w-full mt-2" disabled={loading}>
-                          {activeFolio.reservation && activeFolio.reservation.status !== "IN_HOUSE" ? "Post Pre-arrival Fee" : `Post Charge to Folio ${activeFolio.folioNumber}`}
+                        <Button type="submit" className="w-full mt-2" disabled={loading || preArrival}>
+                          {preArrival ? "Posting unavailable before check-in" : `Post Charge to Folio ${activeFolio.folioNumber}`}
                         </Button>
                       </form>
+                      </fieldset>
                     </TabsContent>
 
                     <TabsContent value="payment" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">

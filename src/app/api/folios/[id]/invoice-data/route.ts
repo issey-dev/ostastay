@@ -76,6 +76,27 @@ export async function GET(
     }
     await assertPropertyAccess(ctx, folio.propertyId);
 
+    // Before the guest checks in, the only document that exists is a quote. A tax invoice
+    // and an interim bill both report POSTED charges, and nothing can be posted to a
+    // reservation folio pre-arrival (owner rule, 2026-08-03) — so both would render an
+    // empty document, and the tax invoice would additionally burn a fiscal sequence
+    // number against a stay that may never happen. Checked here, not just in the panel,
+    // because the print page is a plain URL anyone could hit directly.
+    if (
+      documentType !== "proforma" &&
+      folio.reservation &&
+      folio.reservation.status !== "IN_HOUSE" &&
+      folio.reservation.status !== "CHECKED_OUT"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "A tax invoice or interim bill can only be raised once the guest has checked in. Use the Proforma Invoice for a pre-arrival quote.",
+        },
+        { status: 400 }
+      );
+    }
+
     // Assign a document number the first time this document type is generated for this
     // folio, via the property's Sequence Manager counter — reprints reuse the stored
     // number instead of allocating a new one. The Interim bill is informational and never

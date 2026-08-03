@@ -40,7 +40,10 @@ export function PrintDocumentShell({
         </div>
       </div>
 
-      <div className="max-w-[800px] mx-auto print:border-0 border p-8 sm:p-12 rounded-xl shadow-sm bg-white">
+      {/* The page's own margin moves INSIDE the document (print:px/py below) because
+          @page margin is zero — see the print CSS. On screen the padding is the same, so
+          preview and printout match. */}
+      <div className="max-w-[800px] mx-auto print:border-0 border p-8 sm:p-12 rounded-xl shadow-sm bg-white print:max-w-none print:rounded-none print:shadow-none print:px-[14mm] print:py-[12mm]">
         {children}
       </div>
 
@@ -70,10 +73,27 @@ export function PrintDocumentShell({
           ::-webkit-scrollbar {
             display: none !important;
           }
+          /* A4 with a ZERO page margin. The browser only draws its own header and
+             footer — the source URL, the date, the document title, "1/2" — into the
+             @page margin box, so a non-zero margin here is what was printing that
+             chrome onto every stationery. With margin:0 there is no margin box to
+             draw into and the artifacts disappear without the user having to
+             untick "Headers and footers" in the print dialog.
+
+             The document's own breathing room is restored as padding INSIDE the
+             page (print:px-[14mm] / print:py-[12mm] on the container above), which
+             the browser cannot write into. */
           @page {
-            size: auto;
-            margin: 15mm;
+            size: A4;
+            margin: 0;
           }
+          /* Keep a table row, a totals block or a section heading from being split
+             across a page break — the usual cause of a one-page document spilling a
+             few orphaned lines onto a second sheet. */
+          table { break-inside: auto; }
+          tr, img { break-inside: avoid; }
+          thead { display: table-header-group; }
+          h1, h2, h3 { break-after: avoid; }
         }
       `}} />
     </div>

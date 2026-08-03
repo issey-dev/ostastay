@@ -88,13 +88,32 @@ describe("compact", () => {
 });
 
 describe("by-code", () => {
-  it("rolls the whole stay onto one line per charge", () => {
+  // Changed 2026-08-03 (owner): grouping compresses repetition WITHIN a day and never
+  // across days. A row carries one date, so a line merging two nights would print one
+  // date beside a figure that isn't that day's — unreconcilable against the stay.
+  it("groups per charge within a day, keeping each night on its own line", () => {
     const rows = buildFolioRows(FOLIO, "by-code");
-    const room = rows.find((r) => r.description === "Nightly Room Charge")!;
-    expect(room.count).toBe(2);
-    // Both nights with their service charge and GST, plus the one night's Green Tax.
-    expect(room.total).toBeCloseTo(212, 2);
+    const roomRows = rows.filter((r) => r.description === "Nightly Room Charge");
+    expect(roomRows).toHaveLength(2);
+    expect(roomRows.every((r) => r.count === 1)).toBe(true);
+    // 1 Jul carries the Green Tax as well, so the two nights differ.
+    expect(roomRows[0].total).toBeCloseTo(112, 2);
+    expect(roomRows[1].total).toBeCloseTo(100, 2);
+    // Same grand total as every other style — grouping never changes what is owed.
+    expect(rows.reduce((s, r) => s + r.total, 0)).toBeCloseTo(262, 2);
     expect(rows.find((r) => r.description === "Restaurant — Food")!.count).toBe(1);
+  });
+
+  it("still collapses repeats posted on the SAME day", () => {
+    const sameDay = [
+      line({ id: "a", date: D1, description: "Laundry", amount: 10 }),
+      line({ id: "b", date: D1, description: "Laundry", amount: 15 }),
+      line({ id: "c", date: D2, description: "Laundry", amount: 20 }),
+    ];
+    const rows = buildFolioRows(sameDay, "by-code");
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.count === 2)!.total).toBeCloseTo(25, 2);
+    expect(rows.find((r) => r.count === 1)!.total).toBeCloseTo(20, 2);
   });
 });
 
@@ -114,8 +133,29 @@ describe("by-check", () => {
     const check = rows.find((r) => r.reference === "REST-00012")!;
     expect(check.description).toBe("Outlet check REST-00012");
     expect(check.total).toBeCloseTo(50, 2);
-    // Room charges have no check, so they still summarise by their own description.
-    expect(rows.find((r) => r.description === "Nightly Room Charge")!.count).toBe(2);
+    // Room charges have no check, so they fall back to their own description — still
+    // scoped to a single day, so the two nights stay on separate lines.
+    const roomRows = rows.filter((r) => r.description === "Nightly Room Charge");
+    expect(roomRows).toHaveLength(2);
+    expect(roomRows.every((r) => r.count === 1)).toBe(true);
+  });
+});
+
+// The invariant that motivates the day-scoping, asserted directly against every style.
+describe("every style", () => {
+  it("never merges charges from different days onto one row", () => {
+    for (const style of FOLIO_STYLES) {
+      // Every row's total must fall entirely within its own day — so summing rows by
+      // their printed date reproduces the true day totals, style by style.
+      const rows = buildFolioRows(FOLIO, style);
+      const byDay = new Map<string, number>();
+      for (const r of rows) {
+        const k = new Date(r.date).toISOString().slice(0, 10);
+        byDay.set(k, (byDay.get(k) ?? 0) + r.total);
+      }
+      expect(byDay.get("2026-07-01")).toBeCloseTo(112, 2);
+      expect(byDay.get("2026-07-02")).toBeCloseTo(150, 2);
+    }
   });
 });
 
