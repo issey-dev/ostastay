@@ -11,6 +11,15 @@ import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print
 import { InvoiceDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, StationeryTotalLine, MetaItem } from "@/components/print/stationery/blocks"
 
+// A deposit is a payment with a purpose — name it on the document rather than printing
+// every pre-arrival collection as a bare "Payment".
+const DEPOSIT_PURPOSE_LABELS: Record<string, string> = {
+  DEPOSIT: "Deposit",
+  PRE_ARRIVAL_FEE: "Pre-arrival fee",
+  CANCELLATION_FEE: "Cancellation fee",
+  NO_SHOW_FEE: "No-show fee",
+}
+
 export default function PrintInvoicePage({ params }: { params: Promise<{ id: string; slug: string }> }) {
   const { id } = use(params)
   const searchParams = useSearchParams()
@@ -116,6 +125,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   // then the charge code, as before.
   const chargeRows: StationeryRow[] = buildFolioRows(folio.lineItems, folioStyle).map((row) => ({
     date: format(parseISO(String(row.date)), "dd-MMM-yy"),
+    sortKey: String(row.date),
     description: row.count > 1 && folioStyle !== "compact" && folioStyle !== "detailed"
       ? `${row.description} (${row.count})`
       : row.description,
@@ -123,11 +133,19 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     amount: row.total,
   }))
 
+  // Payments sit in the same ledger as the charges, so they carry the sign they have
+  // against the balance: a payment REDUCES what is owed and prints negative; a refund
+  // gives money back and prints positive. (In the old standalone "Payments & Credits"
+  // table the convention was inverted — positive meant "amount paid" — which read
+  // wrongly the moment the two lists merged.)
   const paymentRows: StationeryRow[] = folio.payments.map((payment: any) => ({
     date: format(parseISO(payment.createdAt), "dd-MMM-yy"),
-    description: `Payment - ${payment.paymentMethod?.name || ""}`,
+    sortKey: payment.createdAt,
+    description: payment.depositPurpose
+      ? `${DEPOSIT_PURPOSE_LABELS[payment.depositPurpose] ?? "Deposit"} — ${payment.paymentMethod?.name || ""}`.trim()
+      : `Payment — ${payment.paymentMethod?.name || ""}`.trim(),
     reference: payment.referenceNumber,
-    amount: payment.isRefund ? -payment.amount : payment.amount,
+    amount: payment.isRefund ? payment.amount : -payment.amount,
   }))
 
   const nights = reservation
@@ -137,12 +155,13 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const invoiceGuestEmail = primaryEmail(invoiceGuest.communications)
   const invoiceGuestMobile = primaryMobile(invoiceGuest.communications)
 
+  // The masthead carries only what identifies the DOCUMENT — its number and its date.
+  // Everything that identifies the STAY (confirmation no, folio no, room, board, pax)
+  // belongs in the summary block below, where the reader is already looking for it
+  // (owner rule, 2026-08-03).
   const meta: MetaItem[] = [
     { label: isTax ? "Invoice No" : isInterim ? "Statement" : "Proforma No", value: documentNumber || "—" },
-    ...(outletHeader ? [{ label: "Check No", value: outletHeader.checkNumber }] : []),
-    ...(reservation ? [{ label: "Confirmation No", value: reservation.confirmationNo }] : []),
     { label: "Date", value: format(new Date(), "dd-MMM-yy") },
-    { label: "Folio No", value: String(folio.folioNumber) },
   ]
 
   const billedTo = {
@@ -150,14 +169,46 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     lines: [invoiceGuestEmail || "", invoiceGuestMobile || ""],
   }
 
+  // "101 · Standard" for a single room; the multi-room case is spelled out in the Room
+  // Assignments table below, so here it just states how many.
+  const assignments: any[] = reservation?.assignments ?? []
+  const roomValue = (() => {
+    if (assignments.length === 0) return "TBA"
+    if (assignments.length === 1) {
+      const a = assignments[0]
+      return [a.room?.roomNumber || "TBA", a.roomType?.name].filter(Boolean).join(" · ")
+    }
+    const numbers = assignments.map((a) => a.room?.roomNumber).filter(Boolean)
+    return `${numbers.length ? numbers.join(", ") : "TBA"} (${assignments.length} rooms)`
+  })()
+
+  const paxValue = reservation
+    ? [
+        `${reservation.adults} adult${reservation.adults === 1 ? "" : "s"}`,
+        reservation.children > 0 ? `${reservation.children} child${reservation.children === 1 ? "" : "ren"}` : "",
+        reservation.infants > 0 ? `${reservation.infants} infant${reservation.infants === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(", ")
+    : ""
+
   const staySummary: MetaItem[] = reservation
     ? [
+        { label: "Confirmation No", value: reservation.confirmationNo },
+        { label: "Folio No", value: String(folio.folioNumber) },
+        ...(outletHeader ? [{ label: "Check No", value: outletHeader.checkNumber }] : []),
         { label: "Check-in", value: format(parseISO(reservation.checkInDate), "dd-MMM-yy") },
         { label: "Check-out", value: format(parseISO(reservation.checkOutDate), "dd-MMM-yy") },
         { label: "Nights", value: String(nights) },
-        { label: "Rooms", value: reservation.assignments?.map((a: any) => a.room?.roomNumber).filter(Boolean).join(", ") || "TBA" },
+        { label: "Room", value: roomValue },
+        ...(reservation.mealPlan && reservation.mealPlan !== "NONE"
+          ? [{ label: "Meal Plan", value: String(reservation.mealPlan) }]
+          : []),
+        { label: "Guests", value: paxValue },
       ]
-    : [{ label: "Type", value: "Walk-in / Outlet Sale" }]
+    : [
+        { label: "Folio No", value: String(folio.folioNumber) },
+        ...(outletHeader ? [{ label: "Check No", value: outletHeader.checkNumber }] : []),
+        { label: "Type", value: "Walk-in / Outlet Sale" },
+      ]
 
   const roomAssignments =
     reservation?.assignments && reservation.assignments.length > 1

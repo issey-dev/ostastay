@@ -111,7 +111,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { payeeProfileId, isClosed, settlementMethod } = body;
+    const { payeeProfileId, isClosed, settlementMethod, defaultPaymentMethodId } = body;
 
     const existing = await prisma.folio.findUnique({ where: { id } });
     if (!existing) {
@@ -128,6 +128,16 @@ export async function PATCH(
 
     if (settlementMethod !== undefined && settlementMethod !== "DIRECT" && settlementMethod !== "CITY_LEDGER") {
       return NextResponse.json({ error: "Invalid settlement method" }, { status: 400 });
+    }
+
+    // Which method the Post Payment form pre-selects for this folio. Purely a
+    // convenience — it settles nothing on its own; settlement follows the payment that
+    // is actually taken (see /api/folios/[id]/payments). null clears the preference.
+    if (defaultPaymentMethodId) {
+      const method = await prisma.paymentMethod.findUnique({ where: { id: defaultPaymentMethodId } });
+      if (!method || method.enterpriseId !== ctx.enterpriseId) {
+        return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
+      }
     }
 
     // Close/reopen bookkeeping: stamp the property business date on close; only allow a
@@ -166,6 +176,7 @@ export async function PATCH(
         ...(isClosed !== undefined && { isClosed }),
         ...(closedBusinessDate !== undefined && { closedBusinessDate }),
         ...(settlementMethod !== undefined && { settlementMethod }),
+        ...(defaultPaymentMethodId !== undefined && { defaultPaymentMethodId: defaultPaymentMethodId || null }),
         ...(finalizeDebtor && { isDebtorAccount: true }),
       },
       include: {

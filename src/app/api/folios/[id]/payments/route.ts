@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
+import { CITY_LEDGER_METHOD_TYPE } from "@/lib/debtor-accounts";
 
 export async function POST(
   request: Request,
@@ -67,6 +68,30 @@ export async function POST(
         shift: true
       }
     });
+
+    // Settling with a City-Ledger method IS the act of transferring the bill to an
+    // account — it replaces the old "Settlement: Direct / City Ledger" toggle, which
+    // asked the desk to declare an intention up front and then diverge from what was
+    // actually collected (owner rule, 2026-08-03). The folio is marked here so
+    // check-out finalizes it into a debtor invoice; the payee defaults to the
+    // reservation's travel agent / company when one isn't already set.
+    if (!body.isRefund && paymentMethod.type === CITY_LEDGER_METHOD_TYPE && !folio.isDebtorAccount) {
+      const reservation = folio.reservationId
+        ? await prisma.reservation.findUnique({
+            where: { id: folio.reservationId },
+            select: { travelAgentId: true },
+          })
+        : null;
+      await prisma.folio.update({
+        where: { id: folioId },
+        data: {
+          settlementMethod: CITY_LEDGER_METHOD_TYPE,
+          ...(folio.payeeProfileId || !reservation?.travelAgentId
+            ? {}
+            : { payeeProfileId: reservation.travelAgentId }),
+        },
+      });
+    }
 
     await logActivity({
       ctx,

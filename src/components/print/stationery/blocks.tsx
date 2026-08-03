@@ -23,6 +23,13 @@ export type StationeryRow = {
   description: string
   reference?: string | null
   amount: number
+  /**
+   * ISO date used only for ordering. `date` is already formatted for display, so it
+   * cannot be sorted — this carries the real value so charges and payments interleave
+   * in true chronological order once merged into one table. Optional: rows without it
+   * keep the order they were given in.
+   */
+  sortKey?: string
 }
 
 export type StationeryTotalLine = {

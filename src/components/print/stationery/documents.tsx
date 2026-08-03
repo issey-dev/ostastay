@@ -55,6 +55,19 @@ export type InvoiceDocumentProps = {
   footerNote?: string | null
 }
 
+// Interleave payments into the charge list by real date. Rows carrying a sortKey sort on
+// it; where any row lacks one (the Controls sample data) the original charges-then-
+// payments order is kept rather than sorting formatted date strings, which would order
+// "01-Aug" before "02-Jul".
+function mergeLedger(charges: StationeryRow[], payments: StationeryRow[]): StationeryRow[] {
+  const all = [...charges, ...payments]
+  if (all.some((r) => !r.sortKey)) return all
+  return all
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => (a.row.sortKey! < b.row.sortKey! ? -1 : a.row.sortKey! > b.row.sortKey! ? 1 : a.i - b.i))
+    .map(({ row }) => row)
+}
+
 export function InvoiceDocument({
   brand,
   variant,
@@ -126,12 +139,17 @@ export function InvoiceDocument({
         </StationerySection>
       )}
 
-      <StationerySection title="Charges">
-        <StationeryTable rows={charges} brandColor={brand.brandColor} emptyLabel="No charges posted." />
-      </StationerySection>
-
-      <StationerySection title="Payments & Credits">
-        <StationeryTable rows={payments} brandColor={brand.brandColor} emptyLabel="No payments recorded." />
+      {/* Charges and payments read as ONE chronological ledger (owner rule,
+          2026-08-03): a payment is an entry against the stay like any other, shown as a
+          negative figure on the day it happened, not exiled to a second table the guest
+          has to cross-reference. Merged here rather than by each caller so the Controls
+          preview and the real document cannot drift apart. */}
+      <StationerySection title="Charges & Payments">
+        <StationeryTable
+          rows={mergeLedger(charges, payments)}
+          brandColor={brand.brandColor}
+          emptyLabel="Nothing posted."
+        />
       </StationerySection>
 
       <StationeryTotals

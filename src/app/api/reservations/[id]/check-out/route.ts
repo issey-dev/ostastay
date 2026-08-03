@@ -34,7 +34,9 @@ export async function POST(
         folios: {
           include: {
             lineItems: true,
-            payments: true
+            // paymentMethod.type identifies a City-Ledger settlement — see
+            // settlesToLedger() below.
+            payments: { include: { paymentMethod: { select: { type: true } } } }
           }
         }
       }
@@ -76,14 +78,23 @@ export async function POST(
       }
     }
 
+    // A folio settles to the account when the desk actually PAID it with a City-Ledger
+    // method (the payments route stamps settlementMethod at that moment), or when
+    // settlementMethod was set directly — group master folios still do that at creation,
+    // and pre-2026-08-03 reservations carry it from the old toggle. Either way the
+    // account must exist for the invoice to have somewhere to go.
+    const settlesToLedger = (folio: (typeof reservation.folios)[number]) =>
+      folio.settlementMethod === "CITY_LEDGER" ||
+      folio.payments.some((p) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER");
+
     const qualifiesForAccount = (folio: (typeof reservation.folios)[number]) =>
-      folio.settlementMethod === "CITY_LEDGER" && creditAccount !== null;
+      settlesToLedger(folio) && creditAccount !== null;
 
     // City Ledger with no AR account behind it has nowhere for the invoice to go —
     // checkout is BLOCKED (owner rule), rather than silently falling back to guest-payable
     // and hiding the misconfiguration. Create the AR account, or change the settlement
     // method, before checking out.
-    const cityLedgerFolios = reservation.folios.filter((f) => f.settlementMethod === "CITY_LEDGER");
+    const cityLedgerFolios = reservation.folios.filter(settlesToLedger);
     if (cityLedgerFolios.length > 0 && !creditAccount) {
       return NextResponse.json(
         {

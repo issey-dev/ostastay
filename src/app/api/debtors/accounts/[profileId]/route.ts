@@ -6,7 +6,10 @@ import { computeFolioAgingBuckets } from "@/lib/debtor-aging";
 
 const INVOICE_INCLUDE = {
   lineItems: true,
-  payments: true,
+  // paymentMethod.type is REQUIRED here: buildInvoiceSummary excludes City-Ledger
+  // payments from the receivable, and without the type every transfer would read as
+  // cash and the account would show as settled. See lib/debtor-accounts.ts.
+  payments: { include: { paymentMethod: { select: { type: true } } } },
   reservation: { include: { primaryGuest: true } },
 } as const;
 

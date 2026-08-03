@@ -357,9 +357,13 @@ export async function GET(
           }
         }
 
-        // A proforma is an estimate — show the full projected charges with nothing
-        // yet applied against them (deposits/payments belong on the tax invoice).
-        responseFolio = { ...folio, lineItems: proformaLines, payments: [] };
+        // A proforma projects the FULL charges for the stay, but it keeps the real
+        // payments. Blanking them (as this did) meant a guest who had already paid a
+        // deposit was quoted the gross total with no sign of their money and a balance
+        // they did not owe — the single most confusing thing on the document. The
+        // projection replaces the charge lines only; payments are actual, and the
+        // balance is now genuinely what is left to pay.
+        responseFolio = { ...folio, lineItems: proformaLines };
       } catch {
         // If the quote can't be computed, fall back to the posted lines.
         responseFolio = folio;

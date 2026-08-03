@@ -120,6 +120,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         setFolios(data)
         if (data.length > 0 && !activeFolioId) {
           setActiveFolioId(data[0].id)
+          // Open the Post Payment form on the folio's configured method, so settling is
+          // one click at the desk. Only seeds an untouched form.
+          if (data[0].defaultPaymentMethodId) {
+            setPaymentForm(p => (p.paymentMethodId ? p : { ...p, paymentMethodId: data[0].defaultPaymentMethodId }))
+          }
         }
       }
     } catch (e) {
@@ -225,7 +230,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        setPaymentForm({ paymentMethodId: "", amount: "", referenceNumber: "" })
+        // Reset back to the folio's default rather than blank — taking a second payment
+        // shouldn't mean re-picking the method the folio is configured to settle with.
+        setPaymentForm({ paymentMethodId: activeFolio?.defaultPaymentMethodId || "", amount: "", referenceNumber: "" })
         fetchFolios()
         setNotification({ title: "Success", message: "Payment posted successfully." })
       } else {
@@ -353,22 +360,25 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     }
   }
 
-  const handleSetSettlementMethod = async (method: "DIRECT" | "CITY_LEDGER") => {
+  // Sets which method the Post Payment form opens on for this folio. It does NOT settle
+  // anything by itself — settlement follows the payment that is actually taken.
+  const handleSetDefaultPaymentMethod = async (paymentMethodId: string | null) => {
     if (!activeFolioId) return
     setSettlementSaving(true)
     try {
       const res = await fetch(`/api/folios/${activeFolioId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settlementMethod: method })
+        body: JSON.stringify({ defaultPaymentMethodId: paymentMethodId })
       })
       if (res.ok) {
+        setPaymentForm(p => ({ ...p, paymentMethodId: paymentMethodId ?? "" }))
         fetchFolios()
       } else {
-        setNotification({ title: "Error", message: "Failed to update settlement method.", isError: true })
+        setNotification({ title: "Error", message: "Failed to update the default payment method.", isError: true })
       }
     } catch {
-      setNotification({ title: "Error", message: "Error updating settlement method.", isError: true })
+      setNotification({ title: "Error", message: "Error updating the default payment method.", isError: true })
     } finally {
       setSettlementSaving(false)
     }
@@ -524,20 +534,36 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         </Button>
                       </div>
 
+                      {/* Replaces the old Settlement toggle. Settlement is no longer
+                          declared up front — it's whatever the folio is actually PAID
+                          with, so picking a City-Ledger method here (and then taking the
+                          payment) is what bills the stay to an account. This only
+                          pre-selects; the cashier can still change it per payment. */}
                       <div className="mb-3 flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">Settlement:</span>
-                        <Badge variant={activeFolio.settlementMethod === "CITY_LEDGER" ? "default" : "outline"}>
-                          {activeFolio.settlementMethod === "CITY_LEDGER" ? "City Ledger" : "Direct"}
-                        </Badge>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 text-primary"
+                        <span className="text-sm font-medium text-foreground">Default payment:</span>
+                        <Select
+                          value={activeFolio.defaultPaymentMethodId || "none"}
+                          onValueChange={(v) => handleSetDefaultPaymentMethod(v === "none" ? null : (v ?? null))}
                           disabled={settlementSaving}
-                          onClick={() => handleSetSettlementMethod(activeFolio.settlementMethod === "CITY_LEDGER" ? "DIRECT" : "CITY_LEDGER")}
                         >
-                          Change
-                        </Button>
+                          <SelectTrigger className="h-7 w-52 text-xs">
+                            <SelectValue placeholder="None — choose each time">
+                              {paymentMethods.find((m) => m.id === activeFolio.defaultPaymentMethodId)?.name ||
+                                "None — choose each time"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None — choose each time</SelectItem>
+                            {paymentMethods.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {activeFolio.settlementMethod === "CITY_LEDGER" && (
+                          <Badge variant="default" title="A City-Ledger payment has settled this folio to an account">
+                            City Ledger
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-3 mt-1">

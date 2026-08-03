@@ -2626,3 +2626,55 @@ user unless specifically fired for internal purposes."**
   `SupportAccessGrant`, every possible deletion carries a named operator and a grant id,
   both written into the activity log — which is the only surviving record once the row
   is gone.
+
+## 2026-08-03 — Folio: pre-arrival window, documents, and settlement (owner)
+
+Verbal, reviewing the Guest Folio panel and a printed proforma.
+
+**Nothing posts before arrival.** Not even a cancellation or no-show fee. Money taken
+before the guest arrives is a **deposit**, recorded against the reservation. It already
+lands on the folio the guest is billed from, so no transfer step exists or is needed —
+check-in reuses that same folio. The `preArrivalFee` opt-out is removed from
+`/api/pos/charge` (the folio line-item route never honoured it) and the Post Charge form
+is disabled pre-arrival.
+
+**Only a proforma exists before arrival.** A tax invoice and an interim bill both report
+posted charges, of which there can now be none; a tax invoice would also burn a fiscal
+sequence number against a stay that may never happen. Both are hidden in the panel AND
+refused by `/api/folios/[id]/invoice-data` — the print page is a plain URL, so the panel
+alone is not a gate.
+
+**A folio row is one day.** `by-code` and `by-check` grouped across the whole stay, so
+two nights merged into one row printing a single date beside a two-night figure. Both
+keys are now day-scoped: grouping compresses repetition inside a day, never across days.
+
+**Charges and payments are one ledger.** The separate "Payments & Credits" table is gone;
+payments appear in the detail table on their own date as negative figures. Consequently
+the **proforma now keeps real payments** — it previously blanked them, so a guest who had
+paid a deposit was quoted the gross total with no sign of their money.
+
+**Document identity vs stay identity.** The masthead carries only the document number and
+its date. Confirmation no, folio no, room + room type, meal plan and pax all moved into
+the Stay Summary block.
+
+**Print bleed.** `@page` carried a 15mm margin, and the margin box is exactly where a
+browser draws its own URL, date, title and page counter — which is why that chrome
+appeared on every stationery. Page margin is now zero, with the document's breathing room
+moved inside as padding the browser cannot write into.
+
+**Settlement follows the payment.** The "Settlement: Direct / City Ledger" toggle is
+gone. It asked the desk to declare an intention up front that then diverged from what was
+actually collected. Its place on the folio card is taken by a per-folio **Default payment
+method**, which pre-selects the Post Payment form. Paying with a `CITY_LEDGER`-type
+method is now what bills the stay to an account: the payments route stamps
+`settlementMethod`, and check-out finalizes the debtor invoice from either the stamp or
+the payment itself (group master folios still set the stamp directly at creation).
+
+- **Where the receivable lives.** A City-Ledger payment is a TRANSFER, not a receipt, so
+  it reads two ways: on the guest's bill it settles (check-out and every guest-payable
+  balance count it, so the desk can check out), and on the account's invoice it is
+  ignored — it is the thing that created the receivable. `computeReceivableBalance()` in
+  `src/lib/debtor-accounts.ts` is that second view, used by `buildInvoiceSummary` and so
+  by all four Debtors routes, which now select the payment method's type. Without the
+  type a transfer is indistinguishable from cash and every account would read as settled.
+  Pinned in `tests/business-rules/city-ledger-receivable.test.ts`.

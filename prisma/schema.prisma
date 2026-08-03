@@ -801,6 +801,8 @@ model PaymentMethod {
   chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   payments Payment[]
+  // Folios that pre-select this method on their Post Payment form.
+  defaultForFolios Folio[]
 
   @@index([chargeCodeId])
   @@index([enterpriseId])
@@ -1275,10 +1277,24 @@ model Folio {
   isMaster           Boolean      @default(false)
 
   // DIRECT (guest pays, default) | CITY_LEDGER (billed to a TA/corporate credit
-  // account — enables the "Bill to Account" action in the Folio Panel). Defaults to
-  // CITY_LEDGER at reservation creation when a credit-account Travel Agent/corporate
-  // profile is attached; not re-evaluated on edit so a staff override isn't clobbered.
+  // account). Defaults to CITY_LEDGER at reservation creation when a credit-account
+  // Travel Agent/corporate profile is attached; not re-evaluated on edit so a staff
+  // override isn't clobbered.
+  //
+  // No longer set by hand from the Folio Panel (owner rule, 2026-08-03): the toggle
+  // asked the desk to declare an intention that then diverged from what was actually
+  // collected. It is now STAMPED by the payments route the moment a City-Ledger
+  // payment method settles the folio, and group master folios still set it directly at
+  // creation. Check-out reads it (plus the payments themselves) to finalize the debtor
+  // invoice — see settlesToLedger() in reservations/[id]/check-out.
   settlementMethod String @default("DIRECT")
+
+  // The payment method the Post Payment form pre-selects for this folio — a
+  // convenience that makes settling faster at a busy desk, and the seam through which
+  // City-Ledger settlement is now chosen. Nullable: no default configured means the
+  // cashier picks every time, exactly as before.
+  defaultPaymentMethodId String?
+  defaultPaymentMethod   PaymentMethod? @relation(fields: [defaultPaymentMethodId], references: [id])
 
   // True only once this reservation's own folio has been finalized into a debtor
   // invoice (see the Debtors module) — flips at checkout, and only for a folio still
@@ -1319,6 +1335,7 @@ model Folio {
   @@index([groupBlockId])
   @@index([payeeProfileId])
   @@index([reservationId])
+  @@index([defaultPaymentMethodId])
 }
 
 model FolioLineItem {
