@@ -1247,6 +1247,32 @@ since the Postgres move — the probe only spoke SQLite's PRAGMA/dbstat dialect.
   both, but making the APP run on SQLite again is a separate, much larger piece of work.
   **Flagged, not attempted.**
 
+## Reservations list: one-field search, date modes, mobile (2026-08-03) — DONE (branch `feat/reservations-search-mobile`)
+
+App-owner brief for the Reservations screen, phone-first.
+
+- **One search field over every "vital info"** (`GET /api/reservations`): confirmation
+  number, `externalRef` (channel booking ref), guest first/last/company, travel-agent
+  company, ROOM NUMBER (through assignments), the guest's phone/email (rows in
+  ProfileCommunication, not columns on Profile), and accompanying guests' names — a call
+  often comes from the second name on the booking. All case-insensitive.
+- **`dateMode` = stay | arrival | departure** (default `stay`, the previous behaviour):
+  the desk thinks in "who arrives / who is here / who leaves", so the range switches
+  rather than always meaning overlap. Range end is INCLUSIVE.
+- **CHECKED_OUT and NO_SHOW hidden unless the status is asked for explicitly.** A desk
+  searching "Smith" wants the live booking. `status=CHECKED_OUT` still returns them —
+  the exclusion only applies when no status preference was expressed. CANCELLED is NOT
+  hidden (the owner named only the two). The dropdown's default label is therefore
+  "Active bookings", not "All statuses", which would now be a lie.
+- **Mobile**: Auto-Assign and Tape Chart hidden below `sm` (a room grid and a bulk sweep
+  are not phone work, and they squeezed the title onto two lines); filters moved into a
+  bottom-sheet drawer with an active-filter count badge. New Booking stays.
+- **Card / table toggle on desktop** (persisted in localStorage); the phone always gets
+  cards. One `filterControls` definition renders both the inline desktop bar and the
+  drawer, so the two cannot drift apart.
+- Tests: `tests/business-rules/reservation-search.test.ts` — every search field, the
+  three date modes, inclusive range end, and the default exclusion both ways.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
