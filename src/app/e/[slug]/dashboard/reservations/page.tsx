@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -195,7 +195,6 @@ export default function ReservationsDashboard() {
 
   // Modals state — the booking create/edit form itself lives on its own page now
   // (/reservations/new, /reservations/[id]/edit), not a dialog here.
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null)
   const [requestCategory, setRequestCategory] = useState("")
@@ -295,11 +294,6 @@ export default function ReservationsDashboard() {
       .catch(console.error)
   }, [currentProperty])
 
-  const handleDeletePrompt = (res: Reservation) => {
-    setSelectedRes(res)
-    setIsDeleteModalOpen(true)
-  }
-
   const handleRequestPrompt = (res: Reservation) => {
     // Only allow if there's an assigned room on the active segment
     const activeAssignment = res.assignments?.find(a => a.roomId)
@@ -341,18 +335,6 @@ export default function ReservationsDashboard() {
       setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const confirmDelete = async () => {
-    if (!selectedRes) return
-    try {
-      await fetch(`/api/reservations/${selectedRes.id}`, { method: "DELETE" })
-      setIsDeleteModalOpen(false)
-      fetchData()
-      setNotification({ title: "Success", message: "Reservation deleted." })
-    } catch {
-      setNotification({ title: "Error", message: "Failed to delete reservation.", isError: true })
     }
   }
 
@@ -577,12 +559,11 @@ export default function ReservationsDashboard() {
                 <FileText className="h-4 w-4 mr-2" /> Confirmation letter
               </DropdownMenuItem>
             )}
+            {/* No Delete. A booking is never destroyed from the front desk — Cancel is
+                the operation that keeps its history. Hard delete is internal-only
+                maintenance; see src/lib/reservations/hard-delete-gate.ts. */}
             <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}/edit`)}>
               <Pencil className="h-4 w-4 mr-2" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => handleDeletePrompt(res)}>
-              <Trash2 className="h-4 w-4 mr-2" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -935,22 +916,6 @@ export default function ReservationsDashboard() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Reservation</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this reservation ({selectedRes?.confirmationNo})? This action cannot be undone and will permanently remove all associated folios and charges.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete Reservation</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
       {/* Special Request Modal */}
       <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
         <DialogContent className="sm:max-w-[425px]">

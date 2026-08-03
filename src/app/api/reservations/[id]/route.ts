@@ -8,6 +8,7 @@ import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availabili
 import { findStopSaleConflicts } from "@/lib/restrictions";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
+import { checkHardDeleteGate, checkHardDeleteTarget, HARD_DELETE_FLAG } from "@/lib/reservations/hard-delete-gate";
 
 const RESERVATION_DETAIL_INCLUDE = {
   primaryGuest: true,
@@ -431,37 +432,48 @@ export async function DELETE(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
-    // Deleting a reservation cascades into its folios and line items — if any money
-    // has ever been posted or taken, deletion would destroy financial history (or
-    // 500 on the Payment FK). Those reservations must be cancelled instead, which
-    // preserves the ledger. Delete stays available for true data-entry mistakes
-    // (nothing posted yet).
-    const hasFinancialHistory = existing.folios.some(
-      (f) => f.lineItems.length > 0 || f.payments.length > 0
-    );
-    if (hasFinancialHistory) {
-      return NextResponse.json(
-        { error: "This reservation has posted charges or payments and cannot be deleted. Cancel it instead." },
-        { status: 400 }
-      );
+    // Internal-maintenance gate — see src/lib/reservations/hard-delete-gate.ts. There is
+    // no delete button anywhere in the UI; this path exists only for Osta staff cleaning
+    // up bad data, behind a kill switch that is off by default and an explicit
+    // confirmation-number echo. Everyone else cancels.
+    const body = await request.json().catch(() => ({}));
+    const gate = checkHardDeleteGate({
+      flag: process.env[HARD_DELETE_FLAG],
+      isInternal: ctx.isInternal,
+      confirmationNo: existing.confirmationNo,
+      suppliedConfirmation: (body as { confirm?: unknown })?.confirm,
+    });
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.error }, { status: gate.status });
     }
-    if (existing.status === "IN_HOUSE" || existing.status === "CHECKED_OUT") {
-      return NextResponse.json(
-        { error: `A ${existing.status === "IN_HOUSE" ? "checked-in" : "checked-out"} reservation cannot be deleted.` },
-        { status: 400 }
-      );
+
+    // Gate 4 — is this booking destroyable at all? Even authorized internal staff must
+    // not be able to erase money or a stay that actually happened.
+    const target = checkHardDeleteTarget({
+      status: existing.status,
+      hasFinancialHistory: existing.folios.some(
+        (f) => f.lineItems.length > 0 || f.payments.length > 0
+      ),
+    });
+    if (!target.ok) {
+      return NextResponse.json({ error: target.error }, { status: target.status });
     }
 
     await prisma.reservation.delete({
       where: { id },
     });
+    // The row is gone, so this log line is the only surviving record of it — spell out
+    // who destroyed it and under what authority.
     await logActivity({
       ctx,
       module: "RESERVATIONS",
       action: "DELETE",
       entityType: "Reservation",
       entityId: id,
-      description: `Deleted reservation ${existing.confirmationNo} (no financial history)`,
+      description:
+        `HARD DELETE of reservation ${existing.confirmationNo} by internal staff ` +
+        `(no financial history)` +
+        (ctx.isActingAsSupport ? ` — via support grant ${ctx.supportGrantId}` : ""),
     });
     return NextResponse.json({ success: true });
   } catch (error) {

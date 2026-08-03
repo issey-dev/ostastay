@@ -2600,3 +2600,29 @@ Verbal, on the reservations list.
 Implementation: the gates live in `src/lib/reservation-state.ts`
 (`isClosedReservation`, `canEditReservation`, `canReinstate`, `canReverseCheckOut`,
 `reservationRowToneClass`) so the list, detail page and booking form can't drift apart.
+
+## 2026-08-03 — Reservation delete is internal-only (owner)
+
+Follow-up to the closed-reservation decision above. Asked for delete to be removed from
+the API, then revised: **"keep the API but it should be very safe — not allowed to any
+user unless specifically fired for internal purposes."**
+
+- **No delete button anywhere in the UI**, for any status. A hotel's operation for an
+  unwanted booking is **Cancel**, which preserves history. The Delete menu item, its
+  confirmation dialog and its handlers are gone from the reservations list.
+- **`DELETE /api/reservations/[id]` stays** for genuine internal cleanup (a bad import,
+  a test booking on a live property) behind four independent gates, all of which must
+  pass — see `src/lib/reservations/hard-delete-gate.ts`:
+  1. **Osta (INTERNAL) staff only.** No tenant user of any role, ever, regardless of the
+     `RESERVATIONS.delete` permission bit. Checked FIRST, deliberately, so a tenant's
+     refusal never names the internal mechanism.
+  2. **`ALLOW_RESERVATION_HARD_DELETE=true`** on the server process — unset in every
+     normal deployment, so the endpoint is dead code by default.
+  3. **The caller must echo the exact confirmation number** in the body
+     (`{ "confirm": "DMH-000000000002" }`), so it cannot be fired blind or replayed.
+  4. **Nothing financial posted, and the stay not live or departed.** A voided line still
+     counts as history. This one binds internal staff too.
+- Because an Osta user only reaches tenant data through an approved, time-boxed
+  `SupportAccessGrant`, every possible deletion carries a named operator and a grant id,
+  both written into the activity log — which is the only surviving record once the row
+  is gone.

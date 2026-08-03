@@ -310,17 +310,23 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     expect(folio!.isClosed).toBe(true);
   });
 
-  it("blocks deleting a reservation once it has financial history (even voided lines)", async () => {
-    const res = await asUser(adminId, () =>
+  // Hard delete became an internal-only maintenance operation on 2026-08-03 (see
+  // .agents/docs/DECISIONS.md). No tenant user can reach it any more — not the Admin
+  // role, not with a clean folio, not ever — so what this asserts is the refusal itself.
+  // The rule's own conditions (kill switch, internal identity, confirmation echo,
+  // financial history, live/departed stay) are pinned directly in
+  // reservation-hard-delete-gate.test.ts.
+  it("refuses reservation deletion for a tenant admin, clean folio or not", async () => {
+    const dirty = await asUser(adminId, () =>
       reservationIdRoute.DELETE(
         new Request(`http://localhost/api/reservations/${thirdReservationId}`, { method: "DELETE" }),
         { params: Promise.resolve({ id: thirdReservationId }) }
       )
     );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/cannot be deleted/i);
+    expect(dirty.status).toBe(403);
 
-    // A financially clean reservation still deletes fine (true data-entry mistakes).
+    // Financially clean and never arrived — the old "true data-entry mistake" case. Still
+    // refused: the tenant's path for an unwanted booking is Cancel, which keeps history.
     const cleanRes = await bookVia({ checkInDate: "2026-09-01", checkOutDate: "2026-09-02" });
     expect(cleanRes.status).toBe(201);
     const clean = await cleanRes.json();
@@ -330,7 +336,11 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         { params: Promise.resolve({ id: clean.id }) }
       )
     );
-    expect(del.status).toBe(200);
+    expect(del.status).toBe(403);
+    expect((await del.json()).error).toMatch(/cancel the reservation instead/i);
+
+    // And it really is still there.
+    expect(await prisma.reservation.findUnique({ where: { id: clean.id } })).not.toBeNull();
   });
 
   it("rejects zero payment amounts and check-out dates not after check-in", async () => {

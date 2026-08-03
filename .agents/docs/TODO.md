@@ -34,11 +34,26 @@ What landed:
   pins every date boundary, including early-checkout (actual departure wins over
   scheduled) and the no-business-date fallback. Pure logic, no DB.
 
+**Delete is now internal-only** (owner follow-up, same day). No delete button remains
+anywhere in the UI for any status — the dialog and handlers were removed too. The
+endpoint survives for internal cleanup behind four gates in
+`src/lib/reservations/hard-delete-gate.ts` (Osta staff → `ALLOW_RESERVATION_HARD_DELETE=true`
+→ confirmation-number echo → no financial history / not live or departed), covered by
+`tests/business-rules/reservation-hard-delete-gate.test.ts`. The financial-history guard
+moved out of the route into that module so it stays unit-tested now that the HTTP path
+needs support-mode credentials; `alpha-hardening.test.ts` was updated to assert the
+tenant refusal instead of the old success case.
+
+**To actually run one:** set `ALLOW_RESERVATION_HARD_DELETE=true` on the server process,
+enter support mode for the enterprise, then
+`DELETE /api/reservations/<id>` with body `{"confirm":"<confirmationNo>"}`. Unset the
+flag afterwards.
+
 Deliberately **not** done (ask the owner first):
-- Delete is gone from the closed-row UI, but `DELETE /api/reservations/[id]` still
-  permits it for RESERVED/CANCELLED/NO_SHOW — only the UI entry point was removed.
 - The same gating has **not** been applied to the Front Office boards, tape chart or
   group screens — only the reservations list + detail + booking form.
+- Other delete endpoints (profiles, traces, rate plans, …) were **not** touched — this
+  decision was scoped to reservations.
 
 ## PostgreSQL migration follow-ups (2026-08-02) — OPEN
 
