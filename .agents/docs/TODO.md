@@ -2,6 +2,44 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Closed-reservation presentation + action gating (2026-08-03) — DONE
+
+Owner call (verbal, this session): a cancelled booking shouldn't be rendered with a
+strikethrough, and closed bookings were still offering the full live action set (folio,
+deposit, housekeeping request, delete) that they have no business exposing.
+
+What landed:
+- **No more strikethrough.** Cancelled rows/badges now carry a subtle whole-row tint
+  instead: red for cancelled, amber for no-show, grey for checked-out. Text stays fully
+  legible. `reservationRowToneClass()` in `src/lib/reservation-state.ts`; returned as
+  `bg-* hover:bg-*` so tailwind-merge drops `TableRow`'s default `hover:bg-muted/50`.
+  Applied to BOTH the table rows and the card view (the mobile-first list from
+  `594d625` renders cards on a phone and on desktop when card view is chosen).
+- **One gate module, three surfaces.** `isClosedReservation` / `canEditReservation` /
+  `canReinstate` / `canReverseCheckOut` live in `src/lib/reservation-state.ts` and are
+  used by the reservations list, the reservation detail page and the booking form so all
+  three agree with the API's own guards.
+- **Cancelled / no-show** — actions are now exactly: View details, Reinstate (only while
+  the dates allow it: cancelled needs arrival still in the future, no-show needs the
+  departure not yet passed — matching `PATCH /api/reservations/[id]/status`), Edit.
+  No folio, no deposit, no housekeeping request, no confirmation letter, **no delete**.
+- **Checked out** — View details + folio reprint always; Reinstate (= reverse check-out)
+  only on the business day the guest actually departed (`checkedOutAt`, falling back to
+  the departure date for legacy rows). **Never editable.**
+- **Edit is now blocked server-side too** — `PUT /api/reservations/[id]` 400s on a
+  `CHECKED_OUT` reservation (its folios are closed and any debtor invoice finalized, so
+  editing behind the settlement would desync the two). `BookingForm` renders an
+  explanatory card instead of the form when deep-linked.
+- **Tests** — `tests/business-rules/reservation-closed-actions.test.ts` (19 cases)
+  pins every date boundary, including early-checkout (actual departure wins over
+  scheduled) and the no-business-date fallback. Pure logic, no DB.
+
+Deliberately **not** done (ask the owner first):
+- Delete is gone from the closed-row UI, but `DELETE /api/reservations/[id]` still
+  permits it for RESERVED/CANCELLED/NO_SHOW — only the UI entry point was removed.
+- The same gating has **not** been applied to the Front Office boards, tape chart or
+  group screens — only the reservations list + detail + booking form.
+
 ## PostgreSQL migration follow-ups (2026-08-02) — OPEN
 
 The engine moved from SQLite to PostgreSQL 17 (see [DECISIONS.md](DECISIONS.md)). Left

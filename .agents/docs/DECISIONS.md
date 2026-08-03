@@ -2576,3 +2576,27 @@ Not done, and deliberately: no composite or covering indexes were added. Those s
 driven by real query plans (`pg_stat_statements`, `EXPLAIN ANALYZE` on slow requests)
 rather than guessed at, and single-column FK indexes are the well-established default that
 carries its own justification.
+
+## 2026-08-03 — Closed reservations: presentation + allowed actions (owner)
+
+Verbal, on the reservations list.
+
+- **No strikethrough on cancelled bookings.** Use a very subtle whole-row background
+  tint instead: **red = cancelled, yellow = no-show, grey = checked out.** The guest
+  name and confirmation number must stay fully legible.
+- **Cancelled / no-show → the only actions are Reinstate and Edit** (plus viewing).
+  Explicitly *no* folio generation, no deposits, no housekeeping requests, no
+  confirmation letters, no delete. Reinstate is offered only when the dates allow it
+  against the property's current **business date** — cancelled needs its arrival still
+  in the future; a no-show needs its departure not yet passed.
+- **Checked out → Reinstate means "reverse check-out", and only on the day they
+  actually checked out** (departure = current business date). After that day the stay
+  is view-only, except that **folios can still be reprinted**.
+- **A checked-out reservation can never be edited** — view functions only. Enforced in
+  the UI *and* in `PUT /api/reservations/[id]`, because its folios are closed and any
+  debtor invoice is finalized; editing behind that would desync the booking from the
+  money. The correction path is Reverse Check-out first.
+
+Implementation: the gates live in `src/lib/reservation-state.ts`
+(`isClosedReservation`, `canEditReservation`, `canReinstate`, `canReverseCheckOut`,
+`reservationRowToneClass`) so the list, detail page and booking form can't drift apart.

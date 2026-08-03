@@ -140,6 +140,18 @@ export async function PUT(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
+    // A departed stay is financially settled: its folios are closed, any debtor invoice
+    // is finalized and commission is posted. Editing dates/rooms/rates/pax behind that
+    // would desync the booking from the money already accounted for, so a checked-out
+    // reservation is view-only. The correction path is Reverse Check-out (same business
+    // day), which unwinds the settlement first.
+    if (existing.status === "CHECKED_OUT") {
+      return NextResponse.json(
+        { error: "A checked-out reservation can't be edited. Reverse the check-out first (same business day only)." },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
 
     // Parse and validate the body

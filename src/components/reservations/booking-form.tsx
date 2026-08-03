@@ -26,6 +26,7 @@ import { GuestPickerModal, type GuestProfile } from "@/components/reservations/g
 import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
 import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
 import { BookingSummary, type Quote } from "@/components/reservations/booking-summary"
+import { canEditReservation } from "@/lib/reservation-state"
 
 type ReservationDetail = {
   id: string
@@ -507,6 +508,37 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       <div className="flex flex-col gap-6 max-w-6xl mx-auto p-4">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-96 rounded-lg" />
+      </div>
+    )
+  }
+
+  // A departed stay is settled — folios closed, debtor invoice finalized, commission
+  // posted. The API refuses the PUT (see /api/reservations/[id] PUT), so don't render a
+  // form that can only fail; the correction path is Reverse Check-out on the departure
+  // business day. Reached only by deep link — the Edit entry points are already hidden.
+  if (isEditMode && existingStatus && !canEditReservation(existingStatus)) {
+    return (
+      <div className="flex flex-col gap-6 max-w-2xl mx-auto p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>This reservation can&apos;t be edited</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+            <p>
+              {existingConfirmationNo ?? "This booking"} has already checked out. A departed stay is
+              settled against its folio, so its details are view-only. To correct it, reverse the
+              check-out first — that&apos;s only possible on the business day the guest departed.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" onClick={() => router.push(`/e/${slug}/dashboard/reservations/${reservationId}`)}>
+                View reservation
+              </Button>
+              <Button type="button" variant="outline" onClick={() => router.push(exitUrl)}>
+                Back to list
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

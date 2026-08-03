@@ -61,3 +61,81 @@ export function reservationStateLabel(state: string): string {
 export function canCheckIn(status: string, checkInDate: Dateish, businessDate: Dateish): boolean {
   return status === "RESERVED" && deriveReservationState(status, checkInDate, null, businessDate) === "DUE_IN"
 }
+
+// ── Closed bookings ───────────────────────────────────────────────────────────
+// Once a booking leaves the live lifecycle it stops being an operational record and
+// becomes a historical one, so the front desk gets a deliberately short action list.
+// These gates mirror the server's own guards (PATCH /api/reservations/[id]/status and
+// POST .../reverse-check-out) so the UI never offers a button the API will reject:
+//
+//   Cancelled   — reinstate while the arrival is still in the future; edit; view.
+//   No-show     — reinstate while the departure hasn't passed yet; edit; view.
+//   Checked out — reverse the check-out on the day it happened; view and reprint
+//                 folios after that. Never editable — the stay is settled.
+//
+// Nothing else: no folio postings, no deposits, no housekeeping requests, no
+// confirmation letters, no delete.
+export function isClosedReservation(status: string): boolean {
+  return status === "CANCELLED" || status === "NO_SHOW" || status === "CHECKED_OUT"
+}
+
+// Editing is a live-booking operation. A departed stay is financially settled — moving
+// its dates, rooms or rates behind an already-closed folio would desync the two. A
+// cancelled or no-show booking stays editable because it can still be reinstated.
+export function canEditReservation(status: string): boolean {
+  return status !== "CHECKED_OUT"
+}
+
+// Reinstate = CANCELLED/NO_SHOW → RESERVED. Date-bounded by the stay itself: a cancelled
+// booking whose arrival has already come and gone is a fresh booking, not a
+// reinstatement; a no-show can only come back while the stay period is still open.
+export function canReinstate(
+  status: string,
+  checkInDate: Dateish,
+  checkOutDate: Dateish,
+  businessDate: Dateish
+): boolean {
+  const bd = dayMs(businessDate)
+  if (Number.isNaN(bd)) return false
+  if (status === "CANCELLED") {
+    const arrival = dayMs(checkInDate)
+    return !Number.isNaN(arrival) && arrival > bd
+  }
+  if (status === "NO_SHOW") {
+    const departure = dayMs(checkOutDate)
+    return !Number.isNaN(departure) && departure >= bd
+  }
+  return false
+}
+
+// Reverse check-out is a same-day correction only: the guest goes back In-House on the
+// business date they departed on. Once Night Audit rolls past that day the departure
+// belongs to a closed period and the folio is reprint-only.
+export function canReverseCheckOut(
+  status: string,
+  checkOutDate: Dateish,
+  businessDate: Dateish,
+  checkedOutAt?: Dateish
+): boolean {
+  if (status !== "CHECKED_OUT") return false
+  const bd = dayMs(businessDate)
+  if (Number.isNaN(bd)) return false
+  // checkedOutAt is the truth when present (it covers early departures); the scheduled
+  // departure date is the fallback for legacy rows that never stamped it.
+  const departed = checkedOutAt ? dayMs(checkedOutAt) : dayMs(checkOutDate)
+  return !Number.isNaN(departed) && departed === bd
+}
+
+// Subtle whole-row tint that replaces the old strikethrough: red for cancelled, amber
+// for no-show, grey for departed. Deliberately near-invisible at rest — it's a state
+// hint on a dense list, not an alert. Returned as `bg-* hover:bg-*` so tailwind-merge
+// drops TableRow's default `hover:bg-muted/50` instead of fighting it.
+const CLOSED_ROW_TONE: Record<string, string> = {
+  CANCELLED: "bg-destructive-muted hover:bg-destructive/[0.09]",
+  NO_SHOW: "bg-warning-muted hover:bg-warning/[0.09]",
+  CHECKED_OUT: "bg-muted/50 hover:bg-muted",
+}
+
+export function reservationRowToneClass(status: string): string {
+  return CLOSED_ROW_TONE[status] ?? ""
+}
