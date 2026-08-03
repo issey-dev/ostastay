@@ -94,9 +94,12 @@ docker compose logs -f
 
 ## 6. Create the first admin account
 
-A freshly migrated database has no users, and the app needs its internal "Osta"
-enterprise row to exist before any request can be served. This one command creates both.
-Run it once, after the first successful start:
+The internal "Osta" enterprise (the platform-admin side that manages customer
+enterprises and channel-manager connections) exists by default — every container start
+ensures it, along with its system roles. What a fresh database does NOT have is any
+user: accounts need a password, and a default password would be a well-known credential
+on every deployment. This one command creates yours. Run it once, after the first
+successful start:
 
 ```bash
 docker compose exec \
@@ -234,7 +237,10 @@ JWTs, so no sticky sessions are needed.
 missing `JWT_SECRET` — the app refuses to boot in production without one rather than
 fall back to a well-known development secret.
 
-**"No INTERNAL (Osta) enterprise found".** The bootstrap in step 6 has not been run yet.
+**"No INTERNAL (Osta) enterprise found".** Should no longer occur — the entrypoint
+ensures the enterprise on every start (look for "Ensuring the Osta platform enterprise"
+in `docker compose logs app`). If it does appear, that ensure step failed; its error is
+in the same logs, and running the step-6 bootstrap repairs it by hand.
 
 **Can't reach it from a browser.** Check in this order:
 

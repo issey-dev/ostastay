@@ -13,5 +13,5 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["scripts/bootstrap-admin.ts", "prisma/rbac-seed-data.ts"]
+  "include": ["scripts/bootstrap-admin.ts", "scripts/ensure-platform.ts", "prisma/rbac-seed-data.ts"]
 }
