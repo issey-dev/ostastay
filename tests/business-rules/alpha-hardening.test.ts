@@ -702,7 +702,9 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
 
     expect(has("RESERVATIONS", "CREATE")).toBe(true); // bookings
     expect(has("RESERVATIONS", "CANCELLED")).toBe(true); // status transitions
-    expect(has("RESERVATIONS", "DELETE")).toBe(true); // clean-reservation delete
+    // No RESERVATIONS/DELETE row is expected: hard delete became internal-only on
+    // 2026-08-03 and nothing a tenant admin can do produces one any more. The gates
+    // that refuse it are pinned in reservation-hard-delete-gate.test.ts.
     expect(has("CASHIERING", "CREATE")).toBe(true); // posted charges
     expect(has("CASHIERING", "VOID")).toBe(true); // the void
     expect(has("CASHIERING", "PAYMENT")).toBe(true); // fee payment
