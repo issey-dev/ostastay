@@ -23,6 +23,7 @@ import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
 import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 
 const ALLOCATION_TYPE_LABELS: Record<string, string> = {
   FNB: "Food & Beverage",
@@ -234,10 +235,10 @@ export default function RevenueDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Revenue Management</h2>
-          <p className="text-muted-foreground">
-            Configure dynamic rate plans, priorities, and price calendars.
-          </p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Revenue Management
+            <InfoHint label="Revenue Management">Configure dynamic rate plans, priorities, and price calendars.</InfoHint>
+          </h2>
         </div>
       </div>
 
@@ -497,10 +498,10 @@ export default function RevenueDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rate Plan Hierarchy</CardTitle>
-          <CardDescription>
-            Defines the pricing waterfall. Lower priority numbers always win in a conflict.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            Rate Plan Hierarchy
+            <InfoHint label="Rate Plan Hierarchy">Defines the pricing waterfall. Lower priority numbers always win in a conflict.</InfoHint>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

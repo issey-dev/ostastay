@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { InfoHint } from "@/components/ui/info-hint"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
 type AddonRow = { module: string; enabled: boolean }
@@ -54,11 +55,9 @@ export function EnterpriseAddonAccessManager({ enterpriseId, enterpriseName }: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Add-ons — {enterpriseName}</CardTitle>
-        <CardDescription>
-          Sold and enabled per enterprise, independent of its license/tier — once enabled, the add-on is available to
-          every property in the enterprise. Off by default — a missing toggle here means it was never purchased.
-        </CardDescription>
+        <CardTitle className="flex items-center gap-2 text-lg">Add-ons — {enterpriseName}
+              <InfoHint>Sold and enabled per enterprise, independent of its license/tier — once enabled, the add-on is available to every property in the enterprise. Off by default — a missing toggle here means it was never purchased.</InfoHint>
+            </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3">

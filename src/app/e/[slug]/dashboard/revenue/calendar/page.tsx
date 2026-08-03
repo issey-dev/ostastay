@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
 import type { DateRange } from "react-day-picker"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 
 type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
@@ -221,10 +222,10 @@ function PriceCalendarPageContent() {
           </Button>
         </Link>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Price Calendar</h2>
-          <p className="text-muted-foreground">
-            Manage daily rates by room type and rate plan.
-          </p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Price Calendar
+            <InfoHint label="Price Calendar">Manage daily rates by room type and rate plan.</InfoHint>
+          </h2>
         </div>
       </div>
 
@@ -275,8 +276,10 @@ function PriceCalendarPageContent() {
           ) : (
             <Card className="border-info/30 shadow-sm bg-info-muted/50">
               <CardHeader>
-                <CardTitle className="text-info">Bulk Update</CardTitle>
-                <CardDescription>Apply a price to a date range.</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-info">
+            Bulk Update
+            <InfoHint label="Bulk Update">Apply a price to a date range.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleBulkUpdate} className="space-y-4">

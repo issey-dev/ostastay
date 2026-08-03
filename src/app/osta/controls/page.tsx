@@ -1,4 +1,5 @@
 import { OstaInvoicingManager } from "@/components/osta/osta-invoicing-manager"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Platform-level controls: how Osta itself bills client enterprises (licensing
 // invoices + payment receipts) — the counterpart of a property's own Controls >
@@ -7,8 +8,10 @@ export default function OstaControlsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Controls</h2>
-        <p className="text-muted-foreground">Configure the invoices and payment receipts Osta issues to client enterprises.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Controls
+            <InfoHint label="Controls">Configure the invoices and payment receipts Osta issues to client enterprises.</InfoHint>
+          </h2>
       </div>
       <OstaInvoicingManager />
     </div>

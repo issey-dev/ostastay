@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
 
 type Ticket = {
@@ -145,8 +146,10 @@ export default function MaintenanceDashboard() {
       <div>
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Maintenance Dashboard</h2>
-            <p className="text-muted-foreground">Track, manage, and resolve property maintenance issues.</p>
+            <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Maintenance Dashboard
+            <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
+          </h2>
           </div>
         </div>
         <ErrorState title="Couldn't load maintenance tickets" onRetry={() => fetchTickets()} />
@@ -158,8 +161,10 @@ export default function MaintenanceDashboard() {
     <div>
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Maintenance Dashboard</h2>
-          <p className="text-muted-foreground">Track, manage, and resolve property maintenance issues.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Maintenance Dashboard
+            <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => fetchTickets()} className="flex items-center gap-2">

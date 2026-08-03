@@ -1,6 +1,7 @@
 "use client"
 
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { InfoHint } from "@/components/ui/info-hint"
 import { cn } from "@/lib/utils"
 
 // The single reusable "settings section" wrapper — every Controls tab should render its
@@ -35,9 +36,15 @@ export function ControlsCard({
           box balanced (equal space above the title and below the description). The
           content's pt-0 compensates, so the total title→content rhythm matches the
           rest of the app's cards. */}
+      {/* `description` is no longer rendered as a subheading — it moved into the ⓘ
+          beside the title (app-owner decision, 2026-08-03). Every Controls section gets
+          this for free by going through this component, so call sites keep passing the
+          same prop and nothing had to be edited 30 times. */}
       <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+        <CardTitle className="flex items-center gap-2 text-lg">
+          {title}
+          {description && <InfoHint label={title}>{description}</InfoHint>}
+        </CardTitle>
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
       <CardContent className="p-6 pt-0">{children}</CardContent>

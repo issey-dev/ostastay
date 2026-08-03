@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { ErrorState } from "@/components/ui/error-state"
+import { InfoHint } from "@/components/ui/info-hint"
 
 const ISSUE_TYPES = MAINTENANCE_ISSUE_TYPES
 
@@ -100,8 +101,10 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Maintenance Tickets</h3>
-          <p className="text-sm text-muted-foreground">Log and track room-specific issues like plumbing, electrical, or general repairs.</p>
+          <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            Maintenance Tickets
+            <InfoHint label="Maintenance Tickets">Log and track room-specific issues like plumbing, electrical, or general repairs.</InfoHint>
+          </h3>
         </div>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} className="">

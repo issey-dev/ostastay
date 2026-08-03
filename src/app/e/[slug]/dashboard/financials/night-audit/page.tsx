@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
+import { InfoHint } from "@/components/ui/info-hint"
 import Link from "next/link"
 import { format } from "date-fns"
 
@@ -182,8 +183,10 @@ export default function EndOfDayPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">End of Day</h2>
-          <p className="text-muted-foreground">Close the business date step by step. The date stays open until every step is done.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            End of Day
+            <InfoHint label="End of Day">Close the business date step by step. The date stays open until every step is done.</InfoHint>
+          </h2>
         </div>
         <div className="flex items-center gap-3">
         <Link href="night-audit/reports" className={buttonVariants({ variant: "outline", size: "sm" })}>

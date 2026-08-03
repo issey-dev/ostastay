@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
+import { InfoHint } from "@/components/ui/info-hint"
 import { GROUP_START_STATUSES, GROUP_STATUS_LABEL } from "@/lib/group-status"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
@@ -85,8 +86,10 @@ export default function NewGroupBlock() {
           </Button>
         </Link>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">New Group Block</h2>
-          <p className="text-muted-foreground">Reserve inventory for an upcoming event or corporate group.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            New Group Block
+            <InfoHint label="New Group Block">Reserve inventory for an upcoming event or corporate group.</InfoHint>
+          </h2>
         </div>
       </div>
 

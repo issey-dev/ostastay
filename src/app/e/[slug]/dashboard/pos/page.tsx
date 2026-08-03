@@ -16,6 +16,7 @@ import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
+import { InfoHint } from "@/components/ui/info-hint"
 
 export default function POSDashboard() {
   const { currentProperty } = useProperty()
@@ -236,8 +237,10 @@ export default function POSDashboard() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Fast Post</h2>
-        <p className="text-muted-foreground">Select an outlet, then post charges to an in-house guest&apos;s room or a walk-in bill.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Fast Post
+            <InfoHint label="Fast Post">Select an outlet, then post charges to an in-house guest&apos;s room or a walk-in bill.</InfoHint>
+          </h2>
       </div>
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "charges" | "history") ?? "charges")}>

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { InfoHint } from "@/components/ui/info-hint"
 
 export default function CashieringPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -227,10 +228,10 @@ export default function CashieringPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Cashiering & Shift Reconciliation</h2>
-          <p className="text-muted-foreground">
-            Manage your physical cash drawer and track all financial postings during your shift.
-          </p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Cashiering & Shift Reconciliation
+            <InfoHint label="Cashiering & Shift Reconciliation">Manage your physical cash drawer and track all financial postings during your shift.</InfoHint>
+          </h2>
         </div>
         <ErrorState title="Couldn't load cashiering" onRetry={fetchStatus} />
       </div>
@@ -240,10 +241,10 @@ export default function CashieringPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Cashiering & Shift Reconciliation</h2>
-        <p className="text-muted-foreground">
-          Manage your physical cash drawer and track all financial postings during your shift.
-        </p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Cashiering & Shift Reconciliation
+            <InfoHint label="Cashiering & Shift Reconciliation">Manage your physical cash drawer and track all financial postings during your shift.</InfoHint>
+          </h2>
       </div>
 
       {error && (
@@ -314,10 +315,10 @@ export default function CashieringPage() {
             </div>
           </div>
           <CardHeader className="text-center pt-8">
-            <CardTitle className="text-2xl">Your Shift is Closed</CardTitle>
-            <CardDescription>
-              You cannot post any payments to guest folios until you open a new cashier shift.
-            </CardDescription>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+            Your Shift is Closed
+            <InfoHint label="Your Shift is Closed">You cannot post any payments to guest folios until you open a new cashier shift.</InfoHint>
+          </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -569,8 +570,8 @@ export default function CashieringPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <History className="w-5 h-5 text-muted-foreground" />
               Shift History
+              <InfoHint>Your past closed shifts with their reconciliation results.</InfoHint>
             </CardTitle>
-            <CardDescription>Your past closed shifts with their reconciliation results.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">

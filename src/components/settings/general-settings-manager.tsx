@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { Save } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type SettingsForm = {
   resConfirmPrefix: string
@@ -127,10 +128,10 @@ export function GeneralSettingsManager() {
       {/* Cashiering Defaults — separated from the section above by a line, not a box. */}
       <div className="space-y-4 border-t border-border pt-8">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Cashiering Defaults</h3>
-          <p className="text-xs text-muted-foreground">
-            Pre-filled values on the Cashiering page — staff can always override per shift/transaction.
-          </p>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            Cashiering Defaults
+            <InfoHint label="Cashiering Defaults">Pre-filled values on the Cashiering page — staff can always override per shift/transaction.</InfoHint>
+          </h3>
         </div>
         <div className="grid gap-6 sm:grid-cols-3">
           <div className="space-y-2">

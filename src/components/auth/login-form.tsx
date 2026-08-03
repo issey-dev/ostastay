@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { KeyRound, Hotel, Eye, EyeOff } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 
 // Shared by the generic /login (asks for an Enterprise Code) and each enterprise's own
@@ -137,11 +138,10 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
         {mustChange ? (
           <Card className="border-0 shadow-xl ring-1 ring-border">
             <CardHeader className="pb-4">
-              <CardTitle>Set your password</CardTitle>
-              <CardDescription>
-                You signed in with a temporary password. Choose your own (at least 12 characters) to continue —
-                the temporary one stops working immediately.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2">
+            Set your password
+            <InfoHint label="Set your password">You signed in with a temporary password. Choose your own (at least 12 characters) to continue — the temporary one stops working immediately.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <form onSubmit={handleChangePassword}>
               <CardContent className="space-y-4">

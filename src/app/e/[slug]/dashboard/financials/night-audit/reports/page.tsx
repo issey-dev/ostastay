@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Printer, FileText, ArrowLeft } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 import Link from "next/link"
 import { format } from "date-fns"
 
@@ -79,8 +80,10 @@ export default function EodReportsPage() {
           <Link href="../night-audit" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-1">
             <ArrowLeft className="w-3.5 h-3.5" /> End of Day
           </Link>
-          <h2 className="text-3xl font-bold tracking-tight">EOD Report Archive</h2>
-          <p className="text-muted-foreground">Frozen snapshots of each closed business date&apos;s reports.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            EOD Report Archive
+            <InfoHint label="EOD Report Archive">Frozen snapshots of each closed business date&apos;s reports.</InfoHint>
+          </h2>
         </div>
         <div className="flex items-end gap-2">
           <div className="w-64">

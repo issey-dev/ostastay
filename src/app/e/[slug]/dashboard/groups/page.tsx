@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { InfoHint } from "@/components/ui/info-hint"
 
 export default function GroupsDashboard() {
   const { slug } = useParams<{ slug: string }>()
@@ -45,8 +46,10 @@ export default function GroupsDashboard() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Groups & Allotments</h2>
-          <p className="text-muted-foreground">Manage blocks of rooms for weddings, corporate events, and tours.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Groups & Allotments
+            <InfoHint label="Groups & Allotments">Manage blocks of rooms for weddings, corporate events, and tours.</InfoHint>
+          </h2>
         </div>
         <Link href={`/e/${slug}/dashboard/groups/new`}>
           <Button className="flex items-center gap-2">

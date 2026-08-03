@@ -19,6 +19,7 @@ import { ExcursionManifestPanel } from "@/components/front-office/excursion-mani
 import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
 import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type GuestResult = {
   reservationId: string
@@ -261,8 +262,10 @@ export default function ExcursionsPage() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Excursions</h2>
-        <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Excursions
+            <InfoHint label="Excursions">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</InfoHint>
+          </h2>
       </div>
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>

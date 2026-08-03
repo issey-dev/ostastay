@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ShieldCheck, ShieldOff, LogIn } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type Grant = {
   id: string
@@ -117,11 +118,10 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Request Support Access</CardTitle>
-              <CardDescription>
-                You have no implicit access to any enterprise&apos;s data — the enterprise&apos;s own admin must approve a
-                time-boxed request before you can view/troubleshoot their configuration.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            Request Support Access
+            <InfoHint label="Request Support Access">You have no implicit access to any enterprise&apos;s data — the enterprise&apos;s own admin must approve a time-boxed request before you can view/troubleshoot their configuration.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {errorMsg && <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md">{errorMsg}</div>}
@@ -176,8 +176,10 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
 
       {!isInternal && (
         <div className="space-y-3">
-          <h3 className="text-lg font-medium">Support Access Requests</h3>
-          <p className="text-sm text-muted-foreground">Osta support staff need your explicit, time-boxed approval before viewing this enterprise&apos;s configuration.</p>
+          <h3 className="flex items-center gap-2 text-lg font-medium">
+            Support Access Requests
+            <InfoHint label="Support Access Requests">Osta support staff need your explicit, time-boxed approval before viewing this enterprise&apos;s configuration.</InfoHint>
+          </h3>
           {grants.map((g) => (
             <Card key={g.id}>
               <CardContent className="flex items-center justify-between py-4">

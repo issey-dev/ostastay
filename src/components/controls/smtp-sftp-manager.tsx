@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Save } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type SmtpSftpForm = {
   smtpHost: string
@@ -84,8 +85,10 @@ export function SmtpSftpManager() {
   return (
     <form onSubmit={handleSave} className="space-y-8">
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SMTP (Outgoing Email)</h3>
-        <p className="text-xs text-muted-foreground">Used to send guest Confirmation Letters. Configure these before using the &quot;Email to Guest&quot; button on a reservation&apos;s Confirmation Letter.</p>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+            SMTP (Outgoing Email)
+            <InfoHint label="SMTP (Outgoing Email)">Used to send guest Confirmation Letters. Configure these before using the &quot;Email to Guest&quot; button on a reservation&apos;s Confirmation Letter.</InfoHint>
+          </h3>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Host</Label>
@@ -115,8 +118,10 @@ export function SmtpSftpManager() {
       </div>
 
       <div className="space-y-4 border-t border-border pt-8">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">SFTP (File Transfer)</h3>
-        <p className="text-xs text-muted-foreground">Not yet wired to any actual transfer — saved for when a file-export feature is built.</p>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+            SFTP (File Transfer)
+            <InfoHint label="SFTP (File Transfer)">Not yet wired to any actual transfer — saved for when a file-export feature is built.</InfoHint>
+          </h3>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Host</Label>

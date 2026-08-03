@@ -1,5 +1,6 @@
 import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
 import { InboundBookingsManager } from "@/components/hub/inbound-bookings-manager"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Inbound bookings — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
 //
@@ -14,10 +15,10 @@ export default async function ChannelManagerBookingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Inbound Bookings</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Bookings received from the booking channels, with anything that needs attention flagged.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            Inbound Bookings
+            <InfoHint label="Inbound Bookings">Bookings received from the booking channels, with anything that needs attention flagged.</InfoHint>
+          </h2>
       </div>
 
       <InboundBookingsManager canManage={canManage} />

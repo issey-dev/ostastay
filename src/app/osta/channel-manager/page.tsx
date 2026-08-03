@@ -1,5 +1,6 @@
 import { requireSession, hasPermission } from "@/lib/scope"
 import { ChannelConnectionsAdmin } from "@/components/osta/channel-connections-admin"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Cross-tenant channel-manager administration — the master-account topology's control
 // room (.agents/docs/DECISIONS.md, 2026-08-02). The Osta layout already bounced anyone
@@ -12,11 +13,10 @@ export default async function OstaChannelManagerPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Channel Manager</h2>
-        <p className="text-muted-foreground">
-          Every enterprise&rsquo;s Beds24 connection, run from the master account: setup, health, webhooks and the
-          shared rate-limit pool. Room and rate mapping stays in each enterprise&rsquo;s own Hub.
-        </p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Channel Manager
+            <InfoHint label="Channel Manager">Every enterprise&rsquo;s Beds24 connection, run from the master account: setup, health, webhooks and the shared rate-limit pool. Room and rate mapping stays in each enterprise&rsquo;s own Hub.</InfoHint>
+          </h2>
       </div>
       <ChannelConnectionsAdmin canManage={canManage} />
     </div>

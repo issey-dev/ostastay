@@ -17,6 +17,7 @@ import { CheckSquare, X, Check, Wrench } from "@/components/icons"
 import { WorkOrderManager } from "@/components/housekeeping/work-order-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
+import { InfoHint } from "@/components/ui/info-hint"
 import { statusMutedClasses, toneMutedClasses, toneSolidClasses } from "@/lib/status-tone"
 
 type Room = {
@@ -142,8 +143,10 @@ export default function RoomMatrix() {
   if (!propertyId) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
-        <h3 className="text-xl font-bold text-foreground mb-2">No Property Found</h3>
-        <p className="text-muted-foreground mb-6">Please create a property in the Properties module first.</p>
+        <h3 className="flex items-center gap-2 text-xl font-bold text-foreground mb-2">
+            No Property Found
+            <InfoHint label="No Property Found">Please create a property in the Properties module first.</InfoHint>
+          </h3>
       </div>
     )
   }
@@ -151,10 +154,10 @@ export default function RoomMatrix() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Housekeeping Operations</h2>
-        <p className="text-muted-foreground">
-          Manage real-time housekeeping statuses, bulk updates, and room readiness.
-        </p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Housekeeping Operations
+            <InfoHint label="Housekeeping Operations">Manage real-time housekeeping statuses, bulk updates, and room readiness.</InfoHint>
+          </h2>
       </div>
 
       <Tabs defaultValue="matrix" className="w-full">
@@ -167,8 +170,10 @@ export default function RoomMatrix() {
           <Card className="overflow-hidden relative">
             <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Status Overview</CardTitle>
-                <CardDescription>Click a room to instantly update its status (Optimistic UI Enabled).</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-lg">
+            Status Overview
+            <InfoHint label="Status Overview">Click a room to instantly update its status (Optimistic UI Enabled).</InfoHint>
+          </CardTitle>
               </div>
               {!isBulkMode ? (
                 <Button variant="outline" onClick={toggleBulkMode} className="shadow-sm">
@@ -224,8 +229,10 @@ export default function RoomMatrix() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No Rooms Configured</h3>
-              <p className="text-muted-foreground text-sm text-center">You haven&apos;t added any floors or rooms to this property yet. Set up your property to see the grid.</p>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground mb-2">
+            No Rooms Configured
+            <InfoHint label="No Rooms Configured">You haven&apos;t added any floors or rooms to this property yet. Set up your property to see the grid.</InfoHint>
+          </h3>
             </div>
           ) : (
             floors.map(floorName => (

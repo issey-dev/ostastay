@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type DebtorAccount = {
   upid: string
@@ -59,8 +60,10 @@ export default function DebtorsPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Debtors</h2>
-          <p className="text-sm text-muted-foreground">Accounts Receivable — Travel Agent and corporate credit accounts.</p>
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            Debtors
+            <InfoHint label="Debtors">Accounts Receivable — Travel Agent and corporate credit accounts.</InfoHint>
+          </h2>
         </div>
         <Link href={`/e/${slug}/dashboard/debtors/new`}>
           <Button><Plus className="w-4 h-4 mr-2" /> New Account</Button>

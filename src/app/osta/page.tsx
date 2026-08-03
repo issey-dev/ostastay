@@ -1,5 +1,6 @@
 import { Building2, ClipboardCheck, ShieldCheck } from "@/components/icons"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { InfoHint } from "@/components/ui/info-hint"
 import { prisma } from "@/lib/db"
 
 export default async function OstaOverviewPage() {
@@ -18,8 +19,10 @@ export default async function OstaOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Overview</h2>
-        <p className="text-muted-foreground">Every enterprise, property, and support grant on the platform, in one place.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Overview
+            <InfoHint label="Overview">Every enterprise, property, and support grant on the platform, in one place.</InfoHint>
+          </h2>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map((c) => (
