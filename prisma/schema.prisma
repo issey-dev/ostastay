@@ -195,6 +195,10 @@ model SupportAccessGrant {
   respondedAt DateTime?
   expiresAt   DateTime?
   revokedAt   DateTime?
+
+  @@index([approvedByUserId])
+  @@index([enterpriseId])
+  @@index([requestedByUserId])
 }
 
 model SystemCode {
@@ -224,6 +228,8 @@ model NightAuditLog {
   notes            String?
 
   createdAt DateTime @default(now())
+
+  @@index([enterpriseId])
 }
 
 // Scope: ENTERPRISE (sees every Property under the Enterprise) | PROPERTY (a single
@@ -255,6 +261,10 @@ model User {
   currencyExchangesCreated CurrencyExchange[]   @relation("CurrencyExchangeCreatedBy")
   propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
   spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
+
+  @@index([enterpriseId])
+  @@index([propertyId])
+  @@index([roleId])
 }
 
 // PropertyStatus: PENDING (newly created by a tenant, not yet reviewed — locked out of
@@ -410,6 +420,9 @@ model Property {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([enterpriseId])
+  @@index([reviewedByUserId])
 }
 
 model Building {
@@ -419,6 +432,8 @@ model Building {
   name       String
 
   floors Floor[]
+
+  @@index([propertyId])
 }
 
 model Floor {
@@ -428,6 +443,8 @@ model Floor {
   name       String
 
   rooms Room[]
+
+  @@index([buildingId])
 }
 
 model Facility {
@@ -436,6 +453,8 @@ model Facility {
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name        String
   description String?
+
+  @@index([propertyId])
 }
 
 model RoomType {
@@ -489,6 +508,8 @@ model RoomType {
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
   // since all three are "pick any number of codes from a category" in the same shape.
   features          RoomTypeFeature[]
+
+  @@index([propertyId])
 }
 
 model RoomTypeFeature {
@@ -561,6 +582,10 @@ model Room {
   features          RoomFeature[]
 
   @@unique([propertyId, roomNumber])
+
+  @@index([assignedAttendantId])
+  @@index([floorId])
+  @@index([roomTypeId])
 }
 
 model RoomFeature {
@@ -583,6 +608,8 @@ model TaxProfile {
   rates       TaxRate[]
   chargeCodes ChargeCode[]
   outlets     Outlet[]
+
+  @@index([enterpriseId])
 }
 
 model TaxRate {
@@ -602,6 +629,8 @@ model TaxRate {
   order         Int        @default(0)
   effectiveFrom DateTime
   effectiveTo   DateTime?
+
+  @@index([taxProfileId])
 }
 
 // Level 1 of the Opera-modelled Group → Subgroup → Code hierarchy. `reportBucket` is
@@ -652,6 +681,9 @@ model ChargeSubgroup {
   chargeCodes ChargeCode[]
 
   @@unique([enterpriseId, code])
+
+  @@index([chargeGroupId])
+  @@index([outletId])
 }
 
 model ChargeCode {
@@ -707,6 +739,9 @@ model ChargeCode {
   spaTreatments  SpaTreatment[]
 
   @@unique([enterpriseId, code])
+
+  @@index([chargeSubgroupId])
+  @@index([taxProfileId])
 }
 
 // Declarative replacement for hardcoded "posting ROOM also posts GTX" logic: posting the
@@ -735,6 +770,8 @@ model ChargeCodeGenerate {
 
   @@unique([generatorCodeId, generatedCodeId])
   @@index([enterpriseId, generatorCodeId])
+
+  @@index([generatedCodeId])
 }
 
 // PaymentType: CASH, CARD, TRANSFER
@@ -757,6 +794,9 @@ model PaymentMethod {
   chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   payments Payment[]
+
+  @@index([chargeCodeId])
+  @@index([enterpriseId])
 }
 
 // ProfileType: GUEST, COMPANY, TRAVEL_AGENT, STAFF (GUEST/STAFF are "individual
@@ -834,6 +874,9 @@ model Profile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([enterpriseId])
+  @@index([originPropertyId])
 }
 
 // Multiple per profile, one may be marked primary — type is a fixed 3-value enum
@@ -846,6 +889,8 @@ model ProfileCommunication {
   value     String
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([upid])
 }
 
 // Multiple per profile, one may be marked primary. fullAddress is one free-text block
@@ -863,6 +908,8 @@ model ProfileAddress {
   country       String?
   isPrimary     Boolean  @default(false)
   createdAt     DateTime @default(now())
+
+  @@index([upid])
 }
 
 // A clickable reference list (label + externally-hosted URL) — deliberately not a
@@ -875,6 +922,8 @@ model ProfileAttachment {
   label     String
   url       String
   createdAt DateTime @default(now())
+
+  @@index([upid])
 }
 
 model ProfilePreference {
@@ -884,6 +933,8 @@ model ProfilePreference {
   category String // DIETARY | PREFERENCE | ROOM | BEDDING | AMENITY
   value    String
   notes    String?
+
+  @@index([upid])
 }
 
 model ProfileDocument {
@@ -917,6 +968,8 @@ model ProfileNote {
   noteText     String
   isPinned     Boolean  @default(false)
   createdAt    DateTime @default(now())
+
+  @@index([upid])
 }
 
 model RatePlan {
@@ -989,6 +1042,9 @@ model RatePlan {
   agentAccess     RatePlanAgentAccess[]
 
   @@unique([propertyId, code])
+
+  @@index([chargeCodeId])
+  @@index([parentRatePlanId])
 }
 
 model PriceCalendar {
@@ -1007,6 +1063,8 @@ model PriceCalendar {
   extraChildPrice Float?
 
   @@unique([ratePlanId, roomTypeId, date])
+
+  @@index([roomTypeId])
 }
 
 // Stop-Sale / availability restriction. A row's PRESENCE means the date is CLOSED (not
@@ -1034,6 +1092,8 @@ model AvailabilityRestriction {
 
   @@unique([propertyId, roomTypeId, date])
   @@index([propertyId, date])
+
+  @@index([roomTypeId])
 }
 
 // ReservationStatus: RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
@@ -1131,6 +1191,11 @@ model Reservation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([groupBlockId])
+  @@index([primaryGuestId])
+  @@index([propertyId])
+  @@index([travelAgentId])
 }
 
 // Pickup/Dropoff transport for a reservation — one row per direction (arrival pickup,
@@ -1235,6 +1300,10 @@ model Folio {
   outletChecks       OutletCheck[]
 
   @@index([propertyId])
+
+  @@index([groupBlockId])
+  @@index([payeeProfileId])
+  @@index([reservationId])
 }
 
 model FolioLineItem {
@@ -1297,6 +1366,14 @@ model FolioLineItem {
   excursionBooking ExcursionBooking?
   // Back-reference from SpaAppointment.folioLineItemId (1:1, optional).
   spaAppointment   SpaAppointment?
+
+  @@index([chargeCodeId])
+  @@index([folioId])
+  @@index([generatedFromLineItemId])
+  @@index([outletCheckId])
+  @@index([outletId])
+  @@index([roomAssignmentId])
+  @@index([shiftId])
 }
 
 // A standing "routing instruction": charges of a given ChargeCode on a source
@@ -1319,6 +1396,9 @@ model FolioRoutingRule {
   createdAt       DateTime    @default(now())
 
   @@unique([reservationId, chargeCodeId])
+
+  @@index([chargeCodeId])
+  @@index([targetFolioId])
 }
 
 // A front-desk cashier's drawer session, scoped to (userId, propertyId): a user
@@ -1357,6 +1437,8 @@ model CashierShift {
 
   @@index([propertyId])
   @@index([userId])
+
+  @@index([enterpriseId])
 }
 
 // A petty-cash disbursement from the drawer during a shift (florist COD, taxi
@@ -1370,6 +1452,8 @@ model CashierPaidOut {
   reason          String
   createdByUserId String
   createdAt       DateTime     @default(now())
+
+  @@index([shiftId])
 }
 
 model Payment {
@@ -1410,6 +1494,11 @@ model Payment {
   // Spa appointments refunded by this payment (see SpaAppointment.refundPaymentId) —
   // same "never automatic" convention.
   refundedSpaAppointments   SpaAppointment[]
+
+  @@index([chargeCodeId])
+  @@index([folioId])
+  @@index([paymentMethodId])
+  @@index([shiftId])
 }
 
 // Per-property fee rules (Controls > Fee Rules) that drive the Deposit module and
@@ -1442,6 +1531,8 @@ model PropertyFeeRule {
   updatedAt    DateTime    @updatedAt
 
   @@index([propertyId, ruleType])
+
+  @@index([chargeCodeId])
 }
 
 // A cashier-recorded currency exchange (guest-facing FX, common at resort front
@@ -1469,6 +1560,10 @@ model CurrencyExchange {
   createdAt       DateTime @default(now())
   createdByUserId String
   createdBy       User     @relation("CurrencyExchangeCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([createdByUserId])
+  @@index([propertyId])
+  @@index([shiftId])
 }
 
 // A revenue-generating point of sale scoped to one Property (Spa, Restaurant, Bar,
@@ -1525,6 +1620,8 @@ model Outlet {
 
   @@unique([propertyId, name])
   @@unique([propertyId, code])
+
+  @@index([taxProfileId])
 }
 
 // The curated many-to-many "shared pool" — an explicit join model (not Prisma's
@@ -1541,6 +1638,8 @@ model OutletChargeCode {
   createdAt DateTime @default(now())
 
   @@unique([outletId, chargeCodeId])
+
+  @@index([chargeCodeId])
 }
 
 // One outlet "sales check" — the identifiable grouping of charges sold through an Outlet
@@ -1718,6 +1817,9 @@ model EnterpriseSettings {
   sftpRemotePath String?
 
   updatedAt DateTime @updatedAt
+
+  @@index([excursionOutletId])
+  @@index([spaOutletId])
 }
 
 // TraceType: GUEST_MESSAGE, WAKE_UP_CALL, MAINTENANCE, FRONT_DESK
@@ -1736,6 +1838,8 @@ model ReservationTrace {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([reservationId])
 }
 
 // IssueType: PLUMBING, ELECTRICAL, HVAC, GENERAL
@@ -1757,6 +1861,9 @@ model RoomMaintenance {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([assignedToId])
+  @@index([roomId])
 }
 
 model AccompanyingGuest {
@@ -1769,6 +1876,8 @@ model AccompanyingGuest {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, profileId])
+
+  @@index([profileId])
 }
 
 // eRegistration — a shareable, unauthenticated temp link letting a guest fill in their
@@ -1807,6 +1916,9 @@ model ERegistrationLink {
 
   @@index([reservationId])
   @@index([groupBlockId])
+
+  @@index([enterpriseId])
+  @@index([propertyId])
 }
 
 // One guest's own slot on a link. Always tagged with its OWN reservationId even under a
@@ -1870,6 +1982,9 @@ model ERegistrationGuestSlot {
   childrenInfo String?
 
   @@unique([reservationId, slotIndex])
+
+  @@index([existingProfileId])
+  @@index([linkId])
 }
 
 model RoomAssignment {
@@ -1900,6 +2015,12 @@ model RoomAssignment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([chargeRoomTypeId])
+  @@index([ratePlanId])
+  @@index([reservationId])
+  @@index([roomId])
+  @@index([roomTypeId])
 }
 
 // HousekeepingTaskStatus: PENDING, IN_PROGRESS, COMPLETED
@@ -1921,6 +2042,9 @@ model HousekeepingTask {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([assignedToId])
+  @@index([roomId])
 }
 
 model RoomAttendant {
@@ -1932,6 +2056,8 @@ model RoomAttendant {
   zone         String? // e.g. "Floor 1"
 
   tasks HousekeepingTask[]
+
+  @@index([enterpriseId])
 }
 
 // GroupStatus: TENTATIVE, DEFINITE, CANCELLED
@@ -1968,6 +2094,8 @@ model GroupBlock {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
+
+  @@index([payeeProfileId])
 }
 
 // Rooms of a given type held by a group block for its whole date span. Outstanding
@@ -1982,6 +2110,8 @@ model GroupBlockRoom {
   quantity     Int        @default(0)
 
   @@unique([groupBlockId, roomTypeId])
+
+  @@index([roomTypeId])
 }
 
 model PropertyNightAuditLog {
@@ -2078,6 +2208,8 @@ model GuestRegistration {
 
   @@unique([propertyId, year, registrationNo])
   @@unique([reservationId, profileId])
+
+  @@index([profileId])
 }
 
 // An immutable per-business-date report snapshot generated during EOD's reports
@@ -2170,6 +2302,8 @@ model Allocation {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
+
+  @@index([chargeCodeId])
 }
 
 // Date-range pricing rows — ranges must never overlap (validated in the API, like rate
@@ -2185,6 +2319,8 @@ model AllocationRate {
   childPrice    Float      @default(0)
   effectiveFrom DateTime
   effectiveTo   DateTime?
+
+  @@index([allocationId])
 }
 
 // "This package rate includes these allocations." Explicit join model with its own id,
@@ -2200,6 +2336,8 @@ model RatePlanAllocation {
   createdAt DateTime @default(now())
 
   @@unique([ratePlanId, allocationId])
+
+  @@index([allocationId])
 }
 
 // Restricts a negotiated RatePlan (RatePlan.isNegotiated) to specific Company/Travel
@@ -2224,6 +2362,8 @@ model RatePlanAgentAccess {
   createdAt DateTime @default(now())
 
   @@unique([ratePlanId, upid])
+
+  @@index([upid])
 }
 
 // "Choosing this meal plan on a reservation brings these allocations" (BB → {BF}).
@@ -2237,6 +2377,8 @@ model MealPlanAllocation {
   createdAt DateTime @default(now())
 
   @@unique([mealPlanId, allocationId])
+
+  @@index([allocationId])
 }
 
 // The materialized per-reservation attachment set — written at reservation create/edit
@@ -2260,6 +2402,8 @@ model ReservationAllocation {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, allocationId])
+
+  @@index([allocationId])
 }
 
 // ---------------------------------------------------------------------------
@@ -2320,6 +2464,8 @@ model ExcursionType {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
+
+  @@index([chargeCodeId])
 }
 
 // Dated pricing, same shape and non-overlapping-range rule as AllocationRate — the row
@@ -2336,6 +2482,8 @@ model ExcursionRate {
   flatPrice       Float?
   effectiveFrom   DateTime
   effectiveTo     DateTime? // null = open-ended; ranges must not overlap (API-validated)
+
+  @@index([excursionTypeId])
 }
 
 // The recurring half of the "hybrid" scheduling model (see EXCURSIONS_PLAN.md) — a
@@ -2359,6 +2507,8 @@ model ExcursionSchedule {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([excursionTypeId])
 }
 
 // One bookable instance — either generated from a schedule or added ad hoc (the manual
@@ -2392,6 +2542,8 @@ model ExcursionDeparture {
   updatedAt DateTime @updatedAt
 
   @@unique([excursionTypeId, departureDate, departureTime])
+
+  @@index([scheduleId])
 }
 
 // The actual sale. Guest identity is XOR (reservationId OR walk-in name/contact),
@@ -2453,6 +2605,12 @@ model ExcursionBooking {
   updatedAt DateTime @updatedAt
 
   @@index([departureId])
+
+  @@index([folioId])
+  @@index([movedFromDepartureId])
+  @@index([propertyId])
+  @@index([refundPaymentId])
+  @@index([reservationId])
 }
 
 // ---------------------------------------------------------------------------
@@ -2516,6 +2674,10 @@ model SpaTreatment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([chargeCodeId])
+  @@index([propertyId])
 }
 
 // Dated pricing — same shape and non-overlapping-range rule as ExcursionRate/
@@ -2531,6 +2693,8 @@ model SpaTreatmentRate {
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@index([treatmentId])
 }
 
 model SpaTherapist {
@@ -2563,6 +2727,8 @@ model SpaTherapist {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
 }
 
 model SpaTherapistTreatment {
@@ -2577,6 +2743,8 @@ model SpaTherapistTreatment {
   notes                 String?
 
   @@unique([therapistId, treatmentId])
+
+  @@index([treatmentId])
 }
 
 model SpaRoom {
@@ -2598,6 +2766,8 @@ model SpaRoom {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
 }
 
 model SpaTreatmentRoom {
@@ -2609,6 +2779,8 @@ model SpaTreatmentRoom {
   preferred   Boolean      @default(false)
 
   @@unique([treatmentId, roomId])
+
+  @@index([roomId])
 }
 
 model SpaTherapistSchedule {
@@ -2621,6 +2793,8 @@ model SpaTherapistSchedule {
   effectiveFrom DateTime
   effectiveTo   DateTime?
   isActive      Boolean      @default(true)
+
+  @@index([therapistId])
 }
 
 model SpaTherapistAvailabilityException {
@@ -2633,6 +2807,8 @@ model SpaTherapistAvailabilityException {
   exceptionType String // DAY_OFF | LEAVE | TRAINING | SICK | EXTENDED_HOURS | UNAVAILABLE
   reason        String?
   createdAt     DateTime     @default(now())
+
+  @@index([therapistId])
 }
 
 model SpaRoomAvailabilityException {
@@ -2645,6 +2821,8 @@ model SpaRoomAvailabilityException {
   exceptionType String // MAINTENANCE | CLEANING | RENOVATION | PRIVATE_EVENT | UNAVAILABLE
   reason        String?
   createdAt     DateTime @default(now())
+
+  @@index([roomId])
 }
 
 model SpaSettings {
@@ -2747,6 +2925,10 @@ model SpaAppointment {
 
   @@index([propertyId, appointmentDate])
   @@index([roomId, appointmentDate])
+
+  @@index([folioId])
+  @@index([refundPaymentId])
+  @@index([treatmentId])
 }
 
 // One row per guest within a SpaAppointment — where the actual "multi-resource"
@@ -2794,6 +2976,9 @@ model SpaAppointmentParticipant {
 
   @@index([therapistId])
   @@index([appointmentId])
+
+  @@index([requestedTherapistId])
+  @@index([reservationId])
 }
 
 // A guest's remembered therapist at ONE property — deliberately not on the generic
@@ -2813,6 +2998,9 @@ model SpaGuestTherapistPreference {
   updatedAt   DateTime     @updatedAt
 
   @@unique([profileId, propertyId])
+
+  @@index([propertyId])
+  @@index([therapistId])
 }
 
 // A connection to an external channel manager (Beds24 today) — the exchange interface
@@ -3134,6 +3322,10 @@ model ChannelInboundBooking {
   @@unique([connectionId, externalBookingId])
   @@index([enterpriseId, receivedAt])
   @@index([enterpriseId, isOverbooking])
+
+  @@index([propertyId])
+  @@index([reservationId])
+  @@index([roomTypeId])
 }
 
 // Per-link defaults for converting a ChannelInboundBooking into a real Reservation — what to
@@ -3160,4 +3352,6 @@ model ChannelBookingDefaults {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ratePlanId])
 }
