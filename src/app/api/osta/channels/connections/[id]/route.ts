@@ -1,37 +1,37 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
-// Confirms the connection exists AND belongs to the caller's enterprise. One generic
-// "Connection not found" either way, so a probing request cannot distinguish "belongs to
-// another enterprise" from "does not exist" — the same rule assertPropertyAccess() follows.
-async function assertConnectionInEnterprise(id: string, enterpriseId: string) {
-  const connection = await prisma.channelConnection.findUnique({ where: { id } });
-  if (!connection || connection.enterpriseId !== enterpriseId) {
-    return null;
-  }
-  return connection;
-}
+// Osta-console per-connection management — see ../route.ts for why this reaches across
+// tenants and why it is guarded on isInternal + INTEGRATIONS.
+//
+// No enterprise scoping on the lookup, ON PURPOSE: cross-tenant reach is this API's job.
+// The internal guard is the entire access control, which is why it comes first in every
+// handler and why these routes must never be reachable through any tenant-facing path.
 
-// Two distinct edits, dispatched by which field is present — same pattern as the
-// property-links PATCH:
-//   { inviteCode }               — replace the stored credentials with a fresh invite code
-//                                   (the recovery path when a refresh token has lapsed past
-//                                   the provider's idle window and cannot be repaired by
-//                                   refreshing, since the token is already dead).
-//   { rateLimitPauseThreshold }  — the operator's self-throttle floor (null disables it).
-//   { pollLookbackHours }        — the scheduled poll's lookback window (null = 48h default).
+// Same field-dispatched PATCH as the Hub route:
+//   { inviteCode }               — replace the stored credentials (recovery for a lapsed
+//                                   refresh token; refreshing cannot revive a dead one).
+//   { rateLimitPauseThreshold }  — the self-throttle floor. Under the master-account
+//                                   topology every tenant drains ONE shared Beds24 credit
+//                                   pool, so setting these floors is how the platform
+//                                   stops one busy property starving the rest.
+//   { pollLookbackHours }        — the scheduled poll's lookback window (null = default
+//                                   48h). This is the outage self-heal horizon; one-off
+//                                   catch-ups beyond it belong to [id]/resync.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    if (!ctx.isInternal) {
+      throw new ForbiddenError("Only Osta staff can manage connections across enterprises");
+    }
     requirePermission(ctx, "INTEGRATIONS", "update");
 
-    const existing = await assertConnectionInEnterprise(id, ctx.enterpriseId);
+    const existing = await prisma.channelConnection.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
@@ -58,6 +58,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const connection = await setPollLookbackHours(id, hours);
         return NextResponse.json({ connection });
       } catch (e) {
+        // The setter's own bounds message (1..MAX_STORED_LOOKBACK_HOURS) is the useful one.
         return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid value" }, { status: 400 });
       }
     }
@@ -73,9 +74,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ctx,
       module: "INTEGRATIONS",
       action: "UPDATE",
-      description: `Re-authorized channel manager "${existing.name}" with a new invite code`,
+      description: `Re-authorized channel manager "${existing.name}" with a new invite code — by Osta platform admin`,
       entityType: "ChannelConnection",
       entityId: id,
+      targetEnterpriseId: existing.enterpriseId,
     });
 
     return NextResponse.json({ connection });
@@ -95,10 +97,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    if (!ctx.isInternal) {
+      throw new ForbiddenError("Only Osta staff can manage connections across enterprises");
+    }
     requirePermission(ctx, "INTEGRATIONS", "delete");
 
-    const existing = await assertConnectionInEnterprise(id, ctx.enterpriseId);
+    const existing = await prisma.channelConnection.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
@@ -109,9 +113,10 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       ctx,
       module: "INTEGRATIONS",
       action: "DELETE",
-      description: `Removed channel manager connection "${existing.name}"`,
+      description: `Removed channel manager connection "${existing.name}" — by Osta platform admin`,
       entityType: "ChannelConnection",
       entityId: id,
+      targetEnterpriseId: existing.enterpriseId,
     });
 
     return NextResponse.json({ ok: true });

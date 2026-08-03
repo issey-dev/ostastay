@@ -35,6 +35,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 type Reservation = {
   id: string
   confirmationNo: string
+  /** The channel's own booking id (Beds24/OTA ref) for channel-sourced reservations. */
+  externalRef: string | null
   status: string
   checkInDate: string
   checkOutDate: string
@@ -545,7 +547,10 @@ export default function ReservationsDashboard() {
                           <span className="truncate">{guestName}</span>
                           {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                         </div>
-                        <div className="text-xs font-mono text-muted-foreground mt-0.5">{res.confirmationNo}</div>
+                        <div className="text-xs font-mono text-muted-foreground mt-0.5">
+                          {res.confirmationNo}
+                          {res.externalRef && <span className="text-muted-foreground/70"> · ch:{res.externalRef}</span>}
+                        </div>
                       </div>
                       <StatusBadge
                         label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
@@ -622,7 +627,10 @@ export default function ReservationsDashboard() {
                             <span className="truncate">{guestName}</span>
                             {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </div>
-                          <div className="text-xs font-mono text-muted-foreground truncate">{res.confirmationNo}</div>
+                          <div className="text-xs font-mono text-muted-foreground truncate">
+                            {res.confirmationNo}
+                            {res.externalRef && <span className="text-muted-foreground/70"> · ch:{res.externalRef}</span>}
+                          </div>
                         </TableCell>
 
                         {/* Stay */}

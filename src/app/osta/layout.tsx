@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { OstaSidebar } from "@/components/osta-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
+import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -48,7 +49,9 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
         </header>
         <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
           <div className="max-w-7xl mx-auto w-full print:max-w-none">
-            {children}
+            {/* Same confirm-dialog provider the tenant shells mount — Osta pages with
+                destructive actions (Channel Manager's remove/replace-URL) need it too. */}
+            <ConfirmProvider>{children}</ConfirmProvider>
           </div>
         </div>
       </main>

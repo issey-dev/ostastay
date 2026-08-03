@@ -994,6 +994,95 @@ way; the channel webhook was the remaining plaintext holdout that
   attack) gets a 404**; generating returns a plaintext that authenticates while the token
   it replaced stops working.
 
+## Osta-console channel administration (2026-08-02) — DONE (branch `feature/beds24-master-account`)
+
+Platform-side channel-manager tooling for the master-account topology (see the DECISIONS.md
+entry of the same date): the app owner runs ONE Beds24 account and drives every customer
+enterprise's setup/monitoring from the Osta console instead of touring tenant Hubs under
+support grants.
+
+- **New Osta console page `/osta/channel-manager`** (sidebar entry "Channel Manager"):
+  every enterprise's connection in one place — status, health-check/keep-alive button,
+  refresh-token expiry countdown, webhook generate/replace (show-once dialog), rate-limit
+  pause threshold, connect-new (enterprise picker + invite code), re-authorize, delete.
+  A "Shared API credit pool" card surfaces the most recently observed rate-limit reading,
+  because under one master account every tenant drains the same budget.
+- **New API `/api/osta/channels/connections`** (+ `[id]`, `[id]/test`, `[id]/webhook`) —
+  the cross-tenant counterpart of `/api/hub/connections`. Every handler requires
+  `ctx.isInternal` FIRST and then `INTEGRATIONS` bits (not CONTROLS like other /api/osta
+  routes — it's channel work and the permission should say so). Deliberately no
+  enterprise scoping on lookups: cross-tenant reach is the point, and isInternal is the
+  entire access control. Creating a connection on the INTERNAL enterprise itself is
+  refused (404, same rule as support-access grants).
+- **Every action on a tenant's connection logs into THAT tenant's activity trail**
+  (`logActivity targetEnterpriseId`), with the Osta admin's identity snapshotted — the
+  enterprise being acted on is the one whose auditors need to see it.
+- **`listAllConnections()`** in `src/lib/channels/connection.ts` — the one deliberately
+  unscoped connection query; goes through `toPublicConnection` so no token fields can
+  ride along. Tenant code keeps using `listConnections()`.
+- **Room-type/rate MAPPING deliberately absent** from the Osta page — the owner's call is
+  that mapping stays in each enterprise's own Hub.
+- The tenant Hub component now exports its `Connection` type + `StatusBadge` +
+  `RateLimitPanel` + `formatDateTime` for reuse; `hasWebhook` was added to that type.
+- **Fixed in passing: the Osta layout had no `ConfirmProvider`** — any Osta page using
+  `useConfirm()` would 500. Found by live browser verification, mounted in
+  `src/app/osta/layout.tsx` mirroring the tenant shells.
+- Tests: `tests/business-rules/osta-channel-admin.test.ts` — tenant admin refused even
+  with full INTEGRATIONS (the block is isInternal, not the permission bit); cross-tenant
+  list carries enterprise info and no credential fields; create-for-tenant (stubbed
+  Beds24) lands encrypted in the tenant with a tenant-trail entry; INTERNAL-enterprise
+  create refused; cross-tenant threshold set; webhook mint is show-once/hash-at-rest and
+  authenticates on the public route; delete logs to the tenant trail.
+
+## Reservation.externalRef — channel booking id on the reservation (2026-08-03) — DONE (branch `feature/beds24-master-account`)
+
+App-owner request: an "External confirmation id" on the reservation to match a Beds24
+booking id to the Osta system. The id already lived on
+`ChannelInboundBooking.externalBookingId` (the idempotency key, with `reservationId`
+linkage after conversion) and inside the reservation's remarks text — so channel→
+reservation matching worked, but reservation-side search did not.
+
+- **`Reservation.externalRef`** (nullable; migration `20260803060000_reservation_external_ref`
+  with a backfill from every already-converted `ChannelInboundBooking`). NOT unique on
+  purpose — uniqueness and full provenance stay on ChannelInboundBooking's
+  `(connectionId, externalBookingId)`.
+- Set only by the conversion path (`convert.ts` → `CreateReservationInput.externalRef`);
+  staff-made reservations never carry one. The remarks line ("Booked via ... (ref ...)")
+  stays as the human-readable provenance.
+- **Reservation search now matches it** (`GET /api/reservations` OR-clause) — the desk
+  pastes a Beds24/OTA ref into the ordinary search box and lands on the stay. Shown in
+  the reservations list (mobile + table) as `· ch:<ref>` next to the confirmation number.
+
+## Configurable poll window + deep resync (2026-08-03) — DONE (branch `feature/beds24-master-account`)
+
+App-owner request after the outage-recovery discussion: the 48h poll lookback was fixed,
+so an outage longer than that had no built-in catch-up.
+
+- **`ChannelConnection.pollLookbackHours`** (nullable; migration
+  `20260803070000_poll_lookback_hours`) — per-connection override of the scheduled poll's
+  window; null = the built-in 48h default. **Bounded at 720h (30 days)** by
+  `setPollLookbackHours` in `src/lib/channels/connection.ts` — a routine poll permanently
+  re-reading more than that is a standing bulk export, not a safety net. The constant
+  lives there (not poll.ts) because poll.ts imports connection.ts and the setter enforces
+  it.
+- **`pollConnection(id, { lookbackHours })`** — explicit one-off override with its own
+  ceiling (`MAX_RESYNC_LOOKBACK_HOURS`, 8760h/1 year), never persisted. Priority:
+  explicit > stored > default.
+- **`POST /api/osta/channels/connections/[id]/resync`** `{ hours }` — the deep-resync
+  action: polls with the one-off window, then runs the conversion sweep so recovered
+  bookings become reservations in the same action. A reachable-but-failing poll returns
+  200 with the recorded reason (same philosophy as the health-check route). Logged to the
+  tenant's trail.
+- **Osta console UI**: "Deep resync" button per connection (dialog with hours input +
+  result readout) and a "Booking poll window" panel (blur-to-save, mirrors the rate-limit
+  panel). `{ pollLookbackHours }` PATCH added to BOTH the Osta and tenant-Hub connection
+  routes; tenant-Hub UI for it deliberately not added yet (the platform admin is the
+  operator under the master-account topology).
+- Tests in `tests/business-rules/osta-channel-admin.test.ts` capture the stubbed fetch's
+  `modifiedSince` URL param to prove the window actually sent to Beds24 matches the
+  stored setting / the one-off value, that deep resync persists nothing, and that both
+  ceilings reject out-of-range values.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

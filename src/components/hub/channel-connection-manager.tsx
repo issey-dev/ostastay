@@ -22,12 +22,17 @@ import { toast } from "@/lib/toast"
 // use useProperty() — the Hub has no PropertyProvider (see src/app/e/[slug]/hub/layout.tsx),
 // because a channel-manager connection is enterprise-level, not per-property.
 
-type Connection = {
+// Exported for the Osta console's cross-tenant manager
+// (src/components/osta/channel-connections-admin.tsx), which renders the same
+// per-connection shape with an enterprise attached.
+export type Connection = {
   id: string
   provider: string
   name: string
   status: string
   hasCredentials: boolean
+  /** Whether an inbound webhook URL exists. The token itself is never in any response. */
+  hasWebhook: boolean
   lastTokenRefreshAt: string | null
   lastHealthCheckAt: string | null
   lastError: string | null
@@ -40,6 +45,8 @@ type Connection = {
   rateLimitResetsAt: string | null
   rateLimitObservedAt: string | null
   rateLimitPauseThreshold: number | null
+  /** Scheduled-poll lookback override in hours. Null = the built-in 48h default. */
+  pollLookbackHours: number | null
 }
 
 const connectSchema = z.object({
@@ -53,12 +60,12 @@ const reauthSchema = z.object({
 })
 type ReauthFormValues = z.infer<typeof reauthSchema>
 
-function formatDateTime(iso: string | null) {
+export function formatDateTime(iso: string | null) {
   if (!iso) return "Never"
   return new Date(iso).toLocaleString()
 }
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   if (status === "CONNECTED") return <Badge variant="default">Connected</Badge>
   if (status === "ERROR") return <Badge variant="destructive">Error</Badge>
   return <Badge variant="secondary">Not connected</Badge>
@@ -410,7 +417,7 @@ export function ChannelConnectionManager({ canManage }: { canManage: boolean }) 
 // real call has happened yet. The threshold below is the operator's own safety margin:
 // push/poll skip a real call once remaining credits reach it, rather than waiting for
 // Beds24 itself to start rejecting requests.
-function RateLimitPanel({
+export function RateLimitPanel({
   c,
   canManage,
   onSave,

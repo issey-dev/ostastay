@@ -50,6 +50,9 @@ export type CreateReservationInput = {
   infants?: number | string;
   mealPlan?: string;
   remarks?: string | null;
+  /** The originating channel's own booking id — set only by the channel-conversion path
+   *  (src/lib/channels/inbound/convert.ts). Staff-made reservations never carry one. */
+  externalRef?: string | null;
   depositFeeRuleId?: string | null;
   cancellationFeeRuleId?: string | null;
   noShowFeeRuleId?: string | null;
@@ -336,6 +339,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       infants: parseInt(String(body.infants)) || 0,
       mealPlan: body.mealPlan || "NONE",
       remarks: body.remarks || null,
+      externalRef: body.externalRef || null,
       depositFeeRuleId: feeRuleSel.DEPOSIT,
       cancellationFeeRuleId: feeRuleSel.CANCELLATION,
       noShowFeeRuleId: feeRuleSel.NO_SHOW,

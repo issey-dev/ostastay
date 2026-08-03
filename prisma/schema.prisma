@@ -1040,6 +1040,14 @@ model AvailabilityRestriction {
 model Reservation {
   id             String   @id @default(uuid())
   confirmationNo String   @unique
+  // The originating channel's own booking id (e.g. Beds24's booking id), set when this
+  // reservation was converted from a ChannelInboundBooking — first-class and searchable,
+  // so the desk can paste an OTA/channel reference into reservation search and land on
+  // the stay. NOT unique: uniqueness belongs to ChannelInboundBooking's
+  // (connectionId, externalBookingId), where the full provenance (raw payload, channel
+  // name, source) also lives via its reservationId link. Null for every directly-made
+  // reservation.
+  externalRef    String?
   propertyId     String
   property       Property @relation(fields: [propertyId], references: [id])
   primaryGuestId String
@@ -2884,6 +2892,13 @@ model ChannelConnection {
   // means no self-throttling — only Beds24's own limit applies, and a call is only ever
   // skipped once Beds24 itself would already be rejecting it.
   rateLimitPauseThreshold Int?
+
+  // How many hours back each scheduled booking poll looks. Null = the built-in default
+  // (POLL_LOOKBACK_HOURS, 48). The window is a RESYNC HORIZON, not a schedule: any outage
+  // shorter than it self-heals on the next poll because ingestion is idempotent. Raise it
+  // when longer outages are a real concern; a one-off catch-up beyond it should use the
+  // deep-resync action instead of permanently widening every routine poll.
+  pollLookbackHours Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

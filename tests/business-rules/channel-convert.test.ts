@@ -127,6 +127,10 @@ describe("Inbound booking conversion", () => {
     expect(reservation!.assignments[0].ratePlanId).toBe(ratePlanId);
     expect(reservation!.primaryGuest.firstName).toBe("Ada");
     expect(reservation!.remarks).toContain("ok-1");
+    // The channel's own booking id lands first-class on the reservation — this is what
+    // lets the desk paste a Beds24/OTA reference into reservation search and match the
+    // stay, rather than digging it out of the remarks text.
+    expect(reservation!.externalRef).toBe("ok-1");
 
     const stored = await prisma.channelInboundBooking.findUnique({ where: { id: booking.id } });
     expect(stored?.status).toBe("CONVERTED");
