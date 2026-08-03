@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
@@ -77,6 +78,10 @@ export async function POST(request: Request) {
         checkInTime,
         checkOutTime,
         status: "ACTIVE",
+        // Same as the tenant route: the chosen go-live date becomes the initial
+        // business date (today if unset). A property with none breaks the booking
+        // form's Arrival default. Night Audit rolls it forward from here.
+        businessDate: goLiveDate(typeof body?.goLiveDate === "string" ? body.goLiveDate : undefined),
         reviewedByUserId: ctx.userId,
         reviewedAt: new Date(),
       },

@@ -30,3 +30,13 @@ export function nextBusinessDate(d: Date): Date {
   const midnight = toUtcMidnight(d);
   return new Date(midnight.getTime() + 24 * 60 * 60 * 1000);
 }
+
+/** The initial business date for a newly onboarded property: the operator's chosen
+ *  GO-LIVE DATE, or today when they didn't pick one. Parsed as a UTC midnight so it
+ *  matches every other business-date value; anything unparseable falls back to today
+ *  rather than writing an Invalid Date. */
+export function goLiveDate(input?: string | null): Date {
+  if (!input) return serverToday();
+  const parsed = new Date(`${input}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? serverToday() : toUtcMidnight(parsed);
+}

@@ -9,6 +9,7 @@ import { Plus, UserPlus, ClipboardList } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
 
@@ -30,6 +31,8 @@ const propertySchema = z.object({
   timeZone: z.string().trim().min(1, "An IANA time zone, e.g. Indian/Maldives"),
   checkInTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "HH:MM"),
   checkOutTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "HH:MM"),
+  // Becomes the property's initial business date; Night Audit rolls it on.
+  goLiveDate: z.string().trim().min(1, "Pick the go-live date"),
 })
 type PropertyFormValues = z.infer<typeof propertySchema>
 
@@ -70,6 +73,7 @@ export function EnterpriseOnboardingActions({
       timeZone: "Indian/Maldives",
       checkInTime: "14:00",
       checkOutTime: "11:00",
+      goLiveDate: new Date().toISOString().slice(0, 10),
     },
   })
   const userForm = useForm<InitialUserFormValues>({
@@ -236,6 +240,20 @@ export function EnterpriseOnboardingActions({
                       <FormControl>
                         <Input placeholder="11:00" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={propertyForm.control}
+                  name="goLiveDate"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Go-live date</FormLabel>
+                      <FormControl>
+                        <DatePicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                      <FormDescription>The property&apos;s first business date.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

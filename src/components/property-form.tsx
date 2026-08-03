@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 
 const propertyFormSchema = z.object({
   name: z.string().min(2, { message: "Property name must be at least 2 characters." }),
@@ -22,6 +23,10 @@ const propertyFormSchema = z.object({
   timeZone: z.string().min(1, { message: "Time zone is required." }),
   checkInTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Must be in HH:MM format"),
   checkOutTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Must be in HH:MM format"),
+  // The day the property starts operating in OstaStay — it becomes the initial
+  // business date, which Night Audit then rolls forward. Create-only: once the
+  // property is live, moving the business date is Night Audit's job, not a form's.
+  goLiveDate: z.string().min(1, { message: "Pick the go-live date." }).optional(),
 })
 
 import { useEffect } from "react"
@@ -38,6 +43,7 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
       timeZone: "UTC",
       checkInTime: "14:00",
       checkOutTime: "11:00",
+      goLiveDate: new Date().toISOString().slice(0, 10),
     },
   })
 
@@ -53,6 +59,7 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
         timeZone: "UTC",
         checkInTime: "14:00",
         checkOutTime: "11:00",
+        goLiveDate: new Date().toISOString().slice(0, 10),
       })
     }
   }, [initialData, form])
@@ -155,6 +162,22 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
             )}
           />
         </div>
+        {/* Create only — after go-live the business date belongs to Night Audit. */}
+        {!isEditing && (
+          <FormField
+            control={form.control}
+            name="goLiveDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Go-live date</FormLabel>
+                <FormControl>
+                  <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" className="w-full">{isEditing ? 'Update Property' : 'Create Property'}</Button>
       </form>
     </Form>
