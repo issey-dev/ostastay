@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InfoHint } from "@/components/ui/info-hint"
+import { RollForwardDialog } from "@/components/front-office/roll-forward-dialog"
 import Link from "next/link"
 import { format } from "date-fns"
 
@@ -188,7 +189,16 @@ export default function EndOfDayPage() {
             <InfoHint label="End of Day">Close the business date step by step. The date stays open until every step is done.</InfoHint>
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+        {/* Skips the date over a CLOSED period without an audit per day — refuses while
+            the range holds any activity. See the dialog and /api/eod/roll-forward. */}
+        {currentProperty?.id && businessDate && (
+          <RollForwardDialog
+            propertyId={currentProperty?.id ?? ""}
+            currentBusinessDate={businessDate.slice(0, 10)}
+            onRolled={() => { void fetchStatus() }}
+          />
+        )}
         <Link href="night-audit/reports" className={buttonVariants({ variant: "outline", size: "sm" })}>
           <FileText className="w-4 h-4 mr-2" /> Report archive
         </Link>

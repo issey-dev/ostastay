@@ -483,36 +483,41 @@ export default function FrontOfficeDashboard() {
         </Card>
       </div>
 
-      {/* Operations Tabs */}
-      <Card className="shadow-elevation-1">
-        <Tabs defaultValue="arrivals" className="w-full">
-          <CardHeader className="border-b px-6 py-4 bg-muted/50 rounded-t-xl space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
-              {/* 2x2 on a phone, one row from md up. grid-cols-4 at every width gave
-                  each trigger ~90px on a 390px screen while the labels are ~110px and
-                  whitespace-nowrap, so "In-House" and "Room Moves" overlapped and
-                  clipped. Wrapping beats horizontal scrolling here — all four counts
-                  stay visible, which is the point of the strip.
-                  The h-auto pair overrides the primitive's data-horizontal:h-8, which is
-                  an attribute selector and so outranks a plain h-auto. */}
-              <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 data-horizontal:h-auto md:h-8 md:grid-cols-4 md:gap-0 md:data-horizontal:h-8">
-                <TabsTrigger value="arrivals">Arrivals ({arrivals.length})</TabsTrigger>
-                <TabsTrigger value="departures">Departures ({departures.length})</TabsTrigger>
-                <TabsTrigger value="inhouse">In-House ({inHouse.length})</TabsTrigger>
-                <TabsTrigger value="roommoves">Room Moves ({data?.roomMovesToday?.length})</TabsTrigger>
-              </TabsList>
-              <div className="relative md:ml-auto md:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Guest, room, or conf. #..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
+      {/* Operations Tabs.
+          The tab strip sits OUTSIDE the results card, not inside its header: fused
+          together, the four triggers and the search box read as one undifferentiated
+          grey block, and on a phone it was genuinely unclear which control switched the
+          list and which filtered it. Separating them makes the strip a navigation
+          control that owns the card beneath it, which is also how the rest of the app's
+          tabbed screens are laid out. */}
+      <Tabs defaultValue="arrivals" className="w-full space-y-3">
+        {/* 2x2 on a phone, one row from md up. grid-cols-4 at every width gave each
+            trigger ~90px on a 390px screen while the labels are ~110px and
+            whitespace-nowrap, so "In-House" and "Room Moves" overlapped and clipped.
+            Wrapping beats horizontal scrolling here — all four counts stay visible,
+            which is the point of the strip.
+            The h-auto pair overrides the primitive's data-horizontal:h-8, which is an
+            attribute selector and so outranks a plain h-auto. */}
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 data-horizontal:h-auto md:h-8 md:w-fit md:grid-cols-4 md:gap-0 md:data-horizontal:h-8">
+          <TabsTrigger value="arrivals">Arrivals ({arrivals.length})</TabsTrigger>
+          <TabsTrigger value="departures">Departures ({departures.length})</TabsTrigger>
+          <TabsTrigger value="inhouse">In-House ({inHouse.length})</TabsTrigger>
+          <TabsTrigger value="roommoves">Room Moves ({data?.roomMovesToday?.length})</TabsTrigger>
+        </TabsList>
+
+        <Card className="shadow-elevation-1">
+          <CardHeader className="border-b px-4 py-3 sm:px-6 sm:py-4">
+            <div className="relative sm:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Guest, room, or conf. #..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
             </div>
           </CardHeader>
-          
+
           <CardContent className="p-0">
             {/* Arrivals Tab — Check-In, Assign Room (TBA), Reg Card; ⚠ on incomplete profiles */}
             <TabsContent value="arrivals" className="m-0 border-none outline-none">
@@ -905,8 +910,8 @@ export default function FrontOfficeDashboard() {
               </div>
             </TabsContent>
           </CardContent>
-        </Tabs>
-      </Card>
+        </Card>
+      </Tabs>
 
       {/* Global Folio Panel */}
       <FolioPanel

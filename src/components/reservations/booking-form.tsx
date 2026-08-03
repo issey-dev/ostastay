@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useProperty } from "@/components/providers/property-provider"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -85,10 +86,16 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const enterpriseId = currentProperty?.enterpriseId ?? ""
   const isEditMode = !!reservationId
 
-  // Walk-in: the arrival is fixed to today's business date and can't be changed.
+  // The property's OPERATIONAL business date (rolled by Night Audit), never the
+  // server's calendar date — a desk working a day the property hasn't closed yet must
+  // book against the property's day.
   const businessDateIso = currentProperty?.businessDate
     ? new Date(currentProperty.businessDate).toISOString().split("T")[0]
     : ""
+  // Locked ONLY when we actually know the business date. A property whose date was
+  // never initialised (businessDate is null) previously got a field that was both empty
+  // AND disabled, so a walk-in could not be booked at all.
+  const arrivalLocked = walkIn && !!businessDateIso
   // Where the back/cancel/success navigation lands — walk-ins came from Front Desk.
   const exitUrl = walkIn ? `/e/${slug}/dashboard/front-office` : `/e/${slug}/dashboard/reservations`
 
@@ -331,14 +338,15 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     }
   }
 
-  // Walk-in create mode: seed the arrival with the business date once it's known.
-  // The user still picks the departure; the arrival field itself is locked below.
+  // Create mode: seed the arrival with the property's business date once it's known —
+  // for walk-ins (where it is then locked) and for ordinary new bookings (where it is
+  // just a sensible default the user can change).
   useEffect(() => {
-    if (walkIn && !isEditMode && businessDateIso && !formCtl.getValues("checkInDate")) {
+    if (!isEditMode && businessDateIso && !formCtl.getValues("checkInDate")) {
       setStayDate("in", businessDateIso)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walkIn, isEditMode, businessDateIso])
+  }, [isEditMode, businessDateIso])
 
   const selectGridCell = (roomTypeId: string, ratePlanId: string) => {
     const i = Math.min(activeSegmentIndex, formCtl.getValues("assignments").length - 1)
@@ -505,22 +513,27 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
   return (
     <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
-      <div className="flex items-center gap-4">
-        <Button type="button" variant="outline" size="icon" onClick={() => router.push(exitUrl)} aria-label="Back">
-          <ArrowLeft className="h-4 w-4" />
+      {/* Back sits ABOVE the title on a phone and beside it from sm up — on a narrow
+          screen a bordered icon button next to a wrapping title pushed the heading into
+          a cramped column. Borderless (ghost) and labelled, so it reads as navigation
+          rather than a form control. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push(exitUrl)}
+          className="-ml-2 w-fit text-muted-foreground hover:text-foreground sm:size-9 sm:p-0"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-4 w-4 sm:mr-0" />
+          <span className="ml-1.5 sm:hidden">Back</span>
         </Button>
         <div className="flex-1">
           <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl flex items-center gap-3">
             {isEditMode ? "Edit Booking" : walkIn ? "Walk-in Booking" : "New Booking"}
             {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
           </h2>
-          <p className="text-muted-foreground">
-            {isEditMode
-              ? `Modify details for ${existingConfirmationNo ?? "this reservation"}. Status changes go through the Check-In / Check-Out / Cancel actions.`
-              : walkIn
-                ? "Arrival is set to today's business date. Pick the departure, choose a room and rate, then attach the guest — they'll appear in Arrivals to check in."
-                : "Pick the stay dates, choose a room and rate from the grid, then attach the guest."}
-          </p>
         </div>
         {notification && (
           <span className="text-sm text-destructive font-medium">{notification.title}: {notification.message}</span>
@@ -531,18 +544,15 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         <div className="lg:col-span-2 flex flex-col gap-6">
 
           {/* ── 1 · Stay ──────────────────────────────────────────────── */}
-          <Card>
-            <CardHeader><CardTitle className="text-lg">1 · Stay</CardTitle></CardHeader>
-            <CardContent className="flex flex-col gap-4">
+          <section className="flex flex-col gap-4">
+            <h3 className="text-base font-semibold">1 · Stay</h3>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
-                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} disabled={walkIn} />
-                  {walkIn
-                    ? <p className="text-[11px] text-muted-foreground">Locked to today&apos;s business date.</p>
-                    : <FieldError message={errors.checkInDate?.message} />}
+                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} disabled={arrivalLocked} />
+                  <FieldError message={errors.checkInDate?.message} />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label className="flex items-center gap-2">
                     Departure <span className="text-destructive">*</span>
                     {form.checkInDate && form.checkOutDate && (
@@ -554,26 +564,21 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <DatePicker value={form.checkOutDate} onChange={v => setStayDate("out", v)} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
                   <FieldError message={errors.checkOutDate?.message} />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Adults</Label>
                   <Input type="number" min="1" value={form.adults} onChange={e => setField("adults", parseInt(e.target.value) || 1)} />
                   <FieldError message={errors.adults?.message} />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Children</Label>
                   <Input type="number" min="0" value={form.children} onChange={e => setField("children", parseInt(e.target.value) || 0)} />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Infants</Label>
                   <Input type="number" min="0" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Guests beyond a room type&apos;s base occupancy (shown in Room &amp; Rate below) incur an
-                extra-person charge if one is configured — free otherwise. Exceeding the room&apos;s max
-                occupancy needs an explicit override.
-              </p>
-              <div className="grid gap-2">
+              <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
                   Booking Source / Travel Agent (Optional)
                   {ratePlans.some(rp => rp.isNegotiated && form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)) && (
@@ -593,7 +598,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   ]}
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid content-start gap-2">
                 <Label>Group Block (Optional)</Label>
                 <SearchableSelect
                   value={form.groupBlockId}
@@ -604,29 +609,25 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     ...groupBlocks.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` })),
                   ]}
                 />
-                {form.groupBlockId !== "none" && (
-                  <p className="text-[11px] text-muted-foreground">Dates and room type must fall within the block&apos;s window and held types.</p>
-                )}
               </div>
-            </CardContent>
-          </Card>
+          </section>
+
 
           {/* ── 2 · Room & Rate (Look-to-Book grid) ──────────────────────── */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>2 · Room &amp; Rate</span>
+          <Separator />
+
+          <section className="flex flex-col gap-4">
+            <h3 className="flex flex-wrap items-center justify-between gap-2 text-base font-semibold">
+              <span>2 · Room &amp; Rate</span>
                 {gridStart && gridEnd && gridData && (
                   <span className="text-xs font-normal text-muted-foreground">
                     Avg / night for {format(new Date(gridStart), "dd MMM")} – {format(new Date(gridEnd), "dd MMM")}
                     {form.assignments.length > 1 && ` (Segment ${Math.min(activeSegmentIndex, form.assignments.length - 1) + 1})`}
                   </span>
                 )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+            </h3>
               {!gridStart || !gridEnd ? (
-                <p className="text-sm text-muted-foreground italic py-4 text-center border rounded-md bg-muted/40">
+                <p className="text-sm text-muted-foreground italic py-6 text-center">
                   Pick arrival and departure dates to see rates and availability.
                 </p>
               ) : gridLoading && !gridData ? (
@@ -650,7 +651,12 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <div
                     key={index}
                     onClick={() => setActiveSegmentIndex(index)}
-                    className={`flex flex-col gap-3 p-3 border rounded-md bg-muted shadow-sm ${form.assignments.length > 1 ? "cursor-pointer" : ""} ${isActive && form.assignments.length > 1 ? "ring-2 ring-info/50" : ""}`}
+                    className={`flex flex-col gap-3 rounded-md bg-muted/50 p-3 ${
+                      // Bordered ONLY with several segments, where each has to read as its
+                      // own selectable object. With one segment the border was a box inside
+                      // a box for no gain.
+                      form.assignments.length > 1 ? "cursor-pointer border shadow-sm" : ""
+                    } ${isActive && form.assignments.length > 1 ? "ring-2 ring-info/50" : ""}`}
                   >
                     <div className="text-sm flex justify-between items-center gap-2 flex-wrap">
                       <span className="font-semibold text-foreground shrink-0">
@@ -683,7 +689,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     )}
                     {form.assignments.length > 1 && (
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                           <Label>From <span className="text-destructive">*</span></Label>
                           <DatePicker
                             value={assignment.startDate}
@@ -698,13 +704,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                             }}
                           />
                           <FieldError message={segErr?.startDate?.message} />
-                          {index > 0 && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Locked to Segment {index}&apos;s departure — no gaps allowed between segments.
-                            </p>
-                          )}
                         </div>
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                           <Label className="flex items-center gap-2">
                             To <span className="text-destructive">*</span>
                             {assignment.startDate && assignment.endDate && (
@@ -726,7 +727,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
+                      <div className="grid content-start gap-2">
                         <Label>Room Assignment</Label>
                         <SearchableSelect
                           value={assignment.roomId}
@@ -741,7 +742,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           ]}
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid content-start gap-2">
                         <Label>Flat Override Rate</Label>
                         <Input
                           type="number"
@@ -787,15 +788,16 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               }}>
                 <Plus className="h-4 w-4 mr-2" /> Add Segment (Split Stay)
               </Button>
-            </CardContent>
-          </Card>
+          </section>
+
 
           {/* ── 3 · Guest & details ──────────────────────────────────────── */}
-          <Card>
-            <CardHeader><CardTitle className="text-lg">3 · Guest &amp; Details</CardTitle></CardHeader>
-            <CardContent className="flex flex-col gap-4">
+          <Separator />
+
+          <section className="flex flex-col gap-4">
+            <h3 className="text-base font-semibold">3 · Guest &amp; Details</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Primary Guest <span className="text-destructive">*</span></Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 border rounded-md px-3 h-9 text-sm bg-background flex items-center overflow-hidden">
@@ -815,7 +817,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   </div>
                   <FieldError message={errors.primaryGuestId?.message} />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Meal Plan</Label>
                   <Select value={form.mealPlan} onValueChange={(v) => setField("mealPlan", v ?? "NONE")}>
                     <SelectTrigger>
@@ -834,7 +836,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               </div>
 
               {feeRules.length > 0 && (
-                <div className="grid gap-2 p-4 bg-muted border rounded-md">
+                <div className="grid gap-2 rounded-md bg-muted/50 p-4">
                   <Label className="flex items-center gap-2">
                     Fee Policies
                     <span className="text-xs font-normal text-muted-foreground">— optional; drive this booking&apos;s deposit, cancellation &amp; no-show fees</span>
@@ -868,7 +870,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 </div>
               )}
 
-              <div className="grid gap-2 p-4 bg-muted border rounded-md">
+              <div className="grid gap-2 rounded-md bg-muted/50 p-4">
                 <Label className="flex items-center justify-between">
                   <span>Accompanying Guests</span>
                   <span className="text-xs font-normal text-muted-foreground">
@@ -915,7 +917,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               </div>
 
               {specialRequestOptions.length > 0 && (
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label>Special Requests</Label>
                   <div className="flex flex-wrap gap-2">
                     {specialRequestOptions.map(opt => {
@@ -941,7 +943,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 </div>
               )}
 
-              <div className="grid gap-2">
+              <div className="grid content-start gap-2">
                 <Label>Remarks</Label>
                 <Textarea
                   value={form.remarks}
@@ -950,15 +952,16 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   rows={2}
                 />
               </div>
-            </CardContent>
-          </Card>
+          </section>
+
 
           {/* ── 4 · Allocations & Add-ons ─────────────────────────────────── */}
-          <Card>
-            <CardHeader><CardTitle className="text-lg">4 · Allocations &amp; Add-ons</CardTitle></CardHeader>
-            <CardContent className="flex flex-col gap-3">
+          <Separator />
+
+          <section className="flex flex-col gap-3">
+            <h3 className="text-base font-semibold">4 · Allocations &amp; Add-ons</h3>
               {autoAllocationIds.length > 0 && (
-                <div className="rounded-md border p-3 bg-muted/40">
+                <div className="rounded-md bg-muted/50 p-3">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Included via rate plan / meal plan</p>
                   <div className="flex flex-col gap-1.5">
                     {autoAllocationIds.map(id => {
@@ -987,7 +990,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <p className="text-xs text-muted-foreground italic">No sell-separate add-ons available for this property.</p>
                 )
                 return (
-                  <div className="rounded-md border p-3">
+                  <div className="rounded-md bg-muted/30 p-3">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Add-ons (sold separately, posted nightly by Night Audit)</p>
                     <div className="flex flex-col gap-1.5">
                       {addOnOptions.map(a => {
@@ -1014,8 +1017,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   </div>
                 )
               })()}
-            </CardContent>
-          </Card>
+          </section>
+
         </div>
 
         {/* ── Sticky Booking Summary sidebar ──────────────────────────────── */}

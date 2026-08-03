@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
@@ -55,6 +56,12 @@ export async function POST(request: Request) {
         // Hard gate: locked out of real use (see assertPropertyAccess in
         // src/lib/scope.ts) until an Osta admin approves it from /osta/properties.
         status: "PENDING",
+        // The operator's chosen GO-LIVE DATE becomes the initial business date; today
+        // if they didn't pick one. Leaving it null (the old behaviour) meant the booking
+        // form had nothing to default Arrival to — and a walk-in, whose Arrival is
+        // locked to the business date, could not be booked at all. Night Audit rolls it
+        // forward from here.
+        businessDate: goLiveDate(body.goLiveDate),
       },
     });
 
