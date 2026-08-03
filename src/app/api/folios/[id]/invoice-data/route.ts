@@ -311,25 +311,49 @@ export async function GET(
           }
         }
 
-        reservation.assignments.forEach((a) => {
-          const seg = quote.segments.find((s) => s.roomTypeId === a.roomTypeId && s.ratePlanId === a.ratePlanId);
-          if (!seg) return;
-          line({
-            description: `Accommodation — ${roomTypeName.get(a.roomTypeId)} (${seg.nights} night${seg.nights === 1 ? "" : "s"})`,
-            code: roomCodeLabel, amount: seg.roomBase, tax: seg.roomTax, sc: seg.roomServiceCharge, date: a.startDate,
-          });
-        });
-        const extraBase = quote.totals.extraOccupancyBase;
-        if (extraBase > 0.005) {
-          const extraTax = quote.segments.reduce((s, x) => s + x.extraOccupancyTax, 0);
-          const extraSc = quote.segments.reduce((s, x) => s + x.extraOccupancyServiceCharge, 0);
-          line({ description: "Extra Occupancy Charge", code: roomCodeLabel, amount: extraBase, tax: extraTax, sc: extraSc, date: reservation.checkInDate });
-        }
-        quote.allocations.forEach((al) => {
-          line({ description: al.name, code: allocationChargeCode.get(al.allocationId) ?? al.code, amount: al.base, tax: al.tax, sc: al.serviceCharge, date: reservation.checkInDate });
-        });
-        if (quote.greenTax.enabled && quote.greenTax.total > 0.005) {
-          line({ description: "Green Tax", code: greenTaxCodeLabel, amount: quote.greenTax.total, date: reservation.checkInDate });
+        // ONE LINE PER NIGHT, per charge — never a stay-wide line dated at arrival
+        // (owner rule, 2026-08-03). The previous version emitted a single
+        // "Accommodation (3 nights)" row stamped with the check-in date, plus one
+        // Green Tax row for the whole stay, which is precisely the "different days'
+        // charges on a single line" the rule forbids: the guest cannot reconcile a
+        // three-night figure against a one-night date.
+        //
+        // quote.days is the same per-night data the reservation's Daily Details grid
+        // renders, so the proforma and that grid now agree row for row. Combining is
+        // then left to the folio style (see buildFolioRows), which groups WITHIN a day
+        // — so a property that prefers a summary still gets one, without days merging.
+        const allocationName = new Map(quote.allocations.map((al) => [al.allocationId, al.name]));
+        const allocationCode = new Map(quote.allocations.map((al) => [al.allocationId, al.code]));
+
+        for (const day of quote.days) {
+          // The night's calendar date, parsed as UTC midnight to match how every other
+          // folio line is dated.
+          const nightDate = new Date(`${day.date}T00:00:00.000Z`);
+          const roomTypeLabel = day.roomTypeId ? roomTypeName.get(day.roomTypeId) : undefined;
+
+          const room = day.parts.room;
+          if (Math.abs(room.base) > 0.005 || Math.abs(room.tax) > 0.005 || Math.abs(room.serviceCharge) > 0.005) {
+            line({
+              description: `Accommodation${roomTypeLabel ? ` — ${roomTypeLabel}` : ""}`,
+              code: roomCodeLabel,
+              amount: room.base, tax: room.tax, sc: room.serviceCharge,
+              date: nightDate,
+            });
+          }
+
+          for (const al of day.parts.allocations) {
+            if (Math.abs(al.base) < 0.005 && Math.abs(al.tax) < 0.005 && Math.abs(al.serviceCharge) < 0.005) continue;
+            line({
+              description: allocationName.get(al.allocationId) ?? "Package",
+              code: allocationChargeCode.get(al.allocationId) ?? allocationCode.get(al.allocationId) ?? roomCodeLabel,
+              amount: al.base, tax: al.tax, sc: al.serviceCharge,
+              date: nightDate,
+            });
+          }
+
+          if (quote.greenTax.enabled && day.parts.greenTax > 0.005) {
+            line({ description: "Green Tax", code: greenTaxCodeLabel, amount: day.parts.greenTax, date: nightDate });
+          }
         }
 
         // Hotel-booked transport — projected exactly like Daily Details so the proforma

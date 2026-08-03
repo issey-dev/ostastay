@@ -129,6 +129,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           otherCharge: round2(t.baseAmount),
           taxes,
           total: round2(t.baseAmount + taxes),
+          // No room night here — the transport charge itself is carried in otherCharge
+          // above, which the proforma projects separately from its own transport pass.
+          parts: { room: { base: 0, tax: 0, serviceCharge: 0 }, greenTax: 0, allocations: [] },
           roomTypeName: null,
           roomNumber: null,
           ratePlanCode: null,

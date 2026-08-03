@@ -80,6 +80,15 @@ export type ReservationQuoteDay = {
   allocationCharge: number; // allocation base for the night
   taxes: number; // GST + service charge + green tax for the night
   total: number; // roomCharge + allocationCharge + taxes
+  // The same night split the way it would POST, so a document can render one line per
+  // night per charge instead of one aggregated line per stay. `taxes` above is the flat
+  // sum of everything here — kept for the Daily Details grid, which shows a single Taxes
+  // column. Added 2026-08-03 for the proforma, which must never merge days onto a line.
+  parts: {
+    room: { base: number; tax: number; serviceCharge: number }; // incl. extra occupancy
+    greenTax: number;
+    allocations: { allocationId: string; base: number; tax: number; serviceCharge: number }[];
+  };
 };
 
 export type ReservationQuote = {
@@ -343,10 +352,19 @@ export async function computeReservationQuote(
       warnings.push(`No room segment covers ${night.toISOString().slice(0, 10)} — that night was not quoted.`);
     }
 
+    // Per-allocation split for THIS night, kept alongside the running totals so a
+    // document can print one line per allocation per night.
+    const nightAllocations: { allocationId: string; base: number; tax: number; serviceCharge: number }[] = [];
     for (const { allocationId, amount, chargeCodeId } of allocationsTonight) {
       const alloc = allocationById.get(allocationId);
       if (!alloc) continue;
       const allocTax = resolveChargeTax({ chargeCode: alloc.chargeCode, inputAmount: amount, settings, pricesIncludeTaxes });
+      nightAllocations.push({
+        allocationId,
+        base: allocTax.baseAmount,
+        tax: allocTax.taxAmount,
+        serviceCharge: allocTax.serviceChargeAmount,
+      });
       nAllocBase += allocTax.baseAmount; nAllocTax += allocTax.taxAmount; nAllocSC += allocTax.serviceChargeAmount;
       const accum = allocationAccum.get(allocationId)!;
       accum.base = round2(accum.base + allocTax.baseAmount);
@@ -377,6 +395,22 @@ export async function computeReservationQuote(
       allocationCharge: round2(nAllocBase),
       taxes: round2(nTaxes),
       total: round2(nRoomCharge + nAllocBase + nTaxes),
+      parts: {
+        // Room and extra occupancy post against the same code, so they merge into one
+        // projected line exactly as they do on the folio.
+        room: {
+          base: round2(nRoomBase + nExtraBase),
+          tax: round2(nRoomTax + nExtraTax),
+          serviceCharge: round2(nRoomSC + nExtraSC),
+        },
+        greenTax: round2(nGreenTax),
+        allocations: nightAllocations.map((a) => ({
+          allocationId: a.allocationId,
+          base: round2(a.base),
+          tax: round2(a.tax),
+          serviceCharge: round2(a.serviceCharge),
+        })),
+      },
     });
   }
 

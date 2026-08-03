@@ -81,6 +81,47 @@ describe("Reservation quote engine (src/lib/reservation-quote-server.ts)", () =>
     expect(quote.totals.grandTotal).toBeCloseTo(200 + 20 + 37.4 + quote.totals.greenTaxTotal, 2);
   });
 
+  // The proforma builds ONE LINE PER NIGHT from day.parts rather than one aggregated
+  // line per stay (owner rule, 2026-08-03 — a folio line may never span days). That is
+  // only safe if the parts reconcile exactly to the stay totals; if they drifted, the
+  // quoted document would disagree with the quote it came from.
+  it("splits each night into parts that reconcile to the stay totals", async () => {
+    const ctx = await setup();
+    const quote = await computeReservationQuote({
+      propertyId: ctx.propertyId,
+      assignments: [{ roomTypeId: ctx.roomTypeId, ratePlanId: ctx.ratePlanId, startDate: new Date("2026-08-01"), endDate: new Date("2026-08-03") }],
+      adults: 2, children: 0,
+      manualAllocationIds: [ctx.allocationId],
+    }, prisma);
+
+    expect(quote.days.length).toBe(2);
+
+    const sum = (f: (d: (typeof quote.days)[number]) => number) => quote.days.reduce((s, d) => s + f(d), 0);
+
+    // Room: base, service charge and GST each add back to the stay figure.
+    expect(sum((d) => d.parts.room.base)).toBeCloseTo(
+      quote.totals.roomBase + quote.totals.extraOccupancyBase, 2
+    );
+    expect(sum((d) => d.parts.greenTax)).toBeCloseTo(quote.totals.greenTaxTotal, 2);
+    expect(sum((d) => d.parts.allocations.reduce((s, a) => s + a.base, 0))).toBeCloseTo(
+      quote.allocations.reduce((s, a) => s + a.base, 0), 2
+    );
+
+    // And the parts account for the whole night — nothing is dropped between the flat
+    // `taxes` figure the Daily Details grid shows and the split the proforma prints.
+    for (const d of quote.days) {
+      const partsTax =
+        d.parts.room.tax + d.parts.room.serviceCharge + d.parts.greenTax +
+        d.parts.allocations.reduce((s, a) => s + a.tax + a.serviceCharge, 0);
+      expect(partsTax).toBeCloseTo(d.taxes, 2);
+      const partsBase = d.parts.room.base + d.parts.allocations.reduce((s, a) => s + a.base, 0);
+      expect(partsBase).toBeCloseTo(d.roomCharge + d.allocationCharge, 2);
+    }
+
+    // Every night carries its own date — the invariant the whole change exists for.
+    expect(new Set(quote.days.map((d) => d.date)).size).toBe(quote.days.length);
+  });
+
   it("attributes an allocation to its OWN charge code's custom tax profile, separate from the room's default engine", async () => {
     const ctx = await setup();
     const quote = await computeReservationQuote({
