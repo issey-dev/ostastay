@@ -12,6 +12,8 @@ import { SupportSessionNotice } from "@/components/ui/support-session-notice"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { EodSessionWatch } from "@/components/providers/eod-session-watch"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
+import { PropertyOnboardingGate } from "@/components/onboarding/property-onboarding-gate"
+import { decidePropertyGate } from "@/lib/properties/onboarding-gate"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -50,6 +52,41 @@ export default async function DashboardLayout({
   const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { name: true, slug: true } })
   if (!enterprise) redirect("/login")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/dashboard`)
+
+  // Property onboarding gate. Every dashboard page is built around a current property —
+  // they all wait on PropertyProvider's `currentProperty` — so a session with no ACTIVE
+  // property renders pages that never finish loading. That looked broken; this states
+  // the real situation instead, and covers every route at once by living in the layout.
+  //
+  // Support sessions are exempt: Osta acting inside a tenant may legitimately need to
+  // see a pending property's setup, the same carve-out assertPropertyAccess() makes.
+  const properties = ctx.isActingAsSupport
+    ? []
+    : await prisma.property.findMany({
+        where: ctx.scope === "PROPERTY" ? { id: ctx.propertyId ?? "" } : { enterpriseId: ctx.enterpriseId },
+        select: { id: true, name: true, code: true, status: true, rejectionReason: true },
+        orderBy: { createdAt: "asc" },
+      })
+
+  const gate = decidePropertyGate({
+    isActingAsSupport: ctx.isActingAsSupport,
+    properties,
+    scope: ctx.scope,
+    canCreateControls: ctx.permissions.get("CONTROLS")?.canCreate ?? false,
+  })
+
+  if (gate.blocked) {
+    return (
+      <PropertyOnboardingGate
+        enterpriseName={enterprise.name}
+        properties={properties}
+        state={gate.state}
+        // Drives the resubmit button in the AWAITING state too, so this is the real
+        // permission rather than something derived from the state.
+        canManage={ctx.scope === "ENTERPRISE" && (ctx.permissions.get("CONTROLS")?.canCreate ?? false)}
+      />
+    )
+  }
 
   return (
     <PropertyProvider>
