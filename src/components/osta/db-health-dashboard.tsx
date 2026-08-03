@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { RefreshCw, AlertTriangle } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type TenantOpRow = {
   enterpriseId: string | null
@@ -84,7 +85,7 @@ function formatBytes(bytes: number | null): string {
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader>
       <CardContent>
         <div className="text-2xl font-bold tabular-nums">{value}</div>
         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
@@ -301,8 +302,10 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Row Counts</CardTitle>
-              <CardDescription>A fixed, hand-picked list of the heaviest tables — not every model.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            Row Counts
+            <InfoHint label="Row Counts">A fixed, hand-picked list of the heaviest tables — not every model.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -349,8 +352,10 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">DB Load by Enterprise / Property</CardTitle>
-              <CardDescription>Prisma operations attributed to the session that ran them. Unauthenticated work (login, public eRegistration) shows separately.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            DB Load by Enterprise / Property
+            <InfoHint label="DB Load by Enterprise / Property">Prisma operations attributed to the session that ran them. Unauthenticated work (login, public eRegistration) shows separately.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {tenantSummary.length === 0 ? (
@@ -382,8 +387,9 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Operations{entFilter || propFilter ? " (filtered)" : ""}</CardTitle>
-              <CardDescription>By model and operation, heaviest total time first.</CardDescription>
+              <CardTitle className="text-lg">Operations{entFilter || propFilter ? " (filtered)" : ""}
+              <InfoHint>By model and operation, heaviest total time first.</InfoHint>
+            </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {opBreakdown.length === 0 ? (
@@ -415,8 +421,10 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">SQL Statements (by total time)</CardTitle>
-              <CardDescription>Raw engine view — parameterized SQL, all tenants combined (SQL events carry no tenant identity).</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            SQL Statements (by total time)
+            <InfoHint label="SQL Statements (by total time)">Raw engine view — parameterized SQL, all tenants combined (SQL events carry no tenant identity).</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.queryStats.length === 0 ? (
@@ -515,8 +523,10 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Channel Manager API — by Operation</CardTitle>
-              <CardDescription>From the persisted sync log (survives restarts). OUTBOUND = we called the channel manager; INBOUND = webhooks.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            Channel Manager API — by Operation
+            <InfoHint label="Channel Manager API — by Operation">From the persisted sync log (survives restarts). OUTBOUND = we called the channel manager; INBOUND = webhooks.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {filteredChannelOps.length === 0 ? (
@@ -554,8 +564,10 @@ export function DbHealthDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Background Jobs (7d)</CardTitle>
-              <CardDescription>Latest run and failure count per job, per enterprise.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            Background Jobs (7d)
+            <InfoHint label="Background Jobs (7d)">Latest run and failure count per job, per enterprise.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {filteredJobs.length === 0 ? (

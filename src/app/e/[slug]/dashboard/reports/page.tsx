@@ -9,6 +9,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type Param = {
   key: string
@@ -116,10 +117,12 @@ export default function ReportsPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Reports</h2>
-        <p className="text-muted-foreground">
-          Generate operational and financial reports as PDF, Excel, or CSV{currentProperty ? ` for ${currentProperty.name}` : ""}.
-        </p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          Reports
+          <InfoHint label="Reports">
+            Generate operational and financial reports as PDF, Excel, or CSV{currentProperty ? ` for ${currentProperty.name}` : ""}.
+          </InfoHint>
+        </h2>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">

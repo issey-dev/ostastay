@@ -5,6 +5,7 @@ import { RefreshCw } from "@/components/icons"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Background-job health on the Hub overview.
 //
@@ -68,10 +69,8 @@ export function JobStatusCard() {
         <CardTitle className="flex items-center gap-2 text-base">
           <RefreshCw className="h-4 w-4 text-muted-foreground" />
           Background jobs
-        </CardTitle>
-        <CardDescription>
-          Run by an external scheduler. These keep channel-manager credentials alive and trim the exchange log.
-        </CardDescription>
+              <InfoHint>Run by an external scheduler. These keep channel-manager credentials alive and trim the exchange log.</InfoHint>
+            </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {jobs.map((j) => {

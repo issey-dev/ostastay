@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 
@@ -350,8 +351,10 @@ export default function HousekeepingDashboard() {
     <div className="pb-32 relative">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Housekeeping Dashboard</h2>
-          <p className="text-muted-foreground">Manage room statuses, turnovers, and attendant tasks.</p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Housekeeping Dashboard
+            <InfoHint label="Housekeeping Dashboard">Manage room statuses, turnovers, and attendant tasks.</InfoHint>
+          </h2>
         </div>
         <div className="flex items-center gap-3">
           {isBulkMode && (

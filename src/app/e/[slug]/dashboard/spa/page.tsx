@@ -16,6 +16,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
+import { InfoHint } from "@/components/ui/info-hint"
 
 type GuestResult = {
   reservationId: string
@@ -484,8 +485,10 @@ export default function SpaPage() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Spa</h2>
-        <p className="text-muted-foreground">Search for an in-house guest, or start a walk-in bill, then book a treatment.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Spa
+            <InfoHint label="Spa">Search for an in-house guest, or start a walk-in bill, then book a treatment.</InfoHint>
+          </h2>
       </div>
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>

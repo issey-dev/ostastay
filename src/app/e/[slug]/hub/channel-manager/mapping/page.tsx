@@ -1,5 +1,6 @@
 import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
 import { MappingManager } from "@/components/hub/mapping-manager"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Mapping (formerly "Sharing") — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
 //
@@ -15,10 +16,10 @@ export default async function ChannelManagerMappingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Mapping</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Control what is shared with the channel manager and map it to their room types, rates, and defaults.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            Mapping
+            <InfoHint label="Mapping">Control what is shared with the channel manager and map it to their room types, rates, and defaults.</InfoHint>
+          </h2>
       </div>
 
       <MappingManager canManage={canManage} />

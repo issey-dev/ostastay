@@ -1,5 +1,6 @@
 import { requireSession, requireHubAccess } from "@/lib/scope"
 import { SyncLogViewer } from "@/components/hub/sync-log-viewer"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Channel-manager exchange log — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
 //
@@ -12,10 +13,10 @@ export default async function ChannelManagerLogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Exchange Log</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every call to and from the channel manager, inbound and outbound. Select a row to see the detail.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            Exchange Log
+            <InfoHint label="Exchange Log">Every call to and from the channel manager, inbound and outbound. Select a row to see the detail.</InfoHint>
+          </h2>
       </div>
 
       <SyncLogViewer />

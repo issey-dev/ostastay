@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 import { KeyRound, Building2, FileText, Printer, Receipt } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 
 // Osta's licensing console, reworked 2026-07-31 (owner decisions): tier pricing is GONE
@@ -386,12 +387,10 @@ export function LicensingManager() {
           {/* ------------------------ Per-property allowances ------------------------ */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Property Allowances</CardTitle>
-              <CardDescription>
-                Per-property caps on room types, rooms and channel connections — enforced at creation time.
-                Blank = unlimited, 0 = disallowed. PM (pseudo) room types and their rooms never count, and PM
-                room types can&apos;t be mapped to channels at all.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            Property Allowances
+            <InfoHint label="Property Allowances">Per-property caps on room types, rooms and channel connections — enforced at creation time. Blank = unlimited, 0 = disallowed. PM (pseudo) room types and their rooms never count, and PM room types can&apos;t be mapped to channels at all.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {allowances.length === 0 ? (
@@ -445,11 +444,9 @@ export function LicensingManager() {
           {/* ------------------------------ Invoices ------------------------------ */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2"><FileText className="w-4 h-4" /> License Invoices</CardTitle>
-              <CardDescription>
-                Issued under Osta&apos;s own stationery (set up in Controls). Marking an invoice paid stamps the
-                payment date and issues a receipt number.
-              </CardDescription>
+              <CardTitle className="text-lg flex items-center gap-2"><FileText className="w-4 h-4" /> License Invoices
+              <InfoHint>Issued under Osta&apos;s own stationery (set up in Controls). Marking an invoice paid stamps the payment date and issues a receipt number.</InfoHint>
+            </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto_auto] items-end">

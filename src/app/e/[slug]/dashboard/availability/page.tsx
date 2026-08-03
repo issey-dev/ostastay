@@ -1,23 +1,23 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/components/availability/availability-grid";
+import { InfoHint } from "@/components/ui/info-hint"
 
 export default function AvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Property Availability</h2>
-        <p className="text-muted-foreground mt-2">
-          Available rooms by date and room type. Expand a row for arrivals, occupancy,
-          departures and headcount, or set Stop Sale restrictions.
-        </p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-foreground">
+            Property Availability
+            <InfoHint label="Property Availability">Available rooms by date and room type. Expand a row for arrivals, occupancy, departures and headcount, or set Stop Sale restrictions.</InfoHint>
+          </h2>
       </div>
 
       <Card className="border-0 shadow-lg ring-1 ring-border">
         <CardHeader className="bg-muted border-b border-border pb-4">
-          <CardTitle className="text-lg text-foreground">Availability</CardTitle>
-          <CardDescription>
-            Each column is the night of that date. Closed (Stop Sale) dates block new bookings.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+            Availability
+            <InfoHint label="Availability">Each column is the night of that date. Closed (Stop Sale) dates block new bookings.</InfoHint>
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-hidden">
           <AvailabilityGrid />

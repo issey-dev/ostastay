@@ -4,6 +4,7 @@ import { OstaSidebar } from "@/components/osta-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -40,8 +41,10 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
         <header className="print:hidden h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>
-            <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight">OstaStay</h1>
-            <p className="text-xs text-muted-foreground leading-tight">Osta Platform Admin</p>
+            <h1 className="flex items-center gap-2 font-bold text-lg text-foreground tracking-tight leading-tight">
+            OstaStay
+            <InfoHint label="OstaStay">Osta Platform Admin</InfoHint>
+          </h1>
           </div>
           <div className="ml-auto">
             <ThemeToggle />

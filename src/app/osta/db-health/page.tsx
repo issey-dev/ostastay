@@ -1,11 +1,14 @@
 import { DbHealthDashboard } from "@/components/osta/db-health-dashboard"
+import { InfoHint } from "@/components/ui/info-hint"
 
 export default function OstaDbHealthPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Database Health</h2>
-        <p className="text-muted-foreground">Storage statistics, per-tenant query load, and channel-manager API performance.</p>
+        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Database Health
+            <InfoHint label="Database Health">Storage statistics, per-tenant query load, and channel-manager API performance.</InfoHint>
+          </h2>
       </div>
       <DbHealthDashboard />
     </div>

@@ -13,6 +13,7 @@ import { Users, Building2, Briefcase, UserCog } from "@/components/icons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
+import { InfoHint } from "@/components/ui/info-hint"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { toast } from "@/lib/toast"
@@ -141,10 +142,10 @@ export default function ProfilesDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Client Relations</h2>
-          <p className="text-muted-foreground">
-            Manage your individual guests, travel agents, and corporate accounts here.
-          </p>
+          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Client Relations
+            <InfoHint label="Client Relations">Manage your individual guests, travel agents, and corporate accounts here.</InfoHint>
+          </h2>
         </div>
         
         <Button onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
@@ -201,10 +202,10 @@ export default function ProfilesDashboard() {
         <CardHeader className="bg-muted/50 border-b border-border">
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle className="text-lg">
+              <CardTitle className="flex items-center gap-2 text-lg">
                 {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : activeTab === "STAFF" ? "Staff Directory" : "Travel Agents"}
-              </CardTitle>
-              <CardDescription>Search by name, email, or phone.</CardDescription>
+              <InfoHint>Search by name, email, or phone.</InfoHint>
+            </CardTitle>
             </div>
             <div className="relative w-72">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

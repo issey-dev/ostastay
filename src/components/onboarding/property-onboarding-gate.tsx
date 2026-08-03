@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PropertyForm } from "@/components/property-form"
+import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 
 // Shown INSTEAD of the whole dashboard while an enterprise has no property it may
@@ -87,11 +88,10 @@ export function PropertyOnboardingGate({
         {state === "NONE" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">No property yet</CardTitle>
-              <CardDescription>
-                Everything in OstaStay — reservations, rooms, rates, billing — belongs to a property, so there is
-                nothing to show until you add one. Create it here; Osta reviews and approves it before it goes live.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+            No property yet
+            <InfoHint label="No property yet">Everything in OstaStay — reservations, rooms, rates, billing — belongs to a property, so there is nothing to show until you add one. Create it here; Osta reviews and approves it before it goes live.</InfoHint>
+          </CardTitle>
             </CardHeader>
             <CardContent>
               <Button onClick={() => setCreateOpen(true)} className="w-full h-11">
@@ -156,11 +156,8 @@ export function PropertyOnboardingGate({
               <CardTitle className="text-lg flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-muted-foreground" />
                 No property available
-              </CardTitle>
-              <CardDescription>
-                Your account is not attached to an active property yet. Your administrator needs to add one — or have
-                it approved — before you can use the system. Please contact them.
-              </CardDescription>
+              <InfoHint>Your account is not attached to an active property yet. Your administrator needs to add one — or have it approved — before you can use the system. Please contact them.</InfoHint>
+            </CardTitle>
             </CardHeader>
           </Card>
         )}

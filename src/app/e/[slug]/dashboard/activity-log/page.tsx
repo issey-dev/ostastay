@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { History, Search } from "@/components/icons"
+import { InfoHint } from "@/components/ui/info-hint"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
 type LogEntry = {
@@ -88,10 +89,10 @@ export default function ActivityLogPage() {
         className={cn("space-y-1", accentColor && "border-l-4 pl-4")}
         style={accentColor ? { borderLeftColor: accentColor } : undefined}
       >
-        <h2 className="text-2xl font-bold tracking-tight">Activity Log</h2>
-        <p className="text-sm text-muted-foreground">
-          Who did what, when — every create, change, deletion, and sign-in across the enterprise. Read-only.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            Activity Log
+            <InfoHint label="Activity Log">Who did what, when — every create, change, deletion, and sign-in across the enterprise. Read-only.</InfoHint>
+          </h2>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

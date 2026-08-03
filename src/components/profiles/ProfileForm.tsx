@@ -26,6 +26,7 @@ import { AttachmentsManager } from "@/components/profiles/attachments-manager"
 import { NotesPanel } from "@/components/profiles/notes-panel"
 import { PreferencesEditor } from "@/components/profiles/preferences-editor"
 import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-manager"
+import { InfoHint } from "@/components/ui/info-hint"
 
 const profileFormSchema = z.object({
   profileType: z.string(),
@@ -368,8 +369,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Communications */}
             <Card id="communications">
               <CardHeader>
-                <CardTitle>Communications</CardTitle>
-                <CardDescription>Email, mobile, and social contact methods — one may be marked primary.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+            Communications
+            <InfoHint label="Communications">Email, mobile, and social contact methods — one may be marked primary.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent>
                 {isEditMode ? (
@@ -413,8 +416,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Address */}
             <Card id="address">
               <CardHeader>
-                <CardTitle>Address</CardTitle>
-                <CardDescription>Home, business, or billing addresses — one may be marked primary.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+            Address
+            <InfoHint label="Address">Home, business, or billing addresses — one may be marked primary.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent>
                 {isEditMode ? (
@@ -498,8 +503,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isIndividual && (
               <Card id="identification" className="scroll-mt-32">
                 <CardHeader>
-                  <CardTitle>Identification</CardTitle>
-                  <CardDescription>Passport or National ID documents — one may be marked primary.</CardDescription>
+                  <CardTitle className="flex items-center gap-2">
+            Identification
+            <InfoHint label="Identification">Passport or National ID documents — one may be marked primary.</InfoHint>
+          </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {isEditMode ? (
@@ -550,8 +557,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isIndividual && (
             <Card id="crm">
               <CardHeader>
-                <CardTitle>CRM</CardTitle>
-                <CardDescription>Stay history summary, guest preferences, and VIP status.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+            CRM
+            <InfoHint label="CRM">Stay history summary, guest preferences, and VIP status.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -638,8 +647,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isB2B && (
               <Card id="negotiated-rates">
                 <CardHeader>
-                  <CardTitle>Negotiated Rates</CardTitle>
-                  <CardDescription>Which negotiated Rate Plans this account can book with — restricted to bookings made through this profile.</CardDescription>
+                  <CardTitle className="flex items-center gap-2">
+            Negotiated Rates
+            <InfoHint label="Negotiated Rates">Which negotiated Rate Plans this account can book with — restricted to bookings made through this profile.</InfoHint>
+          </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {isEditMode ? (
@@ -654,8 +665,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Attachments */}
             <Card id="attachments">
               <CardHeader>
-                <CardTitle>Attachments</CardTitle>
-                <CardDescription>Linked files (label + URL) — passport scans, signed contracts, etc.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+            Attachments
+            <InfoHint label="Attachments">Linked files (label + URL) — passport scans, signed contracts, etc.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent>
                 {isEditMode ? (
@@ -669,8 +682,10 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Notes */}
             <Card id="notes">
               <CardHeader>
-                <CardTitle>Notes</CardTitle>
-                <CardDescription>Feedback, complaints, and other notable things about this profile.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+            Notes
+            <InfoHint label="Notes">Feedback, complaints, and other notable things about this profile.</InfoHint>
+          </CardTitle>
               </CardHeader>
               <CardContent>
                 {isEditMode ? (

@@ -1,6 +1,7 @@
 import { ArrowLeftRight } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobStatusCard } from "@/components/hub/job-status-card"
+import { InfoHint } from "@/components/ui/info-hint"
 import { requireSession } from "@/lib/scope"
 
 // Hub overview. Intentionally thin for now — the Hub shell ships before any
@@ -16,11 +17,10 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Hub</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Enterprise-wide connectivity and configuration. Day-to-day property operations live in
-          the property dashboard.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            Hub
+            <InfoHint label="Hub">Enterprise-wide connectivity and configuration. Day-to-day property operations live in the property dashboard.</InfoHint>
+          </h2>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -29,11 +29,8 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
             <CardTitle className="flex items-center gap-2 text-base">
               <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
               Channel Manager
+              <InfoHint>Connect to the channel manager, choose what is shared, and review inbound and outbound sync logs.</InfoHint>
             </CardTitle>
-            <CardDescription>
-              Connect to the channel manager, choose what is shared, and review inbound and
-              outbound sync logs.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <a

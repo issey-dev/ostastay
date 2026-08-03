@@ -52,6 +52,7 @@ import { SpaCatalogManager } from "@/components/controls/spa-manager"
 import { SpaTherapistsManager } from "@/components/controls/spa-therapists-manager"
 import { SpaRoomsManager } from "@/components/controls/spa-rooms-manager"
 import { SpaSettingsForm } from "@/components/controls/spa-settings-form"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Vertical sidebar-nav trigger (tablet/desktop only — see ControlsDashboard below).
 // Base UI's Tabs primitive marks the active tab with a bare `data-active` attribute,
@@ -351,10 +352,10 @@ export function ControlsDashboard({
 
   const header = (
     <div>
-      <h2 className="text-3xl font-bold tracking-tight">Controls</h2>
-      <p className="text-muted-foreground">
-        Manage your enterprise, properties, taxes, users, and integrations here.
-      </p>
+      <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            Controls
+            <InfoHint label="Controls">Manage your enterprise, properties, taxes, users, and integrations here.</InfoHint>
+          </h2>
     </div>
   )
 

@@ -1,5 +1,6 @@
 import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
 import { ChannelConnectionStatus } from "@/components/hub/channel-connection-status"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Channel Manager — the exchange interface between this enterprise and the booking
 // channels. See .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
@@ -20,10 +21,10 @@ export default async function ChannelManagerPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Channel Manager</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          The exchange interface between this enterprise and the booking channels.
-        </p>
+        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            Channel Manager
+            <InfoHint label="Channel Manager">The exchange interface between this enterprise and the booking channels.</InfoHint>
+          </h2>
       </div>
 
       <ChannelConnectionStatus canManage={canManage} />

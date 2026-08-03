@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 const dateStr = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—")
@@ -154,10 +155,10 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div>
-        <h3 className="font-semibold text-lg mb-3">Invoices</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          One row per stay billed to this account — invoices appear here only once the guest has checked out.
-        </p>
+        <h3 className="flex items-center gap-2 font-semibold text-lg mb-3">
+            Invoices
+            <InfoHint label="Invoices">One row per stay billed to this account — invoices appear here only once the guest has checked out.</InfoHint>
+          </h3>
         <Table>
           <TableHeader>
             <TableRow>

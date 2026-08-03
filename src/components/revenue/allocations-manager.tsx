@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useProperty } from "@/components/providers/property-provider"
+import { InfoHint } from "@/components/ui/info-hint"
 
 export type AllocationDto = {
   id: string
@@ -276,12 +277,10 @@ export function AllocationsManager() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Allocations</CardTitle>
-          <CardDescription>
-            Per-person priced components — meals, transfers, spa, excursions — attachable to package
-            rates and meal plans, or sold separately per reservation. Posted nightly by Night Audit
-            according to each allocation&apos;s posting rhythm.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            Allocations
+            <InfoHint label="Allocations">Per-person priced components — meals, transfers, spa, excursions — attachable to package rates and meal plans, or sold separately per reservation. Posted nightly by Night Audit according to each allocation&apos;s posting rhythm.</InfoHint>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {serverError && !isDialogOpen && (

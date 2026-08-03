@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { InfoHint } from "@/components/ui/info-hint"
 
 // Priority buckets, in the order an attendant should work them: rooms needed for
 // an arrival first, departure cleans next, other dirty rooms, then stayover
@@ -164,8 +165,8 @@ export default function TaskSheetPage() {
         <div className="flex-1">
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-muted-foreground" /> Task Sheet
+            <InfoHint>Assigned rooms in cleaning order.</InfoHint>
           </h2>
-          <p className="text-sm text-muted-foreground">Assigned rooms in cleaning order.</p>
         </div>
         <Button variant="outline" size="icon" onClick={() => fetchRooms()} title="Refresh" aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />

@@ -14,6 +14,7 @@ import type { StationeryBrand } from "@/lib/stationery-brand"
 import { STATIONERY_FONTS, DEFAULT_STATIONERY_FONT, resolveStationeryFontClass } from "@/lib/stationery-fonts"
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding"
 import { StationeryPreviewFrame } from "@/components/print/stationery/preview-frame"
+import { InfoHint } from "@/components/ui/info-hint"
 import {
   LicenseTaxInvoiceDocument,
   LicenseReceiptDocument,
@@ -153,11 +154,10 @@ export function OstaInvoicingManager() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Platform Identity</CardTitle>
-          <CardDescription>
-            Who the licensing invoice comes from. Client enterprises see this in the header of every
-            invoice and payment receipt Osta issues to them.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            Platform Identity
+            <InfoHint label="Platform Identity">Who the licensing invoice comes from. Client enterprises see this in the header of every invoice and payment receipt Osta issues to them.</InfoHint>
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -226,8 +226,10 @@ export function OstaInvoicingManager() {
               </div>
               <Card size="sm">
                 <CardHeader>
-                  <CardTitle className="text-sm">Payment Instructions</CardTitle>
-                  <CardDescription>Bank details a client enterprise pays the license fee to.</CardDescription>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+            Payment Instructions
+            <InfoHint label="Payment Instructions">Bank details a client enterprise pays the license fee to.</InfoHint>
+          </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
