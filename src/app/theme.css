@@ -89,6 +89,13 @@
     --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.06); /* sticky header */
 
     /* 8. SIDEBAR SPECIFIC THEME */
+    /* `bg-sidebar` maps to --sidebar (shadcn's current token name), but this block only
+       ever defined --sidebar-background (the older name). The variable was therefore
+       undefined and bg-sidebar computed to rgba(0,0,0,0) — the sidebar painted NO
+       background, so page content showed straight through the nav. That read as a
+       deliberate "glass" effect; it was an unpainted surface. Aliased rather than
+       renamed so both names keep working. */
+    --sidebar: var(--sidebar-background);
     --sidebar-background: #FFFEFB;
     --sidebar-foreground: #3C3833;
     --sidebar-primary: var(--primary);
