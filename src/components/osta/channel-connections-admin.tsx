@@ -23,7 +23,7 @@ import {
   StatusBadge,
   RateLimitPanel,
   formatDateTime,
-} from "@/components/hub/channel-connection-manager"
+} from "@/components/hub/connection-shared"
 
 // The Osta console's cross-tenant channel-manager screen — the platform-admin
 // counterpart of the tenant Hub's ChannelConnectionManager, for the master-account

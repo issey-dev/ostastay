@@ -1,5 +1,5 @@
 import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
-import { ChannelConnectionManager } from "@/components/hub/channel-connection-manager"
+import { ChannelConnectionStatus } from "@/components/hub/channel-connection-status"
 
 // Channel Manager — the exchange interface between this enterprise and the booking
 // channels. See .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
@@ -12,8 +12,9 @@ export default async function ChannelManagerPage() {
   // its own terms rather than relying on an ancestor for authorization.
   requireHubAccess(ctx)
 
-  // View-only users see the connection's health but none of the mutating controls. The
-  // API enforces this independently — this only avoids showing buttons that would 403.
+  // Only gates the health-check button now — establishing the link is an Osta action and
+  // is refused by the API for every tenant regardless of permission (see
+  // src/app/api/hub/connections/route.ts).
   const canManage = hasPermission(ctx, "INTEGRATIONS", "update")
 
   return (
@@ -25,7 +26,7 @@ export default async function ChannelManagerPage() {
         </p>
       </div>
 
-      <ChannelConnectionManager canManage={canManage} />
+      <ChannelConnectionStatus canManage={canManage} />
     </div>
   )
 }

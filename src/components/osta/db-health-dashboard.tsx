@@ -24,12 +24,13 @@ type DbHealth = {
   migrationStatus: { appliedCount: number; onDiskCount: number; inSync: boolean; lastApplied: string | null }
   dbFileSizeBytes: number | null
   storage: {
+    engine: "sqlite" | "postgresql" | "unknown"
     pageSize: number | null
     pageCount: number | null
     freelistCount: number | null
     totalBytes: number | null
     freeBytes: number | null
-    tables: Array<{ name: string; bytes: number; percent: number }> | null
+    tables: Array<{ name: string; bytes: number; percent: number; indexBytes: number | null }> | null
   }
   queryStats: Array<{ query: string; count: number; avgMs: number; maxMs: number; totalMs: number }>
   slowestQueries: Array<{ query: string; duration: number; timestamp: number }>
@@ -198,7 +199,25 @@ export function DbHealthDashboard() {
         {/* ============================== STORAGE ============================== */}
         <TabsContent value="storage" className="space-y-6 pt-4">
           <div className="grid gap-4 md:grid-cols-4">
-            <StatCard label="Database File" value={formatBytes(data.dbFileSizeBytes)} sub={data.dbFileSizeBytes === null ? "Remote database — no local file" : undefined} />
+            {/* Development runs SQLite and production PostgreSQL, so every card below
+                states which engine it is describing rather than implying one. */}
+            <StatCard
+              label="Database Size"
+              value={
+                data.storage.engine === "sqlite"
+                  ? formatBytes(data.dbFileSizeBytes)
+                  : data.storage.totalBytes !== null
+                    ? formatBytes(data.storage.totalBytes)
+                    : "N/A"
+              }
+              sub={
+                data.storage.engine === "sqlite"
+                  ? "Local SQLite file on disk"
+                  : data.storage.engine === "postgresql"
+                    ? "pg_database_size()"
+                    : "Unrecognised database engine"
+              }
+            />
             <StatCard
               label="Allocated Pages"
               value={data.storage.totalBytes !== null ? formatBytes(data.storage.totalBytes) : "N/A"}
@@ -207,7 +226,11 @@ export function DbHealthDashboard() {
             <StatCard
               label="Reclaimable"
               value={data.storage.freeBytes !== null ? formatBytes(data.storage.freeBytes) : "N/A"}
-              sub="Freelist pages a VACUUM would release"
+              sub={
+                data.storage.engine === "postgresql"
+                  ? `${(data.storage.freelistCount ?? 0).toLocaleString()} dead tuples — a VACUUM FULL would release these (estimated)`
+                  : "Freelist pages a VACUUM would release"
+              }
             />
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Migrations</CardTitle></CardHeader>
@@ -228,13 +251,18 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Storage by Table</CardTitle>
-              <CardDescription>Bytes actually used per table, with indexes listed separately.</CardDescription>
+              <CardDescription>
+                {data.storage.engine === "postgresql"
+                  ? "Total size per table (heap + indexes + TOAST), with the index-only share broken out."
+                  : "Bytes actually used per table, with indexes listed separately."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.storage.tables === null ? (
                 <p className="text-sm text-muted-foreground italic">
-                  Per-table breakdown unavailable on PostgreSQL — the storage probe still reads SQLite&apos;s dbstat
-                  table. See the PostgreSQL follow-ups in TODO.md.
+                  {data.storage.engine === "sqlite"
+                    ? "Per-table breakdown unavailable — this SQLite build has no dbstat virtual table."
+                    : "Per-table breakdown unavailable — the database role cannot read the catalog."}
                 </p>
               ) : (
                 <table className="w-full text-sm">
@@ -242,6 +270,7 @@ export function DbHealthDashboard() {
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="py-1.5 pr-4">Table</th>
                       <th className="py-1.5 pr-4 text-right">Size</th>
+                      {data.storage.engine === "postgresql" && <th className="py-1.5 pr-4 text-right">Indexes</th>}
                       <th className="py-1.5 pr-4 text-right">Share</th>
                       <th className="py-1.5 w-1/3">&nbsp;</th>
                     </tr>
@@ -251,6 +280,11 @@ export function DbHealthDashboard() {
                       <tr key={t.name} className="border-b last:border-0">
                         <td className="py-1.5 pr-4 font-mono text-xs">{t.name}</td>
                         <td className="py-1.5 pr-4 text-right tabular-nums">{formatBytes(t.bytes)}</td>
+                        {data.storage.engine === "postgresql" && (
+                          <td className="py-1.5 pr-4 text-right tabular-nums text-muted-foreground">
+                            {t.indexBytes !== null ? formatBytes(t.indexBytes) : "—"}
+                          </td>
+                        )}
                         <td className="py-1.5 pr-4 text-right tabular-nums">{t.percent}%</td>
                         <td className="py-1.5">
                           <div className="h-2 bg-muted w-full">

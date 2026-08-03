@@ -1,122 +1,28 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
-import { logActivity } from "@/lib/activity-log";
-import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours } from "@/lib/channels/connection";
-import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
-// Confirms the connection exists AND belongs to the caller's enterprise. One generic
-// "Connection not found" either way, so a probing request cannot distinguish "belongs to
-// another enterprise" from "does not exist" — the same rule assertPropertyAccess() follows.
-async function assertConnectionInEnterprise(id: string, enterpriseId: string) {
-  const connection = await prisma.channelConnection.findUnique({ where: { id } });
-  if (!connection || connection.enterpriseId !== enterpriseId) {
-    return null;
-  }
-  return connection;
+// Everything that ESTABLISHES or RESHAPES the Beds24 link is an OSTA-LEVEL action, not a
+// tenant one (app-owner decision, 2026-08-03). Under the master-account topology the
+// invite code belongs to the app owner's own Beds24 account and every tenant drains one
+// shared API credit pool, so a tenant must not be able to:
+//   - re-authorize with a new invite code (they have none, and it would replace a
+//     credential the platform owns),
+//   - delete the connection,
+//   - change the rate-limit self-throttle floor (it protects a pool shared with every
+//     other tenant), or the poll lookback window.
+//
+// Refused here rather than only hidden in the Hub UI — a hidden button is not a control.
+// The platform-side equivalents live under /api/osta/channels/connections/[id].
+//
+// What the Hub KEEPS: a read-only view of connection health (GET /api/hub/connections),
+// the on-demand health check (POST .../test — diagnostics, and the keep-alive), mapping,
+// inbound bookings, and its own exchange logs.
+const OSTA_MANAGED =
+  "Channel-manager connections are set up and maintained by Osta. Contact Osta to change or remove this enterprise's channel manager.";
+
+export async function PATCH() {
+  return NextResponse.json({ error: OSTA_MANAGED }, { status: 403 });
 }
 
-// Two distinct edits, dispatched by which field is present — same pattern as the
-// property-links PATCH:
-//   { inviteCode }               — replace the stored credentials with a fresh invite code
-//                                   (the recovery path when a refresh token has lapsed past
-//                                   the provider's idle window and cannot be repaired by
-//                                   refreshing, since the token is already dead).
-//   { rateLimitPauseThreshold }  — the operator's self-throttle floor (null disables it).
-//   { pollLookbackHours }        — the scheduled poll's lookback window (null = 48h default).
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
-
-    const existing = await assertConnectionInEnterprise(id, ctx.enterpriseId);
-    if (!existing) {
-      return NextResponse.json({ error: "Connection not found" }, { status: 404 });
-    }
-
-    const body = await request.json().catch(() => null);
-
-    if (body && typeof body === "object" && "rateLimitPauseThreshold" in body) {
-      const raw = body.rateLimitPauseThreshold;
-      const threshold = raw === null ? null : Number(raw);
-      if (threshold !== null && !Number.isFinite(threshold)) {
-        return NextResponse.json({ error: "Pause threshold must be a number or null" }, { status: 400 });
-      }
-      const connection = await setRateLimitPauseThreshold(id, threshold);
-      return NextResponse.json({ connection });
-    }
-
-    if (body && typeof body === "object" && "pollLookbackHours" in body) {
-      const raw = body.pollLookbackHours;
-      const hours = raw === null ? null : Number(raw);
-      if (hours !== null && !Number.isFinite(hours)) {
-        return NextResponse.json({ error: "Poll lookback must be a number of hours or null" }, { status: 400 });
-      }
-      try {
-        const connection = await setPollLookbackHours(id, hours);
-        return NextResponse.json({ connection });
-      } catch (e) {
-        return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid value" }, { status: 400 });
-      }
-    }
-
-    const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";
-    if (!inviteCode) {
-      return NextResponse.json({ error: "An invite code is required" }, { status: 400 });
-    }
-
-    const connection = await reauthorizeConnection(id, inviteCode);
-
-    await logActivity({
-      ctx,
-      module: "INTEGRATIONS",
-      action: "UPDATE",
-      description: `Re-authorized channel manager "${existing.name}" with a new invite code`,
-      entityType: "ChannelConnection",
-      entityId: id,
-    });
-
-    return NextResponse.json({ connection });
-  } catch (error) {
-    if (error instanceof ChannelAuthError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    if (error instanceof ChannelApiError) {
-      return NextResponse.json({ error: error.message }, { status: 502 });
-    }
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
-}
-
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "delete");
-
-    const existing = await assertConnectionInEnterprise(id, ctx.enterpriseId);
-    if (!existing) {
-      return NextResponse.json({ error: "Connection not found" }, { status: 404 });
-    }
-
-    await prisma.channelConnection.delete({ where: { id } });
-
-    await logActivity({
-      ctx,
-      module: "INTEGRATIONS",
-      action: "DELETE",
-      description: `Removed channel manager connection "${existing.name}"`,
-      entityType: "ChannelConnection",
-      entityId: id,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
+export async function DELETE() {
+  return NextResponse.json({ error: OSTA_MANAGED }, { status: 403 });
 }

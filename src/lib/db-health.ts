@@ -48,20 +48,56 @@ export async function getMigrationStatus(): Promise<{ appliedCount: number; onDi
   };
 }
 
-// SQLite-level storage breakdown. Page accounting comes from PRAGMAs (always
-// available); the per-table byte split needs the dbstat virtual table, which is a
-// compile-time option of the bundled SQLite — so it's probed and reported as null when
-// absent rather than assumed. All raw SQL here is read-only.
+// Storage breakdown. DUAL-ENGINE by design (app-owner decision, 2026-08-03): local
+// development stays on SQLite while production runs PostgreSQL, so this probes whichever
+// engine is actually connected rather than assuming one. The engine is read from
+// DATABASE_URL — the same string Prisma itself dispatches on — and every branch is
+// read-only SQL that degrades to nulls rather than throwing, so a locked-down role or an
+// unexpected engine leaves the dashboard showing "N/A" instead of erroring the page.
+//
+// The two engines genuinely expose different things, so the shared shape below is the
+// honest intersection:
+//   SQLite      pageSize/pageCount/freelistCount from PRAGMAs; per-table bytes from the
+//               dbstat virtual table (a compile-time option — probed, never assumed).
+//   PostgreSQL  totalBytes from pg_database_size(); pages derived from the block_size
+//               GUC; "reclaimable" is dead-tuple bytes estimated from
+//               pg_stat_user_tables — what a VACUUM FULL would release, the closest
+//               analogue of SQLite's freelist, and approximate for the same reason the
+//               stats collector's own counts are; per-table bytes from
+//               pg_total_relation_size(), with the index-only share broken out.
+export type DbEngine = "sqlite" | "postgresql" | "unknown";
+
+export function detectDbEngine(url = process.env.DATABASE_URL): DbEngine {
+  if (!url) return "unknown";
+  if (url.startsWith("file:")) return "sqlite";
+  if (url.startsWith("postgres://") || url.startsWith("postgresql://")) return "postgresql";
+  return "unknown";
+}
+
 export type StorageStats = {
+  engine: DbEngine;
   pageSize: number | null;
   pageCount: number | null;
-  freelistCount: number | null; // reclaimable pages (VACUUM would release these)
-  totalBytes: number | null; // pageCount * pageSize
-  freeBytes: number | null; // freelistCount * pageSize
-  tables: Array<{ name: string; bytes: number; percent: number }> | null; // null = dbstat unavailable
+  /** SQLite: freelist pages. PostgreSQL: dead tuples. Both mean "a reclaim would free this". */
+  freelistCount: number | null;
+  totalBytes: number | null;
+  freeBytes: number | null;
+  /** indexBytes is PostgreSQL-only — SQLite's dbstat lists indexes as their own rows. */
+  tables: Array<{ name: string; bytes: number; percent: number; indexBytes: number | null }> | null;
 };
 
-export async function getStorageStats(): Promise<StorageStats> {
+/** Share of the LISTED tables, matching what the dashboard's bars draw. */
+function withPercent(
+  rows: Array<{ name: string; bytes: number; indexBytes: number | null }>
+): NonNullable<StorageStats["tables"]> {
+  const total = rows.reduce((sum, r) => sum + r.bytes, 0);
+  return rows.map((r) => ({
+    ...r,
+    percent: total > 0 ? Math.round((r.bytes / total) * 1000) / 10 : 0,
+  }));
+}
+
+async function getSqliteStorage(): Promise<StorageStats> {
   let pageSize: number | null = null;
   let pageCount: number | null = null;
   let freelistCount: number | null = null;
@@ -73,7 +109,7 @@ export async function getStorageStats(): Promise<StorageStats> {
     pageCount = pc ? Number(pc.page_count) : null;
     freelistCount = fl ? Number(fl.freelist_count) : null;
   } catch {
-    // non-SQLite or PRAGMA blocked — leave everything null
+    // PRAGMA blocked — leave everything null.
   }
 
   let tables: StorageStats["tables"] = null;
@@ -81,23 +117,103 @@ export async function getStorageStats(): Promise<StorageStats> {
     const rows = await prisma.$queryRawUnsafe<Array<{ name: string; bytes: number | bigint }>>(
       `SELECT name, SUM(pgsize) AS bytes FROM dbstat WHERE name NOT LIKE 'sqlite_%' GROUP BY name ORDER BY bytes DESC LIMIT 30`
     );
-    const total = rows.reduce((s, r) => s + Number(r.bytes), 0);
-    tables = rows.map((r) => ({
-      name: r.name,
-      bytes: Number(r.bytes),
-      percent: total > 0 ? Math.round((Number(r.bytes) / total) * 1000) / 10 : 0,
-    }));
+    tables = withPercent(rows.map((r) => ({ name: r.name, bytes: Number(r.bytes), indexBytes: null })));
   } catch {
-    tables = null; // dbstat not compiled in — the dashboard says so instead of erroring
+    tables = null; // dbstat not compiled in — the dashboard says so instead of erroring.
   }
 
-  const totalBytes = pageSize !== null && pageCount !== null ? pageSize * pageCount : null;
-  const freeBytes = pageSize !== null && freelistCount !== null ? pageSize * freelistCount : null;
-  return { pageSize, pageCount, freelistCount, totalBytes, freeBytes, tables };
+  return {
+    engine: "sqlite",
+    pageSize,
+    pageCount,
+    freelistCount,
+    totalBytes: pageSize !== null && pageCount !== null ? pageSize * pageCount : null,
+    freeBytes: pageSize !== null && freelistCount !== null ? pageSize * freelistCount : null,
+    tables,
+  };
 }
 
-// Only meaningful for a local SQLite file — a remote libSQL/Turso URL has no local
-// file to stat, so this returns null rather than throwing.
+async function getPostgresStorage(): Promise<StorageStats> {
+  let pageSize: number | null = null;
+  let totalBytes: number | null = null;
+  try {
+    const [row] = await prisma.$queryRawUnsafe<Array<{ block_size: string; db_size: bigint | number }>>(
+      `SELECT current_setting('block_size') AS block_size, pg_database_size(current_database()) AS db_size`
+    );
+    pageSize = row ? Number(row.block_size) : null;
+    totalBytes = row ? Number(row.db_size) : null;
+  } catch {
+    // Role cannot read the catalog — leave nulls and let the dashboard say "N/A".
+  }
+
+  let freelistCount: number | null = null;
+  let freeBytes: number | null = null;
+  try {
+    const [row] = await prisma.$queryRawUnsafe<Array<{ dead: bigint | number; dead_bytes: bigint | number | null }>>(
+      `SELECT COALESCE(SUM(s.n_dead_tup), 0) AS dead,
+              COALESCE(SUM(
+                s.n_dead_tup
+                * (pg_relation_size(s.relid) / NULLIF(s.n_live_tup + s.n_dead_tup, 0))
+              ), 0) AS dead_bytes
+         FROM pg_stat_user_tables s`
+    );
+    freelistCount = row ? Number(row.dead) : null;
+    freeBytes = row && row.dead_bytes !== null ? Number(row.dead_bytes) : null;
+  } catch {
+    freelistCount = null;
+    freeBytes = null;
+  }
+
+  let tables: StorageStats["tables"] = null;
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ name: string; bytes: bigint | number; index_bytes: bigint | number }>
+    >(
+      `SELECT c.relname AS name,
+              pg_total_relation_size(c.oid) AS bytes,
+              pg_indexes_size(c.oid) AS index_bytes
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r' AND n.nspname = 'public'
+        ORDER BY pg_total_relation_size(c.oid) DESC
+        LIMIT 30`
+    );
+    tables = withPercent(
+      rows.map((r) => ({ name: r.name, bytes: Number(r.bytes), indexBytes: Number(r.index_bytes) }))
+    );
+  } catch {
+    tables = null;
+  }
+
+  return {
+    engine: "postgresql",
+    pageSize,
+    pageCount: pageSize !== null && totalBytes !== null ? Math.round(totalBytes / pageSize) : null,
+    freelistCount,
+    totalBytes,
+    freeBytes,
+    tables,
+  };
+}
+
+export async function getStorageStats(): Promise<StorageStats> {
+  const engine = detectDbEngine();
+  if (engine === "sqlite") return getSqliteStorage();
+  if (engine === "postgresql") return getPostgresStorage();
+  return {
+    engine,
+    pageSize: null,
+    pageCount: null,
+    freelistCount: null,
+    totalBytes: null,
+    freeBytes: null,
+    tables: null,
+  };
+}
+
+// The on-disk file, for a LOCAL SQLite database only — development keeps SQLite, so this
+// stays useful there. A PostgreSQL (or remote libSQL) URL has no local file to stat and
+// returns null, which the dashboard renders as a server-hosted database instead.
 export function getDbFileSizeBytes(): number | null {
   const url = process.env.DATABASE_URL;
   if (!url || !url.startsWith("file:")) return null;

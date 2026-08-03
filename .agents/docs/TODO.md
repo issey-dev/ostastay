@@ -1211,6 +1211,42 @@ arrive. The app looked broken rather than unfinished.
 - Live-verified end to end on dev: no property → create (lands PENDING, still blocked) →
   Osta approves → dashboard unlocks.
 
+## Hub connection screen is READ-ONLY + DB Health storage fixed (2026-08-03) — DONE (branch `feature/hub-connection-readonly`)
+
+**Hub is downstream-only now.** App-owner decision: establishing the Beds24 link is an
+Osta-level act (the invite code belongs to the app owner's master account), so the tenant
+Hub must not offer it.
+- `POST /api/hub/connections`, `PATCH`/`DELETE /api/hub/connections/[id]`, and
+  `POST /api/hub/connections/[id]/webhook` now return **403** with a "contact Osta"
+  message. Refused at the API, not merely hidden — a hidden button is not a control.
+  Note `PATCH` carried `rateLimitPauseThreshold` and `pollLookbackHours` too; both are
+  now Osta-only, deliberately, because the credit pool is shared across every tenant.
+- **Kept for the tenant**: `GET /api/hub/connections` (read-only health), the on-demand
+  health check (`POST .../test` — diagnostics + keep-alive), mapping, inbound bookings,
+  and their own exchange logs.
+- New `src/components/hub/channel-connection-status.tsx` replaces the old manager:
+  status + last-checked + webhook-installed, and a **"Property mapped"** row per link
+  showing the channel-side **Property ID**. Empty state tells them to contact Osta.
+- `channel-connection-manager.tsx` was DELETED (its connect/re-authorize/delete dialogs
+  had no tenant home left); its shared pieces moved to
+  `src/components/hub/connection-shared.tsx`, used by both the Osta admin screen and the
+  Hub's read-only one.
+
+**DB Health storage panel now works on both engines.** It had shown N/A for everything
+since the Postgres move — the probe only spoke SQLite's PRAGMA/dbstat dialect.
+- `detectDbEngine()` reads DATABASE_URL; `getStorageStats()` dispatches to a SQLite or a
+  PostgreSQL implementation, each degrading to nulls rather than throwing.
+- PostgreSQL: `pg_database_size()`, pages from the `block_size` GUC, "reclaimable" =
+  estimated dead-tuple bytes from `pg_stat_user_tables` (the honest analogue of SQLite's
+  freelist), per-table `pg_total_relation_size()` with the index-only share broken out.
+- Verified against the live dev database: 13.8 MB, 8 KB pages, 30-table breakdown.
+- ⚠️ **The app itself is still PostgreSQL-only** — `datasource.provider = "postgresql"`,
+  the migrations are Postgres SQL (`TIMESTAMP(3)`, `DOUBLE PRECISION`), and 15 queries
+  use `mode: "insensitive"`, which SQLite does not support. The app-owner's stated
+  intent is SQLite locally / Postgres in production; the db-health probe now supports
+  both, but making the APP run on SQLite again is a separate, much larger piece of work.
+  **Flagged, not attempted.**
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

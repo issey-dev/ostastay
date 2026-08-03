@@ -251,39 +251,38 @@ describe("Channel manager connection (Beds24)", () => {
     await destroySession();
   });
 
-  it("one enterprise cannot delete another's connection — 404, not 403", async () => {
+  it("the Hub cannot delete a connection at all — setup is Osta-level", async () => {
     stubBeds24({ refreshToken: "r-victim", token: "a-victim", expiresIn: 86400 });
-    const victim = await createConnection({
+    const existing = await createConnection({
       enterpriseId: enterpriseAId,
       name: `Victim ${Date.now()}`,
       inviteCode: "y",
     });
 
     cookieJar.clear();
-    await createSession(adminBId);
-    const res = await connectionByIdRoute.DELETE(new Request("http://localhost", { method: "DELETE" }), {
-      params: Promise.resolve({ id: victim.id }),
-    });
-    // Generic "not found" so a prober cannot distinguish "another enterprise's" from
-    // "does not exist".
-    expect(res.status).toBe(404);
+    // Even the connection's OWN enterprise admin is refused: since 2026-08-03 the Beds24
+    // link is established and removed from the Osta console only, because the invite code
+    // belongs to the app owner's master account (see .agents/docs/DECISIONS.md).
+    await createSession(adminAId);
+    const res = await connectionByIdRoute.DELETE();
+    expect(res.status).toBe(403);
     await destroySession();
 
     // And it really is still there.
-    expect(await prisma.channelConnection.findUnique({ where: { id: victim.id } })).not.toBeNull();
+    expect(await prisma.channelConnection.findUnique({ where: { id: existing.id } })).not.toBeNull();
   });
 
-  it("POST rejects a missing name or invite code before calling Beds24", async () => {
+  it("the Hub cannot create or re-authorize a connection — 403 without touching Beds24", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
     cookieJar.clear();
     await createSession(adminAId);
-    const res = await connectionsRoute.POST(
-      new Request("http://localhost", { method: "POST", body: JSON.stringify({ name: "", inviteCode: "" }) })
-    );
-    expect(res.status).toBe(400);
-    // No outbound call should have been attempted for input we can reject locally.
+
+    expect((await connectionsRoute.POST()).status).toBe(403);
+    expect((await connectionByIdRoute.PATCH()).status).toBe(403);
+
+    // Refused before any outbound call — the tenant has no invite code to spend anyway.
     expect(fetchSpy).not.toHaveBeenCalled();
     await destroySession();
   });

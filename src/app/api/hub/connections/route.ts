@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
-import { logActivity } from "@/lib/activity-log";
-import { listConnections, createConnection } from "@/lib/channels/connection";
-import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
+import { listConnections } from "@/lib/channels/connection";
 
 // Channel-manager connections for the session's own enterprise — see
 // .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
@@ -30,50 +28,17 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "create");
+// Establishing the Beds24 link is an OSTA-LEVEL action, not a tenant one (app-owner
+// decision, 2026-08-03): under the master-account topology the invite code comes from
+// the app owner's own Beds24 account, so the tenant never holds one and must not be able
+// to mint, replace, or delete a connection. Refused here rather than only hidden in the
+// UI — a hidden button is not a control. The Hub keeps everything downstream of the
+// link: mapping, inbound bookings, its own exchange logs, and a read-only health view.
+//
+// The platform-side equivalents live under /api/osta/channels/connections.
+const OSTA_MANAGED =
+  "Channel-manager connections are set up by Osta. Contact Osta to connect or change this enterprise's channel manager.";
 
-    const body = await request.json().catch(() => null);
-    const name = typeof body?.name === "string" ? body.name.trim() : "";
-    const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";
-
-    if (!name) {
-      return NextResponse.json({ error: "A connection name is required" }, { status: 400 });
-    }
-    if (!inviteCode) {
-      return NextResponse.json({ error: "An invite code is required" }, { status: 400 });
-    }
-
-    const connection = await createConnection({ enterpriseId: ctx.enterpriseId, name, inviteCode });
-
-    // The invite code itself is never logged — only that a connection was established.
-    await logActivity({
-      ctx,
-      module: "INTEGRATIONS",
-      action: "CREATE",
-      description: `Connected channel manager "${name}" (Beds24)`,
-      entityType: "ChannelConnection",
-      entityId: connection.id,
-    });
-
-    return NextResponse.json({ connection }, { status: 201 });
-  } catch (error) {
-    // A rejected invite code is the operator's mistake, not a server fault — surface the
-    // real reason with a 4xx instead of letting it fall through to a generic 500.
-    if (error instanceof ChannelAuthError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    if (error instanceof ChannelApiError) {
-      return NextResponse.json({ error: error.message }, { status: 502 });
-    }
-    // Prisma's unique constraint on (enterpriseId, name).
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
-      return NextResponse.json({ error: "A connection with that name already exists" }, { status: 409 });
-    }
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
+export async function POST() {
+  return NextResponse.json({ error: OSTA_MANAGED }, { status: 403 });
 }
