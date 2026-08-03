@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Trash2, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Button } from "@/components/ui/button"
 import { InfoHint } from "@/components/ui/info-hint"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useProperty } from "@/components/providers/property-provider"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { FolioPanel } from "@/components/front-office/folio-panel"
@@ -204,6 +205,22 @@ export default function ReservationsDashboard() {
   const [filterSearch, setFilterSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [filterDates, setFilterDates] = useState<DateRange | undefined>()
+  // Which date the range applies to — the desk thinks in "who arrives", "who is here"
+  // and "who leaves", so the range switches between them rather than always meaning
+  // "overlapping stay" (app-owner, 2026-08-03).
+  const [dateMode, setDateMode] = useState<"stay" | "arrival" | "departure">("stay")
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // Desktop can switch between the dense table and the same cards the phone gets.
+  // Remembered per browser: it is a workspace preference, not a per-visit choice.
+  const [view, setView] = useState<"table" | "card">("table")
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem("osta:reservations-view") : null
+    if (saved === "card" || saved === "table") setView(saved)
+  }, [])
+  const chooseView = (v: "table" | "card") => {
+    setView(v)
+    try { window.localStorage.setItem("osta:reservations-view", v) } catch {}
+  }
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
@@ -213,6 +230,7 @@ export default function ReservationsDashboard() {
     if (filterStatus) params.set("status", filterStatus)
     if (filterDates?.from) params.set("from", format(filterDates.from, "yyyy-MM-dd"))
     if (filterDates?.to) params.set("to", format(filterDates.to, "yyyy-MM-dd"))
+    if (filterDates?.from || filterDates?.to) params.set("dateMode", dateMode)
     return params
   }
 
@@ -256,7 +274,7 @@ export default function ReservationsDashboard() {
     if (!currentProperty) return
     const t = setTimeout(fetchData, filterSearch ? 350 : 0)
     return () => clearTimeout(t)
-  }, [currentProperty, filterSearch, filterStatus, filterDates])
+  }, [currentProperty, filterSearch, filterStatus, filterDates, dateMode])
 
   useEffect(() => {
     if (!currentProperty) return
@@ -455,23 +473,84 @@ export default function ReservationsDashboard() {
     )
   }
 
+  const activeFilterCount = [filterSearch.trim(), filterStatus, filterDates?.from ? "d" : ""].filter(Boolean).length
+  const clearFilters = () => {
+    setFilterSearch("")
+    setFilterStatus("")
+    setFilterDates(undefined)
+    setDateMode("stay")
+  }
+
+  // Rendered twice — inline on desktop, inside the mobile drawer — from this single
+  // definition, so the two can never offer different filters.
+  const filterControls = (
+    <>
+      <div className="relative md:w-72">
+        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Guest, conf. #, room, phone, email..."
+          value={filterSearch}
+          onChange={(e) => setFilterSearch(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+      <div className="md:w-44">
+        <SearchableSelect
+          value={filterStatus}
+          onChange={(v: string) => setFilterStatus(v)}
+          placeholder="Active bookings"
+          options={[
+            // "" is not "everything" any more — the API hides finished business unless a
+            // status is named, so the label says what it actually does.
+            { label: "Active bookings", value: "" },
+            { label: "Reserved", value: "RESERVED" },
+            { label: "In-House", value: "IN_HOUSE" },
+            { label: "Checked Out", value: "CHECKED_OUT" },
+            { label: "No-Show", value: "NO_SHOW" },
+            { label: "Cancelled", value: "CANCELLED" },
+          ]}
+        />
+      </div>
+      <div className="md:w-36">
+        <SearchableSelect
+          value={dateMode}
+          onChange={(v: string) => setDateMode((v || "stay") as "stay" | "arrival" | "departure")}
+          placeholder="By stay"
+          options={[
+            { label: "By stay", value: "stay" },
+            { label: "By arrival", value: "arrival" },
+            { label: "By departure", value: "departure" },
+          ]}
+        />
+      </div>
+      <DateRangePicker value={filterDates} onChange={setFilterDates} placeholder="Any dates" className="md:w-60" />
+      {activeFilterCount > 0 && (
+        <Button variant="ghost" size="sm" className="hidden text-muted-foreground md:inline-flex" onClick={clearFilters}>
+          Clear
+        </Button>
+      )}
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Reservations &amp; Stays
-            <InfoHint label="Reservations &amp; Stays">
-              Manage incoming bookings, in-house guests, and room assignments.
-            </InfoHint>
-          </h2>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button variant="outline" className="shadow-sm" onClick={handleAutoAssign} disabled={autoAssigning}>
+      {/* Auto-Assign and Tape Chart are desk-at-a-desk tools — a room grid and a bulk
+          assignment sweep are not phone work, and side by side they pushed the title
+          into two lines. Hidden below sm; New Booking stays, since that is the one
+          thing you do reach for on a phone. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
+          Reservations &amp; Stays
+          <InfoHint label="Reservations &amp; Stays">
+            Manage incoming bookings, in-house guests, and room assignments.
+          </InfoHint>
+        </h2>
+
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="hidden shadow-sm sm:inline-flex" onClick={handleAutoAssign} disabled={autoAssigning}>
             <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
           </Button>
-          <Link href={`/e/${slug}/dashboard/reservations/tape-chart`}>
+          <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
             <Button variant="outline" className="shadow-sm">
               <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
             </Button>
@@ -484,45 +563,81 @@ export default function ReservationsDashboard() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col xl:flex-row xl:items-end gap-4">
-            <div className="flex-1">
+          {/* One set of controls, rendered inline on desktop and inside a drawer on a
+              phone — filters that took three stacked rows there left almost no room for
+              the results they filter. `filterControls` is defined once so the two can
+              never drift apart. */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
                 Reservations
-                <InfoHint label="Reservations">Search and filter every booking at the property.</InfoHint>
+                <InfoHint label="Reservations">
+                  One search box covers guest name, confirmation number, channel reference, room number, phone and
+                  email. Checked-out and no-show bookings are hidden unless you pick that status.
+                </InfoHint>
               </CardTitle>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative sm:w-56">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Guest or conf. #..."
-                  value={filterSearch}
-                  onChange={(e) => setFilterSearch(e.target.value)}
-                  className="pl-8"
-                />
+
+              <div className="flex items-center gap-2">
+                {/* Desktop-only: the phone always gets cards. */}
+                <div className="hidden items-center rounded-md border border-border p-0.5 md:flex">
+                  <button
+                    type="button"
+                    onClick={() => chooseView("table")}
+                    aria-pressed={view === "table"}
+                    aria-label="Table view"
+                    className={`rounded px-2 py-1 ${view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <ListChecks className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => chooseView("card")}
+                    aria-pressed={view === "card"}
+                    aria-label="Card view"
+                    className={`rounded px-2 py-1 ${view === "card" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <SheetTrigger
+                    render={
+                      <Button variant="outline" size="sm" className="md:hidden">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                          <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                            {activeFilterCount}
+                          </span>
+                        )}
+                      </Button>
+                    }
+                  />
+                  <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+                    <SheetHeader>
+                      <SheetTitle>Filter reservations</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-col gap-4 p-4">
+                      {filterControls}
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1" onClick={clearFilters}>Clear</Button>
+                        <Button className="flex-1" onClick={() => setFiltersOpen(false)}>Show results</Button>
+                      </div>
+                    </div>
+                  </SheetContent>
+                </Sheet>
               </div>
-              <div className="sm:w-44">
-                <SearchableSelect
-                  value={filterStatus}
-                  onChange={(v: string) => setFilterStatus(v)}
-                  placeholder="All statuses"
-                  options={[
-                    { label: "All statuses", value: "" },
-                    { label: "Reserved", value: "RESERVED" },
-                    { label: "In-House", value: "IN_HOUSE" },
-                    { label: "Checked Out", value: "CHECKED_OUT" },
-                    { label: "No-Show", value: "NO_SHOW" },
-                    { label: "Cancelled", value: "CANCELLED" },
-                  ]}
-                />
-              </div>
-              <DateRangePicker value={filterDates} onChange={setFilterDates} placeholder="Any dates" className="sm:w-60" />
             </div>
+
+            {/* Inline on desktop only. */}
+            <div className="hidden gap-2 md:flex md:flex-wrap md:items-center">{filterControls}</div>
           </div>
         </CardHeader>
         <CardContent>
           {/* Mobile: stacked cards */}
-          <div className="md:hidden space-y-3">
+          {/* Cards: always on a phone, and on desktop when card view is chosen. */}
+          <div className={`space-y-3 ${view === "card" ? "" : "md:hidden"}`}>
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
             ) : loadError ? (
@@ -583,7 +698,7 @@ export default function ReservationsDashboard() {
 
           {/* Tablet/desktop: fixed-layout table — a stable column grid that never
               reflows when a booking has more rooms or more flags. */}
-          <div className="hidden md:block">
+          <div className={view === "card" ? "hidden" : "hidden md:block"}>
             <Table className="table-fixed w-full">
               <TableHeader>
                 <TableRow>
