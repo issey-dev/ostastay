@@ -19,7 +19,7 @@ export default async function OstaOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Overview
             <InfoHint label="Overview">Every enterprise, property, and support grant on the platform, in one place.</InfoHint>
           </h2>

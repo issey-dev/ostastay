@@ -13,7 +13,7 @@ export default async function OstaChannelManagerPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Channel Manager
             <InfoHint label="Channel Manager">Every enterprise&rsquo;s Beds24 connection, run from the master account: setup, health, webhooks and the shared rate-limit pool. Room and rate mapping stays in each enterprise&rsquo;s own Hub.</InfoHint>
           </h2>

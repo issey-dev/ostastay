@@ -146,7 +146,7 @@ export default function MaintenanceDashboard() {
       <div>
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Maintenance Dashboard
             <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
           </h2>
@@ -161,7 +161,7 @@ export default function MaintenanceDashboard() {
     <div>
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Maintenance Dashboard
             <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
           </h2>

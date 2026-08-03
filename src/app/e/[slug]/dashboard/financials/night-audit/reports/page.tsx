@@ -80,7 +80,7 @@ export default function EodReportsPage() {
           <Link href="../night-audit" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-1">
             <ArrowLeft className="w-3.5 h-3.5" /> End of Day
           </Link>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             EOD Report Archive
             <InfoHint label="EOD Report Archive">Frozen snapshots of each closed business date&apos;s reports.</InfoHint>
           </h2>

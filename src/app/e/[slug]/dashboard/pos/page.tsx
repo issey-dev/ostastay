@@ -237,7 +237,7 @@ export default function POSDashboard() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Fast Post
             <InfoHint label="Fast Post">Select an outlet, then post charges to an in-house guest&apos;s room or a walk-in bill.</InfoHint>
           </h2>

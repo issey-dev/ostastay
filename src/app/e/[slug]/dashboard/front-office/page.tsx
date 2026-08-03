@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { InfoHint } from "@/components/ui/info-hint"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
@@ -363,7 +364,8 @@ export default function FrontOfficeDashboard() {
           <Skeleton className="h-9 w-72 mb-2" />
           <Skeleton className="h-5 w-96" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Two-up on a phone — four full-width cards pushed the actual work off-screen. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-4 lg:gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
@@ -375,72 +377,81 @@ export default function FrontOfficeDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
+      {/* Stacks on a phone: side-by-side squeezed the title into two lines and pushed
+          the button into the subtitle. The subtitle keeps only the business date — live
+          operational data the desk reads constantly — while the descriptive half moved
+          into the ⓘ like every other page. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Front Desk Operations</h2>
-          <p className="text-muted-foreground">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
+            Front Desk Operations
+            <InfoHint label="Front Desk Operations">
+              Today&apos;s arrivals, departures, in-house guests and room moves for this property.
+            </InfoHint>
+          </h2>
+          <p className="text-sm text-muted-foreground">
             Business date{" "}
             <span className="font-medium text-foreground">
               {data?.businessDate
                 ? new Date(data.businessDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
                 : "—"}
-            </span>{" "}
-            · arrivals, departures, and in-house guests.
+            </span>
           </p>
         </div>
-        <Button onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
+        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
           <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking
         </Button>
       </div>
 
       {/* KPI Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Two-up on a phone — four full-width cards pushed the actual work off-screen. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-4 lg:gap-4">
         {/* Arrivals — checked in of expected */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Arrivals</CardTitle>
+        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
+            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Arrivals</CardTitle>
             <LogIn className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 lg:px-6">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold">{data?.arrivalsSummary?.checkedIn ?? 0}</span>
-              <span className="text-lg font-medium text-muted-foreground">/ {data?.arrivalsSummary?.expected ?? 0}</span>
+              <span className="text-2xl font-bold lg:text-3xl">{data?.arrivalsSummary?.checkedIn ?? 0}</span>
+              <span className="text-base font-medium text-muted-foreground lg:text-lg">/ {data?.arrivalsSummary?.expected ?? 0}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground lg:mt-1 lg:text-xs">
               checked in · {Math.max(0, (data?.arrivalsSummary?.expected ?? 0) - (data?.arrivalsSummary?.checkedIn ?? 0))} to arrive
             </p>
           </CardContent>
         </Card>
 
         {/* Departures — checked out of expected */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Departures</CardTitle>
+        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
+            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Departures</CardTitle>
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 lg:px-6">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold">{data?.departuresSummary?.checkedOut ?? 0}</span>
-              <span className="text-lg font-medium text-muted-foreground">/ {data?.departuresSummary?.expected ?? 0}</span>
+              <span className="text-2xl font-bold lg:text-3xl">{data?.departuresSummary?.checkedOut ?? 0}</span>
+              <span className="text-base font-medium text-muted-foreground lg:text-lg">/ {data?.departuresSummary?.expected ?? 0}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground lg:mt-1 lg:text-xs">
               checked out · {Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out
             </p>
           </CardContent>
         </Card>
 
         {/* In-House — occupied rooms and the people in them */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">In-House</CardTitle>
+        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
+            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">In-House</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 lg:px-6">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold">{data?.inHouseSummary?.rooms ?? 0}</span>
+              <span className="text-2xl font-bold lg:text-3xl">{data?.inHouseSummary?.rooms ?? 0}</span>
               <span className="text-sm font-medium text-muted-foreground">rooms</span>
             </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground lg:gap-3 lg:text-xs">
               <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.adults ?? 0}</span> Adt</span>
               <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.children ?? 0}</span> Chd</span>
               <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.infants ?? 0}</span> Inf</span>
@@ -449,19 +460,21 @@ export default function FrontOfficeDashboard() {
         </Card>
 
         {/* Room Status — occupied/vacant split and housekeeping readiness */}
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Room Status</CardTitle>
+        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
+            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Room Status</CardTitle>
             <BedDouble className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-bold">{data?.roomStatusSummary?.occupied ?? 0}</span>
+          {/* Both rows wrap on a phone — at the two-up card width they otherwise ran
+              past the card's edge. */}
+          <CardContent className="px-4 lg:px-6">
+            <div className="flex flex-wrap items-baseline gap-x-2 lg:gap-3">
+              <span className="text-2xl font-bold lg:text-3xl">{data?.roomStatusSummary?.occupied ?? 0}</span>
               <span className="text-sm font-medium text-muted-foreground">occ ·</span>
-              <span className="text-3xl font-bold">{data?.roomStatusSummary?.vacant ?? 0}</span>
+              <span className="text-2xl font-bold lg:text-3xl">{data?.roomStatusSummary?.vacant ?? 0}</span>
               <span className="text-sm font-medium text-muted-foreground">vac</span>
             </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground lg:gap-3 lg:text-xs">
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {data?.roomStatusSummary?.clean ?? 0} Clean</span>
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" /> {data?.roomStatusSummary?.inspected ?? 0} Insp</span>
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {data?.roomStatusSummary?.dirty ?? 0} Dirty</span>

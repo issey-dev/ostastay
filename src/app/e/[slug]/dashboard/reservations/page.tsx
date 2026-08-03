@@ -459,7 +459,7 @@ export default function ReservationsDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Reservations &amp; Stays
             <InfoHint label="Reservations &amp; Stays">
               Manage incoming bookings, in-house guests, and room assignments.

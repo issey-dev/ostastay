@@ -351,7 +351,7 @@ export default function HousekeepingDashboard() {
     <div className="pb-32 relative">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Housekeeping Dashboard
             <InfoHint label="Housekeeping Dashboard">Manage room statuses, turnovers, and attendant tasks.</InfoHint>
           </h2>

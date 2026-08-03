@@ -103,7 +103,7 @@ export function LicenseTaxInvoiceDocument({
       <BrandRow brand={brand} />
 
       {/* The title, exactly once. */}
-      <h1 className="mt-5 mb-6 text-3xl font-bold tracking-tight text-slate-900">Tax Invoice</h1>
+      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">Tax Invoice</h1>
 
       {/* Centre-split header: invoice facts left, Bill To right. */}
       <div className="mb-8 grid grid-cols-2 gap-8">
@@ -219,7 +219,7 @@ export function LicenseReceiptDocument({
     <StationeryPage fontClass={brand.fontClass}>
       <BrandRow brand={brand} />
 
-      <h1 className="mt-5 mb-6 text-3xl font-bold tracking-tight text-slate-900">Payment Receipt</h1>
+      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">Payment Receipt</h1>
 
       <div className="mb-8 grid grid-cols-2 gap-8">
         <dl className="space-y-1.5 text-sm">

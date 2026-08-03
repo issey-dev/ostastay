@@ -510,7 +510,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+          <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl flex items-center gap-3">
             {isEditMode ? "Edit Booking" : walkIn ? "Walk-in Booking" : "New Booking"}
             {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
           </h2>

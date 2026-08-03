@@ -262,7 +262,7 @@ export default function ExcursionsPage() {
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Excursions
             <InfoHint label="Excursions">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</InfoHint>
           </h2>
