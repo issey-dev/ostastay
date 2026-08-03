@@ -117,7 +117,7 @@ export default function ReportsPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
           Reports
           <InfoHint label="Reports">
             Generate operational and financial reports as PDF, Excel, or CSV{currentProperty ? ` for ${currentProperty.name}` : ""}.

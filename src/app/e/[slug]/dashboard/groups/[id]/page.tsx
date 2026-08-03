@@ -163,7 +163,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           </Button>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-3xl font-bold tracking-tight">{group.name}</h2>
+              <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">{group.name}</h2>
               <StatusBadge label={group.status} status={group.status} />
             </div>
             <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">

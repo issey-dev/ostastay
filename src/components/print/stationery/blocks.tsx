@@ -91,7 +91,7 @@ export function StationeryHeader({
           >
             {eyebrow}
           </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
+          <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">{title}</h1>
         </div>
         {meta && meta.length > 0 && (
           <dl className="shrink-0 space-y-1 text-right text-xs">

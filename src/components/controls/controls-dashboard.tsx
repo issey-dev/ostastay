@@ -352,7 +352,7 @@ export function ControlsDashboard({
 
   const header = (
     <div>
-      <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+      <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Controls
             <InfoHint label="Controls">Manage your enterprise, properties, taxes, users, and integrations here.</InfoHint>
           </h2>

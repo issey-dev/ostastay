@@ -6,7 +6,7 @@ export default function AvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-foreground">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-foreground">
             Property Availability
             <InfoHint label="Property Availability">Available rooms by date and room type. Expand a row for arrivals, occupancy, departures and headcount, or set Stop Sale restrictions.</InfoHint>
           </h2>

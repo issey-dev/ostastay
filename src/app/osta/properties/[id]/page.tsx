@@ -19,7 +19,7 @@ export default async function OstaPropertyDetailPage({ params }: { params: Promi
           &larr; {property.enterprise.name}
         </Link>
         <div className="flex items-center gap-3 mt-1">
-          <h2 className="text-3xl font-bold tracking-tight">{property.name}</h2>
+          <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">{property.name}</h2>
           <StatusBadge label={property.status} status={property.status} dot />
         </div>
         <p className="text-muted-foreground font-mono text-sm">{property.code}</p>

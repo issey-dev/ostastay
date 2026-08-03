@@ -8,7 +8,7 @@ export default function OstaControlsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Controls
             <InfoHint label="Controls">Configure the invoices and payment receipts Osta issues to client enterprises.</InfoHint>
           </h2>

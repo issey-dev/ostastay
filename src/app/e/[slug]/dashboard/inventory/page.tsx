@@ -154,7 +154,7 @@ export default function RoomMatrix() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Housekeeping Operations
             <InfoHint label="Housekeeping Operations">Manage real-time housekeeping statuses, bulk updates, and room readiness.</InfoHint>
           </h2>

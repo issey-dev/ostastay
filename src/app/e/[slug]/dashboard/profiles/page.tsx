@@ -142,7 +142,7 @@ export default function ProfilesDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Client Relations
             <InfoHint label="Client Relations">Manage your individual guests, travel agents, and corporate accounts here.</InfoHint>
           </h2>

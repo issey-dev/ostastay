@@ -183,7 +183,7 @@ export default function EndOfDayPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             End of Day
             <InfoHint label="End of Day">Close the business date step by step. The date stays open until every step is done.</InfoHint>
           </h2>

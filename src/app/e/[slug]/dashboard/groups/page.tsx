@@ -46,7 +46,7 @@ export default function GroupsDashboard() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Groups & Allotments
             <InfoHint label="Groups & Allotments">Manage blocks of rooms for weddings, corporate events, and tours.</InfoHint>
           </h2>
