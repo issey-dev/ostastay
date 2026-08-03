@@ -1034,6 +1034,25 @@ support grants.
   create refused; cross-tenant threshold set; webhook mint is show-once/hash-at-rest and
   authenticates on the public route; delete logs to the tenant trail.
 
+## Reservation.externalRef — channel booking id on the reservation (2026-08-03) — DONE (branch `feature/beds24-master-account`)
+
+App-owner request: an "External confirmation id" on the reservation to match a Beds24
+booking id to the Osta system. The id already lived on
+`ChannelInboundBooking.externalBookingId` (the idempotency key, with `reservationId`
+linkage after conversion) and inside the reservation's remarks text — so channel→
+reservation matching worked, but reservation-side search did not.
+
+- **`Reservation.externalRef`** (nullable; migration `20260803060000_reservation_external_ref`
+  with a backfill from every already-converted `ChannelInboundBooking`). NOT unique on
+  purpose — uniqueness and full provenance stay on ChannelInboundBooking's
+  `(connectionId, externalBookingId)`.
+- Set only by the conversion path (`convert.ts` → `CreateReservationInput.externalRef`);
+  staff-made reservations never carry one. The remarks line ("Booked via ... (ref ...)")
+  stays as the human-readable provenance.
+- **Reservation search now matches it** (`GET /api/reservations` OR-clause) — the desk
+  pastes a Beds24/OTA ref into the ordinary search box and lands on the stay. Shown in
+  the reservations list (mobile + table) as `· ch:<ref>` next to the confirmation number.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

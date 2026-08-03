@@ -1040,6 +1040,14 @@ model AvailabilityRestriction {
 model Reservation {
   id             String   @id @default(uuid())
   confirmationNo String   @unique
+  // The originating channel's own booking id (e.g. Beds24's booking id), set when this
+  // reservation was converted from a ChannelInboundBooking — first-class and searchable,
+  // so the desk can paste an OTA/channel reference into reservation search and land on
+  // the stay. NOT unique: uniqueness belongs to ChannelInboundBooking's
+  // (connectionId, externalBookingId), where the full provenance (raw payload, channel
+  // name, source) also lives via its reservationId link. Null for every directly-made
+  // reservation.
+  externalRef    String?
   propertyId     String
   property       Property @relation(fields: [propertyId], references: [id])
   primaryGuestId String

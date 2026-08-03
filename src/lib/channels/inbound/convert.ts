@@ -136,6 +136,10 @@ export async function convertInboundBooking(bookingId: string): Promise<ConvertR
       children: booking.children ?? 0,
       mealPlan: defaults.mealPlanCode,
       remarks: `Booked via ${booking.channelName ?? "channel manager"} (ref ${booking.externalBookingId})`,
+      // First-class copy of the channel's booking id, so the desk can search a Beds24/OTA
+      // reference and land on this reservation. The remarks line above stays — it is the
+      // human-readable provenance; this is the matchable one.
+      externalRef: booking.externalBookingId,
       // D-7 rule 4: the channel already confirmed this stay to the guest, so a booking that
       // exceeds our availability is accepted and flagged, never refused — the same
       // isOverbooking flag ingest.ts already computed for this row. This is the one place

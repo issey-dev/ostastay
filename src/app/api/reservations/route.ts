@@ -32,6 +32,9 @@ export async function GET(request: Request) {
           ? {
               OR: [
                 { confirmationNo: { contains: search, mode: "insensitive" as const } },
+                // The channel's own booking id (Beds24/OTA ref) — lets the desk paste a
+                // reference from the channel manager straight into this search box.
+                { externalRef: { contains: search, mode: "insensitive" as const } },
                 { primaryGuest: { firstName: { contains: search, mode: "insensitive" as const } } },
                 { primaryGuest: { lastName: { contains: search, mode: "insensitive" as const } } },
                 { primaryGuest: { companyName: { contains: search, mode: "insensitive" as const } } },
