@@ -17,8 +17,9 @@ import { logActivity } from "@/lib/activity-log";
 //
 // The password is GENERATED, never chosen: 12 random base64url characters, returned
 // once in this response and stored only as a bcrypt hash — the same show-once posture
-// as webhook URLs and eRegistration links. The operator hands it to the client, who
-// changes it after first sign-in.
+// as webhook URLs and eRegistration links. It is also TEMPORARY, enforced rather than
+// advisory: mustChangePassword makes login refuse to mint a session until the client
+// replaces it with their own at first sign-in.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -80,6 +81,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         lastName,
         roleId: adminRole.id,
         scope: "ENTERPRISE",
+        // The generated password is TEMPORARY: login refuses to mint a session until
+        // the client replaces it with their own (see /api/auth/login and
+        // /api/auth/change-password).
+        mustChangePassword: true,
       },
     });
 
@@ -93,7 +98,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // The one and only time this password exists outside its bcrypt hash.
         password,
         enterpriseSlug: enterprise.slug,
-        warning: "Copy these now — the password is shown only once. Ask the client to change it after first sign-in.",
+        warning:
+          "Copy these now — the password is shown only once, and it is TEMPORARY: the client will be required to set their own password at first sign-in before anything else works.",
       },
       { status: 201 }
     );

@@ -248,6 +248,13 @@ model User {
   propertyId   String?
   property     Property?  @relation("UserWorkLocation", fields: [propertyId], references: [id])
   isActive     Boolean    @default(true)
+  // TRUE while the account holds a TEMPORARY password (the platform-generated handover
+  // credential from /api/osta/enterprises/[id]/initial-user). Enforced at the door, not
+  // in the UI: /api/auth/login refuses to mint a session while this is set — the only
+  // path forward is /api/auth/change-password, which verifies the temp password, sets
+  // the user's own, and clears this. A temp password therefore can never be used to
+  // operate the app, only to replace itself.
+  mustChangePassword Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

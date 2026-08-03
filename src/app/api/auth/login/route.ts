@@ -105,6 +105,25 @@ export async function POST(request: Request) {
       }
     }
 
+    // Temporary-password gate — AFTER the password and license checks (the temp
+    // password was correct; this is not a failure) and BEFORE the session: an account
+    // holding a platform-issued temporary password gets NO session under it, ever. The
+    // client is sent to set their own password (/api/auth/change-password), then signs
+    // in again with it. Enforced here rather than in the UI so the temp credential is
+    // unusable against the API as well.
+    if (user.mustChangePassword) {
+      recordLoginSuccess(email);
+      await logAuthActivity({
+        action: "LOGIN",
+        email,
+        description: "Signed in with a temporary password — password change required before a session is issued",
+        userId: user.id,
+        userName: `${user.firstName} ${user.lastName}`,
+        enterpriseId: user.enterpriseId,
+      });
+      return NextResponse.json({ mustChangePassword: true });
+    }
+
     recordLoginSuccess(email);
     await createSession(user.id);
     await logAuthActivity({
