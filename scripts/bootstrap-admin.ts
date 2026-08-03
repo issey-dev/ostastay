@@ -27,7 +27,8 @@
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../prisma/rbac-seed-data";
+import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../prisma/rbac-seed-data";
+import { ensurePlatform } from "./ensure-platform";
 
 const prisma = new PrismaClient();
 
@@ -58,19 +59,12 @@ async function main() {
     fail(`ADMIN_PASSWORD must be at least ${MIN_PASSWORD_LENGTH} characters (got ${password.length}).`);
   }
 
-  // Exactly one INTERNAL enterprise may exist; slug "osta" is what the rest of the app
-  // and every seed script already assume.
-  const osta = await prisma.enterprise.upsert({
-    where: { slug: "osta" },
-    update: {},
-    create: { name: "Osta", slug: "osta", type: "INTERNAL" },
-  });
-
-  // System roles are shared across enterprises and cannot be edited through Controls, so
-  // they must exist before any user can be attached to one. ensureRoles is itself an
-  // upsert per role — re-running adds only what is missing.
-  const systemRoleIds = await ensureRoles(prisma, osta.id, SYSTEM_ROLE_DEFS, true);
-  await ensureRoles(prisma, osta.id, SUPPORT_ROLE_DEFS, true);
+  // The enterprise + roles half is shared with the container entrypoint (see
+  // scripts/ensure-platform.ts), which runs it on every boot — so by the time an
+  // operator gets here the platform side normally already exists and this is a no-op
+  // re-assertion. Kept here too so this script remains a complete recovery path on its
+  // own, exactly as before the split.
+  const { ostaEnterpriseId, systemRoleIds } = await ensurePlatform(prisma);
 
   const adminRoleId = systemRoleIds["Admin"];
   if (!adminRoleId) {
@@ -87,7 +81,7 @@ async function main() {
     // customer user into the Osta enterprise.
     update: { passwordHash, isActive: true },
     create: {
-      enterpriseId: osta.id,
+      enterpriseId: ostaEnterpriseId,
       email,
       passwordHash,
       firstName,

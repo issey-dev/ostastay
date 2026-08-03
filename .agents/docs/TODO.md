@@ -1083,6 +1083,29 @@ so an outage longer than that had no built-in catch-up.
   stored setting / the one-off value, that deep resync persists nothing, and that both
   ceilings reject out-of-range values.
 
+## Osta enterprise exists by default (2026-08-03) — DONE (branch `feature/platform-bootstrap`)
+
+App-owner requirement: the Osta (INTERNAL) enterprise — the platform-admin side that
+manages customer enterprises and channel-manager connections — must exist by default on
+a deployment, not only after someone remembers the manual bootstrap.
+
+- **`scripts/ensure-platform.ts`** — idempotent upsert of the INTERNAL enterprise + all
+  system/support roles; **run by `docker-entrypoint.sh` on every container start**, so a
+  fresh deployment has the admin side before any request is served. Concurrency-safe
+  (one retry absorbs the P2002 race between replicas booting together); non-fatal on
+  failure so the tenant-facing app never crash-loops over platform-admin rows.
+- **Creates NO user, deliberately** — a default account would mean a well-known password
+  on every deployment. `scripts/bootstrap-admin.ts` (now refactored to reuse
+  ensurePlatform) remains the only way to mint the operator account, with its
+  per-invocation `ADMIN_PASSWORD` (min 12 chars).
+- The entrypoint's migration comment was stale ("single-instance SQLite") — rewritten
+  for the Postgres reality (advisory lock serializes concurrent `migrate deploy`).
+- DEPLOY.md step 6 + the "No INTERNAL enterprise found" troubleshooting entry updated.
+- Test `tests/business-rules/ensure-platform.test.ts` — targets the shared `test-osta`
+  slug via the opts override, NOT the default "osta": the test DB must never gain a
+  second INTERNAL enterprise or concurrent test files' isInternal resolution becomes
+  ambiguous (the override exists solely for this).
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
