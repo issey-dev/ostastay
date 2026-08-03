@@ -1053,6 +1053,36 @@ reservation matching worked, but reservation-side search did not.
   pastes a Beds24/OTA ref into the ordinary search box and lands on the stay. Shown in
   the reservations list (mobile + table) as `· ch:<ref>` next to the confirmation number.
 
+## Configurable poll window + deep resync (2026-08-03) — DONE (branch `feature/beds24-master-account`)
+
+App-owner request after the outage-recovery discussion: the 48h poll lookback was fixed,
+so an outage longer than that had no built-in catch-up.
+
+- **`ChannelConnection.pollLookbackHours`** (nullable; migration
+  `20260803070000_poll_lookback_hours`) — per-connection override of the scheduled poll's
+  window; null = the built-in 48h default. **Bounded at 720h (30 days)** by
+  `setPollLookbackHours` in `src/lib/channels/connection.ts` — a routine poll permanently
+  re-reading more than that is a standing bulk export, not a safety net. The constant
+  lives there (not poll.ts) because poll.ts imports connection.ts and the setter enforces
+  it.
+- **`pollConnection(id, { lookbackHours })`** — explicit one-off override with its own
+  ceiling (`MAX_RESYNC_LOOKBACK_HOURS`, 8760h/1 year), never persisted. Priority:
+  explicit > stored > default.
+- **`POST /api/osta/channels/connections/[id]/resync`** `{ hours }` — the deep-resync
+  action: polls with the one-off window, then runs the conversion sweep so recovered
+  bookings become reservations in the same action. A reachable-but-failing poll returns
+  200 with the recorded reason (same philosophy as the health-check route). Logged to the
+  tenant's trail.
+- **Osta console UI**: "Deep resync" button per connection (dialog with hours input +
+  result readout) and a "Booking poll window" panel (blur-to-save, mirrors the rate-limit
+  panel). `{ pollLookbackHours }` PATCH added to BOTH the Osta and tenant-Hub connection
+  routes; tenant-Hub UI for it deliberately not added yet (the platform admin is the
+  operator under the master-account topology).
+- Tests in `tests/business-rules/osta-channel-admin.test.ts` capture the stubbed fetch's
+  `modifiedSince` URL param to prove the window actually sent to Beds24 matches the
+  stored setting / the one-off value, that deep resync persists nothing, and that both
+  ceilings reject out-of-range values.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01

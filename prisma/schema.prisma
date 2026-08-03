@@ -2893,6 +2893,13 @@ model ChannelConnection {
   // skipped once Beds24 itself would already be rejecting it.
   rateLimitPauseThreshold Int?
 
+  // How many hours back each scheduled booking poll looks. Null = the built-in default
+  // (POLL_LOOKBACK_HOURS, 48). The window is a RESYNC HORIZON, not a schedule: any outage
+  // shorter than it self-heals on the next poll because ingestion is idempotent. Raise it
+  // when longer outages are a real concern; a one-off catch-up beyond it should use the
+  // deep-resync action instead of permanently widening every routine poll.
+  pollLookbackHours Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

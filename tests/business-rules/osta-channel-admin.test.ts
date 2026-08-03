@@ -26,7 +26,9 @@ const { hashWebhookToken } = await import("@/lib/channels/webhook-token");
 const connectionsRoute = await import("@/app/api/osta/channels/connections/route");
 const connectionByIdRoute = await import("@/app/api/osta/channels/connections/[id]/route");
 const webhookGenRoute = await import("@/app/api/osta/channels/connections/[id]/webhook/route");
+const resyncRoute = await import("@/app/api/osta/channels/connections/[id]/resync/route");
 const publicWebhookRoute = await import("@/app/api/channels/webhook/[token]/route");
+const { pollConnection } = await import("@/lib/channels/inbound/poll");
 
 /** Stub Beds24's HTTP surface so no test ever makes a real outbound call. */
 function stubBeds24(response: unknown, ok = true, status = 200) {
@@ -34,6 +36,30 @@ function stubBeds24(response: unknown, ok = true, status = 200) {
     "fetch",
     vi.fn(async () => ({ ok, status, json: async () => response }) as unknown as Response)
   );
+}
+
+/** Stub for the POLL path: answers the token refresh AND the bookings read, capturing
+ *  every requested URL so a test can assert the actual lookback window sent to Beds24. */
+function stubBeds24Poll(bookings: unknown = []) {
+  const urls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      const body = url.includes("/authentication") ? { token: "acc", expiresIn: 86400 } : bookings;
+      return { ok: true, status: 200, json: async () => body, headers: new Headers() } as unknown as Response;
+    })
+  );
+  return urls;
+}
+
+/** The lookback window actually sent to Beds24, in hours, read off the captured URLs. */
+function sentLookbackHours(urls: string[]): number {
+  const bookingsUrl = urls.find((u) => u.includes("modifiedSince="));
+  expect(bookingsUrl).toBeTruthy();
+  const since = new URL(bookingsUrl!).searchParams.get("modifiedSince")!;
+  return (Date.now() - new Date(since).getTime()) / (60 * 60 * 1000);
 }
 
 // The Osta console's cross-tenant channel administration — the master-account topology
@@ -256,6 +282,92 @@ describe("Osta platform channel administration", () => {
     });
     expect(trail).toBeTruthy();
     expect(trail!.description).toContain("webhook");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Poll window + deep resync — the outage-recovery controls
+  // ---------------------------------------------------------------------------
+
+  it("the stored poll window is bounded, persisted, and actually used by the next poll", async () => {
+    await createSession(ostaAdminId);
+
+    // A routine poll wider than 30 days is a standing bulk export, not a safety net.
+    const tooWide = await connectionByIdRoute.PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pollLookbackHours: 1000 }),
+      }),
+      { params: Promise.resolve({ id: connectionBId }) }
+    );
+    expect(tooWide.status).toBe(400);
+
+    const ok = await connectionByIdRoute.PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pollLookbackHours: 240 }),
+      }),
+      { params: Promise.resolve({ id: connectionBId }) }
+    );
+    expect(ok.status).toBe(200);
+    const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionBId } });
+    expect(row.pollLookbackHours).toBe(240);
+
+    // Not just stored — the next scheduled poll genuinely reads 240h back.
+    const urls = stubBeds24Poll([]);
+    const result = await pollConnection(connectionBId);
+    expect(result.status).toBe("POLLED");
+    expect(sentLookbackHours(urls)).toBeGreaterThan(239.9);
+    expect(sentLookbackHours(urls)).toBeLessThan(240.1);
+  });
+
+  it("deep resync polls with the one-off window, converts in the same action, and persists nothing", async () => {
+    await createSession(ostaAdminId);
+    const urls = stubBeds24Poll([]);
+
+    const res = await resyncRoute.POST(
+      new Request("http://localhost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours: 2000 }),
+      }),
+      { params: Promise.resolve({ id: connectionAId }) }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { poll: { status: string; received: number }; converted: number };
+    expect(body.poll.status).toBe("POLLED");
+    expect(body.converted).toBe(0);
+
+    // The window really was ~2000h — far beyond any storable setting...
+    expect(sentLookbackHours(urls)).toBeGreaterThan(1999.9);
+    expect(sentLookbackHours(urls)).toBeLessThan(2000.1);
+    // ...and it was one-off: nothing about it was written to the connection.
+    const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionAId } });
+    expect(row.pollLookbackHours).toBeNull();
+
+    // The action is visible in the tenant's own trail.
+    const trail = await prisma.userActivityLog.findFirst({
+      where: { enterpriseId: tenantAId, entityType: "ChannelConnection", entityId: connectionAId },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(trail!.description).toContain("Deep resync");
+  });
+
+  it("deep resync rejects a zero, fractional, or absurd window", async () => {
+    await createSession(ostaAdminId);
+
+    for (const hours of [0, 1.5, 10000]) {
+      const res = await resyncRoute.POST(
+        new Request("http://localhost", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hours }),
+        }),
+        { params: Promise.resolve({ id: connectionAId }) }
+      );
+      expect(res.status).toBe(400);
+    }
   });
 
   it("removes a tenant connection cross-tenant, and the removal lands in the tenant's trail", async () => {

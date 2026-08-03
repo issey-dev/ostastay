@@ -114,6 +114,8 @@ export type PublicConnection = {
   rateLimitObservedAt: string | null;
   /** Operator-configured self-throttle floor. Null means disabled. */
   rateLimitPauseThreshold: number | null;
+  /** Scheduled-poll lookback override in hours. Null means the built-in default (48). */
+  pollLookbackHours: number | null;
 };
 
 export function toPublicConnection(c: ChannelConnection): PublicConnection {
@@ -137,6 +139,7 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
     rateLimitResetsAt: c.rateLimitResetsAt?.toISOString() ?? null,
     rateLimitObservedAt: c.rateLimitObservedAt?.toISOString() ?? null,
     rateLimitPauseThreshold: c.rateLimitPauseThreshold,
+    pollLookbackHours: c.pollLookbackHours,
   };
 }
 
@@ -404,6 +407,25 @@ export async function setRateLimitPauseThreshold(connectionId: string, threshold
   const updated = await prisma.channelConnection.update({
     where: { id: connectionId },
     data: { rateLimitPauseThreshold: threshold },
+  });
+  return toPublicConnection(updated);
+}
+
+/** Ceiling on the STORED per-connection poll window: 30 days. A routine poll permanently
+ *  re-reading more than a month on every run is a standing bulk export, not a safety net
+ *  — a one-off catch-up should use the deep-resync path (pollConnection with an explicit
+ *  lookbackHours, which has its own much higher ceiling) instead. Lives here rather than
+ *  in poll.ts because poll.ts imports this module and the setter is what enforces it. */
+export const MAX_STORED_LOOKBACK_HOURS = 720;
+
+/** Set (or clear) the connection's scheduled-poll lookback window. Null = built-in default. */
+export async function setPollLookbackHours(connectionId: string, hours: number | null): Promise<PublicConnection> {
+  if (hours !== null && (!Number.isInteger(hours) || hours < 1 || hours > MAX_STORED_LOOKBACK_HOURS)) {
+    throw new Error(`Poll lookback must be a whole number of hours between 1 and ${MAX_STORED_LOOKBACK_HOURS}, or null for the default`);
+  }
+  const updated = await prisma.channelConnection.update({
+    where: { id: connectionId },
+    data: { pollLookbackHours: hours },
   });
   return toPublicConnection(updated);
 }

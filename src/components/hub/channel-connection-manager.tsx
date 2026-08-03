@@ -45,6 +45,8 @@ export type Connection = {
   rateLimitResetsAt: string | null
   rateLimitObservedAt: string | null
   rateLimitPauseThreshold: number | null
+  /** Scheduled-poll lookback override in hours. Null = the built-in 48h default. */
+  pollLookbackHours: number | null
 }
 
 const connectSchema = z.object({

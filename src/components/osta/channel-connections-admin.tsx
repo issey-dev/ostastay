@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -62,6 +63,10 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   // The one moment a webhook URL exists in plaintext — held only until the dialog closes.
   const [mintedWebhook, setMintedWebhook] = useState<{ connectionName: string; url: string } | null>(null)
+  const [resyncFor, setResyncFor] = useState<PlatformConnection | null>(null)
+  const [resyncHours, setResyncHours] = useState("168")
+  const [resyncBusy, setResyncBusy] = useState(false)
+  const [resyncResult, setResyncResult] = useState<string | null>(null)
 
   const connectForm = useForm<ConnectFormValues>({
     resolver: zodResolver(connectSchema),
@@ -204,6 +209,59 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
     }
   }
 
+  const handleSetPollLookback = async (connectionId: string, hours: number | null) => {
+    const res = await fetch(`/api/osta/channels/connections/${connectionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pollLookbackHours: hours }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? "Could not save")
+      return false
+    }
+    toast.success(hours === null ? "Poll window reset to the 48h default" : `Poll now looks back ${hours}h`)
+    await load()
+    return true
+  }
+
+  const handleResync = async () => {
+    if (!resyncFor) return
+    const hours = Number(resyncHours)
+    if (!Number.isInteger(hours) || hours < 1) {
+      toast.error("Enter a whole number of hours")
+      return
+    }
+    setResyncBusy(true)
+    setResyncResult(null)
+    try {
+      const res = await fetch(`/api/osta/channels/connections/${resyncFor.id}/resync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not run the resync")
+        return
+      }
+      if (data.poll?.status !== "POLLED") {
+        // A reachable-but-failing connection is a recorded outcome, not an HTTP error —
+        // surface the recorded reason rather than a generic failure.
+        setResyncResult(`Could not poll: ${data.poll?.reason ?? "unknown reason"}`)
+        return
+      }
+      setResyncResult(
+        `${data.poll.received} received — ${data.poll.created} new, ${data.poll.updated} updated, ` +
+          `${data.converted} converted to reservations` +
+          (data.poll.overbookings > 0 ? `, ${data.poll.overbookings} OVERBOOKING(S) flagged` : "")
+      )
+      await load()
+    } finally {
+      setResyncBusy(false)
+    }
+  }
+
   const handleDelete = async (c: PlatformConnection) => {
     const ok = await confirm({
       title: `Remove "${c.name}" from ${c.enterprise.name}?`,
@@ -328,6 +386,18 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                         <ClipboardList className="h-4 w-4 mr-2" />
                         {c.hasWebhook ? "Replace webhook URL" : "Generate webhook URL"}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setResyncResult(null)
+                          setResyncHours("168")
+                          setResyncFor(c)
+                        }}
+                      >
+                        <ArrowLeftRight className="h-4 w-4 mr-2" />
+                        Deep resync
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => setReauthFor(c)}>
                         <KeyRound className="h-4 w-4 mr-2" />
                         Re-authorize
@@ -387,6 +457,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                 )}
 
                 <RateLimitPanel c={c} canManage={canManage} onSave={(v) => handleSetPauseThreshold(c.id, v)} />
+                <PollWindowRow c={c} canManage={canManage} onSave={(v) => handleSetPollLookback(c.id, v)} />
               </CardContent>
             </Card>
           ))}
@@ -502,6 +573,56 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
         </DialogContent>
       </Dialog>
 
+      {/* Deep resync — the recovery path for an outage LONGER than the routine poll
+          window. One-off: the window applies to this poll only, nothing is persisted. */}
+      <Dialog
+        open={resyncFor !== null}
+        onOpenChange={(o) => {
+          if (!o && !resyncBusy) setResyncFor(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deep resync &ldquo;{resyncFor?.name}&rdquo;</DialogTitle>
+            <DialogDescription>
+              Re-reads every booking Beds24 modified in the window below and converts the recovered ones. Safe to
+              repeat — already-known bookings update in place, never duplicate. Large windows spend more shared API
+              credits.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="deep-resync-hours" className="text-sm shrink-0">
+              Look back
+            </Label>
+            <Input
+              id="deep-resync-hours"
+              type="number"
+              min={1}
+              step={1}
+              className="h-9 w-28"
+              value={resyncHours}
+              onChange={(e) => setResyncHours(e.target.value)}
+              disabled={resyncBusy}
+            />
+            <span className="text-sm text-muted-foreground">hours (168 = 7 days, 720 = 30 days)</span>
+          </div>
+          {resyncResult && (
+            <div className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+              {resyncResult}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setResyncFor(null)} disabled={resyncBusy}>
+              Close
+            </Button>
+            <Button type="button" onClick={() => void handleResync()} disabled={resyncBusy}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${resyncBusy ? "animate-spin" : ""}`} />
+              {resyncBusy ? "Resyncing..." : "Run resync"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Show-once webhook URL. Closing this dialog is the last time the URL is visible
           anywhere — only its hash is stored, so there is nothing to reveal later. */}
       <Dialog open={mintedWebhook !== null} onOpenChange={(o) => !o && setMintedWebhook(null)}>
@@ -527,6 +648,64 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// The scheduled poll's lookback window — the outage self-heal horizon. Mirrors
+// RateLimitPanel's blur-to-save idiom. Blank = the built-in 48h default; the API bounds
+// stored values at 30 days (a routine poll wider than that is a standing bulk export —
+// use Deep resync for one-off catch-ups instead).
+function PollWindowRow({
+  c,
+  canManage,
+  onSave,
+}: {
+  c: PlatformConnection
+  canManage: boolean
+  onSave: (hours: number | null) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState(c.pollLookbackHours?.toString() ?? "")
+
+  useEffect(() => {
+    setDraft(c.pollLookbackHours?.toString() ?? "")
+  }, [c.pollLookbackHours])
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <span className="text-sm font-medium">Booking poll window</span>
+      <p className="text-sm text-muted-foreground">
+        Each scheduled poll re-reads the last {c.pollLookbackHours ?? 48} hours
+        {c.pollLookbackHours === null && " (default)"} — any outage shorter than this self-heals automatically.
+      </p>
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor={`poll-window-${c.id}`} className="text-xs text-muted-foreground">
+            Look back
+          </Label>
+          <Input
+            id={`poll-window-${c.id}`}
+            type="number"
+            min={1}
+            step={1}
+            value={draft}
+            placeholder="48"
+            className="h-8 w-24"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              const trimmed = draft.trim()
+              const parsed = trimmed === "" ? null : Number(trimmed)
+              if (parsed !== null && (!Number.isInteger(parsed) || parsed < 1)) {
+                setDraft(c.pollLookbackHours?.toString() ?? "")
+                return
+              }
+              if (parsed === (c.pollLookbackHours ?? null)) return
+              void onSave(parsed)
+            }}
+          />
+          <span className="text-xs text-muted-foreground">hours (blank = 48h default, max 720)</span>
+        </div>
+      )}
     </div>
   )
 }

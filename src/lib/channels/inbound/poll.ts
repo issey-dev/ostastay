@@ -15,8 +15,15 @@ import { getProvider } from "@/lib/channels/providers/registry";
 // covers the cases a watermark misses: clock skew between systems, a booking modified after
 // it was first seen, and anything that arrived during a deployment.
 
-/** How far back each poll looks. Generous on purpose — see the note above. */
+/** How far back each poll looks when the connection has no override. Generous on
+ *  purpose — see the note above. */
 export const POLL_LOOKBACK_HOURS = 48;
+
+/** Ceiling on a one-off deep resync: 365 days. Effectively "everything Beds24 will still
+ *  return", while keeping the parameter an intentional number rather than unbounded.
+ *  (The much lower ceiling on the STORED per-connection window lives with its setter —
+ *  see setPollLookbackHours in src/lib/channels/connection.ts.) */
+export const MAX_RESYNC_LOOKBACK_HOURS = 8760;
 
 export type PollResult = {
   connectionId: string;
@@ -32,11 +39,19 @@ export type PollResult = {
 /**
  * Poll one connection for recent bookings.
  *
+ * The window, in priority order: an explicit `lookbackHours` (the deep-resync path —
+ * one-off, never persisted), else the connection's stored pollLookbackHours, else the
+ * built-in default. An explicit value is bounded by the resync ceiling, not the stored
+ * one, because a deliberate catch-up is exactly when a huge window is legitimate.
+ *
  * ⚠️ The query parameter and response shape are NOT verified against a live account (see
  * src/lib/channels/inbound/parse.ts). extractBookings() accepts several plausible envelopes
  * for that reason, and the raw response is logged so the real shape is recoverable.
  */
-export async function pollConnection(connectionId: string): Promise<PollResult> {
+export async function pollConnection(
+  connectionId: string,
+  opts?: { lookbackHours?: number }
+): Promise<PollResult> {
   const connection = await prisma.channelConnection.findUnique({
     where: { id: connectionId },
     select: {
@@ -48,9 +63,20 @@ export async function pollConnection(connectionId: string): Promise<PollResult> 
       rateLimitPauseThreshold: true,
       rateLimitRemaining: true,
       rateLimitResetsAt: true,
+      pollLookbackHours: true,
     },
   });
   if (!connection) throw new Error("Connection not found");
+
+  const lookbackHours = (() => {
+    if (opts?.lookbackHours !== undefined) {
+      if (!Number.isInteger(opts.lookbackHours) || opts.lookbackHours < 1 || opts.lookbackHours > MAX_RESYNC_LOOKBACK_HOURS) {
+        throw new Error(`Lookback must be a whole number of hours between 1 and ${MAX_RESYNC_LOOKBACK_HOURS}`);
+      }
+      return opts.lookbackHours;
+    }
+    return connection.pollLookbackHours ?? POLL_LOOKBACK_HOURS;
+  })();
 
   const base = { connectionId, connectionName: connection.name, received: 0, created: 0, updated: 0, overbookings: 0 };
 
@@ -71,7 +97,7 @@ export async function pollConnection(connectionId: string): Promise<PollResult> 
     connectionName: connection.name,
     connectionId: connection.id,
   });
-  const since = new Date(Date.now() - POLL_LOOKBACK_HOURS * 60 * 60 * 1000);
+  const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000);
 
   try {
     const accessToken = await getValidAccessToken(connection.id);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { reauthorizeConnection, setRateLimitPauseThreshold } from "@/lib/channels/connection";
+import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
 // Confirms the connection exists AND belongs to the caller's enterprise. One generic
@@ -23,6 +23,7 @@ async function assertConnectionInEnterprise(id: string, enterpriseId: string) {
 //                                   the provider's idle window and cannot be repaired by
 //                                   refreshing, since the token is already dead).
 //   { rateLimitPauseThreshold }  — the operator's self-throttle floor (null disables it).
+//   { pollLookbackHours }        — the scheduled poll's lookback window (null = 48h default).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -45,6 +46,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       const connection = await setRateLimitPauseThreshold(id, threshold);
       return NextResponse.json({ connection });
+    }
+
+    if (body && typeof body === "object" && "pollLookbackHours" in body) {
+      const raw = body.pollLookbackHours;
+      const hours = raw === null ? null : Number(raw);
+      if (hours !== null && !Number.isFinite(hours)) {
+        return NextResponse.json({ error: "Poll lookback must be a number of hours or null" }, { status: 400 });
+      }
+      try {
+        const connection = await setPollLookbackHours(id, hours);
+        return NextResponse.json({ connection });
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid value" }, { status: 400 });
+      }
     }
 
     const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";
