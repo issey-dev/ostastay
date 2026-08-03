@@ -77,25 +77,39 @@ describe("Proforma = full projected stay", () => {
     const pf = await proforma.json();
     expect(pf.documentType).toBe("proforma");
     expect(pf.folio.lineItems.length).toBeGreaterThan(0);
-    // Room charge is projected: 2 nights × $150 = $300 gross. Tax is attached at group
-    // level now, so the room line carries only its net and the Service Charge / GST sit
-    // on their own lines against SVCACM / GSTACM — the same split a real posting makes.
-    // The projection must total the same $300 the guest was quoted.
-    const roomLine = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "1000");
-    expect(roomLine).toBeTruthy();
-    const roomFamily = pf.folio.lineItems.filter(
-      (l: any) => l.id === roomLine.id || l.generatedFromLineItemId === roomLine.id
-    );
-    const roomGross = roomFamily.reduce(
-      (sum: number, l: any) => sum + l.amount + l.taxAmount + l.serviceChargeAmount,
-      0
-    );
+
+    // ONE LINE PER NIGHT (owner rule, 2026-08-03): a folio line carries a single date,
+    // so the projection emits a room charge per night rather than one
+    // "Accommodation (2 nights)" row stamped with the arrival date. Tax is attached at
+    // group level, so each night's room line carries only its net and the Service
+    // Charge / GST sit on their own lines against SVCACM / GSTACM — the same split a
+    // real posting makes.
+    const roomLines = pf.folio.lineItems.filter((l: any) => l.chargeCode.code === "1000");
+    expect(roomLines).toHaveLength(2);
+    const nightOf = (l: any) => String(l.date).slice(0, 10);
+    expect(new Set(roomLines.map(nightOf))).toEqual(new Set(["2026-09-01", "2026-09-02"]));
+
+    // Splitting by night must not change what is quoted: every room line plus the tax
+    // it generates still totals the $300 the guest was quoted (2 × $150 gross).
+    const roomGross = pf.folio.lineItems
+      .filter((l: any) => roomLines.some((r: any) => l.id === r.id || l.generatedFromLineItemId === r.id))
+      .reduce((sum: number, l: any) => sum + l.amount + l.taxAmount + l.serviceChargeAmount, 0);
     expect(roomGross).toBeCloseTo(300, 1);
-    // Green Tax projected: 2 adults × $12 × 2 nights = $48.
-    const gtx = pf.folio.lineItems.find((l: any) => l.chargeCode.code === "8500");
-    expect(gtx).toBeTruthy();
-    expect(gtx.amount).toBeCloseTo(48, 1);
-    // Nothing paid on a quote.
+
+    // Green Tax likewise lands per night — 2 adults × $12 = $24 a night, $48 the stay.
+    const gtxLines = pf.folio.lineItems.filter((l: any) => l.chargeCode.code === "8500");
+    expect(gtxLines).toHaveLength(2);
+    expect(gtxLines.every((l: any) => Math.abs(l.amount - 24) < 0.05)).toBe(true);
+    expect(gtxLines.reduce((s: number, l: any) => s + l.amount, 0)).toBeCloseTo(48, 1);
+
+    // No line may span days: every projected line falls on one of the two nights.
+    for (const l of pf.folio.lineItems) {
+      expect(["2026-09-01", "2026-09-02"]).toContain(nightOf(l));
+    }
+
+    // No payments exist on this fixture. (A proforma no longer BLANKS payments — it
+    // shows real ones, so a guest who paid a deposit sees it — there simply aren't any
+    // here.)
     expect(pf.folio.payments.length).toBe(0);
 
     // Tax invoice = actually posted charges (none yet) — stays empty.
