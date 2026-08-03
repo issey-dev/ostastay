@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { EnterpriseAddonAccessManager } from "@/components/osta/enterprise-addon-access-manager"
+import { EnterpriseOnboardingActions } from "@/components/osta/enterprise-onboarding-actions"
 
 export default async function OstaEnterpriseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,9 +21,18 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">{enterprise.name}</h2>
-        <p className="text-muted-foreground">/e/{enterprise.slug} · {enterprise._count.users} user{enterprise._count.users === 1 ? "" : "s"}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">{enterprise.name}</h2>
+          <p className="text-muted-foreground">/e/{enterprise.slug} · {enterprise._count.users} user{enterprise._count.users === 1 ? "" : "s"}</p>
+        </div>
+        <EnterpriseOnboardingActions
+          enterpriseId={enterprise.id}
+          enterpriseName={enterprise.name}
+          userCount={enterprise._count.users}
+          propertyCount={enterprise._count.properties}
+          maxProperties={enterprise.license?.maxProperties ?? 1}
+        />
       </div>
 
       <Card>
