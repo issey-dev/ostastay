@@ -502,34 +502,31 @@ describe("Inbound bookings", () => {
       expect(hashWebhookToken(a)).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it("generating a URL returns the plaintext ONCE and persists only its hash", async () => {
+    it("the Hub cannot mint a webhook URL — Osta installs it in the channel manager", async () => {
       cookieJar.clear();
       await createSession(hubUserId);
 
-      const res = await generateWebhookRoute.POST(new Request("http://localhost", { method: "POST" }), {
-        params: Promise.resolve({ id: connectionId }),
+      // Since 2026-08-03 the webhook URL is generated from the Osta console, because the
+      // person who pastes it into Beds24 is the app owner (master-account topology). A
+      // tenant minting one would rotate a credential they cannot install, silently
+      // breaking inbound delivery. End-to-end show-once coverage of the Osta route lives
+      // in tests/business-rules/osta-channel-admin.test.ts.
+      const res = await generateWebhookRoute.POST();
+      expect(res.status).toBe(403);
+
+      await destroySession();
+      cookieJar.clear();
+    });
+
+    it("rotating the stored hash kills the old URL and activates the new one", async () => {
+      // What the Osta generate endpoint does, at the storage level: replace the hash.
+      const minted = generateWebhookToken();
+      await prisma.channelConnection.update({
+        where: { id: connectionId },
+        data: { webhookTokenHash: hashWebhookToken(minted) },
       });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { path: string; regenerated: boolean };
 
-      const minted = body.path.replace("/api/channels/webhook/", "");
-      expect(minted).toMatch(/^[0-9a-f]{64}$/);
-      // This connection already had one (the fixture), so this is a regeneration.
-      expect(body.regenerated).toBe(true);
-
-      const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId } });
-      expect(row.webhookTokenHash).toBe(hashWebhookToken(minted));
-      expect(JSON.stringify(row)).not.toContain(minted);
-
-      // Shown once means shown once: nothing the Hub can read afterwards carries it. The
-      // list shape reports only that a URL exists.
-      const { toPublicConnection } = await import("@/lib/channels/connection");
-      const publicShape = toPublicConnection(row);
-      expect(publicShape.hasWebhook).toBe(true);
-      expect(JSON.stringify(publicShape)).not.toContain(minted);
-      expect(JSON.stringify(publicShape)).not.toContain(row.webhookTokenHash!);
-
-      // The freshly minted URL really does authenticate...
+      // The freshly minted URL authenticates...
       const ok = await webhookRoute.POST(
         new Request("http://localhost", { method: "POST", body: JSON.stringify([booking("BK-MINT")]) }),
         { params: Promise.resolve({ token: minted }) }
@@ -548,9 +545,6 @@ describe("Inbound bookings", () => {
 
       // Later tests in this file must not keep using the now-dead fixture token.
       webhookToken = minted;
-
-      await destroySession();
-      cookieJar.clear();
     });
   });
 });

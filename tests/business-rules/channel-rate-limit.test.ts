@@ -153,33 +153,20 @@ describe("Beds24 rate-limit handling", () => {
     });
   });
 
-  it("PATCH /api/hub/connections/[id] accepts a rateLimitPauseThreshold body", async () => {
+  it("the Hub cannot change the self-throttle floor — it protects Osta's shared pool", async () => {
     stubBeds24WithHeaders({ refreshToken: "r5", token: "a5", expiresIn: 86400 }, null);
     const created = await createConnection({ enterpriseId, name: `RL Route ${Date.now()}`, inviteCode: "v" });
 
     cookieJar.clear();
     await createSession(adminId);
-    const res = await connectionByIdRoute.PATCH(
-      new Request("http://localhost", { method: "PATCH", body: JSON.stringify({ rateLimitPauseThreshold: 15 }) }),
-      { params: Promise.resolve({ id: created.id }) }
-    );
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.connection.rateLimitPauseThreshold).toBe(15);
-    await destroySession();
-  });
+    // Since 2026-08-03 the threshold is Osta-level: under the master-account topology
+    // every tenant drains ONE Beds24 credit pool, so a tenant raising their own floor
+    // would spend everyone else's credits. Set it from /api/osta/channels/connections.
+    const res = await connectionByIdRoute.PATCH();
+    expect(res.status).toBe(403);
 
-  it("PATCH rejects a non-numeric rateLimitPauseThreshold", async () => {
-    stubBeds24WithHeaders({ refreshToken: "r6", token: "a6", expiresIn: 86400 }, null);
-    const created = await createConnection({ enterpriseId, name: `RL BadRoute ${Date.now()}`, inviteCode: "u" });
-
-    cookieJar.clear();
-    await createSession(adminId);
-    const res = await connectionByIdRoute.PATCH(
-      new Request("http://localhost", { method: "PATCH", body: JSON.stringify({ rateLimitPauseThreshold: "not-a-number" }) }),
-      { params: Promise.resolve({ id: created.id }) }
-    );
-    expect(res.status).toBe(400);
+    const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: created.id } });
+    expect(row.rateLimitPauseThreshold).toBeNull();
     await destroySession();
   });
 
