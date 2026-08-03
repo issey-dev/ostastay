@@ -146,6 +146,13 @@ export async function convertInboundBooking(bookingId: string): Promise<ConvertR
       // that override is deliberately used for a channel-sourced booking rather than a
       // staff member's own manual decision.
       acknowledgeOverbook: true,
+      // Same reasoning, for the arrival floor: a booking can reach us AFTER its own
+      // arrival date (a webhook outage, a poller running behind, an OTA booking made
+      // for today on a property whose business date has not rolled). The channel has
+      // already confirmed that stay to the guest, so refusing it here would turn a real
+      // paid booking into a FAILED conversion — the exact silent loss this pipeline
+      // exists to prevent.
+      allowPastArrival: true,
     });
   } catch (e) {
     // A thrown error here (e.g. the property is pending approval) is exceptional enough

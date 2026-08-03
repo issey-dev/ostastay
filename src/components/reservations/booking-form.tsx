@@ -549,7 +549,18 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="grid content-start gap-2">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
-                  <DatePicker value={form.checkInDate} onChange={v => setStayDate("in", v)} disabled={arrivalLocked} />
+                  {/* Arrival can never predate the business date — a booking arriving on a
+                      day the property has already closed could never be checked in.
+                      createReservation enforces the same floor server-side; this just
+                      stops the date being pickable in the first place. Edit mode is
+                      exempt: an existing booking may legitimately have arrived before
+                      today, and re-saving it must not be blocked. */}
+                  <DatePicker
+                    value={form.checkInDate}
+                    onChange={v => setStayDate("in", v)}
+                    disabled={arrivalLocked}
+                    minDate={!isEditMode && businessDateIso ? businessDateIso : undefined}
+                  />
                   <FieldError message={errors.checkInDate?.message} />
                 </div>
                 <div className="grid content-start gap-2">
@@ -796,11 +807,15 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
           <section className="flex flex-col gap-4">
             <h3 className="text-base font-semibold">3 · Guest &amp; Details</h3>
-              <div className="grid grid-cols-2 gap-4">
+              {/* Guest name and its picker share ONE row at 2:1, with the meal plan on
+                  its own row beneath (app-owner, 2026-08-03). Previously the guest cell
+                  and the meal plan were two halves of a 2-column grid, so on a phone the
+                  Change button and the meal-plan select collided. */}
+              <div className="grid gap-4">
                 <div className="grid content-start gap-2">
                   <Label>Primary Guest <span className="text-destructive">*</span></Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 border rounded-md px-3 h-9 text-sm bg-background flex items-center overflow-hidden">
+                  <div className="grid grid-cols-[2fr_1fr] items-center gap-2">
+                    <div className="border rounded-md px-3 h-9 text-sm bg-background flex items-center overflow-hidden">
                       {(() => {
                         const prof = profiles.find(p => p.upid === form.primaryGuestId)
                         return prof ? (
@@ -811,13 +826,13 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         ) : <span className="text-muted-foreground">No guest selected</span>
                       })()}
                     </div>
-                    <Button type="button" variant="outline" onClick={() => setGuestPickerOpen("primary")}>
+                    <Button type="button" variant="outline" className="w-full" onClick={() => setGuestPickerOpen("primary")}>
                       {form.primaryGuestId ? "Change" : "Select..."}
                     </Button>
                   </div>
                   <FieldError message={errors.primaryGuestId?.message} />
                 </div>
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-2 sm:w-2/3">
                   <Label>Meal Plan</Label>
                   <Select value={form.mealPlan} onValueChange={(v) => setField("mealPlan", v ?? "NONE")}>
                     <SelectTrigger>
