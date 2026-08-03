@@ -2534,3 +2534,45 @@ pattern, not a feature):
 - ⚠️ **The API credit pool is per Beds24 ACCOUNT**, so under this topology every tenant
   shares one rate-limit budget. `rateLimitPauseThreshold` exists per connection exactly
   for this — set it once several tenants are live, or one busy property starves the rest.
+
+## 2026-08-03 — Every foreign key is now indexed
+
+PostgreSQL does not create an index for a foreign key constraint; MySQL does, which is
+where the common assumption comes from, and SQLite's planner hid the cost on the small
+local databases used before the 2026-08-02 migration. An audit of the live schema found
+**122 of 200 foreign keys** with no index on the FK column as the leading column, across
+72 of the 102 tables.
+
+Two costs were being paid:
+
+- **Reads.** Any join or filter on those columns was a sequential scan. This covered the
+  hottest paths in the product: `Reservation.propertyId` (the filter behind essentially
+  every front-office screen), `FolioLineItem.folioId` (opening a folio), `Payment.folioId`
+  (computing a balance), and every tenant-scoping `*.enterpriseId`.
+- **Deletes.** 51 of the 122 are `ON DELETE CASCADE`. Deleting one parent row makes
+  Postgres locate referencing rows in each child table; with no index that is a full scan
+  of the child table per parent row. Removing an Enterprise or Property would have scanned
+  dozens of tables.
+
+Measured on a 200,000-row `Profile` table, filtering by `enterpriseId`:
+
+| | Plan | Buffers | Time |
+| --- | --- | --- | --- |
+| Before | Parallel Seq Scan (2 workers) | 3,178 | ~16 ms |
+| After | Index Only Scan | 6 | ~0.5 ms |
+
+Storage cost is modest: on that table, 11 MB of indexes against 25 MB of data. Write
+amplification is real but immaterial at a PMS's write volume — a hotel posts hundreds of
+rows a day, not millions.
+
+**Applied while the tables were still effectively empty, deliberately.** Plain
+`CREATE INDEX` takes an ACCESS EXCLUSIVE lock for its duration. At current data volumes
+each statement completes in milliseconds. **Any index added to a table that already holds
+real data must be created manually with `CREATE INDEX CONCURRENTLY`, outside the
+migration** — Prisma wraps each migration in a transaction and `CONCURRENTLY` cannot run
+inside one, so a naive migration would lock the front desk out for the duration.
+
+Not done, and deliberately: no composite or covering indexes were added. Those should be
+driven by real query plans (`pg_stat_statements`, `EXPLAIN ANALYZE` on slow requests)
+rather than guessed at, and single-column FK indexes are the well-established default that
+carries its own justification.
