@@ -1181,6 +1181,36 @@ production deploy. `.github/workflows/deploy.yml`:
   key). Until set, the deploy job fails on auth and the server is untouched. Deliberately
   no registry — the image builds on the server, keeping the existing deployment model.
 
+## Property onboarding gate (2026-08-03) — DONE (branch `feature/property-onboarding-gate`)
+
+Reported by the app owner after using the handover flow: a freshly onboarded tenant with
+no property saw every page stuck in a permanent loading state — pages guard with
+`if (!currentProperty) return`, so they wait forever on a property that will never
+arrive. The app looked broken rather than unfinished.
+
+- **`decidePropertyGate()`** (`src/lib/properties/onboarding-gate.ts`) — pure rule,
+  tested directly: through if ANY property is ACTIVE; otherwise blocked in one of three
+  states. NOT a security boundary (assertPropertyAccess already refuses non-ACTIVE
+  properties on every route) — it decides what the user SEES instead of a dead page.
+- **Gate lives in the dashboard LAYOUT**, so it covers every route at once and cannot be
+  bypassed by deep-linking. Verified live: `/dashboard` and `/dashboard/reservations`
+  both blocked.
+- Three states: `NONE` (nothing created — shows the create form, reusing the existing
+  `PropertyForm`), `AWAITING` (submitted/rejected — status list, rejection reason,
+  resubmit, "check again"), `NO_RIGHTS` (property-scoped user or no CONTROLS create —
+  "contact your administrator", since an "add property" button would 403).
+- **App-owner decision: EVERY tenant-created property needs Osta approval, including the
+  first** — creating it does not unblock the dashboard; the tenant waits on
+  `/osta/properties`. (Osta-created properties are ACTIVE on creation — Osta creating it
+  IS the approval.)
+- Support sessions are exempt, same carve-out `assertPropertyAccess()` makes.
+- The gate replaces the whole shell, so it carries its own **Sign out** button —
+  otherwise a blocked user has no way out.
+- Controls → Inventory → Properties (existing `PropertiesManager`) already covers adding
+  further properties; no change needed there.
+- Live-verified end to end on dev: no property → create (lands PENDING, still blocked) →
+  Osta approves → dashboard unlocks.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
