@@ -75,6 +75,9 @@ describe("Phase 3 tenant isolation: profiles, reservations, groups, tape-chart",
         legalName: "Property A LLC",
         defaultCurrency: "USD",
         timeZone: "UTC",
+        // Pinned so the arrival floor (createReservation) is deterministic rather than
+        // measured against the real wall-clock date.
+        businessDate: new Date(Date.UTC(2026, 0, 1)),
         checkInTime: "14:00",
         checkOutTime: "11:00",
       },
@@ -89,6 +92,9 @@ describe("Phase 3 tenant isolation: profiles, reservations, groups, tape-chart",
         legalName: "Property B LLC",
         defaultCurrency: "USD",
         timeZone: "UTC",
+        // Pinned so the arrival floor (createReservation) is deterministic rather than
+        // measured against the real wall-clock date.
+        businessDate: new Date(Date.UTC(2026, 0, 1)),
         checkInTime: "14:00",
         checkOutTime: "11:00",
       },

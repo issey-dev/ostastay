@@ -98,6 +98,9 @@ describe("Reservation API: segment contiguity, scheduled room move, accompanying
       data: {
         enterpriseId: enterprise.id, name: "P", code: `SEG-${uniq()}`, legalName: "P LLC",
         defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+      // Pinned so the arrival floor (createReservation) is deterministic rather than
+      // measured against the real wall-clock date.
+      businessDate: new Date(Date.UTC(2026, 0, 1)),
       },
     });
     propertyId = property.id;

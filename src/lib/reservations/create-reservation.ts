@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { assertPropertyAccess, type AuthContext } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
@@ -58,6 +59,11 @@ export type CreateReservationInput = {
   noShowFeeRuleId?: string | null;
   groupBlockId?: string | null;
   acknowledgeOverbook?: boolean;
+  /** Skip the "arrival cannot predate the business date" floor. Set ONLY by the channel
+   *  conversion path: an OTA has already confirmed that stay to the guest, so refusing it
+   *  here would turn a real paid booking into a failed conversion. Same reasoning as
+   *  acknowledgeOverbook — see D-7 rule 4. Never set from a staff-facing route. */
+  allowPastArrival?: boolean;
   manualAllocationIds?: string[];
 };
 
@@ -112,6 +118,24 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     return fail(400, "Check-out date must be after check-in date");
   }
   await assertPropertyAccess(ctx, body.propertyId);
+
+  // Arrival can never predate the property's BUSINESS date. A booking arriving on a day
+  // the property has already closed could never be checked in, and Night Audit would
+  // never see it — it would sit as a permanent phantom arrival. The UI's date picker
+  // enforces the same floor, but this is the real gate: the picker can be bypassed by
+  // any direct API call. Business date, not the server's calendar date, because the
+  // property's operational day is what the desk works in.
+  const bookingProperty = await prisma.property.findUnique({
+    where: { id: body.propertyId },
+    select: { businessDate: true },
+  });
+  const businessDate = resolveBusinessDate(bookingProperty ?? {});
+  if (!body.allowPastArrival && toUtcMidnight(new Date(body.checkInDate)) < businessDate) {
+    return fail(
+      400,
+      `Arrival cannot be before the property's business date (${businessDate.toISOString().slice(0, 10)}).`
+    );
+  }
 
   const primaryGuest = await prisma.profile.findUnique({ where: { upid: body.primaryGuestId } });
   if (!primaryGuest || primaryGuest.enterpriseId !== ctx.enterpriseId) {
