@@ -1106,6 +1106,37 @@ a deployment, not only after someone remembers the manual bootstrap.
   second INTERNAL enterprise or concurrent test files' isInternal resolution becomes
   ambiguous (the override exists solely for this).
 
+## Osta-side onboarding: enterprise / properties / initial user (2026-08-03) — DONE (branch `feature/osta-onboarding`)
+
+App-owner requirement: property onboarding driven entirely from the Osta console —
+create the enterprise, its properties, and the INITIAL USER ONLY from the platform side.
+
+- **Enterprise**: `POST /api/enterprises` already existed; the `/osta/enterprises` list
+  gained the missing "Create enterprise" dialog (name + license property limit), landing
+  on the detail page where the rest of onboarding happens.
+- **Properties**: new `POST /api/osta/properties/create` — creates FOR an enterprise,
+  **ACTIVE with the reviewer stamped** (the approval queue is for tenant-submitted
+  properties; Osta approving its own submission would be a ceremony with no reviewer).
+  Same license `maxProperties` gate as the tenant route — being the platform does not
+  bypass the plan — plus a friendly 409 on a duplicate property code, and identical
+  provisioning (locked Base Rate plan, `ensureChargeTree`, `ensureFeeRules`). Deliberately
+  a sibling of `/api/osta/properties` (the approval-queue list), not a POST on it.
+- **Initial user, ENFORCED as initial-only**: new
+  `POST /api/osta/enterprises/[id]/initial-user` refuses outright once the enterprise has
+  ANY user — ongoing user management stays with the tenant's Controls; a platform path
+  that could quietly add accounts later would be a standing backdoor. The password is
+  GENERATED (12 base64url chars, ~72 bits), returned once, stored only as a bcrypt hash —
+  the same show-once posture as webhook URLs. UI shows a handover dialog with a
+  "copy sign-in details" block (URL + enterprise code + email + password); the button
+  itself disappears once a user exists. Account gets the shared system "Admin" role,
+  ENTERPRISE scope.
+- All actions log into the TENANT's activity trail with the Osta admin's identity.
+- UI: `src/components/osta/enterprise-onboarding-actions.tsx` on the enterprise detail
+  page ("Add property" disabled at the license limit) + the create dialog in
+  `enterprises-list.tsx`.
+- Tests `tests/business-rules/osta-onboarding.test.ts`; live-verified end to end on dev,
+  including a real `/api/auth/login` with the generated handover credentials.
+
 ## Known non-blocking issues / things to flag, not silently fix
 
 - ~~**The z-index token scale is documented but not enforced**~~ — **DONE 2026-08-01
