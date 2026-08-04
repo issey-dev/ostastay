@@ -88,7 +88,7 @@ const USER_SELECT = {
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "view");
+    requirePermission(ctx, "USERS", "view");
 
     // A property-scoped user only sees their own property's roster — an enterprise-wide
     // staff list isn't theirs to browse.
@@ -111,7 +111,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
+    requirePermission(ctx, "USERS", "create");
 
     const body = await request.json();
     const { email, password, firstName, lastName, role, scope, propertyId, jobFunction } = body;
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "update");
+    requirePermission(ctx, "USERS", "update");
 
     const body = await request.json();
     const { id, email, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
@@ -299,7 +299,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "delete");
+    requirePermission(ctx, "USERS", "delete");
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

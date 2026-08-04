@@ -44,6 +44,10 @@ export const MODULES = [
   // automatically (they map over MODULES), and NONE to every operational role — which is
   // exactly right: front-desk/housekeeping staff have no business holding OTA credentials.
   "INTEGRATIONS",
+  // Hub module: user/role administration and active sessions. Admin and Manager get FULL
+  // automatically (they map over MODULES); every other system role gets NONE, which is
+  // what keeps staff administration to enterprise admins.
+  "USERS",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];

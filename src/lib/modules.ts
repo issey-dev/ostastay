@@ -40,6 +40,13 @@ export const MODULES = [
   // grows past ~3 modules, revisit and split MODULES by scope level (PROPERTY|ENTERPRISE).
   // Membership of the Hub is decided by HUB_MODULES in src/lib/scope.ts, not by this list.
   "INTEGRATIONS",
+  // The SECOND Hub module (2026-08-04). Identity is enterprise-wide — who exists, what
+  // they may do, and who is signed in — so it belongs beside Integrations rather than in
+  // a property's Controls. Being a Hub module also means a PROPERTY-scoped user can never
+  // hold it (hasHubAccess), which is the owner's decision that only enterprise admins
+  // manage staff. The operational "list people I can assign work to" lookup is NOT this
+  // module — see /api/staff, gated on HOUSEKEEPING/MAINTENANCE.
+  "USERS",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -65,6 +72,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   EXCURSIONS: "Excursions",
   SPA: "Spa",
   INTEGRATIONS: "Integrations",
+  USERS: "Users & Access",
 };
 
 // ── Scope level ───────────────────────────────────────────────────────────────────
@@ -77,7 +85,7 @@ export const MODULE_LABELS: Record<Module, string> = {
 // location and can never hold Hub access, whatever their role says (see hasHubAccess in
 // src/lib/scope.ts). Without the grouping an admin can tick Integrations for a
 // property-scoped user, save successfully, and have nothing happen.
-export const HUB_MODULES = ["INTEGRATIONS"] as const satisfies readonly Module[];
+export const HUB_MODULES = ["INTEGRATIONS", "USERS"] as const satisfies readonly Module[];
 
 export type ModuleScope = "PROPERTY" | "HUB";
 

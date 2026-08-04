@@ -87,7 +87,7 @@ export default function HousekeepingDashboard() {
   const fetchHousekeepers = async () => {
     if (!currentProperty) return
     try {
-      const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
+      const res = await fetch(`/api/staff`)
       if (res.ok) {
         const data = await res.json()
         // Filters on the user's POST, not their role name — a housekeeper given extra

@@ -10,7 +10,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "update");
+    requirePermission(ctx, "USERS", "update");
 
     const role = await prisma.role.findUnique({ where: { id } });
     if (!role) {
@@ -82,7 +82,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "delete");
+    requirePermission(ctx, "USERS", "delete");
 
     const role = await prisma.role.findUnique({ where: { id }, include: { _count: { select: { users: true } } } });
     if (!role) {

@@ -1,6 +1,6 @@
 # User Management, Roles & Sessions — plan
 
-> Status: **Phases 0-2 and 4 shipped 2026-08-04; Phases 3 and 5 remain.** Owner decisions taken 2026-08-04 (see the Decisions
+> Status: **Phases 0-4 shipped 2026-08-04; Phase 5 (matrix report) remains.** Owner decisions taken 2026-08-04 (see the Decisions
 > table). Read [MASTER_PLAN.md](MASTER_PLAN.md) for the RBAC foundation this builds on
 > and [DECISIONS.md](DECISIONS.md) for the business rules.
 
@@ -153,7 +153,7 @@ it stays as-is in this phase and is noted as a follow-up.
 
 ---
 
-## Phase 3 — Hub move
+## Phase 3 — Hub move — **DONE (2026-08-04)**
 
 - New `USERS` module in `MODULES` (and its hand-synced twin in
   [prisma/rbac-seed-data.ts](../../prisma/rbac-seed-data.ts) — the two lists already drift;
@@ -259,3 +259,36 @@ tokens for up to 24h would defeat the point of building revocation.
 button. The mechanism exists — `revokeSessionById` and `revokeAllForUser` — but nothing
 surfaces it yet, so today a session can only be ended by logging out, deactivating the
 user, the idle timeout, or EOD.
+
+
+---
+
+## What shipped in Phase 3 (2026-08-04)
+
+- `USERS` module added to `MODULES` (and its hand-synced twin in `prisma/rbac-seed-data.ts`)
+  and to `HUB_MODULES`. Admin and Manager map over `MODULES`, so they receive it
+  automatically; `backfillMissingRolePermissions` grants it to existing system roles on
+  their next request and denies it to custom roles, which is the intended default.
+- Hub gains **People** (`hub/people`) and **Sessions** (`hub/sessions`), both re-asserting
+  `requireHubAccess` + `requirePermission(USERS, …)` rather than trusting the layout.
+- `GET/DELETE /api/hub/sessions` — the live list with server-computed uptime and idle, and
+  termination. Scoped to the caller's enterprise on the way IN, so an id from another
+  tenant reads as not-found rather than being revoked.
+- Controls' "Users & Roles" tab is now **Session Timeout** only, per property, with a
+  5-minute floor matching the server.
+- `UsersRolesManager` moved to the Hub unchanged — it took `actorScope` as a prop and never
+  used `PropertyProvider`, which the Hub deliberately lacks.
+
+### The bug this uncovered
+
+`/api/settings/users` required `CONTROLS view`, and the housekeeping and maintenance boards
+fetched it to populate their assignment pickers. The stock **Housekeeping role has no
+CONTROLS at all** — so a housekeeper opening their own board got a 403 and an empty
+attendant list. That was live before this phase and independent of it.
+
+Fixed by splitting the two concerns rather than widening the gate: **`GET /api/staff`** is
+an operational lookup (id, name, post, active) gated on `HOUSEKEEPING`/`MAINTENANCE`/`USERS`
+view, and returns enterprise-wide staff plus the caller's own property. Administration
+stays on `/api/settings/users`, now gated on `USERS` — which no property-scoped user can
+hold. Without this split, moving user management to the Hub would have broken room
+assignment outright.

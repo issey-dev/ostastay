@@ -13,7 +13,7 @@ function normalizePermissions(permissions: { module: string; canView: boolean; c
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "view");
+    requirePermission(ctx, "USERS", "view");
 
     const ostaEnterpriseId = await getOstaEnterpriseId();
 
@@ -35,7 +35,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
+    requirePermission(ctx, "USERS", "create");
 
     const body = await request.json();
     if (!body.name || typeof body.name !== "string") {

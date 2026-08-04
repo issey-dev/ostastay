@@ -72,7 +72,7 @@ export default function TaskSheetPage() {
   useEffect(() => {
     if (!currentProperty) return
     fetchRooms()
-    fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
+    fetch(`/api/staff`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setHousekeepers(housekeepingStaff(data))

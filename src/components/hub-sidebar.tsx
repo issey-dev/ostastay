@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert } from "@/components/icons"
+import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert, Users, Shield } from "@/components/icons"
 import { requireSession, hasHubAccess, hasAnyPropertyModule, resolveCurrentPropertyId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
@@ -30,6 +30,10 @@ const items = [
   { title: "Mapping", url: "hub/channel-manager/mapping", icon: Building2 },
   { title: "Inbound Bookings", url: "hub/channel-manager/bookings", icon: ShieldAlert },
   { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
+  // Staff administration moved here from Controls (2026-08-04): identity is
+  // enterprise-wide, and the Hub is the only shell a property-scoped user can't reach.
+  { title: "People", url: "hub/people", icon: Users },
+  { title: "Sessions", url: "hub/sessions", icon: Shield },
 ]
 
 export async function HubSidebar({ slug }: { slug: string }) {

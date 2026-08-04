@@ -18,6 +18,9 @@ type Property = {
   // desk works against. Rolled forward only by Night Audit (EOD). Null until a
   // property has been initialized. See src/lib/business-date.ts.
   businessDate: string | null
+  // Minutes of inactivity before a session at this property ends. 0 = off.
+  // Set in Controls > General; enforced in requireSession. See src/lib/session-store.ts.
+  sessionIdleMinutes: number
 }
 
 type PropertyContextType = {

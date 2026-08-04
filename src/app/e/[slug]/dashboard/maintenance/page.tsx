@@ -35,7 +35,7 @@ export default function MaintenanceDashboard() {
   const fetchMaintenanceTeam = async () => {
     if (!currentProperty) return
     try {
-      const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
+      const res = await fetch(`/api/staff`)
       if (res.ok) {
         const data = await res.json()
         setMaintenanceTeam(maintenanceStaff(data))

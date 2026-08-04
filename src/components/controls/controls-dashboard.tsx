@@ -37,7 +37,7 @@ import { PostingDefaultsManager } from "@/components/controls/posting-defaults-m
 import { SettlementDefaultsManager } from "@/components/controls/settlement-defaults-manager"
 import { FeeRulesManager } from "@/components/controls/fee-rules-manager"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES, OPERATIONS_LOV_CATEGORIES, ROOM_FEATURE_LOV_CATEGORIES, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
-import { UsersRolesManager } from "@/components/controls/users-roles-manager"
+import { SessionTimeoutManager } from "@/components/controls/session-timeout-manager"
 import { SupportAccessManager } from "@/components/controls/support-access-manager"
 import { PropertyProfileManager } from "@/components/controls/property-profile-manager"
 import { PropertyBannerColorManager } from "@/components/controls/property-banner-color-manager"
@@ -292,11 +292,16 @@ function buildSections(actorScope: "ENTERPRISE" | "PROPERTY", actorPropertyId: s
       ),
     },
     {
-      key: "users",
-      label: "Users & Roles",
+      key: "sessions",
+      label: "Session Timeout",
       icon: Users,
       render: () => (
-        <UsersRolesManager actorScope={actorScope} actorPropertyId={actorPropertyId} />
+        <ControlsCard
+          title="Session Timeout"
+          description="How long a terminal at this property may sit idle before the person using it is signed out. Staff accounts, roles and active sessions moved to the Hub — this is the one user setting that is genuinely per-property."
+        >
+          <SessionTimeoutManager />
+        </ControlsCard>
       ),
     },
     {
