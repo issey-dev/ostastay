@@ -5,52 +5,27 @@
 // ROLES array) onto the new per-module CRUD matrix — they're starting points an Enterprise
 // admin can freely edit afterward via Controls > Users & Roles, not fixed forever.
 
-export const MODULES = [
-  "FRONT_DESK",
-  "RESERVATIONS",
-  "GROUP_BLOCKS",
-  "TAPE_CHART",
-  // Property Availability grid + Stop-Sale restrictions. Kept in sync with
-  // src/lib/modules.ts's MODULES by hand (prisma/ scripts can't import from src/).
-  "AVAILABILITY",
-  "PROFILES",
-  "HOUSEKEEPING",
-  "MAINTENANCE",
-  "CASHIERING",
-  "POS",
-  "NIGHT_AUDIT",
-  "DEBTORS",
-  "REVENUE",
-  "REPORTS",
-  "CONTROLS",
-  // Read-only audit trail (User Activity Log). Rows are machine-written via
-  // src/lib/activity-log.ts — the create/update/delete bits are meaningless for it;
-  // only canView matters. Deliberately granted to Admin/Manager only by default
-  // (they get FULL automatically via their all-modules matrices below).
-  "ACTIVITY_LOG",
-  // Excursions bookings (see .agents/docs/EXCURSIONS_PLAN.md) — kept in sync with
-  // src/lib/modules.ts's own MODULES array by hand (this file can't import from src/
-  // since prisma/ scripts run standalone via tsx). If these two lists ever drift,
-  // src/lib/scope.ts's backfillMissingRolePermissions() self-heals existing roles on
-  // their next login, but a brand-new enterprise seeded via ensureRoles() below would
-  // still miss the default here until both lists agree.
-  "EXCURSIONS",
-  // Spa bookings (see .agents/docs/SPA_PLAN.md) — same add-on shape and same
-  // hand-sync caveat as EXCURSIONS above.
-  "SPA",
-  // Hub / channel-manager connectivity (see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md) —
-  // the first ENTERPRISE-level module, not a property-operational one. Same hand-sync
-  // caveat as EXCURSIONS above. Note the role matrices below give this to Admin/Manager
-  // automatically (they map over MODULES), and NONE to every operational role — which is
-  // exactly right: front-desk/housekeeping staff have no business holding OTA credentials.
-  "INTEGRATIONS",
-  // Hub module: user/role administration and active sessions. Admin and Manager get FULL
-  // automatically (they map over MODULES); every other system role gets NONE, which is
-  // what keeps staff administration to enterprise admins.
-  "USERS",
-] as const;
+// THE module list lives in src/lib/modules.ts and is imported here rather than copied.
+//
+// It used to be duplicated, with a hand-sync caveat on each entry, because "prisma/
+// scripts run standalone via tsx" and so supposedly could not import from src/. That was
+// only ever half true: the `@/` alias does not resolve under tsconfig.scripts.json (no
+// `paths`, moduleResolution "node"), but a RELATIVE import does — and src/lib/scope.ts has
+// always imported THIS file the same way, in the opposite direction.
+//
+// The duplication was a live drift risk: a module added to one list and not the other left
+// newly seeded enterprises without a default for it. backfillMissingRolePermissions()
+// self-healed existing roles on their next request, which made the drift invisible until a
+// brand-new enterprise was onboarded.
+//
+// src/lib/modules.ts imports nothing, so pulling it into the scripts compile costs one
+// extra emitted file (dist-scripts/src/lib/modules.js) and nothing else.
+import { MODULES, type Module } from "../src/lib/modules";
 
-export type ModuleName = (typeof MODULES)[number];
+export { MODULES };
+
+// Kept as a name because the role matrices below and several seeders refer to it.
+export type ModuleName = Module;
 
 type Perm = { canView: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean };
 

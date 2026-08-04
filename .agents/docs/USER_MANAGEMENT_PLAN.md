@@ -222,7 +222,8 @@ Phases 3-5 are additive UI and can ship separately.
 
 - Multi-property work locations (decision 6).
 - Reworking EOD force-logout onto the session table.
-- Deduplicating the two `MODULES` lists.
+- ~~Deduplicating the two `MODULES` lists.~~ **Done 2026-08-05** — `prisma/rbac-seed-data.ts`
+  now imports the canonical list from `src/lib/modules.ts` by relative path. See below.
 - SSO / 2FA / password policy.
 - Per-user permission overrides — roles remain the only grant mechanism.
 
@@ -315,3 +316,33 @@ stripe and a gap is obvious.
 The "who holds each role" appendix is what makes it an audit rather than a specification.
 It also carries the multi-role caveat in print: a person's effective access is the
 combination of every role they hold, so a single row never tells the whole story.
+
+
+---
+
+## MODULES dedupe (2026-08-05)
+
+`prisma/rbac-seed-data.ts` kept its own hand-synced copy of `MODULES`, with a caveat
+comment on each entry. It now imports the canonical list from `src/lib/modules.ts`.
+
+The stated reason for the copy — "prisma/ scripts run standalone via tsx and can't import
+from src/" — was only half true. The `@/` alias genuinely does not resolve under
+`tsconfig.scripts.json` (no `paths`, `moduleResolution: "node"`), but a **relative** import
+does, and `src/lib/scope.ts` has always imported that same file relatively in the opposite
+direction.
+
+Why it mattered: drift was invisible in the worst way. A module added to one list and not
+the other left newly seeded enterprises without a default for it, while
+`backfillMissingRolePermissions()` quietly self-healed every EXISTING role on its next
+request — so the gap only surfaced when a brand-new enterprise was onboarded.
+
+Verified against the path that actually consumes it: `npx tsc -p tsconfig.scripts.json`
+emits `dist-scripts/src/lib/modules.js` beside `dist-scripts/prisma/rbac-seed-data.js`,
+and requiring the compiled file under plain `node` (what the Docker runtime does) resolves
+and reports the full 20-module list. `src/lib/modules.ts` imports nothing, so it pulls no
+further `src/` code into that compile.
+
+`tests/business-rules/module-registry.test.ts` holds the line: it asserts the two are the
+same array by IDENTITY (not deep equality — a re-declared copy could match today and drift
+tomorrow), that every module has a label and a scope, and that every seeded role matrix has
+an explicit entry for every module.

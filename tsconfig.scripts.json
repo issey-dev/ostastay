@@ -13,5 +13,13 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["scripts/bootstrap-admin.ts", "scripts/ensure-platform.ts", "prisma/rbac-seed-data.ts"]
+  // src/lib/modules.ts is listed explicitly rather than left to import-following, so it is
+  // obvious that the canonical module list is part of this compile unit. It imports
+  // nothing, so it pulls in no further src/ code.
+  "include": [
+    "scripts/bootstrap-admin.ts",
+    "scripts/ensure-platform.ts",
+    "prisma/rbac-seed-data.ts",
+    "src/lib/modules.ts"
+  ]
 }
