@@ -13,8 +13,15 @@ export async function proxy(request: NextRequest) {
   // carries identity only (no role/enterpriseId), so per-module/per-page authorization
   // always happens server-side via src/lib/scope.ts (requireSession/requirePermission),
   // which re-fetches the live User+Role row on every request, and the enterprise slug
-  // itself is re-validated against the live session in src/app/e/[slug]/layout.tsx.
-  // Middleware can't affordably hit the DB, so none of that happens here.
+  // itself is re-validated against the live session in the two shell layouts —
+  // src/app/e/[slug]/dashboard/layout.tsx and src/app/e/[slug]/hub/layout.tsx. (NOT a
+  // shared src/app/e/[slug]/layout.tsx: that would also cover the public
+  // /e/[slug]/login page, which must render without a session. This comment named that
+  // file long after it was split.) Middleware can't affordably hit the DB, so none of
+  // that happens here.
+  //
+  // Note also that this matcher EXCLUDES /api — no route handler is protected by
+  // anything here. Each one calls requireSession() itself; that is the actual boundary.
   const isDashboardPath = pathname.startsWith('/dashboard') || /^\/e\/[^/]+\/dashboard(\/|$)/.test(pathname)
   if (isDashboardPath) {
     if (!token) {

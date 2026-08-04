@@ -47,6 +47,13 @@ export async function PATCH(request: Request) {
     if (!body.enterpriseId || !body.module || typeof body.enabled !== "boolean") {
       return NextResponse.json({ error: "enterpriseId, module, and enabled (boolean) are required" }, { status: 400 });
     }
+    // `module` is written straight into EnterpriseAddonAccess's compound key, so an
+    // unrecognised value would silently create a permanent row for a module that does
+    // not exist — invisible to the GET above (it projects over MODULES) and therefore
+    // un-removable through the UI. Reject rather than persist.
+    if (!(MODULES as readonly string[]).includes(body.module)) {
+      return NextResponse.json({ error: "Unknown module" }, { status: 400 });
+    }
 
     const target = await prisma.enterprise.findUnique({ where: { id: body.enterpriseId }, select: { name: true } });
     if (!target) {
