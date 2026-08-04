@@ -43,7 +43,8 @@ export function SessionTimeoutManager() {
     setMessage(null)
     try {
       const res = await fetch(`/api/properties/${currentProperty.id}`, {
-        method: "PATCH",
+        // PUT, not PATCH — this route only exports PUT, and a PATCH silently 405s.
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionIdleMinutes: next }),
       })

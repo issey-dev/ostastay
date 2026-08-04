@@ -58,7 +58,18 @@ export async function PUT(
         contactPhone: body.contactPhone,
         contactEmail: body.contactEmail,
         address: body.address,
-        starRating: body.starRating !== undefined && body.starRating !== null && body.starRating !== "" ? parseInt(body.starRating) : null,
+        // Only written when the caller actually sent the key. It previously fell through
+        // to `null` whenever `starRating` was absent, so EVERY partial PUT silently wiped
+        // the property's star rating — the banner-colour, stationery-font and
+        // allocation-mode panels all send one-field bodies. (The same trap was already
+        // spotted and guarded for stationeryFont below; starRating was missed.) Sending
+        // null or "" still clears it deliberately.
+        starRating:
+          body.starRating === undefined
+            ? undefined
+            : body.starRating === null || body.starRating === ""
+              ? null
+              : parseInt(body.starRating),
         bannerColor: body.bannerColor,
         // Stationery typeface (Controls > General > Appearance). undefined leaves it
         // unchanged so the banner-colour PUT and the font PUT don't clobber each other.
