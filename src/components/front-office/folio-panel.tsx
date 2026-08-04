@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
+import { RoutingInstructionsDialog } from "@/components/front-office/routing-instructions-dialog"
 
 type FolioPanelProps = {
   reservationId: string | null
@@ -61,8 +62,6 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // another folio window or another in-house room's folio.
   const [isRoutingOpen, setIsRoutingOpen] = useState(false)
   const [routingRules, setRoutingRules] = useState<any[]>([])
-  const [routingCodeIds, setRoutingCodeIds] = useState<string[]>([])
-  const [routingTargetFolioId, setRoutingTargetFolioId] = useState("")
   const [routingSaving, setRoutingSaving] = useState(false)
   // Other in-house reservations' folios at this property — cross-room routing/move targets.
   const [inHouseFolios, setInHouseFolios] = useState<{ id: string; label: string }[]>([])
@@ -244,27 +243,25 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   }
 
   const openRouting = () => {
-    setRoutingCodeIds([])
-    setRoutingTargetFolioId("")
     fetchRoutingRules()
     setIsRoutingOpen(true)
   }
 
-  const handleSaveRouting = async () => {
-    if (routingCodeIds.length === 0 || !routingTargetFolioId) return
+  // The picker owns its own selection now (see RoutingInstructionsDialog) and hands it
+  // back on save, so the panel no longer mirrors that state.
+  const handleSaveRouting = async (chargeCodeIds: string[], targetFolioId: string) => {
+    if (chargeCodeIds.length === 0 || !targetFolioId) return
     setRoutingSaving(true)
     try {
-      const target = await resolveTargetFolioId(routingTargetFolioId)
+      const target = await resolveTargetFolioId(targetFolioId)
       if (!target) { setRoutingSaving(false); return }
       const res = await fetch(`/api/reservations/${reservationId}/routing-rules`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chargeCodeIds: routingCodeIds, targetFolioId: target }),
+        body: JSON.stringify({ chargeCodeIds, targetFolioId: target }),
       })
       const data = await res.json()
       if (res.ok) {
-        setRoutingCodeIds([])
-        setRoutingTargetFolioId("")
         fetchRoutingRules()
         fetchFolios()
         setNotification({ title: "Routing Saved", message: `Charges will auto-route.${data.movedCount ? ` ${data.movedCount} existing charge(s) moved.` : ""}` })
@@ -917,76 +914,19 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         </DialogContent>
       </Dialog>
 
-      {/* Routing Instructions Dialog */}
-      <Dialog open={isRoutingOpen} onOpenChange={setIsRoutingOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Routing Instructions</DialogTitle>
-            <DialogDescription>
-              Auto-route selected charge codes to another folio window or another in-house room. Existing matching
-              charges move immediately; future postings (incl. Night Audit) follow the rule.
-            </DialogDescription>
-          </DialogHeader>
-
-          {routingRules.length > 0 && (
-            <div className="space-y-1.5 border border-border rounded-md p-2 max-h-40 overflow-y-auto">
-              <p className="text-xs font-medium text-muted-foreground">Active rules</p>
-              {routingRules.map((r: any) => {
-                const t = r.targetFolio
-                const room = t?.reservation?.assignments?.[0]?.room?.roomNumber
-                const target = t?.reservationId === reservationId ? `Folio #${t.folioNumber}` : `Room ${room ?? "?"} · Folio #${t?.folioNumber}`
-                return (
-                  <div key={r.id} className="flex items-center justify-between text-sm">
-                    <span><span className="font-mono">{r.chargeCode.code}</span> → {target}</span>
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-destructive" onClick={() => handleDeleteRouting(r.id)}>Remove</Button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>Charge codes to route</Label>
-              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto border border-border rounded-md p-2">
-                {postableChargeCodes(chargeCodes).map((c) => {
-                  const on = routingCodeIds.includes(c.id)
-                  return (
-                    <button
-                      type="button" key={c.id}
-                      onClick={() => setRoutingCodeIds((prev) => on ? prev.filter((x) => x !== c.id) : [...prev, c.id])}
-                      className={`text-xs rounded-md px-2 py-1 border transition-colors ${on ? "bg-info-muted text-info border-info/40 font-medium" : "border-border text-muted-foreground hover:border-foreground/40"}`}
-                    >
-                      {c.code}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Route to</Label>
-              <Select value={routingTargetFolioId} onValueChange={(v) => setRoutingTargetFolioId(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select guest or travel agent">
-                    {targetFolioOptions().find((o) => o.id === routingTargetFolioId)?.label}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {targetFolioOptions().map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRoutingOpen(false)}>Close</Button>
-            <Button onClick={handleSaveRouting} disabled={routingSaving || routingCodeIds.length === 0 || !routingTargetFolioId}>
-              {routingSaving ? "Saving..." : "Save Routing"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Routing Instructions — grouped-checklist redesign, see
+          src/components/front-office/routing-instructions-dialog.tsx */}
+      <RoutingInstructionsDialog
+        isOpen={isRoutingOpen}
+        onClose={() => setIsRoutingOpen(false)}
+        folioNumber={activeFolio?.folioNumber}
+        chargeCodes={chargeCodes}
+        targetOptions={targetFolioOptions()}
+        rules={routingRules}
+        onDeleteRule={handleDeleteRouting}
+        onSave={handleSaveRouting}
+        saving={routingSaving}
+      />
 
       {/* Assign Payee Dialog */}
       <Dialog open={isPayeeDialogOpen} onOpenChange={setIsPayeeDialogOpen}>
