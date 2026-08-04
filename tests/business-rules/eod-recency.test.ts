@@ -53,7 +53,7 @@ describe("End-of-Day 12-hour recency guard", () => {
     // A ROOM charge code is required by the audit even with no in-house guests.
     await customChargeCode(enterprise.id, { code: "1000", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `eod-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EOD", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+    const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `eod-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EOD", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;
   });
 

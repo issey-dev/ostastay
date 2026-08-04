@@ -41,7 +41,7 @@ async function setupEnterprise(label: string) {
     data: { propertyId: property.id, confirmationNo: `T${label}-${uniq()}`, primaryGuestId: guest.upid, checkInDate: biz, checkOutDate: new Date(biz.getTime() + 2 * DAY), status: "RESERVED", adults: 1, children: 0 },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
-  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `t${label}-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: label, roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `t${label}-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: label, roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
 
   const genRes = await asUser(admin.id, () => linkRoute.POST(new Request(`http://localhost/api/reservations/${reservation.id}/eregistration-link`, { method: "POST" }), { params: Promise.resolve({ id: reservation.id }) }));
   const { token } = await genRes.json();

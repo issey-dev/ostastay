@@ -28,7 +28,7 @@ async function main() {
       passwordHash,
       firstName: "Osta",
       lastName: "Support",
-      roleId: supportRoleIds["Osta Support Admin"],
+      roles: { create: { roleId: supportRoleIds["Osta Support Admin"] } },
       scope: "ENTERPRISE",
     },
   });
@@ -60,7 +60,7 @@ async function main() {
       passwordHash,
       firstName: "Veyo",
       lastName: "Admin",
-      roleId: systemRoleIds["Admin"],
+      roles: { create: { roleId: systemRoleIds["Admin"] } },
       scope: "ENTERPRISE",
     },
   });
@@ -73,7 +73,7 @@ async function main() {
       passwordHash,
       firstName: "Fatima",
       lastName: "Desk",
-      roleId: systemRoleIds["Front Desk"],
+      roles: { create: { roleId: systemRoleIds["Front Desk"] } },
       scope: "ENTERPRISE",
     },
   });
@@ -86,7 +86,7 @@ async function main() {
       passwordHash,
       firstName: "Aisha",
       lastName: "Maid",
-      roleId: systemRoleIds["Housekeeping"],
+      roles: { create: { roleId: systemRoleIds["Housekeeping"] } },
       scope: "ENTERPRISE",
     },
   });
@@ -638,7 +638,7 @@ async function main() {
       passwordHash,
       firstName: "Aisha",
       lastName: "Rahman",
-      roleId: systemRoleIds["Front Desk"],
+      roles: { create: { roleId: systemRoleIds["Front Desk"] } },
       scope: "PROPERTY",
       propertyId: lagoon.id,
     },

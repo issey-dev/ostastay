@@ -79,7 +79,7 @@ describe("Phase 6 tenant isolation: analytics & front-office summary", () => {
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p6-admin-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -87,7 +87,7 @@ describe("Phase 6 tenant isolation: analytics & front-office summary", () => {
     const noPermA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p6-noperm-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "NoPerm", lastName: "A", roleId: roleIds["Housekeeping"], scope: "ENTERPRISE",
+        firstName: "NoPerm", lastName: "A", roles: { create: { roleId: roleIds["Housekeeping"] } }, scope: "ENTERPRISE",
       },
     });
     noPermAId = noPermA.id;

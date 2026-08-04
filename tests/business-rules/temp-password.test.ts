@@ -54,7 +54,7 @@ describe("Temporary handover password", () => {
         passwordHash: await bcrypt.hash("password123", 10),
         firstName: "Temp",
         lastName: "Issuer",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

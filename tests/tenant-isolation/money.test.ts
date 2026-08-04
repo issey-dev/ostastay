@@ -125,7 +125,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p4-admin-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -133,7 +133,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
     const cashierA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p4-cashier-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "NoCashier", lastName: "A", roleId: roleIds["Housekeeping"], scope: "ENTERPRISE",
+        firstName: "NoCashier", lastName: "A", roles: { create: { roleId: roleIds["Housekeeping"] } }, scope: "ENTERPRISE",
       },
     });
     cashierAId = cashierA.id;

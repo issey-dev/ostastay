@@ -109,7 +109,7 @@ async function setup(opts: {
   const admin = await prisma.user.create({
     data: {
       enterpriseId: enterprise.id, email: `rcc-admin-${uniq()}@test.local`,
-      passwordHash, firstName: "Admin", lastName: "RCC", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+      passwordHash, firstName: "Admin", lastName: "RCC", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
     },
   });
 

@@ -78,7 +78,7 @@ describe("Per-outlet sales-check numbering", () => {
     barOutletId = bar.id;
 
     const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({ data: { enterpriseId, email: `oc-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "OC", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+    const admin = await prisma.user.create({ data: { enterpriseId, email: `oc-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "OC", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Outlet", lastName: "Check" } });
     guestId = guest.upid;

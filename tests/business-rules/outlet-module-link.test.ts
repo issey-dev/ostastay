@@ -62,7 +62,7 @@ describe("Hub-wide Spa/Excursion outlet links (/api/module-outlets)", () => {
     foreignOutletId = (await prisma.outlet.create({ data: { propertyId: otherProp.id, name: "Foreign", code: "FRGN", outletType: "SPA" } })).id;
 
     const passwordHash = await bcrypt.hash("password123", 10);
-    adminId = (await prisma.user.create({ data: { enterpriseId, email: `modout-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE" } })).id;
+    adminId = (await prisma.user.create({ data: { enterpriseId, email: `modout-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } })).id;
   });
 
   it("links, persists, and unlinks the Spa outlet enterprise-wide", async () => {

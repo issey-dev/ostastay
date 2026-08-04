@@ -67,7 +67,7 @@ describe("Channel sync log", () => {
         passwordHash,
         firstName: "Log",
         lastName: "Admin",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -92,7 +92,7 @@ describe("Channel sync log", () => {
         passwordHash,
         firstName: "Prop",
         lastName: "User",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "PROPERTY",
         propertyId: property.id,
       },

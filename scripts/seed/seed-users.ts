@@ -37,7 +37,7 @@ async function main() {
           lastName: u.lastName,
           email: u.email,
           passwordHash,
-          roleId: u.roleId,
+          roles: { create: { roleId: u.roleId } },
           scope: "ENTERPRISE",
         }
       })

@@ -35,7 +35,7 @@ async function setup() {
   });
   await ensureChargeTree(prisma, enterprise.id);
   const passwordHash = await bcrypt.hash("password123", 10);
-  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `osb-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `osb-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
   return { enterpriseId: enterprise.id, propertyId: property.id, adminId: admin.id };
 }
 

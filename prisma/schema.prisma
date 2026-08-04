@@ -155,7 +155,7 @@ model Role {
   createdAt    DateTime   @default(now())
 
   permissions RolePermission[]
-  users       User[]
+  users       UserRole[]
 
   @@unique([enterpriseId, name])
 }
@@ -242,8 +242,11 @@ model User {
   passwordHash String
   firstName    String
   lastName     String
-  roleId       String
-  role         Role       @relation(fields: [roleId], references: [id])
+  // Roles are MANY per user since 2026-08-04 (owner): access is the union of every role
+  // held — see mergeRolePermissions() in src/lib/role-permissions.ts. `roleId` used to
+  // live here; the migration moved each user's single role into UserRole before dropping
+  // it, so there is exactly one place to ask "what may this person do".
+  roles        UserRole[]
   scope        String     @default("ENTERPRISE")
   propertyId   String?
   property     Property?  @relation("UserWorkLocation", fields: [propertyId], references: [id])
@@ -264,6 +267,14 @@ model User {
   // needn't hold a post.
   jobFunction String?
 
+  // The account created during onboarding. Undeletable, never deactivated, always holds a
+  // full-access role, and always ENTERPRISE scope. That last part is load-bearing: user
+  // management lives in the Hub, which refuses PROPERTY-scoped users, so without a
+  // guaranteed enterprise-scoped admin a tenant could strip its own last full-access role
+  // (or demote itself) and lock everyone out with no in-app way back.
+  isProtected Boolean @default(false)
+
+  sessions  Session[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -279,7 +290,60 @@ model User {
 
   @@index([enterpriseId])
   @@index([propertyId])
+}
+
+// A user may hold several roles; effective access is the OR of their grants.
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
   @@index([roleId])
+}
+
+// A live sign-in. Sessions were stateless JWTs until 2026-08-04, which meant nobody could
+// see who was signed in and nobody could sign anyone else out — the only levers were
+// deactivating the account or the property-wide EOD watermark.
+//
+// The JWT is still the credential; this row decides whether it is still HONOURED. That
+// split matters: the token stays unforgeable without a DB round-trip, while revocation
+// and idle timeout become immediate.
+model Session {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Matches the `jti` claim in the token this session issued.
+  jti String @unique
+
+  createdAt DateTime @default(now())
+  // Stamped at most once a minute (see touchSession) — a bounded write, not one per
+  // request. Drives both "active now" and the idle timeout.
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+
+  revokedAt       DateTime?
+  revokedByUserId String?
+  // Why it ended: LOGOUT | ADMIN | IDLE | EXPIRED. Free-text rather than an enum to match
+  // the rest of the schema's conventions.
+  revokedReason String?
+
+  // Captured at login for the "whose session is this" column. Never used for auth —
+  // both are client-controlled and trivially spoofed.
+  ipAddress String?
+  userAgent String?
+
+  // The property in play when the session was minted: lets the list group by location and
+  // the idle timeout resolve which property's setting applies.
+  propertyId String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
 }
 
 // PropertyStatus: PENDING (newly created by a tenant, not yet reviewed — locked out of
@@ -386,6 +450,11 @@ model Property {
   // can't keep posting while the business date rolls. Enterprise-scoped users are
   // unaffected. Null = no forced logout pending.
   eodSessionsInvalidAt DateTime?
+
+  // Minutes of INACTIVITY before a session at this property is dropped. 0 = disabled
+  // (the previous behaviour: a session lived its full 24h regardless). Enforced in
+  // requireSession against Session.lastSeenAt.
+  sessionIdleMinutes Int @default(0)
 
   eodRuns            EodRun[]
   guestRegistrations GuestRegistration[]

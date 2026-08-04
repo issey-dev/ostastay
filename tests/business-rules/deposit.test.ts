@@ -131,7 +131,7 @@ describe("Pre-arrival deposits", () => {
         passwordHash,
         firstName: "Admin",
         lastName: "DP",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

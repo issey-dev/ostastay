@@ -123,7 +123,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `debtors-admin-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -131,7 +131,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     const housekeepingA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `debtors-hk-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "House", lastName: "Keeping", roleId: roleIds["Housekeeping"], scope: "ENTERPRISE",
+        firstName: "House", lastName: "Keeping", roles: { create: { roleId: roleIds["Housekeeping"] } }, scope: "ENTERPRISE",
       },
     });
     housekeepingAId = housekeepingA.id;
@@ -139,7 +139,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     const adminB = await prisma.user.create({
       data: {
         enterpriseId: enterpriseB.id, email: `debtors-admin-b-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminBId = adminB.id;

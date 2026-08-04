@@ -148,7 +148,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         passwordHash,
         firstName: "Admin",
         lastName: "AH",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -161,7 +161,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         passwordHash,
         firstName: "House",
         lastName: "Keeper",
-        roleId: roleIds["Housekeeping"],
+        roles: { create: { roleId: roleIds["Housekeeping"] } },
         scope: "ENTERPRISE",
       },
     });

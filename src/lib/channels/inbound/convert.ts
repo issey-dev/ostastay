@@ -37,8 +37,12 @@ function systemContext(enterpriseId: string): AuthContext {
     scope: "ENTERPRISE",
     sessionPropertyId: null,
     propertyId: null,
-    roleId: "system",
+    roleIds: [],
     permissions: new Map(),
+    // Synthetic context for channel-inbound conversion — it never passes through
+    // requireSession, so there is no Session row behind it.
+    sessionId: "system",
+    sessionJti: "system",
     isInternal: false,
     isActingAsSupport: false,
     licensedModules: new Set(),

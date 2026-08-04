@@ -1,6 +1,6 @@
 # User Management, Roles & Sessions — plan
 
-> Status: **planned, not started**. Owner decisions taken 2026-08-04 (see the Decisions
+> Status: **Phases 0-2 and 4 shipped 2026-08-04; Phases 3 and 5 remain.** Owner decisions taken 2026-08-04 (see the Decisions
 > table). Read [MASTER_PLAN.md](MASTER_PLAN.md) for the RBAC foundation this builds on
 > and [DECISIONS.md](DECISIONS.md) for the business rules.
 
@@ -47,7 +47,7 @@ that makes the rest of the model safe to hand to a tenant.
 
 ---
 
-## Phase 0 — Schema
+## Phase 0 — Schema — **DONE (2026-08-04)**
 
 One migration, additive except where noted.
 
@@ -113,7 +113,7 @@ should still assert that rather than assume.
 
 ---
 
-## Phase 1 — Multi-role
+## Phase 1 — Multi-role — **DONE (2026-08-04)**
 
 The research flagged 11 call sites that assume one role. In order:
 
@@ -135,7 +135,7 @@ pinning explicitly — that a role granting `view` never silently confers `delet
 
 ---
 
-## Phase 2 — Sessions
+## Phase 2 — Sessions — **DONE (2026-08-04)**
 
 - `createSession` mints a `jti`, writes the `Session` row, and puts the `jti` in the JWT.
 - `requireSession` loads the session by `jti`: reject if missing, revoked, or expired.
@@ -225,3 +225,37 @@ Phases 3-5 are additive UI and can ship separately.
 - Deduplicating the two `MODULES` lists.
 - SSO / 2FA / password policy.
 - Per-user permission overrides — roles remain the only grant mechanism.
+
+
+---
+
+## What actually shipped in 0-2 (2026-08-04)
+
+- `src/lib/role-permissions.ts` — the pure merge, written and tested (21 cases) before
+  anything called it. Access is the OR of every held role, per module per action.
+- `src/lib/session-store.ts` — session lookup, bounded activity stamp, revocation, the
+  pure idle rule, and the expiry purge.
+- `auth.ts` — the JWT now carries a `jti`; `createSession` writes the row before setting
+  the cookie, and `destroySession` revokes it so a copied cookie can't outlive a sign-out.
+- `requireSession` — loads the session, refuses it if missing/revoked/expired, merges
+  every held role, enforces the idle timeout, then stamps activity. The idle check runs
+  BEFORE the stamp, or every request would refresh the clock it is measured against.
+- `AuthContext.roleId` → `roleIds: string[]`, plus `sessionId`/`sessionJti`.
+- Migration `20260804160000_multi_role_and_sessions` — backfills `UserRole` from every
+  user's existing `roleId` before dropping the column, and marks each enterprise's oldest
+  active enterprise-scoped full-access admin as `isProtected`.
+- 122 `roleId:` create-sites across 77 files rewritten to `roles: { create: ... }`.
+- Users API takes `roles[]`, replaces them wholesale on PATCH, refuses to delete /
+  deactivate / demote / re-role a protected account, and revokes live sessions on
+  deactivation. Onboarding creates its account with `isProtected: true`.
+- Controls: roles are a multi-select; the roster shows every role a user holds.
+- Property `sessionIdleMinutes` (0 = off, floor of 5), and Night Audit purges expired rows.
+
+**Everyone signed in at deploy time is signed out**: tokens minted before this carry no
+`jti`, so there is no row to honour them. That is deliberate — honouring un-revocable
+tokens for up to 24h would defeat the point of building revocation.
+
+**Not built here** (Phase 3, the Hub move): the active-sessions list and the terminate
+button. The mechanism exists — `revokeSessionById` and `revokeAllForUser` — but nothing
+surfaces it yet, so today a session can only be ended by logging out, deactivating the
+user, the idle timeout, or EOD.

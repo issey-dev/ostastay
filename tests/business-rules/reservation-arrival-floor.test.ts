@@ -89,7 +89,7 @@ describe("Arrival cannot predate the business date", () => {
         passwordHash: await bcrypt.hash("password123", 10),
         firstName: "Floor",
         lastName: "User",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

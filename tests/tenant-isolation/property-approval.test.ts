@@ -55,7 +55,7 @@ describe("Property approval workflow: hard gate, Osta approve/reject/resubmit", 
     const admin = await prisma.user.create({
       data: {
         enterpriseId, email: `pa-admin-${uniq()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "PA", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "PA", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminUserId = admin.id;
@@ -63,7 +63,7 @@ describe("Property approval workflow: hard gate, Osta approve/reject/resubmit", 
     const ostaAdmin = await prisma.user.create({
       data: {
         enterpriseId: osta.id, email: `pa-osta-admin-${uniq()}@test.local`, passwordHash,
-        firstName: "Osta", lastName: "Admin", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Osta", lastName: "Admin", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     ostaAdminUserId = ostaAdmin.id;

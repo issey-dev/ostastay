@@ -55,7 +55,7 @@ async function setup() {
     include: { folios: true },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
-  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `adv-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "Adv", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `adv-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "Adv", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
   return { propertyId: property.id, reservationId: reservation.id, folioId: reservation.folios[0].id, adminId: admin.id, biz };
 }
 

@@ -209,7 +209,7 @@ describe("Inbound bookings", () => {
           passwordHash: await bcrypt.hash("password123", 10),
           firstName: "In",
           lastName: "Hub",
-          roleId: hubRole.id,
+          roles: { create: { roleId: hubRole.id } },
           scope: "ENTERPRISE",
         },
       });

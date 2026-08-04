@@ -94,7 +94,7 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
         passwordHash,
         firstName: "Admin",
         lastName: "A",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

@@ -64,7 +64,7 @@ describe("Excursions: tenant isolation", () => {
     const ostaAdmin = await prisma.user.create({
       data: {
         enterpriseId: osta.id, email: `excursions-osta-admin-${uniq()}@test.local`, passwordHash,
-        firstName: "Osta", lastName: "Admin", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Osta", lastName: "Admin", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     ostaAdminId = ostaAdmin.id;
@@ -138,7 +138,7 @@ describe("Excursions: tenant isolation", () => {
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseAId, email: `excursions-admin-a-${uniq()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -146,7 +146,7 @@ describe("Excursions: tenant isolation", () => {
     const propertyScopedA2 = await prisma.user.create({
       data: {
         enterpriseId: enterpriseAId, email: `excursions-propscoped-a2-${uniq()}@test.local`, passwordHash,
-        firstName: "PropScoped", lastName: "A2", roleId: roleIds["Admin"], scope: "PROPERTY", propertyId: propertyA2Id,
+        firstName: "PropScoped", lastName: "A2", roles: { create: { roleId: roleIds["Admin"] } }, scope: "PROPERTY", propertyId: propertyA2Id,
       },
     });
     propertyScopedA2Id = propertyScopedA2.id;
@@ -154,7 +154,7 @@ describe("Excursions: tenant isolation", () => {
     const adminB = await prisma.user.create({
       data: {
         enterpriseId: enterpriseB.id, email: `excursions-admin-b-${uniq()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminBId = adminB.id;

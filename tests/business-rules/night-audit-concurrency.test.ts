@@ -55,7 +55,7 @@ describe("Night Audit concurrency — no double-post, no double-roll (A1)", () =
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
     await customChargeCode(enterprise.id, { code: "1000", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `nac-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "NAC", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+    const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `nac-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "NAC", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;
     const guest = await prisma.profile.create({ data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "Nac", lastName: "Guest" } });
     const chargeable = await prisma.reservation.create({

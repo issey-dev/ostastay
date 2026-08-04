@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId, type AuthContext } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { revokeAllForUser } from "@/lib/session-store";
 
 // Accepts either a real Role id, or (for compatibility with the existing role-name
 // dropdown in team-manager.tsx) a role name — resolved against the enterprise's own
@@ -26,6 +27,27 @@ async function resolveRoleId(enterpriseId: string, roleNameOrId: string): Promis
   });
   return systemRole?.id ?? null;
 }
+
+// Plural form. Returns null if ANY entry fails to resolve — a partial assignment would
+// silently give a user less access than the admin just chose, which is worse than an error.
+async function resolveRoleIds(enterpriseId: string, roles: unknown): Promise<string[] | null> {
+  const list = Array.isArray(roles) ? roles : [roles];
+  const cleaned = list.filter((r): r is string => typeof r === "string" && r.length > 0);
+  if (cleaned.length === 0) return null;
+  const ids: string[] = [];
+  for (const r of cleaned) {
+    const id = await resolveRoleId(enterpriseId, r);
+    if (!id) return null;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+// The onboarding account is the floor that stops a tenant locking itself out of its own
+// Hub: it can never be deleted, deactivated, stripped of its roles, or demoted to
+// property scope. See .agents/docs/USER_MANAGEMENT_PLAN.md decision 9.
+const PROTECTED_USER_MESSAGE =
+  "This is the account created during onboarding. It cannot be deleted, deactivated, moved to a single property, or have its access reduced — it is what guarantees someone can always administer this enterprise.";
 
 async function assertPropertyInEnterprise(propertyId: string, enterpriseId: string) {
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
@@ -52,7 +74,8 @@ const USER_SELECT = {
   email: true,
   firstName: true,
   lastName: true,
-  role: { select: { id: true, name: true } },
+  roles: { select: { role: { select: { id: true, name: true, isSystem: true } } } },
+  isProtected: true,
   scope: true,
   propertyId: true,
   isActive: true,
@@ -103,8 +126,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email already exists" }, { status: 400 });
     }
 
-    const roleId = await resolveRoleId(enterpriseId, role);
-    if (!roleId) {
+    const roleIds = await resolveRoleIds(enterpriseId, body.roles ?? role);
+    if (!roleIds) {
       return NextResponse.json({ error: "Unknown role" }, { status: 400 });
     }
 
@@ -130,7 +153,7 @@ export async function POST(request: Request) {
         passwordHash,
         firstName,
         lastName,
-        roleId,
+        roles: { create: roleIds.map((roleId) => ({ roleId })) },
         scope: userScope,
         propertyId: targetPropertyId,
         // Free-form against the tenant's JOB_FUNCTION list — not validated against it on
@@ -147,7 +170,7 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "User",
       entityId: newUser.id,
-      description: `Created user ${firstName} ${lastName} (${email}) with role ${newUser.role.name}`,
+      description: `Created user ${firstName} ${lastName} (${email}) with role(s) ${newUser.roles.map((ur) => ur.role.name).join(", ")}`,
     });
 
     return NextResponse.json(newUser, { status: 201 });
@@ -177,6 +200,17 @@ export async function PATCH(request: Request) {
     // just rename them — checked against the user's *current* scope/property first.
     assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);
 
+    // The onboarding account may be renamed and have its password reset — everything that
+    // could strand the enterprise is refused.
+    if (existing.isProtected) {
+      const wouldDeactivate = isActive === false;
+      const wouldDemote = scope === "PROPERTY";
+      const wouldChangeRoles = body.roles !== undefined || role !== undefined;
+      if (wouldDeactivate || wouldDemote || wouldChangeRoles) {
+        return NextResponse.json({ error: PROTECTED_USER_MESSAGE, protectedUser: true }, { status: 400 });
+      }
+    }
+
     const updateData: any = {};
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
@@ -185,12 +219,18 @@ export async function PATCH(request: Request) {
     // `undefined` leaves it alone; an empty string clears the post.
     if (jobFunction !== undefined) updateData.jobFunction = jobFunction || null;
 
-    if (role) {
-      const roleId = await resolveRoleId(ctx.enterpriseId, role);
-      if (!roleId) {
+    // Roles are REPLACED wholesale, not merged: the UI sends the full set the admin
+    // chose, so a removed role must actually go.
+    let nextRoleIds: string[] | null = null;
+    if (body.roles !== undefined || role !== undefined) {
+      nextRoleIds = await resolveRoleIds(ctx.enterpriseId, body.roles ?? role);
+      if (!nextRoleIds) {
         return NextResponse.json({ error: "Unknown role" }, { status: 400 });
       }
-      updateData.roleId = roleId;
+      updateData.roles = {
+        deleteMany: {},
+        create: nextRoleIds.map((roleId) => ({ roleId })),
+      };
     }
 
     if (scope) {
@@ -228,8 +268,15 @@ export async function PATCH(request: Request) {
       select: USER_SELECT,
     });
 
+    // Deactivating ends the account's live sessions immediately. requireSession would
+    // refuse them anyway on the next request, but leaving the rows "live" would make the
+    // Sessions list lie about who is signed in.
+    if (updateData.isActive === false) {
+      await revokeAllForUser(id, "ADMIN", ctx.userId);
+    }
+
     const sensitive: string[] = [];
-    if (updateData.roleId && updateData.roleId !== existing.roleId) sensitive.push(`role → ${updatedUser.role.name}`);
+    if (nextRoleIds) sensitive.push(`roles → ${updatedUser.roles.map((ur) => ur.role.name).join(", ")}`);
     if (updateData.passwordHash) sensitive.push("password changed");
     if (updateData.isActive === false) sensitive.push("deactivated");
     if (updateData.isActive === true && !existing.isActive) sensitive.push("reactivated");
@@ -266,6 +313,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);
+
+    if (existing.isProtected) {
+      return NextResponse.json({ error: PROTECTED_USER_MESSAGE, protectedUser: true }, { status: 400 });
+    }
 
     // Since users might be tied to shifts or audit logs, a physical delete might fail due to foreign keys.
     // However, if they aren't, it will succeed.

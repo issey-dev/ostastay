@@ -79,8 +79,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         passwordHash: await bcrypt.hash(password, 10),
         firstName,
         lastName,
-        roleId: adminRole.id,
+        roles: { create: { roleId: adminRole.id } },
         scope: "ENTERPRISE",
+        // The handover account is PROTECTED: it can never be deleted, deactivated,
+        // demoted to a single property, or stripped of its roles. User management lives
+        // in the Hub, which refuses property-scoped users, so this account is what
+        // guarantees a tenant can always administer itself without an Osta support
+        // ticket. See .agents/docs/USER_MANAGEMENT_PLAN.md decision 9.
+        isProtected: true,
         // The generated password is TEMPORARY: login refuses to mint a session until
         // the client replaces it with their own (see /api/auth/login and
         // /api/auth/change-password).

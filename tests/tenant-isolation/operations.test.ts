@@ -121,7 +121,7 @@ describe("Phase 5 tenant isolation: housekeeping & maintenance", () => {
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p5-admin-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -129,7 +129,7 @@ describe("Phase 5 tenant isolation: housekeeping & maintenance", () => {
     const noPermA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p5-nohk-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "NoHousekeeping", lastName: "A", roleId: roleIds["Reservations"], scope: "ENTERPRISE",
+        firstName: "NoHousekeeping", lastName: "A", roles: { create: { roleId: roleIds["Reservations"] } }, scope: "ENTERPRISE",
       },
     });
     noPermAId = noPermA.id;
@@ -137,7 +137,7 @@ describe("Phase 5 tenant isolation: housekeeping & maintenance", () => {
     const attendantA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `p5-attendant-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Attendant", lastName: "A", roleId: roleIds["Housekeeping"], scope: "ENTERPRISE",
+        firstName: "Attendant", lastName: "A", roles: { create: { roleId: roleIds["Housekeeping"] } }, scope: "ENTERPRISE",
       },
     });
     attendantAId = attendantA.id;
@@ -145,7 +145,7 @@ describe("Phase 5 tenant isolation: housekeeping & maintenance", () => {
     const attendantB = await prisma.user.create({
       data: {
         enterpriseId: enterpriseB.id, email: `p5-attendant-b-${Date.now()}@test.local`, passwordHash,
-        firstName: "Attendant", lastName: "B", roleId: roleIds["Housekeeping"], scope: "ENTERPRISE",
+        firstName: "Attendant", lastName: "B", roles: { create: { roleId: roleIds["Housekeeping"] } }, scope: "ENTERPRISE",
       },
     });
     attendantBId = attendantB.id;

@@ -207,7 +207,7 @@ describe("License lockout at requireSession", () => {
           passwordHash: await bcrypt.hash("password123", 10),
           firstName: "Lock",
           lastName: "Out",
-          roleId: entRoleIds["Admin"] ?? roleIds["Admin"],
+          roles: { create: { roleId: entRoleIds["Admin"] ?? roleIds["Admin"] } },
           scope: "ENTERPRISE",
         },
       })

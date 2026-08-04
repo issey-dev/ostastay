@@ -38,10 +38,12 @@ export async function HubSidebar({ slug }: { slug: string }) {
 
   const user = await prisma.user.findUnique({
     where: { id: ctx.userId },
-    select: { firstName: true, lastName: true, role: { select: { name: true } } },
+    select: { firstName: true, lastName: true, roles: { select: { role: { select: { name: true } } } } },
   })
   const name = user ? `${user.firstName} ${user.lastName}` : "Hub"
-  const roleName = user?.role.name ?? ""
+  // A user may hold several roles; the chrome shows them joined rather than
+  // picking one arbitrarily.
+  const roleName = user?.roles.map((ur) => ur.role.name).join(", ") ?? ""
 
   // A Hub-only administrator has nowhere to go back to — only offer the return link
   // when the user actually holds a property-operational module.

@@ -72,7 +72,7 @@ describe("Channel manager connection (Beds24)", () => {
           passwordHash,
           firstName: "Chan",
           lastName: label,
-          roleId: roleIds["Admin"],
+          roles: { create: { roleId: roleIds["Admin"] } },
           scope: "ENTERPRISE",
         },
       });
@@ -106,7 +106,7 @@ describe("Channel manager connection (Beds24)", () => {
         passwordHash,
         firstName: "Prop",
         lastName: "Scoped",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "PROPERTY",
         propertyId: property.id,
       },

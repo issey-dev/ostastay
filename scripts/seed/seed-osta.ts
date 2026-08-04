@@ -50,7 +50,7 @@ async function main() {
       passwordHash,
       firstName: "Osta",
       lastName: "Admin",
-      roleId: systemRoleIds["Admin"],
+      roles: { create: { roleId: systemRoleIds["Admin"] } },
       scope: "ENTERPRISE",
     },
   });

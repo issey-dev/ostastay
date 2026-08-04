@@ -111,7 +111,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     const adminA = await prisma.user.create({
       data: {
         enterpriseId: enterpriseA.id, email: `confletter-admin-a-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminAId = adminA.id;
@@ -119,7 +119,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     const adminB = await prisma.user.create({
       data: {
         enterpriseId: enterpriseB.id, email: `confletter-admin-b-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminBId = adminB.id;

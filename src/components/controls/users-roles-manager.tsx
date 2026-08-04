@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsHubAccess, type PermissionMatrix } from "./role-permission-matrix"
@@ -31,7 +32,8 @@ type UserRow = {
   email: string
   firstName: string
   lastName: string
-  role: { id: string; name: string }
+  roles: { role: { id: string; name: string; isSystem: boolean } }[]
+  isProtected: boolean
   scope: "ENTERPRISE" | "PROPERTY"
   propertyId: string | null
   isActive: boolean
@@ -99,14 +101,15 @@ export function UsersRolesManager({
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
   const [userForm, setUserForm] = useState({
     firstName: "", lastName: "", email: "", password: "",
-    roleId: "", scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
+    roleIds: [] as string[], scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
     jobFunction: "",
   })
-  // Whether the role currently chosen in the user dialog carries any Hub module.
-  const selectedRoleGrantsHub = (() => {
-    const role = roles.find((r) => r.id === userForm.roleId)
-    return role ? grantsHubAccess(matrixFromRole(role)) : false
-  })()
+  // Whether ANY role currently chosen in the user dialog carries a Hub module — access is
+  // the union, so one Hub-granting role among several is enough.
+  const hubGrantingRoles = roles.filter(
+    (r) => userForm.roleIds.includes(r.id) && grantsHubAccess(matrixFromRole(r))
+  )
+  const selectedRoleGrantsHub = hubGrantingRoles.length > 0
   const [userErrorMsg, setUserErrorMsg] = useState<string | null>(null)
   const [savingUser, setSavingUser] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
@@ -127,7 +130,7 @@ export function UsersRolesManager({
   const openNewUserDialog = () => {
     setEditingUser(null)
     setUserForm({
-      firstName: "", lastName: "", email: "", password: "", roleId: roles[0]?.id ?? "",
+      firstName: "", lastName: "", email: "", password: "", roleIds: roles[0] ? [roles[0].id] : [],
       scope: isPropertyLockedActor ? "PROPERTY" : "ENTERPRISE",
       propertyId: isPropertyLockedActor ? (actorPropertyId ?? "") : "",
       jobFunction: "",
@@ -140,7 +143,7 @@ export function UsersRolesManager({
     setEditingUser(user)
     setUserForm({
       firstName: user.firstName, lastName: user.lastName, email: user.email, password: "",
-      roleId: user.role.id, scope: user.scope, propertyId: user.propertyId ?? "",
+      roleIds: user.roles.map((ur) => ur.role.id), scope: user.scope, propertyId: user.propertyId ?? "",
       jobFunction: user.jobFunction ?? "",
     })
     setUserErrorMsg(null)
@@ -154,7 +157,7 @@ export function UsersRolesManager({
     const method = editingUser ? "PATCH" : "POST"
     const body: any = {
       ...userForm,
-      role: userForm.roleId,
+      roles: userForm.roleIds,
       propertyId: userForm.scope === "PROPERTY" ? userForm.propertyId : null,
     }
     if (editingUser) body.id = editingUser.id
@@ -330,7 +333,12 @@ export function UsersRolesManager({
                   <TableCell className="font-medium px-6">{user.firstName} {user.lastName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <StatusBadge label={user.role.name} tone={getRoleTone(user.role.name)} />
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles.map((ur) => (
+                        <StatusBadge key={ur.role.id} label={ur.role.name} tone={getRoleTone(ur.role.name)} />
+                      ))}
+                      {user.roles.length === 0 && <span className="text-sm text-muted-foreground">No role</span>}
+                    </div>
                   </TableCell>
                   {/* Post, not role — an unset one reads as a dash rather than being
                       guessed from the role, which is exactly the conflation being undone. */}
@@ -462,14 +470,42 @@ export function UsersRolesManager({
               </label>
               <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder={editingUser ? "••••••••" : "Create a secure password"} />
             </div>
+            {/* Roles are MANY per user: access is the union of what each grants, so
+                holding "Cashier" and "Reservations" means both sets of permissions. */}
             <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-1"><Shield className="w-4 h-4 text-primary" /> Role</label>
-              <Select value={userForm.roleId} onValueChange={(v) => setUserForm({ ...userForm, roleId: v ?? "" })}>
-                <SelectTrigger><SelectValue placeholder="Select role">{roles.find((r) => r.id === userForm.roleId)?.name}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}{r.isSystem ? " (System)" : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium flex items-center gap-1"><Shield className="w-4 h-4 text-primary" /> Roles</label>
+              <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
+                {roles.map((r) => {
+                  const on = userForm.roleIds.includes(r.id)
+                  return (
+                    <label key={r.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={on}
+                        onCheckedChange={() =>
+                          setUserForm({
+                            ...userForm,
+                            roleIds: on
+                              ? userForm.roleIds.filter((x) => x !== r.id)
+                              : [...userForm.roleIds, r.id],
+                          })
+                        }
+                        disabled={editingUser?.isProtected}
+                      />
+                      <span>{r.name}{r.isSystem ? " (System)" : ""}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              {editingUser?.isProtected ? (
+                <p className="text-xs text-warning">
+                  This is the onboarding account — its access can&apos;t be changed. It&apos;s what
+                  guarantees someone can always administer this enterprise.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Access is the combination of every role selected.
+                </p>
+              )}
             </div>
             {/* The user's POST, separate from the Role above. Roles decide what the app
                 lets them see; this decides where they show up as assignable staff. */}
@@ -530,7 +566,7 @@ export function UsersRolesManager({
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p className="text-muted-foreground">
                   <strong className="text-foreground">
-                    {roles.find((r) => r.id === userForm.roleId)?.name}
+                    {hubGrantingRoles.map((r) => r.name).join(", ")}
                   </strong>{" "}
                   grants Hub modules, but a user assigned to a single property can never reach
                   the Hub — enterprise-wide credentials aren&apos;t held from one work location.
@@ -546,7 +582,7 @@ export function UsersRolesManager({
             <Button
               className=""
               onClick={handleSaveUser}
-              disabled={savingUser || !userForm.email || !userForm.roleId || (!editingUser && !userForm.password) || !userForm.firstName}
+              disabled={savingUser || !userForm.email || userForm.roleIds.length === 0 || (!editingUser && !userForm.password) || !userForm.firstName}
             >
               {savingUser ? "Saving..." : "Save User"}
             </Button>

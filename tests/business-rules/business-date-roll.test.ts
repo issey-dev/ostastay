@@ -88,7 +88,7 @@ describe("Business-date roll-forward", () => {
         passwordHash: await bcrypt.hash("password123", 10),
         firstName: "Night",
         lastName: "Auditor",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { setRequestTenantContext } from "@/lib/request-context";
 import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 import { MODULES, MODULE_LABELS, HUB_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
+import { mergeRolePermissions } from "@/lib/role-permissions";
+import { findLiveSession, touchSession, revokeSession, isIdleExpired } from "@/lib/session-store";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
 export { MODULES, HUB_MODULES, type Module, type Action };
@@ -43,8 +45,13 @@ export type AuthContext = {
   // enterprise has no ACTIVE property at all.
   sessionPropertyId: string | null;
   propertyId: string | null;
-  roleId: string;
+  // Every role the user holds. Access is the UNION of their grants — see
+  // mergeRolePermissions() in src/lib/role-permissions.ts.
+  roleIds: string[];
   permissions: Map<string, PermissionRow>;
+  // The Session row backing this request, so a handler can name or revoke it.
+  sessionId: string;
+  sessionJti: string;
   isInternal: boolean; // true when the user's home enterprise is Osta (type INTERNAL)
   isActingAsSupport: boolean;
   supportGrantId?: string;
@@ -147,7 +154,7 @@ type RawRolePermission = { module: string; canView: boolean; canCreate: boolean;
 // that this is a no-op for the life of the role. Safe under concurrent requests
 // racing to backfill the same role, since RolePermission's @@unique([roleId, module])
 // plus skipDuplicates makes the insert idempotent.
-async function backfillMissingRolePermissions(
+export async function backfillMissingRolePermissions(
   roleId: string,
   roleName: string,
   isSystem: boolean,
@@ -207,13 +214,22 @@ export async function requireSession(opts?: {
 }): Promise<AuthContext> {
   const session = await getSession();
   const userId = session?.id;
-  if (!userId || typeof userId !== "string") {
+  const jti = typeof session?.jti === "string" ? session.jti : null;
+  if (!userId || typeof userId !== "string" || !jti) {
     throw new UnauthorizedError("Not authenticated");
+  }
+
+  // The token is the credential; this row decides whether it is still honoured. A token
+  // minted before 2026-08-04 has no row and is refused — everyone signed in across that
+  // deploy signs in again, which is the point of being able to revoke at all.
+  const liveSession = await findLiveSession(jti);
+  if (!liveSession || liveSession.userId !== userId) {
+    throw new UnauthorizedError("Session invalid or account disabled");
   }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { role: { include: { permissions: true } } },
+    include: { roles: { include: { role: { include: { permissions: true } } } } },
   });
   if (!user || !user.isActive) {
     throw new UnauthorizedError("Session invalid or account disabled");
@@ -222,19 +238,21 @@ export async function requireSession(opts?: {
   const ostaEnterpriseId = await getOstaEnterpriseId();
   const isInternal = user.enterpriseId === ostaEnterpriseId;
 
-  const rolePermissions = await backfillMissingRolePermissions(
-    user.roleId,
-    user.role.name,
-    user.role.isSystem,
-    user.role.permissions
+  // Backfill each held role, then OR their grants together. A user with no roles gets a
+  // fully-denied map rather than an empty one, so no caller can read "module absent" as
+  // anything but denied.
+  const heldRoles = user.roles.map((ur) => ur.role);
+  const backfilled = await Promise.all(
+    heldRoles.map(async (role) => ({
+      permissions: await backfillMissingRolePermissions(
+        role.id,
+        role.name,
+        role.isSystem,
+        role.permissions
+      ),
+    }))
   );
-
-  const permissions = new Map<string, PermissionRow>(
-    rolePermissions.map((p) => [
-      p.module,
-      { canView: p.canView, canCreate: p.canCreate, canUpdate: p.canUpdate, canDelete: p.canDelete },
-    ])
-  );
+  const permissions = mergeRolePermissions(backfilled);
 
   let enterpriseId = user.enterpriseId;
   let isActingAsSupport = false;
@@ -290,7 +308,7 @@ export async function requireSession(opts?: {
   if (!opts?.allowDuringEodLockout && sessionPropertyId) {
     const prop = await prisma.property.findUnique({
       where: { id: sessionPropertyId },
-      select: { eodSessionsInvalidAt: true },
+      select: { eodSessionsInvalidAt: true, sessionIdleMinutes: true },
     });
     const iatMs = typeof session?.iat === "number" ? session.iat * 1000 : null;
     if (prop?.eodSessionsInvalidAt && iatMs !== null && iatMs < prop.eodSessionsInvalidAt.getTime()) {
@@ -298,7 +316,20 @@ export async function requireSession(opts?: {
         "The End-of-Day business date roll has completed for this property. Please sign in again."
       );
     }
+
+    // Idle timeout. Checked BEFORE the activity stamp below, or every request would
+    // refresh the very clock it is being measured against and no session would ever
+    // time out. Revoked rather than merely refused, so the token cannot be replayed.
+    if (isIdleExpired(liveSession.lastSeenAt, prop?.sessionIdleMinutes ?? 0)) {
+      await revokeSession(jti, "IDLE");
+      throw new EodLockoutError(
+        "You were signed out after a period of inactivity. Please sign in again."
+      );
+    }
   }
+
+  // Bounded activity stamp — at most one write a minute per session.
+  await touchSession(liveSession);
 
   // Every module is licensed for every enterprise since the 2026-07-31 removal of
   // enterprise-level module gating — see ALL_MODULES_LICENSED above.
@@ -316,8 +347,10 @@ export async function requireSession(opts?: {
     scope: user.scope as "ENTERPRISE" | "PROPERTY",
     propertyId: user.propertyId,
     sessionPropertyId,
-    roleId: user.roleId,
+    roleIds: heldRoles.map((r) => r.id),
     permissions,
+    sessionId: liveSession.id,
+    sessionJti: liveSession.jti,
     isInternal,
     isActingAsSupport,
     supportGrantId,

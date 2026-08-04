@@ -126,7 +126,7 @@ describe("Reservation search", () => {
         passwordHash: await bcrypt.hash("password123", 10),
         firstName: "Search",
         lastName: "User",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

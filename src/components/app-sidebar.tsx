@@ -14,14 +14,16 @@ export async function AppSidebar() {
   const [user, enterprise] = await Promise.all([
     prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { firstName: true, lastName: true, email: true, role: { select: { name: true } } },
+      select: { firstName: true, lastName: true, email: true, roles: { select: { role: { select: { name: true } } } } },
     }),
     // ctx.enterpriseId is the EFFECTIVE enterprise (the support-acting-as target when
     // relevant) — links must point there, not the user's own home enterprise.
     prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } }),
   ]);
   const name = user ? `${user.firstName} ${user.lastName}` : "Guest";
-  const roleName = user?.role.name ?? "";
+  // A user may hold several roles; the chrome shows them joined rather than
+  // picking one arbitrarily.
+  const roleName = user?.roles.map((ur) => ur.role.name).join(", ") ?? "";
   const enterprisePrefix = enterprise ? `/e/${enterprise.slug}` : "";
 
   // Modules sold as an add-on (see EnterpriseAddonAccess) need an extra check beyond

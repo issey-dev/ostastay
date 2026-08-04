@@ -32,10 +32,12 @@ const items = [
 export async function OstaSidebar() {
   const ctx = await requireSession().catch(() => null)
   const user = ctx
-    ? await prisma.user.findUnique({ where: { id: ctx.userId }, select: { firstName: true, lastName: true, role: { select: { name: true } } } })
+    ? await prisma.user.findUnique({ where: { id: ctx.userId }, select: { firstName: true, lastName: true, roles: { select: { role: { select: { name: true } } } } } })
     : null
   const name = user ? `${user.firstName} ${user.lastName}` : "Osta"
-  const roleName = user?.role.name ?? ""
+  // A user may hold several roles; the chrome shows them joined rather than
+  // picking one arbitrarily.
+  const roleName = user?.roles.map((ur) => ur.role.name).join(", ") ?? ""
 
   return (
     <Sidebar collapsible="icon">

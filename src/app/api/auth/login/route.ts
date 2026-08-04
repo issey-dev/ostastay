@@ -125,7 +125,16 @@ export async function POST(request: Request) {
     }
 
     recordLoginSuccess(email);
-    await createSession(user.id);
+    // Session metadata for the Hub's active-sessions list. Both headers are
+    // client-controlled and are recorded for recognition only — never for auth.
+    await createSession(user.id, {
+      propertyId: user.propertyId,
+      ipAddress:
+        request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+        request.headers.get("x-real-ip") ||
+        null,
+      userAgent: request.headers.get("user-agent"),
+    });
     await logAuthActivity({
       action: "LOGIN",
       email,

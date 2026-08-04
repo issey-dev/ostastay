@@ -131,7 +131,7 @@ describe("Group block editing & pickup rate choice", () => {
         passwordHash,
         firstName: "Admin",
         lastName: "GE",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

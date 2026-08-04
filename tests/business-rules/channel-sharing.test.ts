@@ -88,7 +88,7 @@ describe("Channel sharing & mapping", () => {
           passwordHash,
           firstName: "Share",
           lastName: "Admin",
-          roleId: roleIds["Admin"],
+          roles: { create: { roleId: roleIds["Admin"] } },
           scope: "ENTERPRISE",
         },
       })
@@ -103,7 +103,7 @@ describe("Channel sharing & mapping", () => {
           passwordHash,
           firstName: "Prop",
           lastName: "Scoped",
-          roleId: roleIds["Admin"],
+          roles: { create: { roleId: roleIds["Admin"] } },
           scope: "PROPERTY",
           propertyId: scopedProp.id,
         },

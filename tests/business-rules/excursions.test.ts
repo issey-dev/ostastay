@@ -112,7 +112,7 @@ describe("Excursions: business rules", () => {
     const ostaAdmin = await prisma.user.create({
       data: {
         enterpriseId: osta.id, email: `excursions-br-osta-${uniq()}@test.local`, passwordHash,
-        firstName: "Osta", lastName: "Admin", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Osta", lastName: "Admin", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     ostaAdminId = ostaAdmin.id;
@@ -155,7 +155,7 @@ describe("Excursions: business rules", () => {
     const admin = await prisma.user.create({
       data: {
         enterpriseId, email: `excursions-br-admin-${uniq()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "BR", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "BR", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminId = admin.id;
@@ -172,7 +172,7 @@ describe("Excursions: business rules", () => {
     const limitedUser = await prisma.user.create({
       data: {
         enterpriseId, email: `excursions-br-limited-${uniq()}@test.local`, passwordHash,
-        firstName: "Limited", lastName: "User", roleId: limitedRole.id, scope: "ENTERPRISE",
+        firstName: "Limited", lastName: "User", roles: { create: { roleId: limitedRole.id } }, scope: "ENTERPRISE",
       },
     });
     limitedUserId = limitedUser.id;
@@ -373,7 +373,7 @@ describe("Excursions: business rules", () => {
     const noDeleteUser = await prisma.user.create({
       data: {
         enterpriseId, email: `excursions-br-nodelete-${uniq()}@test.local`, passwordHash: await bcrypt.hash("password123", 10),
-        firstName: "NoDelete", lastName: "User", roleId: noDeleteRole.id, scope: "ENTERPRISE",
+        firstName: "NoDelete", lastName: "User", roles: { create: { roleId: noDeleteRole.id } }, scope: "ENTERPRISE",
       },
     });
 

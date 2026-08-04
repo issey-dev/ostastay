@@ -37,7 +37,7 @@ export async function POST() {
         passwordHash,
         firstName: "Osta",
         lastName: "Support",
-        roleId: supportRoleIds["Osta Support Admin"],
+        roles: { create: { roleId: supportRoleIds["Osta Support Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -65,7 +65,7 @@ export async function POST() {
         passwordHash,
         firstName: "System",
         lastName: "Admin",
-        roleId: systemRoleIds["Admin"],
+        roles: { create: { roleId: systemRoleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -79,7 +79,7 @@ export async function POST() {
         passwordHash,
         firstName: "Maria",
         lastName: "Maid",
-        roleId: systemRoleIds["Housekeeping"],
+        roles: { create: { roleId: systemRoleIds["Housekeeping"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -93,7 +93,7 @@ export async function POST() {
         passwordHash,
         firstName: "Tom",
         lastName: "Desk",
-        roleId: systemRoleIds["Front Desk"],
+        roles: { create: { roleId: systemRoleIds["Front Desk"] } },
         scope: "ENTERPRISE",
       },
     });

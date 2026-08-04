@@ -46,7 +46,7 @@ describe("Currency exchange — drawer balancing, validation, shift scope (A3/A4
     const property = await prisma.property.create({ data: { enterpriseId: enterprise.id, name: "FX Prop", code: `FX-${uniq()}`, legalName: "FX LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: new Date(Date.UTC(2026, 5, 1)) } });
     propertyId = property.id;
     const passwordHash = await bcrypt.hash("password123", 10);
-    const user = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `fx-${uniq()}@test.local`, passwordHash, firstName: "Cash", lastName: "Ier", roleId: eRoles["Admin"] ?? roleIds["Admin"], scope: "PROPERTY", propertyId } });
+    const user = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `fx-${uniq()}@test.local`, passwordHash, firstName: "Cash", lastName: "Ier", roles: { create: { roleId: eRoles["Admin"] ?? roleIds["Admin"] } }, scope: "PROPERTY", propertyId } });
     userId = user.id;
   });
 

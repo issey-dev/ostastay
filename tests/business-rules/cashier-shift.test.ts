@@ -54,7 +54,7 @@ describe("Cashier shift: per-user/property, auto-open, charge attribution", () =
     fbCodeId = (await customChargeCode(enterpriseId, { code: `FB-${uniq()}`, description: "Food", subgroupCode: "20RV" })).id;
     cashMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } })).id;
     const passwordHash = await bcrypt.hash("password123", 10);
-    const user = await prisma.user.create({ data: { enterpriseId, email: `cs-${uniq()}@test.local`, passwordHash, firstName: "Front", lastName: "Desk", roleId: roleIds["Front Desk"] ?? roleIds["Admin"], scope: "PROPERTY", propertyId } });
+    const user = await prisma.user.create({ data: { enterpriseId, email: `cs-${uniq()}@test.local`, passwordHash, firstName: "Front", lastName: "Desk", roles: { create: { roleId: roleIds["Front Desk"] ?? roleIds["Admin"] } }, scope: "PROPERTY", propertyId } });
     userId = user.id;
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "In", lastName: "House" } });
     const res = await prisma.reservation.create({
@@ -98,7 +98,7 @@ describe("Cashier shift: per-user/property, auto-open, charge attribution", () =
     // Fresh user so no shift exists yet, then race two opens.
     const passwordHash = await bcrypt.hash("password123", 10);
     const roleIds2 = await ensureRoles(prisma, enterpriseId, SYSTEM_ROLE_DEFS, true);
-    const racer = await prisma.user.create({ data: { enterpriseId, email: `cs-race-${uniq()}@test.local`, passwordHash, firstName: "Race", lastName: "Er", roleId: roleIds2["Front Desk"] ?? roleIds2["Admin"], scope: "PROPERTY", propertyId } });
+    const racer = await prisma.user.create({ data: { enterpriseId, email: `cs-race-${uniq()}@test.local`, passwordHash, firstName: "Race", lastName: "Er", roles: { create: { roleId: roleIds2["Front Desk"] ?? roleIds2["Admin"] } }, scope: "PROPERTY", propertyId } });
 
     await Promise.all([
       asUser(racer.id, propertyId, () => ensureRoute.POST()),

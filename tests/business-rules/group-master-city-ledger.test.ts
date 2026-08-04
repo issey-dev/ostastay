@@ -53,7 +53,7 @@ describe("Group block City-Ledger master bill → debtor invoice", () => {
     const admin = await prisma.user.create({
       data: {
         enterpriseId: enterprise.id, email: `gml-${uniq()}@test.local`, passwordHash: await bcrypt.hash("password123", 10),
-        firstName: "Admin", lastName: "GML", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "GML", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminId = admin.id;

@@ -44,7 +44,7 @@ async function setup(adults = 2) {
     },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
-  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `ereg-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "E", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `ereg-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "E", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
   return { enterpriseId: enterprise.id, propertyId: property.id, reservationId: reservation.id, primaryGuestId: guest.upid, adminId: admin.id };
 }
 

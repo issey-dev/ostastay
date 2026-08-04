@@ -109,7 +109,7 @@ describe("Allocations: tenant isolation", () => {
       await prisma.user.create({
         data: {
           enterpriseId: enterpriseA.id, email: `alloc-admin-a-${uniq()}@test.local`, passwordHash,
-          firstName: "Admin", lastName: "A", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+          firstName: "Admin", lastName: "A", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
         },
       })
     ).id;
@@ -117,7 +117,7 @@ describe("Allocations: tenant isolation", () => {
       await prisma.user.create({
         data: {
           enterpriseId: enterpriseB.id, email: `alloc-admin-b-${uniq()}@test.local`, passwordHash,
-          firstName: "Admin", lastName: "B", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+          firstName: "Admin", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
         },
       })
     ).id;

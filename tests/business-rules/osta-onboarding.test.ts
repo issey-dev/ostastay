@@ -54,7 +54,7 @@ describe("Osta-side onboarding", () => {
         passwordHash,
         firstName: "Osta",
         lastName: "Onboarder",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -75,7 +75,7 @@ describe("Osta-side onboarding", () => {
         passwordHash,
         firstName: "Tenant",
         lastName: "Admin",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -170,11 +170,17 @@ describe("Osta-side onboarding", () => {
     // 12 base64url characters — meets the bootstrap script's own minimum length.
     expect(body.password).toMatch(/^[A-Za-z0-9_-]{12}$/);
 
-    const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { role: true } });
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email },
+      include: { roles: { include: { role: true } } },
+    });
     expect(user.enterpriseId).toBe(fresh.id);
     expect(user.scope).toBe("ENTERPRISE");
-    expect(user.role.name).toBe("Admin");
-    expect(user.role.isSystem).toBe(true);
+    expect(user.roles).toHaveLength(1);
+    expect(user.roles[0].role.name).toBe("Admin");
+    expect(user.roles[0].role.isSystem).toBe(true);
+    // Protected: this is the account that stops a tenant locking itself out of the Hub.
+    expect(user.isProtected).toBe(true);
     // Show-once means hash-at-rest: the credential works, but the row never carries it.
     expect(await bcrypt.compare(body.password, user.passwordHash)).toBe(true);
     expect(JSON.stringify(user)).not.toContain(body.password);

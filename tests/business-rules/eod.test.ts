@@ -58,9 +58,9 @@ describe("End-of-Day wizard: steps, gating, idempotency", () => {
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
     await customChargeCode(enterpriseId, { code: "1000", description: "Room Revenue" });
     const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({ data: { enterpriseId, email: `ew-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EW", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+    const admin = await prisma.user.create({ data: { enterpriseId, email: `ew-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "EW", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;
-    const cashier = await prisma.user.create({ data: { enterpriseId, email: `ew-cash-${uniq()}@test.local`, passwordHash, firstName: "Cash", lastName: "EW", roleId: roleIds["Cashier"], scope: "PROPERTY", propertyId } });
+    const cashier = await prisma.user.create({ data: { enterpriseId, email: `ew-cash-${uniq()}@test.local`, passwordHash, firstName: "Cash", lastName: "EW", roles: { create: { roleId: roleIds["Cashier"] } }, scope: "PROPERTY", propertyId } });
     cashierUserId = cashier.id;
     await prisma.cashierShift.create({ data: { enterpriseId, userId: cashier.id, propertyId, businessDate: BIZ, openingFloat: 300 } });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Eod", lastName: "Guest" } });

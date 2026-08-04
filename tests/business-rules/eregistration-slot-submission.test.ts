@@ -46,7 +46,7 @@ async function setup(adults = 2) {
     },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
-  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `ereg2-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "E", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+  const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `ereg2-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "E", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
 
   const genRes = await asUser(admin.id, () => linkRoute.POST(new Request(`http://localhost/api/reservations/${reservation.id}/eregistration-link`, { method: "POST" }), { params: Promise.resolve({ id: reservation.id }) }));
   const { token } = await genRes.json();

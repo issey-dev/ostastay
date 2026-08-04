@@ -308,7 +308,7 @@ export async function seedDemoData(
         passwordHash,
         firstName: u.firstName,
         lastName: u.lastName,
-        roleId: adminRoleId,
+        roles: { create: { roleId: adminRoleId } },
         scope: "PROPERTY",
         propertyId: u.propertyId,
       },

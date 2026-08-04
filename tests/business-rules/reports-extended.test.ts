@@ -64,7 +64,7 @@ describe("Reporting engine — Revenue / Financial / Housekeeping", () => {
     await prisma.payment.create({ data: { folioId, paymentMethodId: method.id, shiftId: shift.id, amount: 151 } });
 
     // Housekeeping: an attendant with a completed task that took 30 minutes.
-    const attUser = await prisma.user.create({ data: { enterpriseId, email: `att-${uniq()}@test.local`, passwordHash: "x", firstName: "Clara", lastName: "Clean", roleId: roleIds["Housekeeping"] ?? roleIds["Admin"], scope: "PROPERTY", propertyId } });
+    const attUser = await prisma.user.create({ data: { enterpriseId, email: `att-${uniq()}@test.local`, passwordHash: "x", firstName: "Clara", lastName: "Clean", roles: { create: { roleId: roleIds["Housekeeping"] ?? roleIds["Admin"] } }, scope: "PROPERTY", propertyId } });
     const attendantRec = await prisma.roomAttendant.create({ data: { enterpriseId, userId: attUser.id } });
     await prisma.housekeepingTask.create({ data: { roomId: room.id, taskType: "CHECKOUT", status: "COMPLETED", assignedToId: attendantRec.id, scheduledDate: BIZ, startedAt: D(2026, 7, 10, 9, 0), completedAt: D(2026, 7, 10, 9, 30) } });
   });

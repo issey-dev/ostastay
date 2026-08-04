@@ -76,7 +76,7 @@ describe("End-of-Day force logout is keyed on the session's working property", (
       prisma.user.create({
         data: {
           enterpriseId, email, passwordHash, firstName: "EOD", lastName: "User",
-          roleId: roleIds["Admin"], scope, propertyId,
+          roles: { create: { roleId: roleIds["Admin"] } }, scope, propertyId,
         },
       });
 

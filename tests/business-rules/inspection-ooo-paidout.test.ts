@@ -127,7 +127,7 @@ describe("Inspection gate, out-of-order lifecycle, paid-outs", () => {
         passwordHash,
         firstName: "Admin",
         lastName: "IG",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

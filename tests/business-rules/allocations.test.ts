@@ -158,7 +158,7 @@ async function setupWithAllocation(opts: {
   const admin = await prisma.user.create({
     data: {
       enterpriseId: enterprise.id, email: `al-admin-${uniq()}@test.local`,
-      passwordHash, firstName: "Admin", lastName: "AL", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+      passwordHash, firstName: "Admin", lastName: "AL", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
     },
   });
 

@@ -75,7 +75,7 @@ describe("Beds24 rate-limit handling", () => {
           passwordHash,
           firstName: "Rate",
           lastName: "Admin",
-          roleId: roleIds["Admin"],
+          roles: { create: { roleId: roleIds["Admin"] } },
           scope: "ENTERPRISE",
         },
       })

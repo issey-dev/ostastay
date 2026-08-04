@@ -90,7 +90,7 @@ describe("Osta platform channel administration", () => {
         passwordHash,
         firstName: "Osta",
         lastName: "Chan",
-        roleId: ostaRoleIds["Admin"],
+        roles: { create: { roleId: ostaRoleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -115,7 +115,7 @@ describe("Osta platform channel administration", () => {
           passwordHash,
           firstName: "Tenant",
           lastName: label,
-          roleId: roleIds["Admin"],
+          roles: { create: { roleId: roleIds["Admin"] } },
           scope: "ENTERPRISE",
         },
       });

@@ -79,7 +79,7 @@ describe("Hub access (enterprise level)", () => {
         passwordHash,
         firstName: "Hub",
         lastName: "Admin",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -105,7 +105,7 @@ describe("Hub access (enterprise level)", () => {
         passwordHash,
         firstName: "Hub",
         lastName: "Only",
-        roleId: hubOnlyRole.id,
+        roles: { create: { roleId: hubOnlyRole.id } },
         scope: "ENTERPRISE",
       },
     });
@@ -130,7 +130,7 @@ describe("Hub access (enterprise level)", () => {
         passwordHash,
         firstName: "Property",
         lastName: "Hub",
-        roleId: propertyHubRole.id,
+        roles: { create: { roleId: propertyHubRole.id } },
         scope: "PROPERTY",
         propertyId,
       },
@@ -191,7 +191,7 @@ describe("Hub access (enterprise level)", () => {
         passwordHash,
         firstName: "No",
         lastName: "Hub",
-        roleId: noHubRole.id,
+        roles: { create: { roleId: noHubRole.id } },
         scope: "ENTERPRISE",
       },
     });

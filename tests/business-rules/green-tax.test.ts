@@ -151,7 +151,7 @@ async function setupCheckedInReservation(opts: {
   const admin = await prisma.user.create({
     data: {
       enterpriseId: enterprise.id, email: `gt-admin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.local`,
-      passwordHash, firstName: "Admin", lastName: "GT", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+      passwordHash, firstName: "Admin", lastName: "GT", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
     },
   });
 

@@ -86,7 +86,7 @@ async function main() {
       passwordHash,
       firstName,
       lastName,
-      roleId: adminRoleId,
+      roles: { create: { roleId: adminRoleId } },
       scope: "ENTERPRISE",
     },
   });

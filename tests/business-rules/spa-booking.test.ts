@@ -146,7 +146,7 @@ describe("Spa booking: business rules", () => {
     const ostaAdmin = await prisma.user.create({
       data: {
         enterpriseId: osta.id, email: `spa-br-osta-${uniq()}@test.local`, passwordHash,
-        firstName: "Osta", lastName: "Admin", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Osta", lastName: "Admin", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     ostaAdminId = ostaAdmin.id;
@@ -189,7 +189,7 @@ describe("Spa booking: business rules", () => {
     const admin = await prisma.user.create({
       data: {
         enterpriseId, email: `spa-br-admin-${uniq()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "BR", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "BR", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminId = admin.id;

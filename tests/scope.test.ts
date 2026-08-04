@@ -91,7 +91,7 @@ describe("src/lib/scope.ts", () => {
         passwordHash,
         firstName: "Admin",
         lastName: "A",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -104,7 +104,7 @@ describe("src/lib/scope.ts", () => {
         passwordHash,
         firstName: "Front",
         lastName: "Desk",
-        roleId: roleIds["Front Desk"],
+        roles: { create: { roleId: roleIds["Front Desk"] } },
         scope: "PROPERTY",
         propertyId: propertyAId,
       },
@@ -118,7 +118,7 @@ describe("src/lib/scope.ts", () => {
         passwordHash,
         firstName: "Osta",
         lastName: "Support",
-        roleId: supportRoleIds["Osta Support Admin"],
+        roles: { create: { roleId: supportRoleIds["Osta Support Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -259,7 +259,7 @@ describe("src/lib/scope.ts", () => {
         passwordHash,
         firstName: "Legacy",
         lastName: "Admin",
-        roleId: legacyAdminRole.id,
+        roles: { create: { roleId: legacyAdminRole.id } },
         scope: "ENTERPRISE",
       },
     });
@@ -306,7 +306,7 @@ describe("src/lib/scope.ts", () => {
         passwordHash,
         firstName: "Custom",
         lastName: "Role",
-        roleId: customRole.id,
+        roles: { create: { roleId: customRole.id } },
         scope: "ENTERPRISE",
       },
     });

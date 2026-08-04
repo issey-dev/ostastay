@@ -84,7 +84,7 @@ describe("Folio posting rules: check-in gate, negatives, description/reference",
     const pm = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
     paymentMethodId = pm.id;
     const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({ data: { enterpriseId, email: `fp-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "FP", roleId: roleIds["Admin"], scope: "ENTERPRISE" } });
+    const admin = await prisma.user.create({ data: { enterpriseId, email: `fp-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "FP", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Folio", lastName: "Post" } });
     guestId = guest.upid;

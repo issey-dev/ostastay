@@ -67,6 +67,13 @@ export async function PUT(
         requireInspectionOnCheckIn: body.requireInspectionOnCheckIn !== undefined ? !!body.requireInspectionOnCheckIn : undefined,
         allocationCalculationMode: body.allocationCalculationMode,
         eodHousekeepingMode: body.eodHousekeepingMode,
+        // Idle timeout for this property's sessions. 0 disables it. The floor is 5
+        // minutes: lastSeenAt is stamped at most once a minute (TOUCH_INTERVAL_MS), so
+        // anything tighter would sign people out unpredictably rather than promptly.
+        sessionIdleMinutes:
+          body.sessionIdleMinutes !== undefined
+            ? Math.max(0, Number(body.sessionIdleMinutes) === 0 ? 0 : Math.max(5, Math.floor(Number(body.sessionIdleMinutes) || 0)))
+            : undefined,
         // Clear the target unless we're in SET_STATUS mode, so a stale target can't
         // linger after switching to OFF/STEP_DOWN.
         eodHousekeepingTargetStatus:

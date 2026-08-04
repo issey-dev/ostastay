@@ -124,7 +124,7 @@ describe("Reservation API: segment contiguity, scheduled room move, accompanying
         enterpriseId: enterprise.id,
         email: `seg-admin-${uniq()}@test.local`,
         passwordHash, firstName: "Admin", lastName: "Seg",
-        roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminId = admin.id;

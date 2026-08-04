@@ -125,7 +125,7 @@ describe("Housekeeping lifecycle coupling", () => {
         passwordHash,
         firstName: "Admin",
         lastName: "HK",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });

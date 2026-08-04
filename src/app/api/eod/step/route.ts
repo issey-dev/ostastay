@@ -7,6 +7,7 @@ import { startEodRun, completeEodStep, isStepDone, stepStates, nextEodStep, type
 import { assignRegistrationNumbers } from "@/lib/guest-registration";
 import { snapshotEodReports } from "@/lib/eod-reports";
 import { logActivity } from "@/lib/activity-log";
+import { purgeExpiredSessions } from "@/lib/session-store";
 import * as nightAuditRunRoute from "@/app/api/night-audit/run/route";
 
 // Advance one EOD step for a property. Steps run in order; each is idempotent —
@@ -125,6 +126,10 @@ export async function POST(request: Request) {
           where: { id: propertyId },
           data: { eodSessionsInvalidAt: new Date() },
         });
+        // Housekeeping for the session table: rows past their expiry can never be
+        // honoured again, so they are only noise in the Hub's session list. EOD is the
+        // natural host — it already runs once per property per day.
+        await purgeExpiredSessions();
         await completeEodStep(run.id, "finalize");
         await prisma.eodRun.update({ where: { id: run.id }, data: { status: "COMPLETED", completedAt: new Date() } });
         await logActivity({

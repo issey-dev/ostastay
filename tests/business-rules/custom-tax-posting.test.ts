@@ -105,7 +105,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
     const admin = await prisma.user.create({
       data: {
         enterpriseId: enterprise.id, email: `ct-admin-${Date.now()}@test.local`, passwordHash,
-        firstName: "Admin", lastName: "CT", roleId: roleIds["Admin"], scope: "ENTERPRISE",
+        firstName: "Admin", lastName: "CT", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE",
       },
     });
     adminId = admin.id;

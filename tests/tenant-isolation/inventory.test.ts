@@ -108,7 +108,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         passwordHash,
         firstName: "Admin",
         lastName: "A",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -121,7 +121,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         passwordHash,
         firstName: "Admin",
         lastName: "B",
-        roleId: roleIds["Admin"],
+        roles: { create: { roleId: roleIds["Admin"] } },
         scope: "ENTERPRISE",
       },
     });
@@ -134,7 +134,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         passwordHash,
         firstName: "Front",
         lastName: "Desk",
-        roleId: roleIds["Front Desk"],
+        roles: { create: { roleId: roleIds["Front Desk"] } },
         scope: "PROPERTY",
         propertyId: propertyAId,
       },
