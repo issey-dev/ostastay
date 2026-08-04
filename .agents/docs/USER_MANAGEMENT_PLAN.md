@@ -1,6 +1,6 @@
 # User Management, Roles & Sessions — plan
 
-> Status: **Phases 0-4 shipped 2026-08-04; Phase 5 (matrix report) remains.** Owner decisions taken 2026-08-04 (see the Decisions
+> Status: **COMPLETE — all phases shipped 2026-08-04.** Owner decisions taken 2026-08-04 (see the Decisions
 > table). Read [MASTER_PLAN.md](MASTER_PLAN.md) for the RBAC foundation this builds on
 > and [DECISIONS.md](DECISIONS.md) for the business rules.
 
@@ -200,7 +200,7 @@ since that is where user CRUD still is.
 
 ---
 
-## Phase 5 — Permission matrix report
+## Phase 5 — Permission matrix report — **DONE (2026-08-04)**
 
 Roles down, modules across, CRUD ticks per cell, rendered through the print stationery
 components. Add a users-per-role appendix so it answers "who actually has this" rather than
@@ -292,3 +292,26 @@ view, and returns enterprise-wide staff plus the caller's own property. Administ
 stays on `/api/settings/users`, now gated on `USERS` — which no property-scoped user can
 hold. Without this split, moving user management to the Hub would have broken room
 assignment outright.
+
+
+---
+
+## What shipped in Phase 5 (2026-08-04)
+
+- `GET /api/hub/permission-matrix-data` — every role reachable in the enterprise (its own
+  plus Osta's shared system roles, the same union the assignment picker uses, so the
+  report can't disagree with the UI), each role's grants across all modules, and its
+  active holders. Holders are filtered to the caller's enterprise: a shared Osta system
+  role is held across tenants, and one tenant's report must never name another's staff.
+- `hub/permission-matrix` — printable via the shared stationery components, opened from a
+  button on the People screen.
+
+**Laid out as the TRANSPOSE of what this plan first sketched.** The plan said "roles down,
+modules across"; there are 20 modules and rarely more than a handful of roles, so that way
+round is 20 columns on A4 portrait and unreadable. Modules run down and roles across, each
+cell showing `V C U D` — bold when granted, faint when not — so a role reads as a vertical
+stripe and a gap is obvious.
+
+The "who holds each role" appendix is what makes it an audit rather than a specification.
+It also carries the multi-role caveat in print: a person's effective access is the
+combination of every role they hold, so a single row never tells the whole story.

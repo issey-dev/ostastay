@@ -47,6 +47,10 @@ const PRINT_DOCUMENT_FILES = [
   "src/app/e/[slug]/dashboard/reservations/[id]/confirmation-letter/page.tsx",
   "src/app/e/[slug]/dashboard/reservations/[id]/registration-card/page.tsx",
   "src/app/e/[slug]/dashboard/debtors/[profileId]/statement/page.tsx",
+  // The Hub's printable Permission Matrix — same palette-fixed "paper" rationale, and it
+  // renders the shared stationery blocks above, so tokenizing it would make it the only
+  // document that doesn't match the others.
+  "src/app/e/[slug]/hub/permission-matrix/page.tsx",
 ];
 
 function isClassNameAttribute(node) {

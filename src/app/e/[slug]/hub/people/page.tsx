@@ -1,6 +1,8 @@
 import { requireSession, requireHubAccess, requirePermission } from "@/lib/scope"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { InfoHint } from "@/components/ui/info-hint"
+import { Button } from "@/components/ui/button"
+import { FileText } from "@/components/icons"
 
 // People — staff administration, moved out of Controls on 2026-08-04.
 //
@@ -11,7 +13,8 @@ import { InfoHint } from "@/components/ui/info-hint"
 //
 // The operational "list people I can assign work to" lookup deliberately does NOT live
 // behind this gate; see /api/staff.
-export default async function HubPeoplePage() {
+export default async function HubPeoplePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const ctx = await requireSession()
   // Re-asserted here rather than relying on the layout, so the page is honest on its own.
   requireHubAccess(ctx)
@@ -31,6 +34,12 @@ export default async function HubPeoplePage() {
         <p className="mt-1 text-muted-foreground">
           Staff accounts, roles and work locations across the enterprise.
         </p>
+      </div>
+
+      <div>
+        <Button variant="outline" render={<a href={`/e/${slug}/hub/permission-matrix`} target="_blank" rel="noreferrer" />}>
+          <FileText className="mr-2 h-4 w-4" /> Permission matrix report
+        </Button>
       </div>
 
       {/* Enterprise-scoped by definition — a property-scoped user can't reach the Hub, so
