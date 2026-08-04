@@ -88,5 +88,112 @@ export function chargeCodeOptions(
   }))
 }
 
+// ── Two-level tree for the grouped routing picker ────────────────────────────
+// The flat chip list the Routing modal used could not show what a code WAS, and
+// stopped scaling past a dozen codes. The redesign (2026-08-03) is a grouped
+// checklist, which needs the chart's own shape: ChargeGroup → ChargeSubgroup → code.
+//
+// A pure function so it can be unit-tested without a database, and so the picker
+// component stays about interaction rather than data shaping.
+
+export type ChargeCodeSubgroupNode<T> = {
+  /** Stable key for React and for tracking collapse/selection state. */
+  key: string
+  name: string
+  codes: T[]
+}
+
+export type ChargeCodeGroupNode<T> = {
+  key: string
+  name: string
+  subgroups: ChargeCodeSubgroupNode<T>[]
+  /** Every code in the group, flattened — for group-level counts and toggles. */
+  codes: T[]
+}
+
+const UNCLASSIFIED = "Unclassified"
+
+/**
+ * Bucket codes into Group → Subgroup, preserving the chart's own ordering.
+ *
+ * Codes with no subgroup (or no group) collect under "Unclassified" rather than being
+ * dropped: a picker that silently omits a code is worse than one that shows it in an
+ * obvious catch-all, because the operator cannot tell the difference between "not
+ * routable" and "missing".
+ */
+export function groupChargeCodesByHierarchy<T extends ChargeCodeLike>(
+  codes: T[]
+): ChargeCodeGroupNode<T>[] {
+  const groups = new Map<string, ChargeCodeGroupNode<T>>()
+
+  for (const c of [...codes].sort(compareByHierarchy)) {
+    const groupName = c.chargeSubgroup?.chargeGroup?.name ?? UNCLASSIFIED
+    const subName = c.chargeSubgroup?.name ?? UNCLASSIFIED
+
+    let group = groups.get(groupName)
+    if (!group) {
+      group = { key: groupName, name: groupName, subgroups: [], codes: [] }
+      groups.set(groupName, group)
+    }
+    group.codes.push(c)
+
+    let sub = group.subgroups.find((s) => s.name === subName)
+    if (!sub) {
+      sub = { key: `${groupName}::${subName}`, name: subName, codes: [] }
+      group.subgroups.push(sub)
+    }
+    sub.codes.push(c)
+  }
+
+  return [...groups.values()]
+}
+
+/** ✓ all / − some / empty none — the tri-state a group or subgroup header shows. */
+export type TriState = "all" | "some" | "none"
+
+export function triStateOf(codeIds: string[], selected: Set<string>): TriState {
+  if (codeIds.length === 0) return "none"
+  let hits = 0
+  for (const id of codeIds) if (selected.has(id)) hits++
+  return hits === 0 ? "none" : hits === codeIds.length ? "all" : "some"
+}
+
+/**
+ * Compact description of a selection for the modal footer — the design's tray.
+ * Names whole groups where every code is selected, then individual codes, and
+ * collapses to a bare count past `max` entries so the footer never wraps.
+ */
+export function describeSelection<T extends ChargeCodeLike>(
+  groups: ChargeCodeGroupNode<T>[],
+  selected: Set<string>,
+  max = 3
+): string {
+  const parts: string[] = []
+  const claimed = new Set<string>()
+
+  for (const g of groups) {
+    if (g.codes.length > 0 && triStateOf(g.codes.map((c) => c.id), selected) === "all") {
+      parts.push(`${g.name} (all)`)
+      for (const c of g.codes) claimed.add(c.id)
+    }
+  }
+  for (const g of groups) {
+    for (const c of g.codes) {
+      if (selected.has(c.id) && !claimed.has(c.id)) parts.push(c.code)
+    }
+  }
+
+  if (parts.length === 0) return ""
+  if (parts.length > max) return `${parts.slice(0, max).join(", ")} +${parts.length - max} more`
+  return parts.join(", ")
+}
+
+/** Does this code match a free-text query on its code or description? */
+export function chargeCodeMatches(c: ChargeCodeLike, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return c.code.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
+}
+
 /** Whether this code may carry tax — re-exported so pickers don't import two modules. */
 export { canGenerateTax }
