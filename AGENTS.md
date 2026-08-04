@@ -23,6 +23,12 @@ read `.agents/docs/`:
   rate plans/meal plans/reservations, posted at Night Audit). Read before touching
   Revenue, Meal Plans, or Night Audit posting.
 
+- [`.agents/docs/USER_MANAGEMENT_PLAN.md`](.agents/docs/USER_MANAGEMENT_PLAN.md) — the
+  planned move of user management to the Hub: multi-role via a join table, a real Session
+  table (there is none today — sessions are stateless JWTs), idle timeout, and a job-function
+  tag replacing today's role-NAME matching. Read before touching users, roles, `scope.ts`
+  or anything that assumes `User.roleId`.
+
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
 it plus a status correction (its own header is stale — treat it as partially-to-mostly

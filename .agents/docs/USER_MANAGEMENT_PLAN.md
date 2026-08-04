@@ -1,0 +1,209 @@
+# User Management, Roles & Sessions — plan
+
+> Status: **planned, not started**. Owner decisions taken 2026-08-04 (see the Decisions
+> table). Read [MASTER_PLAN.md](MASTER_PLAN.md) for the RBAC foundation this builds on
+> and [DECISIONS.md](DECISIONS.md) for the business rules.
+
+## Why
+
+Four problems, one of which is a live bug:
+
+1. **No session management exists at all.** Sessions are stateless JWTs — `{ id: userId }`,
+   24h, in an `auth_token` cookie ([src/lib/auth.ts](../../src/lib/auth.ts)). There is no
+   `Session` table, no `jti`, no denylist. Nobody can see who is signed in, and the only
+   ways to end someone else's session are indirect: deactivate the account, revoke the
+   license, or the property-wide EOD watermark (`Property.eodSessionsInvalidAt`).
+2. **A user has exactly one role.** `User.roleId` is a required scalar, so access can't be
+   composed from overlapping grants.
+3. **Job function is inferred from the role NAME string.** `u.role?.name === "Housekeeping"`
+   in `dashboard/housekeeping/page.tsx`, `housekeeping/task-sheet/page.tsx` and
+   `dashboard/maintenance/page.tsx`. This already conflates "what may you see" with "what
+   is your post", and it breaks outright the moment a user has two roles — which is why
+   the job tag is a prerequisite for multi-role, not a nice-to-have.
+4. **User management sits in Controls**, which is property-facing, while the thing it
+   governs (identity) is enterprise-wide.
+
+## Decisions
+
+| # | Decision | Consequence |
+|---|---|---|
+| 1 | User management moves to the **Hub**; the Hub's existing `scope === "PROPERTY"` block **stays** | Only ENTERPRISE-scoped users manage staff. A single-property GM cannot add users. |
+| 2 | **Session table** with a `jti` the JWT references, plus a `lastSeenAt` stamped at most once a minute | True "active now", real uptime, instant remote termination. Costs one indexed read per request. |
+| 3 | Session timeout is an **idle timeout**, per property | Needs `lastSeenAt`; enforced server-side in `requireSession`, warned client-side. |
+| 4 | Multi-role via a **`UserRole` join table**; `User.roleId` is dropped | Permissions become the OR of every assigned role's CRUD bits. |
+| 5 | Job function is a **tenant-defined `JOB_FUNCTION` system code, one per user** | Reuses the existing system-code editor. Replaces role-name matching. |
+| 6 | **Work location stays one property per user** | No change to the scope model. |
+| 7 | Permission matrix report renders as **print stationery** | Consistent with folios and reg cards. |
+| 8 | **`RoomAttendant` is dropped**; `HousekeepingTask.assignedToId` repoints at `User` | One answer to "who is this assigned to". |
+| 9 | The **onboarding user is protected**: undeletable, always active, always full-access, always ENTERPRISE scope | Guarantees a tenant can never lock itself out of its own Hub. |
+
+### Why decision 9 locks scope, not just the role
+
+Decision 1 means only ENTERPRISE-scoped users reach the Hub, and decision 4 lets roles be
+edited freely. Without a protected account, an admin can remove their own last full-access
+role, or switch themselves to PROPERTY scope, and **no one can undo it from inside the
+tenant** — it becomes an Osta support ticket every time. The protected user is the floor
+that makes the rest of the model safe to hand to a tenant.
+
+---
+
+## Phase 0 — Schema
+
+One migration, additive except where noted.
+
+```prisma
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Matches the JWT's jti. The token is still the credential; this row decides whether
+  // it is still honoured.
+  jti          String   @unique
+  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokedByUserId String?
+  // Captured at login for the "whose session is this" column. Never used for auth.
+  ipAddress    String?
+  userAgent    String?
+  // The property in play when the session was minted — lets the list group by location
+  // and the idle timeout resolve which property's setting applies.
+  propertyId   String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model User {
+  // roleId / role REMOVED — see the backfill below
+  roles         UserRole[]
+  sessions      Session[]
+  // JOB_FUNCTION system code. Nullable: a manager needn't have a post.
+  jobFunction   String?
+  // The onboarding account. Exactly one per enterprise; enforced in application code
+  // (a partial unique index is Postgres-specific and this is cheap to assert).
+  isProtected   Boolean @default(false)
+}
+
+model Property {
+  // 0 = disabled. Minutes of inactivity before a session is dropped.
+  sessionIdleMinutes Int @default(0)
+}
+```
+
+**Backfill, in the same migration:** insert one `UserRole` per existing `User.roleId`
+before dropping the column, and set `isProtected = true` on each enterprise's oldest
+ENTERPRISE-scoped user holding a full-access role. Both are plain SQL — no data is
+inferred or guessed.
+
+`RoomAttendant` is dropped and `HousekeepingTask.assignedToId` is repointed at `User`.
+Any existing task rows must be remapped via `RoomAttendant.userId` first; if the table is
+empty (it has no `src/` references, so it very likely is), the migration is a no-op and
+should still assert that rather than assume.
+
+---
+
+## Phase 1 — Multi-role
+
+The research flagged 11 call sites that assume one role. In order:
+
+- `requireSession` ([scope.ts](../../src/lib/scope.ts)) — build the permission map by
+  OR-ing every assigned role's CRUD bits. **This is the security-critical change**: a bug
+  here either over-grants or locks everyone out, so it is the one piece that gets its own
+  tests before anything else is written.
+- `backfillMissingRolePermissions` — currently keyed off one role's name/`isSystem`. Runs
+  per role instead.
+- `AuthContext.roleId` → `roleIds: string[]`.
+- `/api/settings/users` POST/PATCH — accept `roleIds[]`; `resolveRoleId` becomes plural.
+- `/api/roles/[id]` DELETE — the "role still has users" guard reads the join table.
+- Controls role matrix + the user dialog's single `<Select>` → multi-select.
+
+**Test first, then migrate.** A pure `mergeRolePermissions(roles[])` in a testable module,
+covering: union of disjoint grants (the owner's Role 1 + Role 2 example), overlapping
+grants, one role granting nothing, a module absent from every role, and — the case worth
+pinning explicitly — that a role granting `view` never silently confers `delete`.
+
+---
+
+## Phase 2 — Sessions
+
+- `createSession` mints a `jti`, writes the `Session` row, and puts the `jti` in the JWT.
+- `requireSession` loads the session by `jti`: reject if missing, revoked, or expired.
+  Stamp `lastSeenAt` when it is older than 60s — a bounded write, not one per request.
+- `destroySession` (logout) sets `revokedAt`.
+- Idle timeout: if `sessionIdleMinutes > 0` and `now - lastSeenAt` exceeds it, revoke and
+  throw the same shape as `EodLockoutError` so the existing client watcher can render it.
+- A sweeper deletes rows past `expiresAt` (Night Audit is the natural host — it already
+  runs per property, per day).
+
+**Interaction with EOD force-logout:** `Property.eodSessionsInvalidAt` compares against the
+JWT's `iat` and still works unchanged. Once sessions are rows, EOD could revoke them
+directly instead — cleaner, but it is a behaviour change to a working safety mechanism, so
+it stays as-is in this phase and is noted as a follow-up.
+
+---
+
+## Phase 3 — Hub move
+
+- New `USERS` module in `MODULES` (and its hand-synced twin in
+  [prisma/rbac-seed-data.ts](../../prisma/rbac-seed-data.ts) — the two lists already drift;
+  this plan does not fix that, but every edit must touch both).
+- Added to `HUB_MODULES`. Admin and Manager get it in `SYSTEM_ROLE_DEFS`; nobody else.
+- Hub pages: **People** (roster CRUD, roles, work location, job function), **Sessions**
+  (active list, uptime, terminate), **Permission Matrix** (report).
+- Controls' "Users & Roles" tab is replaced by a single **Session Timeout** control per
+  property.
+
+**The consequence that needs handling, not just noting:** property-scoped users lose all
+user management — but the housekeeping and maintenance boards still need to *list* people
+to assign work. So `GET /api/settings/users` must survive as an assignment lookup, gated on
+`HOUSEKEEPING`/`MAINTENANCE` view, returning a minimal shape (id, name, job function,
+isActive) rather than the management payload. Without this, decision 1 silently breaks room
+assignment.
+
+---
+
+## Phase 4 — Job function
+
+- `JOB_FUNCTION` system-code category, editable in Controls like `NATIONALITY`.
+- `User.jobFunction` on the Hub user form.
+- **Switch the three role-name filters to it** — this is the phase that fixes the live bug.
+  Seed the category from the role names currently in use so existing filters keep matching.
+
+---
+
+## Phase 5 — Permission matrix report
+
+Roles down, modules across, CRUD ticks per cell, rendered through the print stationery
+components. Add a users-per-role appendix so it answers "who actually has this" rather than
+only "what does this role grant".
+
+---
+
+## Sequencing and risk
+
+Phases 0-2 are one deployable unit (schema, multi-role, sessions) and the riskiest — they
+touch `requireSession`, which every request in the app funnels through. **A bug here locks
+every tenant out of production.** Mitigations: the permission merge is pure and tested
+before use; the session lookup fails *closed* only for missing/revoked rows and never for a
+transient DB error; the migration backfills `UserRole` before dropping `roleId`.
+
+Phases 3-5 are additive UI and can ship separately.
+
+## Deliberately out of scope
+
+- Multi-property work locations (decision 6).
+- Reworking EOD force-logout onto the session table.
+- Deduplicating the two `MODULES` lists.
+- SSO / 2FA / password policy.
+- Per-user permission overrides — roles remain the only grant mechanism.
