@@ -173,12 +173,30 @@ assignment.
 
 ---
 
-## Phase 4 — Job function
+## Phase 4 — Job function — **DONE (2026-08-04)**
 
-- `JOB_FUNCTION` system-code category, editable in Controls like `NATIONALITY`.
-- `User.jobFunction` on the Hub user form.
-- **Switch the three role-name filters to it** — this is the phase that fixes the live bug.
-  Seed the category from the role names currently in use so existing filters keep matching.
+Built first, out of order, because it fixes a live bug on its own and is a prerequisite
+for multi-role.
+
+- [`src/lib/job-functions.ts`](../../src/lib/job-functions.ts) — the `JOB_FUNCTION`
+  category name, the two codes business logic depends on (`HOUSEKEEPING`, `MAINTENANCE`),
+  the seeded default list, `ensureJobFunctions()` in the shape of `ensureChargeTree`, and
+  the `housekeepingStaff` / `maintenanceStaff` predicates.
+- `User.jobFunction` + migration `20260804120000_user_job_function`, which also seeds the
+  category for every existing enterprise and **backfills each user's post from their role
+  name**. Without that backfill the boards would come up empty on deploy, since the
+  filters switch in the same release.
+- The three role-name filters now select on post: `dashboard/housekeeping/page.tsx`,
+  `housekeeping/task-sheet/page.tsx`, `dashboard/maintenance/page.tsx`.
+- Controls: `JOB_FUNCTION` added to `OPERATIONS_LOV_CATEGORIES` (editable like
+  `NATIONALITY`), a Job Function field on the user dialog, and a Post column on the roster.
+- `ensureJobFunctions` runs on property creation, so a newly onboarded enterprise has the
+  list from day one.
+- 10 tests in `tests/business-rules/job-functions.test.ts`, including the case the old
+  filter got wrong: a housekeeper also granted Front Desk access.
+
+Left for the Hub move (Phase 3): the field lives on the Controls user dialog for now,
+since that is where user CRUD still is.
 
 ---
 

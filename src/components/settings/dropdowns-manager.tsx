@@ -58,6 +58,9 @@ export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
 
 export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
+  // A user's POST, as opposed to their role. HOUSEKEEPING and MAINTENANCE drive the
+  // assignment pickers — see src/lib/job-functions.ts before renaming or removing them.
+  { code: "JOB_FUNCTION", label: "Job Functions (staff posts)" },
 ]
 
 export const RESERVATION_LOV_CATEGORIES: DropdownCategory[] = [

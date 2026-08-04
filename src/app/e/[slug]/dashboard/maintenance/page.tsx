@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
+import { maintenanceStaff } from "@/lib/job-functions"
 
 type Ticket = {
   id: string
@@ -37,7 +38,7 @@ export default function MaintenanceDashboard() {
       const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       if (res.ok) {
         const data = await res.json()
-        setMaintenanceTeam(data.filter((u: any) => u.role?.name === "Maintenance" && u.isActive))
+        setMaintenanceTeam(maintenanceStaff(data))
       }
     } catch (e) {
       console.error(e)

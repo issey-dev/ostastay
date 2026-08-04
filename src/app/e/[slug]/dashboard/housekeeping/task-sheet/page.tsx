@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { InfoHint } from "@/components/ui/info-hint"
+import { housekeepingStaff } from "@/lib/job-functions"
 
 // Priority buckets, in the order an attendant should work them: rooms needed for
 // an arrival first, departure cleans next, other dirty rooms, then stayover
@@ -74,7 +75,7 @@ export default function TaskSheetPage() {
     fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setHousekeepers(data.filter((u: any) => u.role?.name === "Housekeeping" && u.isActive))
+        if (Array.isArray(data)) setHousekeepers(housekeepingStaff(data))
       })
       .catch(console.error)
     fetch(`/api/session/current-property`)

@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info } from "@/components/icons"
+import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
+import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsHubAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
 
@@ -34,6 +35,7 @@ type UserRow = {
   scope: "ENTERPRISE" | "PROPERTY"
   propertyId: string | null
   isActive: boolean
+  jobFunction: string | null
 }
 
 type PropertyOption = { id: string; name: string; code: string }
@@ -98,6 +100,7 @@ export function UsersRolesManager({
   const [userForm, setUserForm] = useState({
     firstName: "", lastName: "", email: "", password: "",
     roleId: "", scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
+    jobFunction: "",
   })
   // Whether the role currently chosen in the user dialog carries any Hub module.
   const selectedRoleGrantsHub = (() => {
@@ -108,6 +111,18 @@ export function UsersRolesManager({
   const [savingUser, setSavingUser] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
   const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null)
+  // code -> label for the Post column. The dialog uses SystemCodeSelect, which fetches
+  // and caches this itself; the table only needs to resolve labels it already has.
+  const [jobFunctionLabels, setJobFunctionLabels] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetch("/api/settings/system-codes?category=JOB_FUNCTION")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { code: string; value: string }[]) => {
+        if (Array.isArray(rows)) setJobFunctionLabels(Object.fromEntries(rows.map((r) => [r.code, r.value])))
+      })
+      .catch(() => {})
+  }, [])
 
   const openNewUserDialog = () => {
     setEditingUser(null)
@@ -115,6 +130,7 @@ export function UsersRolesManager({
       firstName: "", lastName: "", email: "", password: "", roleId: roles[0]?.id ?? "",
       scope: isPropertyLockedActor ? "PROPERTY" : "ENTERPRISE",
       propertyId: isPropertyLockedActor ? (actorPropertyId ?? "") : "",
+      jobFunction: "",
     })
     setUserErrorMsg(null)
     setIsUserDialogOpen(true)
@@ -125,6 +141,7 @@ export function UsersRolesManager({
     setUserForm({
       firstName: user.firstName, lastName: user.lastName, email: user.email, password: "",
       roleId: user.role.id, scope: user.scope, propertyId: user.propertyId ?? "",
+      jobFunction: user.jobFunction ?? "",
     })
     setUserErrorMsg(null)
     setIsUserDialogOpen(true)
@@ -301,6 +318,7 @@ export function UsersRolesManager({
                 <SortableTableHead columnKey="name" sort={sort} className="px-6">Name</SortableTableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Post</TableHead>
                 <TableHead>Access</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right px-6">Actions</TableHead>
@@ -313,6 +331,11 @@ export function UsersRolesManager({
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <StatusBadge label={user.role.name} tone={getRoleTone(user.role.name)} />
+                  </TableCell>
+                  {/* Post, not role — an unset one reads as a dash rather than being
+                      guessed from the role, which is exactly the conflation being undone. */}
+                  <TableCell className="text-sm text-muted-foreground">
+                    {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {user.scope === "ENTERPRISE"
@@ -338,7 +361,7 @@ export function UsersRolesManager({
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-0">
+                  <TableCell colSpan={7} className="py-0">
                     <EmptyState icon={Users} title="No users found" description="Create your first team member." />
                   </TableCell>
                 </TableRow>
@@ -447,6 +470,21 @@ export function UsersRolesManager({
                   {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}{r.isSystem ? " (System)" : ""}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            {/* The user's POST, separate from the Role above. Roles decide what the app
+                lets them see; this decides where they show up as assignable staff. */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1"><Briefcase className="w-4 h-4 text-primary" /> Job Function</label>
+              <SystemCodeSelect
+                category="JOB_FUNCTION"
+                value={userForm.jobFunction}
+                onValueChange={(v) => setUserForm({ ...userForm, jobFunction: v ?? "" })}
+                placeholder="No post assigned"
+              />
+              <p className="text-xs text-muted-foreground">
+                Their post at the property. Housekeeping and Maintenance decide who appears in
+                the room-assignment and work-order pickers — the role does not.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
+import { housekeepingStaff } from "@/lib/job-functions"
 
 export default function HousekeepingDashboard() {
   const { slug } = useParams<{ slug: string }>()
@@ -89,7 +90,9 @@ export default function HousekeepingDashboard() {
       const res = await fetch(`/api/settings/users?enterpriseId=${currentProperty.enterpriseId}`)
       if (res.ok) {
         const data = await res.json()
-        setHousekeepers(data.filter((u: any) => u.role?.name === "Housekeeping" && u.isActive))
+        // Filters on the user's POST, not their role name — a housekeeper given extra
+        // access used to drop out of this picker entirely. See src/lib/job-functions.ts.
+        setHousekeepers(housekeepingStaff(data))
       }
     } catch (e) {
       console.error(e)

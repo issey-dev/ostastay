@@ -56,6 +56,9 @@ const USER_SELECT = {
   scope: true,
   propertyId: true,
   isActive: true,
+  // The user's post. The housekeeping and maintenance boards filter on this — they used
+  // to match role.name, which conflated access with job (see src/lib/job-functions.ts).
+  jobFunction: true,
   createdAt: true,
 } as const;
 
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
     requirePermission(ctx, "CONTROLS", "create");
 
     const body = await request.json();
-    const { email, password, firstName, lastName, role, scope, propertyId } = body;
+    const { email, password, firstName, lastName, role, scope, propertyId, jobFunction } = body;
     const enterpriseId = ctx.enterpriseId; // never client-supplied
 
     if (!email || !password || !firstName || !lastName || !role) {
@@ -130,6 +133,10 @@ export async function POST(request: Request) {
         roleId,
         scope: userScope,
         propertyId: targetPropertyId,
+        // Free-form against the tenant's JOB_FUNCTION list — not validated against it on
+        // purpose: the list is editable, and refusing a code a tenant just renamed would
+        // be worse than storing one that no longer resolves to a label.
+        jobFunction: jobFunction || null,
       },
       select: USER_SELECT,
     });
@@ -156,7 +163,7 @@ export async function PATCH(request: Request) {
     requirePermission(ctx, "CONTROLS", "update");
 
     const body = await request.json();
-    const { id, email, password, firstName, lastName, role, isActive, scope, propertyId } = body;
+    const { id, email, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -175,6 +182,8 @@ export async function PATCH(request: Request) {
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
     if (isActive !== undefined) updateData.isActive = isActive;
+    // `undefined` leaves it alone; an empty string clears the post.
+    if (jobFunction !== undefined) updateData.jobFunction = jobFunction || null;
 
     if (role) {
       const roleId = await resolveRoleId(ctx.enterpriseId, role);

@@ -256,6 +256,14 @@ model User {
   // operate the app, only to replace itself.
   mustChangePassword Boolean @default(false)
 
+  // The user's POST at the property — a JOB_FUNCTION system code (see
+  // src/lib/job-functions.ts). Distinct from `roleId`, which is what they may SEE and DO.
+  // Until 2026-08-04 the two were the same thing: the housekeeping and maintenance boards
+  // found their staff by matching the ROLE NAME, so granting a housekeeper any extra
+  // access made them disappear from the room-assignment picker. Nullable — a manager
+  // needn't hold a post.
+  jobFunction String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
