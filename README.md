@@ -1,4 +1,4 @@
-**OstaStay — Guest House PMS.** A multi-tenant property management system (Next.js 16 /
+**Uppsolut PMS — Guest House PMS.** A multi-tenant property management system (Next.js 16 /
 React 19, Prisma + PostgreSQL). For project status, the architecture retrofit plan, and
 open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
 [`.agents/docs/TODO.md`](.agents/docs/TODO.md) — that's the up-to-date source of truth

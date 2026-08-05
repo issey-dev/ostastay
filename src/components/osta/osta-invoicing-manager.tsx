@@ -136,7 +136,7 @@ export function OstaInvoicingManager() {
   // situ" idea as the property Stationaries page.
   const brand: StationeryBrand = useMemo(
     () => ({
-      name: form.invoiceBrandName || "OstaStay",
+      name: form.invoiceBrandName || "Uppsolut PMS",
       logoUrl: form.invoiceLogoUrl || null,
       address: form.invoiceAddress || null,
       phone: form.invoicePhone || null,
@@ -162,7 +162,7 @@ export function OstaInvoicingManager() {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="brandName">Company Name</Label>
-            <Input id="brandName" value={form.invoiceBrandName} onChange={set("invoiceBrandName")} placeholder="OstaStay Pvt Ltd" />
+            <Input id="brandName" value={form.invoiceBrandName} onChange={set("invoiceBrandName")} placeholder="Uppsolut PMS Pvt Ltd" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="logoUrl">Logo URL</Label>
@@ -178,7 +178,7 @@ export function OstaInvoicingManager() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" value={form.invoiceEmail} onChange={set("invoiceEmail")} placeholder="billing@ostastay.com" />
+            <Input id="email" value={form.invoiceEmail} onChange={set("invoiceEmail")} placeholder="billing@uppsolut.com" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="brandColor">Accent Color</Label>

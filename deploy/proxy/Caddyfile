@@ -33,9 +33,9 @@
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OstaStay
+# Uppsolut PMS
 # ─────────────────────────────────────────────────────────────────────────────
-vps-9d96501a.vps.ovh.ca {
+stay.uppsolut.com, vps-9d96501a.vps.ovh.ca {
 	import security_headers
 
 	# Guest ID photos are capped at 10MB in the app (MAX_UPLOAD_BYTES); this stops a

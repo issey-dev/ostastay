@@ -42,8 +42,8 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>
             <h1 className="flex items-center gap-2 font-bold text-lg text-foreground tracking-tight leading-tight">
-            OstaStay
-            <InfoHint label="OstaStay">Osta Platform Admin</InfoHint>
+            Uppsolut PMS
+            <InfoHint label="Uppsolut PMS">Osta Platform Admin</InfoHint>
           </h1>
           </div>
           <div className="ml-auto">

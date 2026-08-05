@@ -1,4 +1,4 @@
-# Deploying OstaStay with Docker
+# Deploying Uppsolut PMS with Docker
 
 Three containers: a shared edge proxy (Caddy) that owns 80/443 for every project on the
 host, the app (Node 22), and PostgreSQL 17 — plus volumes for the database and the
@@ -9,7 +9,8 @@ the proxy, so nothing can bypass its TLS, security headers, or rate limits; Post
 reachable only from the app container.
 
 Target host: `192.99.167.15` (`vps-9d96501a.vps.ovh.ca`), user `ubuntu`.
-Live at **https://vps-9d96501a.vps.ovh.ca**.
+Live at **https://stay.uppsolut.com** (`vps-9d96501a.vps.ovh.ca` still works as a fallback
+hostname — both are configured on the same Caddy site block).
 
 ---
 
@@ -111,7 +112,7 @@ docker compose exec \
 The password is passed per-invocation rather than stored in `.env`, so it never lands in
 a file or in the image. Minimum 12 characters.
 
-Then sign in at `https://vps-9d96501a.vps.ovh.ca` with:
+Then sign in at `https://stay.uppsolut.com` with:
 
 - **Enterprise code:** `osta`
 - **Email / password:** what you just set
@@ -134,8 +135,8 @@ crontab -e
 ```
 
 ```cron
-# OstaStay background jobs — hourly
-0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://vps-9d96501a.vps.ovh.ca/api/jobs/run > /dev/null 2>&1
+# Uppsolut PMS background jobs — hourly
+0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://stay.uppsolut.com/api/jobs/run > /dev/null 2>&1
 ```
 
 If you skip this, the app still works; channel-manager tokens will eventually expire.
