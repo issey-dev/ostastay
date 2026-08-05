@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "OstaStay",
+  title: "Uppsolut PMS",
   // Plain description on purpose — "Next-Generation" was here, and DESIGN_PLAN §0.2
   // bans that vocabulary ("Next-Gen", "Seamless", "Unleash", "Elevate", "Revolutionize")
   // from UI copy. This string is the browser tab title's companion and the share preview.

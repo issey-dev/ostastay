@@ -62,8 +62,8 @@ Current allocation:
 | Stack | CPUs | Memory |
 | --- | --- | --- |
 | edge-proxy | 0.5 | 256 MB |
-| OstaStay app | 2.0 | 2 GB |
-| OstaStay Postgres | 1.0 | 1 GB |
+| Uppsolut PMS app | 2.0 | 2 GB |
+| Uppsolut PMS Postgres | 1.0 | 1 GB |
 | **Unallocated** | **~0.5** | **~4.3 GB** |
 
 ## Notes

@@ -78,7 +78,7 @@ export default function LicenseInvoicePrintPage({ params }: { params: Promise<{ 
   const str = (k: string) => (typeof s[k] === "string" && s[k] ? (s[k] as string) : null)
 
   const brand: StationeryBrand = {
-    name: str("invoiceBrandName") ?? "OstaStay",
+    name: str("invoiceBrandName") ?? "Uppsolut PMS",
     logoUrl: str("invoiceLogoUrl"),
     address: str("invoiceAddress"),
     phone: str("invoicePhone"),
