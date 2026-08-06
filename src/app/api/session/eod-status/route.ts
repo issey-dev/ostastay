@@ -9,9 +9,16 @@ import { requireSession, toErrorResponse } from "@/lib/scope";
 // it 401'd like everything else, the client would only ever see a generic auth failure
 // and couldn't explain *why* the user is being signed out. Every other route takes the
 // throw from requireSession().
+//
+// It also passes touchActivity: false. This route is polled every 30s by a background
+// tab (EodSessionWatch) purely to check EOD status — if that poll counted as activity,
+// it would keep refreshing lastSeenAt forever just because the tab is open, silently
+// defeating the property's idle timeout for as long as any tab stayed open, no matter
+// how long the person was actually away. Idle detection itself lives client-side in
+// IdleSessionWatch instead, precisely so it doesn't need a matching background poll.
 export async function GET() {
   try {
-    const ctx = await requireSession({ allowDuringEodLockout: true });
+    const ctx = await requireSession({ allowDuringEodLockout: true, touchActivity: false });
     if (!ctx.sessionPropertyId) {
       return NextResponse.json({ eodInProgress: false, forcedLogout: false });
     }

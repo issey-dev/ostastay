@@ -211,6 +211,12 @@ export async function requireSession(opts?: {
   // lockout in order to tell the client why it's being signed out. Every other caller
   // must take the throw.
   allowDuringEodLockout?: boolean;
+  // Only /api/session/eod-status passes this too. That route is polled every 30s by a
+  // background tab that may be genuinely idle — if it counted as activity, the idle
+  // timeout could never fire for as long as the tab stayed open, no matter how long the
+  // person was away from the keyboard. Every real request (the user actually doing
+  // something) must keep touching, which is why this defaults to true.
+  touchActivity?: boolean;
 }): Promise<AuthContext> {
   const session = await getSession();
   const userId = session?.id;
@@ -328,8 +334,12 @@ export async function requireSession(opts?: {
     }
   }
 
-  // Bounded activity stamp — at most one write a minute per session.
-  await touchSession(liveSession);
+  // Bounded activity stamp — at most one write a minute per session. Skipped for the
+  // passive EOD status poll (see touchActivity above), so an open-but-idle tab doesn't
+  // keep resetting the very clock the idle timeout measures against.
+  if (opts?.touchActivity !== false) {
+    await touchSession(liveSession);
+  }
 
   // Every module is licensed for every enterprise since the 2026-07-31 removal of
   // enterprise-level module gating — see ALL_MODULES_LICENSED above.

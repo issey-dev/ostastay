@@ -20,6 +20,15 @@ import {
 // so the roll announces itself — a banner while EOD is running, then a modal and a real
 // sign-out the moment the date actually rolls.
 //
+// It also treats a bare 401 from that same poll as "signed out for some other reason"
+// (an admin terminated the session from the Hub's Active Sessions list, the account was
+// deactivated, the token expired) — no extra request, just interpreting the status of
+// the poll this component was already making, so those cases stop being silent too.
+//
+// Idle timeout does NOT live here — see IdleSessionWatch. That one is deliberately not a
+// poll: it costs nothing while the property has no timeout set, and only asks the server
+// once, right when a tab actually looks idle, rather than on a fixed schedule.
+//
 // Applies to every user with the property selected, not just PROPERTY-scoped staff: an
 // enterprise admin viewing that property is just as much "logged in to it".
 
@@ -28,16 +37,18 @@ const POLL_MS = 30_000
 type EodStatus = {
   propertyName: string | null
   eodInProgress: boolean
-  businessDate: string | null
   forcedLogout: boolean
 }
 
+type SignOutReason = "EOD" | "REVOKED"
+
 export function EodSessionWatch({ loginPath }: { loginPath: string }) {
   const [status, setStatus] = useState<EodStatus | null>(null)
+  const [signOutReason, setSignOutReason] = useState<SignOutReason | null>(null)
   const [signingOut, setSigningOut] = useState(false)
-  // Once the roll is seen, stop polling and hold the modal open — further requests are
+  // Once a lockout is seen, stop polling and hold the modal open — further requests are
   // pointless (the session is dead) and would only race the sign-out below.
-  const lockedOut = status?.forcedLogout === true
+  const lockedOut = signOutReason !== null
   const lockedOutRef = useRef(false)
   useEffect(() => {
     lockedOutRef.current = lockedOut
@@ -46,9 +57,17 @@ export function EodSessionWatch({ loginPath }: { loginPath: string }) {
   const check = useCallback(() => {
     if (lockedOutRef.current) return
     fetch("/api/session/eod-status")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setStatus(data)
+      .then((res) => {
+        if (res.status === 401) {
+          setSignOutReason("REVOKED")
+          return null
+        }
+        return res.ok ? res.json() : null
+      })
+      .then((data: EodStatus | null) => {
+        if (!data) return
+        setStatus(data)
+        if (data.forcedLogout) setSignOutReason("EOD")
       })
       .catch(() => {
         // Offline or a transient failure — say nothing rather than announcing a roll
@@ -92,7 +111,7 @@ export function EodSessionWatch({ loginPath }: { loginPath: string }) {
     return () => clearTimeout(timer)
   }, [lockedOut, signOut])
 
-  if (lockedOut) {
+  if (signOutReason === "EOD") {
     return (
       <Dialog open>
         <DialogContent showCloseButton={false} className="sm:max-w-md">
@@ -102,6 +121,31 @@ export function EodSessionWatch({ loginPath }: { loginPath: string }) {
               {status?.propertyName ?? "This property"} has finished its End-of-Day
               business date roll. Your session was working on the closed date, so it has
               been ended. Sign in again to continue on the new business date.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={signOut} disabled={signingOut}>
+              {signingOut ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4 mr-2" />
+              )}
+              Sign in again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  if (signOutReason === "REVOKED") {
+    return (
+      <Dialog open>
+        <DialogContent showCloseButton={false} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Signed out</DialogTitle>
+            <DialogDescription>
+              This session is no longer active. Sign in again to continue.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

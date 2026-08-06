@@ -11,6 +11,7 @@ import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { EodSessionWatch } from "@/components/providers/eod-session-watch"
+import { IdleSessionWatch } from "@/components/providers/idle-session-watch"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
 import { PropertyOnboardingGate } from "@/components/onboarding/property-onboarding-gate"
 import { decidePropertyGate } from "@/lib/properties/onboarding-gate"
@@ -104,6 +105,9 @@ export default async function DashboardLayout({
             {/* Announces an in-progress End-of-Day roll on the property this session is
                 working in, then signs the user out when the date actually rolls. */}
             <EodSessionWatch loginPath={`/e/${enterprise.slug}/login`} />
+            {/* Ends the session after this property's configured idle timeout — a local
+                clock in the browser, not another background poll. See the component. */}
+            <IdleSessionWatch loginPath={`/e/${enterprise.slug}/login`} />
 
             {ctx?.isActingAsSupport && enterprise && (
               <SupportSessionNotice

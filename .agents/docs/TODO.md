@@ -2,6 +2,41 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Idle session timeout never actually fired (2026-08-06) — DONE
+
+Reported as "the app doesn't auto-log-out." Root cause: `EodSessionWatch`
+(`src/components/providers/eod-session-watch.tsx`) polls `/api/session/eod-status` every
+30s from every dashboard tab to watch for an End-of-Day roll. That route calls
+`requireSession()`, which unconditionally stamped `Session.lastSeenAt` — so just having a
+dashboard tab open kept refreshing the idle clock forever, regardless of real mouse/
+keyboard activity. `isIdleExpired()` (`src/lib/session-store.ts`) was correct and tested;
+it just never saw a stale enough `lastSeenAt` to trip. USER_MANAGEMENT_PLAN.md decision 3
+also called for the idle timeout to be "warned client-side," which was never built —
+users had no way to discover a real idle-expiry short of an accidental 401 on their next
+click.
+
+What landed:
+- **`requireSession()` gained a `touchActivity` option** (`src/lib/scope.ts`), defaulting
+  to `true`. `/api/session/eod-status` now passes `touchActivity: false` — the EOD poll
+  no longer resets the idle clock it isn't measuring.
+- **`IdleSessionWatch`** (`src/components/providers/idle-session-watch.tsx`), mounted in
+  the dashboard layout next to `EodSessionWatch`. Deliberately NOT another 30s poll —
+  folding idle detection into the EOD poll was the first draft and would have put every
+  open tab, at every property, on the database every 30 seconds forever. Instead it's a
+  local per-tab activity clock (mousemove/keydown/touchstart/wheel, a 60s local
+  `Date.now()` check) that costs nothing when `sessionIdleMinutes` is 0 (the property
+  default) and only calls the new `GET /api/session/idle-check` once, at the moment the
+  tab actually looks idle — which also correctly resets if another tab of the same
+  session was genuinely active in the meantime.
+- **`EodSessionWatch`** also now treats a bare 401 from its existing poll as "signed out
+  for some other reason" (admin terminated the session from the Hub, account
+  deactivated) — no extra request, just no longer silently ignoring a non-EOD failure.
+- Verified: `tests/business-rules/session-idle.test.ts` (pure `isIdleExpired` logic)
+  still passes. Could not run the DB-backed `eod-force-logout.test.ts` in this session —
+  no live Postgres reachable (`docker` isn't on PATH here); its assertions on
+  `forcedLogout`/`eodInProgress` are unaffected by this change and should be re-run
+  before merging.
+
 ## Closed-reservation presentation + action gating (2026-08-03) — DONE
 
 Owner call (verbal, this session): a cancelled booking shouldn't be rendered with a
