@@ -5,7 +5,9 @@ import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Send, FileStack, Mail, Ban, Loader2, CheckCircle2 } from "@/components/icons"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Send, FileStack, Mail, Ban, Loader2, CheckCircle2, Unlock } from "@/components/icons"
 import { toast } from "@/lib/toast"
 
 type Slot = { id: string; slotIndex: number; isPrimary: boolean; existingProfileId: string | null; status: string; firstName: string | null; lastName: string | null }
@@ -32,6 +34,8 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [sessionUrl, setSessionUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false)
+  const [reopenSelection, setReopenSelection] = useState<Set<string>>(new Set())
 
   const refetch = useCallback(() => {
     setLoading(true)
@@ -59,6 +63,66 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
       refetch()
     } finally {
       setBusy(null)
+    }
+  }
+
+  const reopenSlot = async (slotId: string) => {
+    const res = await fetch(`/api/reservations/${reservationId}/eregistration-link/slots/${slotId}/reopen`, { method: "POST" })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast.error(body.error || "Failed to reopen that guest's slot.")
+      return false
+    }
+    return true
+  }
+
+  const reopenOne = async (slotId: string) => {
+    setBusy(`reopen-${slotId}`)
+    try {
+      if (await reopenSlot(slotId)) {
+        toast.success("Reopened for correction")
+        refetch()
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // A submitted/applied slot stays locked even after the link is regenerated (relinking
+  // never silently reopens someone's already-completed submission) — this is the deliberate
+  // staff-in-the-loop step that lets a regenerate optionally double as "let them fill it in
+  // again," without it being an accidental side effect of every regenerate.
+  const submittedOrApplied = slots.filter((s) => s.status === "SUBMITTED" || s.status === "APPLIED")
+
+  const onRegenerateClick = () => {
+    if (link && submittedOrApplied.length > 0) {
+      setReopenSelection(new Set(submittedOrApplied.map((s) => s.id)))
+      setReopenConfirmOpen(true)
+      return
+    }
+    generate()
+  }
+
+  const toggleReopenSelection = (slotId: string) =>
+    setReopenSelection((prev) => {
+      const next = new Set(prev)
+      if (next.has(slotId)) next.delete(slotId)
+      else next.add(slotId)
+      return next
+    })
+
+  const confirmRegenerate = async () => {
+    setReopenConfirmOpen(false)
+    await generate()
+    if (reopenSelection.size > 0) {
+      setBusy("reopen-batch")
+      try {
+        await Promise.all(Array.from(reopenSelection).map((id) => reopenSlot(id)))
+        toast.success(`Reopened ${reopenSelection.size} guest slot(s) for correction`)
+        refetch()
+      } finally {
+        setBusy(null)
+      }
     }
   }
 
@@ -122,7 +186,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
                     {busy === "revoke" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5 mr-1.5" />} Revoke
                   </Button>
                 )}
-                <Button size="sm" onClick={generate} disabled={!!busy}>
+                <Button size="sm" onClick={onRegenerateClick} disabled={!!busy}>
                   {busy === "generate" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
                   {link ? "Regenerate" : "Generate Link"}
                 </Button>
@@ -151,13 +215,28 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
                 {slots.map((s) => (
                   <div key={s.id} className="flex items-center justify-between text-sm">
                     <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}{s.isPrimary && <Badge variant="outline" className="ml-2 text-[10px] uppercase">Lead</Badge>}</span>
-                    {s.status === "APPLIED" ? (
-                      <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Applied</Badge>
-                    ) : s.status === "SUBMITTED" ? (
-                      <Badge>Submitted — review in Check-In</Badge>
-                    ) : (
-                      <Badge variant="outline">Pending</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {s.status === "APPLIED" ? (
+                        <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Applied</Badge>
+                      ) : s.status === "SUBMITTED" ? (
+                        <Badge>Submitted — review in Check-In</Badge>
+                      ) : (
+                        <Badge variant="outline">Pending</Badge>
+                      )}
+                      {(s.status === "SUBMITTED" || s.status === "APPLIED") && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                          disabled={!!busy}
+                          onClick={() => reopenOne(s.id)}
+                          title="Let this guest fill in their details again"
+                        >
+                          {busy === `reopen-${s.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlock className="h-3 w-3 mr-1" />}
+                          Reopen
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -167,7 +246,33 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
     </>
   )
 
-  if (embedded) return <div className="space-y-4 pt-2">{body}</div>
+  const reopenDialog = (
+    <Dialog open={reopenConfirmOpen} onOpenChange={(o) => !o && setReopenConfirmOpen(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Regenerate eRegistration link</DialogTitle>
+          <DialogDescription>
+            These guests already submitted their details. Check who should be able to fill in and submit again on the new link — everything they already entered stays in place until they resubmit, and re-approving never clears a field that&apos;s already on file.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 rounded-lg border p-3">
+          {submittedOrApplied.map((s) => (
+            <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox checked={reopenSelection.has(s.id)} onCheckedChange={() => toggleReopenSelection(s.id)} />
+              {[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}
+              {s.status === "APPLIED" && <Badge variant="secondary" className="text-[10px]">Already applied</Badge>}
+            </label>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setReopenConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={confirmRegenerate}>Regenerate link</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
+  if (embedded) return <div className="space-y-4 pt-2">{body}{reopenDialog}</div>
 
   return (
     <Card>
@@ -176,6 +281,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
         <CardDescription>A shareable link for the guest to fill in their own registration details.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">{body}</CardContent>
+      {reopenDialog}
     </Card>
   )
 }

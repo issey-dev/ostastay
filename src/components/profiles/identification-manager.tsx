@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { ErrorState } from "@/components/ui/error-state"
+import { CountryFlag } from "@/components/ui/country-flag"
+import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { cn } from "@/lib/utils"
 
 type ProfileDocument = {
@@ -33,6 +35,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { label } = useSystemCodeLabels()
 
   const fetchRows = () => {
     setLoading(true)
@@ -106,7 +109,11 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
               <Badge variant="outline" className="shrink-0">{r.documentType}</Badge>
               <span className="flex-1 text-sm truncate">
                 {r.documentNumber}
-                {r.issuingCountry && <span className="text-muted-foreground"> · {r.issuingCountry}</span>}
+                {r.issuingCountry && (
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    {" "}· <CountryFlag value={r.issuingCountry} /> {label("NATIONALITY", r.issuingCountry)}
+                  </span>
+                )}
                 {r.expiryDate && <span className="text-muted-foreground"> · exp. {new Date(r.expiryDate).toLocaleDateString()}</span>}
               </span>
               <button

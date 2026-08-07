@@ -38,6 +38,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
+    // Signature captured during eRegistration, keyed by guest profile so the card page can
+    // look it up per guest — most recent submission wins if a slot was reopened and
+    // resubmitted. Kept as a separate query rather than a nested include since the slot
+    // isn't part of REGISTRATION_CARD_INCLUDE's guest/profile shape.
+    const signedSlots = await prisma.eRegistrationGuestSlot.findMany({
+      where: { reservationId: id, signatureDataUrl: { not: null }, existingProfileId: { not: null } },
+      orderBy: { submittedAt: "asc" },
+      select: { existingProfileId: true, signatureDataUrl: true, submittedAt: true },
+    });
+    const eregistrationSignatures: Record<string, { dataUrl: string; submittedAt: Date | null }> = {};
+    for (const s of signedSlots) {
+      if (s.existingProfileId && s.signatureDataUrl) {
+        eregistrationSignatures[s.existingProfileId] = { dataUrl: s.signatureDataUrl, submittedAt: s.submittedAt };
+      }
+    }
+
     let settings = await prisma.enterpriseSettings.findUnique({
       where: { enterpriseId: reservation.property.enterpriseId },
     });
@@ -107,7 +123,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       };
     }
 
-    return NextResponse.json({ reservation, settings });
+    return NextResponse.json({ reservation, settings, eregistrationSignatures });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

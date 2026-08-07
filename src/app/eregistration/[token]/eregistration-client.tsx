@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { DatePicker } from "@/components/ui/date-picker"
 import { SignaturePad } from "@/components/eregistration/signature-pad"
-import { Loader2, CheckCircle2, AlertTriangle, Users, ArrowLeft, FileText, Plus, Trash2 } from "@/components/icons"
+import { Loader2, CheckCircle2, AlertTriangle, Users, ArrowLeft, FileText, Plus, Trash2, Sparkles } from "@/components/icons"
 import { toast } from "@/lib/toast"
 
 type SlotSummary = { id: string; slotIndex: number; isPrimary: boolean; displayName: string | null; status: string }
@@ -188,6 +188,8 @@ function SlotFormView({
   const [children, setChildren] = useState<ChildEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [autofillNote, setAutofillNote] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const form = useForm<SlotFormValues>({ resolver: zodResolver(slotFormSchema), mode: "onBlur", defaultValues: EMPTY_VALUES })
@@ -236,15 +238,66 @@ function SlotFormView({
   const handlePhotoSelect = async (file: File) => {
     setPhotoFile(file)
     setPhotoPreviewUrl(URL.createObjectURL(file))
+    setAutofillNote(null)
     const fd = new FormData()
     fd.append("photo", file)
     const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/photo`, { method: "POST", body: fd })
     if (res.ok) {
       setHasPhoto(true)
       toast.success("Photo uploaded")
+      scanAndAutofill(file)
     } else {
       const body = await res.json().catch(() => ({}))
       toast.error(body.error || "Photo upload failed")
+    }
+  }
+
+  // Experimental: OCR's the just-uploaded photo (passport MRZ or a best-effort read of a
+  // Maldivian NID) and fills in only the fields the guest hasn't already typed themselves —
+  // never overwrites something they've already entered, and never touches the form at all
+  // if nothing usable was detected.
+  const scanAndAutofill = async (file: File | null) => {
+    if (!file) return
+    setScanning(true)
+    try {
+      const fd = new FormData()
+      fd.append("photo", file)
+      const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/scan-document`, { method: "POST", body: fd })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(body.error || "Couldn't read that document — you can still fill the form in manually.")
+        return
+      }
+      const fields: Record<string, string | null | undefined> = body.fields || {}
+      const current = form.getValues()
+      const fillable: (keyof SlotFormValues)[] = [
+        "firstName", "lastName", "dateOfBirth", "nationality", "gender",
+        "issuingCountry", "documentNumber", "documentExpiryDate",
+      ]
+      let filled = 0
+      fillable.forEach((key) => {
+        const value = fields[key]
+        if (value && !current[key]) {
+          form.setValue(key, value, { shouldDirty: true, shouldValidate: true })
+          filled += 1
+        }
+      })
+      if (body.documentType && !current.documentType) {
+        form.setValue("documentType", body.documentType, { shouldDirty: true, shouldValidate: true })
+        filled += 1
+      }
+      if (filled > 0) {
+        setAutofillNote(
+          body.confidence === "low"
+            ? "Auto-filled from your ID — this is a best-effort read, please double-check every field before submitting."
+            : "Auto-filled from your passport — please review before submitting."
+        )
+        toast.success(`Auto-filled ${filled} field${filled === 1 ? "" : "s"} from your document`)
+      }
+    } catch {
+      toast.error("Couldn't reach the server to scan that document.")
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -412,7 +465,19 @@ function SlotFormView({
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoSelect(f) }}
                     />
                   </label>
+                  {photoFile && (
+                    <Button type="button" variant="outline" size="sm" disabled={scanning} onClick={() => scanAndAutofill(photoFile)}>
+                      {scanning ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                      {scanning ? "Scanning…" : "Scan & autofill"}
+                    </Button>
+                  )}
                 </div>
+                {autofillNote && (
+                  <Alert>
+                    <Sparkles className="h-4 w-4" />
+                    <AlertDescription>{autofillNote}</AlertDescription>
+                  </Alert>
+                )}
               </div>
             </div>
 

@@ -4,6 +4,7 @@ import { guestName, propertyOrThrow, guestSelect } from "@/lib/reports/defs/_sha
 import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
 import { LINE_BUCKET_INCLUDE, lineReportBucket, reportBucketLabel, isLevyLine } from "@/lib/posting/report-bucket";
+import { countryNameFor } from "@/lib/countries";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -256,7 +257,7 @@ const greenTax: ReportDef = {
       return {
         regNo: r.registrationNo,
         guest: guestName(r.profile),
-        nationality: r.profile.nationality ?? "—",
+        nationality: countryNameFor(r.profile.nationality) ?? "—",
         room: r.reservation.assignments.map((a) => a.room?.roomNumber).filter(Boolean).join(", ") || "—",
         conf: r.reservation.confirmationNo,
         nights,

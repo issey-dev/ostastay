@@ -64,6 +64,11 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
   const address = (guest.addresses ?? []).find((a: any) => a.isPrimary) ?? guest.addresses?.[0]
   const doc = (guest.documents ?? []).find((d: any) => d.isPrimary) ?? guest.documents?.[0]
 
+  const eregSignature = data?.eregistrationSignatures?.[guest.upid] ?? null
+  const guestSignature = eregSignature
+    ? { dataUrl: eregSignature.dataUrl, capturedLabel: format(new Date(eregSignature.submittedAt), "dd-MMM-yyyy, h:mm a") }
+    : null
+
   const activeAssignment = reservation.assignments?.[0]
   const nights = Math.max(
     1,
@@ -122,6 +127,7 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
         stayDetails={stayDetails}
         identification={identification}
         terms={terms}
+        guestSignature={guestSignature}
       />
     </PrintDocumentShell>
   )
