@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { CountryFlag, CountryLabel } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
@@ -241,7 +242,10 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                         {a.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
                       </div>
                       <p className="font-medium mt-1">{a.fullAddress || "—"}</p>
-                      <p className="text-xs text-muted-foreground">{[a.city, a.stateProvince, a.postalCode, label("NATIONALITY", a.country)].filter(Boolean).join(", ") || "—"}</p>
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {a.country && <CountryFlag value={a.country} />}
+                        {[a.city, a.stateProvince, a.postalCode, label("NATIONALITY", a.country)].filter(Boolean).join(", ") || "—"}
+                      </p>
                     </div>
                   ))}
                 </CardContent>
@@ -265,14 +269,21 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                         <div key={d.id} className="flex items-center gap-2 text-sm rounded-md border px-3 py-2">
                           <Badge variant="outline" className="text-xs">{label("ID_TYPE", d.documentType)}</Badge>
                           <span className="font-medium">{d.documentNumber}</span>
-                          {d.issuingCountry && <span className="text-muted-foreground">· {label("NATIONALITY", d.issuingCountry)}</span>}
+                          {d.issuingCountry && (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              · <CountryFlag value={d.issuingCountry} /> {label("NATIONALITY", d.issuingCountry)}
+                            </span>
+                          )}
                           {d.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
                         </div>
                       ))}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border">
                       <Field label="Birthdate" value={profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : undefined} />
-                      <Field label="Nationality" value={label("NATIONALITY", profile.nationality)} />
+                      <Field
+                        label="Nationality"
+                        value={profile.nationality ? <CountryLabel value={profile.nationality} name={label("NATIONALITY", profile.nationality)} /> : undefined}
+                      />
                     </div>
                   </CardContent>
                 </Card>

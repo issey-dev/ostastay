@@ -314,13 +314,25 @@ export type RegistrationCardDocumentProps = {
   stayDetails: FieldItem[]
   identification: FieldItem[]
   terms: string
+  // Present when the guest already signed electronically via eRegistration — renders the
+  // captured signature in place of a blank line, so front office isn't asking someone to
+  // sign twice.
+  guestSignature?: { dataUrl: string; capturedLabel: string } | null
 }
 
-function SignatureLine({ label }: { label: string }) {
+function SignatureLine({ label, signature }: { label: string; signature?: { dataUrl: string; capturedLabel: string } | null }) {
   return (
     <div>
-      <div className="mb-1.5 h-12 border-b border-slate-400" />
+      <div className="mb-1.5 flex h-12 items-end justify-center border-b border-slate-400">
+        {signature && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={signature.dataUrl} alt={`${label} (electronic)`} className="max-h-11 object-contain" />
+        )}
+      </div>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      {signature && (
+        <div className="text-[8px] font-medium text-yellow-600">e-signature — captured {signature.capturedLabel}</div>
+      )}
     </div>
   )
 }
@@ -333,6 +345,7 @@ export function RegistrationCardDocument({
   stayDetails,
   identification,
   terms,
+  guestSignature,
 }: RegistrationCardDocumentProps) {
   return (
     <StationeryPage fontClass={brand.fontClass}>
@@ -357,7 +370,7 @@ export function RegistrationCardDocument({
       </StationerySection>
 
       <div className="mt-auto grid grid-cols-2 gap-10 pt-8">
-        <SignatureLine label="Guest Signature" />
+        <SignatureLine label="Guest Signature" signature={guestSignature} />
         <SignatureLine label="Front Office" />
       </div>
     </StationeryPage>

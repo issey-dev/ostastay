@@ -25,6 +25,7 @@ import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
+import { CountryLabel } from "@/components/ui/country-flag"
 import { useProperty } from "@/components/providers/property-provider"
 import {
   deriveReservationState,
@@ -38,16 +39,6 @@ import {
 // Property business date (UTC midnight ms) vs a reservation date, both date-only.
 const dayMs = (d?: string | null) => (d ? Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), new Date(d).getUTCDate()) : NaN)
 const money = (n: number) => `$${n.toFixed(2)}`
-
-// A country flag emoji from a 2-letter ISO code — nationality is a free-form SystemCode,
-// so only ISO-2 codes produce a flag; anything else just shows the name (per the agreed
-// "flag & name, name-only fallback" behaviour).
-function flagEmoji(code?: string | null) {
-  if (!code) return null
-  const cc = code.trim().toUpperCase()
-  if (!/^[A-Z]{2}$/.test(cc)) return null
-  return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
-}
 
 const DEPOSIT_PURPOSE_LABEL: Record<string, string> = {
   DEPOSIT: "Deposit",
@@ -414,7 +405,6 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const depositsHeld = depositRows.reduce((s: number, p: any) => s + (p.isRefund ? -p.amount : p.amount), 0)
 
   const nationalityLabel = guest?.nationality ? nationalityMap[guest.nationality] ?? guest.nationality : null
-  const nationalityFlag = flagEmoji(guest?.nationality)
 
   return (
     <div className="space-y-6">
@@ -570,10 +560,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
               </Badge>
             )}
             {nationalityLabel && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                {nationalityFlag && <span className="text-base leading-none">{nationalityFlag}</span>}
-                {nationalityLabel}
-              </span>
+              <CountryLabel value={guest?.nationality} name={nationalityLabel} className="inline-flex items-center gap-1.5 text-muted-foreground" />
             )}
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Lead</Badge>
             {regLabel(guest?.upid) && (

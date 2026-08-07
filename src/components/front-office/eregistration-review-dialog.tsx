@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { CountryFlag } from "@/components/ui/country-flag"
 import { Loader2 } from "@/components/icons"
 
 type Slot = {
@@ -107,10 +108,19 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border p-3">
             <div className="text-muted-foreground">Name</div><div>{fullName || "—"}</div>
             <div className="text-muted-foreground">Date of Birth</div><div>{slot.dateOfBirth ? new Date(slot.dateOfBirth).toLocaleDateString() : "—"}</div>
-            <div className="text-muted-foreground">Nationality</div><div>{slot.nationality || "—"}</div>
+            <div className="text-muted-foreground">Nationality</div>
+            <div className="inline-flex items-center gap-1">{slot.nationality && <CountryFlag value={slot.nationality} />}{slot.nationality || "—"}</div>
             <div className="text-muted-foreground">Email / Mobile</div><div>{[slot.email, slot.mobile].filter(Boolean).join(" / ") || "—"}</div>
-            <div className="text-muted-foreground">Address</div><div>{[slot.addressFull, slot.addressCity, slot.addressCountry].filter(Boolean).join(", ") || "—"}</div>
-            <div className="text-muted-foreground">Document</div><div>{[slot.documentType, slot.documentNumber, slot.issuingCountry].filter(Boolean).join(" · ") || "—"}</div>
+            <div className="text-muted-foreground">Address</div>
+            <div className="inline-flex items-center gap-1">
+              {slot.addressCountry && <CountryFlag value={slot.addressCountry} />}
+              {[slot.addressFull, slot.addressCity, slot.addressCountry].filter(Boolean).join(", ") || "—"}
+            </div>
+            <div className="text-muted-foreground">Document</div>
+            <div className="inline-flex items-center gap-1">
+              {slot.issuingCountry && <CountryFlag value={slot.issuingCountry} />}
+              {[slot.documentType, slot.documentNumber, slot.issuingCountry].filter(Boolean).join(" · ") || "—"}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -120,11 +120,14 @@ export async function POST(
           // otherwise throw on the existing @@unique([upid, documentType, documentNumber]).
           await tx.profileDocument.upsert({
             where: { upid_documentType_documentNumber: { upid: profileUpid, documentType: slot.documentType, documentNumber: slot.documentNumber } },
+            // Only overwrite fields the resubmission actually provided — a blank field on
+            // a second pass (e.g. after reopen) must never null out a value already on the
+            // document record.
             update: {
-              issuingCountry: slot.issuingCountry,
-              issueDate: slot.documentIssueDate,
-              expiryDate: slot.documentExpiryDate,
-              documentImageStoragePath: slot.idPhotoPath,
+              ...(slot.issuingCountry && { issuingCountry: slot.issuingCountry }),
+              ...(slot.documentIssueDate && { issueDate: slot.documentIssueDate }),
+              ...(slot.documentExpiryDate && { expiryDate: slot.documentExpiryDate }),
+              ...(slot.idPhotoPath && { documentImageStoragePath: slot.idPhotoPath }),
             },
             create: {
               upid: profileUpid,

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { InfoHint } from "@/components/ui/info-hint"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
+import { CountryFlag } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { toast } from "@/lib/toast"
 
@@ -313,7 +314,10 @@ export default function ProfilesDashboard() {
                             {p.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </span>
                           {p.addresses?.[0]?.country && (
-                            <span className="text-xs text-muted-foreground font-medium">{p.addresses[0].country}</span>
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                              <CountryFlag value={p.addresses[0].country} />
+                              {label("NATIONALITY", p.addresses[0].country)}
+                            </span>
                           )}
                         </div>
                       </div>
