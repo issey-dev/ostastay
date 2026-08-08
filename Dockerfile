@@ -14,13 +14,15 @@ RUN apt-get update \
 # Full install including devDependencies: the build needs next, prisma, and tsc.
 FROM base AS deps
 WORKDIR /app
-# python3/make/g++: only needed when better-sqlite3 has no prebuilt binary for this
-# platform and falls back to compiling. unzip: puppeteer's postinstall (below) downloads
-# Chromium as a zip archive and has no pure-JS fallback extractor unless the optional
-# `yauzl` dependency is present — without a system unzip, `npm ci` fails outright rather
-# than silently degrading. All confined to this stage — none of it reaches the runtime image.
+# unzip: puppeteer's postinstall (below) downloads Chromium as a zip archive and has no
+# pure-JS fallback extractor unless the optional `yauzl` dependency is present — without
+# a system unzip, `npm ci` fails outright rather than silently degrading. Confined to
+# this stage — it doesn't reach the runtime image. (python3/make/g++ used to live here
+# too, for better-sqlite3's native binding — removed along with the SQLite driver
+# adapters once the app finished moving to PostgreSQL-only; nothing left in
+# package.json needs a C toolchain to install.)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ unzip \
+ && apt-get install -y --no-install-recommends unzip \
  && rm -rf /var/lib/apt/lists/*
 # puppeteer's postinstall downloads a matching Linux Chromium build during `npm ci`.
 # Pinned to a project-local path (rather than the default ~/.cache/puppeteer under
