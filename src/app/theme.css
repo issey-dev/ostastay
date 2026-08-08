@@ -161,6 +161,28 @@
     --z-toast: 60;
   }
 
+  /* PRINT / STATIONERY — fixed "paper" ink ramp, deliberately defined ONLY here (never
+     redefined under .dark below), so it can never flip with the app's dark-mode state.
+     Printed stationery (Invoice, Receipt, Confirmation Letter, Registration Card,
+     Statement, the Hub's Permission Matrix) is a physical printout — it stays light
+     regardless of the app's theme, same rationale as --print-ink's siblings below always
+     resolving to their light values even when <html> carries .dark. See DESIGN_PLAN.md
+     §4.5. Consumed only by the files in eslint.config.mjs's PRINT_DOCUMENT_FILES list via
+     arbitrary-value classes (text-[var(--print-ink)], border-[var(--print-border)], …) —
+     never by on-screen chrome, which uses the theme-aware tokens above instead.
+
+     Values mirror this file's own light-mode warm-neutral ramp (a lighter tone was needed
+     for the faintest captions/placeholder rules, so --print-faint borrows dark mode's
+     --muted-foreground value as a plain constant — it does not track dark mode here). */
+  :root {
+    --print-ink: #1C1917;           /* primary text + strongest rules — = light --foreground */
+    --print-ink-secondary: #3C3833; /* secondary/label text — = light --sidebar-foreground */
+    --print-muted: #6B6459;         /* captions — = light --muted-foreground */
+    --print-faint: #A5A096;         /* faintest labels + placeholder rules */
+    --print-border: #E6E2DA;        /* hairline dividers — = light --border */
+    --print-surface: #F3F1EB;       /* subtle fill backgrounds — = light --muted */
+  }
+
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see
      src/components/providers/dark-mode-provider.tsx). Obsidian is the canvas and Steel
      Slate the surface, exactly the roles the brand guide gives them.

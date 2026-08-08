@@ -77,11 +77,11 @@ export function StationeryHeader({
         <div className="flex items-start gap-3">
           <BrandMark brand={brand} />
           <div className="leading-tight">
-            <div className="text-base font-bold tracking-tight text-slate-900">{brand.name}</div>
-            {brand.address && <div className="mt-0.5 text-xs text-slate-500">{brand.address}</div>}
+            <div className="text-base font-bold tracking-tight text-[var(--print-ink)]">{brand.name}</div>
+            {brand.address && <div className="mt-0.5 text-xs text-[var(--print-muted)]">{brand.address}</div>}
           </div>
         </div>
-        <div className="space-y-0.5 text-right text-xs text-slate-500">
+        <div className="space-y-0.5 text-right text-xs text-[var(--print-muted)]">
           {brand.phone && <div>{brand.phone}</div>}
           {brand.email && <div>{brand.email}</div>}
           {brand.taxId && <div>Tax ID: {brand.taxId}</div>}
@@ -98,14 +98,14 @@ export function StationeryHeader({
           >
             {eyebrow}
           </div>
-          <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">{title}</h1>
+          <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-[var(--print-ink)]">{title}</h1>
         </div>
         {meta && meta.length > 0 && (
           <dl className="shrink-0 space-y-1 text-right text-xs">
             {meta.map((m) => (
               <div key={m.label} className="flex justify-end gap-2">
-                <dt className="text-slate-400">{m.label}</dt>
-                <dd className="font-medium text-slate-700">{m.value}</dd>
+                <dt className="text-[var(--print-faint)]">{m.label}</dt>
+                <dd className="font-medium text-[var(--print-ink-secondary)]">{m.value}</dd>
               </div>
             ))}
           </dl>
@@ -127,7 +127,7 @@ export function StationerySection({
 }) {
   return (
     <section className={`mb-6 ${className}`}>
-      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{title}</h2>
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--print-faint)]">{title}</h2>
       {children}
     </section>
   )
@@ -140,11 +140,11 @@ export function StationeryFieldGrid({ fields }: { fields: FieldItem[] }) {
     <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
       {fields.map((f, i) => (
         <div key={i} className="flex items-baseline gap-2">
-          <span className="w-28 shrink-0 text-slate-400">{f.label}</span>
+          <span className="w-28 shrink-0 text-[var(--print-faint)]">{f.label}</span>
           {f.value ? (
-            <span className="font-medium text-slate-800">{f.value}</span>
+            <span className="font-medium text-[var(--print-ink)]">{f.value}</span>
           ) : (
-            <span className="flex-1 border-b border-dashed border-slate-300">&nbsp;</span>
+            <span className="flex-1 border-b border-dashed border-[var(--print-faint)]">&nbsp;</span>
           )}
         </div>
       ))}
@@ -158,8 +158,8 @@ export function StationeryDefinitionList({ items }: { items: MetaItem[] }) {
     <dl className="space-y-1 text-sm">
       {items.map((it) => (
         <div key={it.label} className="flex gap-2">
-          <dt className="w-28 shrink-0 text-slate-400">{it.label}</dt>
-          <dd className="font-medium text-slate-800">{it.value}</dd>
+          <dt className="w-28 shrink-0 text-[var(--print-faint)]">{it.label}</dt>
+          <dd className="font-medium text-[var(--print-ink)]">{it.value}</dd>
         </div>
       ))}
     </dl>
@@ -180,26 +180,26 @@ export function StationeryTable({
     <table className="w-full border-collapse text-sm">
       <thead>
         <tr style={{ borderBottom: `1.5px solid ${brandColor}` }}>
-          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Date</th>
-          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Description</th>
-          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reference</th>
-          <th className="py-1.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount</th>
+          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">Date</th>
+          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">Description</th>
+          <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">Reference</th>
+          <th className="py-1.5 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">Amount</th>
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
           <tr>
-            <td colSpan={4} className="py-3 text-center text-xs text-slate-400">
+            <td colSpan={4} className="py-3 text-center text-xs text-[var(--print-faint)]">
               {emptyLabel}
             </td>
           </tr>
         ) : (
           rows.map((row, i) => (
-            <tr key={i} className="border-b border-slate-100">
-              <td className="whitespace-nowrap py-1.5 text-slate-600">{row.date}</td>
-              <td className="py-1.5 text-slate-800">{row.description}</td>
-              <td className="py-1.5 text-slate-500">{row.reference || "—"}</td>
-              <td className="whitespace-nowrap py-1.5 text-right font-medium text-slate-800">{formatMoney(row.amount)}</td>
+            <tr key={i} className="border-b border-[var(--print-border)]">
+              <td className="whitespace-nowrap py-1.5 text-[var(--print-ink-secondary)]">{row.date}</td>
+              <td className="py-1.5 text-[var(--print-ink)]">{row.description}</td>
+              <td className="py-1.5 text-[var(--print-muted)]">{row.reference || "—"}</td>
+              <td className="whitespace-nowrap py-1.5 text-right font-medium text-[var(--print-ink)]">{formatMoney(row.amount)}</td>
             </tr>
           ))
         )}
@@ -229,14 +229,14 @@ export function StationeryTotals({
         {lines.map((line) => (
           <div
             key={line.label}
-            className={`flex justify-between py-1.5 ${line.emphasis ? "font-semibold text-slate-800" : "text-slate-500"}`}
+            className={`flex justify-between py-1.5 ${line.emphasis ? "font-semibold text-[var(--print-ink)]" : "text-[var(--print-muted)]"}`}
           >
             <span>{line.label}</span>
             <span>{formatMoney(line.amount)}</span>
           </div>
         ))}
         <div
-          className="mt-1 flex justify-between border-t-2 border-slate-800 py-2.5 text-base font-bold"
+          className="mt-1 flex justify-between border-t-2 border-[var(--print-ink)] py-2.5 text-base font-bold"
           style={{ color: resolveBalanceColor(balanceAmount, brandColor) }}
         >
           <span>{balanceLabel}</span>
@@ -297,13 +297,13 @@ export function StationeryFooter({
     (paymentInfo.accountName || paymentInfo.accountNumber || paymentInfo.iban || paymentInfo.bankInfo)
 
   return (
-    <footer className="mt-auto border-t border-slate-200 pt-5">
+    <footer className="mt-auto border-t border-[var(--print-border)] pt-5">
       {(hasPaymentInfo || terms) && (
         <div className="mb-5 grid grid-cols-2 gap-6 text-xs">
           {hasPaymentInfo && (
             <div>
-              <div className="mb-1.5 font-semibold uppercase tracking-wide text-slate-500">Payment Information</div>
-              <div className="space-y-0.5 text-slate-600">
+              <div className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--print-muted)]">Payment Information</div>
+              <div className="space-y-0.5 text-[var(--print-ink-secondary)]">
                 {paymentInfo?.accountName && <div>Account Name: {paymentInfo.accountName}</div>}
                 {paymentInfo?.accountNumber && <div>Account Number: {paymentInfo.accountNumber}</div>}
                 {paymentInfo?.iban && <div>IBAN: {paymentInfo.iban}</div>}
@@ -313,14 +313,14 @@ export function StationeryFooter({
           )}
           {terms && (
             <div className={hasPaymentInfo ? "" : "col-span-2"}>
-              <div className="mb-1.5 font-semibold uppercase tracking-wide text-slate-500">Terms &amp; Conditions</div>
-              <div className="whitespace-pre-line text-slate-600">{terms}</div>
+              <div className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--print-muted)]">Terms &amp; Conditions</div>
+              <div className="whitespace-pre-line text-[var(--print-ink-secondary)]">{terms}</div>
             </div>
           )}
         </div>
       )}
-      {note && <p className="text-center text-sm italic text-slate-500 whitespace-pre-line">{note}</p>}
-      {contactLine && <p className="mt-2 text-center text-[11px] text-slate-400">{contactLine}</p>}
+      {note && <p className="text-center text-sm italic text-[var(--print-muted)] whitespace-pre-line">{note}</p>}
+      {contactLine && <p className="mt-2 text-center text-[11px] text-[var(--print-faint)]">{contactLine}</p>}
     </footer>
   )
 }
@@ -341,6 +341,6 @@ export function StationeryPage({
   // the true printable area was enough to push a one-page invoice onto a second sheet
   // carrying nothing but the header.
   return (
-    <div className={`flex min-h-[1000px] print:min-h-[273mm] flex-col text-slate-800 ${fontClass}`}>{children}</div>
+    <div className={`flex min-h-[1000px] print:min-h-[273mm] flex-col text-[var(--print-ink)] ${fontClass}`}>{children}</div>
   )
 }

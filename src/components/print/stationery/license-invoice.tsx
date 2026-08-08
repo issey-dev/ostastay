@@ -60,11 +60,11 @@ function BrandRow({ brand }: { brand: StationeryBrand }) {
             </div>
           )}
           <div className="leading-tight">
-            <div className="text-base font-bold tracking-tight text-slate-900">{brand.name}</div>
-            {brand.address && <div className="mt-0.5 text-xs text-slate-500 whitespace-pre-line">{brand.address}</div>}
+            <div className="text-base font-bold tracking-tight text-[var(--print-ink)]">{brand.name}</div>
+            {brand.address && <div className="mt-0.5 text-xs text-[var(--print-muted)] whitespace-pre-line">{brand.address}</div>}
           </div>
         </div>
-        <div className="space-y-0.5 text-right text-xs text-slate-500">
+        <div className="space-y-0.5 text-right text-xs text-[var(--print-muted)]">
           {brand.phone && <div>{brand.phone}</div>}
           {brand.email && <div>{brand.email}</div>}
           {brand.taxId && <div>Tax ID: {brand.taxId}</div>}
@@ -103,24 +103,24 @@ export function LicenseTaxInvoiceDocument({
       <BrandRow brand={brand} />
 
       {/* The title, exactly once. */}
-      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">Tax Invoice</h1>
+      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-[var(--print-ink)]">Tax Invoice</h1>
 
       {/* Centre-split header: invoice facts left, Bill To right. */}
       <div className="mb-8 grid grid-cols-2 gap-8">
         <dl className="space-y-1.5 text-sm">
           {detailItems.map((m) => (
             <div key={m.label} className="flex gap-2">
-              <dt className="w-32 shrink-0 text-slate-400">{m.label}</dt>
-              <dd className="font-medium text-slate-700">{m.value}</dd>
+              <dt className="w-32 shrink-0 text-[var(--print-faint)]">{m.label}</dt>
+              <dd className="font-medium text-[var(--print-ink-secondary)]">{m.value}</dd>
             </div>
           ))}
         </dl>
         <div className="text-sm">
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Bill To</div>
-          <div className="font-semibold text-slate-900">{billTo.enterpriseName}</div>
-          <div className="text-xs text-slate-500">Enterprise code: {billTo.enterpriseCode}</div>
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--print-faint)]">Bill To</div>
+          <div className="font-semibold text-[var(--print-ink)]">{billTo.enterpriseName}</div>
+          <div className="text-xs text-[var(--print-muted)]">Enterprise code: {billTo.enterpriseCode}</div>
           {billTo.properties.length > 0 && (
-            <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+            <div className="mt-1.5 space-y-0.5 text-xs text-[var(--print-ink-secondary)]">
               {billTo.properties.map((p) => (
                 <div key={p}>{p}</div>
               ))}
@@ -133,15 +133,15 @@ export function LicenseTaxInvoiceDocument({
       <StationerySection title="Details">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-slate-800 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="border-b-2 border-[var(--print-ink)] text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">
               <th className="py-2 pr-4">Description</th>
               <th className="py-2 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-slate-200">
-              <td className="py-3 pr-4 text-slate-700">{description}</td>
-              <td className="py-3 text-right font-medium tabular-nums text-slate-800">{formatMoney(grossAmount)}</td>
+            <tr className="border-b border-[var(--print-border)]">
+              <td className="py-3 pr-4 text-[var(--print-ink-secondary)]">{description}</td>
+              <td className="py-3 text-right font-medium tabular-nums text-[var(--print-ink)]">{formatMoney(grossAmount)}</td>
             </tr>
           </tbody>
         </table>
@@ -149,7 +149,7 @@ export function LicenseTaxInvoiceDocument({
 
       <div className="mb-8 flex justify-end">
         <div className="w-full max-w-[300px] text-sm">
-          <div className="flex justify-between py-1.5 text-slate-500">
+          <div className="flex justify-between py-1.5 text-[var(--print-muted)]">
             <span>Subtotal</span>
             <span className="tabular-nums">{formatMoney(grossAmount)}</span>
           </div>
@@ -159,7 +159,7 @@ export function LicenseTaxInvoiceDocument({
               <span className="tabular-nums">− {formatMoney(discountAmount)}</span>
             </div>
           )}
-          <div className="mt-1 flex justify-between border-t-2 border-slate-800 py-2.5 text-base font-bold text-slate-900">
+          <div className="mt-1 flex justify-between border-t-2 border-[var(--print-ink)] py-2.5 text-base font-bold text-[var(--print-ink)]">
             <span>{paid ? "Total · PAID" : "Total Due"}</span>
             <span className="tabular-nums">
               {currency} {formatMoney(netAmount)}
@@ -219,26 +219,26 @@ export function LicenseReceiptDocument({
     <StationeryPage fontClass={brand.fontClass}>
       <BrandRow brand={brand} />
 
-      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-slate-900">Payment Receipt</h1>
+      <h1 className="mt-5 mb-6 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-[var(--print-ink)]">Payment Receipt</h1>
 
       <div className="mb-8 grid grid-cols-2 gap-8">
         <dl className="space-y-1.5 text-sm">
           {detailItems.map((m) => (
             <div key={m.label} className="flex gap-2">
-              <dt className="w-32 shrink-0 text-slate-400">{m.label}</dt>
-              <dd className="font-medium text-slate-700">{m.value}</dd>
+              <dt className="w-32 shrink-0 text-[var(--print-faint)]">{m.label}</dt>
+              <dd className="font-medium text-[var(--print-ink-secondary)]">{m.value}</dd>
             </div>
           ))}
         </dl>
         <div className="text-sm">
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Received From</div>
-          <div className="font-semibold text-slate-900">{receivedFrom.enterpriseName}</div>
-          <div className="text-xs text-slate-500">Enterprise code: {receivedFrom.enterpriseCode}</div>
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--print-faint)]">Received From</div>
+          <div className="font-semibold text-[var(--print-ink)]">{receivedFrom.enterpriseName}</div>
+          <div className="text-xs text-[var(--print-muted)]">Enterprise code: {receivedFrom.enterpriseCode}</div>
         </div>
       </div>
 
       <StationerySection title="Payment For">
-        <p className="text-sm text-slate-700">{description}</p>
+        <p className="text-sm text-[var(--print-ink-secondary)]">{description}</p>
       </StationerySection>
 
       <StationeryAmountCallout label="Amount Received" amount={amount} currency={currency} brandColor={brand.brandColor} />
