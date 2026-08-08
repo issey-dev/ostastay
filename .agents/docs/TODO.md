@@ -2,6 +2,82 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Responsive design pass + Stationery overhaul (2026-08-08/09) — DONE
+
+App-wide mobile/tablet/desktop pass (PR #23), plus a full rework of how every printable
+document (Invoice, Payment/Exchange Receipt, Registration Card, Confirmation Letter,
+Debtor Statement) is presented (PR #26):
+
+- **Mobile card-stacking extended to every remaining page**, including the ~12
+  Controls/admin managers previously left on horizontal-scroll only (owner explicitly
+  asked for full parity, superseding the 2026-07-18 "acceptable minimum" scoping call).
+- **New `AvailabilityMobileList`** closes the §4.4 gap the design plan had flagged.
+  Tape Chart's and POS's mobile patterns turned out to already exist from an earlier
+  session — just undocumented here until now.
+- **Stationery documents now render chrome-free on screen**, not just during
+  `@media print` — `DashboardShell` (`src/components/dashboard-shell.tsx`) picks
+  between a full-chrome tree and a bare one via `usePathname()`, built server-side in
+  `dashboard/layout.tsx`. `PrintDocumentShell`'s control bar dropped Back/label — just
+  the delivery actions now. Route matcher: `src/lib/stationery-routes.ts`.
+- **Stationery's shared components (`blocks.tsx`/`documents.tsx`) had hardcoded
+  `grid-cols-2`/`grid-cols-5` with no mobile fallback** — root cause of labels wrapping
+  character-by-character on a phone. Fixed to `grid-cols-1 sm:grid-cols-N
+  print:grid-cols-N` (print keeps the real A4 layout regardless of screen size).
+- **New: Email a document to a guest + download a clean PDF.** Headless Chrome
+  (`src/lib/stationery-pdf.ts`, Puppeteer) renders the same authenticated print page
+  server-side — the OS print-to-PDF path was unreliable across devices (iOS Safari
+  ignores the `@page{margin:0}` trick that works on desktop Chrome, stamping a
+  URL/date/page footer onto every page). One rendering path serves both the download
+  button and the email attachment (`src/lib/send-stationery-email.ts`). The Email
+  button (`src/components/print/email-document-dialog.tsx`) replaces the old
+  hard-fail-if-no-email-on-file behavior with a real picker: existing profile emails,
+  or a new one with an option to save it back to the profile.
+- **`sendMail` (tenant mailer) gained `attachments` support** — needed for the PDF
+  attachment above; reconciled with the platform-mailer rework from the SMTP sender PR
+  (#25) that landed in between.
+- **New Dockerfile runtime dependency**: Puppeteer + its Chromium binary. Debian
+  shared-library set added to the `runner` stage; the downloaded browser (never
+  `import`ed, only spawned, so standalone tracing can't see it) is copied explicitly
+  via a pinned `PUPPETEER_CACHE_DIR`.
+
+**Real bugs found and fixed along the way, not just missing mobile layouts:** a table
+with no `overflow-x-auto` at all on Hub's active-sessions (genuine horizontal overflow),
+a `sm:max-w-sm` dialog-width trap on the POS walk-in folio panel, a `sm:`/`md:`
+tier-boundary bug on the guest-facing eRegistration form, and the Guest Folio panel's
+Balance Card being an unwrapped `flex justify-between` row that forced the whole dialog
+wider than the viewport on mobile.
+
+**Deploy pipeline was broken for ~2.5 hours after PR #26 merged — three follow-up
+fixes, in order (PRs #27, #28, #29), worth reading if this pattern recurs:**
+1. **Puppeteer's Chromium download needs `unzip`** to extract the archive; the
+   Dockerfile's `deps` stage only had `python3 make g++` installed. `npm ci` failed
+   outright with "no zip archiver is available."
+2. **A type-narrowing bug** in `send-statement/route.ts`'s `loadAccount()` helper
+   (inconsistent return shape between branches) was failing `tsc --noEmit` in CI —
+   initially misdiagnosed as a pre-existing/unrelated test issue since the *test file*
+   itself was untouched; the actual cause was the *route* it tested changing shape.
+3. **Two pre-existing test suites needed updating + a real Server/Client boundary bug**:
+   `confirmation-letter.test.ts`/`debtors.test.ts` predated the new explicit-email
+   contract and didn't mock `generateStationeryPdf` (tried to launch a real headless
+   browser on a bare CI runner with no Chromium libs). Separately, `DashboardShell`
+   (a `"use client"` component) directly imported `AppSidebar` (an async Server
+   Component reading `cookies()`/Prisma) — Next.js can't bundle that into a client
+   bundle, and `npm run build` failed outright. **`tsc --noEmit` alone never catches
+   this class of bug** — the Server/Client boundary is enforced by Next's bundler at
+   build time, not by TypeScript. Lesson: run the real `npm run build` (not just tsc)
+   before calling any layout/shell-level change verified.
+
+**Not done, flagged to the owner, still open:**
+- **Version bump.** `package.json` has said `5.8.0` since the eRegistration PR (#20),
+  untagged (last real tag is `v5.7.0`). Owner chose `5.9.0` to cover the responsive
+  pass + platform SMTP sender together, but asked to hold the actual bump/tag until
+  all the related PRs were merged — they now are (#23 through #29). Bumping
+  `package.json` + `package-lock.json` + a `vX.Y.Z` git tag directly on `master` is a
+  deliberate, owner-decided action per this repo's own precedent (see the `5.7.0` vs.
+  `6.0.0` entry below) — do it on request, not proactively.
+- **Puppeteer/Chromium adds real weight to the Docker image and cold-build time** on a
+  small VPS — worth watching; no action needed unless it becomes a problem.
+
 ## Platform email sender (2026-08-08) — DONE
 
 App-owner requirement: "from Uppsolut Stay we send initial Enterprise credentials / Links
