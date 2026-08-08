@@ -15,18 +15,19 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* TYPOGRAPHY — one family, Inter (loaded once in layout.tsx via next/font), with
-     Helvetica ahead of the generic sans fallback: the Swiss grotesque Inter descends
-     from, so the page degrades to a near-identical shape if the webfont is slow.
-     There is deliberately no second face and no separate monospace webfont.
+  /* TYPOGRAPHY — the two faces the brand guide names (§07): Inter for everything, and
+     JetBrains Mono reserved for labels and readouts. Both are loaded once in layout.tsx
+     via next/font. Helvetica sits ahead of the generic sans fallback: the Swiss grotesque
+     Inter descends from, so the page degrades to a near-identical shape if the webfont
+     is slow.
 
-     --font-mono resolves to the same stack rather than a mono family. Numeric column
-     alignment comes from the `tabular-nums` utility (Inter ships proper tabular
-     figures), which is how the app already aligns money and date columns. This token
-     previously pointed at --font-geist-mono, which is defined nowhere in the repo — so
-     every `font-mono` call site was silently resolving to an undefined variable. */
+     --font-mono was previously an alias of --font-sans (and before that pointed at
+     --font-geist-mono, defined nowhere in the repo). Numeric COLUMN alignment still
+     comes from the `tabular-nums` utility — Inter ships proper tabular figures — so
+     money and date columns do not depend on this token. What the mono face is for is
+     the guide's "data label" role: identifiers, codes, log output. */
   --font-sans: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: var(--font-sans);
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -98,42 +99,19 @@
   }
 }
 
-/* Subtle per-property brand accent, applied app-wide via the injected --property-accent
-   variable (see PropertyAccentScope in the dashboard layout). The accent hugs the card's
-   HEADER only — a short colored edge beside the title/description, not a full-height rail
-   down the whole card — so the brand stays a quiet touch rather than a heavy border (it
-   mirrors the page-header treatment on the Stationaries page). The variable is only set
-   when the property has chosen a banner color, so with no color set nothing is accented
-   (monochromatic). Dialogs/popovers portal outside the scope and never inherit it.
+/* PER-PROPERTY ACCENT — REMOVED FROM APP CHROME (2026-08-08).
+   Two rules used to live here: a `--property-accent` edge on every card header, and a
+   low-alpha wash on the active sidebar item. Both were dropped when the Uppsolut brand
+   palette landed, because Crimson OS is now the app's own primary — a second accent
+   colour running through the same chrome put two brand colours on screen at once, and
+   on tenants whose banner colour sits near crimson the two simply muddied each other.
 
-   Uses an inset box-shadow rather than border-left so it adds no width: a real left
-   border would push the header's content 2px right of the body/table below it, leaving
-   the title misaligned with the rows. Cards with no header show no accent (intended —
-   the accent is a header ornament). Revert by deleting this block + PropertyAccentScope. */
-.property-accent-scope
-  [data-slot="card"]:not([data-slot="card"] [data-slot="card"])
-  > [data-slot="card-header"] {
-  box-shadow: inset 2px 0 0 0 var(--property-accent);
-}
-
-/* The active sidebar item, tinted with the same per-property accent as the card edge
-   above — a very low-alpha wash, not a filled pill. The class is only applied when the
-   property has actually chosen a banner color (AppSidebarNav sets --property-accent
-   inline alongside it); with no color set the class is absent and SidebarMenuButton's
-   own neutral `data-active:bg-sidebar-accent` shows through unchanged.
-
-   The class name is doubled deliberately: this needs to out-specify Tailwind's
-   `data-active:bg-sidebar-accent` utility, which is also (0,2,0) and would otherwise win
-   or lose on source order alone. Dark mode gets a slightly stronger mix — the same alpha
-   reads noticeably fainter against #171717 than against white.
-   Revert by deleting this block + the accent lines in AppSidebarNav. */
-.sidebar-item-accent.sidebar-item-accent[data-active] {
-  background-color: color-mix(in oklab, var(--property-accent) 12%, transparent);
-}
-
-.dark .sidebar-item-accent.sidebar-item-accent[data-active] {
-  background-color: color-mix(in oklab, var(--property-accent) 20%, transparent);
-}
+   The per-property colour is NOT gone; it was scoped, not deleted. It still identifies a
+   property where it does not compete with product chrome:
+     - the thin banner bar at the top of every tenant page (PropertyBannerBar)
+     - printed stationery and the eRegistration page (resolveStationeryBrand)
+     - the property switcher's colour dots
+   Property.bannerColor and its picker in Controls → General are untouched. */
 
 /* Respect the OS-level reduced-motion preference globally — collapses every
    token-driven duration to near-zero so no component needs its own reduced-motion

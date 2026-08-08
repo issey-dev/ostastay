@@ -90,7 +90,7 @@ export function PropertyOnboardingGate({
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
             No property yet
-            <InfoHint label="No property yet">Everything in Uppsolut PMS — reservations, rooms, rates, billing — belongs to a property, so there is nothing to show until you add one. Create it here; Osta reviews and approves it before it goes live.</InfoHint>
+            <InfoHint label="No property yet">Everything in Uppsolut Stay — reservations, rooms, rates, billing — belongs to a property, so there is nothing to show until you add one. Create it here; Osta reviews and approves it before it goes live.</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent>

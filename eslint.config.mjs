@@ -21,6 +21,10 @@ const ALLOWED_HEX_FILES = [
   "src/app/theme.css",
   "src/lib/themePresets.ts",
   "src/lib/invoice-branding.ts",
+  // The brand palette as JS literals, for the surfaces that cannot read a CSS custom
+  // property at all (HTML metadata/theme-color, PDF and XLSX renderers, email HTML).
+  // See the header comment in that file.
+  "src/lib/brand.ts",
 ];
 
 // Printed invoice documents intentionally render as fixed "paper" (light background,

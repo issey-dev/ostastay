@@ -2678,3 +2678,69 @@ the payment itself (group master folios still set the stamp directly at creation
   by all four Debtors routes, which now select the payment method's type. Without the
   type a transfer is indistinguishable from cash and every account would read as settled.
   Pinned in `tests/business-rules/city-ledger-receivable.test.ts`.
+
+## Uppsolut brand integration — palette, marks, naming (2026-08-08)
+
+The marketing/sales team delivered a brand kit, now in-repo at `branding-guide/`
+(`uppsolut_brand_guidelines.html` v1.1 plus the asset kit). **That kit outranks
+DESIGN_PLAN.md** — where the two disagree, the kit wins, and §2.1's warm-neutral system
+is the specific thing it overrode. Owner confirmed this explicitly.
+
+**The product is UPPSOLUT STAY.** The guide defines a sub-brand architecture — Stay
+(Property), Stock (Inventory), Pay (POS), Desk (Service), Rent (Rentals) — and this app
+is the Property module, which is also why the domain is `stay.uppsolut.com`. "Uppsolut
+PMS", used briefly earlier in the rename from OstaStay, was never part of that system and
+is gone. The plain company name **Uppsolut** is still correct for vendor-level surfaces:
+license invoices and the `/osta` platform-admin console, which spans every module.
+
+**Palette.** The five brand values replaced the warm-neutral ramp wholesale. Crimson OS
+`#8B0000` is `--primary`; Platinum/Obsidian/Slate carry canvas, text and surfaces; Deep
+Maroon `#580816` is the sidebar rail in BOTH modes (the guide assigns it to "sidebar
+nav", and it is structural furniture rather than a surface that follows the canvas).
+Neutrals are now COOL — no warm greys anywhere; that consistency is the effect.
+
+- **Destructive vs primary is the live tension in a red-branded product.** In light mode
+  they separate by lightness (`#C22F2F` sits deliberately BRIGHTER than Crimson — do not
+  "correct" it darker). In dark mode both must be light enough to read, which collapses
+  that gap, so destructive shifts hue to a frank orange-red `#FF7043` instead. If the two
+  still read alike in practice, the next lever is making destructive buttons outline
+  rather than filled — not re-tinting the brand.
+- Every token pair was measured against `--card` and `--background` in both modes; all
+  AA text pairs pass. Dark `--primary` shipped once at `#E04343` and was caught at 4.07:1
+  before landing.
+
+**Per-property accent was scoped, not removed** (owner decision). Crimson is now the
+app's own accent, so a second accent in the same chrome muddied it. Dropped: the card
+header edge and the active sidebar-item wash — with them `PropertyAccentScope` and the
+`--property-accent` variable, now deleted. Kept: the thin banner bar, printed stationery,
+eRegistration, and the switcher's colour dots. `Property.bannerColor` and its picker are
+untouched.
+
+**Marks are rebuilt, not imported.** `src/components/brand/uppsolut-logo.tsx` renders the
+wordmark/lockup/icon as inline SVG. The kit's own SVGs `@import` Inter from Google Fonts
+inside the file, which would refetch a self-hosted font and break under a strict CSP. The
+kit's measurements (font sizes, `textLength` width-locks, baselines) are reproduced
+exactly — the odd numbers (14.6, -1, 216) are theirs, don't tidy them.
+
+**Favicons are baked, not hand-drawn.** The kit ships only `_approximate-do-not-ship`
+placeholders plus `bake-inter-favicons.py`, which extracts the true Inter Black "U" as an
+outlined path. Ran it against the real Inter variable font (OFL) at wght 900; output is in
+`public/`. Browsers do not load webfonts inside favicons, so the outline is what makes the
+icon and the wordmark's U the same shape.
+
+**`src/lib/brand.ts` is new** — the brand palette as JS literals, for the surfaces that
+cannot read a CSS custom property: HTML metadata/theme-color, PDF/XLSX renderers, email
+HTML. Registered in `eslint.config.mjs`'s `ALLOWED_HEX_FILES`. It exists because those
+contexts had each grown a private hex; the stationery default was indigo `#4f46e5`, from
+no palette this product ever used, and it accented every document of every tenant without
+a banner colour. Now Crimson.
+
+**JetBrains Mono is now loaded.** `--font-mono` aliased the sans stack, so ~45 `font-mono`
+call sites rendered in Inter. The guide reserves a mono face for labels and readouts.
+Numeric COLUMN alignment still comes from `tabular-nums`, not from this token.
+
+**Not done in this pass** (each would have bloated the change; see the spawned follow-ups):
+print stationery is still on the raw Tailwind slate ramp, the four email templates still
+carry their own inline grey palette, the PDF/XLSX renderers still hold `rgb()` literals,
+and `/e/[slug]/hub/permission-matrix` still uses raw `slate-*` classes (pre-existing, and
+broken in dark mode).
