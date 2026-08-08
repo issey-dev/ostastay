@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { sendPlatformMail, isPlatformSmtpConfigured } from "@/lib/mailer";
+import { buildEnterpriseWelcomeEmail } from "@/lib/email-templates";
 
 // Mint a customer enterprise's FIRST user — the handover account the operator gives the
 // client so they can sign in and take over (app-owner requirement, 2026-08-03:
@@ -98,12 +100,54 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await logActivity({ ctx, module: "CONTROLS", action: "CREATE", entityType: "User", entityId: user.id, description });
     await logActivity({ ctx, module: "CONTROLS", action: "CREATE", entityType: "User", entityId: user.id, description, targetEnterpriseId: id });
 
+    // Email the handover details from the PLATFORM sender — this is mail from Uppsolut
+    // Stay, and a brand-new enterprise has no SMTP of its own to send it with.
+    //
+    // Deliberately NON-FATAL, and deliberately after the activity log: the user genuinely
+    // exists by this point, so a failed send must not turn into a 500 that suggests
+    // otherwise and tempts the operator to retry (the retry would be refused — this
+    // endpoint only ever mints the FIRST user). The password is still returned below for
+    // manual handover, which is the flow that worked before mail existed at all. The
+    // outcome is reported so the operator knows which of the two happened.
+    let emailed = false;
+    let emailError: string | null = null;
+    if (!isPlatformSmtpConfigured()) {
+      emailError = "Platform SMTP is not configured — hand these details over manually.";
+    } else {
+      try {
+        const mail = buildEnterpriseWelcomeEmail({
+          firstName,
+          email,
+          password,
+          enterpriseName: enterprise.name,
+          enterpriseSlug: enterprise.slug,
+        });
+        await sendPlatformMail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
+        emailed = true;
+        await logActivity({
+          ctx,
+          module: "CONTROLS",
+          action: "CREATE",
+          entityType: "User",
+          entityId: user.id,
+          description: `Emailed handover sign-in details to ${email}`,
+          targetEnterpriseId: id,
+        });
+      } catch (mailError) {
+        // Never log the message body — it contains the plaintext password.
+        console.error("Failed to email handover credentials:", mailError);
+        emailError = "The account was created, but the welcome email could not be sent.";
+      }
+    }
+
     return NextResponse.json(
       {
         email,
         // The one and only time this password exists outside its bcrypt hash.
         password,
         enterpriseSlug: enterprise.slug,
+        emailed,
+        emailError,
         warning:
           "Copy these now — the password is shown only once, and it is TEMPORARY: the client will be required to set their own password at first sign-in before anything else works.",
       },
