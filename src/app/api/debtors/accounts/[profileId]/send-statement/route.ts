@@ -108,7 +108,7 @@ async function loadAccount(ctx: AuthContext, profileId: string, propertyId: stri
 
   const profile = await prisma.profile.findUnique({ where: { upid: profileId } });
   if (!profile || profile.enterpriseId !== ctx.enterpriseId || !profile.isCreditAccount) {
-    return { error: NextResponse.json({ error: "Credit account not found" }, { status: 404 }) } as const;
+    return { error: NextResponse.json({ error: "Credit account not found" }, { status: 404 }), profile: undefined, property: undefined } as const;
   }
 
   const property = await prisma.property.findUnique({
@@ -116,10 +116,10 @@ async function loadAccount(ctx: AuthContext, profileId: string, propertyId: stri
     include: { enterprise: { select: { slug: true } } },
   });
   if (!property) {
-    return { error: NextResponse.json({ error: "Property not found" }, { status: 404 }) } as const;
+    return { error: NextResponse.json({ error: "Property not found" }, { status: 404 }), profile: undefined, property: undefined } as const;
   }
 
-  return { profile, property } as const;
+  return { error: undefined, profile, property } as const;
 }
 
 function pdfPathFor(slug: string, profileId: string) {
@@ -133,7 +133,7 @@ function filenameFor(accountName: string) {
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ profileId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "DEBTORS", "view");
@@ -150,7 +150,7 @@ export async function POST(
     }
 
     const loaded = await loadAccount(ctx, profileId, propertyId);
-    if ("error" in loaded) return loaded.error;
+    if (loaded.error) return loaded.error;
     const { profile, property } = loaded;
 
     const authToken = (await cookies()).get("auth_token")?.value;
@@ -213,7 +213,7 @@ export async function POST(
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ profileId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "DEBTORS", "view");
@@ -226,7 +226,7 @@ export async function GET(
     }
 
     const loaded = await loadAccount(ctx, profileId, propertyId);
-    if ("error" in loaded) return loaded.error;
+    if (loaded.error) return loaded.error;
     const { profile, property } = loaded;
 
     const authToken = (await cookies()).get("auth_token")?.value;
