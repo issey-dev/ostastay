@@ -46,7 +46,26 @@ export function RatePlanTab({
             plan should publish to — mapping is optional; a property can share availability on a single default
             rate before per-plan mapping exists.
           </p>
-          <div className="overflow-x-auto rounded-md border border-border">
+          {/* Phone view — the mapping input needs its own row width to be usable with a
+              thumb, so each rate plan becomes a small card. */}
+          <div className="space-y-3 md:hidden">
+            {ratePlans.map((rp) => (
+              <div key={rp.ratePlanId} className="space-y-3 rounded-md border border-border bg-card p-4">
+                <div>
+                  <span className="text-sm font-medium">{rp.ratePlanName}</span>
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{rp.ratePlanCode}</span>
+                </div>
+                <MappingInput
+                  value={rp.externalRateId ?? ""}
+                  disabled={!canManage}
+                  placeholder="e.g. 1"
+                  onSave={(v) => onPatch({ ratePlanId: rp.ratePlanId, externalRateId: v }, "Mapping saved")}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-md border border-border md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -77,14 +96,14 @@ export function RatePlanTab({
         </>
       )}
 
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border p-4">
+      <div className="flex flex-col items-start gap-3 rounded-md border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-sm font-semibold">Send prices for a date range</h4>
           <p className="text-sm text-muted-foreground">
             Push what&rsquo;s configured in the PMS for the mapped rate plans, for any date range you choose.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setSendOpen(true)}>
+        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setSendOpen(true)}>
           <DollarSign className="h-4 w-4 mr-2" />
           Send prices
         </Button>

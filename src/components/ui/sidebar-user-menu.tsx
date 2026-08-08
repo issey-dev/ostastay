@@ -65,14 +65,18 @@ export function SidebarUserMenu({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton onClick={() => setOpen(true)} tooltip={name} className="h-auto py-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+        {/* This trigger sits on the Deep Maroon rail, so it takes sidebar-* tokens. The
+            dialog below is portaled to <body> and is a normal content surface, which is
+            why it keeps using bg-muted / text-muted-foreground and should NOT be changed
+            to match this. */}
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
           {initials(name) || "U"}
         </span>
         <div className="flex flex-col items-start min-w-0">
           <span className="text-sm font-semibold truncate w-full leading-tight">{name}</span>
-          <span className="text-xs text-muted-foreground truncate w-full leading-tight">{roleName}</span>
+          <span className="text-xs text-sidebar-foreground/70 truncate w-full leading-tight">{roleName}</span>
         </div>
-        <ChevronsUpDown className="ml-auto h-4 w-4 text-muted-foreground shrink-0" />
+        <ChevronsUpDown className="ml-auto h-4 w-4 text-sidebar-foreground/70 shrink-0" />
       </SidebarMenuButton>
 
       <Dialog open={open} onOpenChange={setOpen}>

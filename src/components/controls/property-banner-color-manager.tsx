@@ -92,14 +92,14 @@ export function PropertyBannerColorManager() {
           className="h-1.5 w-full transition-[background] duration-200"
           style={{ background: previewed.hex ?? NONE_HATCH }}
         />
-        <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-          <div className="flex flex-col gap-1.5" aria-hidden>
-            <div className="h-2 w-[180px] rounded-full bg-muted-foreground/25" />
-            <div className="h-2 w-[120px] rounded-full bg-muted-foreground/15" />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5">
+          <div className="flex min-w-0 flex-col gap-1.5" aria-hidden>
+            <div className="h-2 w-44 max-w-full rounded-full bg-muted-foreground/25" />
+            <div className="h-2 w-28 max-w-full rounded-full bg-muted-foreground/15" />
           </div>
           <div
             className={cn(
-              "text-[11px] font-medium uppercase tracking-wider tabular-nums transition-colors",
+              "shrink-0 text-[11px] font-medium uppercase tracking-wider tabular-nums transition-colors",
               isPreviewing ? "text-muted-foreground" : "text-foreground"
             )}
           >

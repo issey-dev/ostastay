@@ -144,7 +144,72 @@ export function InboundBookingsManager({ canManage }: { canManage: boolean }) {
           description="Bookings from Booking.com, Expedia, Airbnb and Agoda will appear here once the webhook is connected."
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
+        <>
+          {/* Phone view — the table is six columns wide (seven with the action column),
+              unreadable on a narrow screen. Each booking becomes a card instead. */}
+          <div className="space-y-3 md:hidden">
+            {bookings.map((b) => (
+              <div
+                key={b.id}
+                className={`space-y-3 rounded-md border p-4 ${
+                  b.isOverbooking && !b.acknowledgedAt ? "border-destructive/30 bg-destructive-muted/40" : "border-border bg-card"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">
+                      {[b.guestFirstName, b.guestLastName].filter(Boolean).join(" ") || "—"}
+                    </div>
+                    <div className="font-mono text-xs text-muted-foreground">{b.externalBookingId}</div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {b.isOverbooking && (
+                      <Badge variant={b.acknowledgedAt ? "secondary" : "destructive"}>
+                        {b.acknowledgedAt ? "Overbooking (seen)" : "Overbooking"}
+                      </Badge>
+                    )}
+                    {b.channelStatus && !b.isOverbooking && <Badge variant="secondary">{b.channelStatus}</Badge>}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <span className="whitespace-nowrap">{fmtDate(b.arrival)} → {fmtDate(b.departure)}</span>
+                  <span>
+                    {b.roomTypeName ?? (
+                      <span className="text-muted-foreground">
+                        unmapped{b.externalRoomId ? ` (${b.externalRoomId})` : ""}
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  {b.channelName ?? "—"} · {b.source === "WEBHOOK" ? "webhook" : "poll"}
+                </div>
+
+                {(b.problem || b.overbookingNote) && (
+                  <div className="space-y-1">
+                    {b.problem && <p className="text-xs text-destructive">{b.problem}</p>}
+                    {b.overbookingNote && <p className="text-xs text-destructive">{b.overbookingNote}</p>}
+                  </div>
+                )}
+
+                {canManage && b.isOverbooking && !b.acknowledgedAt && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-full"
+                    disabled={busyId === b.id}
+                    onClick={() => void acknowledge(b)}
+                  >
+                    Acknowledge
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-md border border-border md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -209,7 +274,8 @@ export function InboundBookingsManager({ canManage }: { canManage: boolean }) {
               ))}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
 
       <p className="text-xs text-muted-foreground">

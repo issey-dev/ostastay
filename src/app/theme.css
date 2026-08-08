@@ -110,9 +110,15 @@
     --sidebar-foreground: #DCE1E6; /* Platinum, eased back off full strength */
     --sidebar-primary: #F4F6F8;
     --sidebar-primary-foreground: #580816;
-    --sidebar-accent: #6E1522;     /* Hover/active — a step up from the rail */
+    /* Hover/active fill, and the rail's dividers. These are NON-TEXT indicators, so what
+       matters is whether they read as a shape against the rail — not a text ratio. The
+       first pass used #6E1522 / #75202D, which measured 1.23:1 and 1.37:1 against the
+       maroon: the selected nav item and the selected property were effectively invisible
+       even though their labels were perfectly legible. Lifted until the shape reads
+       (1.83:1 and 2.04:1) while keeping Platinum at 7.24:1 on the accent. */
+    --sidebar-accent: #96293C;
     --sidebar-accent-foreground: #F4F6F8;
-    --sidebar-border: #75202D;
+    --sidebar-border: #9C3444;
     --sidebar-ring: #F4F6F8;
 
     /* Charts — anchored to Crimson so a chart never opens with a hue the brand doesn't
@@ -242,9 +248,9 @@
     --sidebar-foreground: #DCE1E6;
     --sidebar-primary: #F4F6F8;
     --sidebar-primary-foreground: #580816;
-    --sidebar-accent: #6E1522;
+    --sidebar-accent: #96293C;
     --sidebar-accent-foreground: #F4F6F8;
-    --sidebar-border: #75202D;
+    --sidebar-border: #9C3444;
     --sidebar-ring: #F4F6F8;
 
     /* chart-1 lifts with the primary; the rest brighten for the dark canvas. */

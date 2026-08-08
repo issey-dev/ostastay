@@ -151,6 +151,91 @@ export function PropertiesManager({ title, description }: { title: string; descr
       </Dialog>
 
       <div className="-mx-6 -mb-6 border-t border-border">
+          {/* Phone — card stack. Table below takes over at md. */}
+          <div className="md:hidden">
+            {loading ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-28 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : properties.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="No Properties Yet"
+                description="You haven't added any properties to your portfolio. Create your first hotel to get started."
+                action={
+                  <Button onClick={() => setIsDialogOpen(true)} className="shadow-md">
+                    <Plus className="mr-2 h-4 w-4" /> Create Property
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedProperties.map((property) => (
+                  <div key={property.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">{property.code}</p>
+                        <p className="font-semibold text-foreground truncate">{property.name}</p>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />
+                        {property.status === "PENDING" && (
+                          <span className="text-xs text-muted-foreground">Awaiting approval</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {property.status === "REJECTED" && property.rejectionReason && (
+                      <p className="text-xs text-destructive">{property.rejectionReason}</p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span>Check-in <span className="font-medium text-foreground">{property.checkInTime}</span></span>
+                      <span>Check-out <span className="font-medium text-foreground">{property.checkOutTime}</span></span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {property.status === "REJECTED" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 flex-1 text-info"
+                          disabled={resubmitting === property.id}
+                          onClick={() => handleResubmit(property.id)}
+                        >
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          {resubmitting === property.id ? "Resubmitting..." : "Resubmit"}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 flex-1"
+                        onClick={() => {
+                          setSelectedProperty(property)
+                          setIsDialogOpen(true)
+                        }}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 flex-1 text-destructive"
+                        onClick={() => setPropertyToDelete(property)}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border hover:bg-transparent">
@@ -258,6 +343,7 @@ export function PropertiesManager({ title, description }: { title: string; descr
               )}
             </TableBody>
           </Table>
+          </div>
       </div>
     </ControlsCard>
   )

@@ -135,41 +135,73 @@ export function SpaCategoriesManager({ onChanged }: { onChanged?: () => void }) 
       ) : categories.length === 0 ? (
         <EmptyState icon={Sparkles} title="No treatment categories yet" description="e.g. Massage, Facial, Body Treatment, Manicure & Pedicure." />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Order</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Phone view — the table below takes over at md. */}
+          <div className="md:hidden space-y-3">
             {categories.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{c.description || "—"}</TableCell>
-                <TableCell className="text-sm">{c.displayOrder}</TableCell>
-                <TableCell>
+              <div key={c.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{c.name}</p>
+                    {c.description && <p className="text-sm text-muted-foreground truncate">{c.description}</p>}
+                  </div>
                   {c.isActive ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                    <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                    <Badge variant="outline" className="text-muted-foreground shrink-0">Inactive</Badge>
                   )}
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="icon" aria-label="Edit category" onClick={() => openEdit(c)}>
-                    <Pencil className="h-4 w-4" />
+                </div>
+                <p className="text-sm text-muted-foreground">Order: <span className="text-foreground">{c.displayOrder}</span></p>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(c)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                   </Button>
-                  <Button variant="outline" size="icon" aria-label="Delete category" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                   </Button>
-                </TableCell>
-              </TableRow>
+                </div>
+              </div>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categories.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{c.description || "—"}</TableCell>
+                    <TableCell className="text-sm">{c.displayOrder}</TableCell>
+                    <TableCell>
+                      {c.isActive ? (
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="icon" aria-label="Edit category" onClick={() => openEdit(c)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" aria-label="Delete category" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

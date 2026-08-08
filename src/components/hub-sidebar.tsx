@@ -3,6 +3,7 @@ import { requireSession, hasHubAccess, hasAnyPropertyModule, resolveCurrentPrope
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
 import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
+import { APP_VERSION } from "@/lib/version"
 import {
   Sidebar,
   SidebarContent,
@@ -98,7 +99,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
             <SidebarMenuButton>
               <div className="flex flex-col items-start px-2 py-1">
                 <span className="text-sm font-semibold truncate w-full">{name}</span>
-                <span className="text-xs text-muted-foreground truncate w-full">{roleName}</span>
+                <span className="text-xs text-sidebar-foreground/70 truncate w-full">{roleName}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -106,6 +107,9 @@ export async function HubSidebar({ slug }: { slug: string }) {
             <LogoutButton />
           </SidebarMenuItem>
         </SidebarMenu>
+        <p className="mt-2 px-2 text-[10px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+          Uppsolut Stay v{APP_VERSION}
+        </p>
       </div>
     </Sidebar>
   )

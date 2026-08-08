@@ -134,7 +134,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
 
       {adding ? (
         <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">Document Type</Label>
               <SystemCodeSelect category="ID_TYPE" value={form.documentType} onValueChange={(v) => setForm((p) => ({ ...p, documentType: v }))} placeholder="Select type" />
@@ -144,7 +144,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
               <Input placeholder="e.g. AB123456" value={form.documentNumber} onChange={(e) => setForm((p) => ({ ...p, documentNumber: e.target.value }))} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">Issued Country</Label>
               <SystemCodeSelect category="NATIONALITY" value={form.issuingCountry} onValueChange={(v) => setForm((p) => ({ ...p, issuingCountry: v }))} placeholder="Select country" />

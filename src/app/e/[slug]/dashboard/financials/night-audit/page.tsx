@@ -358,8 +358,8 @@ export default function EndOfDayPage() {
                     </div>
                   </div>
                   {extendFor === d.id && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <DatePicker value={extendDate} onChange={setExtendDate} className="w-44" />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <DatePicker value={extendDate} onChange={setExtendDate} className="w-full sm:w-44" />
                       <Button size="sm" disabled={!extendDate || busy === `ext-${d.id}`} onClick={() => extendStay(d.id)}>
                         {busy === `ext-${d.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
                       </Button>

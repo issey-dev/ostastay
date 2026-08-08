@@ -621,7 +621,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             </Button>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-muted-foreground text-xs">Check-In</p>
                 <p className="font-semibold">{format(new Date(reservation.checkInDate), "EEE, dd-MMM-yy")}</p>
@@ -641,7 +641,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-muted-foreground text-xs mb-1">Rate Plan{ratePlans.length > 1 ? "s" : ""}</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -707,38 +707,69 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-6">Dates</TableHead>
-                  <TableHead>Room Type</TableHead>
-                  <TableHead>Room</TableHead>
-                  <TableHead>Rate Plan</TableHead>
-                  <TableHead className="text-right pr-6">Override Rate</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(reservation.assignments ?? []).map((a: any) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="pl-6 text-sm">
+            {/* Mobile: stacked cards — a 5-column table is unreadable at phone width. */}
+            <div className="md:hidden divide-y divide-border">
+              {(reservation.assignments ?? []).map((a: any) => (
+                <div key={a.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
                       {format(new Date(a.startDate), "dd-MMM")} – {format(new Date(a.endDate), "dd-MMM-yy")}
-                    </TableCell>
-                    <TableCell>{a.roomType?.name}</TableCell>
-                    <TableCell>
-                      {a.room ? (
-                        <Badge variant="outline">{a.room.roomNumber}</Badge>
-                      ) : (
-                        <span className="text-warning text-xs font-medium">Unassigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">{a.ratePlan?.code} — {a.ratePlan?.name}</TableCell>
-                    <TableCell className="text-right pr-6 font-mono text-sm">
-                      {a.overrideRate != null ? money(a.overrideRate) : "—"}
-                    </TableCell>
+                    </span>
+                    {a.room ? (
+                      <Badge variant="outline">{a.room.roomNumber}</Badge>
+                    ) : (
+                      <span className="text-warning text-xs font-medium">Unassigned</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>{a.roomType?.name}</span>
+                    <span className="text-right">{a.ratePlan?.code} — {a.ratePlan?.name}</span>
+                  </div>
+                  {a.overrideRate != null && (
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">Override Rate</span>
+                      <span className="font-mono">{money(a.overrideRate)}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet/desktop: real table. */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Dates</TableHead>
+                    <TableHead>Room Type</TableHead>
+                    <TableHead>Room</TableHead>
+                    <TableHead>Rate Plan</TableHead>
+                    <TableHead className="text-right pr-6">Override Rate</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {(reservation.assignments ?? []).map((a: any) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="pl-6 text-sm">
+                        {format(new Date(a.startDate), "dd-MMM")} – {format(new Date(a.endDate), "dd-MMM-yy")}
+                      </TableCell>
+                      <TableCell>{a.roomType?.name}</TableCell>
+                      <TableCell>
+                        {a.room ? (
+                          <Badge variant="outline">{a.room.roomNumber}</Badge>
+                        ) : (
+                          <span className="text-warning text-xs font-medium">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{a.ratePlan?.code} — {a.ratePlan?.name}</TableCell>
+                      <TableCell className="text-right pr-6 font-mono text-sm">
+                        {a.overrideRate != null ? money(a.overrideRate) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

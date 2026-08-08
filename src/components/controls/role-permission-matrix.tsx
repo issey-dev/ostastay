@@ -87,12 +87,19 @@ export function RolePermissionMatrix({
     return full === 0 ? "none" : full === mods.length ? "all" : "some"
   }
 
+  // A genuine roles x modules matrix doesn't reduce to card-stacking cleanly — forcing
+  // one row per module into a stacked card would mean five checkboxes per card with no
+  // spatial relationship to the column they toggle, which is worse than the table. Instead
+  // this stays a real table at every tier, sticky first column for module identity plus
+  // the shared `<Table>` component's built-in horizontal scroll (its outer wrapper is
+  // `overflow-x-auto`) — so on a 375px screen Module names stay pinned on the left while
+  // the desk scrolls right to reach View/Create/Update/Delete/Full Access.
   return (
     <div className="border rounded-md">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Module</TableHead>
+            <TableHead className="sticky left-0 z-10 bg-card">Module</TableHead>
             {ACTIONS.map((a) => (
               <TableHead key={a.key} className="text-center">{a.label}</TableHead>
             ))}
@@ -106,8 +113,8 @@ export function RolePermissionMatrix({
             const state = scopeState(scope)
             return [
               <TableRow key={`${scope}-header`} className="bg-muted/50 hover:bg-muted/50">
-                <TableCell colSpan={ACTIONS.length + 1} className="py-2">
-                  <div className="flex items-center gap-2">
+                <TableCell colSpan={ACTIONS.length + 1} className="whitespace-normal py-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
                       {MODULE_SCOPE_LABELS[scope]}
                     </span>
@@ -132,8 +139,10 @@ export function RolePermissionMatrix({
                 const row = value[module]
                 const isFull = row.canView && row.canCreate && row.canUpdate && row.canDelete
                 return (
-                  <TableRow key={module}>
-                    <TableCell className="font-medium pl-6">{MODULE_LABELS[module]}</TableCell>
+                  <TableRow key={module} className="group">
+                    <TableCell className="sticky left-0 z-10 whitespace-nowrap bg-card pl-6 font-medium group-hover:bg-muted/50">
+                      {MODULE_LABELS[module]}
+                    </TableCell>
                     {ACTIONS.map((a) => (
                       <TableCell key={a.key} className="text-center">
                         <Checkbox

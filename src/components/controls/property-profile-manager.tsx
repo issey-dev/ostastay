@@ -81,7 +81,7 @@ export function PropertyProfileManager() {
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Property Name</Label>
           <Input value={detail.name} onChange={(e) => setDetail({ ...detail, name: e.target.value })} />
@@ -122,7 +122,7 @@ export function PropertyProfileManager() {
           <Label>Contact Email</Label>
           <Input type="email" value={detail.contactEmail ?? ""} onChange={(e) => setDetail({ ...detail, contactEmail: e.target.value })} />
         </div>
-        <div className="space-y-2 sm:col-span-2">
+        <div className="space-y-2 md:col-span-2">
           <Label>Address</Label>
           <Input
             placeholder="e.g. North Male Atoll, Maldives"
@@ -136,8 +136,8 @@ export function PropertyProfileManager() {
       </div>
       <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>
 
-      <div className="flex items-center justify-between rounded-md border border-border p-3">
-        <div>
+      <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <Label htmlFor="pricesIncludeTaxes">Prices Include Taxes</Label>
           <p className="text-xs text-muted-foreground">
             Top-level default for this property, applied to anything charged. On: Green Tax/GST/Service Charge are
@@ -147,13 +147,14 @@ export function PropertyProfileManager() {
         </div>
         <Switch
           id="pricesIncludeTaxes"
+          className="shrink-0"
           checked={detail.pricesIncludeTaxes}
           onCheckedChange={(checked) => setDetail({ ...detail, pricesIncludeTaxes: !!checked })}
         />
       </div>
 
-      <div className="flex items-center justify-between rounded-md border border-border p-3">
-        <div>
+      <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <Label htmlFor="requireInspectionOnCheckIn">Require Inspected Room at Check-In</Label>
           <p className="text-xs text-muted-foreground">
             On: guests can only be checked into rooms housekeeping has marked Inspected — a supervisor must sign off
@@ -162,6 +163,7 @@ export function PropertyProfileManager() {
         </div>
         <Switch
           id="requireInspectionOnCheckIn"
+          className="shrink-0"
           checked={detail.requireInspectionOnCheckIn}
           onCheckedChange={(checked) => setDetail({ ...detail, requireInspectionOnCheckIn: !!checked })}
         />

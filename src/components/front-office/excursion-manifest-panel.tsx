@@ -248,33 +248,30 @@ export function ExcursionManifestPanel({
                   </div>
                 )}
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Guest</TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {manifest.bookings.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground text-sm">No bookings yet.</TableCell></TableRow>
-                    )}
-                    {manifest.bookings.map((b) => (
-                      <TableRow key={b.id}>
-                        <TableCell>
-                          <p className="font-medium">{b.guestName}</p>
-                          <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
-                          {b.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{b.notes}</p>}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {b.adultCount}A{b.childCount ? ` ${b.childCount}C` : ""}{b.infantCount ? ` ${b.infantCount}I` : ""}
-                        </TableCell>
-                        <TableCell><StatusBadge label={b.status} status={b.status} /></TableCell>
-                        <TableCell className="text-right">
+                {/* Phone view — stacked card per booking. The table below (md+) shows
+                    the same four facts in columns; a passenger manifest checked at a
+                    boat ramp on a phone shouldn't need a horizontal scroll to see who's
+                    confirmed. */}
+                <div className="md:hidden space-y-2">
+                  {manifest.bookings.length === 0 ? (
+                    <p className="text-center text-muted-foreground text-sm py-6">No bookings yet.</p>
+                  ) : (
+                    manifest.bookings.map((b) => (
+                      <div key={b.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{b.guestName}</p>
+                            <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
+                          </div>
+                          <StatusBadge label={b.status} status={b.status} />
+                        </div>
+                        {b.notes && <p className="text-xs text-muted-foreground italic">{b.notes}</p>}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {b.adultCount}A{b.childCount ? ` ${b.childCount}C` : ""}{b.infantCount ? ` ${b.infantCount}I` : ""}
+                          </span>
                           {b.status === "CONFIRMED" && (
-                            <div className="flex justify-end gap-1">
+                            <div className="flex gap-1">
                               <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
                                 <UserX className="w-4 h-4" />
                               </Button>
@@ -283,11 +280,54 @@ export function ExcursionManifestPanel({
                               </Button>
                             </div>
                           )}
-                        </TableCell>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Guest</TableHead>
+                        <TableHead>Party</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {manifest.bookings.length === 0 && (
+                        <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground text-sm">No bookings yet.</TableCell></TableRow>
+                      )}
+                      {manifest.bookings.map((b) => (
+                        <TableRow key={b.id}>
+                          <TableCell>
+                            <p className="font-medium">{b.guestName}</p>
+                            <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
+                            {b.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{b.notes}</p>}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {b.adultCount}A{b.childCount ? ` ${b.childCount}C` : ""}{b.infantCount ? ` ${b.infantCount}I` : ""}
+                          </TableCell>
+                          <TableCell><StatusBadge label={b.status} status={b.status} /></TableCell>
+                          <TableCell className="text-right">
+                            {b.status === "CONFIRMED" && (
+                              <div className="flex justify-end gap-1">
+                                <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
+                                  <UserX className="w-4 h-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </>
             )}
           </div>

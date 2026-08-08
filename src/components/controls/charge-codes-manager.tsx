@@ -199,86 +199,157 @@ export function ChargeCodesManager() {
       </div>
 
       <ControlsSectionBody>
-        <Table>
-          <TableHeader className="bg-muted/80">
-            <TableRow>
-              <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Group / Subgroup</TableHead>
-              <TableHead>Posting</TableHead>
-              <TableHead>Tax</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sorted.map((cc) => {
-              const tax = taxSummary(cc)
-              return (
-              <TableRow key={cc.id} className={`hover:bg-muted/50 ${cc.isActive ? "" : "opacity-60"}`}>
-                <TableCell className="py-1.5 font-mono font-medium text-foreground whitespace-nowrap">
-                  {cc.code}
-                  {cc.isSystem && <Badge variant="secondary" className="ml-1.5 px-1 text-[10px] font-normal" title="System code — billing resolves against it">Sys</Badge>}
-                  {!cc.isActive && <Badge variant="outline" className="ml-1.5 px-1 text-[10px] font-normal">Off</Badge>}
-                </TableCell>
-                <TableCell className="py-1.5 text-sm">{cc.description}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">
-                  {cc.chargeSubgroup ? (
-                    <span className="text-xs">
-                      <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
-                      <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
-                    </span>
-                  ) : (
-                    <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <Badge variant="outline" className="px-1.5 text-[11px] font-normal whitespace-nowrap">
-                    {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">
-                  {tax.chips.length > 0 || tax.note ? (
-                    <span className="inline-flex items-center gap-1">
-                      {tax.chips.map((code, i) => (
-                        <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
-                      ))}
-                      {tax.note && <span className="text-xs text-muted-foreground">{tax.note}</span>}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="py-1 text-right px-4">
-                  <div className="flex gap-0.5 justify-end">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Generates" onClick={() => setGeneratesFor(cc)}>
-                      <ArrowRightCircle className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-primary hover:bg-muted" title="Edit" onClick={() => openEdit(cc)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="sm"
-                      className="h-7 w-7 p-0 text-destructive hover:bg-destructive-muted disabled:opacity-30"
-                      disabled={cc.isSystem}
-                      title={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
-                      onClick={() => setDeleting(cc)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+        {/* Phone view — each row becomes a card: code/status up top, description and
+            classification beneath, the same actions as the table but full-width/thumb-sized. */}
+        <div className="md:hidden">
+          {filtered.length === 0 ? (
+            <div className="p-4"><EmptyState icon={Receipt} title="No charge codes configured" /></div>
+          ) : (
+            <div className="space-y-3 p-4">
+              {sorted.map((cc) => {
+                const tax = taxSummary(cc)
+                return (
+                  <div key={cc.id} className={`rounded-lg border border-border bg-card p-4 space-y-2 ${cc.isActive ? "" : "opacity-60"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono font-medium text-foreground">{cc.code}</span>
+                          {cc.isSystem && <Badge variant="secondary" className="px-1 text-[10px] font-normal">Sys</Badge>}
+                          {!cc.isActive && <Badge variant="outline" className="px-1 text-[10px] font-normal">Off</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{cc.description}</p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 px-1.5 text-[11px] font-normal whitespace-nowrap">
+                        {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
+                      </Badge>
+                    </div>
+
+                    <div className="text-xs">
+                      {cc.chargeSubgroup ? (
+                        <span>
+                          <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
+                          <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
+                        </span>
+                      ) : (
+                        <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
+                      )}
+                    </div>
+
+                    {(tax.chips.length > 0 || tax.note) && (
+                      <div className="flex flex-wrap items-center gap-1">
+                        {tax.chips.map((code, i) => (
+                          <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
+                        ))}
+                        {tax.note && <span className="text-xs text-muted-foreground">{tax.note}</span>}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setGeneratesFor(cc)}>
+                        <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" /> Generates
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(cc)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                      </Button>
+                      <Button
+                        variant="outline" size="icon"
+                        className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
+                        disabled={cc.isSystem}
+                        aria-label={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
+                        onClick={() => setDeleting(cc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </TableCell>
-              </TableRow>
-              )
-            })}
-            {filtered.length === 0 && (
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-muted/80">
               <TableRow>
-                <TableCell colSpan={6} className="py-0">
-                  <EmptyState icon={Receipt} title="No charge codes configured" />
-                </TableCell>
+                <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Group / Subgroup</TableHead>
+                <TableHead>Posting</TableHead>
+                <TableHead>Tax</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((cc) => {
+                const tax = taxSummary(cc)
+                return (
+                <TableRow key={cc.id} className={`hover:bg-muted/50 ${cc.isActive ? "" : "opacity-60"}`}>
+                  <TableCell className="py-1.5 font-mono font-medium text-foreground whitespace-nowrap">
+                    {cc.code}
+                    {cc.isSystem && <Badge variant="secondary" className="ml-1.5 px-1 text-[10px] font-normal" title="System code — billing resolves against it">Sys</Badge>}
+                    {!cc.isActive && <Badge variant="outline" className="ml-1.5 px-1 text-[10px] font-normal">Off</Badge>}
+                  </TableCell>
+                  <TableCell className="py-1.5 text-sm">{cc.description}</TableCell>
+                  <TableCell className="py-1.5 whitespace-nowrap">
+                    {cc.chargeSubgroup ? (
+                      <span className="text-xs">
+                        <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
+                        <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
+                      </span>
+                    ) : (
+                      <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-1.5">
+                    <Badge variant="outline" className="px-1.5 text-[11px] font-normal whitespace-nowrap">
+                      {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-1.5 whitespace-nowrap">
+                    {tax.chips.length > 0 || tax.note ? (
+                      <span className="inline-flex items-center gap-1">
+                        {tax.chips.map((code, i) => (
+                          <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
+                        ))}
+                        {tax.note && <span className="text-xs text-muted-foreground">{tax.note}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-1 text-right px-4">
+                    <div className="flex gap-0.5 justify-end">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Generates" onClick={() => setGeneratesFor(cc)}>
+                        <ArrowRightCircle className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-primary hover:bg-muted" title="Edit" onClick={() => openEdit(cc)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:bg-destructive-muted disabled:opacity-30"
+                        disabled={cc.isSystem}
+                        title={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
+                        onClick={() => setDeleting(cc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+                )
+              })}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-0">
+                    <EmptyState icon={Receipt} title="No charge codes configured" />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </ControlsSectionBody>
 
       {/* Create / edit */}
@@ -292,7 +363,7 @@ export function ChargeCodesManager() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Code Identifier *</Label>
                 <Input

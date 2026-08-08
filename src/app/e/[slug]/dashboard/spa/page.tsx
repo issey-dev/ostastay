@@ -588,7 +588,7 @@ export default function SpaPage() {
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleStartWalkIn} className="grid grid-cols-2 gap-3">
+                <form onSubmit={handleStartWalkIn} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Input
                     placeholder="Guest name"
                     required
@@ -600,7 +600,7 @@ export default function SpaPage() {
                     value={walkInForm.contact}
                     onChange={(e) => setWalkInForm((p) => ({ ...p, contact: e.target.value }))}
                   />
-                  <Button type="submit" className="col-span-2" disabled={startingWalkIn || !walkInForm.name}>
+                  <Button type="submit" className="md:col-span-2" disabled={startingWalkIn || !walkInForm.name}>
                     {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
                   </Button>
                 </form>
@@ -612,7 +612,7 @@ export default function SpaPage() {
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
               <Sparkles className="w-5 h-5 text-primary" /> Treatment
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Treatment</Label>
                 <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange} disabled={mode === "walkin" && !walkInFolioId}>

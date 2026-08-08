@@ -157,7 +157,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
             <div className="border rounded-md p-3 flex flex-col gap-3 bg-muted/40">
               <p className="text-xs font-medium text-muted-foreground">New Guest Profile</p>
               {error && <p className="text-xs text-destructive">{error}</p>}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">First Name <span className="text-destructive">*</span></Label>
                   <Input value={quickCreate.firstName} onChange={e => setQuickCreate(p => ({ ...p, firstName: e.target.value }))} />

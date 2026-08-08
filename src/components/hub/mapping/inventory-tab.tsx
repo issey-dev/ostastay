@@ -21,7 +21,7 @@ export function InventoryTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border p-4">
+      <div className="flex flex-col items-start gap-3 rounded-md border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-sm font-semibold">Resync availability</h4>
           <p className="text-sm text-muted-foreground">
@@ -29,7 +29,7 @@ export function InventoryTab({
             scheduled sync would send, without waiting for it.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setOpen(true)}>
+        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(true)}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Resync
         </Button>

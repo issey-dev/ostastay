@@ -7,6 +7,7 @@ import { AppSidebarNav } from "@/components/app-sidebar-nav"
 import { NAV_MODULES } from "@/components/app-sidebar-nav.config"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu } from "@/components/ui/sidebar"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
+import { APP_VERSION } from "@/lib/version"
 import Link from "next/link"
 
 export async function AppSidebar() {
@@ -89,6 +90,9 @@ export async function AppSidebar() {
             hubHref={showHub ? `${enterprisePrefix}/hub` : undefined}
           />
         </SidebarMenu>
+        <p className="mt-2 px-2 text-[10px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+          Uppsolut Stay v{APP_VERSION}
+        </p>
       </div>
     </Sidebar>
   )

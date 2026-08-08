@@ -130,7 +130,7 @@ export function AddressManager({ upid }: { upid: string }) {
 
       {adding ? (
         <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">Type</Label>
               <Select value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v ?? "HOME" }))}>
@@ -149,7 +149,7 @@ export function AddressManager({ upid }: { upid: string }) {
             <Label className="text-xs">Full Address</Label>
             <Input placeholder="123 Main St, Apt 4B" value={form.fullAddress} onChange={(e) => setForm((p) => ({ ...p, fullAddress: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">City</Label>
               <Input value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} />
