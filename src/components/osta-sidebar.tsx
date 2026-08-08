@@ -64,7 +64,7 @@ export async function OstaSidebar() {
             <SidebarMenuButton>
               <div className="flex flex-col items-start px-2 py-1">
                 <span className="text-sm font-semibold truncate w-full">{name}</span>
-                <span className="text-xs text-muted-foreground truncate w-full">{roleName}</span>
+                <span className="text-xs text-sidebar-foreground/70 truncate w-full">{roleName}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
