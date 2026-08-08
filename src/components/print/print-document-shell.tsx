@@ -22,6 +22,7 @@ export function PrintDocumentShell({
   extraActions,
   printLabel = "Print / Save as PDF",
   onPrint,
+  orientation = "portrait",
 }: {
   previewLabel: string
   fontClassName: string
@@ -32,10 +33,18 @@ export function PrintDocumentShell({
   // Defaults to window.print(). Pass a custom handler (e.g. a server-generated PDF
   // download) to replace that behavior without duplicating the rest of the bar.
   onPrint?: () => void
+  // A4 portrait (default) matches every branded document. The Hub's Permission Matrix
+  // is a wide roles-across table (see permission-matrix/page.tsx's own header comment),
+  // so it's the only caller that opts into landscape — both the actual @page size and,
+  // on screen, a wider/tighter-padded container so the preview matches what prints and
+  // stays usable on a phone.
+  orientation?: "portrait" | "landscape"
 }) {
+  const isLandscape = orientation === "landscape"
+  const maxW = isLandscape ? "max-w-[1150px]" : "max-w-[800px]"
   return (
     <div className={`bg-white min-h-screen text-[var(--print-ink)] p-4 sm:p-12 print:p-0 ${fontClassName}`}>
-      <div className="print:hidden max-w-[800px] mx-auto mb-6 flex justify-end items-center gap-2 sticky top-0 z-[var(--z-sticky)]">
+      <div className={`print:hidden ${maxW} mx-auto mb-6 flex justify-end items-center gap-2 sticky top-0 z-[var(--z-sticky)]`}>
         <span className="sr-only">{previewLabel}</span>
         {extraActions}
         <Button onClick={onPrint ?? (() => window.print())}>
@@ -46,7 +55,9 @@ export function PrintDocumentShell({
       {/* The page's own margin moves INSIDE the document (print:px/py below) because
           @page margin is zero — see the print CSS. On screen the padding is the same, so
           preview and printout match. */}
-      <div className="max-w-[800px] mx-auto print:border-0 border p-8 sm:p-12 rounded-xl shadow-sm bg-white print:max-w-none print:rounded-none print:shadow-none print:px-[14mm] print:py-[12mm]">
+      <div
+        className={`${maxW} mx-auto print:border-0 border ${isLandscape ? "p-4 sm:p-8 lg:p-12" : "p-8 sm:p-12"} rounded-xl shadow-sm bg-white print:max-w-none print:rounded-none print:shadow-none print:px-[14mm] print:py-[12mm]`}
+      >
         {children}
       </div>
 
@@ -87,7 +98,7 @@ export function PrintDocumentShell({
              page (print:px-[14mm] / print:py-[12mm] on the container above), which
              the browser cannot write into. */
           @page {
-            size: A4;
+            size: A4 ${orientation};
             margin: 0;
           }
           /* Keep a table row, a totals block or a section heading from being split

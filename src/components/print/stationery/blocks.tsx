@@ -333,16 +333,22 @@ export function StationeryFooter({
 export function StationeryPage({
   fontClass,
   children,
+  orientation = "portrait",
 }: {
   fontClass: string
   children: React.ReactNode
+  // Must match the orientation passed to the enclosing PrintDocumentShell — it's what
+  // makes the min-height below the real printable height for that page shape.
+  orientation?: "portrait" | "landscape"
 }) {
-  // On print the min-height is the REAL printable height — A4's 297mm less the 12mm
-  // top and bottom padding PrintDocumentShell applies inside the zero-margin page.
-  // The screen value (1000px) is only an approximation of that, and being ~10px over
-  // the true printable area was enough to push a one-page invoice onto a second sheet
-  // carrying nothing but the header.
+  // On print the min-height is the REAL printable height — A4's long/short edge (297mm
+  // portrait, 210mm landscape) less the 12mm top and bottom padding PrintDocumentShell
+  // applies inside the zero-margin page. The screen value is only an approximation of
+  // that, and being ~10px over the true printable area was enough to push a one-page
+  // invoice onto a second sheet carrying nothing but the header.
+  const screenMinH = orientation === "landscape" ? "min-h-[650px]" : "min-h-[1000px]"
+  const printMinH = orientation === "landscape" ? "print:min-h-[186mm]" : "print:min-h-[273mm]"
   return (
-    <div className={`flex min-h-[1000px] print:min-h-[273mm] flex-col text-[var(--print-ink)] ${fontClass}`}>{children}</div>
+    <div className={`flex ${screenMinH} ${printMinH} flex-col text-[var(--print-ink)] ${fontClass}`}>{children}</div>
   )
 }
