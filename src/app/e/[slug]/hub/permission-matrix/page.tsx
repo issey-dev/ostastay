@@ -69,8 +69,13 @@ export default function PermissionMatrixPage() {
   ]
 
   return (
-    <PrintDocumentShell previewLabel={`Permission Matrix — ${enterpriseName}`} fontClassName={fontClass}>
-      <StationeryPage fontClass={fontClass}>
+    <PrintDocumentShell
+      previewLabel={`Permission Matrix — ${enterpriseName}`}
+      fontClassName={fontClass}
+      screenThemeAware
+      orientation="landscape"
+    >
+      <StationeryPage fontClass={fontClass} screenThemeAware orientation="landscape">
         {brand && (
           <StationeryHeader
             brand={brand}
@@ -80,6 +85,7 @@ export default function PermissionMatrixPage() {
               { label: "Enterprise", value: enterpriseName },
               { label: "Date", value: new Date().toLocaleDateString() },
             ]}
+            screenThemeAware
           />
         )}
 
@@ -87,40 +93,40 @@ export default function PermissionMatrixPage() {
           const rows = modules.filter((m) => m.scope === scope.key)
           if (rows.length === 0) return null
           return (
-            <StationerySection key={scope.key} title={scope.label}>
+            <StationerySection key={scope.key} title={scope.label} screenThemeAware>
               {/* Wide content must scroll in its own box on screen; in print it simply
                   lays out at page width. */}
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-xs">
+                <table className="w-full border-collapse text-[11px] sm:text-xs">
                   <thead>
-                    <tr className="border-b-2 border-slate-300">
-                      <th className="w-[28%] py-1.5 text-left font-semibold text-slate-500">Module</th>
+                    <tr className="border-b-2 border-border print:border-slate-300">
+                      <th className="w-[22%] sm:w-[28%] py-1 text-left font-semibold text-muted-foreground print:text-slate-500">Module</th>
                       {roles.map((r) => (
-                        <th key={r.id} className="py-1.5 text-center font-semibold text-slate-700">
+                        <th key={r.id} className="min-w-[60px] py-1 text-center font-semibold text-foreground print:text-slate-700">
                           {r.name}
-                          {r.isSystem && <span className="block text-[9px] font-normal text-slate-400">system</span>}
+                          {r.isSystem && <span className="block text-[9px] font-normal text-muted-foreground print:text-slate-400">system</span>}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((m) => (
-                      <tr key={m.code} className="border-b border-slate-100">
-                        <td className="py-1.5 pr-2 text-slate-800">{m.label}</td>
+                      <tr key={m.code} className="border-b border-border print:border-slate-100">
+                        <td className="py-1 pr-2 text-foreground print:text-slate-800">{m.label}</td>
                         {roles.map((r) => {
                           const g = grantOf(r, m.code)
                           const none = !g || (!g.view && !g.create && !g.update && !g.delete)
                           return (
-                            <td key={r.id} className="py-1.5 text-center">
+                            <td key={r.id} className="py-1 text-center">
                               {none ? (
-                                <span className="text-slate-300">—</span>
+                                <span className="text-muted-foreground print:text-slate-300">—</span>
                               ) : (
                                 <span className="inline-flex gap-[3px] font-mono tabular-nums">
                                   {ACTIONS.map((a) => (
                                     <span
                                       key={a.key}
                                       title={a.title}
-                                      className={g![a.key] ? "font-bold text-slate-900" : "text-slate-300"}
+                                      className={g![a.key] ? "font-bold text-foreground print:text-slate-900" : "text-muted-foreground print:text-slate-300"}
                                     >
                                       {a.letter}
                                     </span>
@@ -139,7 +145,7 @@ export default function PermissionMatrixPage() {
           )
         })}
 
-        <p className="mb-6 text-[10px] text-slate-500">
+        <p className="mb-4 text-[10px] text-muted-foreground print:text-slate-500">
           V view · C create · U update · D delete. Bold letters are granted; faint are not.
           A person holding more than one role has the COMBINATION of their grants — read
           across every role they hold, not just one.
@@ -147,26 +153,26 @@ export default function PermissionMatrixPage() {
 
         {/* The half that makes this an audit rather than a spec: who actually holds each
             role today. */}
-        <StationerySection title="Who holds each role">
-          <table className="w-full border-collapse text-xs">
+        <StationerySection title="Who holds each role" screenThemeAware>
+          <table className="w-full border-collapse text-[11px] sm:text-xs">
             <thead>
-              <tr className="border-b-2 border-slate-300">
-                <th className="w-[22%] py-1.5 text-left font-semibold text-slate-500">Role</th>
-                <th className="py-1.5 text-left font-semibold text-slate-500">Active holders</th>
+              <tr className="border-b-2 border-border print:border-slate-300">
+                <th className="w-[30%] sm:w-[22%] py-1 text-left font-semibold text-muted-foreground print:text-slate-500">Role</th>
+                <th className="py-1 text-left font-semibold text-muted-foreground print:text-slate-500">Active holders</th>
               </tr>
             </thead>
             <tbody>
               {roles.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100">
-                  <td className="py-1.5 pr-2 align-top font-medium text-slate-800">{r.name}</td>
-                  <td className="py-1.5 text-slate-700">
+                <tr key={r.id} className="border-b border-border print:border-slate-100">
+                  <td className="py-1 pr-2 align-top font-medium text-foreground print:text-slate-800">{r.name}</td>
+                  <td className="py-1 text-foreground print:text-slate-700">
                     {r.holders.length === 0 ? (
-                      <span className="text-slate-400">Nobody</span>
+                      <span className="text-muted-foreground print:text-slate-400">Nobody</span>
                     ) : (
                       r.holders.map((h) => h.name).join(", ")
                     )}
                     {r.holders.length > 0 && (
-                      <span className="text-slate-400"> ({r.holders.length})</span>
+                      <span className="text-muted-foreground print:text-slate-400"> ({r.holders.length})</span>
                     )}
                   </td>
                 </tr>
@@ -179,6 +185,7 @@ export default function PermissionMatrixPage() {
           paymentInfo={undefined}
           terms={undefined}
           note={`Generated ${new Date().toLocaleString()} · Access shown is what each role grants; a person's effective access is the combination of every role they hold.`}
+          screenThemeAware
         />
       </StationeryPage>
     </PrintDocumentShell>
