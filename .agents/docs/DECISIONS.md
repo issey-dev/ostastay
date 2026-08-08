@@ -2744,3 +2744,43 @@ print stationery is still on the raw Tailwind slate ramp, the four email templat
 carry their own inline grey palette, the PDF/XLSX renderers still hold `rgb()` literals,
 and `/e/[slug]/hub/permission-matrix` still uses raw `slate-*` classes (pre-existing, and
 broken in dark mode).
+
+---
+
+## 2026-08-08 — Two email senders: tenant vs platform (owner)
+
+Owner instruction, verbatim: *"clients can have their own SMTP as well which will be used
+for sending things to the guest such as registration/confirmation etc"* and *"from Uppsolut
+Stay we send initial Enterprise credentials / Links and any Channel Manager related mails"*.
+
+So mail splits by **who the message is from**, not by what it contains:
+
+| | Tenant SMTP | Platform SMTP |
+| --- | --- | --- |
+| Sends | Confirmation letters, eRegistration links, debtor statements | Enterprise handover credentials, channel-manager alerts |
+| From | The hotel's own domain | Uppsolut's (`noreply@mail.uppsolut.com`) |
+| Configured | By the tenant, Controls → Reports → SMTP / SFTP | By the operator, `PLATFORM_SMTP_*` env vars |
+
+**No fallback in either direction, deliberately.** A tenant with no SMTP configured does
+NOT fall back to the platform sender — a booking confirmation arriving from Uppsolut rather
+than from the property is the wrong sender for the guest, and silently substituting it
+would be worse than the current clear "SMTP is not configured" failure. There is a test
+pinning this.
+
+Platform SMTP is env-only and has no admin UI to change it. Two reasons: a brand-new
+enterprise has no settings row to read config from at the moment we need to email its first
+admin, and an endpoint able to rewrite the platform's sending identity would be a standing
+route to sending mail as Uppsolut. The platform console shows it read-only, with a test
+button.
+
+**Channel alerts go to Uppsolut ops (`PLATFORM_ALERT_EMAIL`), not to the hotel.** This
+follows the master-account topology (see "Beds24 topology — ONE master account" above): the
+Beds24 account is ours, so a lapsed credential can only be recovered by us with a fresh
+invite code. Telling the tenant would be reporting a fault they cannot act on. Alerts fire
+only on the CONNECTED → failed transition, never on "still failing", so a fault that takes
+days to fix does not mail hourly for those days.
+
+**Blocked on the owner, not on code:** the SES account is still in the **sandbox** — it
+authenticates fine and then rejects any recipient that is not individually verified, which
+is every onboarding email by definition. Production access has to be requested in the SES
+console before platform mail does anything in production.

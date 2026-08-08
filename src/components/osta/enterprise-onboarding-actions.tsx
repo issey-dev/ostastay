@@ -60,7 +60,13 @@ export function EnterpriseOnboardingActions({
   const [propertyOpen, setPropertyOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   // The handover credentials — the single moment the generated password is visible.
-  const [handover, setHandover] = useState<{ email: string; password: string; enterpriseSlug: string } | null>(null)
+  const [handover, setHandover] = useState<{
+    email: string
+    password: string
+    enterpriseSlug: string
+    emailed: boolean
+    emailError: string | null
+  } | null>(null)
 
   const propertyForm = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
@@ -112,7 +118,13 @@ export function EnterpriseOnboardingActions({
     }
     setUserOpen(false)
     userForm.reset()
-    setHandover({ email: data.email, password: data.password, enterpriseSlug: data.enterpriseSlug })
+    setHandover({
+      email: data.email,
+      password: data.password,
+      enterpriseSlug: data.enterpriseSlug,
+      emailed: data.emailed ?? false,
+      emailError: data.emailError ?? null,
+    })
     router.refresh()
   }
 
@@ -349,6 +361,17 @@ export function EnterpriseOnboardingActions({
               after their first sign-in.
             </DialogDescription>
           </DialogHeader>
+          {/* Whether the welcome email actually went out. The account exists either way —
+              this only tells the operator if they still need to hand the details over. */}
+          {handover?.emailed ? (
+            <div className="rounded-md border border-success/30 bg-success-muted p-3 text-sm text-success">
+              A welcome email with these details was sent to {handover.email}.
+            </div>
+          ) : (
+            <div className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning">
+              {handover?.emailError ?? "The welcome email was not sent."} Pass the details below to the client yourself.
+            </div>
+          )}
           <div className="rounded-md border border-border bg-muted p-3 text-sm space-y-1">
             <div>
               <span className="text-muted-foreground">Enterprise code:</span>{" "}

@@ -98,6 +98,9 @@ jobs:
           echo "→ Pruning dangling images"
           docker image prune -f >/dev/null
 
+          echo "→ Pruning build cache older than 7 days"
+          docker builder prune -f --filter until=168h >/dev/null
+
           echo "→ Deployed $(git rev-parse --short HEAD)"
           REMOTE
 

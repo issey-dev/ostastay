@@ -46,8 +46,13 @@ nano .env
 
 Fill in `POSTGRES_PASSWORD`, `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY`, and `CRON_SECRET`,
 and confirm `APP_URL` matches how guests will actually reach the app. `APP_URL` is what
-gets embedded in the eRegistration links emailed to guests — if it is wrong, those links
-point nowhere.
+gets embedded in the eRegistration links emailed to guests and in the sign-in link on the
+enterprise welcome email — if it is wrong, those links point nowhere.
+
+Fill in the `PLATFORM_SMTP_*` block too if this deployment should email enterprise
+handover credentials and channel-manager alerts. It is optional: left blank, onboarding
+still works and still shows the credentials on screen to hand over manually. See
+[Email](#email) below for which sender does what.
 
 Set `POSTGRES_PASSWORD` **before the first start**: it is baked into the database volume
 when that volume is created, so changing it later means an `ALTER USER` inside the
@@ -140,6 +145,51 @@ crontab -e
 ```
 
 If you skip this, the app still works; channel-manager tokens will eventually expire.
+
+---
+
+## Email
+
+There are **two independent senders**, and almost every email question starts with
+working out which one applies.
+
+| | Tenant SMTP | Platform SMTP |
+| --- | --- | --- |
+| Sends | Confirmation letters, eRegistration links, debtor statements | Enterprise handover credentials, channel-manager alerts |
+| From | The hotel's own domain | `noreply@mail.uppsolut.com` |
+| Configured by | The tenant, in-app: Controls → Reports → SMTP / SFTP | You, in `.env`: `PLATFORM_SMTP_*` |
+| Stored | `EnterpriseSettings`, encrypted at rest | Environment only, never in the database |
+| If missing | Those buttons fail with "SMTP is not configured" | Onboarding still works; credentials shown on screen to hand over manually |
+
+Guest mail deliberately comes from the hotel's own domain — a booking confirmation that
+arrives from Uppsolut rather than the property is the wrong sender for the recipient.
+Platform mail exists because the other direction has no tenant to read config from: a
+brand-new enterprise has no settings row and no domain of its own at the moment we need
+to email its first admin their password.
+
+Both sides have a **Test connection** button, and both distinguish two failure modes that
+are worth keeping apart:
+
+- *Could not connect* — host, port, TLS or credentials are wrong.
+- *Connected, but the message was rejected* — the login is fine and the provider refused
+  the envelope. Sending domain not verified, or the account is restricted.
+
+### Amazon SES
+
+If `PLATFORM_SMTP_HOST` is an `email-smtp.*.amazonaws.com` endpoint, three things must all
+be true, and only the first is covered by a connection test:
+
+1. **The SMTP credentials are valid.** These are SES-specific — an SES SMTP username is
+   not an ordinary IAM access key, even though it looks like one.
+2. **The sending domain is verified in the same region as the endpoint.** An identity
+   verified in `eu-west-1` does nothing for an `eu-north-1` endpoint. DKIM CNAMEs, and an
+   SPF `include:amazonses.com` on the MAIL FROM subdomain, should all be in DNS.
+3. **The account has production access.** A new SES account is in the **sandbox**: it can
+   only send to individually verified addresses, capped at 200 messages a day. It
+   authenticates normally and then rejects everything else with
+   `554 Message rejected: Email address is not verified`. Onboarding mail goes to
+   brand-new customers by definition, so the sandbox blocks the feature entirely — request
+   production access in the SES console before relying on it.
 
 ---
 
@@ -276,8 +326,16 @@ challenge, even though the site itself runs on 443. Let's Encrypt also rate-limi
 repeated failures, so fix the cause before retrying in a loop; the `caddy-data` volume
 persists issued certificates across restarts precisely to avoid that.
 
-**Emails aren't sending.** SMTP is configured per-enterprise inside the app under
-Controls → Stationaries, not in `.env`.
+**Emails aren't sending.** Work out which sender is involved first — see
+[Email](#email). Guest mail uses the enterprise's own SMTP, configured inside the app
+under Controls → Reports → SMTP / SFTP, not in `.env`; the tenant can check it with the
+Test connection button there. Platform mail (handover credentials, channel alerts) uses
+the `PLATFORM_SMTP_*` environment block, and Osta staff can check it under the platform
+console's Controls → Platform email.
+
+If a test says it connected but the message was rejected, the credentials are fine and
+the provider is refusing the envelope — on Amazon SES that is almost always either an
+unverified sending domain or an account still in the sandbox (see below).
 
 **The build is killed partway through, or dies with "JavaScript heap out of memory".**
 `next build` is the memory-hungry step and small VPS plans often have too little RAM.
