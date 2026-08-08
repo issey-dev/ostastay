@@ -93,16 +93,16 @@ export function InvoiceDocument({
       <StationeryHeader brand={brand} eyebrow={labels.eyebrow} title={labels.title} meta={meta} />
 
       {headerText && (
-        <div className="mb-6 whitespace-pre-line rounded-md border border-slate-100 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+        <div className="mb-6 whitespace-pre-line rounded-md border border-[var(--print-border)] bg-[var(--print-surface)] p-4 text-xs leading-relaxed text-[var(--print-ink-secondary)]">
           {headerText}
         </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-8">
         <StationerySection title="Billed To" className="mb-0">
-          <div className="text-sm font-semibold text-slate-800">{billedTo.name}</div>
+          <div className="text-sm font-semibold text-[var(--print-ink)]">{billedTo.name}</div>
           {billedTo.lines.filter(Boolean).map((line, i) => (
-            <div key={i} className="text-sm text-slate-500">
+            <div key={i} className="text-sm text-[var(--print-muted)]">
               {line}
             </div>
           ))}
@@ -116,9 +116,9 @@ export function InvoiceDocument({
 
       {roomAssignments && roomAssignments.length > 0 && (
         <StationerySection title="Room Assignments">
-          <div className="overflow-hidden rounded-md border border-slate-200">
-            <table className="w-full text-xs text-slate-700">
-              <thead className="border-b border-slate-200 bg-slate-50">
+          <div className="overflow-hidden rounded-md border border-[var(--print-border)]">
+            <table className="w-full text-xs text-[var(--print-ink-secondary)]">
+              <thead className="border-b border-[var(--print-border)] bg-[var(--print-surface)]">
                 <tr>
                   <th className="p-2 text-left font-semibold">Room</th>
                   <th className="p-2 text-left font-semibold">Room Type</th>
@@ -127,10 +127,10 @@ export function InvoiceDocument({
               </thead>
               <tbody>
                 {roomAssignments.map((a, i) => (
-                  <tr key={i} className="border-b border-slate-100 last:border-0">
+                  <tr key={i} className="border-b border-[var(--print-border)] last:border-0">
                     <td className="p-2 font-semibold">{a.room}</td>
                     <td className="p-2">{a.type}</td>
-                    <td className="p-2 text-right text-slate-500">{a.dates}</td>
+                    <td className="p-2 text-right text-[var(--print-muted)]">{a.dates}</td>
                   </tr>
                 ))}
               </tbody>
@@ -211,7 +211,7 @@ export function ReceiptDocument({
 
       <div className="mb-6 grid grid-cols-2 gap-8">
         <StationerySection title="Received From" className="mb-0">
-          <div className="text-sm font-semibold text-slate-800">{receivedFrom}</div>
+          <div className="text-sm font-semibold text-[var(--print-ink)]">{receivedFrom}</div>
         </StationerySection>
         {paymentDetails.length > 0 && (
           <StationerySection title="Payment Details" className="mb-0">
@@ -227,9 +227,9 @@ export function ReceiptDocument({
       <StationeryAmountCallout label={amountLabel} amount={amount} currency={currency} brandColor={brand.brandColor} />
 
       {remainingLabel != null && remainingAmount != null && (
-        <div className="mb-8 flex justify-end text-sm text-slate-500">
+        <div className="mb-8 flex justify-end text-sm text-[var(--print-muted)]">
           <span className="mr-2">{remainingLabel}</span>
-          <span className="font-medium text-slate-700">
+          <span className="font-medium text-[var(--print-ink-secondary)]">
             {currency} {remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
@@ -269,34 +269,34 @@ export function ConfirmationLetterDocument({
 
       <div className="mb-4 flex items-baseline justify-between gap-4">
         <div className="text-sm">
-          <span className="text-slate-500">Dear </span>
-          <span className="font-semibold text-slate-800">{guestName}</span>,
+          <span className="text-[var(--print-muted)]">Dear </span>
+          <span className="font-semibold text-[var(--print-ink)]">{guestName}</span>,
         </div>
-        <div className="text-sm text-slate-500">{date}</div>
+        <div className="text-sm text-[var(--print-muted)]">{date}</div>
       </div>
 
-      <p className="mb-5 text-sm leading-relaxed text-slate-600">
+      <p className="mb-5 text-sm leading-relaxed text-[var(--print-ink-secondary)]">
         {intro ||
           `We are delighted to confirm your upcoming reservation with ${brand.name}. Please find the details of your stay below — this letter may be presented as confirmation of accommodation where required.`}
       </p>
 
-      <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-5 rounded-md border border-[var(--print-border)] bg-[var(--print-surface)] p-4">
         <dl className="space-y-2 text-sm">
           {details.map((d) => (
             <div key={d.label} className="flex justify-between gap-4">
-              <dt className="uppercase tracking-wide text-[11px] font-semibold text-slate-400 self-center">{d.label}</dt>
-              <dd className="text-right font-medium text-slate-800">{d.value}</dd>
+              <dt className="uppercase tracking-wide text-[11px] font-semibold text-[var(--print-faint)] self-center">{d.label}</dt>
+              <dd className="text-right font-medium text-[var(--print-ink)]">{d.value}</dd>
             </div>
           ))}
         </dl>
       </div>
 
-      <p className="mb-6 whitespace-pre-line text-sm leading-relaxed text-slate-600">{policyText}</p>
+      <p className="mb-6 whitespace-pre-line text-sm leading-relaxed text-[var(--print-ink-secondary)]">{policyText}</p>
 
-      <div className="mb-8 text-sm text-slate-600">
+      <div className="mb-8 text-sm text-[var(--print-ink-secondary)]">
         <p>We look forward to welcoming you.</p>
         <p className="mt-3">Warm regards,</p>
-        <p className="font-semibold text-slate-800">{closingTeam}</p>
+        <p className="font-semibold text-[var(--print-ink)]">{closingTeam}</p>
       </div>
 
       <StationeryFooter contactLine={footerContactLine} />
@@ -323,13 +323,13 @@ export type RegistrationCardDocumentProps = {
 function SignatureLine({ label, signature }: { label: string; signature?: { dataUrl: string; capturedLabel: string } | null }) {
   return (
     <div>
-      <div className="mb-1.5 flex h-12 items-end justify-center border-b border-slate-400">
+      <div className="mb-1.5 flex h-12 items-end justify-center border-b border-[var(--print-faint)]">
         {signature && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={signature.dataUrl} alt={`${label} (electronic)`} className="max-h-11 object-contain" />
         )}
       </div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">{label}</div>
       {signature && (
         <div className="text-[8px] font-medium text-yellow-600">e-signature — captured {signature.capturedLabel}</div>
       )}
@@ -351,7 +351,7 @@ export function RegistrationCardDocument({
     <StationeryPage fontClass={brand.fontClass}>
       <StationeryHeader brand={brand} eyebrow="Front office" title="Registration card" meta={meta} />
 
-      {welcomeMessage && <p className="mb-6 text-sm text-slate-600">{welcomeMessage}</p>}
+      {welcomeMessage && <p className="mb-6 text-sm text-[var(--print-ink-secondary)]">{welcomeMessage}</p>}
 
       <StationerySection title="Guest Details">
         <StationeryFieldGrid fields={guestDetails} />
@@ -366,7 +366,7 @@ export function RegistrationCardDocument({
       </StationerySection>
 
       <StationerySection title="Terms & Conditions">
-        <p className="whitespace-pre-line text-xs leading-relaxed text-slate-500">{terms}</p>
+        <p className="whitespace-pre-line text-xs leading-relaxed text-[var(--print-muted)]">{terms}</p>
       </StationerySection>
 
       <div className="mt-auto grid grid-cols-2 gap-10 pt-8">
@@ -412,9 +412,9 @@ export function StatementDocument({
       <StationeryHeader brand={brand} eyebrow="Account" title="Account statement" meta={meta} />
 
       <StationerySection title="Account">
-        <div className="text-sm font-semibold text-slate-800">{account.name}</div>
+        <div className="text-sm font-semibold text-[var(--print-ink)]">{account.name}</div>
         {account.lines.filter(Boolean).map((line, i) => (
-          <div key={i} className="text-sm text-slate-500">
+          <div key={i} className="text-sm text-[var(--print-muted)]">
             {line}
           </div>
         ))}
@@ -424,9 +424,9 @@ export function StatementDocument({
         <StationerySection title="Open Balance Aging">
           <div className="grid grid-cols-5 gap-2 text-center">
             {aging.map((a) => (
-              <div key={a.label} className="rounded-md bg-slate-50 p-2">
-                <div className="text-[10px] uppercase tracking-wide text-slate-400">{a.label}</div>
-                <div className="mt-0.5 text-sm font-semibold text-slate-800">{a.value}</div>
+              <div key={a.label} className="rounded-md bg-[var(--print-surface)] p-2">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--print-faint)]">{a.label}</div>
+                <div className="mt-0.5 text-sm font-semibold text-[var(--print-ink)]">{a.value}</div>
               </div>
             ))}
           </div>
