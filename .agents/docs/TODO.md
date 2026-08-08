@@ -2,6 +2,74 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Platform email sender (2026-08-08) — DONE
+
+App-owner requirement: "from Uppsolut Stay we send initial Enterprise credentials / Links
+and any Channel Manager related mails", with clients keeping their own SMTP for guest mail
+(registration/confirmation etc).
+
+Until now there was exactly ONE sender — the tenant's `EnterpriseSettings.smtp*` — which
+cannot serve platform mail at all: the moment we need to email a new enterprise its first
+password, that enterprise has no settings row and no domain of its own. So there are now
+**two independent senders**, and the split is the whole point of the design:
+
+- **Tenant SMTP** (`sendMail`, unchanged behaviour) — guest mail from the hotel's own
+  domain: confirmation letters, eRegistration links, debtor statements.
+- **Platform SMTP** (`sendPlatformMail`, new) — mail from Uppsolut Stay itself, configured
+  by `PLATFORM_SMTP_*` environment variables and never stored in the database.
+
+There is deliberately **no fallback between them**. A tenant with no SMTP configured must
+not quietly start sending guest confirmations as Uppsolut; it still fails with the same
+"SMTP is not configured" message, and a test pins that.
+
+What landed:
+- **`src/lib/mailer.ts`** reworked around a shared `ResolvedSmtp` + one transport builder.
+  Adds `getPlatformSmtpConfig()` (returns null rather than throwing when unset — an
+  unconfigured mailer must never be what blocks onboarding), `sendPlatformMail()`,
+  `verifySmtp()` (auth-only, no send — powers the Test buttons), `getPlatformAlertRecipients()`,
+  and `text`/`replyTo`/`fromName` support. Transports now carry connection/greeting/socket
+  timeouts: a wedged SMTP host previously hung the caller forever, which in a cron job
+  stops every later job in the same run.
+- **`src/lib/email-templates.ts`** (new) — branded platform layouts with escaping and a
+  plaintext alternative for every message. `escapeHtml` is not optional here: enterprise
+  names and Beds24 error strings both reach these templates from outside.
+- **Onboarding now emails the handover credentials** (`initial-user` route). NON-FATAL by
+  design: the user exists before the send is attempted, so a mail failure must not become a
+  500 that tempts a retry — the retry would be refused, since the endpoint only ever mints
+  the FIRST user. The password is still returned and shown on screen, and the dialog now
+  says which of the two happened.
+- **Channel-manager alerts** in `channelKeepAliveJob`. Fires only on the TRANSITION from
+  CONNECTED to failed, not on "currently failing" — the keep-alive runs hourly and fires
+  days before expiry, so alerting on state would re-send every sweep for days, which is how
+  an alert mailbox becomes one nobody reads. Goes to `PLATFORM_ALERT_EMAIL` (ops), not the
+  tenant: the Beds24 account is Uppsolut's, so only we can re-authorize a lapsed connection
+  with a fresh invite code. `lastError` is re-redacted on the way out — email leaves the
+  system entirely.
+- **Test buttons on both sides**: `POST /api/tenant-settings/smtp-test` (Controls → Reports
+  → SMTP / SFTP) and `GET`/`POST /api/osta/smtp` + `PlatformMailManager` on the platform
+  console's Controls page. Both distinguish "could not connect" from "connected but the
+  message was rejected", which is the distinction that actually locates an SES problem.
+  Both test the SAVED settings — the stored password never comes back to the browser.
+- The platform route is **read-only on purpose**: an endpoint that could rewrite the
+  platform's own sending identity would be a standing route to sending mail as Uppsolut.
+- Docs: `.env.example`, `.env.production.example`, and a new **Email** section in
+  `DEPLOY.md` covering the two senders and the SES specifics.
+- Tests: `tests/business-rules/platform-mailer.test.ts` (27) — env parsing, the
+  half-configured-environment case, TLS being opt-OUT, no cross-sender fallback, escaping.
+
+**Corrected along the way:** `DEPLOY.md` and `mailer.ts` both said tenant SMTP lives under
+"Controls → Stationaries". It is actually **Controls → Reports → SMTP / SFTP**
+(`controls-dashboard.tsx`). Fixed in both, and in the error message operators are told to
+follow.
+
+**Open — needs the app owner, not a code change:** the SES account
+(`email-smtp.eu-north-1.amazonaws.com`, `noreply@mail.uppsolut.com`) is **in the sandbox**.
+Credentials authenticate and DNS is correct (SPF, custom MAIL FROM, DMARC all present), but
+a send to an unverified address is rejected with `554 Message rejected: Email address is
+not verified`. Onboarding mail goes to brand-new customers by definition, so **production
+access must be requested in the SES console before this feature does anything useful in
+production.** Everything above is wired and will start working the moment it is granted.
+
 ## Idle session timeout never actually fired (2026-08-06) — DONE
 
 Reported as "the app doesn't auto-log-out." Root cause: `EodSessionWatch`

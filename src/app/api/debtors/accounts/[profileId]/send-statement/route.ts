@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
+import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { buildInvoiceSummary, type DebtorInvoiceSummary } from "@/lib/debtor-accounts";
 import { computeFolioAgingBuckets, totalOutstanding } from "@/lib/debtor-aging";
 import { logActivity } from "@/lib/activity-log";
@@ -47,12 +48,12 @@ function buildStatementEmailHtml(params: {
   const invoiceRows = invoices
     .map(
       (inv) =>
-        `<tr><td style="padding: 6px 0; color: #6b7280;">${formatDate(inv.checkOutDate)}</td><td style="padding: 6px 0;">${inv.guestName}${inv.confirmationNo ? ` — ${inv.confirmationNo}` : ""}${!inv.isOpen ? " (Paid)" : ""}</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${inv.total.toFixed(2)}</td></tr>`
+        `<tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">${formatDate(inv.checkOutDate)}</td><td style="padding: 6px 0;">${inv.guestName}${inv.confirmationNo ? ` — ${inv.confirmationNo}` : ""}${!inv.isOpen ? " (Paid)" : ""}</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${inv.total.toFixed(2)}</td></tr>`
     )
     .join("");
 
   return `
-<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: ${OBSIDIAN_BLACK};">
   <div style="border-bottom: 3px solid ${brandColor}; padding-bottom: 16px; margin-bottom: 24px;">
     ${settings?.invoiceLogoUrl
       ? `<img src="${settings.invoiceLogoUrl}" alt="${brandName}" style="max-height: 56px; max-width: 220px;" />`
@@ -67,33 +68,33 @@ function buildStatementEmailHtml(params: {
     ${arNumber ? `AR Number: ${arNumber}.` : ""}
   </p>
 
-  <h3 style="font-size: 13px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em;">Open Balance Aging</h3>
+  <h3 style="font-size: 13px; text-transform: uppercase; color: ${STEEL_SLATE}; letter-spacing: 0.05em;">Open Balance Aging</h3>
   <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 16px 0;">
-    <tr><td style="padding: 6px 0; color: #6b7280; width: 60%;">Current</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging.current.toFixed(2)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">1-30 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["1-30"].toFixed(2)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">31-60 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["31-60"].toFixed(2)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">61-90 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["61-90"].toFixed(2)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">90+ days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["90+"].toFixed(2)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE}; width: 60%;">Current</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging.current.toFixed(2)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">1-30 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["1-30"].toFixed(2)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">31-60 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["31-60"].toFixed(2)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">61-90 days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["61-90"].toFixed(2)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">90+ days</td><td style="padding: 6px 0; text-align: right; font-weight: bold;">${aging["90+"].toFixed(2)}</td></tr>
   </table>
 
-  <h3 style="font-size: 13px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em;">Invoices</h3>
+  <h3 style="font-size: 13px; text-transform: uppercase; color: ${STEEL_SLATE}; letter-spacing: 0.05em;">Invoices</h3>
   <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
-    ${invoiceRows || `<tr><td style="padding: 6px 0; color: #9ca3af;">No invoices billed to this account yet.</td></tr>`}
+    ${invoiceRows || `<tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">No invoices billed to this account yet.</td></tr>`}
   </table>
 
   <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px;">
-    <tr><td style="padding: 4px 0; color: #6b7280;">Total Invoiced</td><td style="padding: 4px 0; text-align: right;">${totalInvoiced.toFixed(2)}</td></tr>
-    <tr><td style="padding: 4px 0; color: #6b7280;">Open Balance (Aging)</td><td style="padding: 4px 0; text-align: right;">${totalOutstanding(aging).toFixed(2)}</td></tr>
+    <tr><td style="padding: 4px 0; color: ${STEEL_SLATE};">Total Invoiced</td><td style="padding: 4px 0; text-align: right;">${totalInvoiced.toFixed(2)}</td></tr>
+    <tr><td style="padding: 4px 0; color: ${STEEL_SLATE};">Open Balance (Aging)</td><td style="padding: 4px 0; text-align: right;">${totalOutstanding(aging).toFixed(2)}</td></tr>
   </table>
 
-  <div style="border-top: 2px solid #1f2937; margin-top: 16px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 16px; font-weight: bold;">
+  <div style="border-top: 2px solid ${OBSIDIAN_BLACK}; margin-top: 16px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 16px; font-weight: bold;">
     <span>Balance Due</span>
     <span style="float: right;">${balance.toFixed(2)}</span>
   </div>
 
-  <p style="font-size: 13px; line-height: 1.6; color: #374151; margin-top: 24px;">${settings?.invoicePaymentTerms || ""}</p>
+  <p style="font-size: 13px; line-height: 1.6; color: ${OBSIDIAN_BLACK}; margin-top: 24px;">${settings?.invoicePaymentTerms || ""}</p>
 
-  <div style="border-top: 1px solid #e5e7eb; margin-top: 24px; padding-top: 12px; font-size: 12px; color: #6b7280;">
+  <div style="border-top: 1px solid ${STEEL_SLATE}; margin-top: 24px; padding-top: 12px; font-size: 12px; color: ${STEEL_SLATE};">
     ${settings?.invoiceAddress ? `${settings.invoiceAddress}<br/>` : ""}
     ${settings?.invoicePhone ? `${settings.invoicePhone}` : ""}${settings?.invoicePhone && settings?.invoiceEmail ? " &middot; " : ""}${settings?.invoiceEmail || ""}
   </div>

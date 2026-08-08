@@ -1,6 +1,15 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import type { ReportResult, ReportBranding, ReportColumn } from "@/lib/reports/types";
 import { formatCell, isNumericColumn } from "@/lib/reports/format";
+import { CRIMSON_OS, OBSIDIAN_BLACK, STEEL_SLATE, COOL_PLATINUM } from "@/lib/brand";
+
+// Hex -> pdf-lib's [0,1] rgb() triple. Used both for the branding fallback below and to
+// convert the brand.ts literals (which are hex strings, like everywhere else in the app)
+// into the numeric form this renderer needs.
+function hexToTriple(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN = 36;
@@ -45,8 +54,8 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const brand = hexToRgb(branding.brandColor, [0.12, 0.12, 0.25]);
-  const muted = rgb(0.42, 0.42, 0.42);
+  const brand = hexToRgb(branding.brandColor, hexToTriple(CRIMSON_OS));
+  const muted = rgb(...hexToTriple(STEEL_SLATE));
 
   // Column x offsets from relative widths.
   const totalWeight = result.columns.reduce((s, c) => s + (c.width ?? 1), 0);
@@ -58,7 +67,7 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
   let page!: PDFPage;
   let y = 0;
 
-  const cellText = (page: PDFPage, text: string, col: ReportColumn, i: number, yy: number, f: PDFFont, size: number, color = rgb(0, 0, 0)) => {
+  const cellText = (page: PDFPage, text: string, col: ReportColumn, i: number, yy: number, f: PDFFont, size: number, color = rgb(...hexToTriple(OBSIDIAN_BLACK))) => {
     const pad = 3;
     const maxW = colW[i] - pad * 2;
     const shown = fit(text, maxW, f, size);
@@ -69,7 +78,7 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
 
   const drawColumnHeader = () => {
     page.drawRectangle({ x: MARGIN, y: y - HEADER_H + 4, width: usableW, height: HEADER_H, color: brand });
-    result.columns.forEach((col, i) => cellText(page, col.label, col, i, y - HEADER_H + 9, bold, 8.5, rgb(1, 1, 1)));
+    result.columns.forEach((col, i) => cellText(page, col.label, col, i, y - HEADER_H + 9, bold, 8.5, rgb(...hexToTriple(COOL_PLATINUM))));
     y -= HEADER_H + 4;
   };
 
@@ -77,7 +86,7 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
     page = doc.addPage([pageW, pageH]);
     y = pageH - MARGIN;
     if (withTitle) {
-      page.drawText(fit(result.title, usableW, bold, 16), { x: MARGIN, y: y - 14, size: 16, font: bold, color: rgb(0.07, 0.07, 0.07) });
+      page.drawText(fit(result.title, usableW, bold, 16), { x: MARGIN, y: y - 14, size: 16, font: bold, color: rgb(...hexToTriple(OBSIDIAN_BLACK)) });
       y -= 22;
       page.drawText(fit(`${branding.propertyName} · ${branding.enterpriseName}  ·  Currency: ${branding.currency}`, usableW, font, 9), { x: MARGIN, y: y - 10, size: 9, font, color: muted });
       y -= 14;
@@ -92,7 +101,7 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
 
   newPage(true);
 
-  const drawRow = (row: Record<string, unknown>, f: PDFFont, size = 8.5, color = rgb(0, 0, 0)) => {
+  const drawRow = (row: Record<string, unknown>, f: PDFFont, size = 8.5, color = rgb(...hexToTriple(OBSIDIAN_BLACK))) => {
     ensureRoom();
     result.columns.forEach((col, i) => cellText(page, formatCell(row[col.key], col.format), col, i, y - 10, f, size, color));
     y -= ROW_H;

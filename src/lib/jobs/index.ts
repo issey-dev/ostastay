@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/db";
 import { getProvider } from "@/lib/channels/providers/registry";
-import { testConnection } from "@/lib/channels/connection";
+import { testConnection, CONNECTION_STATUS } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
 import { pushAllEnabledLinks } from "@/lib/channels/push";
 import { pollAllConnections } from "@/lib/channels/inbound/poll";
 import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
+import { redactErrorMessage } from "@/lib/channels/redact";
+import { sendPlatformMail, getPlatformAlertRecipients, isPlatformSmtpConfigured } from "@/lib/mailer";
+import { buildChannelAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
 import type { Job } from "@/lib/jobs/runner";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
@@ -16,6 +19,33 @@ import type { Job } from "@/lib/jobs/runner";
 // How long channel-manager exchange logs are kept. Long enough to investigate a problem
 // reported a month later, short enough that the table does not grow without bound.
 export const SYNC_LOG_RETENTION_DAYS = 60;
+
+/**
+ * Email the platform's ops mailbox that channel connections have just broken.
+ *
+ * Never throws and never blocks the job: alerting is a side channel, and a mail server
+ * being down must not turn a keep-alive sweep that did its work into a FAILED run.
+ *
+ * Silent when PLATFORM_ALERT_EMAIL or platform SMTP is unset — a deployment without an ops
+ * mailbox is a legitimate configuration, not a fault to log on every sweep.
+ */
+async function alertChannelFailures(connections: ChannelAlertConnection[]): Promise<void> {
+  if (connections.length === 0) return;
+  const recipients = getPlatformAlertRecipients();
+  if (recipients.length === 0 || !isPlatformSmtpConfigured()) return;
+
+  try {
+    const mail = buildChannelAlertEmail({ connections });
+    await sendPlatformMail({
+      to: recipients.join(", "),
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+  } catch (e) {
+    console.error("Failed to send channel-manager alert email:", e);
+  }
+}
 
 /**
  * Keep channel-manager credentials alive.
@@ -35,7 +65,7 @@ export const channelKeepAliveJob: Job = {
   run: async (enterpriseId) => {
     const connections = await prisma.channelConnection.findMany({
       where: { enterpriseId, refreshToken: { not: null } },
-      select: { id: true, name: true, lastTokenRefreshAt: true, provider: true },
+      select: { id: true, name: true, lastTokenRefreshAt: true, provider: true, status: true },
     });
 
     const due = connections.filter((c) => getProvider(c.provider).needsKeepAlive(c.lastTokenRefreshAt));
@@ -45,12 +75,45 @@ export const channelKeepAliveJob: Job = {
 
     let refreshed = 0;
     const failures: string[] = [];
+    // Only connections that JUST broke — a working credential that has stopped working.
+    // Alerting on "is currently failing" instead would re-send every sweep for as long as
+    // the fault lasts, which is how an alert mailbox becomes one nobody reads. A
+    // connection that was already ERROR is a known problem and stays silent.
+    const newlyFailed: { name: string; provider: string; error: string | null }[] = [];
+
     for (const c of due) {
       // testConnection records its own outcome on the connection and never throws — a
       // credential that is already dead must not abort the keep-alive for the others.
       const result = await testConnection(c.id);
-      if (result.status === "CONNECTED") refreshed += 1;
-      else failures.push(c.name);
+      if (result.status === CONNECTION_STATUS.CONNECTED) {
+        refreshed += 1;
+      } else {
+        failures.push(c.name);
+        if (c.status === CONNECTION_STATUS.CONNECTED) {
+          newlyFailed.push({
+            name: c.name,
+            provider: c.provider,
+            // Redacted again on the way out: lastError is short and operator-readable, but
+            // it can quote a provider message, and email leaves the system entirely.
+            error: result.lastError ? redactErrorMessage(result.lastError) : null,
+          });
+        }
+      }
+    }
+
+    if (newlyFailed.length > 0) {
+      const enterprise = await prisma.enterprise.findUnique({
+        where: { id: enterpriseId },
+        select: { name: true },
+      });
+      await alertChannelFailures(
+        newlyFailed.map((f) => ({
+          enterpriseName: enterprise?.name ?? "Unknown enterprise",
+          connectionName: f.name,
+          provider: f.provider,
+          error: f.error,
+        }))
+      );
     }
 
     return {
