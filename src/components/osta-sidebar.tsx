@@ -2,6 +2,7 @@ import { LayoutDashboard, Building2, ClipboardCheck, KeyRound, ShieldCheck, Acti
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
+import { APP_VERSION } from "@/lib/version"
 import {
   Sidebar,
   SidebarContent,
@@ -72,6 +73,9 @@ export async function OstaSidebar() {
             <LogoutButton />
           </SidebarMenuItem>
         </SidebarMenu>
+        <p className="mt-2 px-2 text-[10px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+          Uppsolut Stay v{APP_VERSION}
+        </p>
       </div>
     </Sidebar>
   )
