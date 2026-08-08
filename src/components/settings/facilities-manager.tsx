@@ -53,16 +53,22 @@ export function FacilitiesManager() {
   return (
     <div className="w-full">
       <Tabs value={tab} onValueChange={(v) => setTab((v as typeof tab) ?? tab)} className="w-full">
-        {/* Nav left, Add right — one row (mockup). Wraps on narrow widths. */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <TabsList className="bg-muted flex-wrap h-auto">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                <t.icon className="w-4 h-4 mr-2" /> {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <Button className="shadow-sm" onClick={() => setAddSignal((n) => n + 1)}>
+        {/* Nav left, Add right (mockup) on tablet/desktop. On a phone the four triggers
+            with icons don't fit one row — flex-wrap used to push them into a ragged
+            second row before any content was visible, so this is a single
+            horizontally-scrollable strip instead, stacked above a full-width Add
+            button rather than sharing its row. */}
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="overflow-x-auto">
+            <TabsList className="bg-muted h-auto w-max flex-nowrap">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.id} value={t.id} className="shrink-0 grow-0">
+                  <t.icon className="w-4 h-4 mr-2" /> {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <Button className="w-full shadow-sm md:w-auto" onClick={() => setAddSignal((n) => n + 1)}>
             <Plus className="mr-2 h-4 w-4" /> Add {activeTab.addLabel}
           </Button>
         </div>

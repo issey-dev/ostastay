@@ -551,3 +551,95 @@ Code/Fira Sans, "Exaggerated Minimalism" with `clamp(3rem, 10vw, 12rem)` heading
   `document.activeElement` was the link while `a.matches(':focus')` stayed `false`. The
   cascade evidence above is strong but is not a substitute for tabbing to it — **worth a
   30-second keyboard check on the first authenticated page next session.**
+
+---
+
+## 2026-08-08 — app-wide responsive pass, branch `responsive-design-pass`
+
+Full mobile/tablet/desktop pass across essentially every remaining page and admin
+manager in the app, closing out the "acceptable minimum" scoping decisions from the
+2026-07-18 pass (Controls/admin manager tables were left on horizontal-scroll only;
+owner has now explicitly asked for full card-stacking there too) plus the three
+mobile-layout gaps §4.4 had flagged but never built (Availability grid, and — it turned
+out — Tape Chart, which a session between 07-18 and now had already filled in). Done as
+12 parallel scoped passes (one per app area) plus a couple of small follow-ups for gaps
+those passes themselves flagged; every pass read `DESIGN_PLAN.md` §4 first and matched
+the established card-stacking pattern from `front-office/page.tsx` rather than
+inventing new shapes.
+
+**New mobile-only component built** (§4.4 gap, closed): `src/components/availability/
+availability-mobile-list.tsx` — a day-by-day agenda view for the Date × Room Type
+pivot grid (tap a date to expand its per-room-type breakdown, tap a room type to open
+the same `StopSaleDialog` a desktop grid-cell click would), wired into
+`availability-grid.tsx` via `useDeviceTier()`. Mirrors the pattern the Tape Chart
+mobile view already established.
+
+**Confirmed already done, not rebuilt:** the Tape Chart's mobile day-list
+(`tape-chart-mobile-list.tsx`) and POS's mobile cart pattern — both §4.4 items — were
+already fully implemented in a session between 07-18 and now, just undocumented here.
+Also already correct and left alone: tablet sidebar defaulting to collapsed icon-rail
+(`ui/sidebar.tsx`'s `appliedTierDefault` effect — DESIGN_PLAN §4.1 was describing this
+as "currently missing," which was stale; corrected there too) and the header's
+`HeaderBusinessDate` already hiding below `sm`.
+
+**Controls/admin manager card-stacking** (the scope extension): added the `md:hidden`
+card / `hidden md:block` table split to every list-shaped manager under
+`src/components/controls/` (users/roles, charge codes + generates + groups, tax,
+sequence, meal plans, outlets, spa categories/rooms/therapists/treatments, excursions,
+licensing — including two raw `<table>`s in licensing-manager that weren't even using
+the shared `Table` component) plus `src/components/settings/` (dropdowns, properties,
+facilities) and `src/components/inventory/` (room-manager's three nested tables,
+room-type-manager). One deliberate exception: `role-permission-matrix.tsx` — a real
+roles×modules checkbox grid — was kept as a table with a **sticky first column**
+instead of forced into cards (DESIGN_PLAN §4.2's own rule for wide matrices); same call
+made independently for `hub/availability-preview.tsx`'s date×room-type grid and
+`hub/permission-matrix/page.tsx` (which turned out to be a print/report route, correctly
+left exempt per §4.5).
+
+**Real bugs found and fixed along the way, not just missing mobile layouts:**
+- `hub/active-sessions.tsx`'s table had no `overflow-x-auto` at all — a genuine
+  horizontal page-overflow bug on any narrow viewport, not just a missing mobile card.
+- `pos/walk-in-folio-panel.tsx` had the `sm:max-w-sm` dialog-width trap (see
+  DECISIONS.md-adjacent memory on this pattern): `max-w-lg` was set without the `sm:`
+  variant, so the dialog silently capped at 384px on any screen ≥640px.
+- `eregistration-client.tsx` (the guest-facing self-service form — argued to be one of
+  the highest-priority mobile surfaces in the app, since guests fill it out on their own
+  phones) had six `sm:grid-cols-*` occurrences acting as the tier boundary instead of
+  `md:`, so 640–767px devices got a premature multi-column squeeze that phones under
+  640px didn't.
+- `role-permission-matrix.tsx`'s scope-description cell was inheriting `TableCell`'s
+  default `whitespace-nowrap`, which would have forced long descriptions to overflow
+  horizontally instead of wrapping, independent of the sticky-column fix.
+- Several stat-card grids across Financials/Revenue/db-health were still bare
+  `md:grid-cols-4` (jumps straight to 4-up at the tablet boundary) rather than
+  `grid-cols-2 lg:grid-cols-4`.
+- `debtors/page.tsx`'s account list had no mobile treatment at all — a bare `<table>`
+  with zero fallback, the same class of gap as the pre-2026-07-18 Front Office bug.
+
+**Also swept:** dozens of hardcoded `grid-cols-2`/`grid-cols-3` form-field grids across
+Profiles (address/identification/attachments managers), Spa/Excursions walk-in forms,
+Revenue's Allocations/Bulk-Pricing dialogs, and most of Controls' create/edit dialogs —
+converted to `grid-cols-1 md:grid-cols-2` (or `lg:` where a third column follows) so
+mobile gets single-column fields instead of ~150px-wide inputs. Several more `sm:` tier
+misuses fixed the same way as eRegistration's (reservations detail page, hub overview
+grid, hub channel-connection-status, revenue's rate-plan dialog).
+
+**Deliberately left alone:** the two print/stationery surfaces already exempt per §4.5
+(`debtors/[profileId]/statement`, `hub/permission-matrix`), and every file with active
+uncommitted WIP from an unrelated in-progress feature at the time of this pass
+(`booking-form.tsx`, `smtp-sftp-manager.tsx`, `enterprise-onboarding-actions.tsx`,
+`platform-mail-manager.tsx`, `osta/controls/page.tsx`) — none of those were touched, to
+keep this diff isolated from that separate feature branch's eventual commit.
+
+**Verified:** `npx tsc --noEmit` clean (run after every individual pass and once more
+at the end), `npm run lint` — zero new errors (the 6 pre-existing errors are all in
+untouched `dist-scripts/` build artifacts; the ~600 warnings are all pre-existing test
+file warnings, also untouched), `npm run build` compiles and type-checks cleanly
+(Turbopack "Compiled successfully" + "Finished TypeScript" with no errors — the build's
+later page-data-collection step fails locally only on a missing `JWT_SECRET` in this
+checkout's `.env`, a pre-existing local environment gap unrelated to this change, not
+fixed here since it's out of scope). **Not verified visually** — the Browser pane would
+not composite frames or hold a tracked preview process this session (same class of
+environment issue logged on 2026-07-22 and 2026-08-01); confidence instead comes from
+tsc/build passing across all 76 changed files plus a manual diff read-through. Worth a
+real device/browser pass next session before treating this as fully closed.

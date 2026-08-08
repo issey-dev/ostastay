@@ -137,7 +137,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {folio?.walkInGuestName || "Walk-in Bill"}
@@ -150,7 +150,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
         ) : (
           <div className="space-y-5">
             {/* Balance + primary actions */}
-            <div className="rounded-xl border bg-muted/40 p-4 flex items-center justify-between gap-3">
+            <div className="rounded-xl border bg-muted/40 p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Balance Due</p>
                 <p className={`text-3xl font-bold ${balance > 0.005 ? "text-destructive" : balance < -0.005 ? "text-success" : "text-foreground"}`}>
@@ -225,7 +225,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {!closed && (
               <form onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
                 <h3 className="text-sm font-semibold">Take Payment</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Method *</Label>
                     <Select required value={paymentForm.paymentMethodId} onValueChange={(v) => setPaymentForm((p) => ({ ...p, paymentMethodId: v ?? "" }))}>

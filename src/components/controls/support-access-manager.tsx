@@ -125,7 +125,7 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
             </CardHeader>
             <CardContent className="space-y-4">
               {errorMsg && <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md">{errorMsg}</div>}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Enterprise</label>
                   <Select value={requestEnterpriseId} onValueChange={(v) => setRequestEnterpriseId(v ?? "")}>
@@ -152,16 +152,16 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
               const isLive = g.status === "APPROVED" && (!g.expiresAt || new Date(g.expiresAt) > new Date())
               return (
                 <Card key={g.id}>
-                  <CardContent className="flex items-center justify-between py-4">
-                    <div>
-                      <div className="font-medium flex items-center gap-2">{g.enterprise.name} {statusBadge(g)}</div>
+                  <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="font-medium flex flex-wrap items-center gap-2">{g.enterprise.name} {statusBadge(g)}</div>
                       {g.reason && <p className="text-sm text-muted-foreground mt-1">{g.reason}</p>}
                       {g.expiresAt && g.status === "APPROVED" && (
                         <p className="text-xs text-muted-foreground mt-1">Expires {new Date(g.expiresAt).toLocaleString()}</p>
                       )}
                     </div>
                     {isLive && (
-                      <Button size="sm" variant="outline" onClick={() => enter(g.id)}>
+                      <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => enter(g.id)}>
                         <LogIn className="w-4 h-4 mr-1" /> Enter Support Mode
                       </Button>
                     )}
@@ -182,9 +182,9 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
           </h3>
           {grants.map((g) => (
             <Card key={g.id}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div>
-                  <div className="font-medium flex items-center gap-2">
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="font-medium flex flex-wrap items-center gap-2">
                     {g.requestedBy.firstName} {g.requestedBy.lastName} {statusBadge(g)}
                   </div>
                   {g.reason && <p className="text-sm text-muted-foreground mt-1">{g.reason}</p>}
@@ -193,10 +193,10 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
                 <div className="flex gap-2">
                   {g.status === "PENDING" && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => respond(g.id, "approve")}>
+                      <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => respond(g.id, "approve")}>
                         <ShieldCheck className="w-4 h-4 mr-1" /> Approve
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => respond(g.id, "deny")}>
+                      <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" onClick={() => respond(g.id, "deny")}>
                         <ShieldOff className="w-4 h-4 mr-1 text-destructive" /> Deny
                       </Button>
                     </>

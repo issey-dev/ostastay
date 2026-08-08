@@ -199,7 +199,7 @@ export function DbHealthDashboard() {
 
         {/* ============================== STORAGE ============================== */}
         <TabsContent value="storage" className="space-y-6 pt-4">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {/* Development runs SQLite and production PostgreSQL, so every card below
                 states which engine it is describing rather than implying one. */}
             <StatCard
@@ -504,7 +504,7 @@ export function DbHealthDashboard() {
 
         {/* ============================ API & CHANNELS ============================ */}
         <TabsContent value="api" className="space-y-6 pt-4">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label={`Channel Calls (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.calls.toLocaleString()} sub={data.channelApi.truncated ? "Truncated at 5,000 — real total is higher" : undefined} />
             <StatCard label={`Failures (${data.channelApi.windowDays}d)`} value={<span className={data.channelApi.totals.failures > 0 ? "text-destructive" : undefined}>{data.channelApi.totals.failures.toLocaleString()}</span>} />
             <StatCard label="Calls (24h)" value={data.channelApi.totals.calls24h.toLocaleString()} />

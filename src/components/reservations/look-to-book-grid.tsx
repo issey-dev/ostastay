@@ -42,11 +42,11 @@ type LookToBookGridProps = {
 // and segment bookkeeping live in the parent form.
 export function LookToBookGrid({ gridData, visibleRatePlans, selectedRoomTypeId, selectedRatePlanId, onSelect }: LookToBookGridProps) {
   return (
-    <div className="overflow-x-auto border rounded-md">
+    <div className="overflow-x-auto border rounded-md bg-card">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/40">
-            <th className="text-left font-medium text-muted-foreground px-3 py-2 w-44">Rate Plan</th>
+            <th className="sticky left-0 z-10 text-left font-medium text-muted-foreground px-3 py-2 w-36 md:w-44 bg-muted">Rate Plan</th>
             {gridData.roomTypes.map(rt => (
               <th key={rt.id} className="px-3 py-2 text-center font-medium">
                 <div>{rt.name}</div>
@@ -71,7 +71,7 @@ export function LookToBookGrid({ gridData, visibleRatePlans, selectedRoomTypeId,
         <tbody>
           {visibleRatePlans.map(rp => (
             <tr key={rp.id} className="border-b last:border-b-0">
-              <td className="px-3 py-2 text-muted-foreground">
+              <td className="sticky left-0 z-10 bg-card px-3 py-2 text-muted-foreground">
                 <span className="font-mono text-xs">{rp.code}</span>
                 <span className="block text-xs">
                   {rp.name}

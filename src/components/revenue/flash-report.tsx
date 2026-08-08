@@ -45,7 +45,7 @@ export function FlashReport() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" />
@@ -53,7 +53,7 @@ export function FlashReport() {
           </h1>
           <p className="text-muted-foreground mt-1">Real-time KPI overview for {new Date(data.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
         </div>
-        <Button onClick={fetchAnalytics} variant="outline" className="flex items-center gap-2">
+        <Button onClick={fetchAnalytics} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
           <CalendarIcon className="w-4 h-4" />
           Refresh Today
         </Button>
@@ -136,15 +136,15 @@ export function FlashReport() {
           ) : (
             <div className="space-y-4">
               {Object.entries(data.revenueByCategory).map(([category, amount]) => (
-                <div key={category} className="flex items-center">
-                  <div className="w-32 text-sm font-medium text-muted-foreground">{category}</div>
-                  <div className="flex-1 bg-muted rounded-none h-4 overflow-hidden relative mx-4">
-                    <div 
+                <div key={category} className="flex items-center gap-2">
+                  <div className="w-20 sm:w-32 shrink-0 truncate text-sm font-medium text-muted-foreground">{category}</div>
+                  <div className="flex-1 min-w-0 bg-muted rounded-none h-4 overflow-hidden relative">
+                    <div
                       className="absolute top-0 left-0 h-full bg-primary rounded-none"
                       style={{ width: `${((amount as number) / data.totalRevenue) * 100}%` }}
                     ></div>
                   </div>
-                  <div className="w-24 text-right font-bold text-foreground">
+                  <div className="w-20 sm:w-24 shrink-0 text-right font-bold text-foreground text-sm sm:text-base">
                     {formatCurrency(amount as number)}
                   </div>
                 </div>

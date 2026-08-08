@@ -23,7 +23,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           </h2>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

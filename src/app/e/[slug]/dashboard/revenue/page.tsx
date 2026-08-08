@@ -243,7 +243,10 @@ export default function RevenueDashboard() {
       </div>
 
       <Tabs defaultValue="rate-plans" className="w-full">
-        <TabsList className="bg-muted/50 mb-6">
+        {/* 2x2 on a phone, one row from md up — four triggers at whitespace-nowrap width
+            overflow a 375px screen if forced into a single row (see the same fix on
+            front-office's operations tabs). */}
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted/50 mb-6 data-horizontal:h-auto md:flex md:h-8 md:w-fit md:gap-0 md:data-horizontal:h-8">
           <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
           <TabsTrigger value="rate-plans">Rate Plans</TabsTrigger>
           <TabsTrigger value="allocations">Allocations</TabsTrigger>
@@ -287,10 +290,10 @@ export default function RevenueDashboard() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="grid sm:grid-cols-2 gap-6 py-4">
+              <div className="grid grid-cols-1 gap-6 py-4 md:grid-cols-2">
                 {/* Left column — rate definition */}
                 <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Rate Code <span className="text-destructive">*</span></Label>
                     <Input required disabled={isLockedPlan} placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
@@ -356,7 +359,7 @@ export default function RevenueDashboard() {
                   />
 
                   {form.parentRatePlanId && (
-                    <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div className="grid grid-cols-1 gap-4 mt-3 sm:grid-cols-2">
                       <div className="grid gap-2">
                         <Label className="text-xs">Adjustment Type</Label>
                         <Select value={form.derivedAdjustmentType} onValueChange={(v) => setForm(p => ({ ...p, derivedAdjustmentType: v ?? "PERCENT" }))}>
@@ -503,95 +506,142 @@ export default function RevenueDashboard() {
             <InfoHint label="Rate Plan Hierarchy">Defines the pricing waterfall. Lower priority numbers always win in a conflict.</InfoHint>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Priority</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Plan Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">Loading rate plans...</TableCell></TableRow>
-              ) : loadError ? (
-                <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load rate plans" onRetry={fetchRatePlans} /></TableCell></TableRow>
-              ) : ratePlans.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={CalendarDays} title="No rate plans defined" /></TableCell></TableRow>
-              ) : (
-                ratePlans.map((plan) => (
-                  <TableRow key={plan.id}>
-                    <TableCell>
-                      <span className="font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
-                    </TableCell>
-                    <TableCell className="font-mono font-bold text-info">
-                      <span className="inline-flex items-center gap-1.5">
-                        {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
-                        {plan.code}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-medium">{plan.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1.5">
-                        {plan.isLocked ? (
-                          <Badge variant="outline" className="text-muted-foreground">Base Rate</Badge>
-                        ) : plan.isNegotiated ? (
-                          <>
-                            <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
-                            {(plan.negotiatedForProfileIds?.length ?? 0) === 0 ? (
-                              <Badge variant="outline" className="bg-destructive-muted text-destructive border-destructive/30">No agents linked</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-muted-foreground">
-                                {plan.negotiatedForProfileIds?.length} agent{plan.negotiatedForProfileIds?.length === 1 ? "" : "s"} linked
-                              </Badge>
-                            )}
-                          </>
-                        ) : (
-                          <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
-                        )}
-                        {plan.isComplimentary && (
-                          <Badge variant="outline" className="bg-info-muted text-info border-info/30">Complimentary</Badge>
-                        )}
-                        {plan.isHouseUse && (
-                          <Badge variant="outline" className="text-muted-foreground">House Use</Badge>
-                        )}
-                        {plan.parentRatePlan && (
-                          <Badge variant="outline" className="bg-info-muted text-info border-info/30">
-                            ← {plan.parentRatePlan.code} {plan.derivedAdjustmentType === "FLAT"
-                              ? `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${plan.derivedAdjustmentValue}`
-                              : `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${plan.derivedAdjustmentValue}%`}
-                          </Badge>
-                        )}
-                        {(plan.allocationLinks ?? []).map(l => (
-                          <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
-                            {l.allocation.code}
-                          </Badge>
-                        ))}
+        <CardContent className="p-0">
+          {(() => {
+            const typeBadges = (plan: RatePlan) => (
+              <div className="flex flex-wrap gap-1.5">
+                {plan.isLocked ? (
+                  <Badge variant="outline" className="text-muted-foreground">Base Rate</Badge>
+                ) : plan.isNegotiated ? (
+                  <>
+                    <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">Negotiated</Badge>
+                    {(plan.negotiatedForProfileIds?.length ?? 0) === 0 ? (
+                      <Badge variant="outline" className="bg-destructive-muted text-destructive border-destructive/30">No agents linked</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {plan.negotiatedForProfileIds?.length} agent{plan.negotiatedForProfileIds?.length === 1 ? "" : "s"} linked
+                      </Badge>
+                    )}
+                  </>
+                ) : (
+                  <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
+                )}
+                {plan.isComplimentary && (
+                  <Badge variant="outline" className="bg-info-muted text-info border-info/30">Complimentary</Badge>
+                )}
+                {plan.isHouseUse && (
+                  <Badge variant="outline" className="text-muted-foreground">House Use</Badge>
+                )}
+                {plan.parentRatePlan && (
+                  <Badge variant="outline" className="bg-info-muted text-info border-info/30">
+                    ← {plan.parentRatePlan.code} {plan.derivedAdjustmentType === "FLAT"
+                      ? `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${plan.derivedAdjustmentValue}`
+                      : `${(plan.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${plan.derivedAdjustmentValue}%`}
+                  </Badge>
+                )}
+                {(plan.allocationLinks ?? []).map(l => (
+                  <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
+                    {l.allocation.code}
+                  </Badge>
+                ))}
+              </div>
+            )
+
+            if (loading) {
+              return <p className="py-10 text-center text-sm text-muted-foreground">Loading rate plans...</p>
+            }
+            if (loadError) {
+              return <ErrorState title="Couldn't load rate plans" onRetry={fetchRatePlans} />
+            }
+            if (ratePlans.length === 0) {
+              return <EmptyState icon={CalendarDays} title="No rate plans defined" />
+            }
+
+            return (
+              <>
+                {/* Mobile: card-per-row — a 5-column table is unreadable under ~500px. */}
+                <div className="space-y-3 p-4 md:hidden">
+                  {ratePlans.map((plan) => (
+                    <div key={plan.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 font-mono font-bold text-info">
+                            {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                            {plan.code}
+                          </div>
+                          <div className="truncate font-medium text-foreground">{plan.name}</div>
+                        </div>
+                        <span className="shrink-0 font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>
-                        <Button variant="outline" size="sm">
-                          <CalendarDays className="mr-2 h-3 w-3" /> Calendar
+                      {typeBadges(plan)}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="flex-1">
+                          <Button variant="outline" size="sm" className="h-9 w-full">
+                            <CalendarDays className="mr-2 h-3.5 w-3.5" /> Calendar
+                          </Button>
+                        </Link>
+                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => handleEdit(plan)}>
+                          <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                         </Button>
-                      </Link>
-                      <Button variant="outline" size="icon" aria-label="Edit rate plan" onClick={() => handleEdit(plan)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {!plan.isLocked && (
-                        <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                        {!plan.isLocked && (
+                          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tablet/desktop: real table. */}
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Plan Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ratePlans.map((plan) => (
+                        <TableRow key={plan.id}>
+                          <TableCell>
+                            <span className="font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-info">
+                            <span className="inline-flex items-center gap-1.5">
+                              {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                              {plan.code}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-medium">{plan.name}</TableCell>
+                          <TableCell>{typeBadges(plan)}</TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`}>
+                              <Button variant="outline" size="sm">
+                                <CalendarDays className="mr-2 h-3 w-3" /> Calendar
+                              </Button>
+                            </Link>
+                            <Button variant="outline" size="icon" aria-label="Edit rate plan" onClick={() => handleEdit(plan)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            {!plan.isLocked && (
+                              <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )
+          })()}
         </CardContent>
       </Card>
 

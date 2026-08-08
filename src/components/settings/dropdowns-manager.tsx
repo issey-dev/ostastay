@@ -193,11 +193,17 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           single dead-end option, so tabs only render once there's more than one. */}
       {categories.length > 1 ? (
         <Tabs value={category} onValueChange={(val) => setCategory(val ?? category)}>
-          <TabsList className="flex-wrap h-auto">
-            {categories.map(cat => (
-              <TabsTrigger key={cat.code} value={cat.code}>{cat.label}</TabsTrigger>
-            ))}
-          </TabsList>
+          {/* Some category sets run to 8 items (e.g. profile LOVs) — flex-wrap pushed
+              those into 4+ rows before any content was visible on a phone. A single
+              horizontally-scrollable row keeps every tab reachable without pushing the
+              list below the fold. */}
+          <div className="overflow-x-auto">
+            <TabsList className="h-auto w-max flex-nowrap">
+              {categories.map(cat => (
+                <TabsTrigger key={cat.code} value={cat.code} className="shrink-0 grow-0">{cat.label}</TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </Tabs>
       ) : (
         <Label className="text-sm font-medium">{currentCategoryLabel}</Label>
@@ -214,8 +220,8 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           title={`Add New ${currentCategoryLabel} Option`}
           description="Enter a unique code and its display label."
         />
-        <form onSubmit={handleAdd} className="flex gap-4 items-end">
-          <div className="grid gap-2 flex-1">
+        <form onSubmit={handleAdd} className="flex flex-col gap-4 md:flex-row md:items-end">
+          <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
             <Input
               placeholder="e.g. M, F, VEG"
@@ -223,7 +229,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
               onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
             />
           </div>
-          <div className="grid gap-2 flex-1">
+          <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Display Value</Label>
             <Input
               placeholder="e.g. Male, Female, Vegan"
@@ -231,7 +237,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
               onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
             />
           </div>
-          <Button type="submit" disabled={saving || !form.code || !form.value}>
+          <Button type="submit" className="w-full md:w-auto" disabled={saving || !form.code || !form.value}>
             <Plus className="w-4 h-4 mr-2" /> Add
           </Button>
         </form>
@@ -244,6 +250,97 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           description="Use the arrows to reorder — that order is the dropdown order throughout the system."
         />
         <ControlsSectionBody>
+          {/* Phone — reorderable card stack. Table below takes over at md. */}
+          <div className="p-4 md:hidden">
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : codes.length === 0 ? (
+              <EmptyState
+                icon={ListChecks}
+                title={`No items found for ${currentCategoryLabel}`}
+                description="Add your first option using the form above."
+              />
+            ) : (
+              <div className="space-y-3">
+                {codes.map((c, i) => (
+                  <div key={c.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground">{c.code}</p>
+                        {editingId === c.id ? (
+                          <div className="mt-1 flex items-center gap-2">
+                            <Input
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              className="h-8"
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === "Enter") handleInlineEdit(c.id)
+                                if (e.key === "Escape") setEditingId(null)
+                              }}
+                            />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-success" onClick={() => handleInlineEdit(c.id)}>
+                              <Check className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground" onClick={() => setEditingId(null)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">{c.value}</span>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
+                              className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors shrink-0"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-destructive hover:text-destructive hover:bg-destructive-muted">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete &quot;{c.value}&quot;?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will remove &quot;{c.value}&quot; ({c.code}) from the {currentCategoryLabel} dropdown.
+                              Existing records using this code will not be affected.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                    <div className="flex items-center gap-2 border-t border-border/50 pt-3">
+                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === 0} onClick={() => reorder(i, "up")}>
+                        <ChevronUp className="w-3.5 h-3.5 mr-1.5" /> Move up
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === codes.length - 1} onClick={() => reorder(i, "down")}>
+                        <ChevronDown className="w-3.5 h-3.5 mr-1.5" /> Move down
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
@@ -354,6 +451,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
               )}
             </TableBody>
           </Table>
+          </div>
         </ControlsSectionBody>
       </div>
     </div>

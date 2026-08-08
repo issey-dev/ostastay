@@ -203,7 +203,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                 />
                 <Label htmlFor="selectAll" className="font-semibold cursor-pointer">Select All Room Types</Label>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {roomTypes.map(rt => (
                   <div key={rt.id} className="flex items-center space-x-2">
                     <Checkbox 

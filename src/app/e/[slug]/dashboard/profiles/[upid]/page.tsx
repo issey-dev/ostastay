@@ -139,13 +139,13 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   return (
     <div className="max-w-7xl w-full mx-auto p-4 flex flex-col gap-4 pb-12">
       {/* Header — mirrors the Edit form's sticky header */}
-      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back">
+      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-4">
+          <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back" className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-2xl font-bold tracking-tight">{displayName || "Unnamed profile"}</h2>
               <Badge variant="outline">{PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType}</Badge>
               <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[profile.classification] || "bg-muted text-foreground"}`}>
@@ -162,7 +162,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
             </p>
           </div>
         </div>
-        <Button onClick={() => router.push(`/e/${slug}/dashboard/profiles/${upid}/edit`)}>
+        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${upid}/edit`)}>
           <Pencil className="mr-2 h-4 w-4" /> Edit
         </Button>
       </div>

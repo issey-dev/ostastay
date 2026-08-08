@@ -153,7 +153,44 @@ export function ChargeCodeGeneratesEditor({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border overflow-hidden">
+      {/* Phone view — one card per generate row: destination code up top, amount and
+          order beneath, Disable/Enable + delete as full-width/icon actions. */}
+      <div className="md:hidden">
+        {rows.length === 0 ? (
+          <div className="rounded-lg border p-4"><EmptyState icon={ArrowRightCircle} title="This code generates nothing" /></div>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <div key={r.id} className={`rounded-lg border border-border bg-card p-4 space-y-2 ${r.isActive ? "" : "opacity-50"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-mono font-medium">{r.generatedCode.code}</span>
+                    {!r.isActive && <Badge variant="outline" className="ml-2 font-normal">Off</Badge>}
+                    <p className="text-sm text-muted-foreground">{r.generatedCode.description}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">Order {r.sortOrder}</span>
+                </div>
+                <p className="text-sm">{describeAmount(r)}</p>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => toggleActive(r)}>
+                    {r.isActive ? "Disable" : "Enable"}
+                  </Button>
+                  <Button
+                    variant="outline" size="icon"
+                    className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                    aria-label="Delete"
+                    onClick={() => remove(r)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block rounded-lg border overflow-x-auto">
         <Table>
           <TableHeader className="bg-muted/80">
             <TableRow>

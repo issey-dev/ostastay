@@ -141,8 +141,8 @@ export function ExcursionScheduleManager({
           <p className="text-sm text-muted-foreground">No recurring schedules yet — add one below.</p>
         ) : (
           excursionType.schedules.map((s: ExcursionScheduleDto) => (
-            <div key={s.id} className="flex items-center justify-between border rounded-lg p-3">
-              <div>
+            <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-lg p-3">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">{s.daysOfWeek.split(",").join(", ")} at {s.departureTime}</p>
                 <p className="text-xs text-muted-foreground">
                   Capacity {s.capacity}{s.minCapacity ? ` (min ${s.minCapacity})` : ""}
@@ -186,12 +186,12 @@ export function ExcursionScheduleManager({
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input type="time" placeholder="Departure time" value={form.departureTime} onChange={(e) => setForm((p) => ({ ...p, departureTime: e.target.value }))} />
           <Input type="time" placeholder="Meeting time (optional)" value={form.meetingTime} onChange={(e) => setForm((p) => ({ ...p, meetingTime: e.target.value }))} />
         </div>
         <Input placeholder="Meeting point (optional, e.g. Main Jetty)" value={form.meetingPoint} onChange={(e) => setForm((p) => ({ ...p, meetingPoint: e.target.value }))} />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input type="number" min="1" placeholder="Capacity" value={form.capacity} onChange={(e) => setForm((p) => ({ ...p, capacity: e.target.value }))} />
           <Input type="number" min="0" placeholder="Min. headcount to run (optional)" value={form.minCapacity} onChange={(e) => setForm((p) => ({ ...p, minCapacity: e.target.value }))} />
         </div>

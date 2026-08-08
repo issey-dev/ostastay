@@ -239,9 +239,9 @@ export function TaxManager() {
                   </div>
                   <div className="space-y-3">
                     {taxForm.rates.map((line, index) => (
-                      <div key={index} className="flex items-start gap-2 p-3 border rounded-md bg-muted">
-                        <div className="grid grid-cols-[1fr_auto] gap-2 flex-1">
-                          <div className="grid grid-cols-2 gap-2">
+                      <div key={index} className="flex flex-col gap-2 p-3 border rounded-md bg-muted sm:flex-row sm:items-start">
+                        <div className="grid flex-1 gap-2 sm:grid-cols-[1fr_auto]">
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <Input
                               required
                               placeholder="Line name, e.g. State Tax"
@@ -259,7 +259,7 @@ export function TaxManager() {
                             </div>
                           </div>
                           <Select value={line.calculateOn} onValueChange={v => updateTaxLine(index, { calculateOn: (v ?? "BASE") as "BASE" | "COMPOUND" })}>
-                            <SelectTrigger className="w-56">
+                            <SelectTrigger className="w-full sm:w-56">
                               <SelectValue>{line.calculateOn === "COMPOUND" ? "On Subtotal + Prior Lines" : "On Subtotal"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
@@ -269,7 +269,7 @@ export function TaxManager() {
                           </Select>
                         </div>
                         {taxForm.rates.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted shrink-0" onClick={() => removeTaxLine(index)}>
+                          <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted shrink-0 self-end sm:self-start" onClick={() => removeTaxLine(index)}>
                             <X className="w-4 h-4" />
                           </Button>
                         )}
@@ -333,7 +333,7 @@ export function TaxManager() {
                 </div>
 
                 {settingsForm.greenTaxEnabled && (
-                  <div className="grid gap-6 sm:grid-cols-3 border-t pt-4 mt-2">
+                  <div className="grid grid-cols-1 gap-6 border-t pt-4 mt-2 md:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Adult Rate (per adult/night) in USD</Label>
                       <div className="relative">
@@ -417,7 +417,7 @@ export function TaxManager() {
                   </Label>
                 </div>
 
-                <div className="grid gap-6 sm:grid-cols-2 border-t pt-4 mt-2">
+                <div className="grid grid-cols-1 gap-6 border-t pt-4 mt-2 md:grid-cols-2">
                   {settingsForm.tgstEnabled && (
                     <div className="space-y-2">
                       <Label>GST Rate (%)</Label>
@@ -472,6 +472,53 @@ export function TaxManager() {
 
         <TabsContent value="custom-tax" className="m-0">
           <ControlsSectionBody>
+          {/* Phone view — a card per tax profile: name up top, its lines as chips, then
+              edit/delete as full-width/icon actions. */}
+          <div className="md:hidden">
+            {taxProfiles.length === 0 ? (
+              <div className="p-4"><EmptyState icon={Percent} title="No custom tax profiles configured" /></div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedTaxProfiles.map(tp => {
+                  const lines = [...(tp.rates || [])].sort((a: any, b: any) => a.order - b.order)
+                  return (
+                    <div key={tp.id} className="rounded-lg border border-border bg-card p-4 space-y-2">
+                      <div>
+                        <p className="font-medium text-foreground">{tp.name}</p>
+                        {tp.description && <p className="text-sm text-muted-foreground">{tp.description}</p>}
+                      </div>
+                      {lines.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {lines.map((r: any) => (
+                            <Badge key={r.id} variant="outline" className="bg-success-muted text-success border-success/30 font-normal">
+                              {r.name} {r.ratePercent.toFixed(2)}%{r.calculateOn === "COMPOUND" ? " (compound)" : ""}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">No lines</span>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openTaxEdit(tp)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline" size="icon"
+                          className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                          aria-label="Delete"
+                          onClick={() => { setDeletingTaxId(tp.id); setIsTaxDeleteDialogOpen(true) }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/80">
               <TableRow>
@@ -526,6 +573,7 @@ export function TaxManager() {
               )}
             </TableBody>
           </Table>
+          </div>
           </ControlsSectionBody>
         </TabsContent>
       </Tabs>

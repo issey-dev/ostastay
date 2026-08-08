@@ -59,7 +59,7 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
       ) : (
         <div className="divide-y rounded-lg border">
           {rows.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-3 p-4">
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">
                   {r.walkInGuestName || "Walk-in"}
@@ -71,7 +71,7 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
                   {r.closedBusinessDate ? new Date(r.closedBusinessDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <div className="text-right">
                   <p className="font-semibold text-foreground">${r.charges.toFixed(2)}</p>
                   {Math.abs(r.balance) > 0.01 && <p className="text-xs text-destructive">Balance ${r.balance.toFixed(2)}</p>}

@@ -151,7 +151,7 @@ export function SpaSettingsForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           <FormField control={form.control} name="defaultOpeningTime" render={({ field }) => (
             <FormItem><FormLabel>Opening Time</FormLabel><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
@@ -172,7 +172,7 @@ export function SpaSettingsForm() {
           )} />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           <FormField control={form.control} name="allowTentativeAppointments" render={({ field }) => (
             <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Allow tentative holds</FormLabel></FormItem>
           )} />
@@ -187,7 +187,7 @@ export function SpaSettingsForm() {
           )} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormField control={form.control} name="chargeTiming" render={({ field }) => (
             <FormItem>
               <FormLabel>Charge Timing</FormLabel>
@@ -206,7 +206,7 @@ export function SpaSettingsForm() {
           )} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="grid grid-cols-2 gap-2">
             <FormField control={form.control} name="lateCancellationChargeType" render={({ field }) => (
               <FormItem>
@@ -247,7 +247,7 @@ export function SpaSettingsForm() {
           <FormItem className="max-w-[240px]"><FormLabel>No-Show Grace Period (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormField control={form.control} name="requireCancellationReason" render={({ field }) => (
             <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Require cancellation reason</FormLabel></FormItem>
           )} />

@@ -27,19 +27,14 @@ export function RoomTypeTab({
   onPatch: (payload: Record<string, unknown>, successMessage?: string) => Promise<boolean>
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Room type</TableHead>
-            <TableHead>Channel room ID</TableHead>
-            <TableHead className="w-[90px] text-right">Share</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {roomTypes.map((rt) => (
-            <TableRow key={rt.roomTypeId}>
-              <TableCell>
+    <>
+      {/* Phone view — the mapping input and share toggle both need their own row width
+          to be usable with a thumb, so each room type becomes a small card. */}
+      <div className="space-y-3 md:hidden">
+        {roomTypes.map((rt) => (
+          <div key={rt.roomTypeId} className="space-y-3 rounded-md border border-border bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <span className="text-sm font-medium">{rt.roomTypeName}</span>
                 <span className="ml-2 font-mono text-xs text-muted-foreground">{rt.roomTypeCode}</span>
                 {!rt.isActive && (
@@ -47,16 +42,9 @@ export function RoomTypeTab({
                     Inactive
                   </Badge>
                 )}
-              </TableCell>
-              <TableCell>
-                <MappingInput
-                  value={rt.externalRoomId ?? ""}
-                  disabled={!canManage}
-                  placeholder="Beds24 room ID"
-                  onSave={(v) => onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: v }, "Mapping saved")}
-                />
-              </TableCell>
-              <TableCell className="text-right">
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xs text-muted-foreground">Share</span>
                 <Switch
                   checked={rt.shared}
                   disabled={!canManage || !rt.externalRoomId}
@@ -64,11 +52,61 @@ export function RoomTypeTab({
                     void onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: rt.externalRoomId ?? "", shared: checked })
                   }
                 />
-              </TableCell>
+              </div>
+            </div>
+            <MappingInput
+              value={rt.externalRoomId ?? ""}
+              disabled={!canManage}
+              placeholder="Beds24 room ID"
+              onSave={(v) => onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: v }, "Mapping saved")}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Room type</TableHead>
+              <TableHead>Channel room ID</TableHead>
+              <TableHead className="w-[90px] text-right">Share</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {roomTypes.map((rt) => (
+              <TableRow key={rt.roomTypeId}>
+                <TableCell>
+                  <span className="text-sm font-medium">{rt.roomTypeName}</span>
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{rt.roomTypeCode}</span>
+                  {!rt.isActive && (
+                    <Badge variant="secondary" className="ml-2">
+                      Inactive
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <MappingInput
+                    value={rt.externalRoomId ?? ""}
+                    disabled={!canManage}
+                    placeholder="Beds24 room ID"
+                    onSave={(v) => onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: v }, "Mapping saved")}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Switch
+                    checked={rt.shared}
+                    disabled={!canManage || !rt.externalRoomId}
+                    onCheckedChange={(checked) =>
+                      void onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: rt.externalRoomId ?? "", shared: checked })
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   )
 }

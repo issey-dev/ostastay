@@ -289,60 +289,105 @@ export function ExcursionsManager({ title, description }: { title: string; descr
               description="Create your first excursion — e.g. SNORK — Snorkelling Trip, adult $50 / child $25."
             />
           ) : (
-            <div className="-mx-6 -mb-6 border-t border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Charge Code</TableHead>
-                  <TableHead>Pricing</TableHead>
-                  <TableHead>Current Price</TableHead>
-                  <TableHead>Schedules</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Phone view — the table below takes over at md. */}
+              <div className="md:hidden -mx-6 -mb-6 border-t border-border space-y-3 p-4">
                 {sortedTypes.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-mono font-bold text-info">{t.code}</TableCell>
-                    <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{t.chargeCode?.code}</TableCell>
-                    <TableCell className="text-sm">{PRICING_MODE_LABELS[t.pricingMode] ?? t.pricingMode}</TableCell>
-                    <TableCell>{currentPriceLabel(t)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{t.schedules.length} template{t.schedules.length === 1 ? "" : "s"}</Badge>
-                    </TableCell>
-                    <TableCell>
+                  <div key={t.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-mono font-bold text-info text-sm">{t.code}</span>
+                          <span className="font-medium truncate">{t.name}</span>
+                        </div>
+                        <p className="font-mono text-xs text-muted-foreground">{t.chargeCode?.code}</p>
+                      </div>
                       {t.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                        <Badge variant="outline" className="text-muted-foreground shrink-0">Inactive</Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => setSchedulingFor(t)}>
-                        <CalendarClock className="h-4 w-4 mr-1.5" /> Schedule
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      <div className="text-muted-foreground">{PRICING_MODE_LABELS[t.pricingMode] ?? t.pricingMode}</div>
+                      <div>{currentPriceLabel(t)}</div>
+                      <Badge variant="outline">{t.schedules.length} template{t.schedules.length === 1 ? "" : "s"}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setSchedulingFor(t)}>
+                        <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> Schedule
                       </Button>
-                      <Button variant="outline" size="icon" aria-label="Edit excursion" onClick={() => openEdit(t)}>
-                        <Pencil className="h-4 w-4" />
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                       </Button>
                       <Button
                         variant="outline"
-                        size="icon"
-                        aria-label="Delete excursion"
-                        className="text-destructive hover:text-destructive"
+                        size="sm"
+                        className="h-9 flex-1 text-destructive hover:text-destructive"
                         onClick={() => setDeleting(t)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                       </Button>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-            </div>
+              </div>
+
+              <div className="hidden md:block -mx-6 -mb-6 border-t border-border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Charge Code</TableHead>
+                      <TableHead>Pricing</TableHead>
+                      <TableHead>Current Price</TableHead>
+                      <TableHead>Schedules</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedTypes.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="font-mono font-bold text-info">{t.code}</TableCell>
+                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{t.chargeCode?.code}</TableCell>
+                        <TableCell className="text-sm">{PRICING_MODE_LABELS[t.pricingMode] ?? t.pricingMode}</TableCell>
+                        <TableCell>{currentPriceLabel(t)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{t.schedules.length} template{t.schedules.length === 1 ? "" : "s"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {t.isActive ? (
+                            <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => setSchedulingFor(t)}>
+                            <CalendarClock className="h-4 w-4 mr-1.5" /> Schedule
+                          </Button>
+                          <Button variant="outline" size="icon" aria-label="Edit excursion" onClick={() => openEdit(t)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Delete excursion"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleting(t)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
       </ControlsCard>
 
@@ -359,7 +404,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
               </DialogHeader>
 
               <div className="grid gap-5 py-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="code"
@@ -402,7 +447,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="chargeCodeId"
@@ -481,7 +526,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
                     {ratesArray.fields.map((row, idx) => (
                       <div
                         key={row.id}
-                        className={pricingMode === "FLAT" ? "grid grid-cols-[1fr_1.2fr_1.2fr_auto] gap-2 items-start" : "grid grid-cols-[1fr_1fr_1fr_1.2fr_1.2fr_auto] gap-2 items-start"}
+                        className={pricingMode === "FLAT" ? "grid grid-cols-2 gap-2 items-start md:grid-cols-[1fr_1.2fr_1.2fr_auto]" : "grid grid-cols-2 gap-2 items-start md:grid-cols-[1fr_1fr_1fr_1.2fr_1.2fr_auto]"}
                       >
                         {pricingMode === "FLAT" ? (
                           <FormField

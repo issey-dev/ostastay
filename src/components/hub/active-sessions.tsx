@@ -124,36 +124,26 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="-mx-6 -mb-6 border-t border-border">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead className="px-6">User</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Signed in</TableHead>
-                <TableHead>Idle</TableHead>
-                <TableHead>Device</TableHead>
-                {canTerminate && <TableHead className="px-6 text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                ))
-              ) : error ? (
-                <TableRow><TableCell colSpan={7} className="py-0">
-                  <ErrorState title="Couldn't load sessions" onRetry={fetchSessions} />
-                </TableCell></TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="py-0">
-                  <EmptyState icon={Users} title="Nobody is signed in right now" />
-                </TableCell></TableRow>
-              ) : (
-                rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="px-6">
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : error ? (
+          <ErrorState title="Couldn't load sessions" onRetry={fetchSessions} />
+        ) : rows.length === 0 ? (
+          <EmptyState icon={Users} title="Nobody is signed in right now" />
+        ) : (
+          <>
+            {/* Phone view — the table is six or seven columns wide, so each session
+                becomes a card: who, then the roles/location/timing facts, then the
+                same end-session action. */}
+            <div className="space-y-3 md:hidden">
+              {rows.map((r) => (
+                <div key={r.id} className="space-y-2 rounded-md border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <div className="font-medium">
                         {r.name}
                         {r.id === currentId && (
@@ -161,39 +151,97 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">{r.email}</div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {r.roles.length ? r.roles.join(", ") : "No role"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.propertyName ?? "All properties"}</TableCell>
-                    <TableCell className="text-sm tabular-nums" title={new Date(r.signedInAt).toLocaleString()}>
-                      {duration(r.uptimeMs)} ago
-                    </TableCell>
-                    <TableCell className="text-sm tabular-nums">{duration(r.idleMs)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground" title={r.userAgent ?? undefined}>
-                      {device(r.userAgent)}
-                      {r.ipAddress && <span className="block text-xs">{r.ipAddress}</span>}
-                    </TableCell>
+                    </div>
                     {canTerminate && (
-                      <TableCell className="px-6 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          disabled={busyId === r.id}
-                          onClick={() => terminate(r)}
-                        >
-                          <LogOut className="mr-1.5 h-4 w-4" />
-                          {busyId === r.id ? "Ending..." : "End"}
-                        </Button>
-                      </TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-destructive"
+                        disabled={busyId === r.id}
+                        onClick={() => terminate(r)}
+                      >
+                        <LogOut className="mr-1.5 h-4 w-4" />
+                        {busyId === r.id ? "Ending..." : "End"}
+                      </Button>
                     )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span>{r.roles.length ? r.roles.join(", ") : "No role"}</span>
+                    <span>{r.propertyName ?? "All properties"}</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
+                    <span title={new Date(r.signedInAt).toLocaleString()}>{duration(r.uptimeMs)} ago</span>
+                    <span>Idle {duration(r.idleMs)}</span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground" title={r.userAgent ?? undefined}>
+                    {device(r.userAgent)}
+                    {r.ipAddress && <span> · {r.ipAddress}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:-mx-6 md:-mb-6 md:block md:border-t md:border-border">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="px-6">User</TableHead>
+                    <TableHead>Roles</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Signed in</TableHead>
+                    <TableHead>Idle</TableHead>
+                    <TableHead>Device</TableHead>
+                    {canTerminate && <TableHead className="px-6 text-right">Actions</TableHead>}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="px-6">
+                        <div className="font-medium">
+                          {r.name}
+                          {r.id === currentId && (
+                            <Badge variant="outline" className="ml-2 text-[10px]">This is you</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{r.email}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.roles.length ? r.roles.join(", ") : "No role"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.propertyName ?? "All properties"}</TableCell>
+                      <TableCell className="text-sm tabular-nums" title={new Date(r.signedInAt).toLocaleString()}>
+                        {duration(r.uptimeMs)} ago
+                      </TableCell>
+                      <TableCell className="text-sm tabular-nums">{duration(r.idleMs)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground" title={r.userAgent ?? undefined}>
+                        {device(r.userAgent)}
+                        {r.ipAddress && <span className="block text-xs">{r.ipAddress}</span>}
+                      </TableCell>
+                      {canTerminate && (
+                        <TableCell className="px-6 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            disabled={busyId === r.id}
+                            onClick={() => terminate(r)}
+                          >
+                            <LogOut className="mr-1.5 h-4 w-4" />
+                            {busyId === r.id ? "Ending..." : "End"}
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   )

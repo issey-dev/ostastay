@@ -297,75 +297,129 @@ export function AllocationsManager() {
               description="Create your first allocation — e.g. BF (Breakfast) at adult $10 / child $5."
             />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Charge Code</TableHead>
-                  <TableHead>Rhythm</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Current Price</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile card view — the table below takes over at md. */}
+              <div className="md:hidden space-y-3">
                 {allocations.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-mono font-bold text-info">{a.code}</TableCell>
-                    <TableCell className="font-medium">{a.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{TYPE_LABELS[a.type] ?? a.type}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{a.chargeCode?.code}</TableCell>
-                    <TableCell className="text-sm">{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge
-                          variant="outline"
-                          className={
-                            a.mode === "INCLUDE_IN_RATE"
-                              ? "bg-info-muted text-info border-info/30"
-                              : "bg-success-muted text-success border-success/30"
-                          }
-                        >
-                          {MODE_LABELS[a.mode] ?? a.mode}
-                        </Badge>
-                        {a.sellSeparate && (
-                          <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
-                            Sell Separate
-                          </Badge>
-                        )}
+                  <div key={a.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono font-bold text-info">{a.code}</p>
+                        <p className="font-medium">{a.name}</p>
                       </div>
-                    </TableCell>
-                    <TableCell>{currentPriceLabel(a)}</TableCell>
-                    <TableCell>
                       {a.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                        <Badge variant="outline" className="text-muted-foreground shrink-0">Inactive</Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" aria-label="Edit allocation" onClick={() => openEdit(a)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                      <Badge variant="outline">{TYPE_LABELS[a.type] ?? a.type}</Badge>
+                      <Badge
                         variant="outline"
-                        size="icon"
-                        aria-label="Delete allocation"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleting(a)}
+                        className={
+                          a.mode === "INCLUDE_IN_RATE"
+                            ? "bg-info-muted text-info border-info/30"
+                            : "bg-success-muted text-success border-success/30"
+                        }
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {MODE_LABELS[a.mode] ?? a.mode}
+                      </Badge>
+                      {a.sellSeparate && (
+                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
+                          Sell Separate
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <div>Charge code: <span className="font-mono text-xs text-foreground">{a.chargeCode?.code}</span></div>
+                      <div>{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</div>
+                      <div>{currentPriceLabel(a)}</div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(a)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                       </Button>
-                    </TableCell>
-                  </TableRow>
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => setDeleting(a)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Charge Code</TableHead>
+                      <TableHead>Rhythm</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Current Price</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allocations.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-mono font-bold text-info">{a.code}</TableCell>
+                        <TableCell className="font-medium">{a.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{TYPE_LABELS[a.type] ?? a.type}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{a.chargeCode?.code}</TableCell>
+                        <TableCell className="text-sm">{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge
+                              variant="outline"
+                              className={
+                                a.mode === "INCLUDE_IN_RATE"
+                                  ? "bg-info-muted text-info border-info/30"
+                                  : "bg-success-muted text-success border-success/30"
+                              }
+                            >
+                              {MODE_LABELS[a.mode] ?? a.mode}
+                            </Badge>
+                            {a.sellSeparate && (
+                              <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
+                                Sell Separate
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{currentPriceLabel(a)}</TableCell>
+                        <TableCell>
+                          {a.isActive ? (
+                            <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button variant="outline" size="icon" aria-label="Edit allocation" onClick={() => openEdit(a)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Delete allocation"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleting(a)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -385,7 +439,7 @@ export function AllocationsManager() {
               </DialogHeader>
 
               <div className="grid gap-5 py-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="code"
@@ -418,7 +472,7 @@ export function AllocationsManager() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="type"
@@ -561,7 +615,7 @@ export function AllocationsManager() {
                   </div>
                   <div className="space-y-3">
                     {ratesArray.fields.map((row, idx) => (
-                      <div key={row.id} className="grid grid-cols-[1fr_1fr_1.2fr_1.2fr_auto] gap-2 items-start">
+                      <div key={row.id} className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.2fr_1.2fr_auto] gap-2 items-start">
                         <FormField
                           control={form.control}
                           name={`rates.${idx}.adultPrice`}
@@ -619,7 +673,7 @@ export function AllocationsManager() {
                           variant="ghost"
                           size="icon"
                           aria-label="Remove rate"
-                          className={idx === 0 ? "mt-6" : ""}
+                          className={`col-span-2 justify-self-end md:col-span-1 md:justify-self-auto ${idx === 0 ? "md:mt-6" : ""}`}
                           disabled={ratesArray.fields.length === 1}
                           onClick={() => ratesArray.remove(idx)}
                         >

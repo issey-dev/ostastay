@@ -330,9 +330,9 @@ export default function POSDashboard() {
               )}
             </>
           ) : walkInFolioId ? (
-            <div className="flex items-center justify-between bg-muted rounded-lg p-4">
-              <div>
-                <p className="font-bold text-foreground">{selectedGuest?.guestName}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-muted rounded-lg p-4">
+              <div className="min-w-0">
+                <p className="truncate font-bold text-foreground">{selectedGuest?.guestName}</p>
                 <p className="text-sm text-muted-foreground">Walk-in bill open</p>
               </div>
               <Button size="sm" variant="outline" onClick={() => setIsWalkInPanelOpen(true)}>
@@ -340,7 +340,7 @@ export default function POSDashboard() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleStartWalkIn} className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleStartWalkIn} className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Input
                 placeholder="Guest name"
                 required
@@ -352,7 +352,7 @@ export default function POSDashboard() {
                 value={walkInForm.contact}
                 onChange={(e) => setWalkInForm(p => ({ ...p, contact: e.target.value }))}
               />
-              <Button type="submit" className="col-span-2" disabled={startingWalkIn || !walkInForm.name}>
+              <Button type="submit" className="md:col-span-2" disabled={startingWalkIn || !walkInForm.name}>
                 {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
               </Button>
             </form>
@@ -367,7 +367,7 @@ export default function POSDashboard() {
           </h2>
 
           <form onSubmit={handlePostCharge} className="space-y-5">
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Charge Code{selectedOutletId ? "" : " (Outlet)"}</Label>
                 <SearchableSelect
@@ -379,11 +379,11 @@ export default function POSDashboard() {
               </div>
               <div className="space-y-2">
                 <Label>Amount ($)</Label>
-                <Input 
-                  type="number" 
-                  step="0.01" 
-                  min="0.01" 
-                  required 
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
                   placeholder="0.00"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -391,10 +391,10 @@ export default function POSDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Input 
+                <Input
                   placeholder="e.g., Dinner for two"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -402,7 +402,7 @@ export default function POSDashboard() {
               </div>
               <div className="space-y-2">
                 <Label>Receipt / Check # (Optional)</Label>
-                <Input 
+                <Input
                   placeholder="e.g., CHK-4092"
                   value={form.reference}
                   onChange={(e) => setForm({ ...form, reference: e.target.value })}

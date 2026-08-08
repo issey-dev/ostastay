@@ -349,7 +349,7 @@ export default function ExcursionsPage() {
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleStartWalkIn} className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleStartWalkIn} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Input
                   placeholder="Guest name"
                   required
@@ -361,7 +361,7 @@ export default function ExcursionsPage() {
                   value={walkInForm.contact}
                   onChange={(e) => setWalkInForm((p) => ({ ...p, contact: e.target.value }))}
                 />
-                <Button type="submit" className="col-span-2" disabled={startingWalkIn || !walkInForm.name}>
+                <Button type="submit" className="md:col-span-2" disabled={startingWalkIn || !walkInForm.name}>
                   {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
                 </Button>
               </form>
@@ -381,7 +381,7 @@ export default function ExcursionsPage() {
                 ) : departures.length === 0 && !loadingDepartures ? (
                   <p className="text-sm text-muted-foreground">No upcoming departures — set some up in Controls &gt; Excursions.</p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label>Excursion</Label>
                       <Select value={selectedExcursionTypeId} onValueChange={handleExcursionTypeChange} disabled={loadingDepartures}>

@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useProperty } from "@/components/providers/property-provider";
+import { useDeviceTier } from "@/hooks/use-mobile";
 import { StopSaleDialog, type StopSaleInitial } from "@/components/availability/stop-sale-dialog";
+import { AvailabilityMobileList } from "@/components/availability/availability-mobile-list";
 
 type Cell = {
   available: number;
@@ -47,6 +49,7 @@ const HOUSE_KEY = "__HOUSE__";
 
 export function AvailabilityGrid() {
   const { currentProperty } = useProperty();
+  const deviceTier = useDeviceTier();
   const [startDate, setStartDate] = useState(() => startOfDay(new Date()));
   const [days, setDays] = useState(14);
   const [data, setData] = useState<ApiData | null>(null);
@@ -220,11 +223,81 @@ export function AvailabilityGrid() {
 
   // ---- loading --------------------------------------------------------------
 
+  const today = startOfDay(new Date());
+
   if (!currentProperty) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground">
         Select a property to view availability.
       </div>
+    );
+  }
+
+  // Mobile: a horizontal-scroll Date x Room Type grid doesn't work at phone width — swap
+  // in a day-by-day agenda instead (see availability-mobile-list.tsx). Checked before the
+  // desktop loading-skeleton branch, same pattern as TapeChartGrid, so the mobile list
+  // owns its own loading/empty states rather than briefly flashing the desktop skeleton.
+  if (deviceTier === "mobile") {
+    return (
+      <>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-3 py-2">
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" onClick={() => setStartDate((d) => addDays(d, -days))}>
+              &lt; Prev
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setStartDate(today)}>
+              Today
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setStartDate((d) => addDays(d, days))}>
+              Next &gt;
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span>Days</span>
+              {DAY_OPTIONS.map((d) => (
+                <Button
+                  key={d}
+                  variant={days === d ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 w-9 px-0"
+                  onClick={() => setDays(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => openStopSale(null)}
+            >
+              <Ban className="mr-2 h-4 w-4" /> Stop Sale
+            </Button>
+          </div>
+        </div>
+
+        <AvailabilityMobileList
+          dates={columns}
+          roomTypes={data?.roomTypes ?? []}
+          houseCapacity={data?.house.capacity ?? 0}
+          houseCells={data?.house.cells ?? []}
+          rows={data?.rows ?? []}
+          isLoading={isLoading}
+          onOpenStopSale={openStopSale}
+        />
+
+        {currentProperty && (
+          <StopSaleDialog
+            open={stopSale.open}
+            onClose={() => setStopSale({ open: false })}
+            propertyId={currentProperty.id}
+            roomTypes={data?.roomTypes ?? []}
+            initial={stopSale.initial}
+            onDone={fetchData}
+          />
+        )}
+      </>
     );
   }
 
@@ -246,8 +319,6 @@ export function AvailabilityGrid() {
       </div>
     );
   }
-
-  const today = startOfDay(new Date());
 
   return (
     <>
