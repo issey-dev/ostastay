@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
+import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/confirmation-letter";
 import { logActivity } from "@/lib/activity-log";
@@ -32,7 +33,7 @@ function buildConfirmationEmailHtml(params: {
   const policyText = settings.confirmationLetterMessage || defaultPolicyText(reservation.property.checkInTime, reservation.property.checkOutTime);
 
   return `
-<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: ${OBSIDIAN_BLACK};">
   <div style="border-bottom: 3px solid ${brandColor}; padding-bottom: 16px; margin-bottom: 24px;">
     ${settings.invoiceLogoUrl
       ? `<img src="${settings.invoiceLogoUrl}" alt="${brandName}" style="max-height: 56px; max-width: 220px;" />`
@@ -48,20 +49,20 @@ function buildConfirmationEmailHtml(params: {
   </p>
 
   <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 20px 0;">
-    <tr><td style="padding: 6px 0; color: #6b7280; width: 40%;">Confirmation No.</td><td style="padding: 6px 0; font-weight: bold;">${reservation.confirmationNo}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">Guest Name(s)</td><td style="padding: 6px 0; font-weight: bold;">${guestNames.join(", ")}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">Stay Period</td><td style="padding: 6px 0; font-weight: bold;">${formatDate(reservation.checkInDate)} &ndash; ${formatDate(reservation.checkOutDate)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">Nights</td><td style="padding: 6px 0; font-weight: bold;">${nights}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b7280;">Room Category</td><td style="padding: 6px 0; font-weight: bold;">${roomCategories.join(", ") || "TBA"}</td></tr>
-    ${reservation.remarks ? `<tr><td style="padding: 6px 0; color: #6b7280;">Remarks</td><td style="padding: 6px 0;">${reservation.remarks}</td></tr>` : ""}
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE}; width: 40%;">Confirmation No.</td><td style="padding: 6px 0; font-weight: bold;">${reservation.confirmationNo}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">Guest Name(s)</td><td style="padding: 6px 0; font-weight: bold;">${guestNames.join(", ")}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">Stay Period</td><td style="padding: 6px 0; font-weight: bold;">${formatDate(reservation.checkInDate)} &ndash; ${formatDate(reservation.checkOutDate)}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">Nights</td><td style="padding: 6px 0; font-weight: bold;">${nights}</td></tr>
+    <tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">Room Category</td><td style="padding: 6px 0; font-weight: bold;">${roomCategories.join(", ") || "TBA"}</td></tr>
+    ${reservation.remarks ? `<tr><td style="padding: 6px 0; color: ${STEEL_SLATE};">Remarks</td><td style="padding: 6px 0;">${reservation.remarks}</td></tr>` : ""}
   </table>
 
-  <p style="font-size: 13px; line-height: 1.6; color: #374151;">${policyText}</p>
+  <p style="font-size: 13px; line-height: 1.6; color: ${OBSIDIAN_BLACK};">${policyText}</p>
 
   <p style="font-size: 14px; margin-top: 24px;">We look forward to welcoming you.</p>
   <p style="font-size: 14px;">Warm regards,<br/>${brandName} Reservations Team</p>
 
-  <div style="border-top: 1px solid #e5e7eb; margin-top: 24px; padding-top: 12px; font-size: 12px; color: #6b7280;">
+  <div style="border-top: 1px solid ${STEEL_SLATE}; margin-top: 24px; padding-top: 12px; font-size: 12px; color: ${STEEL_SLATE};">
     ${settings.invoiceAddress ? `${settings.invoiceAddress}<br/>` : ""}
     ${settings.invoicePhone ? `${settings.invoicePhone}` : ""}${settings.invoicePhone && settings.invoiceEmail ? " &middot; " : ""}${settings.invoiceEmail || ""}
   </div>

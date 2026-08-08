@@ -1,10 +1,16 @@
 import ExcelJS from "exceljs";
 import type { ReportResult, ReportBranding, ReportColumn } from "@/lib/reports/types";
 import { excelNumFmt, isNumericColumn } from "@/lib/reports/format";
+import { CRIMSON_OS, OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 
 function argb(hex: string | null | undefined, fallback: string): string {
   const h = (hex ?? fallback).replace("#", "");
   return `FF${h.toUpperCase().padStart(6, "0").slice(0, 6)}`;
+}
+
+// Hex -> exceljs's ARGB string ("FF" alpha + 6-digit hex), for the brand.ts literals.
+function brandArgb(hex: string): string {
+  return `FF${hex.replace("#", "").toUpperCase()}`;
 }
 
 // Coerce a cell into an Excel-native value (numbers stay numbers so totals/filters work).
@@ -26,23 +32,23 @@ export async function renderXlsx(result: ReportResult, branding: ReportBranding)
   const ws = wb.addWorksheet(result.title.slice(0, 28) || "Report");
 
   const colCount = result.columns.length;
-  const brand = argb(branding.brandColor, "1F1F40");
+  const brand = argb(branding.brandColor, CRIMSON_OS);
 
   // Title block
   ws.mergeCells(1, 1, 1, colCount);
   const titleCell = ws.getCell(1, 1);
   titleCell.value = result.title;
-  titleCell.font = { bold: true, size: 16, color: { argb: "FF" + "111111" } };
+  titleCell.font = { bold: true, size: 16, color: { argb: brandArgb(OBSIDIAN_BLACK) } };
 
   ws.mergeCells(2, 1, 2, colCount);
   ws.getCell(2, 1).value = `${branding.propertyName} · ${branding.enterpriseName}`;
-  ws.getCell(2, 1).font = { size: 10, color: { argb: "FF666666" } };
+  ws.getCell(2, 1).font = { size: 10, color: { argb: brandArgb(STEEL_SLATE) } };
 
   let r = 3;
   if (result.subtitle) {
     ws.mergeCells(r, 1, r, colCount);
     ws.getCell(r, 1).value = result.subtitle;
-    ws.getCell(r, 1).font = { size: 10, color: { argb: "FF666666" } };
+    ws.getCell(r, 1).font = { size: 10, color: { argb: brandArgb(STEEL_SLATE) } };
     r++;
   }
   r++; // blank spacer row
