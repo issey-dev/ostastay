@@ -374,7 +374,16 @@ export function daysUntilRefreshTokenExpiry(lastTokenRefreshAt: Date | null | un
   if (!lastTokenRefreshAt) return null;
   const elapsedMs = Date.now() - lastTokenRefreshAt.getTime();
   const elapsedDays = elapsedMs / (24 * 60 * 60 * 1000);
-  return Math.floor(REFRESH_TOKEN_IDLE_DAYS - elapsedDays);
+  // Math.round, not Math.floor: this and `Date.now()` (called by the caller a moment
+  // earlier to build `lastTokenRefreshAt`) are two independent clock reads, so an
+  // input meant to be "exactly N days ago" always carries a few stray milliseconds of
+  // elapsed time by the time this line runs. Under a floor, those milliseconds could
+  // tip a clean N-day boundary down to N-1 — harmless for the real cron job (a few ms
+  // of jitter on a 30-day window is noise), but it was flaking
+  // tests/business-rules/channel-connection.test.ts under a loaded full-suite run,
+  // where scheduling delay between the two clock reads is more likely to cross a
+  // whole-millisecond boundary. Rounding is symmetric and absorbs that jitter either way.
+  return Math.round(REFRESH_TOKEN_IDLE_DAYS - elapsedDays);
 }
 
 /** True when the refresh token should be exercised now to keep it alive. */

@@ -35,6 +35,16 @@ const STATUS_TONE_MAP: Record<string, StatusTone> = {
   REVOKED: "neutral",
   ACTIVE: "success",
   INACTIVE: "neutral",
+  // License lifecycle (src/lib/license.ts LicenseState) — GRACE is deliberately
+  // "warning" (payment overdue, users still signed in) rather than falling back to
+  // neutral, and UNLICENSED spelled out explicitly rather than relying on the fallback,
+  // since both surface prominently on the Osta licensing screens.
+  GRACE: "warning",
+  UNLICENSED: "neutral",
+  // Invoice lifecycle (LicenseInvoice.status)
+  ISSUED: "warning",
+  PAID: "success",
+  VOID: "neutral",
   // Property approval lifecycle (PENDING already covered above)
   REJECTED: "danger",
   // Group block lifecycle
