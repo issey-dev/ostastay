@@ -7,13 +7,17 @@ import { resolveStationeryBrand } from "@/lib/stationery-brand"
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { ReceiptDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, MetaItem } from "@/components/print/stationery/blocks"
+import { Button } from "@/components/ui/button"
+import { Mail } from "@/components/icons"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
 
 export default function PaymentReceiptPage({ params }: { params: Promise<{ id: string; slug: string }> }) {
-  const { id } = use(params)
+  const { id, slug } = use(params)
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   const fetchReceiptData = async () => {
     setLoading(true)
@@ -93,6 +97,13 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ id: s
     <PrintDocumentShell
       previewLabel={`Payment Receipt Preview for ${reservation ? `#${reservation.confirmationNo}` : "Walk-in Sale"}`}
       fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={() => window.open(`/api/payments/${id}/send-receipt?slug=${slug}`, "_blank")}
+      extraActions={
+        <Button variant="outline" onClick={() => setEmailOpen(true)}>
+          <Mail className="w-4 h-4 mr-2" /> Email
+        </Button>
+      }
     >
       <ReceiptDocument
         brand={brand}
@@ -108,6 +119,20 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ id: s
         remainingAmount={folioBalance}
         terms={settings.receiptTerms}
         footerNote={settings.receiptFooterText}
+      />
+
+      <EmailDocumentDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        profileUpid={guest.upid}
+        documentLabel="Payment Receipt"
+        onSend={(email) =>
+          fetch(`/api/payments/${id}/send-receipt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, slug }),
+          }).then(async (res) => (res.ok ? { ok: true } : { ok: false, error: (await res.json()).error }))
+        }
       />
     </PrintDocumentShell>
   )

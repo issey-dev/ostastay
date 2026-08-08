@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
+import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { generateStationeryPdf } from "@/lib/stationery-pdf";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
-import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/confirmation-letter";
 import { logActivity } from "@/lib/activity-log";
-import { primaryEmail } from "@/lib/profile-communications";
 
 function formatDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -78,6 +79,11 @@ export async function POST(
     requirePermission(ctx, "RESERVATIONS", "update");
 
     const { id } = await params;
+    const { email, slug } = await request.json();
+    if (!email || !slug) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
@@ -92,9 +98,9 @@ export async function POST(
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    const guestEmail = primaryEmail(reservation.primaryGuest.communications);
-    if (!guestEmail) {
-      return NextResponse.json({ error: "The primary guest has no email address on file." }, { status: 400 });
+    const authToken = (await cookies()).get("auth_token")?.value;
+    if (!authToken) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const settings = await prisma.enterpriseSettings.findUnique({
@@ -111,22 +117,18 @@ export async function POST(
       brandColor,
     });
 
-    try {
-      await sendMail({
-        settings: settings ?? { smtpHost: null, smtpPort: null, smtpUsername: null, smtpPassword: null, smtpFromAddress: null, smtpUseTls: true },
-        to: guestEmail,
-        subject: `Booking Confirmation — ${reservation.confirmationNo} | ${reservation.property.name}`,
-        html,
-      });
-    } catch (mailError) {
-      if (mailError instanceof SmtpNotConfiguredError) {
-        return NextResponse.json({ error: mailError.message }, { status: 400 });
-      }
-      console.error("Failed to send confirmation email:", mailError);
-      return NextResponse.json(
-        { error: "Failed to send the confirmation email — check the SMTP settings and try again." },
-        { status: 502 }
-      );
+    const result = await sendStationeryEmail({
+      enterpriseId: reservation.property.enterpriseId,
+      to: email,
+      subject: `Booking Confirmation — ${reservation.confirmationNo} | ${reservation.property.name}`,
+      html,
+      pdfPath: `/e/${slug}/dashboard/reservations/${id}/confirmation-letter`,
+      pdfFilename: `Confirmation-${reservation.confirmationNo}.pdf`,
+      authToken,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
     await logActivity({
@@ -135,10 +137,54 @@ export async function POST(
       action: "SEND_CONFIRMATION",
       entityType: "Reservation",
       entityId: reservation.id,
-      description: `Emailed booking confirmation ${reservation.confirmationNo} to ${guestEmail}`,
+      description: `Emailed booking confirmation ${reservation.confirmationNo} to ${email}`,
     });
 
-    return NextResponse.json({ success: true, sentTo: guestEmail });
+    return NextResponse.json({ success: true, sentTo: email });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+    const { id } = await params;
+    const url = new URL(request.url);
+    const slug = url.searchParams.get("slug");
+    if (!slug) {
+      return NextResponse.json({ error: "Missing slug" }, { status: 400 });
+    }
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      select: { propertyId: true, confirmationNo: true },
+    });
+    if (!reservation) {
+      return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    }
+    await assertPropertyAccess(ctx, reservation.propertyId);
+
+    const authToken = (await cookies()).get("auth_token")?.value;
+    if (!authToken) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const pdfBuffer = await generateStationeryPdf(
+      `/e/${slug}/dashboard/reservations/${id}/confirmation-letter`,
+      authToken
+    );
+
+    return new NextResponse(new Uint8Array(pdfBuffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="Confirmation-${reservation.confirmationNo}.pdf"`,
+      },
+    });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

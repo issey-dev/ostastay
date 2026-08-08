@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
-import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { buildInvoiceSummary, type DebtorInvoiceSummary } from "@/lib/debtor-accounts";
 import { computeFolioAgingBuckets, totalOutstanding } from "@/lib/debtor-aging";
 import { logActivity } from "@/lib/activity-log";
-import { primaryEmail } from "@/lib/profile-communications";
+import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { generateStationeryPdf } from "@/lib/stationery-pdf";
+import type { AuthContext } from "@/lib/scope";
 
 function formatDate(d: Date | string | null): string {
   if (!d) return "—";
@@ -99,6 +101,35 @@ function buildStatementEmailHtml(params: {
 </div>`.trim();
 }
 
+// Shared by POST and GET — both need the account/property looked up and access-checked
+// before doing anything else; only POST goes on to build the email body.
+async function loadAccount(ctx: AuthContext, profileId: string, propertyId: string) {
+  await assertPropertyAccess(ctx, propertyId);
+
+  const profile = await prisma.profile.findUnique({ where: { upid: profileId } });
+  if (!profile || profile.enterpriseId !== ctx.enterpriseId || !profile.isCreditAccount) {
+    return { error: NextResponse.json({ error: "Credit account not found" }, { status: 404 }) } as const;
+  }
+
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    include: { enterprise: { select: { slug: true } } },
+  });
+  if (!property) {
+    return { error: NextResponse.json({ error: "Property not found" }, { status: 404 }) } as const;
+  }
+
+  return { profile, property } as const;
+}
+
+function pdfPathFor(slug: string, profileId: string) {
+  return `/e/${slug}/dashboard/debtors/${profileId}/statement`;
+}
+
+function filenameFor(accountName: string) {
+  return `Statement-${accountName.replace(/\s+/g, "-")}.pdf`;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ profileId: string }> }
@@ -110,24 +141,21 @@ export async function POST(
     const { profileId } = await params;
     const body = await request.json();
     const propertyId = body.propertyId;
+    const email = typeof body?.email === "string" ? body.email.trim() : "";
     if (!propertyId) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     }
-    await assertPropertyAccess(ctx, propertyId);
-
-    const profile = await prisma.profile.findUnique({ where: { upid: profileId }, include: { communications: true } });
-    if (!profile || profile.enterpriseId !== ctx.enterpriseId || !profile.isCreditAccount) {
-      return NextResponse.json({ error: "Credit account not found" }, { status: 404 });
+    if (!email) {
+      return NextResponse.json({ error: "An email address is required." }, { status: 400 });
     }
 
-    const accountEmail = primaryEmail(profile.communications);
-    if (!accountEmail) {
-      return NextResponse.json({ error: "This account has no email address on file." }, { status: 400 });
-    }
+    const loaded = await loadAccount(ctx, profileId, propertyId);
+    if ("error" in loaded) return loaded.error;
+    const { profile, property } = loaded;
 
-    const property = await prisma.property.findUnique({ where: { id: propertyId } });
-    if (!property) {
-      return NextResponse.json({ error: "Property not found" }, { status: 404 });
+    const authToken = (await cookies()).get("auth_token")?.value;
+    if (!authToken) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const folios = await prisma.folio.findMany({
@@ -152,22 +180,18 @@ export async function POST(
       brandColor,
     });
 
-    try {
-      await sendMail({
-        settings: settings ?? { smtpHost: null, smtpPort: null, smtpUsername: null, smtpPassword: null, smtpFromAddress: null, smtpUseTls: true },
-        to: accountEmail,
-        subject: `Account Statement — ${accountName} | ${property.name}`,
-        html,
-      });
-    } catch (mailError) {
-      if (mailError instanceof SmtpNotConfiguredError) {
-        return NextResponse.json({ error: mailError.message }, { status: 400 });
-      }
-      console.error("Failed to send account statement email:", mailError);
-      return NextResponse.json(
-        { error: "Failed to send the statement email — check the SMTP settings and try again." },
-        { status: 502 }
-      );
+    const result = await sendStationeryEmail({
+      enterpriseId: ctx.enterpriseId,
+      to: email,
+      subject: `Account Statement — ${accountName} | ${property.name}`,
+      html,
+      pdfPath: pdfPathFor(property.enterprise.slug, profileId),
+      pdfFilename: filenameFor(accountName),
+      authToken,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
     await logActivity({
@@ -176,10 +200,56 @@ export async function POST(
       action: "SEND_STATEMENT",
       entityType: "Profile",
       entityId: profile.upid,
-      description: `Emailed account statement for "${accountName}" to ${accountEmail}`,
+      description: `Emailed account statement for "${accountName}" to ${email}`,
     });
 
-    return NextResponse.json({ success: true, sentTo: accountEmail });
+    return NextResponse.json({ success: true, sentTo: email });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ profileId: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "DEBTORS", "view");
+
+    const { profileId } = await params;
+    const url = new URL(request.url);
+    const propertyId = url.searchParams.get("propertyId");
+    if (!propertyId) {
+      return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
+    }
+
+    const loaded = await loadAccount(ctx, profileId, propertyId);
+    if ("error" in loaded) return loaded.error;
+    const { profile, property } = loaded;
+
+    const authToken = (await cookies()).get("auth_token")?.value;
+    if (!authToken) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const accountName = profile.companyName || `${profile.firstName} ${profile.lastName || ""}`.trim();
+
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await generateStationeryPdf(pdfPathFor(property.enterprise.slug, profileId), authToken);
+    } catch (pdfError) {
+      console.error("Failed to render statement PDF:", pdfError);
+      return NextResponse.json({ error: "Failed to generate the PDF for this document." }, { status: 502 });
+    }
+
+    return new NextResponse(new Uint8Array(pdfBuffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filenameFor(accountName)}"`,
+      },
+    });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

@@ -98,7 +98,7 @@ export function InvoiceDocument({
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-8">
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 sm:gap-8">
         <StationerySection title="Billed To" className="mb-0">
           <div className="text-sm font-semibold text-[var(--print-ink)]">{billedTo.name}</div>
           {billedTo.lines.filter(Boolean).map((line, i) => (
@@ -209,7 +209,7 @@ export function ReceiptDocument({
     <StationeryPage fontClass={brand.fontClass}>
       <StationeryHeader brand={brand} eyebrow={RECEIPT_EYEBROW[kind]} title="Receipt" meta={meta} />
 
-      <div className="mb-6 grid grid-cols-2 gap-8">
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 sm:gap-8">
         <StationerySection title="Received From" className="mb-0">
           <div className="text-sm font-semibold text-[var(--print-ink)]">{receivedFrom}</div>
         </StationerySection>
@@ -369,7 +369,7 @@ export function RegistrationCardDocument({
         <p className="whitespace-pre-line text-xs leading-relaxed text-[var(--print-muted)]">{terms}</p>
       </StationerySection>
 
-      <div className="mt-auto grid grid-cols-2 gap-10 pt-8">
+      <div className="mt-auto grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 sm:gap-10 pt-8">
         <SignatureLine label="Guest Signature" signature={guestSignature} />
         <SignatureLine label="Front Office" />
       </div>
@@ -422,7 +422,7 @@ export function StatementDocument({
 
       {aging && aging.length > 0 && (
         <StationerySection title="Open Balance Aging">
-          <div className="grid grid-cols-5 gap-2 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 print:grid-cols-5 gap-2 text-center">
             {aging.map((a) => (
               <div key={a.label} className="rounded-md bg-[var(--print-surface)] p-2">
                 <div className="text-[10px] uppercase tracking-wide text-[var(--print-faint)]">{a.label}</div>

@@ -149,6 +149,7 @@ export type MailContent = {
   /** Plaintext alternative. Worth supplying — HTML-only mail scores worse with spam filters. */
   text?: string
   replyTo?: string
+  attachments?: { filename: string; content: Buffer; contentType?: string }[]
 }
 
 async function deliver(smtp: ResolvedSmtp, mail: MailContent): Promise<void> {
@@ -162,6 +163,7 @@ async function deliver(smtp: ResolvedSmtp, mail: MailContent): Promise<void> {
       html: mail.html,
       text: mail.text,
       replyTo: mail.replyTo,
+      attachments: mail.attachments,
     })
   } finally {
     // Each send builds its own transport; close it so the connection is not left open.

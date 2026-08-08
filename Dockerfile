@@ -19,6 +19,11 @@ WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
+# puppeteer's postinstall downloads a matching Linux Chromium build during `npm ci`.
+# Pinned to a project-local path (rather than the default ~/.cache/puppeteer under
+# whichever $HOME the build runs as) so the runner stage below can COPY it by a known,
+# stable path instead of guessing.
+ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -49,12 +54,52 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
+
+# Chromium's own runtime shared libraries — headless Chrome (used to render stationery
+# documents to PDF, see src/lib/stationery-pdf.ts) needs these present even though
+# nothing else in the app does. Standard Debian dependency list for running Chrome
+# headless in a container (no X server, no system Chrome package).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nodejs \
  && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY --from=builder /app/public ./public
+# The headless Chromium build puppeteer downloaded during `npm ci` in the deps stage —
+# see PUPPETEER_CACHE_DIR above. Standalone tracing only follows the JS import graph, so
+# this binary (never `import`ed, only spawned) has to be carried over explicitly, the
+# same reasoning as the prisma/bcryptjs copies below.
+COPY --from=deps --chown=nextjs:nodejs /app/.cache/puppeteer ./.cache/puppeteer
 # Standalone emits its own minimal node_modules and server.js at the root.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
