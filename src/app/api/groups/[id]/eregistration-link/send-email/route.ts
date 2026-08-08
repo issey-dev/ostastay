@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hashEregistrationToken } from "@/lib/eregistration/token";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
+import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
 import { primaryEmail } from "@/lib/profile-communications";
 import { logActivity } from "@/lib/activity-log";
@@ -16,7 +17,7 @@ function buildGroupEregistrationEmailHtml(params: { group: any; settings: any; b
   const message = settings.eRegistrationMessage || `Please complete registration details for your group's guests ahead of arrival — ${pickupCount} room${pickupCount > 1 ? "s" : ""} to fill in.`;
 
   return `
-<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: ${OBSIDIAN_BLACK};">
   <div style="border-bottom: 3px solid ${brandColor}; padding-bottom: 16px; margin-bottom: 24px;">
     ${settings.invoiceLogoUrl
       ? `<img src="${settings.invoiceLogoUrl}" alt="${brandName}" style="max-height: 56px; max-width: 220px;" />`
@@ -28,7 +29,7 @@ function buildGroupEregistrationEmailHtml(params: { group: any; settings: any; b
   <p style="text-align: center; margin: 28px 0;">
     <a href="${url}" style="background: ${brandColor}; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: bold;">Complete Group eRegistration</a>
   </p>
-  <p style="font-size: 12px; color: #6b7280;">This link expires on ${expiresAt.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} and is personal to your group — please don't forward it.</p>
+  <p style="font-size: 12px; color: ${STEEL_SLATE};">This link expires on ${expiresAt.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} and is personal to your group — please don't forward it.</p>
   <p style="font-size: 14px; margin-top: 24px;">We look forward to welcoming your group.</p>
   <p style="font-size: 14px;">Warm regards,<br/>${brandName} Reservations Team</p>
 </div>`.trim();

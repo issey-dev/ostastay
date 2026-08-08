@@ -1,5 +1,12 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { format } from 'date-fns';
+import { DEEP_MAROON, OBSIDIAN_BLACK, STEEL_SLATE, COOL_PLATINUM } from '@/lib/brand';
+
+// Hex -> pdf-lib's [0,1] rgb() triple, same conversion used in src/lib/reports/render/pdf.ts.
+function hexToTriple(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 
 /**
  * Generate a simple A4 PDF with a table of rows.
@@ -25,13 +32,13 @@ export async function generateTablePdf(
   const lineHeight = 20;
   const headerHeight = lineHeight * 2;
 
-  // Header background (slate‑indigo style)
+  // Header background — Deep Maroon, the brand's "dark headers" role (src/lib/brand.ts).
   page.drawRectangle({
     x: margin,
     y: page.getHeight() - margin - headerHeight,
     width: usableWidth,
     height: headerHeight,
-    color: rgb(0.12, 0.12, 0.25) // dark slaty-indigo
+    color: rgb(...hexToTriple(DEEP_MAROON))
   });
 
   // Title text
@@ -40,7 +47,7 @@ export async function generateTablePdf(
     y: page.getHeight() - margin - 30,
     size: 18,
     font: fontBold,
-    color: rgb(1, 1, 1)
+    color: rgb(...hexToTriple(COOL_PLATINUM))
   });
 
   // Draw headers
@@ -52,7 +59,7 @@ export async function generateTablePdf(
       y: page.getHeight() - margin - lineHeight - 5,
       size: 12,
       font: fontBold,
-      color: rgb(1, 1, 1)
+      color: rgb(...hexToTriple(COOL_PLATINUM))
     });
   });
 
@@ -70,7 +77,7 @@ export async function generateTablePdf(
         y: y,
         size: 10,
         font: font,
-        color: rgb(0, 0, 0)
+        color: rgb(...hexToTriple(OBSIDIAN_BLACK))
       });
     });
     y -= lineHeight;
@@ -83,7 +90,7 @@ export async function generateTablePdf(
     y: margin / 2,
     size: 8,
     font: font,
-    color: rgb(0.5, 0.5, 0.5)
+    color: rgb(...hexToTriple(STEEL_SLATE))
   });
 
   const pdfBytes = await pdfDoc.save();
