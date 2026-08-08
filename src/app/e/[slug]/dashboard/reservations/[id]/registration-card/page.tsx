@@ -7,6 +7,9 @@ import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print
 import { RegistrationCardDocument } from "@/components/print/stationery/documents"
 import type { FieldItem, MetaItem } from "@/components/print/stationery/blocks"
 import { resolveStationeryBrand } from "@/lib/stationery-brand"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
+import { Button } from "@/components/ui/button"
+import { Mail } from "@/components/icons"
 
 // A registration card is printed per guest, then completed by hand and signed. Any field
 // the system doesn't know is rendered as a blank writable line so the guest can fill it in.
@@ -20,13 +23,14 @@ const DEFAULT_TERMS =
 const fmtDate = (d?: string | Date | null) => (d ? format(new Date(d), "dd-MMM-yyyy") : null)
 
 export default function RegistrationCardPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
-  const { id } = use(params)
+  const { id, slug } = use(params)
   const searchParams = useSearchParams()
   const guestParam = searchParams.get("guest") // profile upid; defaults to the lead guest
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -118,6 +122,13 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
     <PrintDocumentShell
       previewLabel={`Registration Card — ${guestName} (#${reservation.confirmationNo})`}
       fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={() => window.open(`/api/reservations/${id}/send-registration-card${guest.upid ? `?guest=${guest.upid}` : ""}`, "_blank")}
+      extraActions={
+        <Button variant="outline" onClick={() => setEmailOpen(true)}>
+          <Mail className="w-4 h-4 mr-2" /> Email
+        </Button>
+      }
     >
       <RegistrationCardDocument
         brand={brand}
@@ -128,6 +139,20 @@ export default function RegistrationCardPage({ params }: { params: Promise<{ slu
         identification={identification}
         terms={terms}
         guestSignature={guestSignature}
+      />
+      <EmailDocumentDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        profileUpid={guest.upid}
+        documentLabel="Registration Card"
+        onSend={async (email) => {
+          const res = await fetch(`/api/reservations/${id}/send-registration-card`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, slug, guest: guest.upid }),
+          })
+          return res.json()
+        }}
       />
     </PrintDocumentShell>
   )

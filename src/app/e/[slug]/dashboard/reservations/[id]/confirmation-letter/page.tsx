@@ -8,14 +8,14 @@ import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/co
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { ConfirmationLetterDocument } from "@/components/print/stationery/documents"
 import type { MetaItem } from "@/components/print/stationery/blocks"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
 
 export default function ConfirmationLetterPage({ params }: { params: Promise<{ id: string; slug: string }> }) {
-  const { id } = use(params)
+  const { id, slug } = use(params)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState<{ message: string; isError?: boolean } | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   useEffect(() => {
     fetch(`/api/reservations/${id}/confirmation-letter-data`)
@@ -24,25 +24,6 @@ export default function ConfirmationLetterPage({ params }: { params: Promise<{ i
       .catch(() => setError("Failed to load reservation data."))
       .finally(() => setLoading(false))
   }, [id])
-
-  const handleSendEmail = async () => {
-    setSending(true)
-    setSendResult(null)
-    try {
-      const res = await fetch(`/api/reservations/${id}/send-confirmation`, { method: "POST" })
-      const body = await res.json()
-      if (res.ok) {
-        setSendResult({ message: `Sent to ${body.sentTo}.` })
-      } else {
-        setSendResult({ message: body.error || "Failed to send.", isError: true })
-      }
-    } catch {
-      setSendResult({ message: "An unexpected error occurred.", isError: true })
-    } finally {
-      setSending(false)
-      setTimeout(() => setSendResult(null), 6000)
-    }
-  }
 
   if (loading) return <PrintLoading label="Preparing confirmation letter..." />
   if (error || !data) return <PrintError message={error || "Reservation not found"} />
@@ -76,17 +57,12 @@ export default function ConfirmationLetterPage({ params }: { params: Promise<{ i
     <PrintDocumentShell
       previewLabel={`Confirmation Letter for #${reservation.confirmationNo}`}
       fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={() => window.open(`/api/reservations/${id}/send-confirmation?slug=${slug}`, "_blank")}
       extraActions={
-        <>
-          {sendResult && (
-            <span className={`text-xs font-medium ${sendResult.isError ? "text-destructive" : "text-success"}`}>
-              {sendResult.message}
-            </span>
-          )}
-          <Button variant="outline" onClick={handleSendEmail} disabled={sending}>
-            <Mail className="w-4 h-4 mr-2" /> {sending ? "Sending..." : "Email to Guest"}
-          </Button>
-        </>
+        <Button variant="outline" onClick={() => setEmailOpen(true)}>
+          <Mail className="w-4 h-4 mr-2" /> Email
+        </Button>
       }
     >
       <ConfirmationLetterDocument
@@ -97,6 +73,20 @@ export default function ConfirmationLetterPage({ params }: { params: Promise<{ i
         policyText={policyText}
         closingTeam={`${brand.name} Reservations Team`}
         footerContactLine={contactLine}
+      />
+
+      <EmailDocumentDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        profileUpid={reservation.primaryGuest.upid}
+        documentLabel="Booking Confirmation"
+        onSend={(email) =>
+          fetch(`/api/reservations/${id}/send-confirmation`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, slug }),
+          }).then(async (res) => (res.ok ? { ok: true } : { ok: false, error: (await res.json()).error }))
+        }
       />
     </PrintDocumentShell>
   )

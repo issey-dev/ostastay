@@ -6,13 +6,17 @@ import { resolveStationeryBrand } from "@/lib/stationery-brand"
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { ReceiptDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, MetaItem } from "@/components/print/stationery/blocks"
+import { Button } from "@/components/ui/button"
+import { Mail } from "@/components/icons"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
 
 export default function CurrencyExchangeReceiptPage({ params }: { params: Promise<{ id: string; slug: string }> }) {
-  const { id } = use(params)
+  const { id, slug } = use(params)
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   const fetchReceiptData = async () => {
     setLoading(true)
@@ -63,7 +67,17 @@ export default function CurrencyExchangeReceiptPage({ params }: { params: Promis
   ]
 
   return (
-    <PrintDocumentShell previewLabel="Currency Exchange Receipt Preview" fontClassName={brand.fontClass}>
+    <PrintDocumentShell
+      previewLabel="Currency Exchange Receipt Preview"
+      fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={() => window.open(`/api/cashiering/currency-exchange/${id}/send-receipt?slug=${slug}`, "_blank")}
+      extraActions={
+        <Button variant="outline" onClick={() => setEmailOpen(true)}>
+          <Mail className="w-4 h-4 mr-2" /> Email
+        </Button>
+      }
+    >
       <ReceiptDocument
         brand={brand}
         kind="exchange"
@@ -76,6 +90,20 @@ export default function CurrencyExchangeReceiptPage({ params }: { params: Promis
         currency={exchange.toCurrency}
         terms={settings.receiptTerms}
         footerNote={settings.receiptFooterText}
+      />
+
+      <EmailDocumentDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        profileUpid={undefined}
+        documentLabel="Currency Exchange Receipt"
+        onSend={(email) =>
+          fetch(`/api/cashiering/currency-exchange/${id}/send-receipt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, slug }),
+          }).then(async (res) => (res.ok ? { ok: true } : { ok: false, error: (await res.json()).error }))
+        }
       />
     </PrintDocumentShell>
   )

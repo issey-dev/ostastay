@@ -73,15 +73,15 @@ export function StationeryHeader({
 }) {
   return (
     <header className="mb-8">
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4 sm:gap-6">
+        <div className="flex items-start gap-3 min-w-0">
           <BrandMark brand={brand} />
-          <div className="leading-tight">
+          <div className="leading-tight min-w-0">
             <div className="text-base font-bold tracking-tight text-[var(--print-ink)]">{brand.name}</div>
             {brand.address && <div className="mt-0.5 text-xs text-[var(--print-muted)]">{brand.address}</div>}
           </div>
         </div>
-        <div className="space-y-0.5 text-right text-xs text-[var(--print-muted)]">
+        <div className="space-y-0.5 text-left sm:text-right text-xs text-[var(--print-muted)]">
           {brand.phone && <div>{brand.phone}</div>}
           {brand.email && <div>{brand.email}</div>}
           {brand.taxId && <div>Tax ID: {brand.taxId}</div>}
@@ -90,8 +90,8 @@ export function StationeryHeader({
 
       <div className="mt-5 border-t-2" style={{ borderColor: brand.brandColor }} />
 
-      <div className="mt-4 flex items-end justify-between gap-6">
-        <div>
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-4 sm:gap-6">
+        <div className="min-w-0">
           <div
             className="text-[11px] font-semibold uppercase tracking-[0.18em]"
             style={{ color: brand.brandColor }}
@@ -101,9 +101,9 @@ export function StationeryHeader({
           <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-[var(--print-ink)]">{title}</h1>
         </div>
         {meta && meta.length > 0 && (
-          <dl className="shrink-0 space-y-1 text-right text-xs">
+          <dl className="shrink-0 space-y-1 text-left sm:text-right text-xs">
             {meta.map((m) => (
-              <div key={m.label} className="flex justify-end gap-2">
+              <div key={m.label} className="flex justify-start sm:justify-end gap-2">
                 <dt className="text-[var(--print-faint)]">{m.label}</dt>
                 <dd className="font-medium text-[var(--print-ink-secondary)]">{m.value}</dd>
               </div>
@@ -137,7 +137,7 @@ export function StationerySection({
 // value renders a faint rule so the card can be completed by hand.
 export function StationeryFieldGrid({ fields }: { fields: FieldItem[] }) {
   return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
+    <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
       {fields.map((f, i) => (
         <div key={i} className="flex items-baseline gap-2">
           <span className="w-28 shrink-0 text-[var(--print-faint)]">{f.label}</span>
@@ -177,7 +177,8 @@ export function StationeryTable({
   emptyLabel?: string
 }) {
   return (
-    <table className="w-full border-collapse text-sm">
+    <div className="overflow-x-auto print:overflow-visible">
+    <table className="w-full border-collapse text-sm min-w-[480px] print:min-w-0">
       <thead>
         <tr style={{ borderBottom: `1.5px solid ${brandColor}` }}>
           <th className="py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--print-muted)]">Date</th>
@@ -205,6 +206,7 @@ export function StationeryTable({
         )}
       </tbody>
     </table>
+    </div>
   )
 }
 
@@ -299,7 +301,7 @@ export function StationeryFooter({
   return (
     <footer className="mt-auto border-t border-[var(--print-border)] pt-5">
       {(hasPaymentInfo || terms) && (
-        <div className="mb-5 grid grid-cols-2 gap-6 text-xs">
+        <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 text-xs">
           {hasPaymentInfo && (
             <div>
               <div className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--print-muted)]">Payment Information</div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Printer, ArrowLeft } from "@/components/icons"
+import { Printer } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
 // Shared chrome for every printable document (Invoice, Receipt, Confirmation Letter,
@@ -9,35 +9,38 @@ import { Button } from "@/components/ui/button"
 // behavior for every document instead of near-duplicate implementations. The document body
 // itself is composed from src/components/print/stationery; font resolution lives in
 // src/lib/stationery-fonts (resolveStationeryFontClass), no longer duplicated here.
+//
+// Deliberately minimal: just the delivery actions (Email, Print/Download), nothing else —
+// no Back button, no page label. These pages render chrome-free (see DashboardShell /
+// isStationeryRoute) specifically so a guest-facing document reads as clean stationery,
+// not an app screen; native browser back-navigation covers "how do I leave."
 
 export function PrintDocumentShell({
   previewLabel,
   fontClassName,
   children,
   extraActions,
+  printLabel = "Print / Save as PDF",
+  onPrint,
 }: {
   previewLabel: string
   fontClassName: string
   children: React.ReactNode
-  // Rendered before the Print button — e.g. an "Email" button for documents (like the
-  // Debtor Statement) that offer more than one delivery action.
+  // Rendered before the Print button — e.g. an "Email" button.
   extraActions?: React.ReactNode
+  printLabel?: string
+  // Defaults to window.print(). Pass a custom handler (e.g. a server-generated PDF
+  // download) to replace that behavior without duplicating the rest of the bar.
+  onPrint?: () => void
 }) {
   return (
     <div className={`bg-white min-h-screen text-[var(--print-ink)] p-4 sm:p-12 print:p-0 ${fontClassName}`}>
-      <div className="print:hidden max-w-[800px] mx-auto mb-6 bg-muted border border-border rounded-lg p-4 flex justify-between items-center sticky top-0 z-[var(--z-sticky)] shadow-sm">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => window.close()}>
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back
-          </Button>
-          <span className="text-xs text-muted-foreground font-medium">{previewLabel}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {extraActions}
-          <Button onClick={() => window.print()}>
-            <Printer className="w-4 h-4 mr-2" /> Print / Save as PDF
-          </Button>
-        </div>
+      <div className="print:hidden max-w-[800px] mx-auto mb-6 flex justify-end items-center gap-2 sticky top-0 z-[var(--z-sticky)]">
+        <span className="sr-only">{previewLabel}</span>
+        {extraActions}
+        <Button onClick={onPrint ?? (() => window.print())}>
+          <Printer className="w-4 h-4 mr-2" /> {printLabel}
+        </Button>
       </div>
 
       {/* The page's own margin moves INSIDE the document (print:px/py below) because

@@ -10,6 +10,9 @@ import { buildFolioRows, isFolioStyle, FOLIO_STYLE_LABELS, type FolioStyle } fro
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { InvoiceDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, StationeryTotalLine, MetaItem } from "@/components/print/stationery/blocks"
+import { Button } from "@/components/ui/button"
+import { Mail } from "@/components/icons"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
 
 // A deposit is a payment with a purpose — name it on the document rather than printing
 // every pre-arrival collection as a bare "Payment".
@@ -21,7 +24,7 @@ const DEPOSIT_PURPOSE_LABELS: Record<string, string> = {
 }
 
 export default function PrintInvoicePage({ params }: { params: Promise<{ id: string; slug: string }> }) {
-  const { id } = use(params)
+  const { id, slug } = use(params)
   const searchParams = useSearchParams()
   const typeParam = searchParams.get("type")
   const documentTypeParam: "tax" | "proforma" | "interim" =
@@ -37,6 +40,7 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   const fetchInvoiceData = async () => {
     setLoading(true)
@@ -227,10 +231,49 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     { label: "Total Paid", amount: totalPayments, emphasis: true },
   ]
 
+  // Same profile the guest's communications came from above — the payee if this bill is
+  // routed to one, otherwise the reservation's primary guest. Absent for a walk-in with
+  // no profile at all, in which case the Email dialog just falls back to manual entry.
+  const profileUpid: string | null = payeeProfile?.upid ?? reservation?.primaryGuest?.upid ?? null
+
+  const documentQuery = new URLSearchParams({ type: documentTypeParam })
+  if (styleParam) documentQuery.set("view", styleParam)
+  if (headerParam) documentQuery.set("header", headerParam)
+
   return (
     <PrintDocumentShell
       previewLabel={`${displayTitle} Preview for ${reservation ? `#${reservation.confirmationNo}` : "Walk-in Sale"}`}
       fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={() => window.open(`/api/folios/${id}/send-invoice?${documentQuery.toString()}`, "_blank")}
+      extraActions={
+        <>
+          <Button variant="outline" onClick={() => setEmailOpen(true)}>
+            <Mail className="w-4 h-4 mr-2" /> Email
+          </Button>
+          <EmailDocumentDialog
+            open={emailOpen}
+            onOpenChange={setEmailOpen}
+            profileUpid={profileUpid}
+            documentLabel={displayTitle}
+            onSend={async (email) => {
+              const res = await fetch(`/api/folios/${id}/send-invoice`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  email,
+                  type: documentTypeParam,
+                  view: styleParam || undefined,
+                  header: headerParam || undefined,
+                  slug,
+                }),
+              })
+              const responseBody = await res.json().catch(() => ({}))
+              return res.ok ? { ok: true } : { ok: false, error: responseBody.error }
+            }}
+          />
+        </>
+      }
     >
       <InvoiceDocument
         brand={brand}

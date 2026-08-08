@@ -59,6 +59,7 @@ export async function sendMail(params: {
   to: string
   subject: string
   html: string
+  attachments?: { filename: string; content: Buffer; contentType?: string }[]
 }): Promise<void> {
   assertSmtpConfigured(params.settings)
   const { smtpHost, smtpPort, smtpUsername, smtpPassword, smtpFromAddress, smtpUseTls } = params.settings
@@ -80,5 +81,6 @@ export async function sendMail(params: {
     to: params.to,
     subject: params.subject,
     html: params.html,
+    attachments: params.attachments,
   })
 }

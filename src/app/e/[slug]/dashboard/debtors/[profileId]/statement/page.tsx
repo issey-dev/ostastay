@@ -7,17 +7,17 @@ import { Button } from "@/components/ui/button"
 import { totalOutstanding } from "@/lib/debtor-aging"
 import { resolveStationeryBrand } from "@/lib/stationery-brand"
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
+import { EmailDocumentDialog } from "@/components/print/email-document-dialog"
 import { StatementDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, MetaItem } from "@/components/print/stationery/blocks"
 
 export default function DebtorStatementPage({ params }: { params: Promise<{ profileId: string; slug: string }> }) {
-  const { profileId } = use(params)
+  const { profileId, slug } = use(params)
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState<{ message: string; isError?: boolean } | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   useEffect(() => {
     // A statement isn't scoped to any single reservation — it needs the currently
@@ -35,28 +35,22 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
       .finally(() => setLoading(false))
   }, [profileId])
 
-  const handleSendEmail = async () => {
-    setSending(true)
-    setSendResult(null)
-    try {
-      const sess = await fetch("/api/session/current-property").then((r) => r.json())
-      const res = await fetch(`/api/debtors/accounts/${profileId}/send-statement`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: sess?.currentPropertyId }),
-      })
-      const body = await res.json()
-      if (res.ok) {
-        setSendResult({ message: `Sent to ${body.sentTo}.` })
-      } else {
-        setSendResult({ message: body.error || "Failed to send.", isError: true })
-      }
-    } catch {
-      setSendResult({ message: "An unexpected error occurred.", isError: true })
-    } finally {
-      setSending(false)
-      setTimeout(() => setSendResult(null), 6000)
-    }
+  const handleSendEmail = async (email: string) => {
+    const sess = await fetch("/api/session/current-property").then((r) => r.json())
+    const res = await fetch(`/api/debtors/accounts/${profileId}/send-statement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ propertyId: sess?.currentPropertyId, email, slug }),
+    })
+    const body = await res.json()
+    return res.ok ? { ok: true as const } : { ok: false as const, error: body.error || "Failed to send." }
+  }
+
+  const handleDownloadPdf = async () => {
+    const sess = await fetch("/api/session/current-property").then((r) => r.json())
+    const propertyId = sess?.currentPropertyId
+    if (!propertyId) return
+    window.open(`/api/debtors/accounts/${profileId}/send-statement?propertyId=${propertyId}`, "_blank")
   }
 
   if (loading) return <PrintLoading label="Preparing statement..." />
@@ -97,14 +91,20 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
     <PrintDocumentShell
       previewLabel={`Account Statement for ${accountName}`}
       fontClassName={brand.fontClass}
+      printLabel="Download PDF"
+      onPrint={handleDownloadPdf}
       extraActions={
         <div className="flex items-center gap-2">
-          {sendResult && (
-            <span className={`text-xs font-medium ${sendResult.isError ? "text-destructive" : "text-success"}`}>{sendResult.message}</span>
-          )}
-          <Button variant="outline" onClick={handleSendEmail} disabled={sending}>
-            <Mail className="w-4 h-4 mr-2" /> {sending ? "Sending..." : "Email Statement"}
+          <Button variant="outline" onClick={() => setEmailOpen(true)}>
+            <Mail className="w-4 h-4 mr-2" /> Email
           </Button>
+          <EmailDocumentDialog
+            open={emailOpen}
+            onOpenChange={setEmailOpen}
+            profileUpid={profileId}
+            documentLabel="Account Statement"
+            onSend={handleSendEmail}
+          />
         </div>
       }
     >
