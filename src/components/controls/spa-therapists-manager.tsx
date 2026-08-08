@@ -215,52 +215,96 @@ export function SpaTherapistsManager() {
       ) : therapists.length === 0 ? (
         <EmptyState icon={Users} title="No therapists yet" description="Add your first therapist to start scheduling treatments." />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Qualified For</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {therapists.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell className="font-medium">{t.displayName}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{t.phone || t.email || "—"}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{t.skills.filter((s) => s.qualified).length} treatment{t.skills.filter((s) => s.qualified).length === 1 ? "" : "s"}</Badge>
-                </TableCell>
-                <TableCell>
-                  {t.isActive && t.bookable ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => openSkills(t)}>
-                    <ListChecks className="h-4 w-4 mr-1.5" /> Skills
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setScheduleFor(t)}>
-                    <Clock className="h-4 w-4 mr-1.5" /> Schedule
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setExceptionsFor(t)}>
-                    <CalendarOff className="h-4 w-4 mr-1.5" /> Exceptions
-                  </Button>
-                  <Button variant="outline" size="icon" aria-label="Edit therapist" onClick={() => openEdit(t)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" aria-label="Delete therapist" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <>
+          {/* Phone view — the table below takes over at md. */}
+          <div className="md:hidden space-y-3">
+            {therapists.map((t) => {
+              const qualifiedCount = t.skills.filter((s) => s.qualified).length
+              return (
+                <div key={t.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{t.displayName}</p>
+                      <p className="text-sm text-muted-foreground truncate">{t.phone || t.email || "—"}</p>
+                    </div>
+                    {t.isActive && t.bookable ? (
+                      <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground shrink-0">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
+                    )}
+                  </div>
+                  <Badge variant="outline">{qualifiedCount} treatment{qualifiedCount === 1 ? "" : "s"}</Badge>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openSkills(t)}>
+                      <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Skills
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setScheduleFor(t)}>
+                      <Clock className="h-3.5 w-3.5 mr-1.5" /> Schedule
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setExceptionsFor(t)}>
+                      <CalendarOff className="h-3.5 w-3.5 mr-1.5" /> Exceptions
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Qualified For</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {therapists.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.displayName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.phone || t.email || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{t.skills.filter((s) => s.qualified).length} treatment{t.skills.filter((s) => s.qualified).length === 1 ? "" : "s"}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {t.isActive && t.bookable ? (
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => openSkills(t)}>
+                        <ListChecks className="h-4 w-4 mr-1.5" /> Skills
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setScheduleFor(t)}>
+                        <Clock className="h-4 w-4 mr-1.5" /> Schedule
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setExceptionsFor(t)}>
+                        <CalendarOff className="h-4 w-4 mr-1.5" /> Exceptions
+                      </Button>
+                      <Button variant="outline" size="icon" aria-label="Edit therapist" onClick={() => openEdit(t)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" aria-label="Delete therapist" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {/* Create / Edit dialog */}
@@ -280,7 +324,7 @@ export function SpaTherapistsManager() {
                     <FormMessage />
                   </FormItem>
                 )} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField control={form.control} name="gender" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Gender</FormLabel>
@@ -310,7 +354,7 @@ export function SpaTherapistsManager() {
                     </FormItem>
                   )} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField control={form.control} name="phone" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
@@ -326,7 +370,7 @@ export function SpaTherapistsManager() {
                     </FormItem>
                   )} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField control={form.control} name="isActive" render={({ field }) => (
                     <FormItem className="flex items-center gap-3">
                       <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
@@ -490,7 +534,7 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
           <DialogTitle>Working Hours — {therapist.displayName}</DialogTitle>
           <DialogDescription>Weekly recurring schedule. Day-off/leave exceptions are managed separately.</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-2">
+        <div className="grid grid-cols-1 gap-4 py-2 md:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Effective From *</p>
             <DatePicker value={effectiveFrom} onChange={setEffectiveFrom} placeholder="Start" />
@@ -502,15 +546,15 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
         </div>
         <div className="space-y-2 max-h-[45vh] overflow-y-auto">
           {DAY_LABELS.map((label, d) => (
-            <div key={d} className="grid grid-cols-[80px_auto_1fr_1fr] items-center gap-2 rounded-md border p-2">
-              <div className="flex items-center gap-2">
+            <div key={d} className="grid grid-cols-2 items-center gap-2 rounded-md border p-2 md:grid-cols-[80px_auto_1fr_1fr]">
+              <div className="flex items-center gap-2 col-span-2 md:col-span-1">
                 <Checkbox
                   checked={days[d].working}
                   onCheckedChange={(checked) => setDays((prev) => ({ ...prev, [d]: { ...prev[d], working: !!checked } }))}
                 />
                 <span className="text-sm">{label}</span>
               </div>
-              <div />
+              <div className="hidden md:block" />
               <Input
                 type="time"
                 value={days[d].startTime}
@@ -588,7 +632,7 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
           <DialogDescription>Day off, leave, sick day, or a temporary change to normal working hours.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-[1fr_1fr] gap-2 items-end py-2">
+        <div className="grid grid-cols-1 gap-2 items-end py-2 md:grid-cols-[1fr_1fr]">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Date *</p>
             <DatePicker value={date} onChange={setDate} placeholder="Select date" />
@@ -599,8 +643,8 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
               {EXCEPTION_TYPES.map((t) => <SelectItem key={t} value={t}>{t.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="col-span-2" />
-          <Button type="button" onClick={add} disabled={saving} className="col-span-2">
+          <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="md:col-span-2" />
+          <Button type="button" onClick={add} disabled={saving} className="md:col-span-2">
             <Plus className="h-4 w-4 mr-1.5" /> Add Exception
           </Button>
         </div>
@@ -611,8 +655,8 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
             <p className="text-sm text-muted-foreground">No exceptions recorded.</p>
           ) : (
             exceptions.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                <div>
+              <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm">
+                <div className="min-w-0">
                   <span className="font-medium">{new Date(e.date).toDateString()}</span>
                   <Badge variant="outline" className="ml-2">{e.exceptionType.replace(/_/g, " ")}</Badge>
                   {e.reason && <span className="text-muted-foreground ml-2">{e.reason}</span>}

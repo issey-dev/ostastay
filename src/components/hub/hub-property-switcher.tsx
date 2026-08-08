@@ -37,6 +37,12 @@ export function HubPropertySwitcher({
     }
   }
 
+  // SIDEBAR TOKENS, NOT CONTENT TOKENS. This switcher renders on the sidebar rail, which
+  // is Deep Maroon. `bg-muted` here painted a near-white pill and the inherited
+  // sidebar-foreground text sat on top of it light-on-light — the active property was
+  // effectively invisible. Same story for `border-border` (a light hairline meant for
+  // cards) and a `text-foreground` obsidian tick. Anything drawn on the rail must come
+  // from the sidebar-* family.
   return (
     <div className="space-y-1.5">
       {properties.map((p) => {
@@ -47,19 +53,21 @@ export function HubPropertySwitcher({
             type="button"
             disabled={switching !== null}
             onClick={() => void handleSwitch(p.id)}
-            className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-60 ${
-              active ? "border-foreground/30 bg-muted" : "border-border hover:bg-muted/60"
+            className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sidebar-foreground transition-colors disabled:opacity-60 ${
+              active
+                ? "border-sidebar-ring/40 bg-sidebar-accent text-sidebar-accent-foreground"
+                : "border-sidebar-border hover:bg-sidebar-accent/60"
             }`}
           >
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: p.bannerColor ?? "var(--muted-foreground)" }}
+              style={{ backgroundColor: p.bannerColor ?? "var(--sidebar-foreground)" }}
             />
             <span className="flex-1 truncate text-sm font-medium">{p.name}</span>
             {switching === p.id ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2 className="h-4 w-4 animate-spin text-sidebar-foreground/70" />
             ) : active ? (
-              <Check className="h-4 w-4 text-foreground" />
+              <Check className="h-4 w-4 text-sidebar-accent-foreground" />
             ) : null}
           </button>
         )

@@ -392,51 +392,87 @@ export function LicensingManager() {
             <InfoHint label="Property Allowances">Per-property caps on room types, rooms and channel connections — enforced at creation time. Blank = unlimited, 0 = disallowed. PM (pseudo) room types and their rooms never count, and PM room types can&apos;t be mapped to channels at all.</InfoHint>
           </CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent>
               {allowances.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">This enterprise has no properties yet.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-2 pr-4">Property</th>
-                      <th className="py-2 pr-4">Room Types</th>
-                      <th className="py-2 pr-4">Rooms</th>
-                      <th className="py-2 pr-4">Channels</th>
-                      <th className="py-2">&nbsp;</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <>
+                  {/* Phone view — the table below takes over at md. */}
+                  <div className="md:hidden space-y-3">
                     {allowances.map((row) => {
                       const edit = allowanceEdits[row.propertyId] ?? { maxRoomTypes: "", maxRooms: "", maxChannels: "" }
-                      const cell = (usage: number, cap: string, field: keyof typeof edit) => (
-                        <div className="flex items-center gap-2">
-                          <span className="tabular-nums text-muted-foreground w-10">{usage} /</span>
+                      const field = (label: string, usage: number, cap: string, key: keyof typeof edit) => (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">{label} — {usage} used</p>
                           <Input
-                            className="w-20 h-8"
+                            className="h-8"
                             type="number" min={0} placeholder="∞"
                             value={cap}
-                            onChange={(e) => setAllowanceEdits((prev) => ({ ...prev, [row.propertyId]: { ...edit, [field]: e.target.value } }))}
+                            onChange={(e) => setAllowanceEdits((prev) => ({ ...prev, [row.propertyId]: { ...edit, [key]: e.target.value } }))}
                           />
                         </div>
                       )
                       return (
-                        <tr key={row.propertyId} className="border-b last:border-0">
-                          <td className="py-2 pr-4">
+                        <div key={row.propertyId} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                          <div>
                             <div className="font-medium">{row.name}</div>
                             <div className="text-xs text-muted-foreground">{row.code}</div>
-                          </td>
-                          <td className="py-2 pr-4">{cell(row.usage.roomTypes, edit.maxRoomTypes, "maxRoomTypes")}</td>
-                          <td className="py-2 pr-4">{cell(row.usage.rooms, edit.maxRooms, "maxRooms")}</td>
-                          <td className="py-2 pr-4">{cell(row.usage.channelLinks, edit.maxChannels, "maxChannels")}</td>
-                          <td className="py-2 text-right">
-                            <Button size="sm" variant="outline" onClick={() => handleSaveAllowance(row.propertyId)}>Save</Button>
-                          </td>
-                        </tr>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {field("Room Types", row.usage.roomTypes, edit.maxRoomTypes, "maxRoomTypes")}
+                            {field("Rooms", row.usage.rooms, edit.maxRooms, "maxRooms")}
+                            {field("Channels", row.usage.channelLinks, edit.maxChannels, "maxChannels")}
+                          </div>
+                          <Button size="sm" variant="outline" className="w-full" onClick={() => handleSaveAllowance(row.propertyId)}>Save</Button>
+                        </div>
                       )
                     })}
-                  </tbody>
-                </table>
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="py-2 pr-4">Property</th>
+                          <th className="py-2 pr-4">Room Types</th>
+                          <th className="py-2 pr-4">Rooms</th>
+                          <th className="py-2 pr-4">Channels</th>
+                          <th className="py-2">&nbsp;</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allowances.map((row) => {
+                          const edit = allowanceEdits[row.propertyId] ?? { maxRoomTypes: "", maxRooms: "", maxChannels: "" }
+                          const cell = (usage: number, cap: string, field: keyof typeof edit) => (
+                            <div className="flex items-center gap-2">
+                              <span className="tabular-nums text-muted-foreground w-10">{usage} /</span>
+                              <Input
+                                className="w-20 h-8"
+                                type="number" min={0} placeholder="∞"
+                                value={cap}
+                                onChange={(e) => setAllowanceEdits((prev) => ({ ...prev, [row.propertyId]: { ...edit, [field]: e.target.value } }))}
+                              />
+                            </div>
+                          )
+                          return (
+                            <tr key={row.propertyId} className="border-b last:border-0">
+                              <td className="py-2 pr-4">
+                                <div className="font-medium">{row.name}</div>
+                                <div className="text-xs text-muted-foreground">{row.code}</div>
+                              </td>
+                              <td className="py-2 pr-4">{cell(row.usage.roomTypes, edit.maxRoomTypes, "maxRoomTypes")}</td>
+                              <td className="py-2 pr-4">{cell(row.usage.rooms, edit.maxRooms, "maxRooms")}</td>
+                              <td className="py-2 pr-4">{cell(row.usage.channelLinks, edit.maxChannels, "maxChannels")}</td>
+                              <td className="py-2 text-right">
+                                <Button size="sm" variant="outline" onClick={() => handleSaveAllowance(row.propertyId)}>Save</Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -456,15 +492,15 @@ export function LicensingManager() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Amount (net)</label>
-                  <Input type="number" min={0} step="0.01" className="w-28" value={invForm.amount} onChange={(e) => setInvForm({ ...invForm, amount: e.target.value })} />
+                  <Input type="number" min={0} step="0.01" className="w-full lg:w-28" value={invForm.amount} onChange={(e) => setInvForm({ ...invForm, amount: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Discount</label>
-                  <Input type="number" min={0} step="0.01" className="w-24" value={invForm.discount} placeholder="0" onChange={(e) => setInvForm({ ...invForm, discount: e.target.value })} />
+                  <Input type="number" min={0} step="0.01" className="w-full lg:w-24" value={invForm.discount} placeholder="0" onChange={(e) => setInvForm({ ...invForm, discount: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Currency</label>
-                  <Input className="w-20" value={invForm.currency} onChange={(e) => setInvForm({ ...invForm, currency: e.target.value.toUpperCase() })} />
+                  <Input className="w-full lg:w-20" value={invForm.currency} onChange={(e) => setInvForm({ ...invForm, currency: e.target.value.toUpperCase() })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Due</label>
@@ -476,7 +512,65 @@ export function LicensingManager() {
               {invoices.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">No invoices issued to this enterprise yet.</p>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  {/* Phone view — the table below takes over at md. */}
+                  <div className="md:hidden space-y-3">
+                    {invoices.map((inv) => (
+                      <div key={inv.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium tabular-nums">{inv.invoiceNo}</p>
+                            <p className="text-xs text-muted-foreground">Issued {fmtDate(inv.issuedAt)}{inv.dueAt && <> · due {fmtDate(inv.dueAt)}</>}</p>
+                          </div>
+                          <Badge variant="secondary" className={
+                            inv.status === "PAID" ? "bg-success-muted text-success shrink-0"
+                              : inv.status === "VOID" ? "bg-muted text-muted-foreground shrink-0"
+                              : "bg-info-muted text-info shrink-0"
+                          }>
+                            {inv.status}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                          <div className="text-muted-foreground">{fmtDate(inv.periodStart)} → {fmtDate(inv.periodEnd)}</div>
+                          <div className="tabular-nums font-medium">{inv.currency} {inv.amount.toFixed(2)}</div>
+                          {inv.paidAt && (
+                            <div className="text-muted-foreground">
+                              Paid <span className="tabular-nums text-foreground">{fmtDate(inv.paidAt)}</span>
+                              {inv.receiptNo && <span className="tabular-nums"> · {inv.receiptNo}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {payingId === inv.id ? (
+                            <>
+                              <Input className="h-9 w-full" placeholder="Payment ref (optional)" value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} />
+                              <Button size="sm" className="h-9" onClick={() => handleMarkPaid(inv.id)}>Confirm</Button>
+                              <Button size="sm" variant="outline" className="h-9" onClick={() => { setPayingId(null); setPaymentRef("") }}>Cancel</Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="outline" className="h-9 flex-1" aria-label={`Print invoice ${inv.invoiceNo}`} onClick={() => window.open(`/osta/license-invoices/${inv.id}/print`, "_blank")}>
+                                <Printer className="h-3.5 w-3.5 mr-1.5" /> Print
+                              </Button>
+                              {inv.status === "PAID" && (
+                                <Button size="sm" variant="outline" className="h-9 flex-1" aria-label={`Print receipt ${inv.receiptNo ?? ""}`} onClick={() => window.open(`/osta/license-invoices/${inv.id}/print?doc=receipt`, "_blank")}>
+                                  <Receipt className="h-3.5 w-3.5 mr-1.5" /> Receipt
+                                </Button>
+                              )}
+                              {inv.status === "ISSUED" && (
+                                <>
+                                  <Button size="sm" className="h-9 flex-1" onClick={() => setPayingId(inv.id)}>Mark Paid</Button>
+                                  <Button size="sm" variant="outline" className="h-9 flex-1 text-destructive" onClick={() => handleVoid(inv.id)}>Void</Button>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
@@ -544,7 +638,8 @@ export function LicensingManager() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

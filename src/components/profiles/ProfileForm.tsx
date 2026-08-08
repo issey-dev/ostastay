@@ -229,12 +229,12 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-7xl w-full mx-auto pb-12 p-4">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back">
+        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back" className="shrink-0">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold tracking-tight">
                 {isDebtorContext ? "New Credit Account" : isEditMode ? "Edit Profile" : "New Profile"}
               </h2>
@@ -246,8 +246,8 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             </div>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={submitting || !form.formState.isValid}>
+            <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => router.back()}>Cancel</Button>
+            <Button type="submit" className="flex-1 sm:flex-none" disabled={submitting || !form.formState.isValid}>
               <Save className="mr-2 h-4 w-4" /> {submitting ? "Saving..." : "Save Profile"}
             </Button>
           </div>

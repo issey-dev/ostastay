@@ -129,12 +129,12 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                <div className="flex justify-between gap-4 sm:block">
+              <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+                <div className="flex justify-between gap-4 md:block">
                   <dt className="text-muted-foreground">Last checked</dt>
                   <dd className="font-medium">{formatDateTime(c.lastHealthCheckAt)}</dd>
                 </div>
-                <div className="flex justify-between gap-4 sm:block">
+                <div className="flex justify-between gap-4 md:block">
                   <dt className="text-muted-foreground">Inbound webhook</dt>
                   <dd className="font-medium">{c.hasWebhook ? "Installed by Osta" : "Not set up yet"}</dd>
                 </div>

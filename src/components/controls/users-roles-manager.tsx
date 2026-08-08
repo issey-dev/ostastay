@@ -313,69 +313,123 @@ export function UsersRolesManager({
           </Button>
         }
       >
-        {/* Bleed the table to the card edges (like every other Controls table). */}
+        {/* Bleed the table/cards to the card edges (like every other Controls table). */}
         <div className="-mx-6 -mb-6 border-t border-border">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <SortableTableHead columnKey="name" sort={sort} className="px-6">Name</SortableTableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Post</TableHead>
-                <TableHead>Access</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right px-6">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium px-6">{user.firstName} {user.lastName}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
+          {/* Phone view — one card per user: identity + role/post/access facts stacked,
+              edit/delete reachable as full-width buttons instead of a cramped last
+              column. The table below takes over at md. */}
+          <div className="md:hidden">
+            {users.length === 0 ? (
+              <EmptyState icon={Users} title="No users found" description="Create your first team member." />
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedUsers.map((user) => (
+                  <Card key={user.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{user.firstName} {user.lastName}</p>
+                        <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+                      </div>
+                      {user.isActive ? (
+                        <span className="flex shrink-0 items-center text-sm font-medium text-success"><CheckCircle2 className="mr-1 h-4 w-4" /> Active</span>
+                      ) : (
+                        <span className="flex shrink-0 items-center text-sm font-medium text-muted-foreground"><XCircle className="mr-1 h-4 w-4" /> Inactive</span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1">
                       {user.roles.map((ur) => (
                         <StatusBadge key={ur.role.id} label={ur.role.name} tone={getRoleTone(ur.role.name)} />
                       ))}
                       {user.roles.length === 0 && <span className="text-sm text-muted-foreground">No role</span>}
                     </div>
-                  </TableCell>
-                  {/* Post, not role — an unset one reads as a dash rather than being
-                      guessed from the role, which is exactly the conflation being undone. */}
-                  <TableCell className="text-sm text-muted-foreground">
-                    {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {user.scope === "ENTERPRISE"
-                      ? "All properties"
-                      : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
-                  </TableCell>
-                  <TableCell>
-                    {user.isActive ? (
-                      <span className="flex items-center text-success text-sm font-medium"><CheckCircle2 className="w-4 h-4 mr-1" /> Active</span>
-                    ) : (
-                      <span className="flex items-center text-muted-foreground text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right px-6">
-                    <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
-                      <Edit className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setUserToDelete(user)}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {users.length === 0 && (
+
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span>Post: {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}</span>
+                      <span>
+                        {user.scope === "ENTERPRISE"
+                          ? "All properties"
+                          : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEditUserDialog(user)}>
+                        <Edit className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setUserToDelete(user)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" /> Delete
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableCell colSpan={7} className="py-0">
-                    <EmptyState icon={Users} title="No users found" description="Create your first team member." />
-                  </TableCell>
+                  <SortableTableHead columnKey="name" sort={sort} className="px-6">Name</SortableTableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Post</TableHead>
+                  <TableHead>Access</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right px-6">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sortedUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium px-6">{user.firstName} {user.lastName}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles.map((ur) => (
+                          <StatusBadge key={ur.role.id} label={ur.role.name} tone={getRoleTone(ur.role.name)} />
+                        ))}
+                        {user.roles.length === 0 && <span className="text-sm text-muted-foreground">No role</span>}
+                      </div>
+                    </TableCell>
+                    {/* Post, not role — an unset one reads as a dash rather than being
+                        guessed from the role, which is exactly the conflation being undone. */}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {user.scope === "ENTERPRISE"
+                        ? "All properties"
+                        : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
+                    </TableCell>
+                    <TableCell>
+                      {user.isActive ? (
+                        <span className="flex items-center text-success text-sm font-medium"><CheckCircle2 className="w-4 h-4 mr-1" /> Active</span>
+                      ) : (
+                        <span className="flex items-center text-muted-foreground text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right px-6">
+                      <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
+                        <Edit className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setUserToDelete(user)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {users.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-0">
+                      <EmptyState icon={Users} title="No users found" description="Create your first team member." />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </ControlsCard>
 
@@ -389,7 +443,7 @@ export function UsersRolesManager({
           </Button>
         }
       >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
             <Card key={role.id}>
               <CardHeader className="pb-2">
@@ -450,7 +504,7 @@ export function UsersRolesManager({
             </div>
           )}
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">First Name</label>
                 <Input value={userForm.firstName} onChange={(e) => setUserForm({ ...userForm, firstName: e.target.value })} placeholder="John" />
@@ -522,7 +576,7 @@ export function UsersRolesManager({
                 the room-assignment and work-order pickers — the role does not.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Access</label>
                 <Select

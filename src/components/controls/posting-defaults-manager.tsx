@@ -80,53 +80,55 @@ export function PostingDefaultsManager() {
   const NONE = { value: "", label: "None (use the system code)" }
 
   return (
-    <div className="space-y-5 max-w-xl">
-      <div className="space-y-2">
-        <Label>Accommodation Charge Code</Label>
-        <SearchableSelect
-          value={accommodationId}
-          onChange={setAccommodationId}
-          placeholder="Select a room charge code..."
-          options={[NONE, ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] })]}
-        />
-        <p className="text-xs text-muted-foreground">
-          What Night Audit posts the nightly room charge against when a rate plan
-          doesn&apos;t set its own (Revenue &gt; Rate Plans).
-        </p>
-      </div>
+    <div className="space-y-5 max-w-xl md:max-w-4xl">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Accommodation Charge Code</Label>
+          <SearchableSelect
+            value={accommodationId}
+            onChange={setAccommodationId}
+            placeholder="Select a room charge code..."
+            options={[NONE, ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] })]}
+          />
+          <p className="text-xs text-muted-foreground">
+            What Night Audit posts the nightly room charge against when a rate plan
+            doesn&apos;t set its own (Revenue &gt; Rate Plans).
+          </p>
+        </div>
 
-      <div className="space-y-2">
-        <Label>Green Tax Charge Code</Label>
-        <SearchableSelect
-          value={greenTaxId}
-          onChange={setGreenTaxId}
-          placeholder="Select a Green Tax charge code..."
-          options={[NONE, ...chargeCodeOptions(chargeCodes, { includeTax: true, buckets: ["TAX"] })]}
-        />
-        <p className="text-xs text-muted-foreground">
-          Where the nightly Green Tax levy posts. Its <em>rates</em> stay in Finance &gt; Tax
-          &gt; Maldives Tax — this only chooses the code they land on. Must be a Tax / Levy
-          code so it isn&apos;t itself service-charged or GST&apos;d.
-        </p>
-      </div>
+        <div className="space-y-2">
+          <Label>Green Tax Charge Code</Label>
+          <SearchableSelect
+            value={greenTaxId}
+            onChange={setGreenTaxId}
+            placeholder="Select a Green Tax charge code..."
+            options={[NONE, ...chargeCodeOptions(chargeCodes, { includeTax: true, buckets: ["TAX"] })]}
+          />
+          <p className="text-xs text-muted-foreground">
+            Where the nightly Green Tax levy posts. Its <em>rates</em> stay in Finance &gt; Tax
+            &gt; Maldives Tax — this only chooses the code they land on. Must be a Tax / Levy
+            code so it isn&apos;t itself service-charged or GST&apos;d.
+          </p>
+        </div>
 
-      <div className="space-y-2">
-        <Label>Commission Charge Code</Label>
-        <SearchableSelect
-          value={commissionId}
-          onChange={setCommissionId}
-          placeholder="Select a commission charge code..."
-          options={[
-            { value: "", label: "None (disables commission posting)" },
-            ...chargeCodeOptions(chargeCodes, { includeNonRevenue: true }),
-          ]}
-        />
-        <p className="text-xs text-muted-foreground">
-          Where a Travel Agent commission credit posts when a City Ledger folio settles to a
-          debtor account at checkout (Client Relations &gt; Negotiated Rates). Best kept under
-          a Non-Revenue group so it doesn&apos;t inflate revenue reporting. Leave unset to
-          disable commission posting entirely.
-        </p>
+        <div className="space-y-2">
+          <Label>Commission Charge Code</Label>
+          <SearchableSelect
+            value={commissionId}
+            onChange={setCommissionId}
+            placeholder="Select a commission charge code..."
+            options={[
+              { value: "", label: "None (disables commission posting)" },
+              ...chargeCodeOptions(chargeCodes, { includeNonRevenue: true }),
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">
+            Where a Travel Agent commission credit posts when a City Ledger folio settles to a
+            debtor account at checkout (Client Relations &gt; Negotiated Rates). Best kept under
+            a Non-Revenue group so it doesn&apos;t inflate revenue reporting. Leave unset to
+            disable commission posting entirely.
+          </p>
+        </div>
       </div>
 
       {message && (

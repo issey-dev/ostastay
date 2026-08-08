@@ -343,6 +343,36 @@ export function RoomManager({
       </Dialog>
 
       <ControlsSectionBody>
+          {/* Phone — card stack. Table below takes over at md. */}
+          <div className="md:hidden">
+            {loading ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : buildings.length === 0 ? (
+              <EmptyState icon={Building2} title="No buildings configured" />
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedBuildings.map((building) => (
+                  <div key={building.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <p className="font-semibold text-foreground">{building.name}</p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openBuildingEdit(building)}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openBuildingDelete(building.id)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -378,6 +408,7 @@ export function RoomManager({
               )}
             </TableBody>
           </Table>
+          </div>
       </ControlsSectionBody>
       </>
     )}
@@ -445,6 +476,41 @@ export function RoomManager({
       </Dialog>
 
       <ControlsSectionBody>
+          {/* Phone — card stack. Table below takes over at md. */}
+          <div className="md:hidden">
+            {loading ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : allFloors.length === 0 ? (
+              <EmptyState icon={Map} title="No floors configured" />
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedFloors.map((floor) => (
+                  <div key={floor.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{floor.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openFloorEdit(floor)}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openFloorDelete(floor.id)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -484,6 +550,7 @@ export function RoomManager({
               )}
             </TableBody>
           </Table>
+          </div>
       </ControlsSectionBody>
       </>
     )}
@@ -534,7 +601,7 @@ export function RoomManager({
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Building</Label>
                           <Select
@@ -619,6 +686,52 @@ export function RoomManager({
       </Dialog>
 
       <ControlsSectionBody>
+          {/* Phone — card stack. Table below takes over at md. */}
+          <div className="md:hidden">
+            {loading ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : rooms.length === 0 ? (
+              <EmptyState
+                icon={DoorOpen}
+                title="No rooms configured"
+                description="Add a building, a floor, and then create rooms."
+              />
+            ) : (
+              <div className="space-y-3 p-4">
+                {sortedRooms.map((room) => (
+                  <div key={room.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-foreground">{room.roomNumber}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {room.roomType?.name}
+                          {room.roomType?.isPseudo && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                          )}
+                        </p>
+                      </div>
+                      <StatusBadge label={room.status.replace(/_/g, ' ')} status={room.status} className="shrink-0" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">Floor: {room.floor?.name || "—"}</p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openRoomEdit(room)}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openRoomDelete(room.id)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
@@ -669,9 +782,9 @@ export function RoomManager({
                           <Pencil className="mr-2 h-4 w-4" />
                           Edit
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-destructive"
                           onClick={() => openRoomDelete(room.id)}
                         >
@@ -685,6 +798,7 @@ export function RoomManager({
               )}
             </TableBody>
           </Table>
+          </div>
       </ControlsSectionBody>
       </>
     )}

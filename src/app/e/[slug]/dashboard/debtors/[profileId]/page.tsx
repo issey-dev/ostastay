@@ -114,13 +114,13 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div className="flex justify-between items-start">
-        <div className="flex items-center gap-3">
-          <Link href={`/e/${slug}/dashboard/debtors`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Link href={`/e/${slug}/dashboard/debtors`} className="shrink-0">
             <Button variant="ghost" size="icon" aria-label="Back"><ArrowLeft className="w-4 h-4" /></Button>
           </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold tracking-tight flex flex-wrap items-center gap-2 sm:text-2xl">
               {accountName}
               <Badge variant="outline">{profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"}</Badge>
             </h2>
@@ -130,13 +130,13 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             </p>
           </div>
         </div>
-        <Link href={`/e/${slug}/dashboard/debtors/${profileId}/statement`} target="_blank">
-          <Button variant="outline"><Printer className="w-4 h-4 mr-2" /> Statement</Button>
+        <Link href={`/e/${slug}/dashboard/debtors/${profileId}/statement`} target="_blank" className="sm:shrink-0">
+          <Button variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Statement</Button>
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-        <Card className="md:col-span-2">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <Card className="col-span-2 md:col-span-2">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground font-medium">Outstanding Balance</CardTitle></CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold flex items-center gap-2 ${overLimit ? "text-destructive" : ""}`}>
@@ -159,44 +159,76 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             Invoices
             <InfoHint label="Invoices">One row per stay billed to this account — invoices appear here only once the guest has checked out.</InfoHint>
           </h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Guest</TableHead>
-              <TableHead>Conf. #</TableHead>
-              <TableHead>Stay</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoices.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No invoices yet.</TableCell></TableRow>
-            ) : (
-              invoices.map((inv) => (
-                <TableRow key={inv.folioId}>
-                  <TableCell className="font-medium">{inv.guestName}</TableCell>
-                  <TableCell className="text-muted-foreground">{inv.confirmationNo || "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{dateStr(inv.checkInDate)} – {dateStr(inv.checkOutDate)}</TableCell>
-                  <TableCell className="text-right">{money(inv.total)}</TableCell>
-                  <TableCell className={`text-right font-medium ${inv.isOpen ? "text-destructive" : ""}`}>{money(inv.balance)}</TableCell>
-                  <TableCell>
-                    <Badge variant={inv.isOpen ? "destructive" : "outline"}>{inv.isOpen ? "Open" : "Paid"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {inv.isOpen && (
-                      <Button variant="outline" size="sm" onClick={() => openPayDialog(inv)}>
-                        <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
+        <div className="md:hidden space-y-3">
+          {invoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No invoices yet.</p>
+          ) : (
+            invoices.map((inv) => (
+              <div key={inv.folioId} className="rounded-md border border-border bg-card p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground truncate">{inv.guestName}</p>
+                    <p className="text-xs text-muted-foreground">{inv.confirmationNo || "—"}</p>
+                  </div>
+                  <Badge variant={inv.isOpen ? "destructive" : "outline"} className="shrink-0">{inv.isOpen ? "Open" : "Paid"}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{dateStr(inv.checkInDate)} – {dateStr(inv.checkOutDate)}</p>
+                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
+                  <span className="text-muted-foreground">Total {money(inv.total)}</span>
+                  <span className={`font-semibold ${inv.isOpen ? "text-destructive" : "text-foreground"}`}>{money(inv.balance)}</span>
+                </div>
+                {inv.isOpen && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => openPayDialog(inv)}>
+                    <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
+                  </Button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Tablet/desktop: full table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Guest</TableHead>
+                <TableHead>Conf. #</TableHead>
+                <TableHead>Stay</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invoices.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No invoices yet.</TableCell></TableRow>
+              ) : (
+                invoices.map((inv) => (
+                  <TableRow key={inv.folioId}>
+                    <TableCell className="font-medium">{inv.guestName}</TableCell>
+                    <TableCell className="text-muted-foreground">{inv.confirmationNo || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{dateStr(inv.checkInDate)} – {dateStr(inv.checkOutDate)}</TableCell>
+                    <TableCell className="text-right">{money(inv.total)}</TableCell>
+                    <TableCell className={`text-right font-medium ${inv.isOpen ? "text-destructive" : ""}`}>{money(inv.balance)}</TableCell>
+                    <TableCell>
+                      <Badge variant={inv.isOpen ? "destructive" : "outline"}>{inv.isOpen ? "Open" : "Paid"}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {inv.isOpen && (
+                        <Button variant="outline" size="sm" onClick={() => openPayDialog(inv)}>
+                          <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Dialog open={!!payingInvoice} onOpenChange={(open) => { if (!open) setPayingInvoice(null) }}>

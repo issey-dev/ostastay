@@ -168,7 +168,7 @@ export default function RoomMatrix() {
 
         <TabsContent value="matrix" className="m-0 border-none p-0 outline-none">
           <Card className="overflow-hidden relative">
-            <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-row items-center justify-between">
+            <CardHeader className="bg-muted/50 border-b border-border pb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-lg">
             Status Overview
@@ -176,11 +176,11 @@ export default function RoomMatrix() {
           </CardTitle>
               </div>
               {!isBulkMode ? (
-                <Button variant="outline" onClick={toggleBulkMode} className="shadow-sm">
+                <Button variant="outline" onClick={toggleBulkMode} className="w-full shadow-sm sm:w-auto">
                   <CheckSquare className="w-4 h-4 mr-2 text-primary" /> Bulk Update
                 </Button>
               ) : (
-                <Button variant="ghost" onClick={toggleBulkMode} className="text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" onClick={toggleBulkMode} className="w-full text-muted-foreground hover:text-foreground sm:w-auto">
                   <X className="w-4 h-4 mr-2" /> Cancel Bulk Mode
                 </Button>
               )}

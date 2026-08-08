@@ -110,9 +110,15 @@
     --sidebar-foreground: #DCE1E6; /* Platinum, eased back off full strength */
     --sidebar-primary: #F4F6F8;
     --sidebar-primary-foreground: #580816;
-    --sidebar-accent: #6E1522;     /* Hover/active — a step up from the rail */
+    /* Hover/active fill, and the rail's dividers. These are NON-TEXT indicators, so what
+       matters is whether they read as a shape against the rail — not a text ratio. The
+       first pass used #6E1522 / #75202D, which measured 1.23:1 and 1.37:1 against the
+       maroon: the selected nav item and the selected property were effectively invisible
+       even though their labels were perfectly legible. Lifted until the shape reads
+       (1.83:1 and 2.04:1) while keeping Platinum at 7.24:1 on the accent. */
+    --sidebar-accent: #96293C;
     --sidebar-accent-foreground: #F4F6F8;
-    --sidebar-border: #75202D;
+    --sidebar-border: #9C3444;
     --sidebar-ring: #F4F6F8;
 
     /* Charts — anchored to Crimson so a chart never opens with a hue the brand doesn't
@@ -153,6 +159,28 @@
     --z-modal: 40;
     --z-portal: 50;
     --z-toast: 60;
+  }
+
+  /* PRINT / STATIONERY — fixed "paper" ink ramp, deliberately defined ONLY here (never
+     redefined under .dark below), so it can never flip with the app's dark-mode state.
+     Printed stationery (Invoice, Receipt, Confirmation Letter, Registration Card,
+     Statement, the Hub's Permission Matrix) is a physical printout — it stays light
+     regardless of the app's theme, same rationale as --print-ink's siblings below always
+     resolving to their light values even when <html> carries .dark. See DESIGN_PLAN.md
+     §4.5. Consumed only by the files in eslint.config.mjs's PRINT_DOCUMENT_FILES list via
+     arbitrary-value classes (text-[var(--print-ink)], border-[var(--print-border)], …) —
+     never by on-screen chrome, which uses the theme-aware tokens above instead.
+
+     Values mirror this file's own light-mode warm-neutral ramp (a lighter tone was needed
+     for the faintest captions/placeholder rules, so --print-faint borrows dark mode's
+     --muted-foreground value as a plain constant — it does not track dark mode here). */
+  :root {
+    --print-ink: #1C1917;           /* primary text + strongest rules — = light --foreground */
+    --print-ink-secondary: #3C3833; /* secondary/label text — = light --sidebar-foreground */
+    --print-muted: #6B6459;         /* captions — = light --muted-foreground */
+    --print-faint: #A5A096;         /* faintest labels + placeholder rules */
+    --print-border: #E6E2DA;        /* hairline dividers — = light --border */
+    --print-surface: #F3F1EB;       /* subtle fill backgrounds — = light --muted */
   }
 
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see
@@ -220,9 +248,9 @@
     --sidebar-foreground: #DCE1E6;
     --sidebar-primary: #F4F6F8;
     --sidebar-primary-foreground: #580816;
-    --sidebar-accent: #6E1522;
+    --sidebar-accent: #96293C;
     --sidebar-accent-foreground: #F4F6F8;
-    --sidebar-border: #75202D;
+    --sidebar-border: #9C3444;
     --sidebar-ring: #F4F6F8;
 
     /* chart-1 lifts with the primary; the rest brighten for the dark canvas. */

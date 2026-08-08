@@ -141,15 +141,15 @@ export default function ProfilesDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Client Relations
             <InfoHint label="Client Relations">Manage your individual guests, travel agents, and corporate accounts here.</InfoHint>
           </h2>
         </div>
-        
-        <Button onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
+
+        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
           <UserPlus className="mr-2 h-4 w-4" /> New {PROFILE_TYPE_LABELS[activeTab] ?? activeTab}
         </Button>
         
@@ -172,28 +172,28 @@ export default function ProfilesDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col">
-        <TabsList variant="line" className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-6">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0 bg-transparent mb-6">
           <TabsTrigger
             value="GUEST"
-            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
             <Users className="w-4 h-4 mr-2" /> Guests
           </TabsTrigger>
           <TabsTrigger
             value="COMPANY"
-            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
             <Building2 className="w-4 h-4 mr-2" /> Corporate Accounts
           </TabsTrigger>
           <TabsTrigger
             value="TRAVEL_AGENT"
-            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
             <Briefcase className="w-4 h-4 mr-2" /> Travel Agents
           </TabsTrigger>
           <TabsTrigger
             value="STAFF"
-            className="data-active:text-primary dark:data-active:text-primary rounded-none px-6 py-3 font-medium text-muted-foreground"
+            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
             <UserCog className="w-4 h-4 mr-2" /> Staff
           </TabsTrigger>
@@ -201,14 +201,14 @@ export default function ProfilesDashboard() {
 
       <Card>
         <CardHeader className="bg-muted/50 border-b border-border">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
                 {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : activeTab === "STAFF" ? "Staff Directory" : "Travel Agents"}
               <InfoHint>Search by name, email, or phone.</InfoHint>
             </CardTitle>
             </div>
-            <div className="relative w-72">
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"

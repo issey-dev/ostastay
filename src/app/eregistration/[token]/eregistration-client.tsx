@@ -359,7 +359,7 @@ function SlotFormView({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Personal Details</h4>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <FormField control={form.control} name="firstName" render={({ field }) => (
                   <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
@@ -370,7 +370,7 @@ function SlotFormView({
                   <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
                   <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><DatePicker value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                 )} />
@@ -392,7 +392,7 @@ function SlotFormView({
                   </FormItem>
                 )} />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 <FormField control={form.control} name="email" render={({ field }) => (
                   <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
@@ -407,7 +407,7 @@ function SlotFormView({
               <FormField control={form.control} name="addressFull" render={({ field }) => (
                 <FormItem><FormLabel>Address</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 <FormField control={form.control} name="addressCity" render={({ field }) => (
                   <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
@@ -419,7 +419,7 @@ function SlotFormView({
 
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Identification</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 <FormField control={form.control} name="documentType" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Document Type</FormLabel>
@@ -437,7 +437,7 @@ function SlotFormView({
                   <FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <FormField control={form.control} name="issuingCountry" render={({ field }) => (
                   <FormItem><FormLabel>Issuing Country</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
@@ -450,10 +450,10 @@ function SlotFormView({
               </div>
               <div className="space-y-2">
                 <Label>ID / Passport Photo (optional)</Label>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {photoPreviewUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoPreviewUrl} alt="ID document" className="h-16 w-24 rounded border object-cover" />
+                    <img src={photoPreviewUrl} alt="ID document" className="h-16 w-24 shrink-0 rounded border object-cover" />
                   )}
                   <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/60">
                     <FileText className="h-4 w-4" /> {hasPhoto || photoFile ? "Replace photo" : "Add photo"}

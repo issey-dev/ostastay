@@ -199,11 +199,15 @@ export function AvailabilityPreview({
               {plan.roomTypes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No room types would be published.</p>
               ) : (
+                // A date-by-room-type grid, same shape as the tape chart — it doesn't
+                // reduce to card-stacking cleanly (the point is comparing nights across
+                // rows), so this stays a real table with horizontal scroll and a sticky
+                // first column for identity, per DESIGN_PLAN §4.2, at every viewport.
                 <div className="overflow-x-auto rounded-md border border-border">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/50">
-                        <th className="p-2 text-left font-medium">Room type</th>
+                        <th className="sticky left-0 z-[var(--z-sticky)] bg-muted/50 p-2 text-left font-medium">Room type</th>
                         {plan.roomTypes[0].nights.map((n) => (
                           <th key={n.date} className="p-2 text-center font-medium tabular-nums">
                             {shortDate(n.date)}
@@ -215,7 +219,7 @@ export function AvailabilityPreview({
                       {plan.roomTypes.map((rt) => (
                         <Fragment key={rt.roomTypeId}>
                           <tr className="border-b border-border">
-                            <td className="p-2">
+                            <td className="sticky left-0 z-[var(--z-sticky)] bg-card p-2">
                               <span className="font-medium">{rt.roomTypeName}</span>
                               <span className="ml-2 font-mono text-xs text-muted-foreground">
                                 → {rt.externalRoomId}
@@ -244,7 +248,7 @@ export function AvailabilityPreview({
                               channel keeps whatever price it already has. */}
                           {rateIdsFor(rt).map((rateId) => (
                             <tr key={`${rt.roomTypeId}-${rateId}`} className="border-b border-border last:border-0">
-                              <td className="py-1 pl-6 pr-2">
+                              <td className="sticky left-0 z-[var(--z-sticky)] bg-card py-1 pl-6 pr-2">
                                 <span className="font-mono text-xs text-muted-foreground">{rateId}</span>
                               </td>
                               {rt.nights.map((n) => (

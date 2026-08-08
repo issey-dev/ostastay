@@ -4,8 +4,9 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus, Trash2, Star, ArrowLeft, Save, Loader2 } from "@/components/icons"
+import { Plus, Trash2, Star, ArrowLeft, Save, Loader2, ChevronDown } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { InfoHint } from "@/components/ui/info-hint"
 import { useProperty } from "@/components/providers/property-provider"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -503,6 +504,26 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     | (undefined | { roomTypeId?: { message?: string }; ratePlanId?: { message?: string }; startDate?: { message?: string }; endDate?: { message?: string }; overrideRate?: { message?: string } })[]
     | undefined
 
+  // Fee policies collapse by default. `feeSummary` is what the collapsed row says, so
+  // the section still reports its own state without being opened.
+  const feeSelections = ([
+    ["Deposit", form.depositFeeRuleId],
+    ["Cancellation", form.cancellationFeeRuleId],
+    ["No-show", form.noShowFeeRuleId],
+  ] as const).filter(([, id]) => id && id !== "none")
+  const feeSummary =
+    feeSelections.length === 0
+      ? "None set"
+      : feeSelections
+          .map(([label, id]) => `${label}: ${feeRules.find((r) => r.id === id)?.name ?? "set"}`)
+          .join(" · ")
+  const [feesOpen, setFeesOpen] = useState(false)
+  // Never leave a section that HAS content collapsed — opening it once the loaded
+  // reservation turns out to carry a policy keeps edit mode honest.
+  useEffect(() => {
+    if (feeSelections.length > 0) setFeesOpen(true)
+  }, [feeSelections.length])
+
   if (loading) {
     return (
       <div className="flex flex-col gap-6 max-w-6xl mx-auto p-4">
@@ -882,38 +903,62 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 </div>
               </div>
 
+              {/* Fee policies are OPTIONAL and are "None" on almost every booking, yet
+                  they were three full-width selects in a tinted box — a box inside the
+                  form, and on a phone a screenful of empty dropdowns before the guest
+                  fields. They collapse to a single line that states what is set, and
+                  open on demand (or automatically when a booking already has one, so
+                  nothing is ever hidden while it has content). */}
               {feeRules.length > 0 && (
-                <div className="grid gap-2 rounded-md bg-muted/50 p-4">
-                  <Label className="flex items-center gap-2">
-                    Fee Policies
-                    <span className="text-xs font-normal text-muted-foreground">— optional; drive this booking&apos;s deposit, cancellation &amp; no-show fees</span>
-                  </Label>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {([
-                      { key: "depositFeeRuleId" as const, type: "DEPOSIT", label: "Deposit" },
-                      { key: "cancellationFeeRuleId" as const, type: "CANCELLATION", label: "Cancellation" },
-                      { key: "noShowFeeRuleId" as const, type: "NO_SHOW", label: "No-show" },
-                    ]).map(({ key, type, label }) => {
-                      const selectedId = form[key]
-                      const options = [
-                        { value: "none", label: "None" },
-                        ...feeRules
-                          .filter(r => r.ruleType === type && (r.isActive || r.id === selectedId))
-                          .map(r => ({ value: r.id, label: r.isActive ? r.name : `${r.name} (inactive)` })),
-                      ]
-                      return (
-                        <div key={key} className="grid gap-1.5">
-                          <Label className="text-xs text-muted-foreground">{label}</Label>
-                          <SearchableSelect
-                            value={selectedId}
-                            onChange={(v: string) => setField(key, v || "none")}
-                            placeholder="None"
-                            options={options}
-                          />
-                        </div>
-                      )
-                    })}
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      Fee Policies
+                      <InfoHint label="Fee Policies">
+                        Optional. These drive this booking&apos;s deposit, cancellation and no-show fees.
+                      </InfoHint>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto gap-1.5 px-2 py-1 text-xs font-normal text-muted-foreground hover:text-foreground"
+                      onClick={() => setFeesOpen((o) => !o)}
+                      aria-expanded={feesOpen}
+                    >
+                      {feeSummary}
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${feesOpen ? "rotate-180" : ""}`} />
+                    </Button>
                   </div>
+
+                  {feesOpen && (
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {([
+                        { key: "depositFeeRuleId" as const, type: "DEPOSIT", label: "Deposit" },
+                        { key: "cancellationFeeRuleId" as const, type: "CANCELLATION", label: "Cancellation" },
+                        { key: "noShowFeeRuleId" as const, type: "NO_SHOW", label: "No-show" },
+                      ]).map(({ key, type, label }) => {
+                        const selectedId = form[key]
+                        const options = [
+                          { value: "none", label: "None" },
+                          ...feeRules
+                            .filter(r => r.ruleType === type && (r.isActive || r.id === selectedId))
+                            .map(r => ({ value: r.id, label: r.isActive ? r.name : `${r.name} (inactive)` })),
+                        ]
+                        return (
+                          <div key={key} className="grid gap-1.5">
+                            <Label className="text-xs text-muted-foreground">{label}</Label>
+                            <SearchableSelect
+                              value={selectedId}
+                              onChange={(v: string) => setField(key, v || "none")}
+                              placeholder="None"
+                              options={options}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

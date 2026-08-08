@@ -125,8 +125,12 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
     }
   }
 
+  // bg-background, not bg-muted: --muted sits ABOVE --card on the dark ramp, so a muted
+  // page left the sign-in card darker than the page behind it — the card receded into a
+  // hole instead of lifting off the surface. --background is below --card in both modes,
+  // so the card lifts either way.
   return (
-    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Whose name leads here depends on the door you came through. On a tenant's own
             login (/e/[slug]/login) the enterprise name is the headline and Uppsolut steps

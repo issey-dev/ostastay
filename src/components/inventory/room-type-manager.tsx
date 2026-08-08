@@ -231,7 +231,7 @@ export function RoomTypeManager({
                     required
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="code">Code</Label>
                     <Input
@@ -340,35 +340,29 @@ export function RoomTypeManager({
       </Dialog>
 
       <ControlsSectionBody>
-        <Table>
-          <TableHeader className="bg-muted/50">
-            <TableRow className="border-border">
-              <SortableTableHead columnKey="code" sort={sort} className="px-6 py-4">Code</SortableTableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
-              <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-              ))
-            ) : roomTypes.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-0">
-                  <EmptyState icon={BedDouble} title="No room types found" description="Create one to get started." />
-                </TableCell>
-              </TableRow>
-            ) : (
-              sortedRoomTypes.map((rt) => (
-                <TableRow key={rt.id} className="group hover:bg-muted/40">
-                  <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
-                  <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
-                  <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons ({rt.baseOccupancy} base)</TableCell>
-                  <TableCell className="px-6 py-4 text-muted-foreground">
-                    <div className="flex gap-1.5">
+        {loading ? (
+          <div className="space-y-3 p-4 md:p-0">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : roomTypes.length === 0 ? (
+          <EmptyState icon={BedDouble} title="No room types found" description="Create one to get started." />
+        ) : (
+          <>
+            {/* Mobile card view — the table below takes over at md. */}
+            <div className="md:hidden space-y-3 p-4">
+              {sortedRoomTypes.map((rt) => (
+                <div key={rt.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground">{rt.code}</p>
+                      <p className="text-sm text-muted-foreground">{rt.name}</p>
+                    </div>
+                    <span className="text-sm text-muted-foreground shrink-0">{rt.maxOccupancy} Persons</span>
+                  </div>
+                  {(!rt.isActive || rt.isPseudo || !rt.housekeepingEnabled) && (
+                    <div className="flex flex-wrap gap-1.5">
                       {!rt.isActive && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
                       )}
@@ -378,36 +372,80 @@ export function RoomTypeManager({
                       {!rt.housekeepingEnabled && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
                       )}
-                      {rt.isActive && !rt.isPseudo && rt.housekeepingEnabled && "—"}
                     </div>
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-primary"
-                        onClick={() => openEdit(rt)}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => openDelete(rt.id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(rt)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openDelete(rt.id)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="border-border">
+                    <SortableTableHead columnKey="code" sort={sort} className="px-6 py-4">Code</SortableTableHead>
+                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
+                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
+                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
+                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedRoomTypes.map((rt) => (
+                    <TableRow key={rt.id} className="group hover:bg-muted/40">
+                      <TableCell className="px-6 py-4 font-semibold text-foreground">{rt.code}</TableCell>
+                      <TableCell className="px-6 py-4 font-medium text-foreground">{rt.name}</TableCell>
+                      <TableCell className="px-6 py-4 text-muted-foreground">{rt.maxOccupancy} Persons ({rt.baseOccupancy} base)</TableCell>
+                      <TableCell className="px-6 py-4 text-muted-foreground">
+                        <div className="flex gap-1.5">
+                          {!rt.isActive && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
+                          )}
+                          {rt.isPseudo && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                          )}
+                          {!rt.housekeepingEnabled && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
+                          )}
+                          {rt.isActive && !rt.isPseudo && rt.housekeepingEnabled && "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary"
+                            onClick={() => openEdit(rt)}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => openDelete(rt.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
       </ControlsSectionBody>
     </div>
   )

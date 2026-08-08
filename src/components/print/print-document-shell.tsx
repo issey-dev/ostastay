@@ -24,7 +24,7 @@ export function PrintDocumentShell({
   extraActions?: React.ReactNode
 }) {
   return (
-    <div className={`bg-white min-h-screen text-slate-800 p-4 sm:p-12 print:p-0 ${fontClassName}`}>
+    <div className={`bg-white min-h-screen text-[var(--print-ink)] p-4 sm:p-12 print:p-0 ${fontClassName}`}>
       <div className="print:hidden max-w-[800px] mx-auto mb-6 bg-muted border border-border rounded-lg p-4 flex justify-between items-center sticky top-0 z-[var(--z-sticky)] shadow-sm">
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => window.close()}>

@@ -480,7 +480,7 @@ Mobile-first throughout: base (unprefixed) styles target mobile, `md:` layers on
 
 | | Mobile (<768px) | Tablet (768–1023px) | Desktop (≥1024px) |
 |---|---|---|---|
-| Nav | Sidebar hidden, opens as an overlay `Sheet` on trigger tap (already implemented via `useIsMobile()`/Base UI sidebar `isMobile` branch — keep) | **Currently missing** — today tablet gets the desktop icon-rail treatment. Target: icon-rail collapsed by default (matches desktop's collapsed state), same as desktop, but *never* auto-expanded — reduces content-width pressure on tablet portrait. | Icon-rail collapsible sidebar, user-togglable expanded/collapsed, state persisted (existing `SidebarProvider` behavior — keep) |
+| Nav | Sidebar hidden, opens as an overlay `Sheet` on trigger tap (already implemented via `useIsMobile()`/Base UI sidebar `isMobile` branch — keep) | Icon-rail collapsed by default on first load (a saved cookie preference always wins), never auto-re-expanded — implemented in `ui/sidebar.tsx`'s `appliedTierDefault` effect. | Icon-rail collapsible sidebar, user-togglable expanded/collapsed, state persisted (existing `SidebarProvider` behavior — keep) |
 | Header | Full-width, `PropertySwitcher` collapses to icon-only trigger if it doesn't fit (needs a width check — currently unconditionally rendered inline, verify it wraps gracefully) | Full-width, all header items inline | Full-width, all header items inline (unchanged) |
 | Content gutter | `p-4` | `p-6` | `p-8` (already the pattern at `dashboard/layout.tsx:49`, just formalize the `md:p-6` step that's currently skipped — today it jumps straight from `p-4` to `md:p-8`) |
 | Content max-width | full | full | `max-w-7xl` centered (existing, keep) |

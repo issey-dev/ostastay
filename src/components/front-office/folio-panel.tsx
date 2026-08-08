@@ -512,15 +512,15 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 {/* Left Column: Balance & Ledger */}
                 <div className="lg:col-span-2 flex flex-col gap-6 h-full min-h-0">
                   {/* Balance Card */}
-                  <div className="bg-card p-6 rounded-xl border shadow-sm flex justify-between items-center shrink-0">
-                    <div>
+                  <div className="bg-card p-6 rounded-xl border shadow-sm flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 shrink-0">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium text-muted-foreground">Folio {activeFolio.folioNumber} Balance</p>
-                      
-                      <div className="mt-1 mb-3 flex items-center gap-2">
+
+                      <div className="mt-1 mb-3 flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-foreground flex items-center">
                           <UserCircle className="w-4 h-4 mr-1 text-muted-foreground" />
-                          Payee: {activeFolio.payeeProfile 
-                                    ? `${activeFolio.payeeProfile.firstName} ${activeFolio.payeeProfile.lastName || ''}` 
+                          Payee: {activeFolio.payeeProfile
+                                    ? `${activeFolio.payeeProfile.firstName} ${activeFolio.payeeProfile.lastName || ''}`
                                     : "Primary Guest"}
                         </span>
                         <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={() => {
@@ -536,14 +536,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           with, so picking a City-Ledger method here (and then taking the
                           payment) is what bills the stay to an account. This only
                           pre-selects; the cashier can still change it per payment. */}
-                      <div className="mb-3 flex items-center gap-2">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-foreground">Default payment:</span>
                         <Select
                           value={activeFolio.defaultPaymentMethodId || "none"}
                           onValueChange={(v) => handleSetDefaultPaymentMethod(v === "none" ? null : (v ?? null))}
                           disabled={settlementSaving}
                         >
-                          <SelectTrigger className="h-7 w-52 text-xs">
+                          <SelectTrigger className="h-7 w-full sm:w-52 text-xs">
                             <SelectValue placeholder="None — choose each time">
                               {paymentMethods.find((m) => m.id === activeFolio.defaultPaymentMethodId)?.name ||
                                 "None — choose each time"}
@@ -563,7 +563,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex flex-wrap items-center gap-3 mt-1">
                         <p className={`text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
@@ -577,7 +577,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("tax")}
-                            className="h-9 shadow-sm border-border ml-2"
+                            className="h-9 shadow-sm border-border"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                           </Button>
@@ -586,7 +586,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={() => setPrintDocType("proforma")}
-                          className="h-9 shadow-sm border-border ml-2"
+                          className="h-9 shadow-sm border-border"
                           title={preArrival ? "Quoted charges for the stay — not a tax invoice" : undefined}
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
@@ -596,7 +596,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("interim")}
-                            className="h-9 shadow-sm border-border ml-2"
+                            className="h-9 shadow-sm border-border"
                             title="Information statement of charges posted so far — not a tax invoice"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Interim Bill
@@ -606,23 +606,23 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={openRouting}
-                          className="h-9 shadow-sm border-border ml-2"
+                          className="h-9 shadow-sm border-border"
                         >
                           <ArrowRightLeft className="w-4 h-4 mr-2" /> Routing
                         </Button>
                         {activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
+                          <Button
+                            size="sm"
+                            variant="destructive"
                             onClick={handleDeleteFolio}
-                            className="h-9 shadow-sm ml-2"
+                            className="h-9 shadow-sm"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </Button>
                         )}
                       </div>
                     </div>
-                    <div className="text-right text-sm text-muted-foreground space-y-1">
+                    <div className="text-left lg:text-right text-sm text-muted-foreground space-y-1 shrink-0">
                       <p>Base Charges: <span className="font-medium text-foreground">${totalBaseCharges.toFixed(2)}</span></p>
                       <p>Service Charge: <span className="font-medium text-foreground">${totalServiceCharges.toFixed(2)}</span></p>
                       <p>Total Taxes: <span className="font-medium text-foreground">${totalTaxes.toFixed(2)}</span></p>
@@ -645,6 +645,80 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                   {/* Ledger List */}
                   <div className="bg-card rounded-xl border shadow-sm flex-1 overflow-hidden flex flex-col">
                     <div className="overflow-y-auto flex-1">
+                      {/* Phone view — the 9-column table below takes over at md. */}
+                      <div className="md:hidden divide-y divide-border">
+                        {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 ? (
+                          <EmptyState icon={Receipt} title="No transactions posted yet" />
+                        ) : (
+                          <>
+                            {activeFolio.lineItems.map((item: any) => (
+                              <div key={item.id} className={`p-4 space-y-2 ${item.isVoid ? "opacity-50" : selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-start gap-2 min-w-0">
+                                    {!item.isVoid && (
+                                      <Checkbox
+                                        className="mt-0.5 shrink-0"
+                                        checked={selectedLineItemIds.includes(item.id)}
+                                        onCheckedChange={() => toggleLineItemSelection(item.id)}
+                                      />
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className={`text-sm font-medium ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
+                                        {item.description}
+                                        {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">{new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
+                                    </div>
+                                  </div>
+                                  {!item.isVoid && !activeFolio.isClosed && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                      title="Void Charge"
+                                      aria-label="Void Charge"
+                                      onClick={() => { setVoidTarget(item); setVoidReason("") }}
+                                    >
+                                      <Ban className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>
+                                  <span>Base: ${item.amount.toFixed(2)}</span>
+                                  <span>SC: ${(item.serviceChargeAmount || 0).toFixed(2)}</span>
+                                  <span>Tax: ${item.taxAmount.toFixed(2)}</span>
+                                  <span className={`font-medium ${item.isVoid ? "" : "text-destructive"}`}>
+                                    Total: ${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                            {activeFolio.payments.map((payment: any) => (
+                              <div key={payment.id} className="p-4 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium">Payment - {payment.paymentMethod?.name}</p>
+                                  <p className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-sm font-medium text-success">${payment.amount.toFixed(2)}</span>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    title="Print Payment Receipt"
+                                    aria-label="Print Payment Receipt"
+                                    onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="hidden md:block">
                       <Table>
                         <TableHeader className="bg-muted sticky top-0 z-10 shadow-sm">
                           <TableRow>
@@ -740,6 +814,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           )}
                         </TableBody>
                       </Table>
+                      </div>
                     </div>
                   </div>
                 </div>

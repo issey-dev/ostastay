@@ -309,7 +309,7 @@ function PriceCalendarPageContent() {
                       ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>From</Label>
                       <DatePicker
@@ -329,7 +329,7 @@ function PriceCalendarPageContent() {
                     <Label>Daily Price ($)</Label>
                     <Input type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Extra Adult ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
                       <Input type="number" min="0" step="0.01" value={bulkExtraAdultPrice} onChange={e => setBulkExtraAdultPrice(e.target.value)} placeholder="0.00" />
@@ -369,13 +369,13 @@ function PriceCalendarPageContent() {
                   </Button>
                 ))}
               </div>
-              <div className="flex flex-row items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center justify-center gap-2 sm:gap-4">
                   <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>Previous</Button>
-                  <h3 className="text-xl font-semibold w-48 text-center">{format(currentMonth, "MMMM yyyy")}</h3>
+                  <h3 className="text-lg font-semibold text-center sm:w-48 sm:text-xl">{format(currentMonth, "MMMM yyyy")}</h3>
                   <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>Next</Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setCurrentMonth(startOfMonth(new Date()))}>Today</Button>
+                <Button variant="outline" size="sm" className="w-full md:w-auto" onClick={() => setCurrentMonth(startOfMonth(new Date()))}>Today</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -393,16 +393,18 @@ function PriceCalendarPageContent() {
                 </div>
               ) : (
                 <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
-                  {/* Days of week header */}
+                  {/* Days of week header — abbreviated further on mobile so a narrow
+                      7-column grid doesn't force horizontal scroll on a phone. */}
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                    <div key={day} className="bg-muted py-2 text-center text-sm font-medium text-muted-foreground">
-                      {day}
+                    <div key={day} className="bg-muted py-2 text-center text-xs font-medium text-muted-foreground sm:text-sm">
+                      <span className="sm:hidden">{day.slice(0, 1)}</span>
+                      <span className="hidden sm:inline">{day}</span>
                     </div>
                   ))}
-                  
+
                   {/* Empty padding cells for start of month */}
                   {Array.from({ length: startingDayIndex }).map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-card min-h-[100px] p-2" />
+                    <div key={`empty-${i}`} className="bg-card min-h-[64px] p-1 sm:min-h-[100px] sm:p-2" />
                   ))}
 
                   {/* Calendar Days */}
@@ -410,18 +412,18 @@ function PriceCalendarPageContent() {
                     const entry = getEntryForDate(day)
                     const isToday = isSameDay(day, new Date())
                     return (
-                      <div key={day.toISOString()} className={`bg-card min-h-[100px] p-2 flex flex-col group hover:bg-muted transition-colors ${isToday ? 'bg-info-muted/30' : ''}`}>
+                      <div key={day.toISOString()} className={`bg-card min-h-[64px] p-1 flex flex-col group hover:bg-muted transition-colors sm:min-h-[100px] sm:p-2 ${isToday ? 'bg-info-muted/30' : ''}`}>
                         <div className="flex justify-between items-start">
-                          <span className={`text-sm font-medium ${isToday ? 'bg-info text-info-foreground rounded-none w-6 h-6 flex items-center justify-center' : 'text-muted-foreground'}`}>
+                          <span className={`text-xs font-medium sm:text-sm ${isToday ? 'bg-info text-info-foreground rounded-none w-5 h-5 flex items-center justify-center sm:w-6 sm:h-6' : 'text-muted-foreground'}`}>
                             {format(day, "d")}
                           </span>
                         </div>
-                        <div className="mt-auto pt-2 flex flex-col gap-0.5">
+                        <div className="mt-auto pt-1 flex flex-col gap-0.5 sm:pt-2">
                           {entry !== null ? (
                             <>
-                              <span className="text-lg font-bold text-success">${entry.price.toFixed(2)}</span>
+                              <span className="text-xs font-bold text-success tabular-nums sm:text-lg">${entry.price.toFixed(2)}</span>
                               {(entry.extraAdultPrice != null || entry.extraChildPrice != null) && (
-                                <span className="text-[11px] text-muted-foreground leading-tight">
+                                <span className="hidden text-[11px] text-muted-foreground leading-tight sm:block">
                                   {entry.extraAdultPrice != null && `+$${entry.extraAdultPrice.toFixed(2)} adult`}
                                   {entry.extraAdultPrice != null && entry.extraChildPrice != null && " · "}
                                   {entry.extraChildPrice != null && `+$${entry.extraChildPrice.toFixed(2)} child`}
@@ -429,7 +431,7 @@ function PriceCalendarPageContent() {
                               )}
                             </>
                           ) : (
-                            <span className="text-sm text-muted-foreground italic">No Rate</span>
+                            <span className="text-[11px] text-muted-foreground italic sm:text-sm">No Rate</span>
                           )}
                         </div>
                       </div>
