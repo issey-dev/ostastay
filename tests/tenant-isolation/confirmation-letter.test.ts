@@ -28,6 +28,13 @@ vi.mock("@/lib/mailer", async () => {
   };
 });
 
+// Nor launch a real headless browser — generateStationeryPdf shells out to Puppeteer,
+// which needs Chromium runtime libraries this bare test runner doesn't have. The route
+// under test only cares that it gets SOME PDF buffer back to attach.
+vi.mock("@/lib/stationery-pdf", () => ({
+  generateStationeryPdf: vi.fn(async () => Buffer.from("fake-pdf")),
+}));
+
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
@@ -187,23 +194,38 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     expect(res.status).toBe(403);
   });
 
-  it("POST send-confirmation 400s when the primary guest has no email on file", async () => {
+  // The route no longer auto-resolves the guest's email server-side — the caller
+  // (EmailDocumentDialog) always supplies one explicitly, picked from the profile's
+  // communications or entered manually. So "no email on file" is now a client-side
+  // concern (the dialog degrades to manual entry); the route's own validation is just
+  // "was an email/slug actually sent."
+  it("POST send-confirmation 400s when email/slug is missing from the request body", async () => {
     const res = await asUser(adminAId, () =>
-      sendRoute.POST(new Request(`http://localhost/api/reservations/${reservationNoEmailId}/send-confirmation`, { method: "POST" }), {
-        params: Promise.resolve({ id: reservationNoEmailId }),
-      })
+      sendRoute.POST(
+        new Request(`http://localhost/api/reservations/${reservationNoEmailId}/send-confirmation`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+        { params: Promise.resolve({ id: reservationNoEmailId }) }
+      )
     );
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/no email address/i);
+    expect(body.error).toMatch(/missing required fields/i);
     expect(mailerMock.sendMail).not.toHaveBeenCalled();
   });
 
   it("POST send-confirmation 403s when the reservation belongs to a different enterprise", async () => {
     const res = await asUser(adminBId, () =>
-      sendRoute.POST(new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, { method: "POST" }), {
-        params: Promise.resolve({ id: reservationAId }),
-      })
+      sendRoute.POST(
+        new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "guest@example.com", slug: "test-confletter-enterprise-a" }),
+        }),
+        { params: Promise.resolve({ id: reservationAId }) }
+      )
     );
     expect(res.status).toBe(403);
     expect(mailerMock.sendMail).not.toHaveBeenCalled();
@@ -212,21 +234,31 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
   it("POST send-confirmation 400s cleanly when SMTP is not configured", async () => {
     mailerMock.sendMail.mockRejectedValueOnce(new SmtpNotConfiguredError());
     const res = await asUser(adminAId, () =>
-      sendRoute.POST(new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, { method: "POST" }), {
-        params: Promise.resolve({ id: reservationAId }),
-      })
+      sendRoute.POST(
+        new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "guest@example.com", slug: "test-confletter-enterprise-a" }),
+        }),
+        { params: Promise.resolve({ id: reservationAId }) }
+      )
     );
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/SMTP is not configured/i);
   });
 
-  it("POST send-confirmation sends to the primary guest's email and returns success", async () => {
+  it("POST send-confirmation sends to the given email and returns success", async () => {
     mailerMock.sendMail.mockResolvedValueOnce(undefined);
     const res = await asUser(adminAId, () =>
-      sendRoute.POST(new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, { method: "POST" }), {
-        params: Promise.resolve({ id: reservationAId }),
-      })
+      sendRoute.POST(
+        new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "guest@example.com", slug: "test-confletter-enterprise-a" }),
+        }),
+        { params: Promise.resolve({ id: reservationAId }) }
+      )
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -241,9 +273,14 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
   it("POST send-confirmation returns 502 when sendMail fails unexpectedly", async () => {
     mailerMock.sendMail.mockRejectedValueOnce(new Error("connection refused"));
     const res = await asUser(adminAId, () =>
-      sendRoute.POST(new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, { method: "POST" }), {
-        params: Promise.resolve({ id: reservationAId }),
-      })
+      sendRoute.POST(
+        new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "guest@example.com", slug: "test-confletter-enterprise-a" }),
+        }),
+        { params: Promise.resolve({ id: reservationAId }) }
+      )
     );
     expect(res.status).toBe(502);
   });
