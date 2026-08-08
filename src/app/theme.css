@@ -1,44 +1,52 @@
 @layer base {
   :root {
     /* =========================================
-       ✨ GUEST HOUSE PMS - GLOBAL THEME ✨
+       UPPSOLUT STAY — GLOBAL THEME
        =========================================
-       Change these hex codes to instantly change 
-       the entire application's color palette!
-    ========================================= */
-    
-    /* NEUTRALS CARRY A WARM CAST. Every neutral below is a warm off-neutral (hue ~40°,
-       very low saturation) rather than the cool slate ramp this app started on — paper
-       rather than glass. It is deliberately subtle: the shift is meant to read as
-       temperature, not as a beige theme, and it never costs contrast (every pair was
-       measured against the old cool values before landing — see DESIGN_PLAN.md §2.1).
-       No cool greys anywhere; that consistency IS the effect. */
+       Derived from the Uppsolut brand guidelines (v1.1), which live in-repo at
+       `branding-guide/`. That kit is the source of truth for the palette and it
+       OVERRIDES the older warm-neutral system described in
+       .agents/docs/DESIGN_PLAN.md §2.1 — do not "restore" the warm cast.
+
+       The brand is five values, and each one has a stated role:
+
+         Crimson OS     #8B0000  primary / accent — CTAs, active states, key icons
+         Deep Maroon    #580816  structure — dark headers, sidebar nav, footers
+         Obsidian Black #0D0F11  base dark — canvas, high-contrast text
+         Steel Slate    #1A1D20  surface neutral — cards, borders, inactive UI
+         Cool Platinum  #F4F6F8  base light — dashboard background, app canvas
+
+       NEUTRALS ARE COOL. Every grey below is a cool off-neutral drawn from the
+       Platinum/Slate/Obsidian ramp. The app previously ran a warm (hue ~40°) ramp;
+       that is gone. No warm greys anywhere — the consistency IS the effect. */
 
     /* 1. PRIMARY — the app's everyday interactive color (buttons, links, focus rings,
-       active nav state). Fixed monochromatic neutral, same for every property, both
-       modes — NOT a property's own banner accent (see PropertyBannerBar), which is a
-       raw per-property color stored on Property.bannerColor, not a shared CSS token. */
-    --primary: #1C1917; /* Warm near-black — never #000000 */
-    --primary-foreground: #ffffff;
+       active nav state). Crimson OS, per the guide's "CTAs, active states" role.
+       Fixed for every property and both modes — this is the PRODUCT's color, not a
+       tenant's. A property's own color lives on Property.bannerColor and is confined
+       to the banner bar and printed stationery (see §9 below). */
+    --primary: #8B0000; /* Crimson OS — 9.24:1 against Platinum */
+    --primary-foreground: #F4F6F8;
 
     /* 2. BACKGROUND & TEXT */
-    --background: #FAF9F6; /* Warm off-white, the "paper" floor — never #FFFFFF */
-    --foreground: #1C1917; /* Warm near-black ink */
+    --background: #F4F6F8; /* Cool Platinum — the app canvas */
+    --foreground: #0D0F11; /* Obsidian Black — primary type */
 
-    /* 3. CARDS & PANELS — one step brighter than the background, so a card reads as a
-       sheet laid on the desk rather than a hole cut in it. */
-    --card: #FFFEFB;
-    --card-foreground: #1C1917;
-    --popover: #FFFEFB;
-    --popover-foreground: #1C1917;
+    /* 3. CARDS & PANELS — one step brighter than the canvas, so a card reads as a
+       sheet laid on the desk rather than a hole cut in it. Platinum is already a
+       tinted floor, which leaves white free to do the lifting. */
+    --card: #FFFFFF;
+    --card-foreground: #0D0F11;
+    --popover: #FFFFFF;
+    --popover-foreground: #0D0F11;
 
-    /* 4. SECONDARY & MUTED ELEMENTS */
-    --secondary: #F3F1EB;
-    --secondary-foreground: #1C1917;
-    --muted: #F3F1EB;
-    --muted-foreground: #6B6459; /* 5.55:1 on --background, up from 4.55:1 when cool */
-    --accent: #F3F1EB;
-    --accent-foreground: #1C1917;
+    /* 4. SECONDARY & MUTED ELEMENTS — the cool ramp between Platinum and Slate. */
+    --secondary: #E8ECF0;
+    --secondary-foreground: #0D0F11;
+    --muted: #E8ECF0;
+    --muted-foreground: #5A646E; /* 5.57:1 on --background, 6.03:1 on --card */
+    --accent: #E8ECF0;
+    --accent-foreground: #0D0F11;
 
     /* 5. ALERTS & STATUS COLORS
        Semantic status tokens — the only place a status color is defined. Components
@@ -46,74 +54,75 @@
        palette class. --destructive is shadcn's own prop name (kept for compatibility
        with generated component variants) and doubles as the "danger" status tone.
 
-       These are deeper and less neon than the Tailwind defaults they replace, for two
-       reasons: they sit inside the warm neutral system, and the bright originals failed
-       AA as text on a card (success 3.30:1, warning 2.94:1, danger 3.76:1). Every value
-       here clears 4.5:1 on --card, on --background, and on its own -muted tint — status
-       text is frequently rendered in the status color on the tinted pill (see
-       src/lib/status-tone.ts toneMutedClasses), so all three matter. */
-    --destructive: #B4402C; /* Brick red — 5.61:1 on card */
+       NOTE ON --destructive vs --primary: the brand primary is now a deep red, so
+       destructive is deliberately set BRIGHTER and more saturated than Crimson rather
+       than darker — that lightness gap (1.78:1 between the two) is what keeps a
+       "Delete" button from reading as a "Save" button. Do not darken it toward
+       Crimson. Every value here clears 4.5:1 on --card, on --background, and on its
+       own -muted tint, since status text is frequently rendered in the status color
+       on its tinted pill (see src/lib/status-tone.ts toneMutedClasses). */
+    --destructive: #C22F2F; /* 5.61:1 on card — deliberately lighter than Crimson */
     --destructive-foreground: #ffffff;
-    --destructive-muted: #FBF0EC;
+    --destructive-muted: #FAEDED;
 
-    --success: #3F7A52; /* Muted fern — 5.06:1 on card */
+    --success: #2F7D55; /* 5.02:1 on card */
     --success-foreground: #ffffff;
-    --success-muted: #EFF5F0;
+    --success-muted: #ECF4EF;
 
-    --warning: #8F6618; /* Amber-brown — 5.10:1 on card */
+    --warning: #8F6618; /* 5.14:1 on card */
     --warning-foreground: #ffffff;
-    --warning-muted: #FAF4E6;
+    --warning-muted: #F7F2E4;
 
-    --info: #1F5C99; /* Deep sea blue — 6.83:1 on card */
+    --info: #1F5C99; /* 6.89:1 on card */
     --info-foreground: #ffffff;
-    --info-muted: #EDF3F9;
+    --info-muted: #EAF1F8;
 
     /* 6. BORDERS & INPUTS */
-    --border: #E6E2DA; /* Warm hairline rule */
-    --input: #E6E2DA;
-    --ring: var(--primary); /* Focus rings match primary */
+    --border: #D8DEE4; /* Cool hairline rule */
+    --input: #D8DEE4;
+    --ring: var(--primary); /* Focus rings are Crimson */
 
     /* 7. CORNER ROUNDNESS — 0 everywhere, no curves anywhere in the app. This single
        value drives the whole rounded-sm..rounded-4xl scale (see globals.css's
        @theme inline block), so this one line zeroes every component's corners at once.
        rounded-full (avatars/pills/dots) isn't derived from this token — those are
-       squared off individually at each call site instead. */
+       squared off individually at each call site instead.
+
+       This is an APP decision, not a brand one: the brand kit's rounded tiles apply to
+       the icon/logo lockups, which carry their own radius (22%) inside their SVGs. */
     --radius: 0px;
 
-    /* 7b. ELEVATION — neutral shadow scale (never brand/accent-tinted). Replaces the old
-       indigo-tinted ad hoc shadows that used to live in globals.css/card.tsx. */
-    --elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.04);   /* resting card */
-    --elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.08); /* raised / hover */
-    --elevation-3: 0 8px 24px -4px rgb(0 0 0 / 0.12); /* popover / dropdown */
-    --elevation-4: 0 16px 40px -8px rgb(0 0 0 / 0.16); /* dialog / sheet */
-    --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.06); /* sticky header */
+    /* 7b. ELEVATION — neutral shadow scale (never brand/accent-tinted). */
+    --elevation-1: 0 1px 2px 0 rgb(13 15 17 / 0.05);   /* resting card */
+    --elevation-2: 0 4px 12px -2px rgb(13 15 17 / 0.09); /* raised / hover */
+    --elevation-3: 0 8px 24px -4px rgb(13 15 17 / 0.13); /* popover / dropdown */
+    --elevation-4: 0 16px 40px -8px rgb(13 15 17 / 0.17); /* dialog / sheet */
+    --elevation-header: 0 1px 3px 0 rgb(13 15 17 / 0.07); /* sticky header */
 
-    /* 8. SIDEBAR SPECIFIC THEME */
-    /* `bg-sidebar` maps to --sidebar (shadcn's current token name), but this block only
-       ever defined --sidebar-background (the older name). The variable was therefore
-       undefined and bg-sidebar computed to rgba(0,0,0,0) — the sidebar painted NO
-       background, so page content showed straight through the nav. That read as a
-       deliberate "glass" effect; it was an unpainted surface. Aliased rather than
-       renamed so both names keep working. */
+    /* 8. SIDEBAR — Deep Maroon, which the guide assigns explicitly to "sidebar nav".
+       The rail is maroon in BOTH modes: it is structural brand furniture, not a
+       surface that follows the canvas. Platinum on Maroon measures 13.27:1.
+
+       `bg-sidebar` maps to --sidebar (shadcn's current token name); --sidebar-background
+       is the older name. Both are kept wired so either keeps working. */
     --sidebar: var(--sidebar-background);
-    --sidebar-background: #FFFEFB;
-    --sidebar-foreground: #3C3833;
-    --sidebar-primary: var(--primary);
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #F3F1EB;
-    --sidebar-accent-foreground: #1C1917;
-    --sidebar-border: #E6E2DA;
-    --sidebar-ring: var(--primary);
+    --sidebar-background: #580816; /* Deep Maroon */
+    --sidebar-foreground: #DCE1E6; /* Platinum, eased back off full strength */
+    --sidebar-primary: #F4F6F8;
+    --sidebar-primary-foreground: #580816;
+    --sidebar-accent: #6E1522;     /* Hover/active — a step up from the rail */
+    --sidebar-accent-foreground: #F4F6F8;
+    --sidebar-border: #75202D;
+    --sidebar-ring: #F4F6F8;
 
-    /* Charts — drawn from the same Maldives palette as the property banner presets
-       (src/lib/themePresets.ts) so a chart never introduces a hue the rest of the app
-       doesn't already use. Five distinct hues: previously --chart-5 duplicated
-       --chart-1, which made two series of a five-series chart indistinguishable. */
-    --chart-1: #1A5CA0; /* Ocean  */
-    --chart-2: #107880; /* Lagoon */
-    --chart-3: #B55018; /* Sunset */
-    --chart-4: #2F6B45; /* Palm   */
-    --chart-5: #C43E63; /* Coral  */
+    /* Charts — anchored to Crimson so a chart never opens with a hue the brand doesn't
+       own, then spread across distinguishable hues (data series must stay separable;
+       that requirement outranks palette purity past the first series). */
+    --chart-1: #8B0000; /* Crimson OS */
+    --chart-2: #1F5C99; /* Deep sea blue */
+    --chart-3: #2F7D55; /* Fern      */
+    --chart-4: #8F6618; /* Amber     */
+    --chart-5: #6B4E8F; /* Aubergine */
   }
 
   /* Z-INDEX LAYERS — named stacking order, consumed via arbitrary-value utilities
@@ -147,50 +156,56 @@
   }
 
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see
-     src/components/providers/dark-mode-provider.tsx). Primary inverts to a light
-     neutral (the classic monochrome "high-contrast" button — dark-on-light in light
-     mode, light-on-dark in dark mode) rather than chasing the light palette's hue. */
+     src/components/providers/dark-mode-provider.tsx). Obsidian is the canvas and Steel
+     Slate the surface, exactly the roles the brand guide gives them.
+
+     Crimson does NOT invert to a light neutral here. It stays the primary in both modes
+     because it is the brand, not a contrast device — it is only lifted enough to hold
+     4.5:1 against the dark canvas, which #8B0000 alone cannot do. */
   .dark {
-    /* Same warm cast as light mode, mirrored: a warm charcoal with a brown undertone
-       rather than a true-black/cool-slate dark. Still very dark — this is a subtle
-       temperature shift, not a brown theme — but never pure #000000. */
-    --primary: #F5F2EB;         /* Warm cream */
-    --primary-foreground: #1A1917;
+    --primary: #F05252;         /* Crimson lifted for dark surfaces — 4.86:1 on --card */
+    --primary-foreground: #0D0F11;
 
-    --background: #0F0E0C;      /* Warm near-black */
-    --foreground: #F5F2EB;      /* Warm cream — never pure white */
+    --background: #0D0F11;      /* Obsidian Black */
+    --foreground: #F4F6F8;      /* Cool Platinum */
 
-    --card: #1A1917;
-    --card-foreground: #F5F2EB;
-    --popover: #1A1917;
-    --popover-foreground: #F5F2EB;
+    --card: #1A1D20;            /* Steel Slate */
+    --card-foreground: #F4F6F8;
+    --popover: #1A1D20;
+    --popover-foreground: #F4F6F8;
 
-    --secondary: #272521;
-    --secondary-foreground: #F5F2EB;
-    --muted: #272521;
-    --muted-foreground: #A5A096;
-    --accent: #272521;
-    --accent-foreground: #F5F2EB;
+    --secondary: #262A2E;
+    --secondary-foreground: #F4F6F8;
+    --muted: #262A2E;
+    --muted-foreground: #9BA5AF; /* 6.77:1 on --card */
+    --accent: #262A2E;
+    --accent-foreground: #F4F6F8;
 
-    /* Brightened for dark surfaces, same roles as light. All clear 4.5:1 on --card. */
-    --destructive: #E2795F;
-    --destructive-foreground: #1A1917;
-    --destructive-muted: rgb(226 121 95 / 0.12);
+    /* Brightened for dark surfaces, same roles as light. All clear 4.5:1 on --card.
 
-    --success: #6BAF83;
-    --success-foreground: #1A1917;
-    --success-muted: rgb(107 175 131 / 0.12);
+       Destructive is pushed to a frank orange-red here. On a dark canvas both primary
+       and destructive have to be light enough to read, which collapses the lightness
+       gap that separates them in light mode — so hue is the only axis left, and a
+       half-hearted shift would leave "Delete" and "Save" looking alike. It stays clear
+       of --warning (#D9A63F) because that is an amber-yellow, not an orange. */
+    --destructive: #FF7043; /* 6.01:1 on --card */
+    --destructive-foreground: #0D0F11;
+    --destructive-muted: rgb(255 112 67 / 0.14);
+
+    --success: #5FBF87;
+    --success-foreground: #0D0F11;
+    --success-muted: rgb(95 191 135 / 0.14);
 
     --warning: #D9A63F;
-    --warning-foreground: #1A1917;
-    --warning-muted: rgb(217 166 63 / 0.12);
+    --warning-foreground: #0D0F11;
+    --warning-muted: rgb(217 166 63 / 0.14);
 
     --info: #5AA0D8;
-    --info-foreground: #1A1917;
-    --info-muted: rgb(90 160 216 / 0.12);
+    --info-foreground: #0D0F11;
+    --info-muted: rgb(90 160 216 / 0.14);
 
-    --border: #4A463D;
-    --input: #4A463D;
+    --border: #343A40;
+    --input: #343A40;
     --ring: var(--primary);
 
     /* Elevation reads darker/more diffuse against dark surfaces to still register as "lifted". */
@@ -200,13 +215,21 @@
     --elevation-4: 0 16px 40px -8px rgb(0 0 0 / 0.48);
     --elevation-header: 0 1px 3px 0 rgb(0 0 0 / 0.24);
 
-    --sidebar-background: #171717; /* Neutral 900 */
-    --sidebar-foreground: #D4D4D4; /* Neutral 300 */
-    --sidebar-primary: var(--primary);
-    --sidebar-primary-foreground: #171717;
-    --sidebar-accent: #262626;     /* Neutral 800 */
-    --sidebar-accent-foreground: #F5F5F5;
-    --sidebar-border: #404040;     /* Neutral 700 */
-    --sidebar-ring: var(--primary);
+    /* The maroon rail is intentionally identical to light mode — see §8. */
+    --sidebar-background: #580816;
+    --sidebar-foreground: #DCE1E6;
+    --sidebar-primary: #F4F6F8;
+    --sidebar-primary-foreground: #580816;
+    --sidebar-accent: #6E1522;
+    --sidebar-accent-foreground: #F4F6F8;
+    --sidebar-border: #75202D;
+    --sidebar-ring: #F4F6F8;
+
+    /* chart-1 lifts with the primary; the rest brighten for the dark canvas. */
+    --chart-1: #F05252;
+    --chart-2: #5AA0D8;
+    --chart-3: #5FBF87;
+    --chart-4: #D9A63F;
+    --chart-5: #A98BC9;
   }
 }

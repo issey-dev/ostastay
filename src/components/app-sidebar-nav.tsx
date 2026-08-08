@@ -4,7 +4,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { Module } from "@/lib/scope"
 import { NAV_GROUPS } from "@/components/app-sidebar-nav.config"
-import { useProperty } from "@/components/providers/property-provider"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -37,14 +36,6 @@ export function AppSidebarNav({
   const pathname = usePathname()
   const allowed = new Set(allowedModules)
 
-  // The sidebar sits outside PropertyAccentScope (that wrapper only covers the content
-  // area), so the accent is read straight from the provider here rather than inherited.
-  // Undefined when the property hasn't chosen a banner color — in which case the active
-  // item keeps SidebarMenuButton's own neutral highlight. See globals.css
-  // `.sidebar-item-accent`.
-  const { currentProperty } = useProperty()
-  const accent = currentProperty?.bannerColor
-
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((i) => allowed.has(i.module)),
@@ -70,8 +61,6 @@ export function AppSidebarNav({
                     <SidebarMenuButton
                       isActive={isActive}
                       tooltip={item.title}
-                      className={isActive && accent ? "sidebar-item-accent" : undefined}
-                      style={isActive && accent ? ({ "--property-accent": accent } as React.CSSProperties) : undefined}
                       render={<Link href={href} />}
                     >
                       <item.icon className="h-4 w-4" />

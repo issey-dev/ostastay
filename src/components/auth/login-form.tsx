@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { KeyRound, Hotel, Eye, EyeOff } from "@/components/icons"
+import { KeyRound, Eye, EyeOff } from "@/components/icons"
+import { UppsolutIcon, UppsolutStayLockup } from "@/components/brand/uppsolut-logo"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 
@@ -124,15 +125,32 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
     }
   }
 
+  // bg-background, not bg-muted: --muted sits ABOVE --card on the dark ramp, so a muted
+  // page left the sign-in card darker than the page behind it — the card receded into a
+  // hole instead of lifting off the surface. --background is below --card in both modes,
+  // so the card lifts either way.
   return (
-    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Whose name leads here depends on the door you came through. On a tenant's own
+            login (/e/[slug]/login) the enterprise name is the headline and Uppsolut steps
+            back to a small mark — the tenant's staff are signing into *their* system. On
+            the generic /login there is no tenant yet, so the product mark leads. */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-none bg-primary text-primary-foreground mb-4 shadow-lg">
-            <Hotel size={32} />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground">{enterpriseName ?? "Uppsolut PMS"}</h1>
-          <p className="text-muted-foreground mt-2">Sign in to your property management system</p>
+          {enterpriseName ? (
+            <>
+              <UppsolutIcon className="mx-auto mb-4 h-16 w-16 shadow-elevation-2" title={null} />
+              <h1 className="text-3xl font-bold text-foreground">{enterpriseName}</h1>
+              <p className="text-muted-foreground mt-2">Sign in to your property management system</p>
+            </>
+          ) : (
+            <>
+              <h1>
+                <UppsolutStayLockup className="mx-auto h-24 w-auto text-foreground" />
+              </h1>
+              <p className="text-muted-foreground mt-4">Sign in to your property management system</p>
+            </>
+          )}
         </div>
 
         {mustChange ? (

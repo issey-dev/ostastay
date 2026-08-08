@@ -21,7 +21,7 @@ export function HeaderBrand({ enterpriseName }: { enterpriseName: string }) {
       )}
       <div className="min-w-0">
         <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight truncate">
-          {currentProperty?.name ?? "Uppsolut PMS"}
+          {currentProperty?.name ?? "Uppsolut Stay"}
         </h1>
         {enterpriseName && <p className="text-xs text-muted-foreground leading-tight truncate">{enterpriseName}</p>}
       </div>

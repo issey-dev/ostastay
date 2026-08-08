@@ -119,7 +119,7 @@ export function EnterpriseOnboardingActions({
   const copyHandover = async () => {
     if (!handover) return
     await navigator.clipboard.writeText(
-      `Uppsolut PMS sign-in\nURL: ${window.location.origin}/login\nEnterprise code: ${handover.enterpriseSlug}\nEmail: ${handover.email}\nPassword: ${handover.password}\n\nPlease change this password after your first sign-in.`
+      `Uppsolut Stay sign-in\nURL: ${window.location.origin}/login\nEnterprise code: ${handover.enterpriseSlug}\nEmail: ${handover.email}\nPassword: ${handover.password}\n\nPlease change this password after your first sign-in.`
     )
     toast.success("Sign-in details copied")
   }

@@ -1,0 +1,8 @@
+<svg viewBox="0 0 560 96" xmlns="http://www.w3.org/2000/svg">
+  <defs><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&amp;display=swap');</style></defs>
+  
+  <text x="0" y="58" font-family="Inter,sans-serif" font-size="66" textLength="560" lengthAdjust="spacing">
+    <tspan font-weight="900" fill="#F4F6F8">UPP</tspan><tspan font-weight="300" fill="#F4F6F8">SOLUT</tspan>
+  </text>
+  <text x="0" y="86" font-family="Inter,sans-serif" font-weight="300" font-size="14.6" textLength="560" lengthAdjust="spacing" fill="#F4F6F8" opacity="0.85">BUSINESS OPERATING ENGINE</text>
+</svg>

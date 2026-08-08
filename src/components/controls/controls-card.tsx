@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils"
 // content inside one or more of these instead of hand-rolling Card/CardHeader/CardTitle/
 // CardDescription/CardContent each time, so every section looks and behaves identically.
 // Header and body share one continuous surface (no shaded band / divider) — separation is
-// carried by the card's own elevation + spacing. The subtle per-property accent on the
-// card's left edge is applied globally by PropertyAccentScope (see the dashboard layout),
-// so every card across the app picks it up, not just Controls.
+// carried by the card's own elevation + spacing. (Card headers used to carry a thin
+// per-property accent edge; that was removed when the Uppsolut palette landed — see the
+// note in globals.css.)
 //
 // `action` is the card's primary control (usually an "Add …" button). It renders in the
 // header, top-right, aligned with the title — the "Table + Button" card in the

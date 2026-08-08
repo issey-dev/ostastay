@@ -5,7 +5,9 @@ import { AppSidebarNav } from "@/components/app-sidebar-nav"
 // NAV_MODULES comes from the neutral config module, not from the "use client" nav —
 // a server component reading a value out of a client module gets a reference proxy.
 import { NAV_MODULES } from "@/components/app-sidebar-nav.config"
-import { Sidebar, SidebarContent, SidebarMenu } from "@/components/ui/sidebar"
+import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu } from "@/components/ui/sidebar"
+import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
+import Link from "next/link"
 
 export async function AppSidebar() {
   const ctx = await requireSession().catch(() => null);
@@ -61,6 +63,20 @@ export async function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
+      {/* Product mark, on the maroon rail the brand guide assigns to sidebar nav. This is
+          the one place Uppsolut's own identity appears in the tenant shell — the header
+          opposite it carries the PROPERTY's logo and name. Collapsing the rail drops the
+          wordmark and leaves the U, which is exactly the guide's small-size rule (§02:
+          "below icon minimum, use the standalone U"). */}
+      <SidebarHeader className="h-16 justify-center px-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:items-center">
+        <Link href={enterprisePrefix ? `${enterprisePrefix}/dashboard` : "/"} className="flex items-center gap-2.5 outline-hidden focus-visible:ring-2 ring-sidebar-ring">
+          <UppsolutIcon className="h-8 w-8 shrink-0" title="Uppsolut Stay" tile={false} />
+          <span className="flex flex-col leading-none text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            <UppsolutWordmark className="h-[12px] w-auto" title={null} />
+            <span className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.22em] opacity-65">Stay</span>
+          </span>
+        </Link>
+      </SidebarHeader>
       <SidebarContent>
         <AppSidebarNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} />
       </SidebarContent>

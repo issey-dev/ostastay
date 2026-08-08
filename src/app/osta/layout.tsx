@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -41,9 +42,12 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
         <header className="print:hidden h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>
-            <h1 className="flex items-center gap-2 font-bold text-lg text-foreground tracking-tight leading-tight">
-            Uppsolut PMS
-            <InfoHint label="Uppsolut PMS">Osta Platform Admin</InfoHint>
+            {/* The plain wordmark, not the Stay lockup: this console administers every
+                module and every tenant, so it is not branded to one sub-brand. */}
+            <h1 className="flex items-center gap-2.5 text-foreground leading-none">
+            <UppsolutWordmark className="h-[15px] w-auto" />
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Platform Admin</span>
+            <InfoHint label="Uppsolut Platform Admin">The Osta platform console — manages customer enterprises, licensing, and channel-manager connections across every property on Uppsolut.</InfoHint>
           </h1>
           </div>
           <div className="ml-auto">

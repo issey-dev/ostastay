@@ -1,0 +1,8 @@
+<svg viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg">
+  <defs><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&amp;display=swap');</style></defs>
+  
+  <text x="0" y="34" font-family="Inter,sans-serif" font-size="26" textLength="216" lengthAdjust="spacing">
+    <tspan font-weight="900" fill="#0D0F11">UPP</tspan><tspan font-weight="300" fill="#0D0F11">SOLUT</tspan>
+  </text>
+  <text x="-1" y="120" font-family="Inter,sans-serif" font-weight="900" font-size="58" letter-spacing="1" fill="#8B0000">STOCK</text>
+</svg>

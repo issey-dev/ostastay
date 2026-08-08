@@ -6,7 +6,6 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { HeaderBrand, HeaderBusinessDate } from "@/components/ui/dashboard-header"
 import { PropertyProvider } from "@/components/providers/property-provider"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
-import { PropertyAccentScope } from "@/components/providers/property-accent-scope"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
 import { SupportSessionNotice } from "@/components/ui/support-session-notice"
 import { SkipToContent } from "@/components/ui/skip-to-content"
@@ -30,10 +29,11 @@ export default async function DashboardLayout({
   children: React.ReactNode
   params: Promise<{ slug: string }>
 }) {
-  // App chrome (buttons, links, focus rings) stays a fixed monochrome neutral for every
-  // property — see src/app/theme.css. The only per-property color is the thin banner
+  // App chrome (buttons, links, focus rings) is fixed Uppsolut Crimson for every property
+  // — see src/app/theme.css. The only per-property color in the chrome is the thin banner
   // line (PropertyBannerBar), sourced client-side from PropertyProvider so it updates
   // live when the property switcher changes properties, without a full page reload.
+  // A property's colour also still brands its printed stationery and eRegistration page.
   const { slug } = await params
   const ctx = await requireSession().catch(() => null)
   if (!ctx) redirect("/login")
@@ -130,11 +130,9 @@ export default async function DashboardLayout({
 
           {/* Floating Main Content Area */}
           <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
-            <PropertyAccentScope>
-              <div className="max-w-7xl mx-auto w-full print:max-w-none">
-                <ConfirmProvider>{children}</ConfirmProvider>
-              </div>
-            </PropertyAccentScope>
+            <div className="max-w-7xl mx-auto w-full print:max-w-none">
+              <ConfirmProvider>{children}</ConfirmProvider>
+            </div>
           </div>
         </main>
       </SidebarProvider>
