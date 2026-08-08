@@ -15,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useConfirm } from "@/components/providers/confirm-provider"
@@ -89,7 +91,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [checkingOut, setCheckingOut] = useState(false)
   const [reversing, setReversing] = useState(false)
   const [advancing, setAdvancing] = useState(false)
-  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
+  const [advanceBillDialogOpen, setAdvanceBillDialogOpen] = useState(false)
+  const [advanceBillNightsInput, setAdvanceBillNightsInput] = useState("")
+  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean; printHref?: string } | null>(null)
 
   const fetchReservation = async () => {
     try {
@@ -212,17 +216,13 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   }
 
   const handleAdvanceBill = async () => {
-    const input = window.prompt(
-      "Advance-bill how many upcoming nights? Leave blank to bill ALL remaining nights.\n\nCharges (rate, allocations, green tax, transport) post today so the guest can settle before checkout.",
-      ""
-    )
-    if (input === null) return
-    const trimmed = input.trim()
+    const trimmed = advanceBillNightsInput.trim()
     const nights = trimmed === "" ? undefined : parseInt(trimmed, 10)
     if (nights !== undefined && (!Number.isFinite(nights) || nights <= 0)) {
       setNotification({ title: "Invalid", message: "Enter a positive number of nights, or leave blank for all remaining.", isError: true })
       return
     }
+    setAdvanceBillDialogOpen(false)
     setAdvancing(true)
     try {
       const res = await fetch(`/api/reservations/${id}/advance-bill`, {
@@ -232,7 +232,15 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       })
       const data = await res.json()
       if (res.ok) {
-        setNotification({ title: "Advance Bill Posted", message: `${data.nights} night(s) posted — $${data.amountPosted.toFixed(2)} now on the folio (billed through ${data.advanceBilledThrough}).` })
+        const primaryFolioId = reservation.folios?.[0]?.id
+        setNotification({
+          title: "Advance Bill Posted",
+          message: `${data.nights} night(s) posted — $${data.amountPosted.toFixed(2)} now on the folio (billed through ${data.advanceBilledThrough}).`,
+          // Advance-billed charges are just posted folio lines — the Interim Bill (already
+          // numbered-exempt, email/download enabled) shows exactly what was just posted, so
+          // it doubles as the advance bill's own document rather than a new invoice variant.
+          printHref: primaryFolioId ? `/e/${slug}/dashboard/folios/${primaryFolioId}/print?type=interim` : undefined,
+        })
         fetchReservation()
       } else {
         setNotification({ title: "Advance Bill Failed", message: data.error || "Unknown error", isError: true })
@@ -476,7 +484,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>
                   <ArrowLeftRight className="w-4 h-4 mr-2" /> Move Room
                 </Button>
-                <Button variant="outline" onClick={handleAdvanceBill} disabled={advancing}>
+                <Button variant="outline" onClick={() => setAdvanceBillDialogOpen(true)} disabled={advancing}>
                   <Wallet className="w-4 h-4 mr-2" /> {advancing ? "Posting..." : "Advance Bill"}
                 </Button>
                 <Button
@@ -1121,7 +1129,40 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             <DialogDescription>{notification?.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            {notification?.printHref && (
+              <Button variant="outline" onClick={() => window.open(notification.printHref, "_blank")}>
+                Print / Email
+              </Button>
+            )}
             <Button onClick={() => setNotification(null)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={advanceBillDialogOpen} onOpenChange={(open) => { setAdvanceBillDialogOpen(open); if (!open) setAdvanceBillNightsInput("") }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Advance Bill</DialogTitle>
+            <DialogDescription>
+              Charges (rate, allocations, green tax, transport) post today so the guest can settle before checkout.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="advance-bill-nights">Nights to bill</Label>
+            <Input
+              id="advance-bill-nights"
+              type="number"
+              min={1}
+              placeholder="Leave blank to bill all remaining nights"
+              value={advanceBillNightsInput}
+              onChange={(e) => setAdvanceBillNightsInput(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdvanceBillDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdvanceBill} disabled={advancing}>
+              {advancing ? "Posting..." : "Post Advance Bill"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
