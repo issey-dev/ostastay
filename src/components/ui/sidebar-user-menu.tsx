@@ -7,7 +7,11 @@ import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-function initials(name: string) {
+// Shared with OstaSidebar/HubSidebar's own footer identity row — those shells can't
+// reuse this whole component (it calls useProperty(), which by design doesn't exist
+// outside the tenant dashboard), but the avatar-initials treatment is pure and cheap
+// to share so the identity row looks the same everywhere.
+export function initials(name: string) {
   return name
     .split(" ")
     .filter(Boolean)
