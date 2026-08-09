@@ -2464,14 +2464,18 @@ Consequences, deliberate:
   docker-compose.dev.yml up -d` provides it and creates two databases: `ostastay` for
   working data and `ostastay_test`, which `vitest.global-setup.ts` drops and rebuilds on
   every run so tests can never destroy a developer's data.
-- **`getStorageStats()` in src/lib/db-health.ts returns nulls.** It reads SQLite PRAGMAs
-  and the `dbstat` virtual table; it was already written to degrade to null on a
-  non-SQLite engine, so nothing breaks, but the Osta DB Health storage panel is blank
-  until Postgres equivalents (pg_database_size / pg_total_relation_size) are added.
-  Tracked in TODO.md.
-- `better-sqlite3`, `@prisma/adapter-better-sqlite3`, and `@libsql/client` are now dead
-  dependencies (nothing sets driverAdapters). Left in package.json for now; removing
-  them would drop the C toolchain from the Docker build and cut build time noticeably.
+- ~~**`getStorageStats()` in src/lib/db-health.ts returns nulls.**~~ — **DONE**
+  (undated follow-up session): `getPostgresStorage()` was added alongside the SQLite
+  path — `pg_database_size()`/`pg_total_relation_size()`, dual-engine dispatch on
+  `DATABASE_URL`. The Osta DB Health storage panel shows real numbers on Postgres now.
+- ~~`better-sqlite3`, `@prisma/adapter-better-sqlite3`, and `@libsql/client` are now
+  dead dependencies~~ — **removed 2026-08-09**, along with the also-unused
+  `@prisma/adapter-libsql` (a 4th orphan this note hadn't caught — zero source
+  references, zero doc mentions, presumably left over from an earlier libsql/Turso
+  experiment). Confirmed zero usage across `src/`, `prisma/`, and test setup before
+  removing. Also dropped the `python3 make g++` C-toolchain layer from the Dockerfile's
+  `deps` stage — it existed solely for `better-sqlite3`'s native binding, and nothing
+  else in `package.json` needs it.
 
 Also 2026-08-02: DB-backed admin segments (`/osta/*`, `/e/[slug]/dashboard`,
 `/e/[slug]/hub`, `/e/[slug]/login`, `/dashboard`) now declare
