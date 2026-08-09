@@ -372,10 +372,25 @@ Follow-ups deliberately left open:
   any code it reports as unmappable needs a Subgroup assigned by hand in Controls →
   Cashiering, then re-run.
 
-## Hub level + Channel Manager (2026-07-27) — shell DONE, channel manager NOT STARTED
+## Hub level + Channel Manager (2026-07-27 → 2026-07-28) — DONE (both pieces)
 
-Plan: [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md). Two separable pieces; only the
-first has shipped, on branch `feature/hub-shell`.
+**This header's own title used to say "channel manager NOT STARTED" — stale as of
+2026-08-09. Read the full entry below before assuming there's a channel manager left
+to build: shell, connections, exchange log, sharing/mapping, the full sync engine
+(outbound push + inbound webhook/poll/convert), provider abstraction, wire-format
+verification against Beds24's real spec, and the background job runner are ALL done.**
+Rate-limit response headers ARE read AND respected — also stale as of 2026-08-09:
+`extractRateLimit()` in `src/lib/channels/beds24.ts` persists the credit pool to
+`ChannelConnection.rateLimit*`, and `RateLimitPanel`
+(`src/components/hub/connection-shared.tsx`) surfaces it with an operator-settable
+self-throttle pause threshold (push/poll skip the call once remaining credits reach it),
+shown in both the Osta admin console (`channel-connections-admin.tsx`, aggregated as a
+shared account-wide pool) and the tenant Hub's read-only status view. Only one thing
+remains: the cron schedule itself is environment configuration on the VPS, not
+application code (the exact crontab lines are already written out below — this just
+needs someone to actually add them).
+
+Plan: [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md).
 
 - **DONE — Hub shell.** A new enterprise-level shell at `/e/{slug}/hub` with **zero PMS
   functionality**. `src/app/e/[slug]/hub/layout.tsx` deliberately omits `PropertyProvider`
@@ -1653,12 +1668,21 @@ App-owner brief for the Reservations screen, phone-first.
   (Room · Allocation · Other · Taxes + grand total) built in the daily-breakdown endpoint;
   added `Info` to the icon adapter.
 
-## Reservation / Billing — requested, NOT yet built (owner 2026-07-24)
+## Reservation / Billing (owner 2026-07-24) — billing module DONE, two small items remain
+
+**This header used to say "requested, NOT yet built" — stale as of 2026-08-09. All 4
+numbered billing increments below shipped 2026-07-24 (reverse check-in/out, Interim +
+Advance Bill, checkout settlement enforcement, linked-profile folio routing/transfer).
+The "(superseded)" bullet further down is exactly that — dead, superseded by the
+numbered list, not a real remaining scope.** Two genuinely open items:
 
 - **Traces "alert on open"** — a checkbox on a trace; if set, opening the reservation pops
   the trace text every time until the trace is marked complete (for high-attention tasks).
   Needs: `ReservationTrace.alertOnOpen Boolean` (migration), trace-panel checkbox, and a
   popup on the reservation page for unresolved alert traces.
+- **Advance Bill follow-up** (flagged inline below where Advance Bill itself is marked
+  DONE): replace the `window.prompt` nights-picker with a proper modal, and give it a
+  real print document instead of no dedicated stationery.
 - **Billing module — building as increments (owner approved "all of them", 2026-07-24).**
   Rules captured in DECISIONS.md "Billing module — owner rules". Sequence:
   1. **Reverse check-in / reverse check-out** — ✅ DONE (2026-07-24).
