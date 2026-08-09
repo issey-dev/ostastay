@@ -10,6 +10,7 @@ import {
   FileStack,
   History,
   Landmark,
+  LayoutDashboard,
   LayoutGrid,
   Settings,
   Sparkles,
@@ -32,7 +33,12 @@ export type NavItem = {
   title: string
   url: string
   icon: React.ComponentType<{ className?: string }>
-  module: Module
+  /** The module whose `canView` reveals this item. Omit for an item that no single
+   *  module owns — today only the Operations Dashboard, which is a composite of many
+   *  modules and gates each of its own tiles individually (see
+   *  src/lib/dashboard/overview.ts). An ungated item must never show anything a
+   *  permission would otherwise hide. */
+  module?: Module
 }
 export type NavGroup = { label: string; items: NavItem[] }
 
@@ -49,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Operations",
     items: [
+      { title: "Dashboard", url: "/dashboard/overview", icon: LayoutDashboard },
       { title: "Front Desk", url: "/dashboard/front-office", icon: ConciergeBell, module: "FRONT_DESK" },
       { title: "Reservations", url: "/dashboard/reservations", icon: CalendarDays, module: "RESERVATIONS" },
       { title: "Tape Chart", url: "/dashboard/reservations/tape-chart", icon: LayoutGrid, module: "TAPE_CHART" },
@@ -94,4 +101,8 @@ export const NAV_GROUPS: NavGroup[] = [
 
 // Every module referenced by the nav, de-duplicated (Stationaries and Controls share
 // CONTROLS). app-sidebar.tsx filters this server-side and passes back the allowed set.
-export const NAV_MODULES: Module[] = [...new Set(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.module)))]
+// Items with no `module` are absent here by construction — they are always visible, so
+// there is nothing for the server to decide about them.
+export const NAV_MODULES: Module[] = [
+  ...new Set(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.module).filter((m): m is Module => !!m))),
+]

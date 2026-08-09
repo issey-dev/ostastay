@@ -4,7 +4,10 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    // .tsx too, since 2026-08-09: the dashboard chart primitives are checked by rendering
+    // them (react-dom/server) rather than by asserting on a data structure — the failure
+    // they guard against is a NaN reaching an SVG path attribute.
+    include: ["tests/**/*.test.{ts,tsx}"],
     globalSetup: "./vitest.global-setup.ts",
     // Raised from the 5s default when the database moved to Postgres (2026-08-02). The
     // old default was tuned for in-process SQLite, where a query costs a function call;

@@ -38,7 +38,10 @@ export function AppSidebarNav({
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => allowed.has(i.module)),
+    // An item with no `module` is owned by no single permission and is always shown —
+    // today only the Operations Dashboard, which gates its own tiles. Everything else
+    // must survive the server-computed allow-list.
+    items: g.items.filter((i) => !i.module || allowed.has(i.module)),
   })).filter((g) => g.items.length > 0)
 
   const current = activeHref(
