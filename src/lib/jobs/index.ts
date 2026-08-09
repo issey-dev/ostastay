@@ -8,6 +8,7 @@ import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
 import { redactErrorMessage } from "@/lib/channels/redact";
 import { sendPlatformMail, getPlatformAlertRecipients, isPlatformSmtpConfigured } from "@/lib/mailer";
 import { buildChannelAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
+import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
@@ -244,12 +245,73 @@ export const channelBookingConvertJob: Job = {
   },
 };
 
+/**
+ * Sign out sessions that have gone idle past their property's timeout.
+ *
+ * Idle enforcement (src/lib/scope.ts) is otherwise entirely reactive: a session is only
+ * marked IDLE when IT makes another request — the idle-check the browser fires on its own
+ * inactivity clock, or just any ordinary navigation. A session nobody ever asks about again
+ * (the tab was closed, the laptop slept, the network dropped) never gets that request, so it
+ * never gets revoked — it sits in the Hub's Active Sessions list looking "active" (with a
+ * correctly large but easy-to-miss idle time) until its full session length runs out. This
+ * sweep is the safety net for exactly that case; a live user is still normally caught by the
+ * reactive path well before this runs.
+ *
+ * An enterprise-scoped session (an admin, a Hub-only user) doesn't record which property it
+ * was last working in — that only lives in a request cookie (see resolveSessionPropertyId in
+ * scope.ts), which a background job has no access to. For those sessions this applies the
+ * same fallback the live check uses when there is no cookie: the enterprise's first active
+ * property, ordered by creation. Exact for a single-property enterprise; an approximation for
+ * a multi-property one with different idle windows per property, same as a fresh cookieless
+ * request would get.
+ */
+export const sessionIdleSweepJob: Job = {
+  name: "session-idle-sweep",
+  description: "Sign out sessions idle past their property's timeout",
+  run: async (enterpriseId) => {
+    const properties = await prisma.property.findMany({
+      where: { enterpriseId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, status: true, sessionIdleMinutes: true },
+    });
+    const propertyById = new Map(properties.map((p) => [p.id, p]));
+    // First ACTIVE property in creation order — matches resolveSessionPropertyId's own
+    // cookie-absent fallback exactly.
+    const fallbackProperty = properties.find((p) => p.status === "ACTIVE");
+
+    const sessions = await prisma.session.findMany({
+      where: { revokedAt: null, expiresAt: { gt: new Date() }, user: { enterpriseId } },
+      select: { id: true, jti: true, propertyId: true, lastSeenAt: true },
+    });
+
+    let revoked = 0;
+    for (const s of sessions) {
+      const property = (s.propertyId ? propertyById.get(s.propertyId) : undefined) ?? fallbackProperty;
+      if (property && isIdleExpired(s.lastSeenAt, property.sessionIdleMinutes)) {
+        await revokeSession(s.jti, "IDLE");
+        revoked += 1;
+      }
+    }
+
+    return {
+      itemsProcessed: revoked,
+      summary:
+        sessions.length === 0
+          ? "No live sessions"
+          : revoked === 0
+            ? `${sessions.length} live session(s), none idle`
+            : `Signed out ${revoked} of ${sessions.length} live session(s)`,
+    };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
   channelAriPushJob,
   channelBookingPollJob,
   channelBookingConvertJob,
+  sessionIdleSweepJob,
 ];
 
 export function findJob(name: string): Job | undefined {
