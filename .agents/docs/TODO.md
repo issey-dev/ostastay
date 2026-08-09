@@ -359,10 +359,23 @@ Follow-ups deliberately left open:
   the plan's "keep the column one release longer than the code change". Before the drop
   migration, grep `\.category` on `ChargeCode` — should only hit
   `ensure-charge-tree.ts` (backfill mapping) and `report-bucket.ts` (fallback).
-- **Deposit postings** (the Deposit module) were not in scope this pass — `DEP`/`DEPAPP`
-  codes exist and are wired to the fee rules, but the deposit collection flow itself still
-  records a Payment rather than posting a folio charge. Unchanged behaviour; flagged only
-  so the charge codes aren't mistaken for being in use.
+- **Deposit postings recording a Payment rather than a folio charge is NOT a gap** —
+  corrected 2026-08-09 after a follow-up session initially mis-read this note as an open
+  bug. It is intentional, owner-approved design (see `charge-tree.ts` around the `9200`/
+  `9210` codes and `ensureFeeRules()` in `ensure-charge-tree.ts`): a deposit is an advance
+  PAYMENT collected before arrival onto the reservation's own folio, which check-in then
+  reuses as the billing folio, so nothing needs transferring. Routing it through
+  `postCharge` instead would incorrectly tax received money as a sale. The `9200`/`9210`
+  codes exist only for a manual folio adjustment against a deposit, never for the
+  collection flow itself, and the DEPOSIT fee rule deliberately carries no charge code at
+  all. The deposit route already stamps its Payment with a charge code via
+  `resolvePaymentChargeCodeId`, same as every other payment-writing route.
+  One real (but minor, purely cosmetic) finding from that same follow-up: `postPayment()`
+  in `src/lib/posting/post-payment.ts` was built to centralize this exact pattern, but no
+  route actually calls it — `deposit`, `folios/[id]/payments`, `payments`,
+  `spa/appointments`, and `excursions/bookings` each duplicate the same
+  `resolvePaymentChargeCodeId` + `payment.create` inline instead. Zero behavior difference
+  either way; left as-is per owner's call, not worth the diff.
 - **Fee amounts are now taxed — wants owner sign-off.** Cancellation and no-show fees
   previously posted gross and untaxed; they now go through `postCharge` like everything
   else, so the rule's amount follows the property's "Prices Include Taxes" convention and
