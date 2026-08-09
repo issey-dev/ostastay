@@ -37,7 +37,7 @@ export default async function DashboardLayout({
   // A property's colour also still brands its printed stationery and eRegistration page.
   const { slug } = await params
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   // Osta users belong in their own console, not the tenant shell — except while
   // legitimately acting inside a tenant's enterprise via an approved SupportAccessGrant.
@@ -52,7 +52,7 @@ export default async function DashboardLayout({
   // page must never require a session, so this check must not live at the [slug] layout
   // level (it used to, and broke logged-out visits to the enterprise login page).
   const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { name: true, slug: true } })
-  if (!enterprise) redirect("/login")
+  if (!enterprise) redirect("/api/auth/session-expired")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/dashboard`)
 
   // Property onboarding gate. Every dashboard page is built around a current property —

@@ -21,11 +21,11 @@ export const dynamic = "force-dynamic"
 // their own tenant dashboard.
 export default async function OstaLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   if (!ctx.isInternal) {
     const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } })
-    redirect(enterprise ? `/e/${enterprise.slug}/dashboard` : "/login")
+    redirect(enterprise ? `/e/${enterprise.slug}/dashboard` : "/api/auth/session-expired")
   }
 
   return (
