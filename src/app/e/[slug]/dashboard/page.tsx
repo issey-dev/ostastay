@@ -17,9 +17,10 @@ export default async function DashboardRoot({ params }: { params: Promise<{ slug
     redirect(`/e/${slug}/hub`);
   }
 
-  // Redirect users to their specific primary workspace based on permissions — a role
-  // with no Front Desk access (e.g. Housekeeping) lands on their own module instead of
-  // the general front-office view.
-  const canViewFrontDesk = ctx.permissions.get("FRONT_DESK")?.canView ?? false;
-  redirect(canViewFrontDesk ? `/e/${slug}/dashboard/front-office` : `/e/${slug}/dashboard/inventory`);
+  // Everyone else lands on the Operations Dashboard. It is safe as a universal landing
+  // page precisely because it has no single owning module: every tile is gated on its
+  // own module's canView, so a Housekeeping-only user sees the housekeeping tiles and
+  // nothing else rather than a page they aren't allowed to read. (It used to route by
+  // FRONT_DESK to either the front office or the orphaned /inventory route.)
+  redirect(`/e/${slug}/dashboard/overview`);
 }

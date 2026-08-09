@@ -2,6 +2,61 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Operations Dashboard (2026-08-09) — DONE
+
+A real landing page for the product: `/e/[slug]/dashboard/overview`, reached from a new
+ungated **Dashboard** nav item and from `/e/[slug]/dashboard` itself (which used to
+bounce to `/front-office`, or to the orphaned `/inventory` route for anyone without
+FRONT_DESK — that fork is gone).
+
+- **Per-SECTION permission gating, enforced on the data.** `/api/dashboard/overview`
+  deliberately has **no** `requirePermission()` of its own — a dashboard spanning a dozen
+  modules can't have one owning module. Instead `buildDashboardOverview()`
+  (`src/lib/dashboard/overview.ts`) wraps every section in its own
+  `hasPermission(ctx, MODULE, "view")`, so an unauthorized section's **queries never
+  run** and its key is **absent from the payload**. The client renders a tile if and only
+  if its key is present. A user without REVENUE cannot read ADR out of devtools, because
+  ADR was never sent. Spa/Excursions additionally require `EnterpriseAddonAccess`, the
+  same rule the sidebar applies.
+- **Sections**: occupancy · trend · revenue · cashiering · debtors · housekeeping ·
+  maintenance · reservations (booking pace) · groups · profiles (guest mix) · nightAudit ·
+  spa · excursions · pos · integrations · activity · worklists (arrivals/departures/
+  traces). Plus an ops ribbon (Night Audit posture, open drawers, channel health), each
+  chip gated by its own section.
+- **Charts are hand-rolled SVG** (`src/components/dashboard/charts.tsx`) — no new
+  dependency, and the five `--chart-N` brand tokens work in both themes with no runtime
+  plumbing. Deliberate constraints baked in: no dual-axis (the occupancy/ADR panel is two
+  stacked plots on ONE shared x-axis), bars capped at 24px with a 4px data-end, 2px
+  surface gaps instead of strokes, solid hairline grids, a legend for ≥2 series, and a
+  `<ChartTableView>` twin on every chart so no value is hover-only.
+- **Categorical hue order is 2 → 4 → 5 → 3 → 1, not 1..5.** In token order Fern
+  (`--chart-3`) sits next to Amber (`--chart-4`), a pair only ΔE 13 apart for a
+  full-colour reader and ΔE 7 under protanopia. The reordering separates them and takes
+  every discriminability check to PASS in light and dark. The tokens themselves were left
+  alone — they're DESIGN_PLAN §2.1's to change.
+- **`NavItem.module` is now optional.** An item with no module is always visible; today
+  only the Dashboard uses that, because it gates its own tiles. `NAV_MODULES` filters
+  them out by construction, so the server allow-list is unchanged.
+- `tests/business-rules/dashboard-charts.test.tsx` renders every chart primitive through
+  `react-dom/server` and asserts no `NaN`/`Infinity` reaches an SVG attribute, across the
+  degenerate inputs a real property produces (no postings, all-null forecast tail, empty,
+  60-day range). `vitest.config.ts`'s `include` widened to `*.test.{ts,tsx}` for it. It
+  needs no database, but `globalSetup` still requires one to run — worth revisiting if
+  more pure-render tests appear.
+- Covered by `tests/business-rules/dashboard-overview.test.ts` — Admin sees everything
+  with the metrics checked (occupancy %, ADR, RevPAR, room-status mix), Housekeeping sees
+  exactly two sections and the payload contains no `"adr"`/`"occupancyPct"` at all, a
+  revenue-only role gets money but null room-nights, Front Desk gets rooms but no money,
+  the add-on gate flips only for the module actually purchased, and the trend window
+  clamps to [7, 60] + a 7-night on-the-books tail that never claims posted revenue.
+
+**Found in passing, NOT fixed (out of scope):** `/api/analytics` (the Manager's Flash
+Report behind Revenue) filters folio lines through `folio: { reservation: { propertyId } }`,
+so every **walk-in / Fast Post folio is missing from its totals** — `Folio.propertyId`
+exists precisely because a walk-in has no reservation. The new dashboard endpoint filters
+on `folio: { propertyId }` and is therefore correct, which means the two screens will
+disagree on any property that takes walk-in outlet sales. Worth reconciling.
+
 ## Responsive design pass + Stationery overhaul (2026-08-08/09) — DONE
 
 App-wide mobile/tablet/desktop pass (PR #23), plus a full rework of how every printable
