@@ -5,7 +5,7 @@ export default async function DashboardRoot({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const ctx = await requireSession().catch(() => null);
   if (!ctx) {
-    redirect("/login");
+    redirect("/api/auth/session-expired");
   }
 
   // A Hub-only administrator (enterprise-scoped, holding only Hub modules — see

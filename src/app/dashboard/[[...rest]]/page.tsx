@@ -17,10 +17,10 @@ export default async function LegacyDashboardRedirect({
 }) {
   const { rest } = await params
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId } })
-  if (!enterprise) redirect("/login")
+  if (!enterprise) redirect("/api/auth/session-expired")
 
   const subPath = rest && rest.length > 0 ? `/${rest.join("/")}` : ""
   redirect(`/e/${enterprise.slug}/dashboard${subPath}`)

@@ -5,7 +5,7 @@ import { ControlsDashboard } from "@/components/controls/controls-dashboard"
 export default async function ControlsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   const canViewControls = ctx.permissions.get("CONTROLS")?.canView ?? false
   if (!canViewControls) redirect(`/e/${slug}/dashboard`)

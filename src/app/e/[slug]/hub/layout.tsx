@@ -38,7 +38,7 @@ export default async function HubLayout({
 }) {
   const { slug } = await params
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   // Osta users belong in their own console, not a tenant shell — except while
   // legitimately acting inside a tenant's enterprise via an approved SupportAccessGrant.
@@ -53,7 +53,7 @@ export default async function HubLayout({
     where: { id: ctx.enterpriseId },
     select: { name: true, slug: true },
   })
-  if (!enterprise) redirect("/login")
+  if (!enterprise) redirect("/api/auth/session-expired")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/hub`)
 
   // Page-level gate. Hub API routes must call requireHubAccess(ctx) themselves — this
