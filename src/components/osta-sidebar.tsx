@@ -3,9 +3,11 @@ import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
 import { APP_VERSION } from "@/lib/version"
+import { initials } from "@/components/ui/sidebar-user-menu"
 import {
   Sidebar,
   SidebarContent,
+  SidebarHeader,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -13,6 +15,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
+import Link from "next/link"
 
 // A small, static nav for the Osta platform-admin console — deliberately NOT
 // module/permission-filtered like AppSidebar (src/components/app-sidebar.tsx), since
@@ -42,6 +46,18 @@ export async function OstaSidebar() {
 
   return (
     <Sidebar collapsible="icon">
+      {/* Same product mark as the tenant AppSidebar's rail, so the platform console
+          doesn't read as a different, unbranded app. "Osta" replaces "Stay" as the
+          module tag since this is the platform-admin console, not the PMS product. */}
+      <SidebarHeader className="h-16 justify-center px-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:items-center">
+        <Link href="/osta" className="flex items-center gap-2.5 outline-hidden focus-visible:ring-2 ring-sidebar-ring">
+          <UppsolutIcon className="h-8 w-8 shrink-0" title="Uppsolut Osta" tile={false} />
+          <span className="flex flex-col leading-none text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            <UppsolutWordmark className="h-[12px] w-auto" title={null} />
+            <span className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.22em] opacity-65">Osta</span>
+          </span>
+        </Link>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Osta</SidebarGroupLabel>
@@ -62,10 +78,13 @@ export async function OstaSidebar() {
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton>
-              <div className="flex flex-col items-start px-2 py-1">
-                <span className="text-sm font-semibold truncate w-full">{name}</span>
-                <span className="text-xs text-sidebar-foreground/70 truncate w-full">{roleName}</span>
+            <SidebarMenuButton className="h-auto py-2" tooltip={name}>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+                {initials(name) || "U"}
+              </span>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-sm font-semibold truncate w-full leading-tight">{name}</span>
+                <span className="text-xs text-sidebar-foreground/70 truncate w-full leading-tight">{roleName}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
