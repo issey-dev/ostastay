@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
 import { APP_VERSION } from "@/lib/version"
-import { initials } from "@/components/ui/sidebar-user-menu"
+import { initials } from "@/lib/initials"
 import {
   Sidebar,
   SidebarContent,
