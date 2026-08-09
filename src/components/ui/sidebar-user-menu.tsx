@@ -10,15 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 // Shared with OstaSidebar/HubSidebar's own footer identity row — those shells can't
 // reuse this whole component (it calls useProperty(), which by design doesn't exist
 // outside the tenant dashboard), but the avatar-initials treatment is pure and cheap
-// to share so the identity row looks the same everywhere.
-export function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("")
-}
+// to share so the identity row looks the same everywhere. Lives in a plain (no
+// "use client") module: OstaSidebar/HubSidebar are Server Components, and calling a
+// plain function imported from THIS "use client" file crashes at render — Next.js
+// replaces client-module exports with a reference proxy on the server module graph
+// that only supports being rendered as a Component, not invoked directly.
+import { initials } from "@/lib/initials"
 
 // The consolidated User & Property menu in the sidebar footer. The footer shows a
 // single compact identity button; clicking it opens a modal that gathers profile
