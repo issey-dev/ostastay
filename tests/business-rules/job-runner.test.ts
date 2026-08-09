@@ -5,12 +5,19 @@ process.env.SECRETS_ENCRYPTION_KEY = "test-job-runner-key";
 const { prisma } = await import("@/lib/db");
 const { runJobForEnterprise, runJobForAllEnterprises, reclaimStaleRuns, STALE_RUN_MINUTES, JOB_STATUS } =
   await import("@/lib/jobs/runner");
-const { channelKeepAliveJob, channelLogPruneJob, JOBS, findJob, SYNC_LOG_RETENTION_DAYS } = await import(
-  "@/lib/jobs"
-);
+const {
+  channelKeepAliveJob,
+  channelLogPruneJob,
+  sessionIdleSweepJob,
+  JOBS,
+  findJob,
+  SYNC_LOG_RETENTION_DAYS,
+} = await import("@/lib/jobs");
 const { verifyCronSecret } = await import("@/lib/jobs/auth");
 const { createConnection } = await import("@/lib/channels/connection");
+const { createSessionRecord } = await import("@/lib/session-store");
 const jobsRoute = await import("@/app/api/jobs/run/route");
+const bcrypt = await import("bcryptjs");
 
 function stubBeds24(response: unknown, ok = true, status = 200) {
   vi.stubGlobal(
@@ -299,6 +306,167 @@ describe("Background job runner", () => {
     // These are the two operational gaps this runner exists to close.
     expect(findJob("channel-keepalive")).toBeTruthy();
     expect(findJob("channel-log-prune")).toBeTruthy();
+    expect(findJob("session-idle-sweep")).toBeTruthy();
     expect(JOBS.every((j) => j.name && j.description && typeof j.run === "function")).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // session-idle-sweep — the safety net for a session nobody's browser ever asks
+  // about again (closed tab, sleeping laptop, dead network), which the reactive
+  // idle check in scope.ts can never catch on its own.
+  // ---------------------------------------------------------------------------
+
+  describe("session-idle-sweep", () => {
+    async function makeProperty(sessionIdleMinutes: number, opts?: { status?: "ACTIVE" | "PENDING" }) {
+      return prisma.property.create({
+        data: {
+          enterpriseId,
+          name: `Sweep Property ${Date.now()}-${Math.random()}`,
+          code: `SP-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+          legalName: "Sweep Property LLC",
+          defaultCurrency: "USD",
+          timeZone: "UTC",
+          checkInTime: "14:00",
+          checkOutTime: "11:00",
+          sessionIdleMinutes,
+          status: opts?.status ?? "ACTIVE",
+        },
+      });
+    }
+
+    async function makeUser(propertyId: string | null) {
+      const passwordHash = await bcrypt.hash("password123", 10);
+      return prisma.user.create({
+        data: {
+          enterpriseId,
+          email: `sweep-${Date.now()}-${Math.random()}@test.local`,
+          passwordHash,
+          firstName: "Sweep",
+          lastName: "Test",
+          scope: propertyId ? "PROPERTY" : "ENTERPRISE",
+          propertyId,
+        },
+      });
+    }
+
+    async function makeSession(userId: string, propertyId: string | null, lastSeenAgoMs: number) {
+      const session = await createSessionRecord({
+        userId,
+        jti: `sweep-${Date.now()}-${Math.random()}`,
+        expiresAt: new Date(Date.now() + DAY_MS),
+        propertyId,
+      });
+      return prisma.session.update({
+        where: { id: session.id },
+        data: { lastSeenAt: new Date(Date.now() - lastSeenAgoMs) },
+      });
+    }
+
+    it("revokes a property-scoped session idle past that property's own timeout", async () => {
+      const property = await makeProperty(15);
+      const user = await makeUser(property.id);
+      const session = await makeSession(user.id, property.id, 20 * 60_000);
+
+      const result = await sessionIdleSweepJob.run(enterpriseId);
+      expect(result.itemsProcessed).toBeGreaterThanOrEqual(1);
+
+      const after = await prisma.session.findUnique({ where: { id: session.id } });
+      expect(after?.revokedAt).not.toBeNull();
+      expect(after?.revokedReason).toBe("IDLE");
+    });
+
+    it("leaves a session that hasn't crossed its property's timeout alone", async () => {
+      const property = await makeProperty(15);
+      const user = await makeUser(property.id);
+      const session = await makeSession(user.id, property.id, 5 * 60_000);
+
+      await sessionIdleSweepJob.run(enterpriseId);
+
+      const after = await prisma.session.findUnique({ where: { id: session.id } });
+      expect(after?.revokedAt).toBeNull();
+    });
+
+    it("never touches a session on a property with the timeout disabled (0)", async () => {
+      const property = await makeProperty(0);
+      const user = await makeUser(property.id);
+      const session = await makeSession(user.id, property.id, 365 * 24 * 60 * 60_000);
+
+      await sessionIdleSweepJob.run(enterpriseId);
+
+      const after = await prisma.session.findUnique({ where: { id: session.id } });
+      expect(after?.revokedAt).toBeNull();
+    });
+
+    it("falls back to the enterprise's first active property for a session with no propertyId", async () => {
+      // Enterprise-scoped sessions (admins, Hub-only users) never record which property
+      // they were last working in — that only lives in a request cookie the sweep has no
+      // access to. This is the abandoned-tab case the job exists for. A dedicated
+      // enterprise keeps property creation order unpolluted by the other cases above.
+      const other = await prisma.enterprise.create({
+        data: { name: `Sweep Fallback ${Date.now()}`, slug: `test-sweep-fb-${Date.now()}`, type: "STANDARD" },
+      });
+      const otherEnterpriseId = other.id;
+      const makePropertyIn = (sessionIdleMinutes: number) =>
+        prisma.property.create({
+          data: {
+            enterpriseId: otherEnterpriseId,
+            name: `Fallback Property ${Date.now()}-${Math.random()}`,
+            code: `FP-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+            legalName: "Fallback Property LLC",
+            defaultCurrency: "USD",
+            timeZone: "UTC",
+            checkInTime: "14:00",
+            checkOutTime: "11:00",
+            sessionIdleMinutes,
+            status: "ACTIVE",
+          },
+        });
+
+      // Created first, with a long timeout — must be the one the fallback picks.
+      await makePropertyIn(9999);
+      // Created second, with a short timeout — must NOT be picked, or this session would
+      // wrongly get revoked.
+      await makePropertyIn(1);
+
+      const passwordHash = await bcrypt.hash("password123", 10);
+      const user = await prisma.user.create({
+        data: {
+          enterpriseId: otherEnterpriseId,
+          email: `sweep-fb-${Date.now()}@test.local`,
+          passwordHash,
+          firstName: "Sweep",
+          lastName: "Fallback",
+          scope: "ENTERPRISE",
+          propertyId: null,
+        },
+      });
+      const session = await makeSession(user.id, null, 20 * 60_000);
+
+      await sessionIdleSweepJob.run(otherEnterpriseId);
+
+      const after = await prisma.session.findUnique({ where: { id: session.id } });
+      expect(after?.revokedAt).toBeNull();
+    });
+
+    it("ignores an already-revoked or already-expired session", async () => {
+      const property = await makeProperty(15);
+      const user = await makeUser(property.id);
+      const revoked = await makeSession(user.id, property.id, 20 * 60_000);
+      await prisma.session.update({
+        where: { id: revoked.id },
+        data: { revokedAt: new Date(), revokedReason: "LOGOUT" },
+      });
+      const expired = await makeSession(user.id, property.id, 20 * 60_000);
+      await prisma.session.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+
+      const result = await sessionIdleSweepJob.run(enterpriseId);
+
+      // Neither pre-existing row should have been counted or re-touched by this run.
+      const revokedAfter = await prisma.session.findUnique({ where: { id: revoked.id } });
+      expect(revokedAfter?.revokedReason).toBe("LOGOUT");
+      const expiredAfter = await prisma.session.findUnique({ where: { id: expired.id } });
+      expect(expiredAfter?.revokedAt).toBeNull();
+      void result;
+    });
   });
 });
