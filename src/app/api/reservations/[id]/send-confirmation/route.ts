@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { formatAllGuestNames, formatRoomCategories, nightsCount } from "@/lib/confirmation-letter";
@@ -119,6 +120,7 @@ export async function POST(
 
     const result = await sendStationeryEmail({
       enterpriseId: reservation.property.enterpriseId,
+      kind: MAIL_KINDS.CONFIRMATION_LETTER,
       to: email,
       subject: `Booking Confirmation — ${reservation.confirmationNo} | ${reservation.property.name}`,
       html,

@@ -6,7 +6,8 @@ import { pushAllEnabledLinks } from "@/lib/channels/push";
 import { pollAllConnections } from "@/lib/channels/inbound/poll";
 import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
 import { redactErrorMessage } from "@/lib/channels/redact";
-import { sendPlatformMail, getPlatformAlertRecipients, isPlatformSmtpConfigured } from "@/lib/mailer";
+import { getPlatformAlertRecipients, isPlatformSmtpConfigured } from "@/lib/mailer";
+import { sendPlatformMail, MAIL_KINDS } from "@/lib/mail-sender";
 import { buildChannelAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
 import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
@@ -38,6 +39,7 @@ async function alertChannelFailures(connections: ChannelAlertConnection[]): Prom
   try {
     const mail = buildChannelAlertEmail({ connections });
     await sendPlatformMail({
+      kind: MAIL_KINDS.CHANNEL_ALERT,
       to: recipients.join(", "),
       subject: mail.subject,
       html: mail.html,

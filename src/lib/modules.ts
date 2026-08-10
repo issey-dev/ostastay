@@ -75,6 +75,47 @@ export const MODULE_LABELS: Record<Module, string> = {
   USERS: "Users & Access",
 };
 
+// ── Service add-ons ───────────────────────────────────────────────────────────────
+//
+// Sellable add-ons that are NOT app modules. EnterpriseAddonAccess is the right storage
+// for these — it already means "this enterprise has purchased X" — but its key must not
+// be forced into MODULES, because MODULES is the RBAC/nav list: anything added there
+// gains a sidebar entry, a row in every role's permission matrix, and a meaningless
+// requirePermission() surface. A service the platform performs on the tenant's behalf
+// has none of those.
+//
+// PLATFORM_EMAIL (2026-08-10, owner): the enterprise may send through UPPSOLUT's SMTP
+// instead of configuring their own, billed separately. Granting this does NOT change
+// what a tenant sees or configures — their own SMTP under Controls always wins; this
+// only decides whether there is a fallback when they have not set one up. Every message
+// sent this way is recorded in EmailLog, which is what the billing figure comes from.
+export const SERVICE_ADDONS = ["PLATFORM_EMAIL"] as const;
+
+export type ServiceAddon = (typeof SERVICE_ADDONS)[number];
+
+export const SERVICE_ADDON_LABELS: Record<ServiceAddon, string> = {
+  PLATFORM_EMAIL: "Uppsolut Mail Service",
+};
+
+/**
+ * Every valid EnterpriseAddonAccess key.
+ *
+ * The add-ons API writes this value straight into a compound primary key, so an
+ * unrecognised one creates a permanent row that no UI can show or remove. Validate
+ * against this, never against MODULES alone.
+ */
+export const ADDON_KEYS = [...MODULES, ...SERVICE_ADDONS] as const;
+
+export type AddonKey = Module | ServiceAddon;
+
+export function addonLabel(key: string): string {
+  return (
+    SERVICE_ADDON_LABELS[key as ServiceAddon] ??
+    MODULE_LABELS[key as Module] ??
+    key
+  );
+}
+
 // ── Scope level ───────────────────────────────────────────────────────────────────
 //
 // Which shell a module belongs to. This lives here, not in scope.ts, because the

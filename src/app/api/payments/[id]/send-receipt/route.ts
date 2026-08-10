@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 
 const PAYMENT_INCLUDE = {
@@ -45,6 +46,7 @@ export async function POST(
 
     const result = await sendStationeryEmail({
       enterpriseId: payment.folio.property.enterpriseId,
+      kind: MAIL_KINDS.PAYMENT_RECEIPT,
       to: email,
       subject: `Payment Receipt | ${payment.folio.property.name}`,
       html,

@@ -8,6 +8,7 @@ import { buildInvoiceSummary, type DebtorInvoiceSummary } from "@/lib/debtor-acc
 import { computeFolioAgingBuckets, totalOutstanding } from "@/lib/debtor-aging";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 import type { AuthContext } from "@/lib/scope";
 
@@ -182,6 +183,7 @@ export async function POST(
 
     const result = await sendStationeryEmail({
       enterpriseId: ctx.enterpriseId,
+      kind: MAIL_KINDS.DEBTOR_STATEMENT,
       to: email,
       subject: `Account Statement — ${accountName} | ${property.name}`,
       html,

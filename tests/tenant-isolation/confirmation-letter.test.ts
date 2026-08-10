@@ -16,15 +16,19 @@ vi.mock("next/headers", () => ({
 }));
 
 // The confirmation email route must never make a real SMTP connection in tests — mock
-// the shared mailer and drive its behavior per-test via this mutable holder.
+// the shared sender and drive its behavior per-test via this mutable holder.
+//
+// Mocked at the SENDING layer (src/lib/mail-sender.ts), not the transport layer: since the
+// PLATFORM_EMAIL add-on, choosing a sender and writing the EmailLog row both live there,
+// and that is the seam a route actually depends on.
 const mailerMock = {
-  sendMail: vi.fn(),
+  sendEnterpriseMail: vi.fn(),
 };
-vi.mock("@/lib/mailer", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/mailer")>("@/lib/mailer");
+vi.mock("@/lib/mail-sender", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/mail-sender")>("@/lib/mail-sender");
   return {
     ...actual,
-    sendMail: (...args: unknown[]) => mailerMock.sendMail(...args),
+    sendEnterpriseMail: (...args: unknown[]) => mailerMock.sendEnterpriseMail(...args),
   };
 });
 
@@ -64,7 +68,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
   let reservationNoEmailId: string;
 
   beforeEach(() => {
-    mailerMock.sendMail.mockReset();
+    mailerMock.sendEnterpriseMail.mockReset();
   });
 
   beforeAll(async () => {
@@ -213,7 +217,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/missing required fields/i);
-    expect(mailerMock.sendMail).not.toHaveBeenCalled();
+    expect(mailerMock.sendEnterpriseMail).not.toHaveBeenCalled();
   });
 
   it("POST send-confirmation 403s when the reservation belongs to a different enterprise", async () => {
@@ -228,11 +232,11 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
       )
     );
     expect(res.status).toBe(403);
-    expect(mailerMock.sendMail).not.toHaveBeenCalled();
+    expect(mailerMock.sendEnterpriseMail).not.toHaveBeenCalled();
   });
 
   it("POST send-confirmation 400s cleanly when SMTP is not configured", async () => {
-    mailerMock.sendMail.mockRejectedValueOnce(new SmtpNotConfiguredError());
+    mailerMock.sendEnterpriseMail.mockRejectedValueOnce(new SmtpNotConfiguredError());
     const res = await asUser(adminAId, () =>
       sendRoute.POST(
         new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
@@ -249,7 +253,7 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
   });
 
   it("POST send-confirmation sends to the given email and returns success", async () => {
-    mailerMock.sendMail.mockResolvedValueOnce(undefined);
+    mailerMock.sendEnterpriseMail.mockResolvedValueOnce({ sender: "TENANT" });
     const res = await asUser(adminAId, () =>
       sendRoute.POST(
         new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {
@@ -264,14 +268,14 @@ describe("Confirmation Letter: tenant isolation + email sending", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.sentTo).toBe("guest@example.com");
-    expect(mailerMock.sendMail).toHaveBeenCalledTimes(1);
-    const callArgs = mailerMock.sendMail.mock.calls[0][0];
+    expect(mailerMock.sendEnterpriseMail).toHaveBeenCalledTimes(1);
+    const callArgs = mailerMock.sendEnterpriseMail.mock.calls[0][0];
     expect(callArgs.to).toBe("guest@example.com");
     expect(callArgs.html).toContain("Honeymoon");
   });
 
-  it("POST send-confirmation returns 502 when sendMail fails unexpectedly", async () => {
-    mailerMock.sendMail.mockRejectedValueOnce(new Error("connection refused"));
+  it("POST send-confirmation returns 502 when the send fails unexpectedly", async () => {
+    mailerMock.sendEnterpriseMail.mockRejectedValueOnce(new Error("connection refused"));
     const res = await asUser(adminAId, () =>
       sendRoute.POST(
         new Request(`http://localhost/api/reservations/${reservationAId}/send-confirmation`, {

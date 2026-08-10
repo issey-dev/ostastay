@@ -177,9 +177,12 @@ describe("tenant SMTP configuration", () => {
     expect(() => resolveTenantSmtp({ ...complete, smtpHost: null })).toThrow(SmtpNotConfiguredError);
   });
 
-  // The platform sender and the tenant sender must not bleed into each other: a tenant
-  // with no SMTP of its own must NOT quietly fall back to sending guest mail as Uppsolut.
-  it("does not fall back to the platform sender", () => {
+  // resolveTenantSmtp is the TENANT-ONLY resolver and stays that way — it must never
+  // consider the platform sender, whatever the environment says. The fallback introduced
+  // by the PLATFORM_EMAIL add-on (2026-08-10) lives one layer up in
+  // src/lib/mail-sender.ts, where the add-on can actually be looked up; keeping this
+  // function narrow is what makes that decision reviewable in one place.
+  it("is tenant-only — never substitutes the platform sender", () => {
     setMinimalPlatformEnv();
     expect(isPlatformSmtpConfigured()).toBe(true);
     expect(isTenantSmtpConfigured(null)).toBe(false);

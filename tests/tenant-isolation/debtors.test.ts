@@ -14,10 +14,16 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-const mailerMock = { sendMail: vi.fn() };
-vi.mock("@/lib/mailer", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/mailer")>("@/lib/mailer");
-  return { ...actual, sendMail: (...args: unknown[]) => mailerMock.sendMail(...args) };
+// Mocked at the SENDING layer (src/lib/mail-sender.ts), not the transport layer: since the
+// PLATFORM_EMAIL add-on, choosing a sender and writing the EmailLog row both live there,
+// and that is the seam a route actually depends on.
+const mailerMock = { sendEnterpriseMail: vi.fn() };
+vi.mock("@/lib/mail-sender", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/mail-sender")>("@/lib/mail-sender");
+  return {
+    ...actual,
+    sendEnterpriseMail: (...args: unknown[]) => mailerMock.sendEnterpriseMail(...args),
+  };
 });
 
 // Nor launch a real headless browser — generateStationeryPdf shells out to Puppeteer,
@@ -66,7 +72,7 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
   let paymentMethodAId: string;
 
   beforeEach(() => {
-    mailerMock.sendMail.mockReset();
+    mailerMock.sendEnterpriseMail.mockReset();
   });
 
   beforeAll(async () => {
@@ -540,11 +546,11 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/email address is required/i);
-    expect(mailerMock.sendMail).not.toHaveBeenCalled();
+    expect(mailerMock.sendEnterpriseMail).not.toHaveBeenCalled();
   });
 
   it("POST send-statement sends to the given email and returns success", async () => {
-    mailerMock.sendMail.mockResolvedValueOnce(undefined);
+    mailerMock.sendEnterpriseMail.mockResolvedValueOnce({ sender: "TENANT" });
     const res = await asUser(adminAId, () =>
       sendStatementRoute.POST(
         new Request(`http://localhost/api/debtors/accounts/${creditAccountAId}/send-statement`, {
@@ -559,6 +565,6 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.sentTo).toBe("billing@sunnytravels.test");
-    expect(mailerMock.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailerMock.sendEnterpriseMail).toHaveBeenCalledTimes(1);
   });
 });

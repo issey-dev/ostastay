@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { InfoHint } from "@/components/ui/info-hint"
-import { MODULES, MODULE_LABELS } from "@/lib/modules"
+import { MODULES, SERVICE_ADDONS, addonLabel } from "@/lib/modules"
 
 type AddonRow = { module: string; enabled: boolean }
 
@@ -15,7 +15,13 @@ type AddonRow = { module: string; enabled: boolean }
 // as opt-in add-ons (today: EXCURSIONS, SPA) belong here — this list grows one entry
 // at a time as new add-ons ship, never by removing the exclusion. Must stay in sync
 // with the ADD_ON_MODULES set in src/components/app-sidebar.tsx.
-const ADD_ON_MODULES = MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA")
+// Plus SERVICE_ADDONS — sellable things that are not app modules at all (today:
+// PLATFORM_EMAIL, the Uppsolut Mail Service). They share this table and this UI because
+// the question is identical: has this enterprise purchased it?
+const ADD_ON_MODULES: readonly string[] = [
+  ...MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA"),
+  ...SERVICE_ADDONS,
+]
 
 // Enterprise-scoped since 2026-08-02 (owner decision) — an add-on is sold to the
 // enterprise and, once enabled, applies to every property in it. See
@@ -65,7 +71,7 @@ export function EnterpriseAddonAccessManager({ enterpriseId, enterpriseName }: {
             const row = rows.find((r) => r.module === module)
             return (
               <div key={module} className="flex items-center justify-between border-b pb-2">
-                <span className="text-sm">{MODULE_LABELS[module]}</span>
+                <span className="text-sm">{addonLabel(module)}</span>
                 <div className="flex items-center gap-2">
                   {row?.enabled ? (
                     <Badge variant="secondary" className="bg-success-muted text-success">Enabled</Badge>

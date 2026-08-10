@@ -48,6 +48,7 @@ model Enterprise {
   jobRuns               JobRun[]
   eRegistrationLinks    ERegistrationLink[]
   addonAccess           EnterpriseAddonAccess[]
+  emailLogs             EmailLog[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -2536,6 +2537,59 @@ model EnterpriseAddonAccess {
   updatedAt    DateTime   @updatedAt
 
   @@unique([enterpriseId, module])
+}
+
+// Every outgoing email the app sends, one row per send attempt.
+//
+// Exists for BILLING first (owner decision 2026-08-10): an enterprise may send through
+// Uppsolut's own SMTP instead of configuring their own — the PLATFORM_EMAIL service
+// add-on — and that is charged separately. `sender` is what the invoice is built from:
+// count the PLATFORM rows for an enterprise over the billing period. Pricing itself stays
+// manual, like every other LicenseInvoice amount; this table supplies the figure, it does
+// not compute a charge.
+//
+// It is also the answer to "the guest says they never got their confirmation", which is
+// otherwise unanswerable — a send either threw at the time or vanished.
+//
+// METADATA ONLY, deliberately (owner decision): no message body is stored. Bodies contain
+// guest details and, for the enterprise handover email, a plaintext temporary password —
+// none of which should sit in a readable table forever to serve a row count. Subject and
+// recipient are kept because a billing dispute or a "was it sent" question cannot be
+// answered without them.
+model EmailLog {
+  id String @id @default(uuid())
+
+  // Nullable because platform mail predates its tenant: the enterprise handover email is
+  // sent to a brand-new enterprise, and onboarding must not depend on this row's FK. Cascade
+  // when an enterprise is deleted — a deleted tenant cannot be invoiced.
+  enterpriseId String?
+  enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  // TENANT (the enterprise's own SMTP) | PLATFORM (Uppsolut's). The billable distinction.
+  sender String
+  // Coarse message type, e.g. "confirmation-letter", "eregistration-link", "statement",
+  // "enterprise-welcome", "channel-alert", "smtp-test". Lets a bill be itemised by what
+  // was actually sent rather than one undifferentiated total.
+  kind String
+
+  toAddress   String
+  fromAddress String
+  subject     String
+
+  // SENT | FAILED. A FAILED row is deliberately still written: a send that the provider
+  // rejected is exactly what an operator needs to see, and billing must not silently
+  // count it as delivered either.
+  status       String
+  // Provider message id when the send succeeded — the handle for tracing a message with
+  // the SMTP provider afterwards.
+  messageId    String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  // The billing query: one enterprise, one period, grouped by sender.
+  @@index([enterpriseId, createdAt])
+  @@index([sender, createdAt])
 }
 
 // Property-level Excursions settings — currently just the optional module-level Outlet

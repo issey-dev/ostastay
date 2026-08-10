@@ -4,7 +4,8 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { hashEregistrationToken } from "@/lib/eregistration/token";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
-import { sendMail, SmtpNotConfiguredError } from "@/lib/mailer";
+import { SmtpNotConfiguredError, PlatformSmtpNotConfiguredError } from "@/lib/mailer";
+import { sendEnterpriseMail, MAIL_KINDS } from "@/lib/mail-sender";
 import { primaryEmail } from "@/lib/profile-communications";
 import { logActivity } from "@/lib/activity-log";
 
@@ -80,14 +81,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     try {
-      await sendMail({
-        settings: settings ?? { smtpHost: null, smtpPort: null, smtpUsername: null, smtpPassword: null, smtpFromAddress: null, smtpUseTls: true },
+      await sendEnterpriseMail({
+        enterpriseId: group.property.enterpriseId,
+        kind: MAIL_KINDS.EREGISTRATION_LINK,
         to: organizerEmail,
         subject: `Complete your group's eRegistration — ${group.code} | ${group.property.name}`,
         html,
       });
     } catch (mailError) {
       if (mailError instanceof SmtpNotConfiguredError) return NextResponse.json({ error: mailError.message }, { status: 400 });
+      if (mailError instanceof PlatformSmtpNotConfiguredError) {
+        console.error("Platform SMTP is unconfigured but an enterprise relies on it:", mailError);
+        return NextResponse.json(
+          { error: "Email is temporarily unavailable — Uppsolut has been notified. Please try again shortly." },
+          { status: 503 }
+        );
+      }
       console.error("Failed to send group eRegistration email:", mailError);
       return NextResponse.json({ error: "Failed to send the email — check the SMTP settings and try again." }, { status: 502 });
     }
