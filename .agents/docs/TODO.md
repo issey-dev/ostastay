@@ -2,6 +2,43 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Uppsolut Mail Service — billed SMTP fallback + EmailLog (2026-08-10) — DONE
+
+Owner ruling that **reverses** the "no fallback between senders" decision recorded two days
+earlier (see DECISIONS.md, which now carries a superseded marker on it): an enterprise with
+no SMTP of its own may send through Uppsolut's, as a separately billed add-on, and every
+message must be logged for billing.
+
+- **`src/lib/mail-sender.ts` (new)** is now THE way application code sends mail.
+  `src/lib/mailer.ts` keeps transports/credentials/verify; this owns sender selection and
+  the log. `sendMail`/`sendPlatformMail` moved here and gained a required `kind`; the
+  low-level `deliverSmtp()` is documented as internal precisely so no caller can send
+  without logging — a send that skipped the log is revenue that disappears.
+- **`resolveEnterpriseSender()`** — tenant SMTP → platform SMTP (if `PLATFORM_EMAIL`
+  granted) → `SmtpNotConfiguredError`. The tenant's own SMTP always wins; buying the
+  service never takes sending away from a hotel that has its own domain configured.
+- **`PLATFORM_EMAIL` is a SERVICE_ADDON, not a MODULE** (`src/lib/modules.ts`). Anything in
+  MODULES gains a sidebar entry and a row in every role's permission matrix; a relay is
+  neither. The add-ons API now validates against `ADDON_KEYS` (MODULES + SERVICE_ADDONS)
+  rather than MODULES, and the Osta add-on manager lists it alongside Spa/Excursions.
+- **`EmailLog`** (migration `20260810111352_email_log_and_platform_email_addon`) — one row
+  per send attempt. Metadata only, no body. FAILED rows written and excluded from billing.
+- **`/api/osta/email-usage` + Email usage panel** on the Osta Controls page: counts per
+  enterprise per period, split billable / failed / own-SMTP / Uppsolut's-own-mail. Counts
+  only — pricing stays hand-set like every other LicenseInvoice amount.
+- Every guest-mail route now passes a `kind`; the required field caught
+  `send-registration-card`, which had been added by another session mid-change.
+- The tenant test button now reports WHICH sender was used and explains the mail service
+  when it was Uppsolut's — otherwise an enterprise on the service sees blank SMTP fields
+  and assumes it is broken.
+- Tests: `tests/business-rules/mail-sender.test.ts` (12) covering precedence, the
+  operator-fault case (add-on bought, platform SMTP unset), FAILED-row behaviour, no row
+  when nothing was sent, and that no body is ever stored. The two route tests that mocked
+  `@/lib/mailer.sendMail` now mock `@/lib/mail-sender.sendEnterpriseMail` — the seam moved.
+
+**Still open:** nothing in code. Pricing per message is a commercial decision, and the
+report deliberately does not encode one.
+
 ## Operations Dashboard (2026-08-09) — DONE
 
 A real landing page for the product: `/e/[slug]/dashboard/overview`, reached from a new

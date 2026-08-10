@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 
 const EXCHANGE_INCLUDE = {
@@ -41,6 +42,7 @@ export async function POST(
 
     const result = await sendStationeryEmail({
       enterpriseId: exchange.property.enterpriseId,
+      kind: MAIL_KINDS.EXCHANGE_RECEIPT,
       to: email,
       subject: `Currency Exchange Receipt | ${exchange.property.name}`,
       html,

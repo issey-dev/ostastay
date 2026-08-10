@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { logActivity } from "@/lib/activity-log";
 
 // A registration card is per-guest (see the print page), so both handlers below resolve
@@ -65,6 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const result = await sendStationeryEmail({
       enterpriseId: reservation.property.enterpriseId,
+      kind: MAIL_KINDS.REGISTRATION_CARD,
       to: email,
       subject: `Registration Card — ${reservation.confirmationNo} | ${reservation.property.name}`,
       html: buildRegistrationCardEmailHtml(reservation.property.name),

@@ -1,5 +1,6 @@
 import { OstaInvoicingManager } from "@/components/osta/osta-invoicing-manager"
 import { PlatformMailManager } from "@/components/osta/platform-mail-manager"
+import { EmailUsageReport } from "@/components/osta/email-usage-report"
 import { InfoHint } from "@/components/ui/info-hint"
 
 // Platform-level controls: how Osta itself bills client enterprises (licensing
@@ -16,6 +17,7 @@ export default function OstaControlsPage() {
           </h2>
       </div>
       <PlatformMailManager />
+      <EmailUsageReport />
       <OstaInvoicingManager />
     </div>
   )

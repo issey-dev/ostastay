@@ -2771,6 +2771,12 @@ than from the property is the wrong sender for the guest, and silently substitut
 would be worse than the current clear "SMTP is not configured" failure. There is a test
 pinning this.
 
+> **SUPERSEDED the same day** — see "2026-08-10 — Uppsolut Mail Service" below. The owner
+> ruled that the fallback SHOULD exist, as a billed opt-in add-on. The "no fallback"
+> reasoning above was the agent's own design taste, not an owner instruction; what survives
+> of it is the precedence rule (a tenant's own SMTP always wins) and the requirement that
+> the substitution is never silent.
+
 Platform SMTP is env-only and has no admin UI to change it. Two reasons: a brand-new
 enterprise has no settings row to read config from at the moment we need to email its first
 admin, and an endpoint able to rewrite the platform's sending identity would be a standing
@@ -2788,3 +2794,56 @@ days to fix does not mail hourly for those days.
 authenticates fine and then rejects any recipient that is not individually verified, which
 is every onboarding email by definition. Production access has to be requested in the SES
 console before platform mail does anything in production.
+
+---
+
+## 2026-08-10 — Uppsolut Mail Service: platform SMTP as a billed fallback (owner)
+
+Owner instruction, verbatim: *"this SMTP setup is for Osta (admin level) users only and not
+for the enterprises, those settings will still be on the controls that they have to setup
+and store within enterprise/property"*, and *"customers can opt to use our SMTP as a default
+incase they do not have an SMTP themselves which we will bill them seperately so the
+movement of all mails should be logged as well for billing purpose"*.
+
+This **reverses the "no fallback" line** in the 2026-08-08 entry above. That was a design
+judgement made without an owner ruling; the ruling now exists.
+
+**Precedence — the part that must not drift.** A tenant's OWN SMTP always wins when
+configured. The mail service is a fallback for enterprises that have none, never a takeover
+for one that has set up its own domain. Order: tenant SMTP → platform SMTP (if the add-on is
+granted) → the same `SmtpNotConfiguredError` as before. `resolveEnterpriseSender()` in
+`src/lib/mail-sender.ts` is the single place this is decided, and it is pinned by tests.
+
+**Granted by Osta, not self-served.** `EnterpriseAddonAccess` with the key `PLATFORM_EMAIL`
+— the same mechanism as Spa and Excursions, toggled on the Osta enterprise page. A tenant
+cannot switch on a service that generates an invoice; a commercial agreement comes first.
+Because it is a *service* and not a screen, it lives in `SERVICE_ADDONS`, deliberately NOT
+in `MODULES` — anything in MODULES gains a sidebar entry and a row in every role's
+permission matrix, which a relay the platform operates on the tenant's behalf should not.
+`ADDON_KEYS` (= MODULES + SERVICE_ADDONS) is what the add-ons API now validates against.
+
+**Never silent.** The tenant's own Controls → Reports → SMTP / SFTP test reports which
+sender was used and says plainly when it was Uppsolut's, so an enterprise on the service is
+not left looking at empty fields wondering why mail works.
+
+**Every send is logged — `EmailLog`.** One row per attempt, success or failure, written by
+`src/lib/mail-sender.ts`. This is the BILLING RECORD, not diagnostics: the invoice figure is
+a count of an enterprise's `PLATFORM` rows for the period. That is why `deliverSmtp()` in
+`mailer.ts` is documented as internal and nothing outside the sender module calls it — a
+send that skipped the log is revenue that silently disappears.
+
+- **Metadata only** (owner decision): sender, kind, recipient, from, subject, status,
+  provider message id. **No body** — bodies carry guest details and, for the handover email,
+  a plaintext temporary password, none of which should sit in a readable table forever to
+  serve a row count.
+- **FAILED rows are written and are NOT billable.** A rejected send is what an operator
+  needs to see, and must never be charged as delivered.
+- **Uppsolut's own mail is never billable to the tenant** even though it is `PLATFORM` and
+  tagged with their enterprise id — `enterprise-welcome` and `channel-alert` are excluded
+  from the billable count by kind.
+
+**It reports, it does not price.** `/api/osta/email-usage` and the Email usage panel on the
+Osta Controls page give counts per enterprise per period. No rate is applied anywhere:
+`LicenseInvoice` amounts are hand-set throughout this product ("owner decision: no
+formula"), and a rate rendered here would be a second pricing model competing with the real
+one.

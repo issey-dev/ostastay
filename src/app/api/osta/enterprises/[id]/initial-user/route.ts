@@ -4,7 +4,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { sendPlatformMail, isPlatformSmtpConfigured } from "@/lib/mailer";
+import { isPlatformSmtpConfigured } from "@/lib/mailer";
+import { sendPlatformMail, MAIL_KINDS } from "@/lib/mail-sender";
 import { buildEnterpriseWelcomeEmail } from "@/lib/email-templates";
 
 // Mint a customer enterprise's FIRST user — the handover account the operator gives the
@@ -122,7 +123,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           enterpriseName: enterprise.name,
           enterpriseSlug: enterprise.slug,
         });
-        await sendPlatformMail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
+        await sendPlatformMail({
+          kind: MAIL_KINDS.ENTERPRISE_WELCOME,
+          // Tags the log row so the send is attributable to this enterprise. It is still
+          // recorded as PLATFORM and is never billable — this is Uppsolut's own mail.
+          enterpriseId: id,
+          to: email,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
         emailed = true;
         await logActivity({
           ctx,

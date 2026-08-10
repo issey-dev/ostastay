@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
+import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
 
 // Same three variants the print page (src/app/e/[slug]/dashboard/folios/[id]/print)
@@ -82,6 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const result = await sendStationeryEmail({
       enterpriseId: folio.property.enterpriseId,
+      kind: MAIL_KINDS.FOLIO_INVOICE,
       to: email,
       subject: `${label} — ${folio.property.name}`,
       html,

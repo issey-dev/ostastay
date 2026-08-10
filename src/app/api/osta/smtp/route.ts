@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
-import {
-  getPlatformSmtpConfig,
-  getPlatformAlertRecipients,
-  sendPlatformMail,
-  verifySmtp,
-} from "@/lib/mailer";
+import { getPlatformSmtpConfig, getPlatformAlertRecipients, verifySmtp } from "@/lib/mailer";
+import { sendPlatformMail, MAIL_KINDS } from "@/lib/mail-sender";
 import { buildSmtpTestEmail, appBaseUrl } from "@/lib/email-templates";
 import { PRODUCT_NAME } from "@/lib/brand";
 
@@ -92,7 +88,7 @@ export async function POST(request: Request) {
 
     const mail = buildSmtpTestEmail({ sender: PRODUCT_NAME });
     try {
-      await sendPlatformMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
+      await sendPlatformMail({ kind: MAIL_KINDS.SMTP_TEST, to, subject: mail.subject, html: mail.html, text: mail.text });
     } catch (e) {
       return NextResponse.json({
         ok: false,

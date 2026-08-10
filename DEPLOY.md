@@ -159,7 +159,30 @@ working out which one applies.
 | From | The hotel's own domain | `noreply@mail.uppsolut.com` |
 | Configured by | The tenant, in-app: Controls → Reports → SMTP / SFTP | You, in `.env`: `PLATFORM_SMTP_*` |
 | Stored | `EnterpriseSettings`, encrypted at rest | Environment only, never in the database |
-| If missing | Those buttons fail with "SMTP is not configured" | Onboarding still works; credentials shown on screen to hand over manually |
+| If missing | Those buttons fail with "SMTP is not configured" — unless the enterprise is on the mail service, below | Onboarding still works; credentials shown on screen to hand over manually |
+
+### The Uppsolut Mail Service (billed add-on)
+
+An enterprise with no SMTP of its own can send through the platform sender instead. Grant it
+on the Osta enterprise page → **Add-ons** → *Uppsolut Mail Service*; it is off until then, as
+every add-on is.
+
+Precedence is fixed and worth knowing: **a tenant's own SMTP always wins.** The service is a
+fallback for enterprises that have none, never a takeover for one that has configured its own
+domain. So granting it to a customer who later sets up their own SMTP silently stops costing
+them anything, which is the correct behaviour.
+
+Every send is recorded in `EmailLog` — metadata only, no message bodies. **Osta Controls →
+Email usage** reports counts per enterprise for a period, split into billable (sent on the
+platform sender), failed (excluded — we did not deliver those), the enterprise's own SMTP
+sends, and Uppsolut's own mail to them (handover credentials, channel alerts — never
+billable). It reports counts and applies no rate: licensing amounts are hand-set here as
+everywhere else.
+
+This makes the platform sender load-bearing for those tenants. If `PLATFORM_SMTP_*` is unset
+while an enterprise is on the service, their guest mail fails with a 503 that blames us, not
+them — deliberately, so nobody tells a paying customer to configure SMTP they are paying not
+to need.
 
 Guest mail deliberately comes from the hotel's own domain — a booking confirmation that
 arrives from Uppsolut rather than the property is the wrong sender for the recipient.

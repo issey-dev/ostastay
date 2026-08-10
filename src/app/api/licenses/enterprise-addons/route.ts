@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
+import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
+import { ADDON_KEYS } from "@/lib/modules";
 import { logActivity } from "@/lib/activity-log";
 
 // Enterprise-level SELLABLE ADD-ON gate (Spa, Excursions) — enterprise-scoped since
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
     const byModule = new Map(rows.map((r) => [r.module, r.enabled]));
 
     return NextResponse.json(
-      MODULES.map((module) => ({ module, enabled: byModule.get(module) ?? false }))
+      ADDON_KEYS.map((module) => ({ module, enabled: byModule.get(module) ?? false }))
     );
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -48,10 +49,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "enterpriseId, module, and enabled (boolean) are required" }, { status: 400 });
     }
     // `module` is written straight into EnterpriseAddonAccess's compound key, so an
-    // unrecognised value would silently create a permanent row for a module that does
-    // not exist — invisible to the GET above (it projects over MODULES) and therefore
-    // un-removable through the UI. Reject rather than persist.
-    if (!(MODULES as readonly string[]).includes(body.module)) {
+    // unrecognised value would silently create a permanent row that the GET above cannot
+    // show (it projects over ADDON_KEYS) and is therefore un-removable through the UI.
+    // Reject rather than persist. ADDON_KEYS, not MODULES: a service add-on like
+    // PLATFORM_EMAIL is sellable without being an app module.
+    if (!(ADDON_KEYS as readonly string[]).includes(body.module)) {
       return NextResponse.json({ error: "Unknown module" }, { status: 400 });
     }
 

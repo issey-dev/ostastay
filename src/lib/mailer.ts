@@ -152,10 +152,19 @@ export type MailContent = {
   attachments?: { filename: string; content: Buffer; contentType?: string }[]
 }
 
-async function deliver(smtp: ResolvedSmtp, mail: MailContent): Promise<void> {
+/**
+ * Put a message on the wire. Returns the provider's message id.
+ *
+ * LOW LEVEL — this does NOT write an EmailLog row. Application code must not call it
+ * directly: every outgoing message has to be recorded, because the PLATFORM_EMAIL add-on
+ * is billed from those rows and a send that skipped the log is revenue that silently
+ * disappears. Use sendEnterpriseMail / sendPlatformMail from src/lib/mail-sender.ts, which
+ * wrap this and own the logging. It is exported only so that module can reach it.
+ */
+export async function deliverSmtp(smtp: ResolvedSmtp, mail: MailContent): Promise<string | undefined> {
   const transporter = buildTransport(smtp)
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       // The object form lets nodemailer handle display-name quoting and encoding.
       from: smtp.fromName ? { name: smtp.fromName, address: smtp.fromAddress } : smtp.fromAddress,
       to: mail.to,
@@ -165,6 +174,7 @@ async function deliver(smtp: ResolvedSmtp, mail: MailContent): Promise<void> {
       replyTo: mail.replyTo,
       attachments: mail.attachments,
     })
+    return info?.messageId
   } finally {
     // Each send builds its own transport; close it so the connection is not left open.
     transporter.close()
@@ -191,17 +201,6 @@ export async function verifySmtp(smtp: ResolvedSmtp): Promise<{ ok: true } | { o
   } finally {
     transporter.close()
   }
-}
-
-/**
- * Send using the TENANT's own SMTP account — guest-facing mail from the hotel's domain.
- *
- * Throws SmtpNotConfiguredError when the enterprise has not set SMTP up, so callers can
- * return a clean 400 telling the operator where to configure it.
- */
-export async function sendMail(params: { settings: SmtpConfig } & MailContent): Promise<void> {
-  const { settings, ...mail } = params
-  await deliver(resolveTenantSmtp(settings), mail)
 }
 
 // ---------------------------------------------------------------------------
@@ -241,19 +240,6 @@ export function getPlatformSmtpConfig(): ResolvedSmtp | null {
 
 export function isPlatformSmtpConfigured(): boolean {
   return getPlatformSmtpConfig() !== null
-}
-
-/**
- * Send as Uppsolut Stay itself — onboarding credentials, channel-manager alerts.
- *
- * Throws PlatformSmtpNotConfiguredError when the environment is not set up. Callers that
- * must not fail because of mail (onboarding) should catch it; callers that exist only to
- * send (the platform test endpoint) should surface it.
- */
-export async function sendPlatformMail(mail: MailContent): Promise<void> {
-  const smtp = getPlatformSmtpConfig()
-  if (!smtp) throw new PlatformSmtpNotConfiguredError()
-  await deliver(smtp, mail)
 }
 
 /**

@@ -38,7 +38,14 @@ const EMPTY: SmtpSftpForm = {
 // See the two-sender note in src/lib/mailer.ts.
 //
 // SFTP remains scaffold — those fields save but nothing transfers files yet.
-type TestResult = { ok: boolean; stage: "connect" | "send"; error?: string; sentTo?: string | null }
+type TestResult = {
+  ok: boolean
+  stage: "connect" | "send"
+  /** Which account the message actually went through — the enterprise's own, or Uppsolut's. */
+  sender?: "TENANT" | "PLATFORM"
+  error?: string
+  sentTo?: string | null
+}
 
 export function SmtpSftpManager() {
   const [form, setForm] = useState<SmtpSftpForm>(EMPTY)
@@ -178,18 +185,33 @@ export function SmtpSftpManager() {
           </div>
           {testing && <p className="text-sm text-muted-foreground">Testing…</p>}
           {testResult && !testing && (
-            testResult.ok ? (
-              <p className="text-sm text-success">
-                {testResult.stage === "send"
-                  ? `Test email sent to ${testResult.sentTo}. Check the inbox — and the spam folder.`
-                  : "Connected and authenticated successfully."}
-              </p>
-            ) : (
-              <p className="text-sm text-destructive">
-                {testResult.stage === "send" ? "Connected, but the message was rejected: " : "Could not connect: "}
-                {testResult.error}
-              </p>
-            )
+            <div className="space-y-1">
+              {testResult.ok ? (
+                <p className="text-sm text-success">
+                  {testResult.stage === "send"
+                    ? `Test email sent to ${testResult.sentTo}. Check the inbox — and the spam folder.`
+                    : "Connected and authenticated successfully."}
+                </p>
+              ) : (
+                <p className="text-sm text-destructive">
+                  {testResult.stage === "send" ? "Connected, but the message was rejected: " : "Could not connect: "}
+                  {testResult.error}
+                </p>
+              )}
+              {/* Which account was actually used. Worth stating plainly: an enterprise on the
+                  Uppsolut Mail Service has working email with these fields left blank, and
+                  without this the panel would look broken to them. */}
+              {testResult.sender === "PLATFORM" && (
+                <p className="text-xs text-muted-foreground">
+                  Sent through the <strong>Uppsolut Mail Service</strong> — your enterprise has no SMTP of its own
+                  configured, so mail goes out through Uppsolut&apos;s (a billed service). Fill in the fields above to
+                  send from your own domain instead; your own settings always take priority.
+                </p>
+              )}
+              {testResult.sender === "TENANT" && (
+                <p className="text-xs text-muted-foreground">Sent through your own SMTP.</p>
+              )}
+            </div>
           )}
         </div>
       </div>
