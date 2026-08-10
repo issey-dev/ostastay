@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { cookies } from "next/headers"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
@@ -28,6 +29,25 @@ import "./info.css"
  * keeps the footer's copyright year honest rather than fixing it to the image build date.
  */
 export const dynamic = "force-dynamic"
+
+/**
+ * Absolute base for every canonical and og: URL under /info.
+ *
+ * Declared once HERE rather than per page: layout metadata is merged into each child's,
+ * so all four pages inherit it and none can be added later that quietly forgets it —
+ * which is exactly how it regressed once already. Without a metadataBase Next emits
+ * `<link rel="canonical" href="/info/stay">`, and a relative canonical is close to
+ * useless: the entire job of the tag is to name ONE absolute URL when a page is reachable
+ * by several, which is the situation these pages are heading into at the domain move.
+ *
+ * APP_URL is the variable the rest of the app already builds public links from (see
+ * src/lib/email-templates.ts), so this follows the environment automatically. The
+ * localhost fallback only ever applies in dev — production sets it, and `force-dynamic`
+ * above is what guarantees it is read at request time rather than frozen at build.
+ */
+export const metadata: Metadata = {
+  metadataBase: new URL((process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "")),
+}
 
 export default async function InfoLayout({ children }: { children: React.ReactNode }) {
   // The colour preference is resolved on the server so the correct theme is in the first
