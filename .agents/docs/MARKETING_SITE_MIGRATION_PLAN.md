@@ -125,21 +125,49 @@ That is the entire coupling to the PMS. Everything else is internal.
 Collect these before starting. Missing access here is the most likely cause of a
 half-finished migration.
 
-- [ ] Push access to the `issey-dev/ostastay` GitHub repo
-- [ ] Cloudflare dashboard access for the `uppsolut.com` zone (DNS + whatever hosts
-      the current page)
+- [ ] Push access to the `issey-dev/ostastay` GitHub repo, and rights to create a new
+      repo for `uppsolut-web`
+- [ ] Cloudflare dashboard access for the `uppsolut.com` zone — **DNS, Pages, and Rules**.
+      All three are needed; DNS alone is not enough.
 - [ ] Wherever the **current** `uppsolut.com` page is deployed from (Phase 0 finds this)
-- [ ] SSH to `ubuntu@vps-9d96501a.vps.ovh.ca` — only if you choose hosting option B,
-      or for the Phase 6 redirect if done in Caddy
-- [ ] Google Search Console access for `uppsolut.com` (or ability to verify it)
-- [ ] Node 22 and Docker locally
-- [ ] Decision on the questions in §4
+- [ ] SSH to `ubuntu@vps-9d96501a.vps.ovh.ca` — needed for the Phase 6 redirects if done
+      in Caddy, which is the recommended route
+- [ ] Google Search Console access for `uppsolut.com`, or the ability to add a DNS TXT
+      record to verify it. **Not yet set up** — there is no `google-site-verification`
+      record on the domain today.
+- [ ] Node 22 locally (Docker only if you deviate to hosting option B)
+
+Already confirmed by the owner, no action needed:
+
+- `hello@uppsolut.com` delivers to a monitored inbox. The domain uses **Cloudflare Email
+  Routing** (`route1–3.mx.cloudflare.net`) with a matching SPF record.
+- The existing placeholder page at `uppsolut.com` may be replaced.
 
 ---
 
-## 4. Decisions to confirm BEFORE writing code
+## 4. Decisions
 
-Do not start Phase 1 until these are answered. Each one changes the work.
+**Settled by the owner on 2026-08-12. Do not relitigate these — just build to them.**
+
+| Ref | Decision | Answer |
+|---|---|---|
+| §4.1 | Hosting model | **Cloudflare Pages, static export** (Option A) |
+| §4.2 | Canonical host | **Apex — `uppsolut.com`.** `www` is not required |
+| §4.4 | Replace the existing placeholder page | **Yes** |
+| — | `hello@uppsolut.com` | **Confirmed working.** The demo CTAs on all four pages reach a real inbox |
+| — | Google Search Console | **Not set up yet.** A checklist item (§4.4), not a blocker for launch |
+
+**Still open:** §4.3 (separate repo vs. monorepo). A separate `uppsolut-web` repo is
+assumed throughout, since Cloudflare Pages builds from a Git repo and the PMS pipeline
+runs the full test suite on every push. Say so if you want it otherwise.
+
+> ⚠️ **The one consequence to internalise before Phase 3:** static export means there is
+> no server at request time, so **the theme mechanism must be rewritten** (§3.2) and
+> `metadataBase` must become a build-time constant (§3.3). That is the largest single
+> piece of code work in this migration, and §3.2 documents a trap that has already cost
+> a rebuild once.
+
+The subsections below are retained as the reasoning behind each choice.
 
 ### 4.1 Hosting model — **this is the big one**
 
@@ -161,18 +189,27 @@ server to decide the colour theme. That design assumes a Node server. Two option
 - The cookie-based theme keeps working **unchanged**.
 - Costs a second container on the box and another thing that can go down.
 
-**Recommendation: Option A.** The rest of this plan is written for A, and flags
-every place B differs.
+**DECIDED: Option A.** The rest of this plan is written for A, and flags every place B
+differs. Option B is documented only so the trade-off is on record.
 
 ### 4.2 Apex or `www`?
 
 Pick ONE canonical host and 301 the other to it.
 
-- `uppsolut.com` (apex) already resolves and serves. `www` does not exist.
-- **Recommendation: apex.** Less work, already live, one fewer DNS record.
-- If `www` is wanted anyway: add a CNAME `www → uppsolut.com` (proxied) and a
-  redirect rule. Make sure `metadataBase` matches whichever you choose, or every
-  canonical tag will point at the non-canonical host.
+**DECIDED: apex — `uppsolut.com`.** It already resolves and serves, so nothing further
+is required for the canonical host. `metadataBase` is therefore `https://uppsolut.com`
+(§3.3).
+
+`www.uppsolut.com` is **NXDOMAIN** and stays that way. That is a deliberate choice, not
+an oversight — but be aware of the one consequence: anyone who types `www.` out of habit
+gets a browser error rather than the site. If that is ever judged unacceptable, the fix
+is two minutes of work and does **not** change any code:
+
+1. Cloudflare DNS → add `CNAME  www  →  uppsolut.com`, proxied.
+2. Cloudflare → Rules → Redirect Rules → `www.uppsolut.com/*` → `https://uppsolut.com/$1`, 301.
+
+Do **not** serve the site on both hosts without a redirect — two hosts serving identical
+content is duplicate content, and it splits whatever ranking signal the domain earns.
 
 ### 4.3 Same repo or a new one?
 
