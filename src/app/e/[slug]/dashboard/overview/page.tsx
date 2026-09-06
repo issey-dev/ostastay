@@ -17,10 +17,10 @@ export const dynamic = "force-dynamic"
 export default async function DashboardOverviewPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const ctx = await requireSession().catch(() => null)
-  if (!ctx) redirect("/login")
+  if (!ctx) redirect("/api/auth/session-expired")
 
   const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } })
-  if (!enterprise) redirect("/login")
+  if (!enterprise) redirect("/api/auth/session-expired")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/dashboard/overview`)
 
   return <OperationsDashboard enterprisePrefix={`/e/${enterprise.slug}`} />
