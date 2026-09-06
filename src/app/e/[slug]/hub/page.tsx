@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from "@/components/icons"
+import { ArrowLeftRight, Key } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobStatusCard } from "@/components/hub/job-status-card"
 import { InfoHint } from "@/components/ui/info-hint"
@@ -38,6 +38,23 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
               className="text-sm font-medium text-primary hover:underline"
             >
               Open Channel Manager
+            </a>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Key className="h-4 w-4 text-muted-foreground" />
+              Website API
+              <InfoHint>API keys for each property&apos;s own brand website, and what that website may show and sell online.</InfoHint>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <a
+              href={`/e/${slug}/hub/website`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Open Website API
             </a>
           </CardContent>
         </Card>

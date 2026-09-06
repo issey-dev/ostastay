@@ -5,6 +5,11 @@ open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
 for what's done and what's left, kept in-repo so any contributor (human or agent) can
 pick up the project's progress without needing prior chat history.
 
+For a property's own brand website (the public Website API and how to build against
+it), see [`docs/WEBSITE_API.md`](docs/WEBSITE_API.md),
+[`docs/PROPERTY_WEBSITE_GUIDE.md`](docs/PROPERTY_WEBSITE_GUIDE.md) and the OpenAPI spec
+[`docs/website-api.openapi.yaml`](docs/website-api.openapi.yaml).
+
 ## Quick start
 
 Requires Docker (for the database) and Node 22.

@@ -29,6 +29,13 @@ read `.agents/docs/`:
   tag replacing today's role-NAME matching. Read before touching users, roles, `scope.ts`
   or anything that assumes `User.roleId`.
 
+- [`.agents/docs/WEBSITE_API_PLAN.md`](.agents/docs/WEBSITE_API_PLAN.md) — the public
+  Website API (a property's own brand website reading availability/prices and creating
+  bookings through a Hub-minted key): decisions W-1…W-11, file map, open items. The
+  external docs a property's web developer gets are `docs/WEBSITE_API.md`,
+  `docs/PROPERTY_WEBSITE_GUIDE.md` and `docs/website-api.openapi.yaml` — keep them in
+  step with `src/app/api/website/v1/**`.
+
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
 it plus a status correction (its own header is stale — treat it as partially-to-mostly

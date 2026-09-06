@@ -1,0 +1,577 @@
+openapi: 3.1.0
+info:
+  title: Uppsolut Stay — Website API
+  version: "1.0.0"
+  summary: Property information, live availability and prices, and bookings for a property's own brand website.
+  description: |
+    Key-authenticated API for a property's brand website ("front" site + simple booking page).
+    Keys are created in the enterprise Hub (Website API → API Keys) and grant access to one or
+    more of the enterprise's properties. See docs/WEBSITE_API.md for the narrative reference and
+    docs/PROPERTY_WEBSITE_GUIDE.md for the build guide.
+
+    Conventions: dates are `YYYY-MM-DD` calendar days; check-out is exclusive; money is a number
+    in the property's currency; every response is `Cache-Control: no-store`; errors carry a
+    stable `code`.
+servers:
+  - url: https://{host}/api/website/v1
+    variables:
+      host:
+        default: stay.example.com
+        description: The Uppsolut Stay host for the enterprise.
+
+security:
+  - bearerKey: []
+  - headerKey: []
+
+tags:
+  - name: Properties
+  - name: Availability
+  - name: Bookings
+
+paths:
+  /properties:
+    get:
+      tags: [Properties]
+      summary: List the properties this key may act on
+      operationId: listProperties
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [properties]
+                properties:
+                  properties:
+                    type: array
+                    items: { $ref: "#/components/schemas/PropertySummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /properties/{propertyId}:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Properties]
+      summary: Property details for a property page
+      operationId: getProperty
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [property]
+                properties:
+                  property: { $ref: "#/components/schemas/Property" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /properties/{propertyId}/availability:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Availability]
+      summary: Per-night availability and calendar prices
+      operationId: getAvailability
+      description: |
+        For every sellable room type and every night in `[from, to)`: rooms available (real
+        inventory, never below 0), whether a stop-sale closes the night, and the room rate on the
+        rate plan configured in the Hub. At most 62 nights per call. Nightly `price` is the room
+        rate only — use the quote endpoint for the amount a guest pays.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Day" }
+          description: First night (check-in).
+        - name: to
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Day" }
+          description: Exclusive end (check-out).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Availability" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /properties/{propertyId}/quote:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Bookings]
+      summary: Price a stay (authoritative, includes taxes)
+      operationId: quoteStay
+      description: |
+        The amount a guest would pay for the stay, computed by the same code the PMS posts charges
+        with — room rate, extra-occupancy surcharges, package components, taxes, service charge and
+        Green Tax. Never writes anything. Also reports whether the stay is bookable right now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StayRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quote]
+                properties:
+                  quote: { $ref: "#/components/schemas/Quote" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /properties/{propertyId}/bookings:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Bookings]
+      summary: Create a booking
+      operationId: createBooking
+      description: |
+        Creates a real reservation (status RESERVED) in the property's PMS through the same
+        service the front desk uses — confirmation number from the property's sequence, master
+        folio opened, guest profile matched by email or created. The website can never overbook:
+        a stay that no longer fits is refused with SOLD_OUT.
+
+        Send a fresh UUID as `Idempotency-Key` per attempt and reuse it on retry: the same key
+        returns the same booking (`replayed: true`, HTTP 200) instead of a second reservation.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, minLength: 8, maxLength: 128 }
+          description: Unique per booking attempt; reuse on retry. May also be sent as `idempotencyKey` in the body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookingRequest" }
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking]
+                properties:
+                  booking: { $ref: "#/components/schemas/Booking" }
+        "200":
+          description: Replay of an earlier booking with the same Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking]
+                properties:
+                  booking: { $ref: "#/components/schemas/Booking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /bookings/{confirmationNo}:
+    get:
+      tags: [Bookings]
+      summary: Look up a booking by confirmation number and email
+      operationId: getBooking
+      description: Only bookings made through this key are visible, and the email must match the one used to book.
+      parameters:
+        - name: confirmationNo
+          in: path
+          required: true
+          schema: { type: string }
+        - name: email
+          in: query
+          required: true
+          schema: { type: string, format: email }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking]
+                properties:
+                  booking: { $ref: "#/components/schemas/Booking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    bearerKey:
+      type: http
+      scheme: bearer
+      description: "`Authorization: Bearer wsk_…` (preferred)."
+    headerKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: Alternative to the bearer header.
+
+  parameters:
+    propertyId:
+      name: propertyId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Property id from `GET /properties`. A property not covered by the key answers 404.
+
+  responses:
+    BadRequest:
+      description: Validation or date-window error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          examples:
+            validation:
+              value: { error: "Invalid request.", code: "VALIDATION", details: { "guest.email": "A valid email is required" } }
+            past:
+              value: { error: "Arrival cannot be before 2026-03-04.", code: "ARRIVAL_IN_PAST" }
+    Unauthorized:
+      description: Missing, unknown, revoked or expired key
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Invalid or inactive API key.", code: "INVALID_API_KEY" }
+    NotFound:
+      description: Unknown, or not covered by this key
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Property not found.", code: "PROPERTY_NOT_FOUND" }
+    Conflict:
+      description: The stay cannot be sold online right now
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          examples:
+            soldOut:
+              value: { error: "No rooms of this type are available for the selected dates.", code: "SOLD_OUT" }
+            stopSale:
+              value: { error: "The property is not accepting bookings for one or more of the selected dates.", code: "STOP_SALE" }
+            noRate:
+              value: { error: "One or more nights have no rate configured. Please contact the property.", code: "NO_RATE" }
+            disabled:
+              value: { error: "Online booking is not available for this property.", code: "BOOKING_DISABLED" }
+
+  schemas:
+    Day:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+      example: "2026-03-10"
+
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string, description: Human-readable message. }
+        code:
+          type: string
+          description: Stable machine-readable code.
+          enum:
+            - MISSING_API_KEY
+            - INVALID_API_KEY
+            - UNAUTHORIZED
+            - VALIDATION
+            - INVALID_DATES
+            - ARRIVAL_IN_PAST
+            - TOO_FAR_AHEAD
+            - MIN_STAY
+            - STAY_TOO_LONG
+            - INVALID_OCCUPANCY
+            - PROPERTY_NOT_FOUND
+            - ROOM_TYPE_NOT_FOUND
+            - BOOKING_NOT_FOUND
+            - BOOKING_DISABLED
+            - NO_RATE
+            - STOP_SALE
+            - SOLD_OUT
+            - BOOKING_REJECTED
+            - IDEMPOTENCY_CONFLICT
+            - INTERNAL_ERROR
+        details:
+          type: object
+          additionalProperties: { type: string }
+          description: Field path → message, on VALIDATION.
+
+    Ref:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+
+    PropertySummary:
+      type: object
+      required: [id, code, name, currency, timeZone, bookingEnabled]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        headline: { type: [string, "null"] }
+        currency: { type: string, example: USD }
+        timeZone: { type: string, example: Indian/Maldives }
+        starRating: { type: [integer, "null"] }
+        imageUrl: { type: [string, "null"], description: First photo. }
+        bookingEnabled: { type: boolean }
+
+    RoomTypeFeature:
+      type: object
+      required: [category, code, label]
+      properties:
+        category: { type: string, enum: [BED_TYPE, ROOM_VIEW, ROOM_AMENITY] }
+        code: { type: string }
+        label: { type: string, description: Display label from the enterprise's own list. }
+
+    RoomType:
+      type: object
+      required: [id, code, name, baseOccupancy, maxOccupancy, totalRooms, features]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        baseOccupancy: { type: integer, description: Adults included before an extra-adult surcharge. }
+        maxOccupancy: { type: integer, description: Adults + children allowed. }
+        totalRooms: { type: integer, description: Physical sellable rooms — informational, not availability. }
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/RoomTypeFeature" }
+
+    BookingConfig:
+      type: object
+      required: [enabled, reason, ratePlan, mealPlanCode, minNights, maxNightsAhead]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: [string, "null"], description: Why `enabled` is false. }
+        ratePlan:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        mealPlanCode: { type: string, example: BB }
+        minNights: { type: integer }
+        maxNightsAhead: { type: integer }
+
+    Property:
+      type: object
+      required:
+        [id, code, name, legalName, imageUrls, checkInTime, checkOutTime, currency, timeZone,
+         pricesIncludeTaxes, businessDate, facilities, roomTypes, booking, contact]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        legalName: { type: string }
+        headline: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        imageUrls: { type: array, items: { type: string, format: uri } }
+        logoUrl: { type: [string, "null"] }
+        brandColor: { type: [string, "null"], description: Hex colour. }
+        starRating: { type: [integer, "null"] }
+        address: { type: [string, "null"] }
+        location:
+          oneOf:
+            - type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number }
+                longitude: { type: number }
+            - type: "null"
+        contact:
+          type: object
+          properties:
+            phone: { type: [string, "null"] }
+            email: { type: [string, "null"] }
+        checkInTime: { type: string, example: "14:00" }
+        checkOutTime: { type: string, example: "11:00" }
+        currency: { type: string }
+        timeZone: { type: string }
+        pricesIncludeTaxes: { type: boolean, description: Whether displayed prices already include taxes. }
+        businessDate:
+          allOf: [{ $ref: "#/components/schemas/Day" }]
+          description: The property's operational "today" — the earliest accepted check-in.
+        policies: { type: [string, "null"], description: Free text set in the Hub; not enforced by the system. }
+        facilities:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              description: { type: [string, "null"] }
+        roomTypes:
+          type: array
+          items: { $ref: "#/components/schemas/RoomType" }
+        booking: { $ref: "#/components/schemas/BookingConfig" }
+
+    Night:
+      type: object
+      required: [date, available, closed, price, extraAdultPrice, extraChildPrice]
+      properties:
+        date: { $ref: "#/components/schemas/Day" }
+        available: { type: integer, minimum: 0, description: Rooms sellable this night. 0 when closed. }
+        closed: { type: boolean, description: A stop-sale applies — not bookable regardless of `available`. }
+        price: { type: [number, "null"], description: Room rate for the night on the configured plan; null when unpriced. }
+        extraAdultPrice: { type: [number, "null"] }
+        extraChildPrice: { type: [number, "null"] }
+
+    RoomTypeAvailability:
+      type: object
+      required: [id, code, name, baseOccupancy, maxOccupancy, nights, minAvailable, bookable, roomRateTotal]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        baseOccupancy: { type: integer }
+        maxOccupancy: { type: integer }
+        nights:
+          type: array
+          items: { $ref: "#/components/schemas/Night" }
+        minAvailable: { type: integer, description: Lowest `available` across the window. }
+        bookable: { type: boolean, description: Every night open, in stock and priced, and booking enabled. }
+        roomRateTotal: { type: [number, "null"], description: Sum of nightly room rates when every night is priced. Room rate only. }
+
+    Availability:
+      type: object
+      required: [propertyId, from, to, nights, currency, pricesIncludeTaxes, ratePlan, bookingEnabled, roomTypes]
+      properties:
+        propertyId: { type: string }
+        from: { $ref: "#/components/schemas/Day" }
+        to: { $ref: "#/components/schemas/Day" }
+        nights: { type: integer }
+        currency: { type: string }
+        pricesIncludeTaxes: { type: boolean }
+        ratePlan:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        bookingEnabled: { type: boolean }
+        roomTypes:
+          type: array
+          items: { $ref: "#/components/schemas/RoomTypeAvailability" }
+
+    StayRequest:
+      type: object
+      required: [checkIn, checkOut, roomTypeId, adults]
+      properties:
+        checkIn: { $ref: "#/components/schemas/Day" }
+        checkOut: { $ref: "#/components/schemas/Day" }
+        roomTypeId: { type: string }
+        adults: { type: integer, minimum: 1, maximum: 20 }
+        children: { type: integer, minimum: 0, maximum: 20, default: 0 }
+
+    Guest:
+      type: object
+      required: [firstName, email]
+      properties:
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: [string, "null"], maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: [string, "null"], maxLength: 40 }
+
+    BookingRequest:
+      allOf:
+        - $ref: "#/components/schemas/StayRequest"
+        - type: object
+          required: [guest]
+          properties:
+            guest: { $ref: "#/components/schemas/Guest" }
+            remarks: { type: [string, "null"], maxLength: 1000, description: Free text from the guest; shown to the desk. }
+            idempotencyKey: { type: [string, "null"], minLength: 8, maxLength: 128, description: Alternative to the Idempotency-Key header. }
+
+    Quote:
+      type: object
+      required:
+        [propertyId, roomType, ratePlan, mealPlanCode, checkIn, checkOut, nights, adults, children,
+         currency, pricesIncludeTaxes, available, roomsAvailable, totals, taxLines, nightly, warnings]
+      properties:
+        propertyId: { type: string }
+        roomType: { $ref: "#/components/schemas/Ref" }
+        ratePlan: { $ref: "#/components/schemas/Ref" }
+        mealPlanCode: { type: string }
+        checkIn: { $ref: "#/components/schemas/Day" }
+        checkOut: { $ref: "#/components/schemas/Day" }
+        nights: { type: integer }
+        adults: { type: integer }
+        children: { type: integer }
+        currency: { type: string }
+        pricesIncludeTaxes: { type: boolean }
+        available: { type: boolean, description: Whether the stay could be booked right now. }
+        roomsAvailable: { type: integer, description: Rooms of this type free for every night. }
+        totals:
+          type: object
+          required: [roomBase, extraOccupancy, packageAllocations, taxes, greenTax, grandTotal]
+          properties:
+            roomBase: { type: number }
+            extraOccupancy: { type: number }
+            packageAllocations: { type: number }
+            taxes: { type: number, description: All percentage taxes and service charge. }
+            greenTax: { type: number }
+            grandTotal: { type: number, description: The amount to display as the price of the stay. }
+        taxLines:
+          type: array
+          items:
+            type: object
+            required: [name, ratePercent, amount]
+            properties:
+              name: { type: string }
+              ratePercent: { type: number }
+              amount: { type: number }
+        nightly:
+          type: array
+          items:
+            type: object
+            required: [date, rate, roomCharge, taxes, total]
+            properties:
+              date: { $ref: "#/components/schemas/Day" }
+              rate: { type: number }
+              roomCharge: { type: number }
+              taxes: { type: number }
+              total: { type: number }
+        warnings:
+          type: array
+          items: { type: string }
+
+    Booking:
+      type: object
+      required: [bookingId, confirmationNo, reservationId, status, replayed, property, guest, quote]
+      properties:
+        bookingId: { type: string }
+        confirmationNo: { type: string, example: VILLA-000482 }
+        reservationId: { type: string }
+        status:
+          type: string
+          enum: [RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED]
+        replayed: { type: boolean, description: True when returned for a repeated Idempotency-Key. }
+        property:
+          type: object
+          required: [id, name, checkInTime, checkOutTime]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            checkInTime: { type: string }
+            checkOutTime: { type: string }
+        guest:
+          type: object
+          required: [firstName, email]
+          properties:
+            firstName: { type: string }
+            lastName: { type: [string, "null"] }
+            email: { type: string }
+        quote: { $ref: "#/components/schemas/Quote" }

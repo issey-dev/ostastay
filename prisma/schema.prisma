@@ -47,6 +47,8 @@ model Enterprise {
   channelInboundBookings ChannelInboundBooking[]
   jobRuns               JobRun[]
   eRegistrationLinks    ERegistrationLink[]
+  websiteApiKeys        WebsiteApiKey[]
+  websiteBookings       WebsiteBooking[]
   addonAccess           EnterpriseAddonAccess[]
   emailLogs             EmailLog[]
 
@@ -288,6 +290,7 @@ model User {
   currencyExchangesCreated CurrencyExchange[]   @relation("CurrencyExchangeCreatedBy")
   propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
   spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
+  websiteApiKeysCreated    WebsiteApiKey[]      @relation("WebsiteApiKeyCreatedBy")
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -502,6 +505,10 @@ model Property {
   spaSettings                  SpaSettings?
   spaGuestTherapistPreferences SpaGuestTherapistPreference[]
   eRegistrationLinks           ERegistrationLink[]
+  // Website API (brand site per property) — see .agents/docs/WEBSITE_API_PLAN.md.
+  websiteSettings              WebsitePropertySettings?
+  websiteApiKeys               WebsiteApiKeyProperty[]
+  websiteBookings              WebsiteBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1127,6 +1134,8 @@ model RatePlan {
   // as unselectable until at least one profile is linked, same as any other negotiated
   // plan with a non-matching travel agent.
   agentAccess     RatePlanAgentAccess[]
+  // Which properties' brand websites sell THIS plan (see WebsitePropertySettings).
+  websiteSettings WebsitePropertySettings[]
 
   @@unique([propertyId, code])
 
@@ -1282,6 +1291,9 @@ model Reservation {
   // guest identity is per-participant under the multi-resource design).
   spaAppointmentParticipations SpaAppointmentParticipant[]
   eRegistrationLinks           ERegistrationLink[]
+  // Set when this reservation was made through a property's own brand website via the
+  // Website API — full provenance (guest input, idempotency key) lives on that row.
+  websiteBooking               WebsiteBooking?
   eRegistrationSlots           ERegistrationGuestSlot[]
 
   createdAt DateTime @default(now())
@@ -3524,4 +3536,152 @@ model ChannelBookingDefaults {
   updatedAt DateTime @updatedAt
 
   @@index([ratePlanId])
+}
+
+// ─── Website API ──────────────────────────────────────────────────────────────────
+//
+// A property's own BRAND WEBSITE (a "front": property information plus a simple booking
+// page) talks to this PMS through the public Website API (src/app/api/website/v1/**),
+// authenticated by an API key minted in the Hub. See .agents/docs/WEBSITE_API_PLAN.md and
+// docs/WEBSITE_API.md.
+//
+// Keys are ENTERPRISE-level objects (the Hub is the only place they are managed) and each
+// grants access to ONE OR MORE of that enterprise's properties via WebsiteApiKeyProperty —
+// a group with one site per hotel mints one key per property; a group with a single
+// portal mints one key covering all of them.
+//
+// Same storage rule as the channel webhook token and the eRegistration link: only the
+// SHA-256 hash is kept. Possession of a key is authority to READ availability and prices
+// and to CREATE bookings in a tenant's PMS, so a DB dump must never hand out a live one.
+// keyPrefix (the first characters of the plaintext) is stored separately purely so the
+// Hub can show "which key is this" in a list without ever showing the key itself.
+model WebsiteApiKey {
+  id           String     @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name         String
+  keyPrefix    String
+  keyHash      String     @unique
+  status       String     @default("ACTIVE") // ACTIVE | REVOKED
+  // Browser origins (scheme + host [+ port], e.g. https://www.hotel.com) allowed to call
+  // the API directly from a page. Empty = server-to-server only, which is the recommended
+  // topology (the key never reaches a browser). Matched exactly against the Origin header.
+  allowedOrigins String[] @default([])
+  expiresAt    DateTime?
+  lastUsedAt   DateTime?
+
+  createdByUserId String
+  createdBy       User      @relation("WebsiteApiKeyCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  revokedAt       DateTime?
+  revokedByUserId String?
+
+  properties WebsiteApiKeyProperty[]
+  bookings   WebsiteBooking[]
+
+  @@index([enterpriseId])
+  @@index([createdByUserId])
+}
+
+// Which properties a key may act on. Enforced on every Website API request: a property id
+// in the URL that is not on the key's list reads as "not found", never "forbidden", so a
+// key cannot be used to enumerate a group's other hotels.
+model WebsiteApiKeyProperty {
+  keyId      String
+  key        WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  addedAt    DateTime      @default(now())
+
+  @@id([keyId, propertyId])
+  @@index([propertyId])
+}
+
+// What a property's brand website is allowed to show and sell — configured in the Hub
+// (Website API > Properties), the same "configuration, not operation" shape as
+// ChannelBookingDefaults. Property itself carries no description or gallery (it was built
+// for the desk, not for marketing), so the website-facing copy lives here rather than
+// widening Property.
+//
+// ratePlanId is THE plan the website sells. A website booking confirms a stay and a
+// price, never one of the property's rate plans, so — exactly as with channel conversion —
+// nothing is guessed: with no plan configured the property is listed but not bookable, and
+// the API says so (bookingEnabled: false, with a reason) rather than falling back to Base.
+model WebsitePropertySettings {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Marketing copy and imagery for the site's property page.
+  headline         String?
+  description      String?
+  imageUrls        String[] @default([])
+  // Free-text lines shown as "House rules / policies" (cancellation terms, deposit
+  // policy, child policy). The PMS does not enforce these — the property writes what it
+  // honours at the desk.
+  policies         String?
+
+  // Booking configuration.
+  bookingEnabled   Boolean   @default(true)
+  ratePlanId       String?
+  ratePlan         RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+  mealPlanCode     String    @default("NONE")
+  // How far ahead the site may look/book, and the shortest stay it may sell. Both are
+  // website-only limits — the desk is never bound by them.
+  maxNightsAhead   Int       @default(365)
+  minNights        Int       @default(1)
+  // Optional per-booking remark stamped on every website reservation (e.g. "Prepaid via
+  // website — collect balance at check-in"), so the desk sees the site's own terms.
+  deskRemark       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ratePlanId])
+}
+
+// One row per booking ATTEMPT made through the Website API — the audit and idempotency
+// record, mirroring ChannelInboundBooking for channel-sourced stays. The Reservation is
+// created through the same createReservation service the desk uses; this row is what
+// remembers it came from the website, what the guest typed, and which key was used.
+//
+// (keyId, idempotencyKey) is the retry guard: a website whose request timed out can
+// resend the same Idempotency-Key and get the SAME confirmation back rather than a
+// second reservation for the same guest.
+model WebsiteBooking {
+  id            String        @id @default(uuid())
+  enterpriseId  String
+  enterprise    Enterprise    @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId    String
+  property      Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  keyId         String
+  key           WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  reservationId String?       @unique
+  reservation   Reservation?  @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  idempotencyKey String?
+  status         String  @default("CONFIRMED") // CONFIRMED | FAILED
+  problem        String?
+
+  // What the guest submitted, kept verbatim so a dispute can be traced to the request.
+  guestFirstName String
+  guestLastName  String?
+  guestEmail     String
+  guestPhone     String?
+  arrival        DateTime
+  departure      DateTime
+  roomTypeId     String
+  adults         Int
+  children       Int
+  remarks        String?
+  quotedTotal    Float?
+  currency       String?
+  requestIp      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([keyId, idempotencyKey])
+  @@index([enterpriseId, createdAt])
+  @@index([propertyId, createdAt])
 }

@@ -1,5 +1,10 @@
 # Hub Level + Channel Manager (Beds24) — Plan
 
+> **2026-09-06:** the Hub gained a **Website API** section (`/e/[slug]/hub/website`) —
+> API keys for each property's own brand website and what that site shows and sells.
+> Same INTEGRATIONS gate, same requireHubAccess() rule on every route. See
+> [WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md).
+
 > Status (2026-07-27): **Hub + everything up to the sync engine is BUILT.** Shipped as five
 > stacked PRs — Hub shell (#4), Connection (#5), Exchange Log (#6), Job runner (#7), Sharing (#8).
 > **The sync engine itself is NOT started** — that is all that remains of this plan.

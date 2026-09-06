@@ -2,6 +2,37 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Website API — brand website per property (2026-09-06) — DONE
+
+Owner brief: each property may have its own website ("front" + simple booking page) that
+takes minimal guest info and stay details, with availability synced; API keys are made in
+the Hub and may cover one or more of the enterprise's properties; the property builds its
+own site from an API document. Plan and decisions: [WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md).
+
+- **Schema** (migration `20260906100000_website_api`): `WebsiteApiKey` (hash-at-rest,
+  prefix label, allowedOrigins, expiry, rotate/revoke), `WebsiteApiKeyProperty` (key →
+  properties), `WebsitePropertySettings` (rate plan / meal plan the site sells, min
+  stay, booking window, desk note, headline/description/photos/policies),
+  `WebsiteBooking` (one row per attempt, idempotency guard, audit).
+- **Public API** `/api/website/v1/**`: properties, property details, availability,
+  quote, bookings, booking lookup. Key in `Authorization: Bearer` or `X-Api-Key`;
+  per-key CORS opt-in. D-7 rules applied to availability; the website can never overbook
+  (no `acknowledgeOverbook`, no `allowPastArrival`). Bookings go through
+  `createReservation` with `externalRef = WEB-…`.
+- **Hub** `/e/[slug]/hub/website` (API Keys + Properties tabs) and `/api/hub/website/**`,
+  INTEGRATIONS-gated, every action in the activity log.
+- **Shared helpers extracted**: `systemContext()` → `src/lib/reservations/system-context.ts`,
+  `resolveGuestProfile()` → `src/lib/profiles/resolve-guest-profile.ts` (channel
+  conversion now imports them).
+- **Docs for the property's web developer**: `docs/WEBSITE_API.md`,
+  `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml`.
+- **Tests**: `tests/business-rules/website-api.test.ts` (21).
+
+**Still open** (see the plan's follow-ups): per-key rate limiting; a transactional guard
+on the last room (the desk has the same race); a Hub list of website bookings incl. FAILED
+attempts; optional guest confirmation email from the PMS; cancel/modify endpoints;
+multi-room bookings; image upload (URLs only today).
+
 ## Uppsolut Mail Service — billed SMTP fallback + EmailLog (2026-08-10) — DONE
 
 Owner ruling that **reverses** the "no fallback between senders" decision recorded two days

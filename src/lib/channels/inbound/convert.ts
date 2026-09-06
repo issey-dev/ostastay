@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import type { AuthContext } from "@/lib/scope";
 import { createReservation } from "@/lib/reservations/create-reservation";
+import { systemContext } from "@/lib/reservations/system-context";
+import { resolveGuestProfile } from "@/lib/profiles/resolve-guest-profile";
 import { resolveBookingDefaults } from "@/lib/channels/defaults";
 import { getProvider } from "@/lib/channels/providers/registry";
 
@@ -22,72 +23,10 @@ export type ConvertResult = {
   reason?: string;
 };
 
-/**
- * A synthetic AuthContext for this one system-driven path. There is no logged-in user
- * behind a channel booking, so createReservation's assertPropertyAccess() and logActivity()
- * calls need SOMETHING to run against; ENTERPRISE scope with no property pin is the same
- * shape a real enterprise-level admin has, and logActivity tolerates a userId that resolves
- * to no real User row (see src/lib/activity-log.ts) by just recording null name/email.
- */
-function systemContext(enterpriseId: string): AuthContext {
-  return {
-    userId: "system",
-    enterpriseId,
-    homeEnterpriseId: enterpriseId,
-    scope: "ENTERPRISE",
-    sessionPropertyId: null,
-    propertyId: null,
-    roleIds: [],
-    permissions: new Map(),
-    // Synthetic context for channel-inbound conversion — it never passes through
-    // requireSession, so there is no Session row behind it.
-    sessionId: "system",
-    sessionJti: "system",
-    isInternal: false,
-    isActingAsSupport: false,
-    licensedModules: new Set(),
-  };
-}
-
-/**
- * Find an existing guest Profile by email within the enterprise, or create a minimal one.
- * Mirrors the same find-or-create shape the group-block pickup flow already uses
- * (src/app/api/groups/[id]/pickup/route.ts) — Profile has no email column of its own; email
- * lives in ProfileCommunication.
- *
- * A channel booking without bookings-personal scope arrives with no guest name at all (a
- * real gap, not a bug — see .agents/docs/TODO.md); "Guest" is a discoverable placeholder
- * rather than a blocked conversion, since the room is genuinely booked whether or not we yet
- * know who is coming.
- */
-async function resolveGuestProfile(params: {
-  enterpriseId: string;
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-}): Promise<string> {
-  const { enterpriseId, firstName, lastName, email } = params;
-
-  if (email) {
-    const existing = await prisma.profile.findFirst({
-      where: { enterpriseId, communications: { some: { type: "EMAIL", value: email } } },
-      select: { upid: true },
-    });
-    if (existing) return existing.upid;
-  }
-
-  const created = await prisma.profile.create({
-    data: {
-      enterpriseId,
-      profileType: "GUEST",
-      firstName: firstName || "Guest",
-      lastName: lastName || null,
-      communications: email ? { create: [{ type: "EMAIL", value: email, isPrimary: true }] } : undefined,
-    },
-    select: { upid: true },
-  });
-  return created.upid;
-}
+// systemContext() and resolveGuestProfile() used to be defined here. They moved to
+// src/lib/reservations/system-context.ts and src/lib/profiles/resolve-guest-profile.ts on
+// 2026-09-06 when the Website API became the second system-driven booking path — one
+// definition each, so the two paths cannot drift.
 
 /** Convert one booking. Safe to call on any booking in any state — see the file header. */
 export async function convertInboundBooking(bookingId: string): Promise<ConvertResult> {

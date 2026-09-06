@@ -2847,3 +2847,28 @@ Osta Controls page give counts per enterprise per period. No rate is applied any
 `LicenseInvoice` amounts are hand-set throughout this product ("owner decision: no
 formula"), and a rate rendered here would be a second pricing model competing with the real
 one.
+
+---
+
+## 2026-09-06 — Website API: a brand website per property (owner)
+
+Each property may run its own website — a "front" with the property's information and a
+simple booking page — fed by a public, key-authenticated API. Full decision record in
+[WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md) (W-1…W-11); the rulings that shape behaviour:
+
+- **Keys are made in the Hub, at enterprise level, and may cover one or more of the
+  enterprise's properties.** INTEGRATIONS-gated; no new module. A property not on the key
+  answers 404, never 403.
+- **Minimal guest information.** First name, email required; last name, phone, remarks
+  optional. Guest matched to an existing profile by email or created.
+- **Availability is live and follows D-7.** Actual inventory, group holds withheld until
+  cutoff, stop-sale shown as closed. **The website can never overbook** — unlike a channel
+  booking, nothing has been confirmed to the guest yet, so a stay that no longer fits is
+  refused (`SOLD_OUT`).
+- **The site sells exactly one Hub-chosen rate plan per property**, mirroring channel
+  conversion defaults: no plan → not bookable, never a silent fallback to Base. Unpriced
+  nights are refused, never confirmed at 0.
+- **The quote endpoint is the price.** Calendar figures are room rates only.
+- **No payment in v1.** Policies + the Hub's desk note carry the terms.
+- **Keys are shown once, hashed at rest, rotatable and revocable**, same as the webhook
+  token and eRegistration link.
