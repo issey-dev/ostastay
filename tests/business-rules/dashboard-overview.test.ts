@@ -15,6 +15,7 @@ vi.mock("next/headers", () => ({
 }));
 
 const { prisma } = await import("@/lib/db");
+const { WIDGET_IDS } = await import("@/lib/dashboard/widgets");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { requireSession } = await import("@/lib/scope");
 const { buildDashboardOverview } = await import("@/lib/dashboard/overview");
@@ -292,5 +293,93 @@ describe("Operations Dashboard — per-section permission gating", () => {
     expect(futures.every((p) => p.roomRevenue === null && p.totalRevenue === null)).toBe(true);
     // But rooms already on the books for those nights do show.
     expect(futures[0].roomsSold).toBe(4);
+  });
+
+  // Per-role widget curation (RoleDashboardWidget). Layered ON TOP of the section gates
+  // above and only ever narrowing: hiding a card is an administrator's decision about
+  // clutter, and must never be mistaken for — or capable of relaxing — an access decision.
+  describe("per-role dashboard widget curation", () => {
+    it("permits every widget when no role has blocked any", async () => {
+      const o = await overviewFor(adminId);
+      expect(o.permittedWidgets).toContain("kpi-adr");
+      expect(o.permittedWidgets).toContain("revenue-mix");
+      expect(o.permittedWidgets.length).toBe(WIDGET_IDS.length);
+    });
+
+    it("drops a blocked widget from the list without withholding the section it reads from", async () => {
+      const role = await prisma.role.create({
+        data: {
+          enterpriseId,
+          name: `Curated ${uniq()}`,
+          isSystem: false,
+          permissions: {
+            create: [
+              { module: "DASHBOARD", canView: true, canCreate: false, canUpdate: false, canDelete: false },
+              { module: "REVENUE", canView: true, canCreate: false, canUpdate: false, canDelete: false },
+            ],
+          },
+          dashboardWidgets: { create: [{ widgetId: "kpi-adr" }] },
+        },
+      });
+      const user = await prisma.user.create({
+        data: {
+          enterpriseId,
+          email: `curated-${uniq()}@dash.local`,
+          passwordHash: await bcrypt.hash("password123", 10),
+          firstName: "Curated",
+          lastName: "User",
+          scope: "ENTERPRISE",
+          roles: { create: { roleId: role.id } },
+        },
+      });
+
+      const o = await overviewFor(user.id);
+      expect(o.permittedWidgets).not.toContain("kpi-adr");
+      expect(o.permittedWidgets).toContain("kpi-revpar");
+      // The section is still sent: the block hides a card, it does not revoke REVENUE.
+      // Anything stronger has to be done by the module permission, which is the real gate.
+      expect(o.revenue).toBeDefined();
+    });
+
+    it("blocks a widget only when EVERY role the user holds blocks it", async () => {
+      const mkCurated = (name: string, widgetIds: string[]) =>
+        prisma.role.create({
+          data: {
+            enterpriseId,
+            name: `${name} ${uniq()}`,
+            isSystem: false,
+            permissions: {
+              create: [
+                { module: "DASHBOARD", canView: true, canCreate: false, canUpdate: false, canDelete: false },
+                { module: "FRONT_DESK", canView: true, canCreate: false, canUpdate: false, canDelete: false },
+              ],
+            },
+            dashboardWidgets: { create: widgetIds.map((widgetId) => ({ widgetId })) },
+          },
+        });
+
+      // "movements" is blocked by both; "alerts" by only one.
+      const roleA = await mkCurated("Curated A", ["movements", "alerts"]);
+      const roleB = await mkCurated("Curated B", ["movements"]);
+
+      const passwordHash = await bcrypt.hash("password123", 10);
+      const user = await prisma.user.create({
+        data: {
+          enterpriseId,
+          email: `two-roles-${uniq()}@dash.local`,
+          passwordHash,
+          firstName: "Two",
+          lastName: "Roles",
+          scope: "ENTERPRISE",
+          roles: { create: [{ roleId: roleA.id }, { roleId: roleB.id }] },
+        },
+      });
+
+      const o = await overviewFor(user.id);
+      expect(o.permittedWidgets).not.toContain("movements");
+      // Access is the union of a user's grants everywhere else in this app; a curation
+      // list must not become the one place where holding an extra role takes something away.
+      expect(o.permittedWidgets).toContain("alerts");
+    });
   });
 });

@@ -66,12 +66,17 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     NIGHT_AUDIT: EDIT_NO_DELETE,
     EXCURSIONS: EDIT_NO_DELETE,
     SPA: EDIT_NO_DELETE,
+    // Every operational role keeps the Operations Dashboard it has always had. VIEW_ONLY,
+    // not FULL: `update` on this module is the right to decide which widgets OTHER roles
+    // see, which is an administrator's job, not a desk's.
+    DASHBOARD: VIEW_ONLY,
   }),
 
   // Matches today's sidebar HOUSEKEEPING allow-list (Housekeeping, Maintenance only).
   Housekeeping: matrix({
     HOUSEKEEPING: FULL,
     MAINTENANCE: VIEW_ONLY,
+    DASHBOARD: VIEW_ONLY,
   }),
 
   // Named in team-manager.tsx's legacy ROLES list but had no sidebar/proxy branch of its
@@ -80,6 +85,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
   Maintenance: matrix({
     MAINTENANCE: FULL,
     HOUSEKEEPING: VIEW_ONLY,
+    DASHBOARD: VIEW_ONLY,
   }),
 
   // DEBTORS added here (not Front Desk) — Accounts Receivable is back-office billing
@@ -96,6 +102,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     FRONT_DESK: VIEW_ONLY,
     DEBTORS: EDIT_NO_DELETE,
     PROFILES: EDIT_NO_DELETE,
+    DASHBOARD: VIEW_ONLY,
   }),
 
   Reservations: matrix({
@@ -105,6 +112,7 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     GROUP_BLOCKS: EDIT_NO_DELETE,
     PROFILES: EDIT_NO_DELETE,
     FRONT_DESK: VIEW_ONLY,
+    DASHBOARD: VIEW_ONLY,
   }),
 };
 

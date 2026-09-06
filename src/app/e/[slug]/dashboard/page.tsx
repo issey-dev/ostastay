@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope";
+import { requireSession, hasHubAccess, hasAnyPropertyModule, hasPermission } from "@/lib/scope";
+import { NAV_GROUPS } from "@/components/app-sidebar-nav.config";
 
 export default async function DashboardRoot({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -17,10 +18,16 @@ export default async function DashboardRoot({ params }: { params: Promise<{ slug
     redirect(`/e/${slug}/hub`);
   }
 
-  // Everyone else lands on the Operations Dashboard. It is safe as a universal landing
-  // page precisely because it has no single owning module: every tile is gated on its
-  // own module's canView, so a Housekeeping-only user sees the housekeeping tiles and
-  // nothing else rather than a page they aren't allowed to read. (It used to route by
-  // FRONT_DESK to either the front office or the orphaned /inventory route.)
-  redirect(`/e/${slug}/dashboard/overview`);
+  // Everyone who can open the Operations Dashboard lands there. Each of its tiles is
+  // still gated on its own module's canView, so a Housekeeping-only user sees the
+  // housekeeping tiles and nothing else rather than a page they aren't allowed to read.
+  if (hasPermission(ctx, "DASHBOARD", "view")) {
+    redirect(`/e/${slug}/dashboard/overview`);
+  }
+
+  // No DASHBOARD: send them to the first thing their sidebar will actually show. Read
+  // from the nav config rather than a second hand-written order, so this can never send
+  // someone to a page their own sidebar doesn't offer.
+  const first = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.module && hasPermission(ctx, i.module, "view"));
+  redirect(`/e/${slug}${first?.url ?? "/dashboard/profile"}`);
 }

@@ -55,7 +55,7 @@ export type StatTileProps = {
   accent?: string
 }
 
-export function StatTile({ label, value, footnote, icon: Icon, delta, trend, trendColor, href, accent = "var(--chart-2)" }: StatTileProps) {
+export function StatTile({ label, value, footnote, icon: Icon, delta, trend, trendColor, href, accent = "var(--series-1)" }: StatTileProps) {
   const showDelta = delta && Number.isFinite(delta.value) && Math.abs(delta.value) > 0.049
   const higherIsBetter = delta?.higherIsBetter ?? true
   const good = showDelta ? (delta!.value > 0) === higherIsBetter : false
@@ -69,8 +69,11 @@ export function StatTile({ label, value, footnote, icon: Icon, delta, trend, tre
         href && "hover:-translate-y-0.5 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       )}
     >
-      {/* A 2px hairline in the tile's own accent — enough to group tiles by domain at a
-          glance without colouring any text. */}
+      {/* A 2px brand hairline. It used to rotate through four hues so tiles grouped by
+          domain at a glance; with eight tiles on one row that read as decoration, not
+          grouping, and was the loudest part of the "too many colours" problem. One
+          Crimson rule across the strip instead — the icon and the label do the
+          identifying, which is what they were always for. */}
       <span aria-hidden className="absolute inset-x-0 top-0 h-0.5" style={{ background: accent }} />
 
       <div className="flex items-start justify-between gap-2">

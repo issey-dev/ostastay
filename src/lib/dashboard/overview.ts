@@ -15,6 +15,7 @@
 // screen reconcile against the reports rather than telling a second story.
 
 import { prisma } from "@/lib/db";
+import { WIDGET_IDS } from "@/lib/dashboard/widgets";
 import { ReservationStatus } from "@/lib/enums";
 import { hasPermission, hasHubAccess, type AuthContext, type Module } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -60,6 +61,15 @@ export type DashboardOverview = {
   trendDays: number;
   /** Sections the caller was authorized for — handy for support/debugging a "why is my tile gone". */
   visibleSections: string[];
+  /**
+   * Widget ids this session's roles allow on screen (see RoleDashboardWidget).
+   *
+   * A NARROWING filter layered on top of the section gate above, never a widening one:
+   * every id here still has to have its section present before anything renders. Denying
+   * a widget hides a card an admin decided is noise for that role — it does not withhold
+   * the figures, which is what the module permission is for.
+   */
+  permittedWidgets: string[];
 
   occupancy?: {
     totalRooms: number;
@@ -255,6 +265,7 @@ export async function buildDashboardOverview(
     generatedAt: new Date().toISOString(),
     trendDays,
     visibleSections: [],
+    permittedWidgets: [],
   };
 
   // ── Shared reads ────────────────────────────────────────────────────────────────
@@ -972,6 +983,35 @@ export async function buildDashboardOverview(
       })),
     };
   }
+
+  // ── Per-role widget curation ────────────────────────────────────────────────────
+  //
+  // Which of the cards this session is ENTITLED to see an admin has actually chosen to
+  // put in front of it (RoleDashboardWidget). Computed last, so it can only ever narrow
+  // what the gates above decided.
+  //
+  // Blocked only when EVERY role the user holds blocks it: access in this app is the
+  // union of a user's grants (mergeRolePermissions), and a curation list must not become
+  // the one place where holding an extra role takes something away.
+  const blocks = ctx.roleIds.length
+    ? await prisma.roleDashboardWidget.findMany({
+        where: { roleId: { in: ctx.roleIds } },
+        select: { roleId: true, widgetId: true },
+      })
+    : [];
+  const blockedByAll = new Set<string>();
+  if (ctx.roleIds.length > 0) {
+    const counts = new Map<string, Set<string>>();
+    for (const b of blocks) {
+      let roles = counts.get(b.widgetId);
+      if (!roles) counts.set(b.widgetId, (roles = new Set()));
+      roles.add(b.roleId);
+    }
+    for (const [widgetId, roles] of counts) {
+      if (roles.size >= ctx.roleIds.length) blockedByAll.add(widgetId);
+    }
+  }
+  out.permittedWidgets = WIDGET_IDS.filter((id) => !blockedByAll.has(id));
 
   return out;
 }

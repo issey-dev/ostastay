@@ -129,6 +129,27 @@
     --chart-3: #2F7D55; /* Fern      */
     --chart-4: #8F6618; /* Amber     */
     --chart-5: #6B4E8F; /* Aubergine */
+
+    /* SERIES RAMP — what the Operations Dashboard actually plots with (2026-09-06).
+       --chart-1..5 above stay as they are: five separable hues, correct when a chart
+       genuinely needs five unrelated categories. The dashboard is not that chart. It is
+       a dozen small cards on one screen, and giving each its own hue produced a page in
+       blue, amber, aubergine and fern — a palette the brand does not own, and the app
+       owner's actual complaint ("too many colours").
+
+       So the dashboard separates categories by LIGHTNESS inside the Crimson family,
+       supported by the cool Slate/Platinum neutrals, rather than by hue. Two benefits
+       beyond looking like Uppsolut: a lightness ramp survives every colour-vision
+       deficiency (the ΔE the old hue order was tuned for is carried by luminance here),
+       and single-series charts — most of the dashboard — can just be brand Crimson.
+
+       Semantic colour is untouched and still outranks this: --success/--warning/
+       --destructive/--info keep their meaning for room status, work-order priority and
+       balances, where the colour IS the information. */
+    --series-1: #8B0000; /* Crimson OS — the brand, first slot always */
+    --series-2: #A85A5A; /* Muted rose — Crimson lifted and desaturated */
+    --series-3: #5B6B78; /* Steel Slate — the cool neutral counterweight */
+    --series-4: #9AA7B2; /* Platinum Slate — lightest step */
   }
 
   /* Z-INDEX LAYERS — named stacking order, consumed via arbitrary-value utilities
@@ -259,5 +280,13 @@
     --chart-3: #5FBF87;
     --chart-4: #D9A63F;
     --chart-5: #A98BC9;
+
+    /* Series ramp, dark. Same four roles as light mode, re-pitched for the Obsidian
+       canvas: the ramp runs light-to-dark there and dark-to-light here, so the ORDER of
+       the steps (and therefore which bucket is which) never changes with the theme. */
+    --series-1: #F05252; /* lifted Crimson, matching --chart-1 */
+    --series-2: #C97B7B; /* muted rose */
+    --series-3: #8FA3B3; /* steel slate */
+    --series-4: #C3CDD6; /* platinum slate */
   }
 }

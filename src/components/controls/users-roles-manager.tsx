@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
+import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsHubAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
 
@@ -24,6 +25,8 @@ type Role = {
   name: string
   isSystem: boolean
   permissions: { module: string; canView: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean }[]
+  /** Dashboard widget ids this role may NOT see — see RoleWidgetAccess. */
+  blockedWidgets?: string[]
   _count?: { users: number }
 }
 
@@ -214,6 +217,7 @@ export function UsersRolesManager({
   const [editingRole, setEditingRole] = useState<Role | null>(null)
   const [roleName, setRoleName] = useState("")
   const [roleMatrix, setRoleMatrix] = useState<PermissionMatrix>(emptyPermissionMatrix())
+  const [roleBlockedWidgets, setRoleBlockedWidgets] = useState<string[]>([])
   const [roleErrorMsg, setRoleErrorMsg] = useState<string | null>(null)
   const [savingRole, setSavingRole] = useState(false)
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
@@ -223,6 +227,7 @@ export function UsersRolesManager({
     setEditingRole(null)
     setRoleName("")
     setRoleMatrix(emptyPermissionMatrix())
+    setRoleBlockedWidgets([])
     setRoleErrorMsg(null)
     setIsRoleDialogOpen(true)
   }
@@ -231,6 +236,7 @@ export function UsersRolesManager({
     setEditingRole(role)
     setRoleName(role.name)
     setRoleMatrix(matrixFromRole(role))
+    setRoleBlockedWidgets(role.blockedWidgets ?? [])
     setRoleErrorMsg(null)
     setIsRoleDialogOpen(true)
   }
@@ -250,7 +256,7 @@ export function UsersRolesManager({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: roleName, permissions: roleMatrix }),
+        body: JSON.stringify({ name: roleName, permissions: roleMatrix, blockedWidgets: roleBlockedWidgets }),
       })
       if (res.ok) {
         setIsRoleDialogOpen(false)
@@ -683,6 +689,11 @@ export function UsersRolesManager({
               <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Night Manager" disabled={editingRole?.isSystem} />
             </div>
             <RolePermissionMatrix value={roleMatrix} onChange={setRoleMatrix} disabled={editingRole?.isSystem} />
+            {/* Only meaningful once the role can open the dashboard at all — otherwise it
+                is a list of cards nobody will ever reach. */}
+            {roleMatrix.DASHBOARD?.canView && (
+              <RoleWidgetAccess value={roleBlockedWidgets} onChange={setRoleBlockedWidgets} disabled={editingRole?.isSystem} />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>{editingRole?.isSystem ? "Close" : "Cancel"}</Button>

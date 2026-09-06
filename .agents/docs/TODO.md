@@ -2,6 +2,52 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Operations Dashboard — brand palette, customisation, DASHBOARD module (2026-09-06) — DONE
+
+Owner brief: the dashboard's colours did not fit Uppsolut ("too many colours"); add a gear
+to choose which widgets show; let users group widgets into pages/tabs; drag cards around
+with the grid auto-fitting; greet the user by name instead of "Operations Dashboard".
+Then: preferences are PER USER, and admins decide which widgets a role may see, under a
+new Dashboard property module.
+
+- **Colour.** New `--series-1..4` tokens (`src/app/theme.css`) — a Crimson-family LIGHTNESS
+  ramp with cool Slate/Platinum support, replacing the blue → amber → aubergine → fern
+  categorical order. Single-series charts (most of the page) are now brand Crimson via
+  `hueFor(0)`; KPI tiles share one Crimson hairline instead of four rotating hues. Semantic
+  colour (room status, work-order priority, balances) is untouched — there the colour IS
+  the information.
+- **Customisation.** Gear → `DashboardSettings`: per-widget show/hide, width (Small →
+  Full width), and which page it sits on; add/rename/reorder/delete pages; reset. Pages
+  render as tabs only once there is more than one.
+- **Drag & drop.** `WidgetShell` — a handle per card (the card itself stays interactive),
+  live reflow on dragenter, arrow keys as the keyboard equivalent. One dense 12-column
+  grid replaces the two fixed grids, so hiding or resizing a widget closes its own gap.
+- **Per-user, server-side.** `UserDashboardLayout` (one JSON row per user) via
+  `/api/dashboard/layout`; deliberately NOT localStorage, so an arrangement follows staff
+  between terminals. `reconcile()` repairs a layout written against an older catalogue.
+- **Admin widget access.** New `DASHBOARD` property module + `RoleDashboardWidget`
+  (presence = blocked). Edited in the role dialog (Hub → People → Roles) via
+  `RoleWidgetAccess`; returned per session as `permittedWidgets` and enforced server-side.
+  Blocked only when EVERY role a user holds blocks it, matching the union rule everywhere
+  else. It is CURATION, not security — the per-section module gate is unchanged and still
+  decides what data is sent at all.
+- **Migration** `20260906140000_dashboard_module_and_layout` grants DASHBOARD view to every
+  EXISTING role (the dashboard used to be ungated, so a custom role would otherwise have
+  lost it silently), and manage rights wherever the role already had CONTROLS update.
+- **Chart bug fixed alongside:** `niceTicks()` could return a top tick BELOW the data max,
+  so a series peaking at 250 against ticks 0/100/200 drew a quarter of a plot height above
+  its own frame and, with overflow visible, over the chart stacked above it. Top tick now
+  rounds up; the data layer is also clipped. Regression test in `dashboard-charts.test.tsx`.
+- **Two time-bomb tests fixed** (`alpha-hardening`, `special-requests`): both booked
+  hard-coded 2026 dates against a property whose business date defaulted to the server's
+  today, so they passed when written and began failing once the wall clock passed those
+  dates — which had been failing the deploy pipeline since mid-August. Business dates are
+  now pinned in the fixtures.
+
+**Still open:** widget denial hides a card but does not withhold the section's data (the
+module permission is what does that); no per-property layouts (one arrangement per user);
+the printable permission matrix does not yet show widget curation.
+
 ## Website API — brand website per property (2026-09-06) — DONE
 
 Owner brief: each property may have its own website ("front" + simple booking page) that

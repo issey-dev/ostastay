@@ -33,10 +33,11 @@ export type NavItem = {
   title: string
   url: string
   icon: React.ComponentType<{ className?: string }>
-  /** The module whose `canView` reveals this item. Omit for an item that no single
-   *  module owns — today only the Operations Dashboard, which is a composite of many
-   *  modules and gates each of its own tiles individually (see
-   *  src/lib/dashboard/overview.ts). An ungated item must never show anything a
+  /** The module whose `canView` reveals this item. Every item has one since 2026-09-06,
+   *  when the Operations Dashboard — previously the one composite screen no single module
+   *  owned — gained DASHBOARD. Its tiles are still gated individually by the module that
+   *  owns each one's data (see src/lib/dashboard/overview.ts); DASHBOARD only decides
+   *  whether the page exists for you. An ungated item must never show anything a
    *  permission would otherwise hide. */
   module?: Module
 }
@@ -55,7 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { title: "Dashboard", url: "/dashboard/overview", icon: LayoutDashboard },
+      { title: "Dashboard", url: "/dashboard/overview", icon: LayoutDashboard, module: "DASHBOARD" },
       { title: "Front Desk", url: "/dashboard/front-office", icon: ConciergeBell, module: "FRONT_DESK" },
       { title: "Reservations", url: "/dashboard/reservations", icon: CalendarDays, module: "RESERVATIONS" },
       { title: "Tape Chart", url: "/dashboard/reservations/tape-chart", icon: LayoutGrid, module: "TAPE_CHART" },

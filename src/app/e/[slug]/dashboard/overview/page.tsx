@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { requireSession } from "@/lib/scope"
+import { requireSession, hasPermission } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { OperationsDashboard } from "@/components/dashboard/operations-dashboard"
 
@@ -19,9 +19,23 @@ export default async function DashboardOverviewPage({ params }: { params: Promis
   const ctx = await requireSession().catch(() => null)
   if (!ctx) redirect("/api/auth/session-expired")
 
-  const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } })
+  // The page's own module. Bounced rather than thrown: /dashboard picks whichever screen
+  // this session CAN open, so a role without the dashboard lands somewhere useful instead
+  // of on an error. (Individual tiles are gated separately — see the note above.)
+  if (!hasPermission(ctx, "DASHBOARD", "view")) redirect(`/e/${slug}/dashboard`)
+
+  // The user's name is read here rather than fetched by the client, so the greeting is
+  // part of the first paint instead of appearing a moment later.
+  const [enterprise, user] = await Promise.all([
+    prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } }),
+    prisma.user.findUnique({ where: { id: ctx.userId }, select: { firstName: true, lastName: true } }),
+  ])
   if (!enterprise) redirect("/api/auth/session-expired")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/dashboard/overview`)
 
-  return <OperationsDashboard enterprisePrefix={`/e/${enterprise.slug}`} />
+  // A support session acting inside a tenant has no User row in that enterprise; the
+  // greeting falls back rather than rendering "Welcome, undefined".
+  const userName = user ? `${user.firstName} ${user.lastName}`.trim() : "there"
+
+  return <OperationsDashboard enterprisePrefix={`/e/${enterprise.slug}`} userName={userName} />
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
+import { WIDGET_IDS } from "@/lib/dashboard/widgets";
 import { logActivity } from "@/lib/activity-log";
 
 export async function PATCH(
@@ -50,6 +51,21 @@ export async function PATCH(
               canUpdate: !!p?.canUpdate,
               canDelete: !!p?.canDelete,
             },
+          });
+        }
+      }
+      // Dashboard widget curation. Replace-all inside the same transaction, so the saved
+      // state is exactly what the editor showed — a diff would leave rows behind for a
+      // widget the admin just re-enabled. Unknown ids are dropped rather than stored: a
+      // stale id would silently block nothing and outlive the widget it named.
+      if (Array.isArray(body.blockedWidgets)) {
+        const blocked = (body.blockedWidgets as unknown[])
+          .filter((w): w is string => typeof w === "string")
+          .filter((w) => WIDGET_IDS.includes(w));
+        await tx.roleDashboardWidget.deleteMany({ where: { roleId: id } });
+        if (blocked.length > 0) {
+          await tx.roleDashboardWidget.createMany({
+            data: [...new Set(blocked)].map((widgetId) => ({ roleId: id, widgetId })),
           });
         }
       }

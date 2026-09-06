@@ -78,6 +78,45 @@ describe("chart primitives render", () => {
     assertClean("empty", mk([]));
   });
 
+  // Regression, 2026-09-06. The tick scale used to stop at the last clean step at or
+  // BELOW the data max, and every chart scales its marks by that top tick — so an ADR
+  // peaking at 250 against ticks 0/100/200 was drawn a quarter of a plot height above its
+  // own frame and, the SVG having overflow visible, straight over the occupancy chart
+  // stacked above it. The assertion is geometric on purpose: "renders without NaN" was
+  // always true of the broken version.
+  it("never plots above its own frame when the data max is not a clean multiple of a tick", () => {
+    const height = 120;
+    const html = renderToStaticMarkup(
+      React.createElement(LineChart, {
+        ariaLabel: "test",
+        seriesLabel: "ADR",
+        height,
+        points: days(6).map((p, i) => ({ ...p, value: [0, 250, 120, 250, 0, 80][i] })),
+      })
+    );
+
+    const d = /<path d="(M[^"]+)" fill="none"/.exec(html)?.[1];
+    expect(d, "line path not found in markup").toBeTruthy();
+    const ys = [...d!.matchAll(/[ML][\d.]+ (-?[\d.]+)/g)].map((m) => Number(m[1]));
+    expect(ys.length).toBeGreaterThan(1);
+    expect(Math.min(...ys), "line drawn above the top of its own SVG").toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys), "line drawn below the bottom of its own SVG").toBeLessThanOrEqual(height);
+
+    // Same guarantee for bars: the top tick has to cover the tallest column.
+    const bars = renderToStaticMarkup(
+      React.createElement(ColumnChart, {
+        ariaLabel: "test",
+        height: 140,
+        points: days(5).map((p, i) => ({ ...p, values: [[10], [85], [40], [85], [0]][i] })),
+        series: [{ key: "s", label: "S", color: hueFor(0) }],
+        format: (n: number) => String(n),
+      })
+    );
+    const ticks = [...bars.matchAll(/text-anchor="end"[^>]*>([\d.]+)</g)].map((m) => Number(m[1]));
+    expect(ticks.length, "no axis ticks found").toBeGreaterThan(1);
+    expect(Math.max(...ticks), "top tick is below the tallest bar").toBeGreaterThanOrEqual(85);
+  });
+
   it("RankedBars / StackedBar / Sparkline / Meter", () => {
     assertClean("ranked", renderToStaticMarkup(React.createElement(RankedBars, { rows: [{ label: "Cash", value: 400 }, { label: "Card", value: 0 }] })));
     assertClean("ranked ordinal", renderToStaticMarkup(React.createElement(RankedBars, { ordinal: true, rows: [{ label: "Current", value: 0 }, { label: "1-30", value: 0 }] })));

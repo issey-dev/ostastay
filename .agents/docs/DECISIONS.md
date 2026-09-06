@@ -2847,6 +2847,34 @@ Osta Controls page give counts per enterprise per period. No rate is applied any
 `LicenseInvoice` amounts are hand-set throughout this product ("owner decision: no
 formula"), and a rate rendered here would be a second pricing model competing with the real
 one.
+---
+
+## 2026-09-06 — Operations Dashboard: brand palette, per-user layout, DASHBOARD module (owner)
+
+- **Fewer colours, and they are ours.** The dashboard opened in blue, amber and aubergine —
+  none of them brand colours. Categorical series now separate by LIGHTNESS inside the
+  Crimson family (`--series-1..4`), single-series charts are brand Crimson, and the KPI
+  strip shares one hairline instead of four. Semantic colour is untouched: room status,
+  work-order priority and balances keep red/amber/green, because there the colour is the
+  information. The five `--chart-*` tokens stay as they are for charts that genuinely need
+  five unrelated categories.
+- **The title greets the user** — "Welcome, &lt;full name&gt;" rather than "Operations
+  Dashboard". Where you are is already answered by the nav; who you are signed in as is
+  not, and on a shared front-desk terminal that is the more useful fact.
+- **Every user arranges their own dashboard**: show/hide any widget, set its width, group
+  widgets into pages (tabs), drag cards to reorder with the grid auto-fitting.
+- **Layouts are stored per user on the SERVER** (`UserDashboardLayout`), not in the
+  browser. A front desk has several terminals and staff move between them, so an
+  arrangement is expected to be there at the next machine.
+- **A new DASHBOARD property module.** `view` decides who lands on the dashboard at all
+  (it was previously the one ungated screen); `update` is the right to configure, per role,
+  which widgets that role sees (`RoleDashboardWidget`). Existing roles were granted view by
+  migration so nobody silently lost a page they already had.
+- **Widget curation is not access control, and the code says so in both places.** The real
+  gate stays the per-section module permission in `src/lib/dashboard/overview.ts` — a role
+  without REVENUE is never sent revenue figures. Blocking a widget removes a card from
+  that role's dashboard. A user with several roles is blocked only when EVERY role blocks
+  it, matching the union rule that governs access everywhere else in the app.
 
 ---
 

@@ -24,24 +24,33 @@ import { cn } from "@/lib/utils"
 //   · Every chart carries a <ChartTableView> twin, so no value is reachable only by
 //     hovering, and hit targets are per-index bands rather than the mark itself.
 //
-// CATEGORICAL HUE ORDER — deliberately NOT 1,2,3,4,5. Run through the palette validator
-// (OKLab ΔE, normal vision + protan/deutan/tritan), the token order puts Fern (--chart-3)
-// next to Amber (--chart-4), a pair only ΔE 13 apart for a full-colour reader and ΔE 7
-// under protanopia — i.e. genuinely hard to tell apart. Reordering to
-// blue → amber → aubergine → fern → crimson separates that pair and takes every
-// discriminability check to PASS in both light and dark mode, without touching the
-// tokens themselves (they are brand values owned by DESIGN_PLAN §2.1).
+// CATEGORICAL SERIES ORDER — a Crimson-family LIGHTNESS ramp (--series-1..4, defined per
+// theme in src/app/theme.css), not the five --chart-* hues.
+//
+// This used to be blue → amber → aubergine → fern → crimson: five separable hues, ordered
+// that way because the raw token order puts Fern next to Amber, a pair only ΔE 13 apart
+// for a full-colour reader and ΔE 7 under protanopia. That reasoning was sound for ONE
+// chart with five unrelated categories. The Operations Dashboard is a dozen small cards
+// on one screen, and the result was a page that opened in blue, amber and aubergine —
+// none of them colours the brand owns (app-owner call, 2026-09-06).
+//
+// Separating by lightness inside the Crimson family fixes the brand problem without
+// giving up discriminability: luminance difference is the one channel every colour-vision
+// deficiency preserves, so the ramp is if anything safer than the hue order it replaces.
+// Slot 0 is brand Crimson, so a single-series chart — most of this dashboard — is simply
+// `hueFor(0)` and needs no call-site change.
+//
+// Four slots, not five: past the fourth, callers fold the tail into an "Other" row rather
+// than inventing a step so close to its neighbour that the ramp stops reading as ordered.
 export const CATEGORICAL_HUES = [
-  "var(--chart-2)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--chart-3)",
-  "var(--chart-1)",
+  "var(--series-1)",
+  "var(--series-2)",
+  "var(--series-3)",
+  "var(--series-4)",
 ] as const
 
 /** Colour for categorical slot `i`. Assigned by ENTITY, never by rank — filtering a
- *  series out must never repaint the survivors. Past the fifth slot callers fold the
- *  tail into an "Other" row rather than inventing a sixth hue. */
+ *  series out must never repaint the survivors. */
 export const hueFor = (i: number) => CATEGORICAL_HUES[i % CATEGORICAL_HUES.length]
 
 const GRID = "var(--border)"
@@ -117,14 +126,25 @@ function useKeyboardCursor(count: number, setIndex: React.Dispatch<React.SetStat
   )
 }
 
-/** Axis ticks rounded to clean numbers, so the reader isn't decoding 3,847.62. */
+/**
+ * Axis ticks rounded to clean numbers, so the reader isn't decoding 3,847.62.
+ *
+ * The TOP TICK ALWAYS COVERS `max`, and that is load-bearing rather than cosmetic: every
+ * caller scales its marks by `ticks[ticks.length - 1]`, so a top tick below the data
+ * plots that data above the frame. This used to stop at the last clean step at or below
+ * max — ADR peaking at 250 against ticks 0/100/200 drew the line a quarter of a plot
+ * height above its own chart and, with overflow visible, straight over the chart stacked
+ * on top of it (reported 2026-09-06). Rounding the top UP to the next step is the fix;
+ * clipping the data layer at each call site is the belt to this pair of braces.
+ */
 function niceTicks(max: number, count = 4): number[] {
   if (!Number.isFinite(max) || max <= 0) return [0, 1]
   const raw = max / count
   const mag = Math.pow(10, Math.floor(Math.log10(raw)))
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag
+  const top = Math.ceil(max / step - 1e-9) * step
   const ticks: number[] = []
-  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(Number(v.toFixed(6)))
+  for (let v = 0; v <= top + step * 0.001; v += step) ticks.push(Number(v.toFixed(6)))
   if (ticks.length < 2) ticks.push(step)
   return ticks
 }
@@ -249,6 +269,7 @@ export function ColumnChart({
   const [ref, width] = useMeasuredWidth<HTMLDivElement>()
   const [hover, setHover] = React.useState<number | null>(null)
   const onKeyDown = useKeyboardCursor(points.length, setHover)
+  const clipId = React.useId()
 
   const padL = 38
   const padR = 8
@@ -291,6 +312,16 @@ export function ColumnChart({
           </g>
         ))}
 
+        {/* Same vertical-only clip as LineChart: with the tick scale fixed a bar can no
+            longer exceed the plot, and this makes sure a future one still could not
+            reach the card above. */}
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={-40} y={0} width={width + 80} height={height} />
+          </clipPath>
+        </defs>
+
+        <g clipPath={`url(#${clipId})`}>
         {points.map((p, i) => {
           const cx = padL + band * i + band / 2
           const active = hover === i
@@ -336,6 +367,7 @@ export function ColumnChart({
             </g>
           )
         })}
+        </g>
         <line x1={padL} x2={padL + plotW} y1={padT + plotH} y2={padT + plotH} stroke={GRID} strokeWidth={1} shapeRendering="crispEdges" />
       </svg>
 
@@ -380,10 +412,14 @@ export function LineChart({
   const [ref, width] = useMeasuredWidth<HTMLDivElement>()
   const [hover, setHover] = React.useState<number | null>(null)
   const onKeyDown = useKeyboardCursor(points.length, setHover)
+  const clipId = React.useId()
 
   const padL = 38
   const padR = 8
-  const padT = 10
+  // Headroom for the end-of-series value label, which is drawn 10px above its marker.
+  // At the old 10 the label sat on the SVG's top edge, so a series peaking at the top
+  // tick had its own figure clipped away.
+  const padT = 22
   const axisH = 18
   const plotW = Math.max(10, width - padL - padR)
   const plotH = Math.max(10, height - padT - axisH)
@@ -425,18 +461,37 @@ export function LineChart({
           </g>
         ))}
 
-        {/* Area wash at ~10% — a hint of mass under the line, never a saturated block. */}
-        {areaPath && <path d={areaPath} fill={color} opacity={0.1} />}
-        {path && <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+        {/* Vertical-only clip on the data layer. The SVG keeps `overflow-visible` so an
+            x-axis label centred on the last point is not sliced in half, but nothing the
+            data draws can escape upward onto the chart stacked above this one. */}
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={-40} y={0} width={width + 80} height={height} />
+          </clipPath>
+        </defs>
 
-        {last && (
-          <>
-            <circle cx={px(last.i)} cy={py(last.value as number)} r={4} fill={color} stroke={SURFACE} strokeWidth={2} />
-            <text x={Math.min(px(last.i), padL + plotW - 2)} y={py(last.value as number) - 10} textAnchor="end" fontSize={10} fontWeight={600} fill="var(--foreground)" className="tabular-nums">
-              {format(last.value as number)}
-            </text>
-          </>
-        )}
+        <g clipPath={`url(#${clipId})`}>
+          {/* Area wash at ~10% — a hint of mass under the line, never a saturated block. */}
+          {areaPath && <path d={areaPath} fill={color} opacity={0.1} />}
+          {path && <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+
+          {last && (
+            <>
+              <circle cx={px(last.i)} cy={py(last.value as number)} r={4} fill={color} stroke={SURFACE} strokeWidth={2} />
+              <text
+                x={Math.min(px(last.i), padL + plotW - 2)}
+                y={py(last.value as number) - 10}
+                textAnchor="end"
+                fontSize={10}
+                fontWeight={600}
+                fill="var(--foreground)"
+                className="tabular-nums"
+              >
+                {format(last.value as number)}
+              </text>
+            </>
+          )}
+        </g>
 
         {hover !== null && points[hover]?.value !== null && (
           <line x1={px(hover)} x2={px(hover)} y1={padT} y2={padT + plotH} stroke={GRID} strokeWidth={1} shapeRendering="crispEdges" />

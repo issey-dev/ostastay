@@ -31,6 +31,16 @@ export const MODULES = [
   // is a Controls tab gated by CONTROLS, this module only covers day-to-day
   // appointment booking/check-in/completion.
   "SPA",
+  // The Operations Dashboard (2026-09-06, owner). Until now the dashboard was the one
+  // screen no module owned — every role could open it. It has a module for two reasons:
+  // `view` decides who lands on it at all, and `update` is where the per-role choice of
+  // WHICH WIDGETS a role sees is administered (see RoleDashboardWidget in the schema).
+  //
+  // Not a gate on the underlying figures: every tile is still governed by the module that
+  // owns its data (REVENUE, HOUSEKEEPING, …) inside /api/dashboard/overview, so granting
+  // DASHBOARD hands out no numbers a role could not already reach. It decides whether the
+  // page exists for you and which of your own tiles are put in front of you.
+  "DASHBOARD",
   // The FIRST enterprise-level (Hub) module — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
   // Unlike every module above it, this one is NOT property-operational: it gates the Hub
   // shell (src/app/e/[slug]/hub), where channel-manager connectivity, credentials, sharing
@@ -71,6 +81,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   ACTIVITY_LOG: "Activity Log",
   EXCURSIONS: "Excursions",
   SPA: "Spa",
+  DASHBOARD: "Dashboard",
   INTEGRATIONS: "Integrations",
   USERS: "Users & Access",
 };

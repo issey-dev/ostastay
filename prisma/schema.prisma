@@ -159,6 +159,8 @@ model Role {
 
   permissions RolePermission[]
   users       UserRole[]
+  // Dashboard widgets this role may not see — see RoleDashboardWidget.
+  dashboardWidgets RoleDashboardWidget[]
 
   @@unique([enterpriseId, name])
 }
@@ -291,6 +293,7 @@ model User {
   propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
   spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
   websiteApiKeysCreated    WebsiteApiKey[]      @relation("WebsiteApiKeyCreatedBy")
+  dashboardLayout          UserDashboardLayout?
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -3684,4 +3687,63 @@ model WebsiteBooking {
   @@unique([keyId, idempotencyKey])
   @@index([enterpriseId, createdAt])
   @@index([propertyId, createdAt])
+}
+
+// ─── Operations Dashboard ──────────────────────────────────────────────────────────
+
+/// One person's own arrangement of the Operations Dashboard: which widgets they show,
+/// how wide each one is, which page (tab) it sits on, and in what order.
+///
+/// PER USER, and stored server-side rather than in the browser, because an arrangement
+/// someone has built is expected to be there when they sign in at another terminal — a
+/// front desk has several, and staff move between them. The row is keyed by userId alone
+/// (not by property): the layout is about how a person likes to work, and re-arranging
+/// every screen after switching property would be worse than one arrangement that
+/// travels. Widgets a property has no data for simply do not render.
+///
+/// `layout` is opaque JSON, deliberately. Its shape is owned by
+/// src/lib/dashboard/layout.ts, which reconciles whatever it reads against the widget
+/// catalogue that actually shipped — so a layout written by an older build, naming
+/// widgets that no longer exist, is repaired on read rather than migrated in SQL.
+///
+/// This is a PREFERENCE, never a permission. What a user may see is decided by
+/// src/lib/dashboard/overview.ts (per-section module permissions) and by
+/// RoleDashboardWidget below; hiding a widget here only hides a card from its owner.
+model UserDashboardLayout {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout    Json
+  updatedAt DateTime @updatedAt
+}
+
+/// A dashboard widget a role may NOT see. PRESENCE MEANS BLOCKED — same convention as
+/// AvailabilityRestriction, and for the same reason: the default (no row) is the common
+/// case, so storing only the exceptions keeps a new widget from needing a row per role
+/// before anyone can see it.
+///
+/// Two rules follow from that, and both matter:
+///
+///   · A user holding several roles is blocked from a widget only when EVERY one of their
+///     roles blocks it. Access elsewhere in this app is the UNION of a user's grants
+///     (see mergeRolePermissions), and a curation list must not quietly become the one
+///     place where holding an extra role takes something away.
+///
+///   · A widget that ships later is visible to everyone until an admin says otherwise.
+///     The alternative — invisible until each role is ticked — makes every new tile
+///     undiscoverable, and this list is not what keeps data safe.
+///
+/// It is CURATION, not security. The real gate is the per-section module permission in
+/// src/lib/dashboard/overview.ts: a role without REVENUE never receives revenue figures
+/// at all, blocked or not. This list decides which of the cards a user is *entitled* to
+/// see are actually put in front of them — "the front desk shouldn't open onto
+/// Receivables" — and it is enforced server-side so it cannot be clicked away, but it
+/// was never the boundary and must not be treated as one.
+model RoleDashboardWidget {
+  roleId   String
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  /// A widget id from WIDGET_CATALOG in src/components/dashboard/operations-dashboard.tsx.
+  widgetId String
+
+  @@id([roleId, widgetId])
+  @@index([roleId])
 }

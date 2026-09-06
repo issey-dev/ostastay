@@ -195,6 +195,10 @@ export const MessageSquare = outline(Message2Outline)
 export const MonitorPlay = outline(MonitorOutline)
 export const Moon = outline(MoonOutline)
 export const MoreHorizontal = outline(MoreOutline)
+// Drag handle on a rearrangeable card (Operations Dashboard widgets). The runtime bundle
+// has no dedicated grip glyph; Sort's stacked arrows read as "move this" better than the
+// three-dot More does, which everywhere else in this app means "open a menu".
+export const GripVertical = outline(SortOutline)
 export const Package = outline(BoxOutline)
 export const Palette = outline(ColorSwatchOutline)
 export const PanelLeftIcon = outline(SidebarLeftOutline)
