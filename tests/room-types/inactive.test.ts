@@ -65,6 +65,10 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
         timeZone: "UTC",
         checkInTime: "14:00",
         checkOutTime: "11:00",
+        // Pinned. The stays below use hard-coded 2026 dates and createReservation
+        // refuses an arrival before the property's business date; unset, that date is the
+        // SERVER's today, so the file passes until the wall clock overtakes those dates.
+        businessDate: new Date(Date.UTC(2026, 7, 1)),
       },
     });
     propertyId = property.id;

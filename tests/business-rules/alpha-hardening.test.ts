@@ -113,6 +113,15 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         timeZone: "UTC",
         checkInTime: "14:00",
         checkOutTime: "11:00",
+        // PINNED, and the pin is load-bearing. Every booking below uses a hard-coded
+        // 2026 date, and createReservation refuses an arrival earlier than the property's
+        // business date. Left unset that date falls back to the SERVER's today, so this
+        // file passed when it was written and began failing the moment the wall clock
+        // passed 2026-08-10 — taking the deploy pipeline down with it, since a red suite
+        // never reaches the server. A fixed business date plus fixed booking dates makes
+        // the file time-independent. Individual tests that need a different "today" still
+        // set it themselves (see the Night Audit cases).
+        businessDate: new Date(Date.UTC(2026, 7, 1)),
       },
     });
     propertyId = property.id;

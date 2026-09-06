@@ -42,6 +42,11 @@ async function setup() {
     data: {
       enterpriseId: enterprise.id, name: "P", code: `SR-${uniq()}`, legalName: "P LLC",
       defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+      // Pinned so the hard-coded 2026-09-01 stay below is always a FUTURE arrival.
+      // Unset, the business date falls back to the server's today and createReservation
+      // rejects the booking the moment the wall clock passes that date — a test that
+      // rots on a calendar rather than on a change to the code.
+      businessDate: new Date(Date.UTC(2026, 7, 1)),
     },
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 3 } });
