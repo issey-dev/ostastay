@@ -162,17 +162,20 @@ export function OperationsDashboard({
     void load()
   }, [load])
 
-  // The saved arrangement, read once. Aborted on unmount so a slow response cannot
-  // resurrect a layout onto a page the user has already left.
+  // The saved arrangement for the property being viewed, re-read whenever that changes.
+  // The abort matters twice over: on unmount, and on a property switch, so a slow response
+  // for the property just left cannot land as the layout of the one now on screen.
   React.useEffect(() => {
+    if (!propertyId) return
+    setLayoutLoaded(false)
     const ac = new AbortController()
-    void fetchLayout(ac.signal).then((stored) => {
+    void fetchLayout(propertyId, ac.signal).then((stored) => {
       if (ac.signal.aborted) return
       setSaved(stored)
       setLayoutLoaded(true)
     })
     return () => ac.abort()
-  }, [])
+  }, [propertyId])
 
   // Quiet background refresh — the desk leaves this open all shift.
   React.useEffect(() => {
@@ -223,13 +226,21 @@ export function OperationsDashboard({
   // five round trips. A failure is reported once rather than per keystroke — silently
   // losing an arrangement the user just built is the thing to avoid.
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const schedulePersist = React.useCallback((next: DashboardLayout) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      const ok = await persistLayout(next)
-      if (!ok) toast.error("Couldn't save your dashboard layout", { description: "It still looks right here, but it may not be there next time you sign in." })
-    }, 400)
-  }, [])
+  const schedulePersist = React.useCallback(
+    (next: DashboardLayout) => {
+      if (!propertyId) return
+      // The property is captured HERE, not read when the timer fires: switching property
+      // mid-debounce would otherwise file this arrangement under the property the user
+      // just moved to.
+      const target = propertyId
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(async () => {
+        const ok = await persistLayout(target, next)
+        if (!ok) toast.error("Couldn't save your dashboard layout", { description: "It still looks right here, but it may not be there next time you sign in." })
+      }, 400)
+    },
+    [propertyId]
+  )
   React.useEffect(() => () => void (saveTimer.current && clearTimeout(saveTimer.current)), [])
 
   const apply = React.useCallback(
@@ -423,9 +434,11 @@ export function OperationsDashboard({
           // user tracking whatever ships next, not pin today's default into their account.
           setSaved(defaultLayout(WIDGET_CATALOG))
           setActivePageId(null)
-          void resetStoredLayout().then((ok) => {
-            if (!ok) toast.error("Couldn't reset your dashboard layout")
-          })
+          if (propertyId) {
+            void resetStoredLayout(propertyId).then((ok) => {
+              if (!ok) toast.error("Couldn't reset your dashboard layout")
+            })
+          }
         }}
         catalog={WIDGET_CATALOG}
         availableIds={availableIds}

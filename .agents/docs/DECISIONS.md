@@ -2866,6 +2866,14 @@ one.
 - **Layouts are stored per user on the SERVER** (`UserDashboardLayout`), not in the
   browser. A front desk has several terminals and staff move between them, so an
   arrangement is expected to be there at the next machine.
+- **And per property** (2026-09-07): one person's two properties are two different jobs —
+  a city hotel with a busy debtors ledger and an island resort running excursions and a spa
+  do not want the same cards in the same order, and keying on the user alone made every
+  property inherit whichever arrangement was tidied last. A property with no arrangement of
+  its own gets the shipped default rather than borrowing another property's, because
+  copying a layout the user never chose for it would then leave the first drag ambiguous
+  about which property it was editing. Existing rows were fanned out to every property
+  their owner could reach, which is exactly what the old row meant.
 - **A new DASHBOARD property module.** `view` decides who lands on the dashboard at all
   (it was previously the one ungated screen); `update` is the right to configure, per role,
   which widgets that role sees (`RoleDashboardWidget`). Existing roles were granted view by

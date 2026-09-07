@@ -293,7 +293,8 @@ model User {
   propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
   spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
   websiteApiKeysCreated    WebsiteApiKey[]      @relation("WebsiteApiKeyCreatedBy")
-  dashboardLayout          UserDashboardLayout?
+  // One per property this user has arranged — see UserDashboardLayout.
+  dashboardLayouts         UserDashboardLayout[]
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -512,6 +513,7 @@ model Property {
   websiteSettings              WebsitePropertySettings?
   websiteApiKeys               WebsiteApiKeyProperty[]
   websiteBookings              WebsiteBooking[]
+  dashboardLayouts             UserDashboardLayout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3694,12 +3696,21 @@ model WebsiteBooking {
 /// One person's own arrangement of the Operations Dashboard: which widgets they show,
 /// how wide each one is, which page (tab) it sits on, and in what order.
 ///
-/// PER USER, and stored server-side rather than in the browser, because an arrangement
-/// someone has built is expected to be there when they sign in at another terminal — a
-/// front desk has several, and staff move between them. The row is keyed by userId alone
-/// (not by property): the layout is about how a person likes to work, and re-arranging
-/// every screen after switching property would be worse than one arrangement that
-/// travels. Widgets a property has no data for simply do not render.
+/// PER USER AND PER PROPERTY, and stored server-side rather than in the browser.
+///
+/// Server-side because an arrangement someone has built is expected to be there when they
+/// sign in at another terminal — a front desk has several and staff move between them.
+///
+/// Per property (owner call, 2026-09-07) because one person's two properties are two
+/// different jobs. A city hotel with a busy debtors ledger and an island resort running
+/// excursions and a spa do not want the same cards in the same order, and the widgets that
+/// matter at one are the ones that sit empty at the other. Keying on the user alone made
+/// every property inherit whichever arrangement was built last.
+///
+/// A property with no row of its own gets the shipped default rather than borrowing
+/// another property's — the alternative silently copies a layout the user never chose for
+/// it, and the first drag would then have to decide whether it was editing one property or
+/// all of them.
 ///
 /// `layout` is opaque JSON, deliberately. Its shape is owned by
 /// src/lib/dashboard/layout.ts, which reconciles whatever it reads against the widget
@@ -3710,10 +3721,15 @@ model WebsiteBooking {
 /// src/lib/dashboard/overview.ts (per-section module permissions) and by
 /// RoleDashboardWidget below; hiding a widget here only hides a card from its owner.
 model UserDashboardLayout {
-  userId    String   @id
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  layout    Json
-  updatedAt DateTime @updatedAt
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  layout     Json
+  updatedAt  DateTime @updatedAt
+
+  @@id([userId, propertyId])
+  @@index([propertyId])
 }
 
 /// A dashboard widget a role may NOT see. PRESENCE MEANS BLOCKED — same convention as

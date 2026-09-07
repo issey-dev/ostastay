@@ -22,9 +22,16 @@ new Dashboard property module.
 - **Drag & drop.** `WidgetShell` — a handle per card (the card itself stays interactive),
   live reflow on dragenter, arrow keys as the keyboard equivalent. One dense 12-column
   grid replaces the two fixed grids, so hiding or resizing a widget closes its own gap.
-- **Per-user, server-side.** `UserDashboardLayout` (one JSON row per user) via
-  `/api/dashboard/layout`; deliberately NOT localStorage, so an arrangement follows staff
-  between terminals. `reconcile()` repairs a layout written against an older catalogue.
+- **Per-user AND per-property, server-side.** `UserDashboardLayout` (one JSON row per
+  user per property) via `/api/dashboard/layout`; deliberately NOT localStorage, so an
+  arrangement follows staff between terminals. `reconcile()` repairs a layout written
+  against an older catalogue. Per property from 2026-09-07 (migration
+  `20260907090000_dashboard_layout_per_property`, which fans each existing row out to every
+  property its owner could reach so nobody lost an arrangement): a city hotel and an island
+  resort are two different jobs, and keying on the user alone meant whichever was tidied
+  last became the layout for both. A property with no row gets the shipped default rather
+  than borrowing another's. The endpoint now takes a client-supplied propertyId, so it
+  calls `assertPropertyAccess` — pinned by `tests/business-rules/dashboard-layout.test.ts`.
 - **Admin widget access.** New `DASHBOARD` property module + `RoleDashboardWidget`
   (presence = blocked). Edited in the role dialog (Hub → People → Roles) via
   `RoleWidgetAccess`; returned per session as `permittedWidgets` and enforced server-side.
@@ -45,8 +52,8 @@ new Dashboard property module.
   now pinned in the fixtures.
 
 **Still open:** widget denial hides a card but does not withhold the section's data (the
-module permission is what does that); no per-property layouts (one arrangement per user);
-the printable permission matrix does not yet show widget curation.
+module permission is what does that); the printable permission matrix does not yet show
+widget curation; there is no "copy this arrangement to my other properties" shortcut.
 
 ## Website API — brand website per property (2026-09-06) — DONE
 

@@ -1,11 +1,13 @@
 // Per-user layout for the Operations Dashboard: which widgets are shown, how wide each
 // one is, which page (tab) it sits on, and in what order.
 //
-// WHERE THIS LIVES — server-side, one row per user (UserDashboardLayout), read and written
-// through /api/dashboard/layout. Not localStorage: a front desk has several terminals and
-// staff move between them, so an arrangement someone has built is expected to be there
-// when they sign in on the next machine. The row is keyed by user id alone, so two people
-// sharing a terminal never inherit each other's screen.
+// WHERE THIS LIVES — server-side, one row per user PER PROPERTY (UserDashboardLayout),
+// read and written through /api/dashboard/layout. Not localStorage: a front desk has
+// several terminals and staff move between them, so an arrangement someone has built is
+// expected to be there when they sign in on the next machine. Keyed by user, so two people
+// sharing a terminal never inherit each other's screen; keyed by property too, because one
+// person's two properties are two different jobs and the cards that matter at a city hotel
+// are the ones that sit empty at an island resort.
 //
 // It is a PREFERENCE and never a gate. What a user may see is decided by
 // /api/dashboard/overview (per-section module permissions) and, on top of that, by the
@@ -221,10 +223,10 @@ export function isStorableLayout(value: unknown): value is DashboardLayout {
   );
 }
 
-/** The saved layout, or null when this user has never rearranged anything. */
-export async function fetchLayout(signal?: AbortSignal): Promise<DashboardLayout | null> {
+/** This user's saved layout FOR ONE PROPERTY, or null when they have never arranged it. */
+export async function fetchLayout(propertyId: string, signal?: AbortSignal): Promise<DashboardLayout | null> {
   try {
-    const res = await fetch("/api/dashboard/layout", { signal });
+    const res = await fetch(`/api/dashboard/layout?propertyId=${encodeURIComponent(propertyId)}`, { signal });
     if (!res.ok) return null;
     const body = await res.json();
     return isStorableLayout(body?.layout) ? (body.layout as DashboardLayout) : null;
@@ -235,12 +237,12 @@ export async function fetchLayout(signal?: AbortSignal): Promise<DashboardLayout
   }
 }
 
-export async function persistLayout(layout: DashboardLayout): Promise<boolean> {
+export async function persistLayout(propertyId: string, layout: DashboardLayout): Promise<boolean> {
   try {
     const res = await fetch("/api/dashboard/layout", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ layout }),
+      body: JSON.stringify({ propertyId, layout }),
     });
     return res.ok;
   } catch {
@@ -248,9 +250,10 @@ export async function persistLayout(layout: DashboardLayout): Promise<boolean> {
   }
 }
 
-export async function resetStoredLayout(): Promise<boolean> {
+/** Reset ONE property back to the shipped default; the user's other properties are untouched. */
+export async function resetStoredLayout(propertyId: string): Promise<boolean> {
   try {
-    const res = await fetch("/api/dashboard/layout", { method: "DELETE" });
+    const res = await fetch(`/api/dashboard/layout?propertyId=${encodeURIComponent(propertyId)}`, { method: "DELETE" });
     return res.ok;
   } catch {
     return false;
