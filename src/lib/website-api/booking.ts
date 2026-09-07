@@ -33,6 +33,10 @@ export type WebsiteStayInput = {
   roomTypeId: string;
   adults: number;
   children: number;
+  /** Omitted = the property's configured default. Only honoured when it offers a choice. */
+  mealPlanCode?: string | null;
+  /** Optional paid extras, by allocation id. Only honoured when the property offers them. */
+  addOnIds?: string[];
 };
 
 export type WebsiteGuestInput = {
@@ -61,11 +65,29 @@ export type WebsiteQuote = {
   totals: {
     roomBase: number;
     extraOccupancy: number;
+    /** Everything the rate plan or meal plan includes, plus any extras the guest ticked. */
     packageAllocations: number;
     taxes: number;
     greenTax: number;
     grandTotal: number;
   };
+  /**
+   * Every allocation on this stay, itemised. `source` says WHY each one is here:
+   * RATE_PLAN or MEAL_PLAN means it came with what the guest chose (show it as included),
+   * MANUAL means they ticked it (show it as an extra they can untick).
+   *
+   * `mode` matters for wording: INCLUDE_IN_RATE is carved out of the room line, so its
+   * amount is already inside roomBase and must NOT be added again; ADD_TO_RATE sits on
+   * top. grandTotal is correct either way.
+   */
+  allocations: {
+    id: string;
+    code: string;
+    name: string;
+    source: "RATE_PLAN" | "MEAL_PLAN" | "MANUAL";
+    mode: string;
+    amount: number;
+  }[];
   taxLines: { name: string; ratePercent: number; amount: number }[];
   nightly: { date: string; rate: number; roomCharge: number; taxes: number; total: number }[];
   warnings: string[];
@@ -93,6 +115,10 @@ type StayContext = {
     ratePlan: { id: string; code: string; name: string };
   };
   roomType: { id: string; code: string; name: string; maxOccupancy: number };
+  /** The meal plan this stay is actually on, after applying the guest's choice (or not). */
+  mealPlanCode: string;
+  /** Allocation ids the guest ticked, after validation. */
+  addOnIds: string[];
   nights: number;
   fromUtc: Date;
   toUtc: Date;
@@ -115,6 +141,8 @@ async function loadStayContext(propertyId: string, stay: WebsiteStayInput): Prom
         select: {
           bookingEnabled: true,
           mealPlanCode: true,
+          offerMealPlans: true,
+          offerAddOns: true,
           minNights: true,
           maxNightsAhead: true,
           deskRemark: true,
@@ -164,12 +192,57 @@ async function loadStayContext(propertyId: string, stay: WebsiteStayInput): Prom
     };
   }
 
+  // ── The guest's choices ────────────────────────────────────────────────────────
+  //
+  // Both are validated against what this property actually offers, not merely against
+  // what exists: a site that sends a meal plan the Hub never opened up, or an allocation
+  // from another property, is refused rather than quietly ignored. Silently dropping a
+  // choice would quote one thing and book another.
+  let mealPlanCode = settings.mealPlanCode;
+  const requestedMealPlan = stay.mealPlanCode?.trim();
+  if (requestedMealPlan && requestedMealPlan !== mealPlanCode) {
+    if (!settings.offerMealPlans) {
+      return { ok: false, status: 409, code: "MEAL_PLAN_NOT_OFFERED", error: "This property does not offer a choice of meal plan online." };
+    }
+    // "NONE" is the app-wide "no meal plan" sentinel and is always selectable; anything
+    // else has to be one of this property's own active plans.
+    if (requestedMealPlan !== "NONE") {
+      const plan = await prisma.mealPlan.findFirst({
+        where: { propertyId: property.id, code: requestedMealPlan, isActive: true },
+        select: { code: true },
+      });
+      if (!plan) return { ok: false, status: 400, code: "MEAL_PLAN_NOT_FOUND", error: "That meal plan is not available at this property." };
+    }
+    mealPlanCode = requestedMealPlan;
+  }
+
+  const requestedAddOns = [...new Set((stay.addOnIds ?? []).filter((id) => typeof id === "string" && id))];
+  let addOnIds: string[] = [];
+  if (requestedAddOns.length > 0) {
+    if (!settings.offerAddOns) {
+      return { ok: false, status: 409, code: "ADD_ONS_NOT_OFFERED", error: "This property does not offer extras online." };
+    }
+    const allowed = await prisma.allocation.findMany({
+      // sellSeparate is the owner-set flag for "can be attached on its own" — the same
+      // gate the desk's Add-ons picker uses. An allocation that is only ever part of a
+      // package cannot be bought separately here either.
+      where: { id: { in: requestedAddOns }, propertyId: property.id, isActive: true, sellSeparate: true },
+      select: { id: true },
+    });
+    if (allowed.length !== requestedAddOns.length) {
+      return { ok: false, status: 400, code: "ADD_ON_NOT_FOUND", error: "One or more of the extras chosen is not available at this property." };
+    }
+    addOnIds = allowed.map((a) => a.id);
+  }
+
   return {
     ok: true,
     ctx: {
       property,
       settings: { ...settings, ratePlan: settings.ratePlan },
       roomType,
+      mealPlanCode,
+      addOnIds,
       nights: window.nights,
       fromUtc: window.fromUtc,
       toUtc: window.toUtc,
@@ -184,7 +257,7 @@ function shapeQuote(ctx: StayContext, stay: WebsiteStayInput, quote: Reservation
     propertyId: ctx.property.id,
     roomType: { id: ctx.roomType.id, code: ctx.roomType.code, name: ctx.roomType.name },
     ratePlan: ctx.settings.ratePlan,
-    mealPlanCode: ctx.settings.mealPlanCode,
+    mealPlanCode: ctx.mealPlanCode,
     checkIn: stay.checkIn,
     checkOut: stay.checkOut,
     nights: quote.nights,
@@ -202,6 +275,17 @@ function shapeQuote(ctx: StayContext, stay: WebsiteStayInput, quote: Reservation
       greenTax: round2(t.greenTaxTotal),
       grandTotal: round2(t.grandTotal),
     },
+    allocations: quote.allocations.map((a) => ({
+      id: a.allocationId,
+      code: a.code,
+      name: a.name,
+      source: a.source,
+      mode: a.mode,
+      // base + tax + service charge: what this line adds to the bill, which is the figure
+      // a guest is being asked to agree to. INCLUDE_IN_RATE lines are carved out of the
+      // room line rather than added on top — see the field's docblock.
+      amount: round2(a.base + a.tax + a.serviceCharge),
+    })),
     taxLines: quote.taxLines.map((l) => ({ name: l.name, ratePercent: l.ratePercent, amount: round2(l.amount) })),
     nightly: quote.days.map((d) => ({
       date: d.date,
@@ -241,7 +325,8 @@ async function quoteFor(ctx: StayContext, stay: WebsiteStayInput): Promise<Quote
       ],
       adults: stay.adults,
       children: stay.children,
-      mealPlanCode: ctx.settings.mealPlanCode,
+      mealPlanCode: ctx.mealPlanCode,
+      manualAllocationIds: ctx.addOnIds,
     }),
   ]);
   const rt = availability.ok ? availability.availability.roomTypes[0] : undefined;
@@ -332,6 +417,8 @@ export async function createWebsiteBooking(opts: {
     adults: stay.adults,
     children: stay.children,
     remarks: remarks?.trim() || null,
+    mealPlanCode: ctx.mealPlanCode,
+    addOnIds: ctx.addOnIds,
     quotedTotal: quote.totals.grandTotal,
     currency: ctx.property.defaultCurrency,
     requestIp,
@@ -380,7 +467,10 @@ export async function createWebsiteBooking(opts: {
     ratePlanId: ctx.settings.ratePlan.id,
     adults: stay.adults,
     children: stay.children,
-    mealPlan: ctx.settings.mealPlanCode,
+    mealPlan: ctx.mealPlanCode,
+    // The extras the guest ticked, attached exactly as the desk's Add-ons picker attaches
+    // them, so Night Audit posts them without knowing where the booking came from.
+    manualAllocationIds: ctx.addOnIds,
     remarks: remarkLines.join("\n"),
     externalRef,
     // Deliberately absent: acknowledgeOverbook, allowPastArrival — see the file header.
@@ -470,6 +560,10 @@ async function buildResult(websiteBookingId: string, replayed: boolean): Promise
     roomTypeId: row.roomTypeId,
     adults: row.adults,
     children: row.children,
+    // Re-quote on what was actually booked, not on today's defaults — otherwise a guest
+    // who chose Half Board and an airport transfer is shown a total for neither.
+    mealPlanCode: row.mealPlanCode,
+    addOnIds: row.addOnIds,
   };
   // Re-quote from the live reservation so the figures always match what the desk sees.
   // If the property's website settings changed since (e.g. rate plan removed), fall back
@@ -481,7 +575,7 @@ async function buildResult(websiteBookingId: string, replayed: boolean): Promise
         propertyId: row.propertyId,
         roomType: { id: row.roomTypeId, code: "", name: "" },
         ratePlan: { id: "", code: "", name: "" },
-        mealPlanCode: "NONE",
+        mealPlanCode: row.mealPlanCode ?? "NONE",
         checkIn: stay.checkIn,
         checkOut: stay.checkOut,
         nights: Math.round((row.departure.getTime() - row.arrival.getTime()) / 86_400_000),
@@ -492,6 +586,7 @@ async function buildResult(websiteBookingId: string, replayed: boolean): Promise
         available: true,
         roomsAvailable: 0,
         totals: { roomBase: 0, extraOccupancy: 0, packageAllocations: 0, taxes: 0, greenTax: 0, grandTotal: row.quotedTotal ?? 0 },
+        allocations: [],
         taxLines: [],
         nightly: [],
         warnings: ["Live pricing is unavailable; showing the total quoted at booking time."],

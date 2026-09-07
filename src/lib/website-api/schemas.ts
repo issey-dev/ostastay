@@ -11,6 +11,10 @@ export const websiteStaySchema = z.object({
   roomTypeId: z.string().min(1),
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20).default(0),
+  /** Omitted = the property's configured default. Refused if it does not offer a choice. */
+  mealPlanCode: z.string().trim().max(40).optional().nullable(),
+  /** Optional paid extras by allocation id. Refused if the property does not offer them. */
+  addOnIds: z.array(z.string().min(1)).max(20).optional(),
 });
 
 export const websiteGuestSchema = z.object({

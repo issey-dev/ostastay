@@ -15,6 +15,8 @@ export type WebsitePropertySettingsDto = {
   bookingEnabled: boolean;
   ratePlanId: string | null;
   mealPlanCode: string;
+  offerMealPlans: boolean;
+  offerAddOns: boolean;
   maxNightsAhead: number;
   minNights: number;
   deskRemark: string | null;
@@ -34,6 +36,8 @@ const DEFAULTS = {
   bookingEnabled: true,
   ratePlanId: null,
   mealPlanCode: "NONE",
+  offerMealPlans: false,
+  offerAddOns: false,
   maxNightsAhead: 365,
   minNights: 1,
   deskRemark: null,
@@ -77,6 +81,8 @@ export async function listWebsitePropertySettings(enterpriseId: string): Promise
       bookingEnabled: s?.bookingEnabled ?? DEFAULTS.bookingEnabled,
       ratePlanId: s?.ratePlanId ?? DEFAULTS.ratePlanId,
       mealPlanCode: s?.mealPlanCode ?? DEFAULTS.mealPlanCode,
+      offerMealPlans: s?.offerMealPlans ?? DEFAULTS.offerMealPlans,
+      offerAddOns: s?.offerAddOns ?? DEFAULTS.offerAddOns,
       maxNightsAhead: s?.maxNightsAhead ?? DEFAULTS.maxNightsAhead,
       minNights: s?.minNights ?? DEFAULTS.minNights,
       deskRemark: s?.deskRemark ?? DEFAULTS.deskRemark,
@@ -96,6 +102,8 @@ export type WebsitePropertySettingsInput = {
   bookingEnabled?: boolean;
   ratePlanId?: string | null;
   mealPlanCode?: string;
+  offerMealPlans?: boolean;
+  offerAddOns?: boolean;
   maxNightsAhead?: number;
   minNights?: number;
   deskRemark?: string | null;
@@ -151,6 +159,8 @@ export async function updateWebsitePropertySettings(params: {
     bookingEnabled: input.bookingEnabled,
     ratePlanId: input.ratePlanId === undefined ? undefined : input.ratePlanId || null,
     mealPlanCode: input.mealPlanCode === undefined ? undefined : input.mealPlanCode.trim() || "NONE",
+    offerMealPlans: input.offerMealPlans,
+    offerAddOns: input.offerAddOns,
     maxNightsAhead: input.maxNightsAhead,
     minNights: input.minNights,
     deskRemark: cleanText(input.deskRemark),
@@ -168,6 +178,8 @@ export async function updateWebsitePropertySettings(params: {
       bookingEnabled: data.bookingEnabled ?? true,
       ratePlanId: data.ratePlanId ?? null,
       mealPlanCode: data.mealPlanCode ?? "NONE",
+      offerMealPlans: data.offerMealPlans ?? false,
+      offerAddOns: data.offerAddOns ?? false,
       maxNightsAhead: data.maxNightsAhead ?? 365,
       minNights: data.minNights ?? 1,
       deskRemark: data.deskRemark ?? null,

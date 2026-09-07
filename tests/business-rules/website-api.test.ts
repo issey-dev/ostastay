@@ -23,7 +23,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const { createWebsiteApiKey, revokeWebsiteApiKey } = await import("@/lib/website-api/keys");
 const { updateWebsitePropertySettings } = await import("@/lib/website-api/settings");
 const { hashWebsiteApiKey } = await import("@/lib/website-api/key");
-const { ensureChart } = await import("../helpers/charge-codes");
+const { ensureChart, customChargeCode } = await import("../helpers/charge-codes");
 
 const propertiesRoute = await import("@/app/api/website/v1/properties/route");
 const propertyRoute = await import("@/app/api/website/v1/properties/[propertyId]/route");
@@ -511,6 +511,168 @@ describe("Website API", () => {
         params({ confirmationNo: firstConfirmation })
       );
       expect(otherKey.status).toBe(404);
+    });
+  });
+
+  // Meal plans and paid extras (2026-09-07). Both are OPT-IN per property: a site that has
+  // not been switched on must not start selling things, and a choice the property never
+  // opened up must be refused rather than quietly ignored — quoting one thing and booking
+  // another is the failure mode worth testing for.
+  describe("meal plans and add-ons", () => {
+    let transferId: string;
+    let packageOnlyId: string;
+
+    beforeAll(async () => {
+      await prisma.mealPlan.createMany({
+        data: [
+          { propertyId: propertyAId, code: "RO", name: "Room Only" },
+          { propertyId: propertyAId, code: "BB", name: "Bed & Breakfast" },
+        ],
+      });
+      const code = await customChargeCode(enterpriseAId, { code: "TRF", description: "Transfers", subgroupCode: "20RV" });
+
+      // Sellable on its own — what the desk Add-ons picker offers, and now the website too.
+      transferId = (
+        await prisma.allocation.create({
+          data: {
+            propertyId: propertyAId,
+            code: "TRF-SB",
+            name: "Speedboat Transfer",
+            type: "TRANSFER",
+            chargeCodeId: code.id,
+            postingRhythm: "ARRIVAL_NIGHT",
+            mode: "ADD_TO_RATE",
+            sellSeparate: true,
+            rates: { create: { adultPrice: 75, childPrice: 40, effectiveFrom: new Date(Date.UTC(2020, 0, 1)) } },
+          },
+        })
+      ).id;
+
+      // Part of a package only — never buyable on its own, at the desk or online.
+      packageOnlyId = (
+        await prisma.allocation.create({
+          data: {
+            propertyId: propertyAId,
+            code: "DN-PKG",
+            name: "Package Dinner",
+            type: "FNB",
+            chargeCodeId: code.id,
+            postingRhythm: "EVERY_NIGHT",
+            mode: "ADD_TO_RATE",
+            sellSeparate: false,
+            rates: { create: { adultPrice: 50, childPrice: 25, effectiveFrom: new Date(Date.UTC(2020, 0, 1)) } },
+          },
+        })
+      ).id;
+    });
+
+    const stay = { checkIn: "2026-01-20", checkOut: "2026-01-22", adults: 2, children: 0 };
+
+    it("offers nothing until the property switches it on", async () => {
+      const res = await propertyRoute.GET(req(`/properties/${propertyAId}`, { key: keyA }), params({ propertyId: propertyAId }));
+      const { property } = await res.json();
+      expect(property.booking.mealPlanSelectable).toBe(false);
+      expect(property.booking.mealPlans).toEqual([]);
+      expect(property.booking.addOns).toEqual([]);
+
+      const quote = await quoteRoute.POST(
+        req(`/properties/${propertyAId}/quote`, { key: keyA, body: { ...stay, roomTypeId: roomTypeAId, mealPlanCode: "BB" } }),
+        params({ propertyId: propertyAId })
+      );
+      expect(quote.status).toBe(409);
+      expect((await quote.json()).code).toBe("MEAL_PLAN_NOT_OFFERED");
+    });
+
+    it("publishes the catalogue once switched on, and only sell-separately items", async () => {
+      await updateWebsitePropertySettings({
+        enterpriseId: enterpriseAId,
+        propertyId: propertyAId,
+        input: { offerMealPlans: true, offerAddOns: true },
+      });
+
+      const res = await propertyRoute.GET(req(`/properties/${propertyAId}`, { key: keyA }), params({ propertyId: propertyAId }));
+      const { property } = await res.json();
+      expect(property.booking.mealPlanSelectable).toBe(true);
+      expect(property.booking.mealPlans.map((m: { code: string }) => m.code).sort()).toEqual(["BB", "RO"]);
+      expect(property.booking.addOns.map((a: { code: string }) => a.code)).toEqual(["TRF-SB"]);
+      // A package-only allocation is never on the public catalogue.
+      expect(property.booking.addOns.find((a: { id: string }) => a.id === packageOnlyId)).toBeUndefined();
+    });
+
+    it("prices a chosen extra into the quote and itemises it", async () => {
+      const res = await quoteRoute.POST(
+        req(`/properties/${propertyAId}/quote`, { key: keyA, body: { ...stay, roomTypeId: roomTypeAId, addOnIds: [transferId] } }),
+        params({ propertyId: propertyAId })
+      );
+      expect(res.status).toBe(200);
+      const { quote } = await res.json();
+
+      const line = quote.allocations.find((a: { id: string }) => a.id === transferId);
+      expect(line).toBeDefined();
+      // The guest ticked it, so it is theirs to untick — not something the plan included.
+      expect(line.source).toBe("MANUAL");
+      // ARRIVAL_NIGHT: two adults at 75 charged once for the stay, not per night.
+      expect(line.amount).toBeGreaterThanOrEqual(150);
+      expect(quote.totals.packageAllocations).toBeGreaterThanOrEqual(150);
+    });
+
+    it("refuses an extra this property does not sell separately, and one from nowhere", async () => {
+      for (const bad of [packageOnlyId, "00000000-0000-0000-0000-000000000000"]) {
+        const res = await quoteRoute.POST(
+          req(`/properties/${propertyAId}/quote`, { key: keyA, body: { ...stay, roomTypeId: roomTypeAId, addOnIds: [bad] } }),
+          params({ propertyId: propertyAId })
+        );
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe("ADD_ON_NOT_FOUND");
+      }
+
+      const badPlan = await quoteRoute.POST(
+        req(`/properties/${propertyAId}/quote`, { key: keyA, body: { ...stay, roomTypeId: roomTypeAId, mealPlanCode: "HB" } }),
+        params({ propertyId: propertyAId })
+      );
+      expect(badPlan.status).toBe(400);
+      expect((await badPlan.json()).code).toBe("MEAL_PLAN_NOT_FOUND");
+    });
+
+    it("carries the choices onto the reservation and back out of the lookup", async () => {
+      const res = await bookingsRoute.POST(
+        req(`/properties/${propertyAId}/bookings`, {
+          key: keyA,
+          body: {
+            ...stay,
+            roomTypeId: roomTypeAId,
+            mealPlanCode: "BB",
+            addOnIds: [transferId],
+            guest: { firstName: "Grace", lastName: "Hopper", email: "grace@example.com" },
+          },
+        }),
+        params({ propertyId: propertyAId })
+      );
+      expect(res.status).toBe(201);
+      const { booking } = await res.json();
+      expect(booking.quote.mealPlanCode).toBe("BB");
+
+      const reservation = await prisma.reservation.findUniqueOrThrow({
+        where: { id: booking.reservationId },
+        include: { allocations: true },
+      });
+      expect(reservation.mealPlan).toBe("BB");
+      // Attached to the reservation itself, so Night Audit posts it without knowing the
+      // booking came from a website.
+      expect(reservation.allocations.some((a) => a.allocationId === transferId)).toBe(true);
+
+      const audit = await prisma.websiteBooking.findUniqueOrThrow({ where: { reservationId: reservation.id } });
+      expect(audit.mealPlanCode).toBe("BB");
+      expect(audit.addOnIds).toEqual([transferId]);
+
+      // "Manage my booking" re-quotes on what was actually booked, not today's defaults.
+      const lookup = await lookupRoute.GET(
+        req(`/bookings/${booking.confirmationNo}?email=grace@example.com`, { key: keyA }),
+        params({ confirmationNo: booking.confirmationNo })
+      );
+      const found = (await lookup.json()).booking;
+      expect(found.quote.mealPlanCode).toBe("BB");
+      expect(found.quote.allocations.some((a: { id: string }) => a.id === transferId)).toBe(true);
     });
   });
 

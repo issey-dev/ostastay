@@ -301,6 +301,10 @@ components:
             - NO_RATE
             - STOP_SALE
             - SOLD_OUT
+            - MEAL_PLAN_NOT_OFFERED
+            - MEAL_PLAN_NOT_FOUND
+            - ADD_ONS_NOT_OFFERED
+            - ADD_ON_NOT_FOUND
             - BOOKING_REJECTED
             - IDEMPOTENCY_CONFLICT
             - INTERNAL_ERROR
@@ -354,9 +358,33 @@ components:
           type: array
           items: { $ref: "#/components/schemas/RoomTypeFeature" }
 
+    MealPlanOption:
+      type: object
+      required: [code, name, isDefault]
+      properties:
+        code: { type: string, example: BB }
+        name: { type: string, example: Bed & Breakfast }
+        isDefault: { type: boolean, description: The plan used when the guest expresses no preference. }
+
+    AddOn:
+      type: object
+      required: [id, code, name, type, postingRhythm]
+      description: >-
+        A paid extra the guest can tick. Carries NO price: what one costs depends on the
+        party, the length of stay and its posting rhythm, so send the id to the quote and
+        display the line it returns.
+      properties:
+        id: { type: string }
+        code: { type: string, example: TRF-SB }
+        name: { type: string, example: Speedboat Transfer }
+        type: { type: string, enum: [FNB, TRANSFER, SPA, EXCURSION, OTHER] }
+        postingRhythm: { type: string, enum: [EVERY_NIGHT, ARRIVAL_NIGHT, DEPARTURE_NIGHT] }
+
     BookingConfig:
       type: object
-      required: [enabled, reason, ratePlan, mealPlanCode, minNights, maxNightsAhead]
+      required:
+        [enabled, reason, ratePlan, mealPlanCode, mealPlanSelectable, mealPlanAffectsPrice,
+         mealPlans, addOns, minNights, maxNightsAhead]
       properties:
         enabled: { type: boolean }
         reason: { type: [string, "null"], description: Why `enabled` is false. }
@@ -364,7 +392,22 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Ref"
             - type: "null"
-        mealPlanCode: { type: string, example: BB }
+        mealPlanCode: { type: string, example: BB, description: The plan a booking uses unless the guest picks another. }
+        mealPlanSelectable: { type: boolean, description: Whether the guest may choose at all. }
+        mealPlanAffectsPrice:
+          type: boolean
+          description: >-
+            Whether choosing a different meal plan changes the price. False when the rate
+            plan carries the price and the meal plan is only a label — say so honestly
+            rather than implying a cost that is not there.
+        mealPlans:
+          type: array
+          items: { $ref: "#/components/schemas/MealPlanOption" }
+          description: Empty unless mealPlanSelectable is true.
+        addOns:
+          type: array
+          items: { $ref: "#/components/schemas/AddOn" }
+          description: Empty unless the property sells extras online.
         minNights: { type: integer }
         maxNightsAhead: { type: integer }
 
@@ -475,6 +518,20 @@ components:
         roomTypeId: { type: string }
         adults: { type: integer, minimum: 1, maximum: 20 }
         children: { type: integer, minimum: 0, maximum: 20, default: 0 }
+        mealPlanCode:
+          type: [string, "null"]
+          maxLength: 40
+          description: >-
+            Omit for the property's default. Refused with MEAL_PLAN_NOT_OFFERED if the
+            property does not let guests choose, rather than silently ignored — a quote
+            must never disagree with the booking that follows it.
+        addOnIds:
+          type: array
+          maxItems: 20
+          items: { type: string }
+          description: >-
+            Ids from the property's `booking.addOns`. Refused with ADD_ONS_NOT_OFFERED or
+            ADD_ON_NOT_FOUND rather than silently dropped.
 
     Guest:
       type: object
@@ -499,7 +556,8 @@ components:
       type: object
       required:
         [propertyId, roomType, ratePlan, mealPlanCode, checkIn, checkOut, nights, adults, children,
-         currency, pricesIncludeTaxes, available, roomsAvailable, totals, taxLines, nightly, warnings]
+         currency, pricesIncludeTaxes, available, roomsAvailable, totals, allocations, taxLines,
+         nightly, warnings]
       properties:
         propertyId: { type: string }
         roomType: { $ref: "#/components/schemas/Ref" }
@@ -520,10 +578,31 @@ components:
           properties:
             roomBase: { type: number }
             extraOccupancy: { type: number }
-            packageAllocations: { type: number }
+            packageAllocations:
+              type: number
+              description: Everything the plan includes plus any extras the guest ticked.
             taxes: { type: number, description: All percentage taxes and service charge. }
             greenTax: { type: number }
             grandTotal: { type: number, description: The amount to display as the price of the stay. }
+        allocations:
+          type: array
+          description: >-
+            Every allocation on this stay, itemised. `source` says why each line is there:
+            RATE_PLAN or MEAL_PLAN came with what the guest chose (show as included),
+            MANUAL was ticked by the guest (show as removable). `mode` INCLUDE_IN_RATE is
+            carved out of the room line, so its amount is ALREADY inside totals.roomBase
+            and must not be added again; ADD_TO_RATE sits on top. grandTotal is correct
+            either way.
+          items:
+            type: object
+            required: [id, code, name, source, mode, amount]
+            properties:
+              id: { type: string }
+              code: { type: string }
+              name: { type: string }
+              source: { type: string, enum: [RATE_PLAN, MEAL_PLAN, MANUAL] }
+              mode: { type: string, enum: [INCLUDE_IN_RATE, ADD_TO_RATE] }
+              amount: { type: number, description: Base + tax + service charge for the stay. }
         taxLines:
           type: array
           items:

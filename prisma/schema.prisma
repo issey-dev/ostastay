@@ -3631,7 +3631,28 @@ model WebsitePropertySettings {
   bookingEnabled   Boolean   @default(true)
   ratePlanId       String?
   ratePlan         RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+  /// The meal plan every website booking is made on, and the default the guest sees when
+  /// they are allowed to choose (offerMealPlans below).
   mealPlanCode     String    @default("NONE")
+  /// Whether the website may let a guest CHOOSE their meal plan, from this property's
+  /// active MealPlan list, instead of silently taking mealPlanCode above.
+  ///
+  /// Off by default so switching this on is a deliberate act: a property with four meal
+  /// plans that only sells Bed & Breakfast online should not start offering all four
+  /// because the capability shipped. What choosing one actually costs depends on
+  /// Property.allocationCalculationMode — under MEAL_PLAN the linked allocations price
+  /// per person per night, under RATE_PLAN the meal plan is a label and the rate plan
+  /// carries the price. The quote endpoint reports the real total either way, and the
+  /// property payload says which mode is in force so a site can word it honestly.
+  offerMealPlans   Boolean   @default(false)
+  /// Whether the website may offer paid extras — Transportation, a spa treatment, an
+  /// airport transfer — as optional add-ons the guest ticks at booking.
+  ///
+  /// The catalogue is not configured twice: it is this property's ACTIVE allocations
+  /// marked `sellSeparate`, which is already the owner-set flag meaning "can be attached
+  /// to a reservation on its own", and is what the desk's own Add-ons picker offers. This
+  /// switch only decides whether that same list is exposed to the public site.
+  offerAddOns      Boolean   @default(false)
   // How far ahead the site may look/book, and the shortest stay it may sell. Both are
   // website-only limits — the desk is never bound by them.
   maxNightsAhead   Int       @default(365)
@@ -3680,6 +3701,10 @@ model WebsiteBooking {
   adults         Int
   children       Int
   remarks        String?
+  /// What the guest chose, kept so a disputed folio can be traced back to the request:
+  /// the meal plan the booking was made on, and the ids of any optional add-ons ticked.
+  mealPlanCode   String?
+  addOnIds       String[] @default([])
   quotedTotal    Float?
   currency       String?
   requestIp      String?

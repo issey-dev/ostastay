@@ -94,6 +94,10 @@ humans. Validation errors add `details` keyed by field path.
 | 409 | `NO_RATE` | One or more nights have no price. The stay cannot be booked online. |
 | 409 | `STOP_SALE` | The property has closed one or more of the dates. |
 | 409 | `SOLD_OUT` | No room of that type is free for every night of the stay. |
+| 409 | `MEAL_PLAN_NOT_OFFERED` | You sent a `mealPlanCode` but the property does not let guests choose one. |
+| 400 | `MEAL_PLAN_NOT_FOUND` | Not an active meal plan of this property. |
+| 409 | `ADD_ONS_NOT_OFFERED` | You sent `addOnIds` but the property does not sell extras online. |
+| 400 | `ADD_ON_NOT_FOUND` | An id is not an extra this property sells separately. |
 | 409 | `IDEMPOTENCY_CONFLICT` | The `Idempotency-Key` was already used for a different property. |
 | 500 | `INTERNAL_ERROR` | Something went wrong on our side. Safe to retry a GET; for a booking, retry **with the same `Idempotency-Key`**. |
 
@@ -194,6 +198,16 @@ Everything a property page needs.
       "reason": null,
       "ratePlan": { "id": "…", "code": "BAR", "name": "Best Available Rate" },
       "mealPlanCode": "BB",
+      "mealPlanSelectable": true,
+      "mealPlanAffectsPrice": true,
+      "mealPlans": [
+        { "code": "RO", "name": "Room Only", "isDefault": false },
+        { "code": "BB", "name": "Bed & Breakfast", "isDefault": true }
+      ],
+      "addOns": [
+        { "id": "9a2f…", "code": "TRF-SB", "name": "Speedboat Transfer",
+          "type": "TRANSFER", "postingRhythm": "ARRIVAL_NIGHT" }
+      ],
       "minNights": 1,
       "maxNightsAhead": 365
     }
@@ -209,6 +223,21 @@ Notes:
   booking off; `booking.reason` says which. Show the property, hide the booking form.
 - `pricesIncludeTaxes` tells you how to label prices ("incl. taxes" vs "+ taxes"). The
   quote endpoint always returns the tax breakdown either way.
+
+**Meal plans and extras.** Both are switched on per property in the Hub, so both lists are
+often empty — build the page to cope with that rather than assuming they are there.
+
+- `mealPlanSelectable` is true when the guest may choose. `mealPlans` then lists the
+  property's active plans with the default flagged. When it is false the list is empty and
+  a booking simply uses `mealPlanCode`.
+- `mealPlanAffectsPrice` says whether choosing a different plan changes the total. Some
+  properties price per person off the meal plan; others carry the price in the rate plan
+  and treat the meal plan as a label. Word the page accordingly rather than implying a
+  choice costs something when it does not.
+- `addOns` are the paid extras the property sells online — a transfer, a spa treatment, a
+  set dinner. **They carry no price**, on purpose: what one costs depends on the party and
+  the length of stay, and on whether it is charged every night or once on arrival. Send the
+  ids to the quote and show the line it returns.
 
 ### 3.3 Availability calendar
 
@@ -274,7 +303,10 @@ with `bookable`, `minAvailable` and `roomRateTotal`.
 POST /properties/{propertyId}/quote
 Content-Type: application/json
 
-{ "checkIn": "2026-03-10", "checkOut": "2026-03-12", "roomTypeId": "c2a1…", "adults": 2, "children": 1 }
+{ "checkIn": "2026-03-10", "checkOut": "2026-03-12", "roomTypeId": "c2a1…",
+  "adults": 2, "children": 1,
+  "mealPlanCode": "BB",
+  "addOnIds": ["9a2f…"] }
 ```
 
 The **authoritative price** for a stay, computed by exactly the code the PMS posts
@@ -304,6 +336,12 @@ charges with. Never writes anything.
       "greenTax": 18,
       "grandTotal": 1154.8
     },
+    "allocations": [
+      { "id": "…", "code": "BF", "name": "Breakfast", "source": "MEAL_PLAN",
+        "mode": "ADD_TO_RATE", "amount": 96 },
+      { "id": "9a2f…", "code": "TRF-SB", "name": "Speedboat Transfer", "source": "MANUAL",
+        "mode": "ADD_TO_RATE", "amount": 174 }
+    ],
     "taxLines": [
       { "name": "TGST", "ratePercent": 16, "amount": 156.8 }
     ],
@@ -322,6 +360,17 @@ charges with. Never writes anything.
   `greenTax` beneath it if the property wants a breakdown.
 - `warnings` are informational strings (for example an unpriced night). Log them; do not
   show them raw to guests.
+- `allocations` itemises everything on the stay. `source` says why each line is there:
+  `RATE_PLAN` or `MEAL_PLAN` means it came with what the guest chose, so show it as
+  included; `MANUAL` means they ticked it, so show it as an extra they can remove.
+- `mode` matters for wording. `INCLUDE_IN_RATE` is carved out of the room line, so its
+  amount is **already inside** `roomBase` and must not be added again. `ADD_TO_RATE` sits
+  on top. `grandTotal` is correct either way, which is why it is the figure to display.
+
+**Both fields are optional.** Omit `mealPlanCode` and the booking uses the property's
+default; omit `addOnIds` and no extras are added. Send either one to a property that does
+not offer it and the request is refused rather than silently ignored, so a quote can never
+disagree with the booking that follows it.
 
 The stay is validated the same way a booking is — `MIN_STAY`, `TOO_FAR_AHEAD`,
 `INVALID_OCCUPANCY` and friends apply.
@@ -339,6 +388,8 @@ Idempotency-Key: 6d0b2f9e-1c3a-4e5f-9a7b-…
   "roomTypeId": "c2a1…",
   "adults": 2,
   "children": 1,
+  "mealPlanCode": "BB",
+  "addOnIds": ["9a2f…"],
   "guest": {
     "firstName": "Ada",
     "lastName": "Lovelace",
@@ -353,6 +404,11 @@ Creates a real reservation in the PMS with status `RESERVED`, a confirmation num
 the property's own sequence, and a master folio — exactly what the front desk would
 create. The guest is matched to an existing profile by email (case-insensitive) or a new
 profile is created.
+
+`mealPlanCode` and `addOnIds` are validated the same way the quote validates them, and the
+extras are attached to the reservation itself — the front desk sees them on the booking and
+Night Audit posts them, with no knowledge that the booking came from a website. Send the
+same values you quoted with, or the guest agrees to one total and is billed another.
 
 **Idempotency.** Generate a fresh UUID per booking attempt and send it as
 `Idempotency-Key` (or as `idempotencyKey` in the body). If your request times out or you

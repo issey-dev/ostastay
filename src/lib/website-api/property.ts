@@ -21,13 +21,52 @@ export type PublicRoomType = {
   features: PublicRoomTypeFeature[];
 };
 
+export type PublicMealPlan = {
+  code: string;
+  name: string;
+  /** The one a booking uses when the guest expresses no preference. */
+  isDefault: boolean;
+};
+
+/**
+ * A paid extra the guest can tick — a transfer, a spa treatment, a set dinner.
+ *
+ * No price here on purpose. What an allocation costs depends on the party and the length
+ * of stay (per adult, per child, and on its own posting rhythm — every night, arrival
+ * night, departure night), so a single figure on a catalogue entry would be a number that
+ * is right for nobody. Send the selection to the quote endpoint and show the line it
+ * returns, which is the same arithmetic Night Audit will post.
+ */
+export type PublicAddOn = {
+  id: string;
+  code: string;
+  name: string;
+  /** FNB | TRANSFER | SPA | EXCURSION | OTHER — for grouping on the site. */
+  type: string;
+  /** EVERY_NIGHT | ARRIVAL_NIGHT | DEPARTURE_NIGHT — how often it is charged. */
+  postingRhythm: string;
+};
+
 export type PublicPropertyBooking = {
   /** False when the Hub has disabled booking or has not chosen a rate plan to sell. */
   enabled: boolean;
   /** Human-readable reason when enabled is false. */
   reason: string | null;
   ratePlan: { id: string; code: string; name: string } | null;
+  /** The meal plan a booking uses unless the guest picks another. */
   mealPlanCode: string;
+  /** Whether the guest may choose their meal plan at all. */
+  mealPlanSelectable: boolean;
+  /**
+   * Whether choosing a different meal plan changes the price. True when the property
+   * prices per person off the meal plan's linked allocations; false when the rate plan
+   * carries the price and the meal plan is a label. Say so honestly on the site rather
+   * than implying a choice costs something when it does not.
+   */
+  mealPlanAffectsPrice: boolean;
+  mealPlans: PublicMealPlan[];
+  /** Optional paid extras. Empty when the property does not sell any online. */
+  addOns: PublicAddOn[];
   minNights: number;
   maxNightsAhead: number;
 };
@@ -74,26 +113,43 @@ export type PublicProperty = {
 
 const DEFAULT_SETTINGS = { minNights: 1, maxNightsAhead: 365, mealPlanCode: "NONE", bookingEnabled: true };
 
-function bookingFrom(settings: {
-  bookingEnabled: boolean;
-  ratePlan: { id: string; code: string; name: string } | null;
-  mealPlanCode: string;
-  minNights: number;
-  maxNightsAhead: number;
-} | null): PublicPropertyBooking {
+function bookingFrom(
+  settings: {
+    bookingEnabled: boolean;
+    ratePlan: { id: string; code: string; name: string } | null;
+    mealPlanCode: string;
+    offerMealPlans: boolean;
+    offerAddOns: boolean;
+    minNights: number;
+    maxNightsAhead: number;
+  } | null,
+  catalogue: { mealPlans: PublicMealPlan[]; addOns: PublicAddOn[]; mealPlanAffectsPrice: boolean }
+): PublicPropertyBooking {
+  const empty = {
+    ratePlan: null,
+    mealPlanCode: DEFAULT_SETTINGS.mealPlanCode,
+    mealPlanSelectable: false,
+    mealPlanAffectsPrice: catalogue.mealPlanAffectsPrice,
+    mealPlans: [] as PublicMealPlan[],
+    addOns: [] as PublicAddOn[],
+    minNights: DEFAULT_SETTINGS.minNights,
+    maxNightsAhead: DEFAULT_SETTINGS.maxNightsAhead,
+  };
   if (!settings) {
-    return {
-      enabled: false,
-      reason: "Online booking has not been set up for this property.",
-      ratePlan: null,
-      mealPlanCode: DEFAULT_SETTINGS.mealPlanCode,
-      minNights: DEFAULT_SETTINGS.minNights,
-      maxNightsAhead: DEFAULT_SETTINGS.maxNightsAhead,
-    };
+    return { enabled: false, reason: "Online booking has not been set up for this property.", ...empty };
   }
+
+  // A choice is only offered when the Hub switched it on AND there is more than one thing
+  // to choose between — a single meal plan rendered as a picker is a control that does
+  // nothing.
+  const mealPlanSelectable = settings.offerMealPlans && catalogue.mealPlans.length > 1;
   const base = {
     ratePlan: settings.ratePlan,
     mealPlanCode: settings.mealPlanCode,
+    mealPlanSelectable,
+    mealPlanAffectsPrice: catalogue.mealPlanAffectsPrice,
+    mealPlans: mealPlanSelectable ? catalogue.mealPlans : [],
+    addOns: settings.offerAddOns ? catalogue.addOns : [],
     minNights: settings.minNights,
     maxNightsAhead: settings.maxNightsAhead,
   };
@@ -154,7 +210,17 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
       defaultCurrency: true,
       timeZone: true,
       pricesIncludeTaxes: true,
+      allocationCalculationMode: true,
       businessDate: true,
+      mealPlans: { where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } },
+      // The add-on catalogue. `sellSeparate` is the owner-set flag meaning "can be
+      // attached to a reservation on its own" — the same list the desk's Add-ons picker
+      // offers, not a second one configured for the website.
+      allocations: {
+        where: { isActive: true, sellSeparate: true },
+        orderBy: [{ type: "asc" }, { name: "asc" }],
+        select: { id: true, code: true, name: true, type: true, postingRhythm: true },
+      },
       facilities: { select: { name: true, description: true }, orderBy: { name: "asc" } },
       websiteSettings: {
         select: {
@@ -164,6 +230,8 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
           policies: true,
           bookingEnabled: true,
           mealPlanCode: true,
+          offerMealPlans: true,
+          offerAddOns: true,
           minNights: true,
           maxNightsAhead: true,
           ratePlan: { select: { id: true, code: true, name: true } },
@@ -239,6 +307,16 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
         label: labels.get(`${f.category}|${f.code}`) ?? f.code,
       })),
     })),
-    booking: bookingFrom(p.websiteSettings ?? null),
+    booking: bookingFrom(p.websiteSettings ?? null, {
+      mealPlans: p.mealPlans.map((m) => ({
+        code: m.code,
+        name: m.name,
+        isDefault: m.code === (p.websiteSettings?.mealPlanCode ?? "NONE"),
+      })),
+      addOns: p.allocations,
+      // Under RATE_PLAN the rate plan carries the price and the meal plan is a label; only
+      // MEAL_PLAN mode makes the choice cost anything. See Property.allocationCalculationMode.
+      mealPlanAffectsPrice: p.allocationCalculationMode === "MEAL_PLAN",
+    }),
   };
 }

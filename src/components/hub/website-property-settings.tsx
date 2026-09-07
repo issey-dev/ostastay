@@ -29,6 +29,8 @@ type PropertyRow = {
   bookingEnabled: boolean
   ratePlanId: string | null
   mealPlanCode: string
+  offerMealPlans: boolean
+  offerAddOns: boolean
   maxNightsAhead: number
   minNights: number
   deskRemark: string | null
@@ -44,6 +46,8 @@ const settingsSchema = z.object({
   imageUrls: z.string(),
   policies: z.string().max(5000),
   bookingEnabled: z.boolean(),
+  offerMealPlans: z.boolean(),
+  offerAddOns: z.boolean(),
   ratePlanId: z.string(),
   mealPlanCode: z.string(),
   maxNightsAhead: z.string().refine((v) => /^\d+$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 730, "1 to 730 nights"),
@@ -59,6 +63,8 @@ function toForm(row: PropertyRow): SettingsFormValues {
     imageUrls: row.imageUrls.join("\n"),
     policies: row.policies ?? "",
     bookingEnabled: row.bookingEnabled,
+    offerMealPlans: row.offerMealPlans,
+    offerAddOns: row.offerAddOns,
     ratePlanId: row.ratePlanId ?? "",
     mealPlanCode: row.mealPlanCode ?? "NONE",
     maxNightsAhead: String(row.maxNightsAhead),
@@ -112,6 +118,8 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
         imageUrls: values.imageUrls.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
         policies: values.policies || null,
         bookingEnabled: values.bookingEnabled,
+        offerMealPlans: values.offerMealPlans,
+        offerAddOns: values.offerAddOns,
         ratePlanId: values.ratePlanId || null,
         mealPlanCode: values.mealPlanCode || "NONE",
         maxNightsAhead: parseInt(values.maxNightsAhead),
@@ -235,7 +243,31 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
                           <FormMessage />
                         </FormItem>
                       )} />
-                      <FormField control={form.control} name="mealPlanCode" render={({ field }) => (
+                      <FormField control={form.control} name="offerMealPlans" render={({ field }) => (
+                      <FormItem className="flex items-start gap-3">
+                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <div className="!mt-0">
+                          <FormLabel className="cursor-pointer font-normal">Let guests choose their meal plan</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            Off: every booking uses the plan chosen below. On: the site offers this property&apos;s active
+                            meal plans, with that one preselected.
+                          </p>
+                        </div>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="offerAddOns" render={({ field }) => (
+                      <FormItem className="flex items-start gap-3">
+                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <div className="!mt-0">
+                          <FormLabel className="cursor-pointer font-normal">Offer paid extras online</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            Transfers, spa treatments and anything else marked &quot;sell separately&quot; in Allocations —
+                            the same list the front desk can add to a booking.
+                          </p>
+                        </div>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="mealPlanCode" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Meal plan</FormLabel>
                           <SearchableSelect

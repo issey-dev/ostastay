@@ -40,7 +40,9 @@ administrator with the **Integrations** permission does this part.
 |---|---|
 | Accept bookings from the website | Master switch. Off = the site can show the property but the booking form should be hidden. |
 | Rate plan to sell | **Required for booking.** Every website reservation is made on this plan, priced from its Price Calendar (with the property's Base plan as the fallback for unpriced nights, the same as at the desk). Negotiated plans are not offered. |
-| Meal plan | Stamped on every website reservation (e.g. Bed & Breakfast). |
+| Meal plan | The plan every website reservation is made on, and the default when guests may choose. |
+| Let guests choose their meal plan | Off: every booking uses the plan above. On: the site offers this property's active meal plans, with that one preselected. |
+| Offer paid extras online | Off: the site sells rooms only. On: it may offer transfers, spa treatments and anything else marked **sell separately** in Allocations — the same list the front desk can add to a booking. |
 | Minimum stay / Booking window | Website-only limits. The desk is not bound by them. |
 | Note for the front desk | Added to the remarks of every website reservation — e.g. "Website booking: collect balance at check-in". |
 | Headline, Description, Photo URLs, Policies | The marketing content the site displays. Photos are URLs you host (your site or a CDN). |
@@ -135,6 +137,23 @@ nightly room rates. A night with `closed: true` is a stop-sale; a night with
 To grey out days in a calendar, request a whole month (max 62 nights per call) and mark
 nights where every room type has `available: 0` or `closed: true`.
 
+### Meal plans and extras (optional)
+
+Both are off until an administrator switches them on, so `booking.mealPlans` and
+`booking.addOns` are often empty. Build for that.
+
+- If `booking.mealPlanSelectable` is true, offer `booking.mealPlans` with the default
+  preselected. `booking.mealPlanAffectsPrice` tells you whether the choice changes the
+  total — some properties price per person off the meal plan, others carry the price in
+  the rate plan and treat it as a label. Do not imply a cost that is not there.
+- `booking.addOns` are paid extras with **no price attached**, because what one costs
+  depends on the party, the length of stay and whether it is charged nightly or once on
+  arrival. Show them as tick boxes, send the ids to the quote, and display the lines the
+  quote returns.
+- Re-quote whenever the guest changes either. The quote's `allocations` array itemises
+  everything, with `source: "MANUAL"` marking the extras they chose so you can render them
+  as removable.
+
 ### Room and price
 
 Before showing the price of a specific room type for the chosen dates and guests, call
@@ -151,7 +170,9 @@ If `quote.available` is false, the stay cannot be booked right now — disable t
 ### Guest details and confirmation
 
 Collect the **minimum**: first name, last name, email, phone (optional), free-text
-remarks (optional). Then:
+remarks (optional). Send `mealPlanCode` and `addOnIds` exactly as you quoted them — the
+booking validates both the same way, so quoting one thing and booking another is refused
+rather than silently repriced. Then:
 
 `POST /properties/{id}/bookings` with an `Idempotency-Key` header (a fresh UUID per
 attempt; reuse it on retry).

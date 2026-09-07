@@ -103,6 +103,45 @@ style.
 **W-11 — No payment in v1.** Policies and the desk note carry the property's terms; the
 guide lists three payment patterns the site can adopt on its own.
 
+## W-12 — Meal plans and paid extras are guest-selectable, opt-in per property (2026-09-07)
+
+Owner question: does the API support allocations — a guest choosing a meal plan, and
+adding extras like Transportation? It did not. `WebsitePropertySettings.mealPlanCode` was
+a fixed code the guest never saw a choice of, and `manualAllocationIds` was never passed,
+so only what the rate plan or meal plan bundled ever attached. The engine underneath
+(`computeReservationQuote`, `createReservation`) already took both.
+
+**The catalogue is not configured twice.** Extras are this property's ACTIVE allocations
+already marked `sellSeparate` — the owner-set flag meaning "can be attached to a
+reservation on its own", and exactly what the desk's Add-ons picker offers. A second
+website-only list would drift from it within a release. `WebsitePropertySettings.offerAddOns`
+only decides whether that same list is exposed publicly.
+
+**Both switches default OFF** (`offerMealPlans`, `offerAddOns`). Shipping a capability must
+never start a live site selling something it was not selling yesterday, and a property with
+four meal plans that only sells Bed & Breakfast online should have to say so deliberately.
+
+**A choice the property did not open up is REFUSED, not ignored.** `MEAL_PLAN_NOT_OFFERED`,
+`ADD_ONS_NOT_OFFERED`, `MEAL_PLAN_NOT_FOUND`, `ADD_ON_NOT_FOUND`. Silently dropping a
+selection would quote one thing and book another — the guest agrees to a total and is
+billed a different one.
+
+**`mealPlanAffectsPrice` is published because the honest answer varies.** Under
+`Property.allocationCalculationMode = MEAL_PLAN` the linked allocations price per person
+per night; under `RATE_PLAN` the meal plan is a label and the rate plan carries the price.
+A site that renders a price-changing picker in the second case is lying to the guest.
+
+**Add-ons carry no price in the catalogue.** What one costs depends on the party, the
+length of stay and its posting rhythm (every night / arrival / departure), so a single
+figure on a catalogue entry is a number that is right for nobody. The quote returns the
+line; the quote is the price.
+
+The quote now itemises `allocations` with `source` (RATE_PLAN / MEAL_PLAN / MANUAL) and
+`mode`, so a site can show what is included separately from what the guest ticked, and
+knows that an INCLUDE_IN_RATE amount is already inside `roomBase` rather than on top of it.
+`WebsiteBooking` records `mealPlanCode` and `addOnIds`, and the "manage my booking" lookup
+re-quotes on what was actually booked rather than on today's defaults.
+
 ## Open items / follow-ups
 
 - **Rate limiting** — none. A misbehaving site can hammer availability. A per-key token
@@ -121,5 +160,10 @@ guide lists three payment patterns the site can adopt on its own.
   contact the property.
 - **Multi-room bookings** — one room type per booking. A site wanting two rooms makes two
   bookings.
+- **Add-on quantities** — an extra is on or off for the whole party; a guest cannot ask for
+  two transfers on a booking of three. `allocationAmountForNight` prices per adult/child,
+  which covers the common cases but not "one of these, please".
+- **Per-allocation website visibility** — `sellSeparate` gates both the desk picker and the
+  website. A property wanting an extra sold at the desk but not online needs a second flag.
 - **Image hosting** — URLs only; no upload. Fine for a site with a CDN; a future
   eRegistration-style upload could land here.
