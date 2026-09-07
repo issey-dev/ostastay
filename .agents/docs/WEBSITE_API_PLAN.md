@@ -35,7 +35,7 @@ build their own brand website from the API document."
 | Hub routes | `src/app/api/hub/website/**` |
 | Hub UI | `src/app/e/[slug]/hub/website/page.tsx`, `src/components/hub/website-api-keys.tsx`, `src/components/hub/website-property-settings.tsx` |
 | Shared helpers extracted for this | `src/lib/reservations/system-context.ts`, `src/lib/profiles/resolve-guest-profile.ts` (both used to live inside `channels/inbound/convert.ts`) |
-| Tests | `tests/business-rules/website-api.test.ts` (21) |
+| Tests | `tests/business-rules/website-api.test.ts` (27) |
 | External docs | `docs/WEBSITE_API.md`, `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml` |
 
 ## Decisions
@@ -142,6 +142,46 @@ knows that an INCLUDE_IN_RATE amount is already inside `roomBase` rather than on
 `WebsiteBooking` records `mealPlanCode` and `addOnIds`, and the "manage my booking" lookup
 re-quotes on what was actually booked rather than on today's defaults.
 
+## W-13 — Which extras go out is decided per allocation, in the Hub (2026-09-07)
+
+Owner's brief: "I want to mark which allocations will be available from API (whether the
+channel manager or website) — find a simple and easy way to do so through the Hub."
+
+W-12 left `sellSeparate` gating both the desk picker and the website, which the open items
+already flagged as too blunt: a property that sells a transfer at the desk had no way to
+keep it off its website. `Allocation.publishToApi` is that second flag.
+
+**It narrows `sellSeparate`; it does not repeat it.** An allocation must be sellable on
+its own before there is anything to publish, so the public catalogue is
+`isActive && sellSeparate && publishToApi`. The Hub's tick-list therefore offers only
+sell-separate items and says plainly how many others are bundled into plans, rather than
+showing a lever that would do nothing.
+
+**It lives on the Allocation row, not on `WebsitePropertySettings`.** A website-only list
+of extras would drift from the desk's within a release — the whole point of W-12 was that
+there is one catalogue. This records only whether an extra is *also* published.
+
+**It defaults ON, unlike the W-12 switches.** Those two gate a capability that did not
+exist before, so silence had to mean "off". This one narrows a list that already exists,
+so silence must mean "as before" — an upgrade must not quietly stop a live site selling a
+transfer it sold yesterday. `offerAddOns` (off by default) remains the single switch that
+starts online selling; `publishToApi` only decides what is in the list once it has.
+
+**Edited under INTEGRATIONS, not REVENUE.** Distribution is the Hub's job — the same
+permission that mints the keys and picks the rate plan to sell. Revenue owns what an extra
+*is* and what it costs; the Hub owns where it is offered. The Allocations page shows an
+"Online" badge so the revenue side can see the consequence without being able to change it
+there, and so nobody wonders why an extra they just created is on the website (it is,
+by default).
+
+**Named for the API, not for the website.** The channel manager pushes no extras today,
+but when it does it reads this same flag rather than a second one — the owner asked for one
+mark covering both.
+
+Unpublishing withdraws an extra from the catalogue **and** refuses it at quote and booking
+(`ADD_ON_NOT_FOUND`). A site holding a stale id must be told, not quietly charged
+differently from what it showed.
+
 ## Open items / follow-ups
 
 - **Rate limiting** — none. A misbehaving site can hammer availability. A per-key token
@@ -163,7 +203,8 @@ re-quotes on what was actually booked rather than on today's defaults.
 - **Add-on quantities** — an extra is on or off for the whole party; a guest cannot ask for
   two transfers on a booking of three. `allocationAmountForNight` prices per adult/child,
   which covers the common cases but not "one of these, please".
-- **Per-allocation website visibility** — `sellSeparate` gates both the desk picker and the
-  website. A property wanting an extra sold at the desk but not online needs a second flag.
+- **Website vs channel manager, separately** — `publishToApi` (W-13) is one mark for both.
+  A property wanting an extra on its own site but not through OTAs would need the flag to
+  become a set of destinations.
 - **Image hosting** — URLs only; no upload. Fine for a site with a CDN; a future
   eRegistration-style upload could land here.

@@ -40,6 +40,7 @@ export type AllocationDto = {
   postingRhythm: string
   mode: string
   sellSeparate: boolean
+  publishToApi: boolean
   isActive: boolean
   rates: Array<{
     id: string
@@ -330,6 +331,11 @@ export function AllocationsManager() {
                           Sell Separate
                         </Badge>
                       )}
+                      {a.sellSeparate && a.publishToApi && (
+                        <Badge variant="outline" title="Offered by the booking APIs — set in Hub → Website">
+                          Online
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <div>Charge code: <span className="font-mono text-xs text-foreground">{a.chargeCode?.code}</span></div>
@@ -388,6 +394,11 @@ export function AllocationsManager() {
                             {a.sellSeparate && (
                               <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
                                 Sell Separate
+                              </Badge>
+                            )}
+                            {a.sellSeparate && a.publishToApi && (
+                              <Badge variant="outline" title="Offered by the booking APIs — set in Hub → Website">
+                                Online
                               </Badge>
                             )}
                           </div>

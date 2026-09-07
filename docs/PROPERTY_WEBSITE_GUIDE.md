@@ -42,7 +42,8 @@ administrator with the **Integrations** permission does this part.
 | Rate plan to sell | **Required for booking.** Every website reservation is made on this plan, priced from its Price Calendar (with the property's Base plan as the fallback for unpriced nights, the same as at the desk). Negotiated plans are not offered. |
 | Meal plan | The plan every website reservation is made on, and the default when guests may choose. |
 | Let guests choose their meal plan | Off: every booking uses the plan above. On: the site offers this property's active meal plans, with that one preselected. |
-| Offer paid extras online | Off: the site sells rooms only. On: it may offer transfers, spa treatments and anything else marked **sell separately** in Allocations — the same list the front desk can add to a booking. |
+| Offer paid extras online | Off: the site sells rooms only. On: a tick-list appears of everything marked **sell separately** in Allocations, and you choose which of them the website and channel manager may offer. |
+| Extras offered through the APIs | The tick-list itself. A ticked extra is on sale online; an unticked one stays available to the front desk but is never offered outside it. A newly created extra starts ticked. |
 | Minimum stay / Booking window | Website-only limits. The desk is not bound by them. |
 | Note for the front desk | Added to the remarks of every website reservation — e.g. "Website booking: collect balance at check-in". |
 | Headline, Description, Photo URLs, Policies | The marketing content the site displays. Photos are URLs you host (your site or a CDN). |
@@ -146,6 +147,8 @@ Both are off until an administrator switches them on, so `booking.mealPlans` and
   preselected. `booking.mealPlanAffectsPrice` tells you whether the choice changes the
   total — some properties price per person off the meal plan, others carry the price in
   the rate plan and treat it as a label. Do not imply a cost that is not there.
+- `booking.addOns` holds only the extras this property has published — it is not every
+  extra the property sells, and it can change. Read it rather than hard-coding ids.
 - `booking.addOns` are paid extras with **no price attached**, because what one costs
   depends on the party, the length of stay and whether it is charged nightly or once on
   arrival. Show them as tick boxes, send the ids to the quote, and display the lines the

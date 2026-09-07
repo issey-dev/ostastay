@@ -226,7 +226,7 @@ async function loadStayContext(propertyId: string, stay: WebsiteStayInput): Prom
       // sellSeparate is the owner-set flag for "can be attached on its own" — the same
       // gate the desk's Add-ons picker uses. An allocation that is only ever part of a
       // package cannot be bought separately here either.
-      where: { id: { in: requestedAddOns }, propertyId: property.id, isActive: true, sellSeparate: true },
+      where: { id: { in: requestedAddOns }, propertyId: property.id, isActive: true, sellSeparate: true, publishToApi: true },
       select: { id: true },
     });
     if (allowed.length !== requestedAddOns.length) {

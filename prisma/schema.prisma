@@ -2418,6 +2418,15 @@ model Allocation {
   // rate/meal plan. Turning this on doesn't change how it posts when it IS in a rate —
   // it just additionally exposes it in the reservation Add-ons picker.
   sellSeparate  Boolean    @default(false)
+  // Distribution. Whether the external booking APIs — the property's brand website
+  // today, the channel manager when it learns to sell extras — may offer this to a
+  // guest. Narrows `sellSeparate` rather than repeating it: an allocation must be
+  // sellable on its own before there is anything to publish, and this then says
+  // whether that same item is ALSO offered outside the front desk. Defaults on, so
+  // WebsitePropertySettings.offerAddOns stays the single switch that starts online
+  // selling; this decides what is in the list once it has started. Set in the Hub
+  // (Website → property → Extras offered through the APIs).
+  publishToApi  Boolean    @default(true)
   isActive      Boolean    @default(true)
 
   rates                  AllocationRate[]

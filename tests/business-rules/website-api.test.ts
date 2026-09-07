@@ -634,6 +634,48 @@ describe("Website API", () => {
       expect((await badPlan.json()).code).toBe("MEAL_PLAN_NOT_FOUND");
     });
 
+    // The Hub's per-extra distribution switch. `sellSeparate` says the desk may add it;
+    // `publishToApi` says the outside world may buy it. Unpublishing has to take it off
+    // the catalogue AND stop it being bought — a site that could still quote a withdrawn
+    // extra would be selling something the property took off sale.
+    it("withholds an extra the Hub has unpublished, and puts it back", async () => {
+      await updateWebsitePropertySettings({
+        enterpriseId: enterpriseAId,
+        propertyId: propertyAId,
+        input: { publishedAddOnIds: [] },
+      });
+
+      const hidden = await propertyRoute.GET(req(`/properties/${propertyAId}`, { key: keyA }), params({ propertyId: propertyAId }));
+      expect((await hidden.json()).property.booking.addOns).toEqual([]);
+
+      const res = await quoteRoute.POST(
+        req(`/properties/${propertyAId}/quote`, { key: keyA, body: { ...stay, roomTypeId: roomTypeAId, addOnIds: [transferId] } }),
+        params({ propertyId: propertyAId })
+      );
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe("ADD_ON_NOT_FOUND");
+
+      // Withdrawn from the APIs, untouched at the desk — that is the whole point of the flag.
+      expect((await prisma.allocation.findUnique({ where: { id: transferId } }))?.sellSeparate).toBe(true);
+
+      // A bundled-only allocation cannot be published: there is nothing to buy on its own.
+      await expect(
+        updateWebsitePropertySettings({
+          enterpriseId: enterpriseAId,
+          propertyId: propertyAId,
+          input: { publishedAddOnIds: [packageOnlyId] },
+        })
+      ).rejects.toThrow();
+
+      await updateWebsitePropertySettings({
+        enterpriseId: enterpriseAId,
+        propertyId: propertyAId,
+        input: { publishedAddOnIds: [transferId] },
+      });
+      const back = await propertyRoute.GET(req(`/properties/${propertyAId}`, { key: keyA }), params({ propertyId: propertyAId }));
+      expect((await back.json()).property.booking.addOns.map((a: { code: string }) => a.code)).toEqual(["TRF-SB"]);
+    });
+
     it("carries the choices onto the reservation and back out of the lookup", async () => {
       const res = await bookingsRoute.POST(
         req(`/properties/${propertyAId}/bookings`, {

@@ -23,6 +23,10 @@ export type WebsitePropertySettingsDto = {
   /** Plans the Hub may choose from. Negotiated plans are excluded — they are agent-only. */
   ratePlans: { id: string; code: string; name: string; isLocked: boolean; parentRatePlanId: string | null }[];
   mealPlans: { code: string; name: string }[];
+  /** Stand-alone extras this property has, and which of them the booking APIs may offer. */
+  addOns: { id: string; code: string; name: string; type: string; publishToApi: boolean }[];
+  /** Active allocations that are bundled into plans only, so there is nothing to publish. */
+  bundledOnlyCount: number;
   /** Active keys that can act on this property. */
   keyCount: number;
   bookingCount: number;
@@ -60,6 +64,13 @@ export async function listWebsitePropertySettings(enterpriseId: string): Promise
         select: { id: true, code: true, name: true, isLocked: true, parentRatePlanId: true },
       },
       mealPlans: { where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } },
+      // Every active allocation, split below: the sell-separately ones are publishable,
+      // the rest are bundled into rate or meal plans and only counted.
+      allocations: {
+        where: { isActive: true },
+        orderBy: [{ type: "asc" }, { name: "asc" }],
+        select: { id: true, code: true, name: true, type: true, sellSeparate: true, publishToApi: true },
+      },
       _count: {
         select: {
           websiteApiKeys: { where: { key: { status: "ACTIVE" } } },
@@ -88,6 +99,10 @@ export async function listWebsitePropertySettings(enterpriseId: string): Promise
       deskRemark: s?.deskRemark ?? DEFAULTS.deskRemark,
       ratePlans: p.ratePlans,
       mealPlans: p.mealPlans,
+      addOns: p.allocations
+        .filter((a) => a.sellSeparate)
+        .map(({ id, code, name, type, publishToApi }) => ({ id, code, name, type, publishToApi })),
+      bundledOnlyCount: p.allocations.filter((a) => !a.sellSeparate).length,
       keyCount: p._count.websiteApiKeys,
       bookingCount: p._count.websiteBookings,
     };
@@ -104,6 +119,8 @@ export type WebsitePropertySettingsInput = {
   mealPlanCode?: string;
   offerMealPlans?: boolean;
   offerAddOns?: boolean;
+  /** The stand-alone extras the booking APIs may offer — a full replacement of the set. */
+  publishedAddOnIds?: string[];
   maxNightsAhead?: number;
   minNights?: number;
   deskRemark?: string | null;
@@ -149,6 +166,32 @@ export async function updateWebsitePropertySettings(params: {
       }
       imageUrls.push(v);
     }
+  }
+
+  // Which extras go out through the APIs lives on the Allocation row, not on a second
+  // website-only list, so the desk and the website can never disagree about what an
+  // extra IS — this only records whether it is also published. Distribution is the Hub's
+  // job (the same INTEGRATIONS permission that mints the keys), which is why an
+  // integrations manager may flip this one boolean without holding Revenue rights.
+  // An id that is not one of this property's own sell-separate extras is refused rather
+  // than quietly dropped.
+  if (input.publishedAddOnIds !== undefined) {
+    const sellable = await prisma.allocation.findMany({
+      where: { propertyId, isActive: true, sellSeparate: true },
+      select: { id: true },
+    });
+    const sellableIds = new Set(sellable.map((a) => a.id));
+    const chosen = [...new Set(input.publishedAddOnIds)];
+    for (const id of chosen) {
+      if (!sellableIds.has(id)) throw new ForbiddenError("That extra is not one this property sells separately");
+    }
+    if (chosen.length > 0) {
+      await prisma.allocation.updateMany({ where: { id: { in: chosen } }, data: { publishToApi: true } });
+    }
+    await prisma.allocation.updateMany({
+      where: { propertyId, isActive: true, sellSeparate: true, ...(chosen.length > 0 ? { id: { notIn: chosen } } : {}) },
+      data: { publishToApi: false },
+    });
   }
 
   const data = {

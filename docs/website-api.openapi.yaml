@@ -407,7 +407,11 @@ components:
         addOns:
           type: array
           items: { $ref: "#/components/schemas/AddOn" }
-          description: Empty unless the property sells extras online.
+          description: >
+            The extras this property has published to the booking APIs. Empty unless the
+            property sells extras online, and never the whole catalogue: each extra is
+            published individually in the Hub and may be withdrawn, so read this list
+            rather than storing ids.
         minNights: { type: integer }
         maxNightsAhead: { type: integer }
 

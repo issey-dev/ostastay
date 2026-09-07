@@ -213,11 +213,13 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
       allocationCalculationMode: true,
       businessDate: true,
       mealPlans: { where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } },
-      // The add-on catalogue. `sellSeparate` is the owner-set flag meaning "can be
-      // attached to a reservation on its own" — the same list the desk's Add-ons picker
-      // offers, not a second one configured for the website.
+      // The add-on catalogue: this property's own allocations, not a second list
+      // configured for the website. `sellSeparate` is the owner-set flag meaning "can be
+      // attached to a reservation on its own" (what the desk's Add-ons picker offers) and
+      // `publishToApi` is the Hub's decision that this particular one may also be sold
+      // outside the desk. An extra must pass both.
       allocations: {
-        where: { isActive: true, sellSeparate: true },
+        where: { isActive: true, sellSeparate: true, publishToApi: true },
         orderBy: [{ type: "asc" }, { name: "asc" }],
         select: { id: true, code: true, name: true, type: true, postingRhythm: true },
       },

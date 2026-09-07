@@ -14,6 +14,7 @@ const patchSchema = z.object({
   mealPlanCode: z.string().max(40).optional(),
   offerMealPlans: z.boolean().optional(),
   offerAddOns: z.boolean().optional(),
+  publishedAddOnIds: z.array(z.string().max(64)).max(300).optional(),
   maxNightsAhead: z.number().int().optional(),
   minNights: z.number().int().optional(),
   deskRemark: z.string().max(500).nullable().optional(),

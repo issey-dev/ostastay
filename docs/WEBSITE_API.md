@@ -238,6 +238,10 @@ often empty — build the page to cope with that rather than assuming they are t
   set dinner. **They carry no price**, on purpose: what one costs depends on the party and
   the length of stay, and on whether it is charged every night or once on arrival. Send the
   ids to the quote and show the line it returns.
+- The list is the property's own choice, extra by extra: an item appears only when the
+  property both sells it on its own and has published it to the APIs in the Hub. It can be
+  withdrawn at any time, so **read the catalogue rather than hard-coding ids** — a
+  withdrawn extra is refused by the quote as `ADD_ON_NOT_FOUND`, not silently dropped.
 
 ### 3.3 Availability calendar
 

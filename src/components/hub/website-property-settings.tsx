@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -36,6 +37,8 @@ type PropertyRow = {
   deskRemark: string | null
   ratePlans: { id: string; code: string; name: string; isLocked: boolean; parentRatePlanId: string | null }[]
   mealPlans: { code: string; name: string }[]
+  addOns: { id: string; code: string; name: string; type: string; publishToApi: boolean }[]
+  bundledOnlyCount: number
   keyCount: number
   bookingCount: number
 }
@@ -48,6 +51,7 @@ const settingsSchema = z.object({
   bookingEnabled: z.boolean(),
   offerMealPlans: z.boolean(),
   offerAddOns: z.boolean(),
+  publishedAddOnIds: z.array(z.string()),
   ratePlanId: z.string(),
   mealPlanCode: z.string(),
   maxNightsAhead: z.string().refine((v) => /^\d+$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 730, "1 to 730 nights"),
@@ -65,6 +69,7 @@ function toForm(row: PropertyRow): SettingsFormValues {
     bookingEnabled: row.bookingEnabled,
     offerMealPlans: row.offerMealPlans,
     offerAddOns: row.offerAddOns,
+    publishedAddOnIds: row.addOns.filter((a) => a.publishToApi).map((a) => a.id),
     ratePlanId: row.ratePlanId ?? "",
     mealPlanCode: row.mealPlanCode ?? "NONE",
     maxNightsAhead: String(row.maxNightsAhead),
@@ -120,6 +125,7 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
         bookingEnabled: values.bookingEnabled,
         offerMealPlans: values.offerMealPlans,
         offerAddOns: values.offerAddOns,
+        publishedAddOnIds: values.publishedAddOnIds,
         ratePlanId: values.ratePlanId || null,
         mealPlanCode: values.mealPlanCode || "NONE",
         maxNightsAhead: parseInt(values.maxNightsAhead),
@@ -261,12 +267,77 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
                         <div className="!mt-0">
                           <FormLabel className="cursor-pointer font-normal">Offer paid extras online</FormLabel>
                           <p className="text-xs text-muted-foreground">
-                            Transfers, spa treatments and anything else marked &quot;sell separately&quot; in Allocations —
-                            the same list the front desk can add to a booking.
+                            Transfers, spa treatments and anything else marked &quot;sell separately&quot; in Allocations.
+                            Turn this on and pick which of them go out below.
                           </p>
                         </div>
                       </FormItem>
                     )} />
+                    {form.watch("offerAddOns") && (
+                      <FormField control={form.control} name="publishedAddOnIds" render={({ field }) => {
+                        const chosen = new Set(field.value ?? [])
+                        const addOns = editing?.addOns ?? []
+                        const toggle = (id: string) => {
+                          const next = new Set(chosen)
+                          if (next.has(id)) next.delete(id)
+                          else next.add(id)
+                          field.onChange([...next])
+                        }
+                        return (
+                          <FormItem className="rounded-md border border-border p-3 space-y-2 md:col-span-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <FormLabel className="font-normal">Extras offered through the APIs</FormLabel>
+                              {addOns.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                    {chosen.size} of {addOns.length}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7"
+                                    onClick={() => field.onChange(chosen.size === addOns.length ? [] : addOns.map((a) => a.id))}
+                                  >
+                                    {chosen.size === addOns.length ? "None" : "All"}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            {addOns.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                Nothing to offer yet — this property has no allocation marked &quot;sell separately&quot;.
+                                Mark one in Revenue &rarr; Allocations and it will appear here.
+                              </p>
+                            ) : (
+                              <>
+                                <ul className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
+                                  {addOns.map((a) => (
+                                    <li key={a.id} className="min-w-0">
+                                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                        <Checkbox checked={chosen.has(a.id)} onCheckedChange={() => toggle(a.id)} />
+                                        <span className="min-w-0 truncate">{a.name}</span>
+                                        <span className="font-mono text-xs text-muted-foreground">{a.code}</span>
+                                      </label>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <p className="text-xs text-muted-foreground">
+                                  An unticked extra is still there for the front desk to add — it is simply not offered by
+                                  the website or the channel manager. A newly created extra starts published.
+                                </p>
+                              </>
+                            )}
+                            {editing && editing.bundledOnlyCount > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {editing.bundledOnlyCount} more {editing.bundledOnlyCount === 1 ? "allocation is" : "allocations are"} part of
+                                a rate or meal plan only, so there is nothing to sell on its own.
+                              </p>
+                            )}
+                          </FormItem>
+                        )
+                      }} />
+                    )}
                     <FormField control={form.control} name="mealPlanCode" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Meal plan</FormLabel>
