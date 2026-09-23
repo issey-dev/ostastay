@@ -4,6 +4,8 @@ import { ForbiddenError, UnauthorizedError } from "@/lib/scope";
 import { resolveWebsiteApiKey, type ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 import { consumeRateLimit, rateLimitHeaders, type RateDecision } from "@/lib/website-api/rate-limit";
 import { ScopeError } from "@/lib/website-api/scopes";
+import { BookingError } from "@/lib/booking-error";
+import { publicStatus } from "@/lib/website-api/activity-common";
 
 // HTTP plumbing for the public Website API (src/app/api/website/v1/**).
 //
@@ -124,6 +126,12 @@ export function websiteRoute<P = Record<string, never>>(
       // are no secret from its holder, and "ask for Spa to be added" is actionable.
       if (error instanceof ScopeError) {
         return apiError(403, "SCOPE_NOT_GRANTED", error.message, { headers: cors });
+      }
+      // A refusal from a booking service (Excursions/Spa). Its code is the public code;
+      // business refusals (sold out, cut off, price changed...) are 409s on this API.
+      if (error instanceof BookingError) {
+        const details = (error.extra as { details?: unknown } | undefined)?.details;
+        return apiError(publicStatus(error), error.code, error.message, { details, headers: cors });
       }
       // createReservation's assertPropertyAccess throws ForbiddenError for a property the
       // key cannot act on (pending approval, wrong enterprise). To the website that is

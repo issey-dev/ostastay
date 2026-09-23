@@ -49,6 +49,7 @@ model Enterprise {
   eRegistrationLinks    ERegistrationLink[]
   websiteApiKeys        WebsiteApiKey[]
   websiteBookings       WebsiteBooking[]
+  apiActivityBookings   ApiActivityBooking[]
   addonAccess           EnterpriseAddonAccess[]
   emailLogs             EmailLog[]
 
@@ -519,6 +520,7 @@ model Property {
   activityOnlineSettings       ActivityOnlineSettings[]
   websiteApiKeys               WebsiteApiKeyProperty[]
   websiteBookings              WebsiteBooking[]
+  apiActivityBookings          ApiActivityBooking[]
   dashboardLayouts             UserDashboardLayout[]
 
   createdAt DateTime @default(now())
@@ -2740,6 +2742,8 @@ model ExcursionDeparture {
   notes  String?
 
   bookings          ExcursionBooking[] @relation("DepartureBookings")
+  // Booking API holds on this departure (seats kept while a website takes payment).
+  apiHolds ApiActivityBooking[] @relation("ApiExcursionHolds")
   // Bookings that exist because THIS departure was cancelled (e.g. weather) and the
   // guest was moved to a replacement — see ExcursionBooking.movedFromDepartureId.
   movedBookingsAway ExcursionBooking[] @relation("MovedFromDeparture")
@@ -2779,6 +2783,10 @@ model ExcursionBooking {
   totalAmount Float
 
   status String @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
+  // DESK | API — an API booking was made by a brand website through the Booking API
+  // (ApiActivityBooking holds its guest, payment and public reference).
+  source String @default("DESK")
+  apiBooking ApiActivityBooking? @relation("ApiExcursionBooking")
 
   // folioId is always set — either the guest's existing open room folio (in-house) or
   // a fresh walk-in folio created for this booking (walk-in). folioLineItemId is set
@@ -3109,6 +3117,7 @@ model SpaAppointment {
   appointmentStatus String @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
   paymentStatus     String @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
   source            String @default("FRONT_DESK")
+  apiBooking ApiActivityBooking? @relation("ApiSpaAppointment")
 
   // Billing is single-folio — resolved from the participantIndex: 1 participant's
   // guest identity, regardless of partySize.
@@ -3636,6 +3645,7 @@ model WebsiteApiKey {
 
   properties WebsiteApiKeyProperty[]
   bookings   WebsiteBooking[]
+  activityBookings ApiActivityBooking[]
 
   @@index([enterpriseId])
   @@index([createdByUserId])
@@ -3762,6 +3772,75 @@ model ActivityOnlineSettings {
 
   @@unique([propertyId, module])
   @@index([onlinePaymentMethodId])
+}
+
+// One Booking API attempt for an Excursion or Spa booking (BOOKING_API_ADDONS_PLAN.md
+// Phase 2/3) — the activity counterpart of WebsiteBooking. It is, in turn:
+//  - a HOLD: seats kept on a departure while the website takes payment. Held seats count
+//    against capacity until holdExpiresAt; an expired hold simply stops counting (lazy,
+//    no job). Holds live HERE rather than as ExcursionBooking rows so the desk's manifest
+//    only ever shows real bookings.
+//  - the IDEMPOTENCY record for the booking call (keyId + idempotencyKey),
+//  - the AUDIT row, FAILED attempts included,
+//  - the guest's PUBLIC REFERENCE (publicRef, random — never sequential), and the
+//    guest/payment details the website sent, which the walk-in folio has no place for.
+// Live booking status is read from the linked ExcursionBooking / SpaAppointment, never
+// copied here, so a cancellation at the desk is what the website sees.
+model ApiActivityBooking {
+  id           String        @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise    @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  keyId        String
+  key          WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  module       String // EXCURSIONS | SPA
+  publicRef    String        @unique
+
+  // HELD | CONFIRMED | EXPIRED | FAILED
+  status         String    @default("HELD")
+  problem        String?
+  idempotencyKey String?
+  holdExpiresAt  DateTime?
+
+  // What is held / booked (excursions).
+  excursionDepartureId String?
+  excursionDeparture   ExcursionDeparture? @relation("ApiExcursionHolds", fields: [excursionDepartureId], references: [id], onDelete: SetNull)
+  adults               Int                 @default(0)
+  children             Int                 @default(0)
+  infants              Int                 @default(0)
+
+  guestFirstName String?
+  guestLastName  String?
+  guestEmail     String?
+  guestPhone     String?
+  remarks        String?
+
+  // PAID | UNPAID — as the website reported it. The PMS takes no payment itself.
+  paymentStatus    String?
+  paymentProvider  String?
+  paymentReference String?
+  paymentAmount    Float?
+  paymentCurrency  String?
+  // The website's paid amount differs from our total — booked anyway, flagged for the desk.
+  amountMismatch   Boolean @default(false)
+
+  quotedTotal Float?
+  currency    String?
+  requestIp   String?
+
+  excursionBookingId String?           @unique
+  excursionBooking   ExcursionBooking? @relation("ApiExcursionBooking", fields: [excursionBookingId], references: [id], onDelete: SetNull)
+  spaAppointmentId   String?           @unique
+  spaAppointment     SpaAppointment?   @relation("ApiSpaAppointment", fields: [spaAppointmentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([keyId, idempotencyKey])
+  @@index([excursionDepartureId, status])
+  @@index([propertyId, createdAt])
+  @@index([enterpriseId, createdAt])
 }
 
 model WebsiteBooking {

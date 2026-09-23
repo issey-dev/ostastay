@@ -7,7 +7,7 @@ import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
 import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
-import { bookedHeadcount, headcountLabel as formatHeadcount } from "@/lib/excursion-booking";
+import { occupiedSeats, headcountLabel as formatHeadcount } from "@/lib/excursion-booking";
 
 // Thrown inside a move's transaction to roll that one move back and report it as failed.
 class MoveRefused extends Error {}
@@ -148,7 +148,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           await lockKeys(tx, [lockKey.excursionDeparture(targetDepartureId), lockKey.excursionDeparture(sourceDepartureId)]);
           const target = await tx.excursionDeparture.findUniqueOrThrow({ where: { id: targetDepartureId } });
           if (target.status !== "SCHEDULED") throw new MoveRefused("The replacement departure is no longer taking bookings");
-          if ((await bookedHeadcount(tx, targetDepartureId)) + moveHeadcount > target.capacity) {
+          if ((await occupiedSeats(tx, targetDepartureId)) + moveHeadcount > target.capacity) {
             throw new MoveRefused(`The replacement departure is full (capacity ${target.capacity}).`);
           }
           const fresh = await tx.excursionBooking.findUniqueOrThrow({ where: { id: original.id } });
