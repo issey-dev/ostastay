@@ -28,7 +28,6 @@ const { customChargeCode } = await import("../helpers/charge-codes");
 import { setPropertySettings } from "../helpers/property-settings";
 const hubKeysRoute = await import("@/app/api/hub/website/keys/route");
 const hubKeyRoute = await import("@/app/api/hub/website/keys/[id]/route");
-const hubActivitiesRoute = await import("@/app/api/hub/website/activities/route");
 const hubActivityRoute = await import("@/app/api/hub/website/activities/[propertyId]/route");
 const hubItemRoute = await import("@/app/api/hub/website/activity-items/[id]/route");
 const propertyRoute = await import("@/app/api/website/v1/properties/[propertyId]/route");
@@ -67,7 +66,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
     });
 
   const createKey = (body: Record<string, unknown>) =>
-    asUser(adminId, () => hubKeysRoute.POST(json("POST", { name: `site-${uniq()}`, propertyIds: [propertyId], ...body })));
+    asUser(adminId, () => hubKeysRoute.POST(json("POST", { name: `site-${uniq()}`, propertyId: propertyId, ...body })));
 
   const modulesFor = async (key: string) => {
     const res = await propertyRoute.GET(api(`/properties/${propertyId}`, key), params({ propertyId }));
@@ -213,7 +212,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
     it("lists only the modules the enterprise has, with defaults for unconfigured properties", async () => {
       await setAddon("EXCURSIONS", true);
       await setAddon("SPA", false);
-      const data = await (await asUser(adminId, () => hubActivitiesRoute.GET())).json();
+      const data = await (await asUser(adminId, () => hubActivityRoute.GET(new Request("http://localhost"), params({ propertyId })))).json();
       expect(data.modules).toEqual(["EXCURSIONS"]);
       const row = data.properties.find((p: { property: { id: string } }) => p.property.id === propertyId);
       expect(row.modules.map((m: { module: string }) => m.module)).toEqual(["EXCURSIONS"]);
@@ -288,7 +287,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
       const foreign = await asUser(adminId, () =>
         hubItemRoute.PATCH(json("PATCH", { module: "EXCURSIONS", publishOnline: true }), params({ id: foreignType.id }))
       );
-      expect(foreign.status).toBe(403);
+      expect(foreign.status).toBe(404);
       expect((await prisma.excursionType.findUniqueOrThrow({ where: { id: foreignType.id } })).publishOnline).toBe(false);
 
       const desk = await asUser(deskId, () =>

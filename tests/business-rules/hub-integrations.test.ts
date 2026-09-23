@@ -19,6 +19,9 @@ const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const greenTaxRoute = await import("@/app/api/hub/green-tax/route");
+const websiteSettingsRoute = await import("@/app/api/hub/website/properties/[id]/route");
+const onlineBookingsRoute = await import("@/app/api/hub/website/bookings/route");
+const keysRoute = await import("@/app/api/hub/website/keys/route");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -68,5 +71,25 @@ describe("Green Tax register — per property", () => {
   it("opens only their own property's register to a single-property admin", async () => {
     expect((await register(ctx.lagoonAdminId, ctx.lagoonId)).status).toBe(200);
     expect((await register(ctx.lagoonAdminId, ctx.beachId)).status).toBe(403);
+  });
+});
+
+describe("Online booking setup — per property", () => {
+  const settings = (userId: string, propertyId: string) =>
+    asUser(userId, () => websiteSettingsRoute.GET(new Request("http://localhost"), { params: Promise.resolve({ id: propertyId }) }));
+  const bookings = (userId: string, query: string) =>
+    asUser(userId, () => onlineBookingsRoute.GET(new Request(`http://localhost/api/hub/website/bookings?${query}`)));
+
+  it("shows a property its own website settings and bookings, never another's", async () => {
+    expect((await settings(ctx.lagoonAdminId, ctx.lagoonId)).status).toBe(200);
+    expect((await settings(ctx.lagoonAdminId, ctx.beachId)).status).toBe(403);
+    expect((await bookings(ctx.lagoonAdminId, `propertyId=${ctx.lagoonId}`)).status).toBe(200);
+    expect((await bookings(ctx.lagoonAdminId, `propertyId=${ctx.beachId}`)).status).toBe(403);
+    expect((await bookings(ctx.adminId, "")).status).toBe(400);
+  });
+
+  it("keeps API keys in the enterprise area — a single-property admin cannot list or mint them", async () => {
+    expect((await asUser(ctx.lagoonAdminId, () => keysRoute.GET())).status).toBe(403);
+    expect((await asUser(ctx.adminId, () => keysRoute.GET())).status).toBe(200);
   });
 });

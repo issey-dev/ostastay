@@ -119,7 +119,7 @@ describe("Booking API — Spa (Phase 3)", () => {
     const double = await prisma.spaRoom.create({ data: { propertyId, name: "Double", capacity: 2 } });
     await prisma.spaTreatmentRoom.createMany({ data: [{ treatmentId: soloId, roomId: single.id }, { treatmentId: coupleId, roomId: double.id }] });
 
-    key = (await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: "spa-site", propertyIds: [propertyId], allowedOrigins: [], scopes: ["SPA"], expiresAt: null })).key;
+    key = (await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: "spa-site", propertyId: propertyId, allowedOrigins: [], scopes: ["SPA"], expiresAt: null })).key;
   });
 
   beforeEach(() => _resetWebsiteRateLimiter());

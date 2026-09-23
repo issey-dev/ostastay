@@ -533,7 +533,7 @@ model Property {
   // Website API (brand site per property) — see .agents/docs/WEBSITE_API_PLAN.md.
   websiteSettings              WebsitePropertySettings?
   activityOnlineSettings       ActivityOnlineSettings[]
-  websiteApiKeys               WebsiteApiKeyProperty[]
+  websiteApiKeys               WebsiteApiKey[]
   websiteBookings              WebsiteBooking[]
   apiActivityBookings          ApiActivityBooking[]
   dashboardLayouts             UserDashboardLayout[]
@@ -3698,10 +3698,11 @@ model ChannelBookingDefaults {
 // authenticated by an API key minted in the Hub. See .agents/docs/WEBSITE_API_PLAN.md and
 // docs/WEBSITE_API.md.
 //
-// Keys are ENTERPRISE-level objects (the Hub is the only place they are managed) and each
-// grants access to ONE OR MORE of that enterprise's properties via WebsiteApiKeyProperty —
-// a group with one site per hotel mints one key per property; a group with a single
-// portal mints one key covering all of them.
+// Keys are ENTERPRISE-level objects (the Hub's enterprise area is the only place they are
+// managed) and each covers ONE property or ALL of the enterprise's properties — never a
+// subset (owner, 2026-09-23; the same rule as a user's work location). A group with one site
+// per hotel mints one key per property; a group with a single portal mints one ALL key,
+// which also covers properties added later (HUB_SETUP_PLAN.md A-3).
 //
 // Same storage rule as the channel webhook token and the eRegistration link: only the
 // SHA-256 hash is kept. Possession of a key is authority to READ availability and prices
@@ -3732,6 +3733,12 @@ model WebsiteApiKey {
   // the API directly from a page. Empty = server-to-server only, which is the recommended
   // topology (the key never reaches a browser). Matched exactly against the Origin header.
   allowedOrigins String[]   @default([])
+  // The one property this key covers; null = ALL the enterprise's ACTIVE properties,
+  // resolved live on every request (src/lib/website-api/resolve-key.ts). A property id
+  // outside the key's coverage reads as "not found", never "forbidden", so a key cannot be
+  // used to enumerate a group's other hotels.
+  propertyId     String?
+  property       Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   // What the key may use: ROOMS | EXCURSIONS | SPA (src/lib/website-api/scopes.ts). One
   // key serves a site's rooms, excursions and spa (BOOKING_API_ADDONS_PLAN.md B-1). An
   // add-on scope is checked again LIVE on every request against EnterpriseAddonAccess, so
@@ -3747,27 +3754,13 @@ model WebsiteApiKey {
   revokedAt       DateTime?
   revokedByUserId String?
 
-  properties       WebsiteApiKeyProperty[]
   bookings         WebsiteBooking[]
   activityBookings ApiActivityBooking[]
   webhookEndpoints ApiWebhookEndpoint[]
 
   @@index([enterpriseId])
-  @@index([createdByUserId])
-}
-
-// Which properties a key may act on. Enforced on every Website API request: a property id
-// in the URL that is not on the key's list reads as "not found", never "forbidden", so a
-// key cannot be used to enumerate a group's other hotels.
-model WebsiteApiKeyProperty {
-  keyId      String
-  key        WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  propertyId String
-  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  addedAt    DateTime      @default(now())
-
-  @@id([keyId, propertyId])
   @@index([propertyId])
+  @@index([createdByUserId])
 }
 
 // What a property's brand website is allowed to show and sell — configured in the Hub

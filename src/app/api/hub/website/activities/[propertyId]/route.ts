@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { updateActivityModuleSettings } from "@/lib/website-api/activity-settings";
+import { listActivitySettings, updateActivityModuleSettings } from "@/lib/website-api/activity-settings";
 
 const patchSchema = z.object({
   module: z.enum(["EXCURSIONS", "SPA"]),
@@ -16,13 +16,28 @@ const patchSchema = z.object({
   policies: z.string().nullable().optional(),
 });
 
+// What one property sells online for Excursions and Spa through the Booking API — see
+// src/lib/website-api/activity-settings.ts. Property Setup for that property, INTEGRATIONS.
+
+/** GET — the property's online-sale settings for every module the enterprise holds. */
+export async function GET(_request: Request, { params }: { params: Promise<{ propertyId: string }> }) {
+  try {
+    const { propertyId } = await params;
+    const ctx = await requireSession();
+    await requirePropertySetup(ctx, propertyId, "INTEGRATIONS", "view");
+    return NextResponse.json(await listActivitySettings(ctx.enterpriseId, propertyId));
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
 /** A property's online-sale settings for one module (Excursions or Spa). */
 export async function PATCH(request: Request, { params }: { params: Promise<{ propertyId: string }> }) {
   try {
     const { propertyId } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
+    await requirePropertySetup(ctx, propertyId, "INTEGRATIONS", "update");
 
     const { module, ...input } = patchSchema.parse(await request.json());
     const settings = await updateActivityModuleSettings({ enterpriseId: ctx.enterpriseId, propertyId, module, input });

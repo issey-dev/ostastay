@@ -184,7 +184,7 @@ describe("Website API", () => {
       enterpriseId: enterpriseAId,
       userId: adminAId,
       name: "www.property-a.test",
-      propertyIds: [propertyAId],
+      propertyId: propertyAId,
       allowedOrigins: ["https://www.property-a.test/some/page"],
       expiresAt: null,
     });
@@ -194,7 +194,7 @@ describe("Website API", () => {
       enterpriseId: enterpriseBId,
       userId: adminB.id,
       name: "www.property-b.test",
-      propertyIds: [propertyBId],
+      propertyId: propertyBId,
       allowedOrigins: [],
       expiresAt: null,
     });
@@ -225,7 +225,7 @@ describe("Website API", () => {
         enterpriseId: enterpriseAId,
         userId: adminAId,
         name: "temp",
-        propertyIds: [propertyAId],
+        propertyId: propertyAId,
         allowedOrigins: [],
         expiresAt: null,
       });
@@ -730,14 +730,15 @@ describe("Website API", () => {
           new Request("http://localhost/api/hub/website/keys", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ name: "hub-minted", propertyIds: [propertyAId, propertyA2Id], allowedOrigins: [] }),
+            body: JSON.stringify({ name: "hub-minted", propertyId: null, allowedOrigins: [] }),
           })
         )
       );
       expect(created.status).toBe(201);
       const body = await created.json();
       expect(body.key).toMatch(/^wsk_[0-9a-f]{64}$/);
-      expect(body.row.properties).toHaveLength(2);
+      // One property or ALL — null is ALL.
+      expect(body.row.property).toBeNull();
 
       const list = await asUser(adminAId, () => hubKeysRoute.GET());
       const listed = (await list.json()).keys as { id: string; keyPrefix: string }[];
@@ -745,9 +746,43 @@ describe("Website API", () => {
       expect(row.keyPrefix).toBe(body.key.slice(0, 12));
       expect(JSON.stringify(listed)).not.toContain(body.key);
 
-      // A key covering two properties sees both; the sibling now resolves.
+      // An ALL key covers every property of the enterprise; the sibling now resolves.
       const sibling = await propertyRoute.GET(req(`/properties/${propertyA2Id}`, { key: body.key }), params({ propertyId: propertyA2Id }));
       expect(sibling.status).toBe(200);
+    });
+
+    it("refuses a subset of properties — a key is one property or ALL", async () => {
+      const res = await asUser(adminAId, () =>
+        hubKeysRoute.POST(
+          new Request("http://localhost/api/hub/website/keys", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: "subset", propertyIds: [propertyAId, propertyA2Id], allowedOrigins: [] }),
+          })
+        )
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it("an ALL key covers a property added after it was minted", async () => {
+      const created = await asUser(adminAId, () =>
+        hubKeysRoute.POST(
+          new Request("http://localhost/api/hub/website/keys", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: "all-later", propertyId: null, allowedOrigins: [] }),
+          })
+        )
+      );
+      const { key } = await created.json();
+      const later = await prisma.property.create({
+        data: {
+          enterpriseId: enterpriseAId, name: "Later", code: `LATER-${Date.now()}`, legalName: "Later LLC",
+          defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+        },
+      });
+      const res = await propertyRoute.GET(req(`/properties/${later.id}`, { key }), params({ propertyId: later.id }));
+      expect(res.status).not.toBe(404);
     });
 
     it("refuses to mint a key for another enterprise's property", async () => {
@@ -756,7 +791,7 @@ describe("Website API", () => {
           new Request("http://localhost/api/hub/website/keys", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ name: "cross-tenant", propertyIds: [propertyBId], allowedOrigins: [] }),
+            body: JSON.stringify({ name: "cross-tenant", propertyId: propertyBId, allowedOrigins: [] }),
           })
         )
       );

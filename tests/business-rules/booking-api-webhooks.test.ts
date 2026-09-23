@@ -91,7 +91,7 @@ describe("Booking API — webhooks (Phase 5)", () => {
         data: { propertyId, code: "HK", name: "Sunset Cruise", chargeCodeId: code.id, publishOnline: true, rates: { create: [{ adultPrice: 80, childPrice: 40, infantPrice: 0, effectiveFrom: new Date(2020, 0, 1) }] } },
       })
     ).id;
-    const minted = await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: "hooks-site", propertyIds: [propertyId], allowedOrigins: [], scopes: ["EXCURSIONS"], expiresAt: null });
+    const minted = await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: "hooks-site", propertyId: propertyId, allowedOrigins: [], scopes: ["EXCURSIONS"], expiresAt: null });
     key = minted.key;
     keyId = minted.row.id;
     _resetWebsiteRateLimiter();

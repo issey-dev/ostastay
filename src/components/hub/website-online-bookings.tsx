@@ -49,7 +49,7 @@ function money(total: number | null, currency: string | null) {
   return total == null ? "—" : `${total.toFixed(2)} ${currency ?? ""}`.trim()
 }
 
-export function WebsiteOnlineBookings({ modules }: { modules: Row["module"][] }) {
+export function WebsiteOnlineBookings({ propertyId, modules }: { propertyId: string; modules: Row["module"][] }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -60,7 +60,7 @@ export function WebsiteOnlineBookings({ modules }: { modules: Row["module"][] })
     setError(false)
     setLoading(true)
     try {
-      const qs = new URLSearchParams()
+      const qs = new URLSearchParams({ propertyId })
       if (moduleFilter !== "ALL") qs.set("module", moduleFilter)
       if (statusFilter !== "ALL") qs.set("status", statusFilter)
       const res = await fetch(`/api/hub/website/bookings?${qs}`)
@@ -71,7 +71,7 @@ export function WebsiteOnlineBookings({ modules }: { modules: Row["module"][] })
     } finally {
       setLoading(false)
     }
-  }, [moduleFilter, statusFilter])
+  }, [propertyId, moduleFilter, statusFilter])
 
   useEffect(() => {
     load()
@@ -91,7 +91,7 @@ export function WebsiteOnlineBookings({ modules }: { modules: Row["module"][] })
         <div>
           <CardTitle>Online bookings</CardTitle>
           <CardDescription>
-            Everything your websites booked or tried to book, newest first. Failed attempts show why; a hold is a place
+            Everything websites booked or tried to book at this property, newest first. Failed attempts show why; a hold is a place
             kept while the guest paid, and expires by itself if not booked.
           </CardDescription>
         </div>

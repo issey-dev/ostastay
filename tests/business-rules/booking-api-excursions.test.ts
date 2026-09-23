@@ -130,7 +130,7 @@ describe("Booking API — Excursions (Phase 2)", () => {
     ).id;
 
     const mint = async (scopes: string[], origins: string[] = []) =>
-      (await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: `k-${uniq()}`, propertyIds: [propertyId], allowedOrigins: origins, scopes, expiresAt: null })).key;
+      (await createWebsiteApiKey({ enterpriseId, userId: admin.id, name: `k-${uniq()}`, propertyId: propertyId, allowedOrigins: origins, scopes, expiresAt: null })).key;
     serverKey = await mint(["ROOMS", "EXCURSIONS"]);
     otherServerKey = await mint(["EXCURSIONS"]);
     browserKey = await mint(["EXCURSIONS"], ["https://www.example.com"]);

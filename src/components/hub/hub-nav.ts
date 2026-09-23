@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Mail,
+  MonitorPlay,
   Receipt,
   Settings2,
   Shield,
@@ -62,7 +63,7 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "channel-mapping", title: "Mapping", path: "channel-manager/mapping", icon: Building2, modules: ["INTEGRATIONS"], child: true },
   { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true },
   { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true },
-  { key: "booking-api", title: "Booking API", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
+  { key: "booking-api", title: "Booking API Keys", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
   // Guest-profile lists and Job Functions — a guest profile and a user are shared by every
   // property. Every other dropdown list is the property's own (src/lib/system-code-scope.ts).
@@ -152,6 +153,14 @@ export const PROPERTY_NAV: HubNavItem[] = [
     icon: FileText,
     modules: ["CONTROLS"],
     description: "Wording on invoices, receipts, letters, the registration card and statements.",
+  },
+  {
+    key: "online-booking",
+    title: "Online Booking",
+    path: "online-booking",
+    icon: MonitorPlay,
+    modules: ["INTEGRATIONS"],
+    description: "What this property's website shows and sells, and the bookings it made.",
   },
   {
     key: "green-tax",

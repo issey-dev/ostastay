@@ -47,9 +47,14 @@ const DEFAULTS = {
   deskRemark: null,
 };
 
-export async function listWebsitePropertySettings(enterpriseId: string): Promise<WebsitePropertySettingsDto[]> {
+// onlyPropertyId narrows the list to one property — the Hub's property area reads its own
+// property's settings and never another's (HUB_SETUP_PLAN.md, Phase 4).
+export async function listWebsitePropertySettings(enterpriseId: string, onlyPropertyId?: string): Promise<WebsitePropertySettingsDto[]> {
+  // A key covers one property or ALL of them, so a property is served by its own keys plus
+  // every ALL key of the enterprise.
+  const allPropertyKeys = await prisma.websiteApiKey.count({ where: { enterpriseId, propertyId: null, status: "ACTIVE" } });
   const properties = await prisma.property.findMany({
-    where: { enterpriseId, status: "ACTIVE" },
+    where: { enterpriseId, status: "ACTIVE", ...(onlyPropertyId ? { id: onlyPropertyId } : {}) },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -73,7 +78,7 @@ export async function listWebsitePropertySettings(enterpriseId: string): Promise
       },
       _count: {
         select: {
-          websiteApiKeys: { where: { key: { status: "ACTIVE" } } },
+          websiteApiKeys: { where: { status: "ACTIVE" } },
           websiteBookings: { where: { status: "CONFIRMED" } },
         },
       },
@@ -103,7 +108,7 @@ export async function listWebsitePropertySettings(enterpriseId: string): Promise
         .filter((a) => a.sellSeparate)
         .map(({ id, code, name, type, publishToApi }) => ({ id, code, name, type, publishToApi })),
       bundledOnlyCount: p.allocations.filter((a) => !a.sellSeparate).length,
-      keyCount: p._count.websiteApiKeys,
+      keyCount: p._count.websiteApiKeys + allPropertyKeys,
       bookingCount: p._count.websiteBookings,
     };
   });
@@ -229,7 +234,7 @@ export async function updateWebsitePropertySettings(params: {
     },
   });
 
-  const all = await listWebsitePropertySettings(enterpriseId);
+  const all = await listWebsitePropertySettings(enterpriseId, propertyId);
   const row = all.find((r) => r.property.id === propertyId);
   if (!row) throw new ForbiddenError("Property not found");
   return row;

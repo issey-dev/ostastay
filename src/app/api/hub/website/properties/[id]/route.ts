@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { updateWebsitePropertySettings } from "@/lib/website-api/settings";
+import { listWebsitePropertySettings, updateWebsitePropertySettings } from "@/lib/website-api/settings";
 
 const patchSchema = z.object({
   headline: z.string().max(200).nullable().optional(),
@@ -20,13 +20,31 @@ const patchSchema = z.object({
   deskRemark: z.string().max(500).nullable().optional(),
 });
 
+// One property's website configuration (what its brand site shows and sells) — see
+// src/lib/website-api/settings.ts. Property Setup for that property, INTEGRATIONS
+// (Hub > the property > Online Booking; HUB_SETUP_PLAN.md, Phase 4).
+
+/** GET /api/hub/website/properties/{propertyId} — the property's website settings. */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const ctx = await requireSession();
+    await requirePropertySetup(ctx, id, "INTEGRATIONS", "view");
+    const [row] = await listWebsitePropertySettings(ctx.enterpriseId, id);
+    if (!row) return NextResponse.json({ error: "Property not found" }, { status: 404 });
+    return NextResponse.json(row);
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
 /** PATCH /api/hub/website/properties/{propertyId} — upsert the property's website settings. */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
+    await requirePropertySetup(ctx, id, "INTEGRATIONS", "update");
 
     const input = patchSchema.parse(await request.json());
     const row = await updateWebsitePropertySettings({ enterpriseId: ctx.enterpriseId, propertyId: id, input });

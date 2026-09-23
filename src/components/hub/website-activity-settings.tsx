@@ -115,7 +115,7 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return typeof body?.error === "string" ? body.error : fallback
 }
 
-export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
+export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId: string; canManage: boolean }) {
   const [rows, setRows] = useState<PropertyRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -135,7 +135,8 @@ export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
   const load = useCallback(async () => {
     setError(false)
     try {
-      const res = await fetch("/api/hub/website/activities")
+      // This property only — the Hub's property area never lists another property.
+      const res = await fetch(`/api/hub/website/activities/${propertyId}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setRows(data.properties ?? [])
@@ -144,7 +145,7 @@ export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propertyId])
 
   useEffect(() => {
     load()

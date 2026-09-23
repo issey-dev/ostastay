@@ -69,9 +69,11 @@ const DEFAULTS = {
 };
 const DEFAULT_MAX_PARTY: Record<ActivityModule, number | null> = { EXCURSIONS: 10, SPA: null };
 
-export async function listActivitySettings(enterpriseId: string): Promise<ActivitySettingsList> {
+// onlyPropertyId narrows the list to one property — the Hub's property area reads its own
+// property's settings and never another's (HUB_SETUP_PLAN.md, Phase 4).
+export async function listActivitySettings(enterpriseId: string, onlyPropertyId?: string): Promise<ActivitySettingsList> {
   const modules = [...(await enabledActivityModules(enterpriseId))].sort() as ActivityModule[];
-  const propertyScope = { enterpriseId, status: "ACTIVE" };
+  const propertyScope = { enterpriseId, status: "ACTIVE", ...(onlyPropertyId ? { id: onlyPropertyId } : {}) };
   const [properties, excursionTypes, spaTreatments, paymentMethods, links] = await Promise.all([
     prisma.property.findMany({
       where: propertyScope,
@@ -319,8 +321,19 @@ export async function updateActivityItem(params: {
   return { propertyId, item };
 }
 
+/** Which property an excursion type / spa treatment belongs to — so the route can check the
+ * caller may set that property up before changing it. Null when it is not this enterprise's. */
+export async function activityItemPropertyId(enterpriseId: string, module: string, itemId: string): Promise<string | null> {
+  const where = { id: itemId, property: { enterpriseId } };
+  const row =
+    module === "SPA"
+      ? await prisma.spaTreatment.findFirst({ where, select: { propertyId: true } })
+      : await prisma.excursionType.findFirst({ where, select: { propertyId: true } });
+  return row?.propertyId ?? null;
+}
+
 async function findModuleDto(enterpriseId: string, propertyId: string, module: ActivityModule): Promise<ActivityModuleSettingsDto> {
-  const all = await listActivitySettings(enterpriseId);
+  const all = await listActivitySettings(enterpriseId, propertyId);
   const dto = all.properties.find((p) => p.property.id === propertyId)?.modules.find((m) => m.module === module);
   if (!dto) throw new ForbiddenError("Property not found");
   return dto;

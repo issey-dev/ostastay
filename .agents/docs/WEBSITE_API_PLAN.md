@@ -46,9 +46,15 @@ people who manage the channel manager manage this. No new RBAC module — reusin
 INTEGRATIONS avoids the module-registry churn (D-1 in the Hub plan) and keeps the Hub at
 two modules. view = list, create = mint, update = edit/rotate/settings, delete = revoke.
 
-**W-2 — One key, one or more properties.** `WebsiteApiKeyProperty` join. A key for one
-hotel cannot see a sibling hotel; an id off the key's list answers **404, never 403**, so
-keys cannot be used to enumerate a group's properties. Only ACTIVE properties resolve.
+**W-2 — One key, one property or ALL.** *(Superseded 2026-09-23 — was "one or more
+properties" via a `WebsiteApiKeyProperty` join; see HUB_SETUP_PLAN.md Phase 4.)* A key
+covers ONE property (`WebsiteApiKey.propertyId`) or ALL of the enterprise's properties
+(`propertyId` null — resolved live, so it covers properties added later). Never a subset:
+the same rule as a user's work location. A key for one hotel cannot see a sibling hotel;
+an id outside the key's coverage answers **404, never 403**, so keys cannot be used to
+enumerate a group's properties. Only ACTIVE properties resolve. Keys and their webhooks are
+managed in the Hub's enterprise area; what each property's site shows and sells, and its
+online-bookings list, are in that property's area (Online Booking).
 
 **W-3 — Hash at rest, shown once.** Same construction and reasoning as the channel
 webhook token and the eRegistration link. `keyPrefix` (first 12 chars) is stored only as

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { updateActivityItem } from "@/lib/website-api/activity-settings";
+import { activityItemPropertyId, updateActivityItem } from "@/lib/website-api/activity-settings";
 
 const patchSchema = z.object({
   module: z.enum(["EXCURSIONS", "SPA"]),
@@ -17,10 +17,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
 
     const { module, ...input } = patchSchema.parse(await request.json());
+    // The item's own property decides who may publish it — Property Setup there.
+    const propertyId = await activityItemPropertyId(ctx.enterpriseId, module, id);
+    if (!propertyId) return NextResponse.json({ error: module === "SPA" ? "Treatment not found" : "Excursion not found" }, { status: 404 });
+    await requirePropertySetup(ctx, propertyId, "INTEGRATIONS", "update");
     const result = await updateActivityItem({ enterpriseId: ctx.enterpriseId, module, itemId: id, input });
 
     await logActivity({
