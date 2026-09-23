@@ -2912,6 +2912,27 @@ simple booking page — fed by a public, key-authenticated API. Full decision re
 
 ---
 
+## 2026-09-07 — Revenue: "Rate Details" is now "Rate Seasons" (owner)
+
+- The Revenue Management tab formerly labelled **Rate Details** is now **Rate Seasons**.
+  Its `TabsValue` is unchanged (`seasonal-pricing`), so URLs and any saved state still
+  work; only the label and the prose that pointed at it moved (`room-type-manager.tsx`'s
+  Base Occupancy hint, the comment in `revenue/calendar/page.tsx`). Earlier entries in
+  this file still say "Rate Details" — they are dated records, read them as the same tab.
+- The panel inside it is titled **"Define a Rate Season"** (was "Bulk Seasonal Pricing
+  Tool") so the tab and the card agree on what the thing is called.
+- **Layout**: the form was a single `max-w-3xl` column that left most of a wide screen
+  empty. It is now a two-column grid — fields on the left, a **Review** panel on the
+  right (xl and up; it stacks underneath below that) restating rate plan, season, room
+  types, price, and **how many daily price rows the push will overwrite** before the
+  button is pressed. The submit button states what is still missing rather than sitting
+  dead and silent.
+- The two separate From/To date fields were replaced by the standard `DateRangePicker`
+  (per the date-picker standard in AGENTS.md), which also makes an inverted range
+  unenterable rather than rejected on submit.
+
+---
+
 ## 2026-09-23 — UI polish round: reports, dates, dropdowns, dashboard, scrollbars (owner)
 
 - **Reports get a Preview.** The Reports page has a **Preview** button that shows the
@@ -2938,6 +2959,11 @@ simple booking page — fed by a public, key-authenticated API. Full decision re
   in Customise dashboard; widgets shipped later also arrive switched off. Existing saved
   layouts are untouched (they are the user's own choice).
 - **Scrollbars**: one thin, low-profile themed scrollbar app-wide (`globals.css`).
+- **Reports page layout (owner, same day):** no side list of every report. Two
+  searchable dropdowns — **Report group** → **Report** (with "All groups", the Report
+  list shows everything under group headings; picking a report sets its group). Once a
+  report is chosen, its parameters and the Preview / Extract (PDF, Excel, CSV) buttons
+  appear below; the preview spans the full page container.
 - Found while verifying: report date parameters now default to the property's
   **business date** (they used the computer's calendar date); `SearchableSelect` hides
   its search box for lists of 8 or fewer, app-wide (`searchable` prop overrides); a

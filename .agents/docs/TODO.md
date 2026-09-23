@@ -34,7 +34,6 @@ API reference).
 - Existing agent/company profiles have no Booking Method yet — rows for their bookings
   show blank and are flagged in the report note until each profile is set.
 
-
 ## Operations Dashboard — brand palette, customisation, DASHBOARD module (2026-09-06) — DONE
 
 Owner brief: the dashboard's colours did not fit Uppsolut ("too many colours"); add a gear
@@ -1354,7 +1353,7 @@ any other plan, and Night Audit falls back to it when the assigned plan has no e
 for the date. **Note for whoever configures a new property**: unlike the old flat
 `basePrice` (worked for every future date automatically), the Base plan only covers
 whatever date range its Price Calendar has actually been bulk-priced for — an admin
-should set it out at least a year via Revenue > Rate Details right after onboarding.
+should set it out at least a year via Revenue > Rate Seasons right after onboarding.
 177/177 suite passing (8 new tests), `tsc --noEmit` clean.
 
 ## Phase 4 loose end (money & shift data) — resolved, no action needed

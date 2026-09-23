@@ -154,7 +154,7 @@ function PriceCalendarPageContent() {
 
     setBulkSubmitting(true)
     try {
-      // Same multi-room-type endpoint the Rate Details "Bulk Seasonal Pricing Tool"
+      // Same multi-room-type endpoint the Rate Seasons "Define a Rate Season" tool
       // uses — one Apply Prices call now covers every checked room type instead of
       // requiring the whole flow to be repeated per room type.
       const res = await fetch("/api/price-calendar/bulk", {

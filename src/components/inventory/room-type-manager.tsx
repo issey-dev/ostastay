@@ -264,7 +264,7 @@ export function RoomTypeManager({
                     onChange={(e) => setFormData({...formData, baseOccupancy: e.target.value})}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Details) applies.</p>
+                  <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Seasons) applies.</p>
                 </div>
                 <p className="text-xs text-muted-foreground -mt-2">
                   Default nightly price is set per room type on the locked <span className="font-medium">Base Rate</span> plan (Revenue &gt; Rate Plans &gt; Calendar) — it applies whenever no other rate plan has a price for the date.
