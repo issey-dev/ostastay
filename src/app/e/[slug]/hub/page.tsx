@@ -45,8 +45,8 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Key className="h-4 w-4 text-muted-foreground" />
-              Website API
-              <InfoHint>API keys for each property&apos;s own brand website, and what that website may show and sell online.</InfoHint>
+              Booking API
+              <InfoHint>API keys for each property&apos;s own brand website, and what it may show and sell online — rooms, excursions and spa.</InfoHint>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -54,7 +54,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
               href={`/e/${slug}/hub/website`}
               className="text-sm font-medium text-primary hover:underline"
             >
-              Open Website API
+              Open Booking API
             </a>
           </CardContent>
         </Card>

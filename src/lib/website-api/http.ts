@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ForbiddenError, UnauthorizedError } from "@/lib/scope";
 import { resolveWebsiteApiKey, type ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 import { consumeRateLimit, rateLimitHeaders, type RateDecision } from "@/lib/website-api/rate-limit";
+import { ScopeError } from "@/lib/website-api/scopes";
 
 // HTTP plumbing for the public Website API (src/app/api/website/v1/**).
 //
@@ -119,6 +120,11 @@ export function websiteRoute<P = Record<string, never>>(
       for (const [name, value] of Object.entries(rateLimitHeaders(quota))) response.headers.set(name, value);
       return response;
     } catch (error) {
+      // The key is valid but not for this module. A 403 (not 404): the key's own scopes
+      // are no secret from its holder, and "ask for Spa to be added" is actionable.
+      if (error instanceof ScopeError) {
+        return apiError(403, "SCOPE_NOT_GRANTED", error.message, { headers: cors });
+      }
       // createReservation's assertPropertyAccess throws ForbiddenError for a property the
       // key cannot act on (pending approval, wrong enterprise). To the website that is
       // "not found" — same reason keyCanAccessProperty's callers answer 404.

@@ -516,6 +516,7 @@ model Property {
   eRegistrationLinks           ERegistrationLink[]
   // Website API (brand site per property) — see .agents/docs/WEBSITE_API_PLAN.md.
   websiteSettings              WebsitePropertySettings?
+  activityOnlineSettings       ActivityOnlineSettings[]
   websiteApiKeys               WebsiteApiKeyProperty[]
   websiteBookings              WebsiteBooking[]
   dashboardLayouts             UserDashboardLayout[]
@@ -898,6 +899,8 @@ model PaymentMethod {
   payments Payment[]
   // Folios that pre-select this method on their Post Payment form.
   defaultForFolios Folio[]
+  // Settles PAID Booking API bookings (ActivityOnlineSettings.onlinePaymentMethodId).
+  activityOnlineSettings ActivityOnlineSettings[]
 
   @@index([chargeCodeId])
   @@index([enterpriseId])
@@ -2650,6 +2653,15 @@ model ExcursionType {
   cutoffHours  Int        @default(24)
   isActive     Boolean    @default(true)
 
+  // Booking API (BOOKING_API_ADDONS_PLAN.md): whether brand websites may sell this, and
+  // the guest-facing copy they show. Set in the Hub, not Controls — distribution is the
+  // Hub's job, the same split as Allocation.publishToApi. Off by default: nothing goes
+  // online until someone chooses it.
+  publishOnline     Boolean  @default(false)
+  publicDescription String?
+  imageUrls         String[] @default([])
+  inclusions        String?
+
   rates      ExcursionRate[]
   schedules  ExcursionSchedule[]
   departures ExcursionDeparture[]
@@ -2860,6 +2872,15 @@ model SpaTreatment {
   allowInHouseGuest        Boolean              @default(true)
   displayOrder             Int                  @default(0)
   isActive                 Boolean              @default(true)
+
+  // Booking API (BOOKING_API_ADDONS_PLAN.md): whether brand websites may sell this, and
+  // the guest-facing copy they show. Set in the Hub, not Controls — distribution is the
+  // Hub's job, the same split as Allocation.publishToApi. Off by default: nothing goes
+  // online until someone chooses it.
+  publishOnline     Boolean  @default(false)
+  publicDescription String?
+  imageUrls         String[] @default([])
+  inclusions        String?
 
   rates           SpaTreatmentRate[]
   therapistSkills SpaTherapistTreatment[]
@@ -3598,6 +3619,11 @@ model WebsiteApiKey {
   // the API directly from a page. Empty = server-to-server only, which is the recommended
   // topology (the key never reaches a browser). Matched exactly against the Origin header.
   allowedOrigins String[] @default([])
+  // What the key may use: ROOMS | EXCURSIONS | SPA (src/lib/website-api/scopes.ts). One
+  // key serves a site's rooms, excursions and spa (BOOKING_API_ADDONS_PLAN.md B-1). An
+  // add-on scope is checked again LIVE on every request against EnterpriseAddonAccess, so
+  // switching the add-on off stops the API even though the key still lists the scope.
+  scopes       String[]   @default(["ROOMS"])
   expiresAt    DateTime?
   lastUsedAt   DateTime?
 
@@ -3701,6 +3727,43 @@ model WebsitePropertySettings {
 // (keyId, idempotencyKey) is the retry guard: a website whose request timed out can
 // resend the same Idempotency-Key and get the SAME confirmation back rather than a
 // second reservation for the same guest.
+// What a property sells ONLINE through the Booking API for one activity module — one row
+// per (property, EXCURSIONS | SPA). Configured in the Hub (Booking API → Excursions & Spa),
+// the same place and permission (INTEGRATIONS) as WebsitePropertySettings. No row = the
+// module is not sold online at that property. See BOOKING_API_ADDONS_PLAN.md.
+model ActivityOnlineSettings {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  module     String // EXCURSIONS | SPA
+
+  // Master switch. Off: the catalogue may still be read, nothing can be held or booked.
+  enabled               Boolean @default(false)
+  // How long a hold keeps seats / a slot while the website takes payment (B-4).
+  holdMinutes           Int     @default(10)
+  // Earliest a departure / treatment may be booked online, in hours before its start.
+  leadHours             Int     @default(2)
+  // Excursions: the largest party one online booking may carry. Spa uses each treatment's
+  // own maxParticipants instead, so this stays null there.
+  maxPartySize          Int?
+  // Spa: whether the site may pass a therapist gender preference (B-9).
+  offerGenderPreference Boolean @default(true)
+  // The payment method a PAID online booking is settled with, so the folio closes at 0
+  // and the money reports under its own line (B-6). Required before PAID is accepted.
+  onlinePaymentMethodId String?
+  onlinePaymentMethod   PaymentMethod? @relation(fields: [onlinePaymentMethodId], references: [id], onDelete: SetNull)
+  // Added to every online booking's notes for the desk.
+  deskRemark            String?
+  // Cancellation / what-to-bring text the site shows. Not enforced by the system.
+  policies              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, module])
+  @@index([onlinePaymentMethodId])
+}
+
 model WebsiteBooking {
   id            String        @id @default(uuid())
   enterpriseId  String

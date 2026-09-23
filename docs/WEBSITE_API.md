@@ -20,10 +20,12 @@ sync). The machine-readable spec is [`website-api.openapi.yaml`](website-api.ope
 
 ## 1. Authentication
 
-Every request carries an API key created in the **Hub → Website API → API Keys** page of
+Every request carries an API key created in the **Hub → Booking API → API Keys** page of
 the enterprise that owns the property. A key:
 
 - belongs to one **enterprise** and grants access to **one or more of its properties**;
+- is enabled for one or more **modules** — Rooms, and Excursions and Spa where the
+  property has them (see *Scopes* below);
 - is shown **once**, when it is created or rotated — only a hash is stored;
 - can be **rotated** (same key record, new secret; the old secret stops working
   immediately) or **revoked** (permanent);
@@ -42,6 +44,20 @@ X-Api-Key: wsk_3f9c…
 ```
 
 Never put the key in a URL.
+
+### Scopes
+
+A key is ticked in the Hub for what it may use: `ROOMS`, `EXCURSIONS`, `SPA`. One key can
+carry all three, so one website integration serves the whole property. Keys created before
+scopes existed are `ROOMS` keys.
+
+- The property endpoints (`GET /properties`, `GET /properties/{id}`) answer for any scope.
+- Rooms endpoints (availability, quote, bookings, booking lookup) need `ROOMS`; without it
+  they answer `403 SCOPE_NOT_GRANTED`. The Excursions and Spa endpoints, when they
+  arrive, need their own scope in the same way.
+- Having the scope is not enough on its own: the property must also be selling that module
+  online. `GET /properties/{id}` returns a `modules` block saying, per module, whether this
+  key can book it right now — render only the sections that are live.
 
 ### Where the key lives (read this)
 
@@ -87,6 +103,7 @@ humans. Validation errors add `details` keyed by field path.
 | 400 | `MIN_STAY` | Fewer nights than the property's minimum. |
 | 400 | `STAY_TOO_LONG` | More than 62 nights requested. |
 | 400 | `INVALID_OCCUPANCY` | Adults < 1, or adults + children over the room type's maximum. |
+| 403 | `SCOPE_NOT_GRANTED` | The key is valid but not enabled for this module (Rooms, Excursions or Spa). Ask the property to tick it on the key in the Hub. |
 | 404 | `PROPERTY_NOT_FOUND` | Unknown id, **or a property the key does not cover** — never a 403, so keys cannot be used to enumerate properties. |
 | 404 | `ROOM_TYPE_NOT_FOUND` | Not a sellable room type of this property. |
 | 404 | `BOOKING_NOT_FOUND` | Lookup: no match for confirmation number + email under this key. |
@@ -211,12 +228,24 @@ Everything a property page needs.
       ],
       "minNights": 1,
       "maxNightsAhead": 365
+    },
+    "modules": {
+      "rooms":      { "enabled": true,  "code": null, "reason": null },
+      "excursions": { "enabled": false, "code": "NOT_SOLD_ONLINE", "reason": "The property does not sell this online." },
+      "spa":        { "enabled": false, "code": "SCOPE_NOT_GRANTED", "reason": "This API key is not enabled for this module." }
     }
   }
 }
 ```
 
 Notes:
+
+- `modules` says which of Rooms, Excursions and Spa **this key** can book at this property
+  right now. Show a section only when its `enabled` is true, and re-read it rather than
+  hard-coding: a property can switch a module on or off at any time. `code` is one of
+  `SCOPE_NOT_GRANTED` (ask the property to add it to your key), `ADDON_NOT_ENABLED`,
+  `NOT_SOLD_ONLINE`, `NO_OUTLET`, `NOTHING_PUBLISHED` (the property is still setting it
+  up) and, for rooms, `BOOKING_DISABLED` (same meaning as `booking.enabled: false`).
 
 - `roomTypes` contains only **sellable** types (active, physical). `totalRooms` is
   informational — use the availability endpoint for what is actually free.
@@ -538,6 +567,8 @@ console.log(booking.confirmationNo);
 
 ## 6. Changelog
 
+- **v1 (2026-09-23)** — scopes: keys carry `ROOMS` / `EXCURSIONS` / `SPA`; existing keys
+  are `ROOMS`. `403 SCOPE_NOT_GRANTED`; `modules` block on property details. Additive.
 - **v1 (2026-09-23)** — rate limits: per-key request limits, `429 RATE_LIMITED`,
   `RateLimit-*` and `Retry-After` headers (§4). Additive; no existing field changed.
 - **v1 (2026-09-06)** — initial release: properties, property details, availability,

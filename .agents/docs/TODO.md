@@ -2,6 +2,18 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Booking API for Excursions & Spa — Phase 1 scopes & online settings (2026-09-23) — DONE
+
+One key now serves Rooms, Excursions and Spa (`WebsiteApiKey.scopes`); rooms endpoints
+need `ROOMS` (`403 SCOPE_NOT_GRANTED`); `GET /properties/{id}` reports a live `modules`
+block. Hub → **Booking API** (renamed) gains "May use" on keys and an **Excursions & Spa**
+tab: per-property online settings (`ActivityOnlineSettings`) and per-item publishing with
+guest-facing copy. Details: BOOKING_API_ADDONS_PLAN.md "Phase 1 as built". Tests:
+`tests/business-rules/booking-api-scopes.test.ts`.
+
+**Next:** Phase 2 — the Excursions endpoints (catalogue, departures, quote, hold, book,
+lookup, cancel) on top of `createExcursionBooking` and the system actor.
+
 ## Booking API for Excursions & Spa — Phase 0 foundations (2026-09-23) — DONE
 
 Plan: [BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md). Phase 0 ships no public

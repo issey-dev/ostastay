@@ -1,7 +1,7 @@
 # Booking API: Excursions & Spa — plan
 
-> Status (2026-09-23): **Phase 0 DONE** (branch `feat/booking-api-addons`) — see
-> "Phase 0 as built" below. Phases 1–6 not started. This extends the Website API
+> Status (2026-09-23): **Phases 0–1 DONE** (branch `feat/booking-api-addons`) — see
+> "Phase 0 as built" and "Phase 1 as built" below. Phases 2–6 not started. This extends the Website API
 > (`WEBSITE_API_PLAN.md`) so a property's own website can sell Excursions and Spa
 > treatments, using the same `wsk_` key.
 
@@ -53,6 +53,18 @@
 | System actor | `src/lib/system-actor.ts`, `User.isSystem` | Its cashier shift is the normal per-(user, property) shift, closed by End-of-Day like any other. |
 | Rate limits | `src/lib/website-api/rate-limit.ts`, `ApiRateLimitCounter`, Caddy `bookingapi` zone | **Postgres-backed, not in-memory**: production runs several app replicas (`deploy/proxy/Caddyfile`), so a per-process counter would multiply every limit. |
 | Tests | `tests/business-rules/booking-api-foundations.test.ts` | Last-seat race, void cascade, lifecycle and fees, system actor, rate limits. |
+
+## Phase 1 as built (2026-09-23)
+
+| Item | Where | Notes vs the plan below |
+|---|---|---|
+| Schema | migration `20260923120000_booking_api_scopes_and_activity_settings` | `WebsiteApiKey.scopes` (existing keys → `["ROOMS"]`). **One** `ActivityOnlineSettings` model keyed `(propertyId, module)` instead of two near-identical models. The prepaid "charge code" became `onlinePaymentMethodId` — payments settle through a PaymentMethod (`resolvePaymentChargeCodeId`), not a bare charge code. |
+| Scopes | `src/lib/website-api/scopes.ts` | `requireScope` → `403 SCOPE_NOT_GRANTED` (via `websiteRoute`). Rooms availability/quote/bookings/lookup need `ROOMS`; `/properties` and `/properties/{id}` answer any scope. Add-on scopes are granted only while the add-on is enabled; a key keeps one whose add-on was later switched off (refused live instead). |
+| Discovery | `GET /properties/{id}` → `modules: { rooms, excursions, spa }` | `{ enabled, code, reason }`. Excursions/Spa check, in order: scope, add-on, `ActivityOnlineSettings.enabled`, hub-wide outlet linked, something published. Public reasons stay generic (no commercial detail). |
+| Online settings | `src/lib/website-api/activity-settings.ts`, `api/hub/website/activities[/propertyId]`, `api/hub/website/activity-items/[id]` | **Per-item publishing lives in the Hub, not the Controls editors** (deviation from the plan): same precedent as `Allocation.publishToApi` — distribution is the Hub's job under INTEGRATIONS; what an item IS stays in Controls. A spa treatment closed to walk-ins can't be published (online guests are walk-ins, B-8 answer). |
+| Hub UI | `src/components/hub/website-api-keys.tsx` ("May use" checkboxes, scope badges), `src/components/hub/website-activity-settings.tsx` (new "Excursions & Spa" tab, shown only with an add-on) | Nav renamed "Website API" → "Booking API". B-10 (browser keys can't book activities) is warned about in the key dialog; enforced in the Phase 2/3 write routes. |
+| Tests | `tests/business-rules/booking-api-scopes.test.ts` (10) | |
+| Docs | `docs/WEBSITE_API.md` (Scopes, `modules`, `SCOPE_NOT_GRANTED`), OpenAPI (also fixed 3 pre-existing YAML errors), `docs/PROPERTY_WEBSITE_GUIDE.md` | |
 
 ## Prerequisites (Phase 0) — gaps found in the current code
 

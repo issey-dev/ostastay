@@ -1,4 +1,5 @@
 import { websiteRoute, websitePreflight, apiJson, apiError } from "@/lib/website-api/http";
+import { requireScope } from "@/lib/website-api/scopes";
 import { lookupWebsiteBooking } from "@/lib/website-api/booking";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
  * not a secret.
  */
 export const GET = websiteRoute<{ confirmationNo: string }>(async ({ request, key, params, cors }) => {
+  requireScope(key, "ROOMS");
   const email = new URL(request.url).searchParams.get("email") ?? "";
   if (!email.trim()) return apiError(400, "VALIDATION", "email is required.", { headers: cors });
   const result = await lookupWebsiteBooking({ key, confirmationNo: params.confirmationNo, email });

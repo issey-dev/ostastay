@@ -8,6 +8,7 @@ const patchSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   propertyIds: z.array(z.string().min(1)).min(1).optional(),
   allowedOrigins: z.array(z.string()).optional(),
+  scopes: z.array(z.string()).min(1).optional(),
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
@@ -26,6 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       name: data.name,
       propertyIds: data.propertyIds,
       allowedOrigins: data.allowedOrigins,
+      scopes: data.scopes,
       expiresAt: data.expiresAt === undefined ? undefined : data.expiresAt ? new Date(data.expiresAt) : null,
     });
 
@@ -33,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ctx,
       module: "INTEGRATIONS",
       action: "UPDATE",
-      description: `Updated Website API key "${row.name}"`,
+      description: `Updated Booking API key "${row.name}"${data.scopes ? ` — uses ${row.scopes.join(", ")}` : ""}`,
       entityType: "WebsiteApiKey",
       entityId: id,
     });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
 import { generateWebsiteApiKey } from "@/lib/website-api/key";
+import { normalizeScopes, type ApiScope } from "@/lib/website-api/scopes";
 
 // Hub-side management of Website API keys — list, mint, edit, rotate, revoke. Every
 // function takes the enterpriseId from the caller's session (never from the client) and
@@ -15,6 +16,8 @@ export type WebsiteApiKeyRow = {
   /** ACTIVE but past expiresAt — computed here so the UI never reads the clock in render. */
   isExpired: boolean;
   allowedOrigins: string[];
+  /** ROOMS | EXCURSIONS | SPA. */
+  scopes: ApiScope[];
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
@@ -30,6 +33,7 @@ const ROW_SELECT = {
   keyPrefix: true,
   status: true,
   allowedOrigins: true,
+  scopes: true,
   expiresAt: true,
   lastUsedAt: true,
   createdAt: true,
@@ -53,6 +57,7 @@ function shape(r: RawRow): WebsiteApiKeyRow {
     status: r.status,
     isExpired: r.status === "ACTIVE" && !!r.expiresAt && r.expiresAt.getTime() < Date.now(),
     allowedOrigins: r.allowedOrigins,
+    scopes: r.scopes as ApiScope[],
     expiresAt: r.expiresAt?.toISOString() ?? null,
     lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
@@ -109,12 +114,15 @@ export async function createWebsiteApiKey(params: {
   name: string;
   propertyIds: string[];
   allowedOrigins: string[];
+  /** Defaults to ROOMS — a key minted without a choice is a rooms key, as before scopes. */
+  scopes?: string[];
   expiresAt: Date | null;
 }): Promise<{ key: string; row: WebsiteApiKeyRow }> {
   const name = params.name.trim();
   if (!name) throw new ForbiddenError("A name is required");
   await assertPropertiesInEnterprise(params.enterpriseId, params.propertyIds);
   const origins = normalizeOrigins(params.allowedOrigins);
+  const scopes = await normalizeScopes(params.enterpriseId, params.scopes ?? ["ROOMS"]);
 
   const generated = generateWebsiteApiKey();
   const created = await prisma.websiteApiKey.create({
@@ -124,6 +132,7 @@ export async function createWebsiteApiKey(params: {
       keyPrefix: generated.keyPrefix,
       keyHash: generated.keyHash,
       allowedOrigins: origins,
+      scopes,
       expiresAt: params.expiresAt,
       createdByUserId: params.userId,
       properties: { create: [...new Set(params.propertyIds)].map((propertyId) => ({ propertyId })) },
@@ -139,6 +148,7 @@ export async function updateWebsiteApiKey(params: {
   name?: string;
   propertyIds?: string[];
   allowedOrigins?: string[];
+  scopes?: string[];
   expiresAt?: Date | null;
 }): Promise<WebsiteApiKeyRow> {
   const existing = await findRow(params.enterpriseId, params.id);
@@ -148,6 +158,7 @@ export async function updateWebsiteApiKey(params: {
   const data: {
     name?: string;
     allowedOrigins?: string[];
+    scopes?: ApiScope[];
     expiresAt?: Date | null;
     properties?: { deleteMany: Record<string, never>; create: { propertyId: string }[] };
   } = {};
@@ -158,6 +169,16 @@ export async function updateWebsiteApiKey(params: {
   }
   if (params.allowedOrigins !== undefined) data.allowedOrigins = normalizeOrigins(params.allowedOrigins);
   if (params.expiresAt !== undefined) data.expiresAt = params.expiresAt;
+  if (params.scopes !== undefined) {
+    // A scope the key already holds stays allowed even if its add-on was since switched
+    // off (the API refuses it live anyway); only NEWLY added add-on scopes need the add-on.
+    const kept = params.scopes.filter((s) => existing.scopes.includes(s));
+    const added = params.scopes.filter((s) => !existing.scopes.includes(s));
+    const validatedAdded = added.length ? await normalizeScopes(params.enterpriseId, added) : [];
+    const all = [...new Set([...kept, ...validatedAdded])];
+    if (all.length === 0) throw new ForbiddenError("Choose at least one thing this key may use");
+    data.scopes = (["ROOMS", "EXCURSIONS", "SPA"] as ApiScope[]).filter((s) => all.includes(s));
+  }
   if (params.propertyIds !== undefined) {
     await assertPropertiesInEnterprise(params.enterpriseId, params.propertyIds);
     data.properties = { deleteMany: {}, create: [...new Set(params.propertyIds)].map((propertyId) => ({ propertyId })) };

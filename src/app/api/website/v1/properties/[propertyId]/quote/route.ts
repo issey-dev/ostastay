@@ -1,4 +1,5 @@
 import { websiteRoute, websitePreflight, apiJson, apiError, readJsonBody } from "@/lib/website-api/http";
+import { requireScope } from "@/lib/website-api/scopes";
 import { keyCanAccessProperty } from "@/lib/website-api/resolve-key";
 import { websiteStaySchema, zodDetails } from "@/lib/website-api/schemas";
 import { quoteWebsiteStay } from "@/lib/website-api/booking";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
  * page; the availability calendar's nightly figure is the room rate only.
  */
 export const POST = websiteRoute<{ propertyId: string }>(async ({ request, key, params, cors }) => {
+  requireScope(key, "ROOMS");
   if (!keyCanAccessProperty(key, params.propertyId)) {
     return apiError(404, "PROPERTY_NOT_FOUND", "Property not found.", { headers: cors });
   }

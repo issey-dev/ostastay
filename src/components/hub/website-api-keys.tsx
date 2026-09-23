@@ -27,6 +27,7 @@ type KeyRow = {
   status: string
   isExpired: boolean
   allowedOrigins: string[]
+  scopes: Scope[]
   expiresAt: string | null
   lastUsedAt: string | null
   createdAt: string
@@ -38,16 +39,25 @@ type KeyRow = {
 
 type PropertyOption = { id: string; name: string; code: string }
 
+type Scope = "ROOMS" | "EXCURSIONS" | "SPA"
+const SCOPES: { value: Scope; label: string; hint: string }[] = [
+  { value: "ROOMS", label: "Rooms", hint: "Availability, prices and room bookings" },
+  { value: "EXCURSIONS", label: "Excursions", hint: "Departures, seats and excursion bookings" },
+  { value: "SPA", label: "Spa", hint: "Treatments, free times and spa bookings" },
+]
+const scopeLabel = (s: Scope) => SCOPES.find((x) => x.value === s)?.label ?? s
+
 const keySchema = z.object({
   name: z.string().trim().min(1, "Give the key a name — usually the website it belongs to"),
   propertyIds: z.array(z.string()).min(1, "Choose at least one property"),
+  scopes: z.array(z.enum(["ROOMS", "EXCURSIONS", "SPA"])).min(1, "Choose at least one thing this key may use"),
   // One origin per line; validated properly server-side (normalizeOrigins).
   allowedOrigins: z.string(),
   expiresAt: z.string(),
 })
 type KeyFormValues = z.infer<typeof keySchema>
 
-const emptyValues: KeyFormValues = { name: "", propertyIds: [], allowedOrigins: "", expiresAt: "" }
+const emptyValues: KeyFormValues = { name: "", propertyIds: [], scopes: ["ROOMS"], allowedOrigins: "", expiresAt: "" }
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "Never"
@@ -102,6 +112,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
   const confirm = useConfirm()
   const [rows, setRows] = useState<KeyRow[]>([])
   const [properties, setProperties] = useState<PropertyOption[]>([])
+  const [availableScopes, setAvailableScopes] = useState<Scope[]>(["ROOMS"])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -121,6 +132,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
       const data = await res.json()
       setRows(data.keys ?? [])
       setProperties(data.properties ?? [])
+      setAvailableScopes(data.availableScopes ?? ["ROOMS"])
     } catch {
       setError(true)
     } finally {
@@ -145,6 +157,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
     form.reset({
       name: row.name,
       propertyIds: row.properties.map((p) => p.id),
+      scopes: row.scopes,
       allowedOrigins: row.allowedOrigins.join("\n"),
       expiresAt: row.expiresAt ? row.expiresAt.slice(0, 10) : "",
     })
@@ -158,6 +171,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
       const payload = {
         name: values.name,
         propertyIds: values.propertyIds,
+        scopes: values.scopes,
         allowedOrigins: values.allowedOrigins.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean),
         expiresAt: values.expiresAt ? new Date(`${values.expiresAt}T23:59:59.000Z`).toISOString() : null,
       }
@@ -240,8 +254,9 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
           <div>
             <CardTitle>API keys</CardTitle>
             <CardDescription>
-              One key per website. A key may cover one property or several — the site can only see and book the
-              properties on its list. Only the first characters are kept here; the full key is shown once, when created.
+              One key per website. A key may cover one property or several, and rooms, excursions and spa — the site can
+              only see and book what is ticked on its key. Only the first characters are kept here; the full key is shown
+              once, when created.
             </CardDescription>
           </div>
           {canCreate && (
@@ -278,6 +293,9 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                       {statusBadge(r)}
                     </div>
                     <div className="text-sm text-muted-foreground">{r.properties.map((p) => p.name).join(", ")}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       Last used {formatDateTime(r.lastUsedAt)} · {r.bookingCount} booking{r.bookingCount === 1 ? "" : "s"}
                     </div>
@@ -310,6 +328,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                     <TableRow>
                       <TableHead className="px-6">Key</TableHead>
                       <TableHead>Properties</TableHead>
+                      <TableHead>Uses</TableHead>
                       <TableHead>Origins</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Last used</TableHead>
@@ -329,6 +348,11 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.properties.map((p) => p.name).join(", ")}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.allowedOrigins.length === 0 ? <span title="Server-to-server only">Server only</span> : r.allowedOrigins.join(", ")}
                         </TableCell>
@@ -417,6 +441,40 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                   </FormItem>
                 )} />
 
+                <FormField control={form.control} name="scopes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>May use *</FormLabel>
+                    <div className="space-y-2 rounded-md border border-border p-3">
+                      {SCOPES.map((scope) => {
+                        const checked = field.value.includes(scope.value)
+                        // An add-on the enterprise doesn't have can't be granted — but a key that
+                        // already holds it may keep it (the API refuses it anyway while it's off).
+                        const offered = availableScopes.includes(scope.value) || checked
+                        return (
+                          <label key={scope.value} className={`flex items-start gap-3 text-sm ${offered ? "cursor-pointer" : "opacity-50"}`}>
+                            <Checkbox
+                              className="mt-0.5"
+                              checked={checked}
+                              disabled={!offered}
+                              onCheckedChange={(v) => {
+                                const next = v ? [...field.value, scope.value] : field.value.filter((s) => s !== scope.value)
+                                field.onChange(next)
+                              }}
+                            />
+                            <span>
+                              <span className="font-medium">{scope.label}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                {offered ? scope.hint : "Not enabled for your enterprise"}
+                              </span>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
                 <FormField control={form.control} name="allowedOrigins" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Browser origins (optional)</FormLabel>
@@ -427,6 +485,12 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                       Only needed if the website calls the API directly from the visitor&apos;s browser. Leave empty for the
                       recommended server-to-server setup, where the key never leaves the website&apos;s server.
                     </p>
+                    {field.value.trim() !== "" && form.watch("scopes").some((s) => s !== "ROOMS") && (
+                      <p className="text-xs text-warning">
+                        With browser origins set, this key can show excursions and spa treatments but cannot book them —
+                        those bookings carry payment details, so they must come from the website&apos;s server.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )} />

@@ -101,6 +101,7 @@ paths:
               schema: { $ref: "#/components/schemas/Availability" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -132,6 +133,7 @@ paths:
                   quote: { $ref: "#/components/schemas/Quote" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -183,6 +185,7 @@ paths:
                   booking: { $ref: "#/components/schemas/Booking" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -214,6 +217,7 @@ paths:
                   booking: { $ref: "#/components/schemas/Booking" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -254,6 +258,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { error: "Invalid or inactive API key.", code: "INVALID_API_KEY" }
+    Forbidden:
+      description: The key is valid but not enabled for this module (Rooms, Excursions or Spa).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "This API key is not enabled for Rooms. Ask the property to add it to the key in the Hub.", code: "SCOPE_NOT_GRANTED" }
     TooManyRequests:
       description: >-
         Rate limit reached for this key (120 GET and 20 POST requests per minute), or too
@@ -294,6 +304,16 @@ components:
       pattern: "^\\d{4}-\\d{2}-\\d{2}$"
       example: "2026-03-10"
 
+    ModuleStatus:
+      type: object
+      required: [enabled, code, reason]
+      properties:
+        enabled: { type: boolean }
+        code:
+          type: [string, "null"]
+          enum: [SCOPE_NOT_GRANTED, ADDON_NOT_ENABLED, NOT_SOLD_ONLINE, NO_OUTLET, NOTHING_PUBLISHED, BOOKING_DISABLED, null]
+        reason: { type: [string, "null"], description: Human-readable; do not show raw to guests. }
+
     Error:
       type: object
       required: [error, code]
@@ -327,6 +347,7 @@ components:
             - BOOKING_REJECTED
             - IDEMPOTENCY_CONFLICT
             - RATE_LIMITED
+            - SCOPE_NOT_GRANTED
             - INTERNAL_ERROR
         details:
           type: object
@@ -373,7 +394,7 @@ components:
         description: { type: [string, "null"] }
         baseOccupancy: { type: integer, description: Adults included before an extra-adult surcharge. }
         maxOccupancy: { type: integer, description: Adults + children allowed. }
-        totalRooms: { type: integer, description: Physical sellable rooms — informational, not availability. }
+        totalRooms: { type: integer, description: "Physical sellable rooms — informational, not availability." }
         features:
           type: array
           items: { $ref: "#/components/schemas/RoomTypeFeature" }
@@ -486,6 +507,16 @@ components:
           type: array
           items: { $ref: "#/components/schemas/RoomType" }
         booking: { $ref: "#/components/schemas/BookingConfig" }
+        modules:
+          type: object
+          description: >-
+            Which modules THIS key can book at this property right now. Render a section only
+            when its `enabled` is true; re-read rather than hard-code.
+          required: [rooms, excursions, spa]
+          properties:
+            rooms: { $ref: "#/components/schemas/ModuleStatus" }
+            excursions: { $ref: "#/components/schemas/ModuleStatus" }
+            spa: { $ref: "#/components/schemas/ModuleStatus" }
 
     Night:
       type: object
@@ -511,7 +542,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Night" }
         minAvailable: { type: integer, description: Lowest `available` across the window. }
-        bookable: { type: boolean, description: Every night open, in stock and priced, and booking enabled. }
+        bookable: { type: boolean, description: "Every night open, in stock and priced, and booking enabled." }
         roomRateTotal: { type: [number, "null"], description: Sum of nightly room rates when every night is priced. Room rate only. }
 
     Availability:

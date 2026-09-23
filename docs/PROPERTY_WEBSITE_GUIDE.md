@@ -34,7 +34,7 @@ administrator with the **Integrations** permission does this part.
 
 ### Step 1 — Set up the property for online sale
 
-**Hub → Website API → Properties → Edit** for the property:
+**Hub → Booking API → Properties → Edit** for the property:
 
 | Setting | What it does |
 |---|---|
@@ -52,11 +52,14 @@ Until a rate plan is chosen, the API reports `booking.enabled: false` with a rea
 
 ### Step 2 — Create an API key
 
-**Hub → Website API → API Keys → New key**:
+**Hub → Booking API → API Keys → New key**:
 
 - **Name** — usually the website's domain (`www.hotel.com`).
 - **Properties** — tick the property (or several, for one portal covering a group). The
   key can only see and book the properties ticked here.
+- **May use** — Rooms, and Excursions and/or Spa if your enterprise has those add-ons. One
+  key can cover all three. What each property sells online for Excursions and Spa is set
+  under **Hub → Booking API → Excursions & Spa**.
 - **Browser origins** — leave **empty** for the recommended server-to-server setup. Only
   fill it in if the site will call the API directly from the visitor's browser (see §4).
 - **Expires** — optional.
@@ -287,8 +290,8 @@ ambiguous at check-in.
 
 ## 7. Where things live in the PMS (for the property's own staff)
 
-- **Hub → Website API → API Keys** — keys, last used, booking counts, rotate/revoke.
-- **Hub → Website API → Properties** — what each property shows and sells online.
+- **Hub → Booking API → API Keys** — keys, last used, booking counts, rotate/revoke.
+- **Hub → Booking API → Properties** — what each property shows and sells online.
 - **Reservations** — website bookings appear like any other, remarks start with
   "Booked via website (ref WEB-…)"; search by the confirmation number or the WEB reference.
 - **Profiles** — guests created by the website are ordinary guest profiles.
