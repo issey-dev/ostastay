@@ -2908,3 +2908,36 @@ simple booking page — fed by a public, key-authenticated API. Full decision re
 - **No payment in v1.** Policies + the Hub's desk note carry the terms.
 - **Keys are shown once, hashed at rest, rotatable and revocable**, same as the webhook
   token and eRegistration link.
+
+---
+
+## 2026-09-23 — UI polish round: reports, dates, dropdowns, dashboard, scrollbars (owner)
+
+- **Reports get a Preview.** The Reports page has a **Preview** button that shows the
+  report on screen before anything is downloaded. Preview and PDF are the SAME layout
+  (`src/components/reports/report-document.tsx`): the PDF is the report print page
+  (`/e/[slug]/dashboard/reports/print?r=…`) printed by headless Chrome
+  (`generateReportPdf`), the same one-rendering-path approach stationery already uses.
+  The old pdf-lib renderer stays only as a fallback if Chrome is unavailable.
+- **Report layout follows the app theme**: paper ramp (`--print-*`) with a single Crimson
+  OS accent (`--print-accent`), hairline rules, no filled header bars. Reports no longer
+  read `EnterpriseSettings.invoiceBrandColor` — that is Osta's licence-invoice colour and
+  was printing operational reports in indigo.
+- **Date pickers: the "one day before" bug.** Cause: the calendar returns local midnight
+  and several callers serialised it with `toISOString()` (UTC), which at UTC+5 is the
+  previous day. Rule from now on: date-only values go through `src/lib/date-only.ts`
+  (`toDateKey` / `parseDateKey` / `todayKey`), never `toISOString().slice(0, 10)` on a
+  local Date. `DatePicker` and `DateRangePicker` normalise what they are given.
+- **Dropdowns**: no native `<select>` anywhere. `OptionSelect`
+  (`src/components/ui/option-select.tsx`) takes a flat options list and renders the
+  styled plain dropdown for short lists, or `SearchableSelect` above 8 options
+  (`searchable` forces either). `SearchableSelect` now matches its trigger's width and
+  supports arrow-key/Enter navigation.
+- **Dashboard starts empty.** A user's dashboard shows no tiles until they switch them on
+  in Customise dashboard; widgets shipped later also arrive switched off. Existing saved
+  layouts are untouched (they are the user's own choice).
+- **Scrollbars**: one thin, low-profile themed scrollbar app-wide (`globals.css`).
+- Found while verifying: report date parameters now default to the property's
+  **business date** (they used the computer's calendar date); `SearchableSelect` hides
+  its search box for lists of 8 or fewer, app-wide (`searchable` prop overrides); a
+  selected calendar day no longer goes dark-on-dark under the pointer in dark mode.

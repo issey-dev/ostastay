@@ -1,5 +1,6 @@
 "use client"
 
+import { todayKey } from "@/lib/date-only"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -79,7 +80,7 @@ export function EnterpriseOnboardingActions({
       timeZone: "Indian/Maldives",
       checkInTime: "14:00",
       checkOutTime: "11:00",
-      goLiveDate: new Date().toISOString().slice(0, 10),
+      goLiveDate: todayKey(),
     },
   })
   const userForm = useForm<InitialUserFormValues>({

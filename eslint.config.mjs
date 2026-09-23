@@ -55,6 +55,10 @@ const PRINT_DOCUMENT_FILES = [
   // renders the shared stationery blocks above, so tokenizing it would make it the only
   // document that doesn't match the others.
   "src/app/e/[slug]/hub/permission-matrix/page.tsx",
+  // Operational reports (Reports module) — the on-screen preview and the PDF are the same
+  // palette-fixed paper document, so it reads the same in dark mode as it prints.
+  "src/components/reports/report-document.tsx",
+  "src/app/e/[slug]/dashboard/reports/print/page.tsx",
 ];
 
 function isClassNameAttribute(node) {

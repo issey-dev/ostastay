@@ -1,11 +1,13 @@
 "use client"
 
+import { todayKey } from "@/lib/date-only"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
 import { ArrowLeft, CheckCircle2, Brush, RefreshCw, ClipboardList, Users, Bell, Wrench } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -25,7 +27,7 @@ const BUCKETS: Bucket[] = [
   { key: "done", label: "Ready / other", hint: "" },
 ]
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = todayKey
 
 const bucketForRoom = (room: any): string => {
   const assignments: any[] = room.RoomAssignment ?? []
@@ -176,18 +178,18 @@ export default function TaskSheetPage() {
 
       <div className="flex items-center gap-2">
         <Users className="w-4 h-4 text-muted-foreground shrink-0" />
-        <select
-          className="flex-1 h-10 rounded-md border border-border bg-card px-3 text-sm"
-          value={attendantId}
-          onChange={(e) => setAttendantId(e.target.value)}
-        >
-          <option value="">Select attendant...</option>
-          {housekeepers.map((hk) => (
-            <option key={hk.id} value={hk.id}>
-              {hk.firstName} {hk.lastName}{hk.id === myUserId ? " (me)" : ""}
-            </option>
-          ))}
-        </select>
+        <div className="flex-1">
+          <OptionSelect
+            aria-label="Attendant"
+            placeholder="Select attendant..."
+            value={attendantId}
+            onChange={setAttendantId}
+            options={housekeepers.map((hk) => ({
+              label: `${hk.firstName} ${hk.lastName ?? ""}`.trim() + (hk.id === myUserId ? " (me)" : ""),
+              value: hk.id,
+            }))}
+          />
+        </div>
       </div>
 
       {loading ? (

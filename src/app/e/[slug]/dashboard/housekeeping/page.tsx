@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
+import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { InfoHint } from "@/components/ui/info-hint"
@@ -403,16 +404,17 @@ export default function HousekeepingDashboard() {
           </Button>
         ))}
         {housekeepers.length > 0 && (
-          <select
-            className="h-8 rounded-md border border-border bg-card px-2 text-sm ml-auto"
-            value={filterAttendantId}
-            onChange={(e) => setFilterAttendantId(e.target.value)}
-          >
-            <option value="">All attendants</option>
-            {housekeepers.map((hk: any) => (
-              <option key={hk.id} value={hk.id}>{hk.firstName} {hk.lastName}</option>
-            ))}
-          </select>
+          <div className="ml-auto w-48">
+            <OptionSelect
+              aria-label="Filter by attendant"
+              value={filterAttendantId}
+              onChange={setFilterAttendantId}
+              options={[
+                { label: "All attendants", value: "" },
+                ...housekeepers.map((hk: any) => ({ label: `${hk.firstName} ${hk.lastName ?? ""}`.trim(), value: hk.id })),
+              ]}
+            />
+          </div>
         )}
       </div>
 
@@ -552,27 +554,25 @@ export default function HousekeepingDashboard() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Issue Type</label>
-              <select
-                className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+              <OptionSelect
+                aria-label="Issue type"
                 value={maintenanceType}
-                onChange={e => setMaintenanceType(e.target.value)}
-              >
-                {MAINTENANCE_ISSUE_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+                onChange={setMaintenanceType}
+                options={MAINTENANCE_ISSUE_TYPES.map(t => ({ label: t.label, value: t.value }))}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Priority</label>
-              <select
-                className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+              <OptionSelect
+                aria-label="Priority"
                 value={maintenancePriority}
-                onChange={e => setMaintenancePriority(e.target.value)}
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
+                onChange={setMaintenancePriority}
+                options={[
+                  { label: "Low", value: "LOW" },
+                  { label: "Medium", value: "MEDIUM" },
+                  { label: "High", value: "HIGH" },
+                ]}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Description</label>
@@ -649,16 +649,15 @@ export default function HousekeepingDashboard() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Select Attendant</label>
-              <select
-                className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
+              <OptionSelect
+                aria-label="Attendant"
                 value={selectedAttendantId}
-                onChange={e => setSelectedAttendantId(e.target.value)}
-              >
-                <option value="UNASSIGNED">Unassigned (Clear Assignment)</option>
-                {housekeepers.map(h => (
-                  <option key={h.id} value={h.id}>{h.firstName} {h.lastName}</option>
-                ))}
-              </select>
+                onChange={setSelectedAttendantId}
+                options={[
+                  { label: "Unassigned (Clear Assignment)", value: "UNASSIGNED" },
+                  ...housekeepers.map(h => ({ label: `${h.firstName} ${h.lastName ?? ""}`.trim(), value: h.id })),
+                ]}
+              />
             </div>
           </div>
           <DialogFooter>

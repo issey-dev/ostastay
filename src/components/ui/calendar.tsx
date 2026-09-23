@@ -129,8 +129,10 @@ function Calendar({
     "size-8 rounded-md p-0 font-normal transition-none aria-selected:opacity-100",
     props.dayButtonClassName
   )
+  // `!` on the hover colours: the ghost day button's own `dark:hover:bg-muted/50` is more
+  // specific, and without it a selected day went dark-on-dark under the pointer.
   const buttonRangeClassName =
-    "bg-accent [&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary [&>button]:hover:text-primary-foreground"
+    "bg-accent [&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:!bg-primary [&>button]:hover:!text-primary-foreground"
   const _rangeStartClassName = cn(
     buttonRangeClassName,
     "day-range-start rounded-s-md",
@@ -146,7 +148,7 @@ function Calendar({
     props.rangeMiddleClassName
   )
   const _selectedClassName = cn(
-    "[&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary [&>button]:hover:text-primary-foreground",
+    "[&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:!bg-primary [&>button]:hover:!text-primary-foreground",
     props.selectedClassName
   )
   const _todayClassName = cn(

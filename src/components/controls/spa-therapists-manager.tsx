@@ -1,5 +1,6 @@
 "use client"
 
+import { todayKey } from "@/lib/date-only"
 import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -489,7 +490,7 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
     return initial
   })
   const firstExisting = therapist.schedules[0]
-  const [effectiveFrom, setEffectiveFrom] = useState<string | null>(firstExisting?.effectiveFrom.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
+  const [effectiveFrom, setEffectiveFrom] = useState<string | null>(firstExisting?.effectiveFrom.slice(0, 10) ?? todayKey())
   const [effectiveTo, setEffectiveTo] = useState<string | null>(firstExisting?.effectiveTo?.slice(0, 10) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)

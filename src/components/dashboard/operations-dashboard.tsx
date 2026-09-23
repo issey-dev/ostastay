@@ -380,15 +380,15 @@ export function OperationsDashboard({
         <div className="rounded-2xl bg-card ring-1 ring-foreground/5">
           <EmptyState
             icon={LayoutDashboard}
-            title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Every widget is hidden"}
+            title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Your dashboard is empty"}
             description={
               hiddenHere > 0
-                ? `${hiddenHere} widget${hiddenHere === 1 ? " is" : "s are"} switched off. Open Customise dashboard to bring them back.`
+                ? `Choose the tiles you want to see — ${hiddenHere} are available in Customise dashboard.`
                 : "Open Customise dashboard to add widgets to this page."
             }
             action={
-              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-                <Settings className="h-4 w-4" /> Customise dashboard
+              <Button size="sm" onClick={() => setSettingsOpen(true)}>
+                <Settings className="h-4 w-4" /> Add tiles
               </Button>
             }
           />

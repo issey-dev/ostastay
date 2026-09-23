@@ -1,5 +1,6 @@
 "use client"
 
+import { toDateKey, todayKey } from "@/lib/date-only"
 import { useState, useEffect, useCallback } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { useParams } from "next/navigation"
@@ -159,7 +160,7 @@ export default function SpaPage() {
 
   const fetchTodaysAppointments = useCallback(() => {
     if (!currentProperty) return
-    const date = selectedDate || new Date().toISOString().slice(0, 10)
+    const date = selectedDate || todayKey()
     setLoadingAppointments(true)
     fetch(`/api/spa/appointments?propertyId=${currentProperty.id}&date=${date}`)
       .then((r) => r.json())
@@ -181,7 +182,7 @@ export default function SpaPage() {
 
   const loadHistory = useCallback(async (date: string | null): Promise<SalesRow[]> => {
     if (!currentProperty) return []
-    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    const iso = toDateKey
     const from = date || iso(new Date(Date.now() - 60 * 86_400_000))
     const to = date || iso(new Date(Date.now() + 60 * 86_400_000))
     const res = await fetch(`/api/spa/appointments?propertyId=${currentProperty.id}&from=${from}&to=${to}`)
@@ -296,8 +297,8 @@ export default function SpaPage() {
       propertyId: currentProperty.id,
       treatmentId: selectedTreatmentId,
       partySize: String(partySize),
-      from: from.toISOString().slice(0, 10),
-      to: to.toISOString().slice(0, 10),
+      from: toDateKey(from),
+      to: toDateKey(to),
       requirements: requirementsKey,
     })
     fetch(`/api/spa/appointments/availability?${qs.toString()}`)
@@ -805,7 +806,7 @@ export default function SpaPage() {
                     value={selectedDate}
                     onChange={setSelectedDate}
                     placeholder="Choose date..."
-                    minDate={new Date().toISOString().slice(0, 10)}
+                    minDate={todayKey()}
                     availableDates={availableDates}
                   />
                 </div>

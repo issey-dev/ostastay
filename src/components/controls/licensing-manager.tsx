@@ -1,5 +1,6 @@
 "use client"
 
+import { toDateKey } from "@/lib/date-only"
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -249,8 +250,8 @@ export function LicensingManager() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enterpriseId: selectedId,
-        periodStart: invForm.period.from.toISOString(),
-        periodEnd: invForm.period.to.toISOString(),
+        periodStart: toDateKey(invForm.period.from),
+        periodEnd: toDateKey(invForm.period.to),
         amount: parseFloat(invForm.amount),
         discountAmount: invForm.discount === "" ? 0 : parseFloat(invForm.discount),
         currency: invForm.currency,

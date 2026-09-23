@@ -202,6 +202,7 @@
     --print-faint: #A5A096;         /* faintest labels + placeholder rules */
     --print-border: #E6E2DA;        /* hairline dividers — = light --border */
     --print-surface: #F3F1EB;       /* subtle fill backgrounds — = light --muted */
+    --print-accent: #8B0000;        /* Crimson OS — the one brand accent on paper (rules, group labels) */
   }
 
   /* Dark mode — toggled by adding/removing `.dark` on <html> (see

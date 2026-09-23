@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { OptionSelect } from "@/components/ui/option-select"
 import { Save } from "@/components/icons"
 import { Switch } from "@/components/ui/switch"
 import { useProperty } from "@/components/providers/property-provider"
@@ -178,12 +179,15 @@ export function PropertyProfileManager() {
             rooms are never changed.
           </p>
         </div>
-        <select
+        <OptionSelect
           id="eodHousekeepingMode"
-          className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
           value={detail.eodHousekeepingMode}
-          onChange={(e) => {
-            const mode = e.target.value
+          options={[
+            { label: "Off — don't change statuses", value: "OFF" },
+            { label: "Move one status down (Inspected → Clean, Clean → Dirty, Dirty stays)", value: "STEP_DOWN" },
+            { label: "Set all vacant rooms to a specific status…", value: "SET_STATUS" },
+          ]}
+          onChange={(mode) => {
             setDetail({
               ...detail,
               eodHousekeepingMode: mode,
@@ -193,24 +197,20 @@ export function PropertyProfileManager() {
                 mode === "SET_STATUS" ? (detail.eodHousekeepingTargetStatus ?? "DIRTY") : null,
             })
           }}
-        >
-          <option value="OFF">Off — don&apos;t change statuses</option>
-          <option value="STEP_DOWN">Move one status down (Inspected → Clean, Clean → Dirty, Dirty stays)</option>
-          <option value="SET_STATUS">Set all vacant rooms to a specific status…</option>
-        </select>
+        />
         {detail.eodHousekeepingMode === "SET_STATUS" && (
           <div className="space-y-1">
             <Label htmlFor="eodHousekeepingTargetStatus" className="text-xs">Target status for vacant rooms</Label>
-            <select
+            <OptionSelect
               id="eodHousekeepingTargetStatus"
-              className="w-full border-border rounded-md shadow-sm h-10 px-3 border bg-background focus:ring-ring focus:border-ring"
               value={detail.eodHousekeepingTargetStatus ?? "DIRTY"}
-              onChange={(e) => setDetail({ ...detail, eodHousekeepingTargetStatus: e.target.value })}
-            >
-              <option value="CLEAN">Clean</option>
-              <option value="DIRTY">Dirty</option>
-              <option value="INSPECTED">Inspected</option>
-            </select>
+              onChange={(v) => setDetail({ ...detail, eodHousekeepingTargetStatus: v })}
+              options={[
+                { label: "Clean", value: "CLEAN" },
+                { label: "Dirty", value: "DIRTY" },
+                { label: "Inspected", value: "INSPECTED" },
+              ]}
+            />
           </div>
         )}
       </div>

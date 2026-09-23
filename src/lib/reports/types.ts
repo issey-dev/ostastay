@@ -84,6 +84,12 @@ export type ReportDef = {
 
 export type ReportFormat = "pdf" | "xlsx" | "csv";
 
+/** What the generate API returns for `format: "json"` — the on-screen preview. */
+export type ReportPreview = {
+  result: ReportResult;
+  branding: Omit<ReportBranding, "generatedAt"> & { generatedAt: string };
+};
+
 // Header/branding shown on the rendered document, sourced from the property +
 // enterprise invoice-branding settings.
 export type ReportBranding = {
@@ -94,4 +100,6 @@ export type ReportBranding = {
   logoDataUrl?: string | null; // data: URI (PDF embeds bytes; kept optional)
   generatedBy: string;
   generatedAt: Date;
+  // IANA zone the "Generated …" stamp is shown in — the property's own clock.
+  timeZone?: string | null;
 };

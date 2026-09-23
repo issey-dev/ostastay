@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
@@ -206,15 +207,18 @@ export default function MaintenanceDashboard() {
                         <span className="font-bold text-lg text-foreground">Room {ticket.room?.roomNumber}</span>
                         <StatusBadge label={ticket.priority} tone={priorityTone[ticket.priority] ?? "neutral"} className="font-bold" />
                       </div>
-                      <select
-                        className="text-xs bg-muted border border-border rounded p-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      <OptionSelect
+                        size="sm"
+                        aria-label="Ticket status"
+                        className="w-32 text-xs"
                         value={ticket.status}
-                        onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
-                      >
-                        <option value="OPEN">Open</option>
-                        <option value="IN_PROGRESS">In Progress</option>
-                        <option value="RESOLVED">Resolved</option>
-                      </select>
+                        onChange={(v) => handleStatusChange(ticket.id, v)}
+                        options={[
+                          { label: "Open", value: "OPEN" },
+                          { label: "In Progress", value: "IN_PROGRESS" },
+                          { label: "Resolved", value: "RESOLVED" },
+                        ]}
+                      />
                     </div>
 
                     <div className="mb-3">
@@ -225,16 +229,17 @@ export default function MaintenanceDashboard() {
                     <div className="border-t border-border pt-3 mt-3 space-y-3">
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Assignee</label>
-                        <select
-                          className="text-xs bg-muted border border-border rounded p-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        <OptionSelect
+                          size="sm"
+                          aria-label="Assigned to"
+                          className="w-44 text-xs"
                           value={(ticket as any).assignedToId || "UNASSIGNED"}
-                          onChange={(e) => handleAssignChange(ticket.id, ticket.status, e.target.value)}
-                        >
-                          <option value="UNASSIGNED">Unassigned</option>
-                          {maintenanceTeam.map(user => (
-                            <option key={user.id} value={user.id}>{user.firstName} {user.lastName}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => handleAssignChange(ticket.id, ticket.status, v)}
+                          options={[
+                            { label: "Unassigned", value: "UNASSIGNED" },
+                            ...maintenanceTeam.map(user => ({ label: `${user.firstName} ${user.lastName ?? ""}`.trim(), value: user.id })),
+                          ]}
+                        />
                       </div>
 
                       <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-2">

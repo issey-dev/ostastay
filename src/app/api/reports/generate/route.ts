@@ -1,58 +1,69 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
-import { resolveBusinessDate, serverToday } from "@/lib/business-date";
-import { getReport } from "@/lib/reports/registry";
-import { coerceParams, missingRequired } from "@/lib/reports/params";
-import { loadBranding, renderReport } from "@/lib/reports/engine";
-import type { ReportFormat } from "@/lib/reports/types";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { renderReport, reportFilename } from "@/lib/reports/engine";
+import { encodeReportRequest, reportIsLandscape, runReport, ReportRequestError } from "@/lib/reports/run";
+import { generateReportPdf } from "@/lib/stationery-pdf";
+import type { ReportFormat, ReportPreview } from "@/lib/reports/types";
 
-const FORMATS: ReportFormat[] = ["pdf", "xlsx", "csv"];
+const FORMATS: (ReportFormat | "json")[] = ["pdf", "xlsx", "csv", "json"];
 
-// Run a report and stream back the rendered file.
+// Run a report and return it.
 // Body: { key, format, propertyId?, params }.
+//   format "json"            → { result, branding } for the on-screen Preview
+//   format "pdf"             → the print page (the same layout as the Preview) printed by
+//                              headless Chrome; the pdf-lib renderer is only a fallback
+//   format "xlsx" / "csv"    → the file
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "REPORTS", "view");
-
     const body = await request.json();
-    const def = getReport(String(body.key ?? ""));
-    if (!def) return NextResponse.json({ error: "Unknown report." }, { status: 404 });
+    const format = FORMATS.includes(body.format) ? (body.format as ReportFormat | "json") : "pdf";
 
-    const format: ReportFormat = FORMATS.includes(body.format) ? body.format : "pdf";
+    const req = { key: String(body.key ?? ""), propertyId: body.propertyId ? String(body.propertyId) : null, params: body.params ?? {} };
+    const { def, result, branding, propertyId } = await runReport(ctx, req);
 
-    // Resolve the target property (an enterprise user may pass one; verify access).
-    let propertyId: string | null;
-    if (body.propertyId) {
-      await assertPropertyAccess(ctx, String(body.propertyId));
-      propertyId = String(body.propertyId);
-    } else {
-      propertyId = await resolveCurrentPropertyId(ctx);
+    if (format === "json") {
+      const preview: ReportPreview = { result, branding: { ...branding, generatedAt: branding.generatedAt.toISOString() } };
+      return NextResponse.json(preview, { headers: { "Cache-Control": "no-store" } });
     }
 
-    const property = propertyId ? await prisma.property.findUnique({ where: { id: propertyId } }) : null;
-    const businessDate = property ? resolveBusinessDate(property) : serverToday();
+    let file = format === "pdf" ? await chromePdf() : null;
+    if (!file) file = await renderReport(def.key, result, branding, format);
 
-    const params = coerceParams(def, (body.params ?? {}) as Record<string, unknown>, businessDate);
-    const missing = missingRequired(def, params);
-    if (missing.length) {
-      return NextResponse.json({ error: `Missing required parameter(s): ${missing.join(", ")}` }, { status: 400 });
-    }
-
-    const result = await def.run({ ctx, propertyId, params });
-    const branding = await loadBranding(ctx, propertyId);
-    const { body: fileBody, contentType, filename } = await renderReport(def.key, result, branding, format);
-
-    return new NextResponse(new Uint8Array(fileBody), {
+    return new NextResponse(new Uint8Array(file.body), {
       status: 200,
       headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": file.contentType,
+        "Content-Disposition": `attachment; filename="${file.filename}"`,
         "Cache-Control": "no-store",
       },
     });
+
+    // The PDF is the print page rendered as this same user, so it is exactly what the
+    // Preview showed. Null (→ fallback renderer) if Chrome is unavailable on this host —
+    // a report download must never fail just because the nicer renderer did.
+    async function chromePdf() {
+      const authToken = (await cookies()).get("auth_token")?.value;
+      const enterprise = await prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { slug: true } });
+      if (!authToken || !enterprise) return null;
+      try {
+        const r = encodeReportRequest({ ...req, propertyId });
+        const body = await generateReportPdf(`/e/${enterprise.slug}/dashboard/reports/print?r=${r}`, authToken, {
+          landscape: reportIsLandscape(result),
+          footerLabel: `${result.title} · ${branding.propertyName}`,
+        });
+        return { body, contentType: "application/pdf", filename: reportFilename(def.key, branding, "pdf") };
+      } catch (e) {
+        console.error("Report PDF via Chrome failed; using the fallback renderer.", e);
+        return null;
+      }
+    }
   } catch (error) {
+    if (error instanceof ReportRequestError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
   }
