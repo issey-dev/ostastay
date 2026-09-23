@@ -3096,4 +3096,5 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   - Checks run before the change is offered and again, under a lock, when it is made
     (`src/lib/business-date-change.ts`). Property staff are signed out afterwards, as after
     Night Audit. Needs Property Setup (CONTROLS) plus NIGHT_AUDIT update.
-
+- Released as **7.1.0**, with the Hub navigation review of the same day (sidebar "Controls" +
+  "Channel Manager", breadcrumbs, the Hub Account dialog).
