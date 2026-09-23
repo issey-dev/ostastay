@@ -88,7 +88,7 @@ export function HubSidebarNav({
 
       {enterpriseItems.length > 0 && (
         <SidebarGroup>
-          <SidebarGroupLabel>Enterprise · all properties</SidebarGroupLabel>
+          <SidebarGroupLabel>Enterprise</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{enterpriseItems.map((item) => renderItem(item, enterpriseHref(slug, item)))}</SidebarMenu>
           </SidebarGroupContent>
@@ -97,16 +97,9 @@ export function HubSidebarNav({
 
       {property && propertyItems.length > 0 && (
         <SidebarGroup>
-          {/* The group is headed by the property itself, in its own colour — the sidebar
-              says which property these links belong to before you click one. */}
-          <SidebarGroupLabel className="gap-2">
-            <span
-              aria-hidden
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: property.bannerColor ?? "var(--sidebar-foreground)" }}
-            />
-            <span className="truncate">{property.name}</span>
-          </SidebarGroupLabel>
+          {/* Which property these links belong to is named by the property band above the
+              page (with its switcher) — the sidebar just says "Property" (owner, 2026-09-23). */}
+          <SidebarGroupLabel>Property</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{propertyItems.map((item) => renderItem(item, propertyHref(slug, property.id, item)))}</SidebarMenu>
           </SidebarGroupContent>
