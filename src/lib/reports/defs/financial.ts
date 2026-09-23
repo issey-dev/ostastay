@@ -5,6 +5,8 @@ import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summar
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
 import { LINE_BUCKET_INCLUDE, lineReportBucket, reportBucketLabel, isLevyLine } from "@/lib/posting/report-bucket";
 import { countryNameFor } from "@/lib/countries";
+import { bookingMethodFor, greenTaxCategory, isBookingMethod, isStayBasis, localTime, meetsMinStay, sheetGuestName } from "@/lib/green-tax-sheet";
+import { renderGreenTaxXlsx } from "@/lib/reports/render/green-tax-xlsx";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -227,58 +229,239 @@ const folioTax: ReportDef = {
   },
 };
 
-// ─── Green Tax Report (by guest registration no) ────────────────────────────
+// ─── Green Tax Report (MIRA Green Tax information sheet) ─────────────────────
+// One row per GuestRegistration in MIRA's GRTInfoSheet25.1 layout — the columns, order
+// and codes of the government submission. The Excel export writes the exact sheet (see
+// render/green-tax-xlsx.ts); category and booking-method rules live in green-tax-sheet.ts.
 const greenTax: ReportDef = {
   key: "fin-green-tax",
   module: "FINANCIAL",
   name: "Green Tax Report",
-  description: "Green Tax by guest registration number — the government submission list.",
-  params: [{ key: "range", label: "Registered between", type: "dateRange", required: true, defaultToday: true }],
+  description: "MIRA Green Tax information sheet — every registered guest who stayed in the period, by registration number.",
+  params: [{ key: "range", label: "Stayed between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
     const range = rc.params.range as { from: Date; to: Date };
     const { gte, lt } = rangeBounds(range.from, range.to);
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { greenTaxAdultAmount: true, greenTaxChildAmount: true } });
-    const adultRate = settings?.greenTaxAdultAmount ?? 0;
-    const childRate = settings?.greenTaxChildAmount ?? 0;
+    const [property, settings] = await Promise.all([
+      prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { timeZone: true, checkInTime: true, checkOutTime: true } }),
+      prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { greenTaxExemptAge: true } }),
+    ]);
+    const infantAge = settings?.greenTaxExemptAge ?? 2;
 
     const regs = await prisma.guestRegistration.findMany({
-      where: { propertyId, businessDate: { gte, lt } },
+      // Filed monthly by STAY date: everyone in house for at least one night of the period
+      // (arrived before it ends, departs after it starts), so a stay-over carried in from
+      // the previous month appears with its earlier number — the month's list skips
+      // numbers while the year's sequence itself has none. An early check-out moves
+      // checkOutDate to the actual day, so the booking's dates are the real stay.
+      where: { propertyId, reservation: { checkInDate: { lt }, checkOutDate: { gt: gte } } },
       include: {
-        profile: { select: { firstName: true, lastName: true, companyName: true, profileType: true, nationality: true } },
-        reservation: { select: { confirmationNo: true, checkInDate: true, checkOutDate: true, adults: true, children: true, assignments: { select: { room: { select: { roomNumber: true } } } } } },
+        profile: {
+          select: {
+            firstName: true, middleName: true, lastName: true, dateOfBirth: true, nationality: true,
+            documents: { select: { documentNumber: true, isWorkPermit: true }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
+          },
+        },
+        reservation: {
+          select: {
+            status: true, checkInDate: true, checkOutDate: true, checkedInAt: true, checkedOutAt: true,
+            travelAgent: { select: { bookingMethod: true } },
+          },
+        },
       },
       orderBy: [{ year: "asc" }, { registrationNo: "asc" }],
     });
+
+    const missing = { id: 0, dob: 0, nationality: 0, bookingMethod: 0 };
     const rows = regs.map((r) => {
-      const nights = Math.max(1, Math.round((r.reservation.checkOutDate.getTime() - r.reservation.checkInDate.getTime()) / 86_400_000));
-      // Per-registration green tax: primary carries the room's adult/child levy across the stay.
-      const perNight = r.isPrimary ? r.reservation.adults * adultRate + r.reservation.children * childRate : 0;
+      const { profile: p, reservation: res } = r;
+      const idNo = p.documents[0]?.documentNumber ?? "";
+      const bookingMethod = bookingMethodFor(res.travelAgent);
+      if (!idNo) missing.id++;
+      if (!p.dateOfBirth) missing.dob++;
+      if (!p.nationality) missing.nationality++;
+      if (!bookingMethod) missing.bookingMethod++;
+      // An actual check-out carries its own date and time; otherwise the booked
+      // departure at the property's standard check-out time.
+      const out = res.status === "CHECKED_OUT" && res.checkedOutAt ? res.checkedOutAt : null;
       return {
         regNo: r.registrationNo,
-        guest: guestName(r.profile),
-        nationality: countryNameFor(r.profile.nationality) ?? "—",
-        room: r.reservation.assignments.map((a) => a.room?.roomNumber).filter(Boolean).join(", ") || "—",
-        conf: r.reservation.confirmationNo,
-        nights,
-        greenTax: round2(perNight * nights),
+        guest: sheetGuestName(p),
+        category: greenTaxCategory({
+          dateOfBirth: p.dateOfBirth,
+          nationality: p.nationality,
+          isWorkPermitHolder: p.documents.some((d) => d.isWorkPermit),
+          checkInDate: res.checkInDate,
+          infantAge,
+        }),
+        dob: p.dateOfBirth,
+        idNo,
+        nationality: (countryNameFor(p.nationality) ?? "").toUpperCase(),
+        bookingMethod: bookingMethod ?? "",
+        checkInDate: res.checkInDate,
+        checkInTime: res.checkedInAt ? localTime(res.checkedInAt, property.timeZone) : property.checkInTime,
+        // en-CA renders YYYY-MM-DD, which Date parses as that UTC midnight.
+        checkOutDate: out ? new Date(out.toLocaleDateString("en-CA", { timeZone: property.timeZone })) : res.checkOutDate,
+        checkOutTime: out ? localTime(out, property.timeZone) : property.checkOutTime,
       };
     });
+
+    const gaps = [
+      missing.bookingMethod && `${missing.bookingMethod} without a booking method (set it on the agent profile)`,
+      missing.id && `${missing.id} without an identification no.`,
+      missing.dob && `${missing.dob} without a date of birth`,
+      missing.nationality && `${missing.nationality} without a nationality`,
+    ].filter(Boolean);
     return {
       title: "Green Tax Report",
-      subtitle: `Registrations ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} guest(s)`,
-      note: "Green Tax is carried on the primary registration for each room (per-room adult/child levy × nights).",
+      subtitle: `Stayed ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} guest(s)`,
+      note:
+        "Category: 1 Normal · 2 Maldivian · 3 Work permit holder · 4 Infant (under " + infantAge + ")." +
+        (gaps.length ? ` Incomplete for MIRA: ${gaps.join("; ")}.` : ""),
       columns: [
-        { key: "regNo", label: "Reg. No", width: 0.7, format: "number" },
-        { key: "guest", label: "Guest", width: 1.6 },
+        { key: "regNo", label: "Guest Registration No.", width: 0.8, format: "number" },
+        { key: "guest", label: "Name of Guest", width: 1.8 },
+        { key: "category", label: "Category", width: 0.6, format: "number", align: "center" },
+        { key: "dob", label: "Date of birth", width: 0.9, format: "date" },
+        { key: "idNo", label: "Identification No.", width: 1 },
         { key: "nationality", label: "Nationality", width: 1 },
-        { key: "room", label: "Room", width: 0.7 },
-        { key: "conf", label: "Confirmation", width: 1.1 },
-        { key: "nights", label: "Nights", width: 0.6, format: "number" },
-        { key: "greenTax", label: "Green Tax", width: 1, format: "currency" },
+        { key: "bookingMethod", label: "Booking Method", width: 1.1 },
+        { key: "checkInDate", label: "Check-in Date", width: 0.9, format: "date" },
+        { key: "checkInTime", label: "Check-in Time", width: 0.6 },
+        { key: "checkOutDate", label: "Check-out Date", width: 0.9, format: "date" },
+        { key: "checkOutTime", label: "Check-out Time", width: 0.6 },
       ],
       rows,
-      totals: { greenTax: round2(rows.reduce((s, r) => s + r.greenTax, 0)) },
+    };
+  },
+  renderXlsx: renderGreenTaxXlsx,
+};
+
+// ─── Missing Profile Information (Green Tax sheet readiness) ─────────────────
+// Everything that would make the MIRA Green Tax sheet for the period incomplete, by
+// severity: HIGH — a guest who should carry a Reg No has none, or a number of the year is
+// skipped; MEDIUM — no identification no., date of birth or nationality; LOW — the booking
+// has a Travel Agent/Company account whose Booking Method isn't set. Same "stayed between"
+// selection as the Green Tax Report. Guests the sheet leaves out by rule (PM room, stay
+// under 12 hours) are not checked. Identification is the primary document, else the
+// earliest added — the same one the sheet prints.
+const greenTaxMissing: ReportDef = {
+  key: "fin-green-tax-missing",
+  module: "FINANCIAL",
+  name: "Missing Profile Information",
+  description: "Guests whose Green Tax sheet data is incomplete — missing or skipped Reg No, ID, date of birth, nationality, booking method.",
+  params: [{ key: "range", label: "Stayed between", type: "dateRange", required: true, defaultToday: true }],
+  async run(rc): Promise<ReportResult> {
+    const propertyId = await propertyOrThrow(rc);
+    const range = rc.params.range as { from: Date; to: Date };
+    const { gte, lt } = rangeBounds(range.from, range.to);
+    const [property, settings] = await Promise.all([
+      prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { timeZone: true, checkInTime: true, checkOutTime: true } }),
+      prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { greenTaxStayBasis: true } }),
+    ]);
+    const basis = isStayBasis(settings?.greenTaxStayBasis) ? settings.greenTaxStayBasis : "ACTUAL";
+
+    const reservations = await prisma.reservation.findMany({
+      where: { propertyId, status: { in: ["IN_HOUSE", "CHECKED_OUT"] }, checkInDate: { lt }, checkOutDate: { gt: gte } },
+      select: {
+        confirmationNo: true, status: true, checkInDate: true, checkOutDate: true, checkedInAt: true, checkedOutAt: true,
+        primaryGuestId: true,
+        travelAgent: { select: { firstName: true, lastName: true, companyName: true, profileType: true, bookingMethod: true } },
+        assignments: { select: { roomType: { select: { name: true, isPseudo: true } } } },
+        accompanyingGuests: { select: { profileId: true }, orderBy: { createdAt: "asc" } },
+        guestRegistrations: { select: { profileId: true, registrationNo: true, year: true } },
+      },
+      orderBy: [{ checkInDate: "asc" }, { checkedInAt: "asc" }],
+    });
+    const profileIds = [...new Set(reservations.flatMap((r) => [r.primaryGuestId, ...r.accompanyingGuests.map((a) => a.profileId)]))];
+    const profiles = new Map(
+      (await prisma.profile.findMany({
+        where: { upid: { in: profileIds } },
+        select: {
+          upid: true, firstName: true, middleName: true, lastName: true, dateOfBirth: true, nationality: true,
+          documents: { select: { documentNumber: true }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], take: 1 },
+        },
+      })).map((p) => [p.upid, p])
+    );
+
+    type Row = Record<string, unknown> & { regNo: number | null };
+    const high: Row[] = [], medium: Row[] = [], low: Row[] = [];
+
+    for (const res of reservations) {
+      const roomTypes = [...new Set(res.assignments.filter((a) => !a.roomType.isPseudo).map((a) => a.roomType.name))];
+      // Left off the sheet by rule — nothing to complete.
+      if (!roomTypes.length || !meetsMinStay(res, property, basis)) continue;
+      const ta = res.travelAgent;
+      const guestIds = [...new Set([res.primaryGuestId, ...res.accompanyingGuests.map((a) => a.profileId)])];
+      for (const upid of guestIds) {
+        const p = profiles.get(upid);
+        if (!p) continue;
+        const reg = res.guestRegistrations.find((g) => g.profileId === upid);
+        const base = {
+          regNo: reg?.registrationNo ?? null,
+          guest: sheetGuestName(p),
+          conf: res.confirmationNo,
+          roomType: roomTypes.join(", "),
+          travelAgent: ta ? guestName(ta) : "",
+          idNo: p.documents[0]?.documentNumber ?? "",
+          dob: p.dateOfBirth,
+          nationality: (countryNameFor(p.nationality) ?? "").toUpperCase(),
+          bookingMethod: bookingMethodFor(ta) ?? "",
+          checkInDate: res.checkInDate,
+          checkOutDate: res.checkOutDate,
+        };
+        if (!reg) high.push({ ...base, issue: "No Reg No assigned" });
+        const gaps = [!base.idNo && "Identification No.", !p.dateOfBirth && "Date of birth", !p.nationality && "Nationality"].filter(Boolean);
+        if (gaps.length) medium.push({ ...base, issue: `Missing ${gaps.join(", ")}` });
+        if (ta && !isBookingMethod(ta.bookingMethod)) low.push({ ...base, issue: `Booking Method not set on ${base.travelAgent}` });
+      }
+    }
+
+    // Skipped numbers: every number below the highest one the period's sheet prints (the
+    // Green Tax Report's own selection) must exist in its year.
+    const periodMax = await prisma.guestRegistration.groupBy({
+      by: ["year"],
+      where: { propertyId, reservation: { checkInDate: { lt }, checkOutDate: { gt: gte } } },
+      _max: { registrationNo: true },
+    });
+    for (const { year, _max } of periodMax) {
+      const maxNo = _max.registrationNo ?? 0;
+      const taken = new Set(
+        (await prisma.guestRegistration.findMany({ where: { propertyId, year, registrationNo: { lte: maxNo } }, select: { registrationNo: true } }))
+          .map((r) => r.registrationNo)
+      );
+      for (let n = 1; n < maxNo; n++) {
+        if (!taken.has(n)) high.push({ regNo: n, guest: "—", issue: `Reg No ${n} (${year}) skipped — no guest holds it` });
+      }
+    }
+
+    const byRegNo = (a: Row, b: Row) => (a.regNo ?? Infinity) - (b.regNo ?? Infinity);
+    const groups = [
+      { label: `High — Reg No missing or skipped (${high.length})`, rows: high.sort(byRegNo) },
+      { label: `Medium — ID, date of birth or nationality missing (${medium.length})`, rows: medium.sort(byRegNo) },
+      { label: `Low — Booking Method not set on the account (${low.length})`, rows: low.sort(byRegNo) },
+    ].filter((g) => g.rows.length);
+    const total = high.length + medium.length + low.length;
+    return {
+      title: "Missing Profile Information",
+      subtitle: `Stayed ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${total ? `${total} issue(s)` : "nothing missing"}`,
+      note: "Checks everything the MIRA Green Tax sheet needs. Guests left off the sheet by rule (PM room, stay under 12 hours) are not listed. Identification is the guest's primary document.",
+      columns: [
+        { key: "regNo", label: "Reg No", width: 0.6, format: "number" },
+        { key: "guest", label: "Name of Guest", width: 1.5 },
+        { key: "issue", label: "Issue", width: 1.8 },
+        { key: "conf", label: "Confirmation", width: 0.9 },
+        { key: "roomType", label: "Room Type", width: 0.9 },
+        { key: "travelAgent", label: "Travel Agent", width: 1.1 },
+        { key: "idNo", label: "Identification No.", width: 1 },
+        { key: "dob", label: "Date of birth", width: 0.9, format: "date" },
+        { key: "nationality", label: "Nationality", width: 1 },
+        { key: "bookingMethod", label: "Booking Method", width: 1 },
+        { key: "checkInDate", label: "Check-in", width: 0.9, format: "date" },
+        { key: "checkOutDate", label: "Check-out", width: 0.9, format: "date" },
+      ],
+      groups,
     };
   },
 };
@@ -338,4 +521,4 @@ const gst: ReportDef = {
   },
 };
 
-export const FINANCIAL_REPORTS: ReportDef[] = [journal, cashierSummary, outletSales, folioTax, greenTax, gst];
+export const FINANCIAL_REPORTS: ReportDef[] = [journal, cashierSummary, outletSales, folioTax, greenTax, greenTaxMissing, gst];

@@ -1,5 +1,5 @@
-import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert, Users, Shield, Key } from "@/components/icons"
-import { requireSession, hasHubAccess, hasAnyPropertyModule, resolveCurrentPropertyId } from "@/lib/scope"
+import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert, Users, Shield, Key, Receipt } from "@/components/icons"
+import { requireSession, hasHubAccess, hasAnyPropertyModule, hasPermission, resolveCurrentPropertyId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
 import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
@@ -43,6 +43,9 @@ const items = [
   // enterprise-wide, and the Hub is the only shell a property-scoped user can't reach.
   { title: "People", url: "hub/people", icon: Users },
   { title: "Sessions", url: "hub/sessions", icon: Shield },
+  // Green Tax Reg No corrections + monthly MIRA filing (2026-09-23). Its own Hub module
+  // (GREEN_TAX), so the entry is shown only to roles that can view it.
+  { title: "Green Tax", url: "hub/green-tax", icon: Receipt, module: "GREEN_TAX" as const },
 ]
 
 export async function HubSidebar({ slug }: { slug: string }) {
@@ -90,7 +93,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
           <SidebarGroupLabel>Hub</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
+              {items.filter((item) => !("module" in item && item.module) || hasPermission(ctx, item.module, "view")).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton tooltip={item.title} render={<a href={`/e/${slug}/${item.url}`} />}>
                     <item.icon className="h-4 w-4" />

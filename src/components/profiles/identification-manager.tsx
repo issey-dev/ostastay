@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
@@ -20,9 +21,10 @@ type ProfileDocument = {
   issuingCountry: string | null
   expiryDate: string | null
   isPrimary: boolean
+  isWorkPermit: boolean
 }
 
-const emptyForm = { documentType: "", documentNumber: "", issuingCountry: "", expiryDate: "" }
+const emptyForm = { documentType: "", documentNumber: "", issuingCountry: "", expiryDate: "", isWorkPermit: false }
 
 // Multiple per profile, one may be marked primary — see
 // .agents/docs/PROFILES_REDESIGN_PLAN.md "Identification". Upgraded off the old
@@ -88,6 +90,17 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
     fetchRows()
   }
 
+  // Work-permit holders are Green Tax sheet category 3 — toggled per document.
+  const handleToggleWorkPermit = async (r: ProfileDocument) => {
+    await fetch(`/api/profiles/${upid}/documents/${r.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isWorkPermit: !r.isWorkPermit }),
+    })
+    fetchRows()
+    onChange?.()
+  }
+
   const handleDelete = async (id: string) => {
     await fetch(`/api/profiles/${upid}/documents/${id}`, { method: "DELETE" })
     fetchRows()
@@ -116,6 +129,10 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
                 )}
                 {r.expiryDate && <span className="text-muted-foreground"> · exp. {new Date(r.expiryDate).toLocaleDateString()}</span>}
               </span>
+              <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" title="Maldives work permit holder (Green Tax category 3)">
+                <Checkbox checked={r.isWorkPermit} onCheckedChange={() => handleToggleWorkPermit(r)} aria-label="Work permit holder" />
+                Work permit
+              </label>
               <button
                 type="button"
                 title={r.isPrimary ? "Primary" : "Set as primary"}
@@ -154,6 +171,11 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
               <DatePicker value={form.expiryDate} onChange={(v) => setForm((p) => ({ ...p, expiryDate: v }))} />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <Checkbox checked={form.isWorkPermit} onCheckedChange={(v) => setForm((p) => ({ ...p, isWorkPermit: v === true }))} />
+            Work permit holder
+            <span className="text-xs text-muted-foreground">(Green Tax category 3)</span>
+          </label>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => { setAdding(false); setForm(emptyForm); setError(null) }}>Cancel</Button>

@@ -445,6 +445,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                       <Field label="Credit Account (Debtors)" value={profile.isCreditAccount ? "Active" : "No"} />
                       <div className="pt-2 border-t border-border">
                         <Field label="IATA Number" value={profile.iataNumber} />
+                        <Field label="Booking Method" value={profile.bookingMethod} />
                       </div>
                     </>
                   )}

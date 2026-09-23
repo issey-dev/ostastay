@@ -1972,6 +1972,7 @@ Green Tax by registration no, GST), Housekeeping (2 — Special Requests, Attend
   IN_PROGRESS transition, powering the Attendant report's time-on-task.
 - Green Tax report carries the per-room adult/child levy on the primary
   registration (× nights); accompanying registrations show 0 to avoid double count.
+  **Superseded 2026-09-23** — see "Green Tax Report = MIRA information sheet".
 
 ## Excursions Booking (2026-07-22)
 
@@ -2941,3 +2942,66 @@ simple booking page — fed by a public, key-authenticated API. Full decision re
   **business date** (they used the computer's calendar date); `SearchableSelect` hides
   its search box for lists of 8 or fewer, app-wide (`searchable` prop overrides); a
   selected calendar day no longer goes dark-on-dark under the pointer in dark mode.
+
+## Green Tax Report = MIRA information sheet (2026-09-23)
+
+Owner supplied MIRA's template (`GRTInfoSheet25.1`); the Green Tax Report now *is* that
+sheet and its Excel export is submitted as-is.
+- **Columns, in order:** Guest Registration No., Name of Guest (LAST FIRST MIDDLE,
+  upper-case), Category, Date of birth, Identification No. (primary document),
+  Nationality (country name, upper-case), Booking Method, Check-in Date/Time,
+  Check-out Date/Time. No amounts — the levy column is gone.
+- **Category:** 4 = under `greenTaxExemptAge` (2) at check-in, 2 = Maldivian
+  nationality, 3 = work-permit holder, 1 = everyone else — checked in that order.
+- **Work-permit holder** is a tick on the guest's identification document
+  (`ProfileDocument.isWorkPermit`); any ticked document makes the guest category 3.
+- **Booking Method** is a fixed MIRA list (Foreign tour operator, Local tour operator,
+  Direct booking, FIT, Online travel agent) set on COMPANY/TRAVEL_AGENT profiles
+  (`Profile.bookingMethod`). A reservation reports its travel agent's value; no agent =
+  FIT. An agent with no method set is left blank and flagged in the report note.
+- **Times:** actual check-in time (`checkedInAt`, property time zone), else the property's
+  standard check-in time; actual check-out date/time once checked out, else the booked
+  departure at the standard check-out time.
+- **Filed monthly by STAY date** (owner): the period selects every registered guest with
+  at least one night in it (arrival < period end, departure > period start). A stay-over
+  from the previous month keeps its earlier number, so a month's list may skip numbers.
+- **Sequence rule** (owner): per property, restarts at 1 every calendar year, assigned in
+  check-in date + time order, and must have **no gaps across the whole year**. A
+  "missing number" exception check is not wanted — arrival always assigns one.
+- **Excel:** `ReportDef.renderXlsx` lets a report replace the generic styled workbook;
+  `render/green-tax-xlsx.ts` writes the bare sheet (header row 1, template's number
+  formats — note the template itself formats Date of birth month-first).
+
+### Green Tax Reg No corrections in the Hub (2026-09-23, owner)
+
+- **Who gets a number:** every guest staying **12 hours or more** (exactly 12 counts) in a
+  real room. PM (pseudo) room guests never get one. Measured from the **actual check-in
+  time**; Controls › Taxes has a toggle to measure on the property's standard check-in →
+  check-out times instead (`EnterpriseSettings.greenTaxStayBasis` ACTUAL | STANDARD).
+  EOD can only see the *booked* departure, so a guest who leaves early is flagged later.
+- **No "missing number" check** — owner: arrival always assigns one.
+- **Corrections** live in the Hub (`/e/[slug]/hub/green-tax`, new Hub module
+  `GREEN_TAX`: view = see, update = correct/file). Removing a number, or closing a gap
+  (e.g. a registration lost with a deleted booking — GuestRegistration cascades), moves
+  every later number of the year down by one: the year's sequence never has a gap.
+  Reason required; logged in `GreenTaxCorrection` + the activity log.
+- **Filed months are frozen.** "Mark as filed" (`GreenTaxFiling`) is allowed only once the
+  business date has passed the month, in month order, and with nothing flagged or gapped
+  in the numbers it freezes. After that **no correction may move a number any guest of a
+  filed month carries** — owner: "never allow"; such fixes are handled outside the system
+  before submission. There is no un-file.
+- The EOD numbering step and every correction share one per-property advisory lock.
+
+### Missing Profile Information report (2026-09-23, owner)
+
+Reports › Financial › **Missing Profile Information** (`fin-green-tax-missing`) — what
+would make the MIRA Green Tax sheet incomplete for a "stayed between" period, grouped by
+severity: **High** — a guest who should carry a Reg No has none, or a number below the
+period's highest is skipped in its year; **Medium** — no identification no., date of
+birth or nationality; **Low** — the booking's Travel Agent/Company account (the one
+`Reservation.travelAgentId` link) has no Booking Method. Guests the sheet leaves out by
+rule (PM room, stay under 12 h) are not checked. Adds Travel Agent, Confirmation No and
+Room Type to the sheet's own columns.
+- **Primary wins:** with several identification documents, the one marked primary is the
+  one reported (else the earliest added) — on both this report and the MIRA sheet.
+  Nationality is a single profile field, so there is nothing to choose between.
