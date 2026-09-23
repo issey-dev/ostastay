@@ -106,7 +106,7 @@ export function ReservationTransport({
   const [chargeCodes, setChargeCodes] = useState<{ id: string; code: string; description: string; category: string }[]>([])
 
   useEffect(() => {
-    fetch(`/api/settings/system-codes?category=TRANSPORT_TYPE`)
+    fetch(`/api/settings/system-codes?propertyId=${propertyId}&category=TRANSPORT_TYPE`)
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: any[]) => Array.isArray(rows) && setTypeLabels(Object.fromEntries(rows.map((c) => [c.code, c.value]))))
       .catch(() => {})
@@ -265,6 +265,7 @@ export function ReservationTransport({
                     <Label className="text-xs">Transport Type</Label>
                     <SystemCodeSelect
                       category="TRANSPORT_TYPE"
+                      propertyId={propertyId}
                       value={f.transportType}
                       onValueChange={(v) => update(key, { transportType: v ?? "" })}
                       placeholder="Select type…"

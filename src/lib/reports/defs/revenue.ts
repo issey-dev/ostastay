@@ -105,7 +105,7 @@ const nationality: ReportDef = {
       where: { propertyId, status: { in: ["RESERVED", "IN_HOUSE", "CHECKED_OUT"] }, checkInDate: { lt }, checkOutDate: { gt: gte } },
       select: { checkInDate: true, checkOutDate: true, adults: true, children: true, primaryGuest: { select: { nationality: true } } },
     });
-    const codes = await prisma.systemCode.findMany({ where: { enterpriseId: rc.ctx.enterpriseId, category: "NATIONALITY" }, select: { code: true, value: true } });
+    const codes = await prisma.systemCode.findMany({ where: { enterpriseId: rc.ctx.enterpriseId, propertyId: null, category: "NATIONALITY" }, select: { code: true, value: true } });
     const label = new Map(codes.map((c) => [c.code, c.value]));
 
     const byNat = new Map<string, { nationality: string; reservations: number; guests: number; roomNights: number }>();

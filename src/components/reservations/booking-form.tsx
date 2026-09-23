@@ -147,7 +147,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       fetch(`/api/rooms?propertyId=${propertyId}`).then(r => r.json()),
       fetch(`/api/meal-plans?propertyId=${propertyId}`).then(r => r.json()),
       fetch(`/api/allocations?propertyId=${propertyId}`).then(r => r.json()),
-      fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=SPECIAL_REQUEST`).then(r => r.json()),
+      fetch(`/api/settings/system-codes?propertyId=${propertyId}&category=SPECIAL_REQUEST`).then(r => r.json()),
       fetch(`/api/settings/fee-rules?propertyId=${propertyId}`).then(r => r.json()),
     ]).then(([profData, rtData, rpData, rmData, mpData, alData, srData, frData]) => {
       if (Array.isArray(profData)) setProfiles(profData)

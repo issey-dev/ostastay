@@ -50,10 +50,6 @@ export type HubNavItem = {
   child?: boolean
   // Only when the enterprise holds this add-on.
   addon?: HubAddon
-  // Enterprise items that are still shared by every property but are moving to each
-  // property's own setup in a later phase. Shown in their own, clearly-labelled group
-  // so nobody mistakes them for settings that are meant to be shared.
-  interim?: boolean
 }
 
 export const ENTERPRISE_NAV: HubNavItem[] = [
@@ -68,9 +64,9 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "booking-api", title: "Booking API", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
   { key: "green-tax", title: "Green Tax", path: "green-tax", icon: Receipt, modules: ["GREEN_TAX"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
-
-  // Still shared by every property — moves into the property's own setup in Phase 3.
-  { key: "shared-lists", title: "Dropdown Lists", path: "lists", icon: ListChecks, modules: ["CONTROLS"], interim: true },
+  // Guest-profile lists and Job Functions — a guest profile and a user are shared by every
+  // property. Every other dropdown list is the property's own (src/lib/system-code-scope.ts).
+  { key: "lists", title: "Guest & Staff Lists", path: "lists", icon: ListChecks, modules: ["CONTROLS"] },
 ]
 
 export const PROPERTY_NAV: HubNavItem[] = [
@@ -89,7 +85,7 @@ export const PROPERTY_NAV: HubNavItem[] = [
     path: "inventory",
     icon: Boxes,
     modules: ["CONTROLS"],
-    description: "Room types, buildings, floors and rooms.",
+    description: "Room types, buildings, floors and rooms, and the room-feature lists.",
   },
   {
     key: "reservations",
@@ -97,7 +93,7 @@ export const PROPERTY_NAV: HubNavItem[] = [
     path: "reservations",
     icon: CalendarDays,
     modules: ["CONTROLS"],
-    description: "The booking number format.",
+    description: "The booking number format, and the reservation and housekeeping lists.",
   },
   {
     key: "revenue",

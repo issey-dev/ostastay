@@ -207,17 +207,30 @@ model SupportAccessGrant {
   @@index([requestedByUserId])
 }
 
+// A dropdown list option. Guest-profile lists and job functions are the enterprise's
+// (propertyId null); reservation, housekeeping, transport and room-feature lists belong to
+// one property (propertyId set) — see src/lib/system-code-scope.ts, which says which
+// category is which, and .agents/docs/HUB_SETUP_PLAN.md (Phase 3).
+//
+// NOTE: two PARTIAL unique indexes live only in the 20260924110000_lists_per_property
+// migration, because Prisma cannot express a partial index:
+//   SystemCode_enterprise_code_key  UNIQUE (enterpriseId, category, code) WHERE propertyId IS NULL
+//   SystemCode_property_code_key    UNIQUE (propertyId, category, code)   WHERE propertyId IS NOT NULL
+// So a code is unique within its list, whichever level that list lives at.
 model SystemCode {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String?
+  property     Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   category     String // e.g., "GENDER", "TITLE", "DIETARY_REQ"
   code         String // e.g., "M", "F", "VEGAN"
   value        String // The display label
   sortOrder    Int        @default(0)
   isActive     Boolean    @default(true)
 
-  @@unique([enterpriseId, category, code])
+  @@index([enterpriseId, category])
+  @@index([propertyId, category])
 }
 
 model NightAuditLog {
@@ -531,6 +544,7 @@ model Property {
   chargeCodeGenerates          ChargeCodeGenerate[]
   taxProfiles                  TaxProfile[]
   paymentMethods               PaymentMethod[]
+  systemCodes                  SystemCode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

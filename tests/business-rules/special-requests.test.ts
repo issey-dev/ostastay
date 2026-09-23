@@ -54,9 +54,9 @@ async function setup() {
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "BAR" } });
   await prisma.systemCode.createMany({
     data: [
-      { enterpriseId: enterprise.id, category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "High Floor" },
-      { enterpriseId: enterprise.id, category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in" },
-      { enterpriseId: enterprise.id, category: "SPECIAL_REQUEST", code: "RETIRED", value: "Retired option", isActive: false },
+      { enterpriseId: enterprise.id, propertyId: property.id, category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "High Floor" },
+      { enterpriseId: enterprise.id, propertyId: property.id, category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in" },
+      { enterpriseId: enterprise.id, propertyId: property.id, category: "SPECIAL_REQUEST", code: "RETIRED", value: "Retired option", isActive: false },
     ],
   });
   const passwordHash = await bcrypt.hash("password123", 10);
@@ -69,7 +69,7 @@ async function setup() {
   const guest = await prisma.profile.create({
     data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "Req", lastName: "Guest" },
   });
-  return { adminId: admin.id, propertyId: property.id, roomTypeId: roomType.id, ratePlanId: ratePlan.id, guestId: guest.upid };
+  return { adminId: admin.id, enterpriseId: enterprise.id, propertyId: property.id, roomTypeId: roomType.id, ratePlanId: ratePlan.id, guestId: guest.upid };
 }
 
 const reservationBody = (ctx: Awaited<ReturnType<typeof setup>>, extra: Record<string, unknown>) => ({
@@ -114,6 +114,27 @@ describe("Reservation special requests (SPECIAL_REQUEST LOV join rows)", () => {
       expect(res.status).toBe(400);
     }
     expect(await prisma.reservation.count({ where: { propertyId: ctx.propertyId } })).toBe(0);
+  });
+
+  it("rejects a code that only ANOTHER property of the enterprise offers", async () => {
+    const ctx = await setup();
+    // Each property keeps its own Special Requests list (Hub Setup, Phase 3).
+    const sibling = await prisma.property.create({
+      data: {
+        enterpriseId: ctx.enterpriseId, name: "Sibling", code: `SR-SIB-${uniq()}`, legalName: "S LLC",
+        defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+      },
+    });
+    await prisma.systemCode.create({
+      data: { enterpriseId: ctx.enterpriseId, propertyId: sibling.id, category: "SPECIAL_REQUEST", code: "SEAPLANE", value: "Seaplane" },
+    });
+    const res = await asUser(ctx.adminId, () =>
+      reservationsRoute.POST(new Request("http://localhost/api/reservations", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(reservationBody(ctx, { specialRequestCodes: ["SEAPLANE"] })),
+      }))
+    );
+    expect(res.status).toBe(400);
   });
 
   it("PUT replaces the set when sent, and leaves it untouched when omitted", async () => {

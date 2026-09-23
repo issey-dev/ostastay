@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { Check } from "@/components/icons"
 import { cn } from "@/lib/utils"
+import { systemCodeCacheKey, systemCodesUrl } from "@/components/ui/system-code-select"
 
 type SystemCode = {
   id: string
@@ -20,37 +21,41 @@ const CACHE_TTL = 60_000
 
 interface SystemCodeMultiSelectProps {
   category: string
+  /** Required for a property list — see SystemCodeSelect. */
+  propertyId?: string | null
   values: string[]
   onChange: (values: string[]) => void
   disabled?: boolean
 }
 
-export function SystemCodeMultiSelect({ category, values, onChange, disabled }: SystemCodeMultiSelectProps) {
+export function SystemCodeMultiSelect({ category, propertyId, values, onChange, disabled }: SystemCodeMultiSelectProps) {
   const [options, setOptions] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
-  const fetchedRef = useRef(false)
+  const fetchedRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (fetchedRef.current) return
-    fetchedRef.current = true
+    const key = systemCodeCacheKey(category, propertyId)
+    if (fetchedRef.current === key) return
+    fetchedRef.current = key
 
-    const cached = cache[category]
+    const cached = cache[key]
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
       setOptions(cached.data)
       setLoading(false)
       return
     }
 
-    fetch(`/api/settings/system-codes?category=${category}`)
+    setLoading(true)
+    fetch(systemCodesUrl(category, propertyId))
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
           setOptions(data)
-          cache[category] = { data, ts: Date.now() }
+          cache[key] = { data, ts: Date.now() }
         }
       })
       .finally(() => setLoading(false))
-  }, [category])
+  }, [category, propertyId])
 
   const toggle = (code: string) => {
     if (disabled) return
@@ -61,7 +66,7 @@ export function SystemCodeMultiSelect({ category, values, onChange, disabled }: 
     return <p className="text-xs text-muted-foreground">Loading options...</p>
   }
   if (options.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">No options configured yet — add some in the Hub (Dropdown Lists).</p>
+    return <p className="text-xs text-muted-foreground italic">No options configured yet — add some in the Hub.</p>
   }
 
   return (

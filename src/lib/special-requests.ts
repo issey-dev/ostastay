@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 
 // Shared by the reservation POST and PUT routes: normalizes and validates a
-// specialRequestCodes[] payload against the enterprise's SPECIAL_REQUEST SystemCode
-// LOV (Controls > Reservations > Reservation Dropdown Lists). Returns the deduped
-// code list, or an error string when any code isn't a real active option.
+// specialRequestCodes[] payload against the reservation's PROPERTY's SPECIAL_REQUEST list
+// (Hub > the property > Reservations > Reservation Lists — each property keeps its own).
+// Returns the deduped code list, or an error string when any code isn't a real active
+// option there.
 export async function validateSpecialRequestCodes(
-  enterpriseId: string,
+  propertyId: string,
   input: unknown
 ): Promise<{ ok: true; codes: string[] } | { ok: false; error: string }> {
   if (input == null) return { ok: true, codes: [] };
@@ -16,7 +17,7 @@ export async function validateSpecialRequestCodes(
   if (codes.length === 0) return { ok: true, codes };
 
   const valid = await prisma.systemCode.findMany({
-    where: { enterpriseId, category: "SPECIAL_REQUEST", code: { in: codes }, isActive: true },
+    where: { propertyId, category: "SPECIAL_REQUEST", code: { in: codes }, isActive: true },
     select: { code: true },
   });
   if (valid.length !== codes.length) {

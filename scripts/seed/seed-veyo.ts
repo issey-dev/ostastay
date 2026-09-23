@@ -7,6 +7,38 @@ import { generatesForTreatment } from "../../src/lib/posting/charge-tree";
 import { seedDemoData, seedSpaAndExcursionBookings, ensureSeedPaymentMethods, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
 import { provisionOutletSubgroup } from "../../src/lib/posting/outlet-subgroup";
 
+type SeedCode = { category: string; code: string; value: string; sortOrder: number };
+
+const BEACH_SPECIAL_REQUESTS: SeedCode[] = [
+  { category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "High Floor", sortOrder: 1 },
+  { category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in", sortOrder: 2 },
+  { category: "SPECIAL_REQUEST", code: "LATE_CHECKOUT", value: "Late Checkout", sortOrder: 3 },
+  { category: "SPECIAL_REQUEST", code: "AIRPORT_PICKUP", value: "Airport Pickup", sortOrder: 4 },
+  { category: "SPECIAL_REQUEST", code: "BABY_COT", value: "Baby Cot", sortOrder: 5 },
+];
+
+// Covers every code seedDemoData books at the Lagoon (HIGH_FLOOR, EARLY_CHECKIN).
+const LAGOON_SPECIAL_REQUESTS: SeedCode[] = [
+  { category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in", sortOrder: 1 },
+  { category: "SPECIAL_REQUEST", code: "LATE_CHECKOUT", value: "Late Checkout", sortOrder: 2 },
+  { category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "Upper Deck Villa", sortOrder: 6 },
+  { category: "SPECIAL_REQUEST", code: "SEAPLANE_TRANSFER", value: "Seaplane Transfer", sortOrder: 3 },
+  { category: "SPECIAL_REQUEST", code: "HONEYMOON_SETUP", value: "Honeymoon Set-up", sortOrder: 4 },
+  { category: "SPECIAL_REQUEST", code: "BABY_COT", value: "Baby Cot", sortOrder: 5 },
+];
+
+// Idempotent: an existing option keeps whatever label and order it has since been given.
+// propertyId null = an enterprise list, set = that property's own list.
+async function ensureSeedSystemCodes(enterpriseId: string, propertyId: string | null, codes: SeedCode[]) {
+  for (const sc of codes) {
+    const existing = await prisma.systemCode.findFirst({
+      where: { enterpriseId, propertyId, category: sc.category, code: sc.code },
+      select: { id: true },
+    });
+    if (!existing) await prisma.systemCode.create({ data: { enterpriseId, propertyId, ...sc } });
+  }
+}
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -345,21 +377,13 @@ async function main() {
     { category: "CLASSIFICATION", code: "VIP", value: "VIP", sortOrder: 1 },
     { category: "CLASSIFICATION", code: "REGULAR", value: "Regular", sortOrder: 2 },
     { category: "CLASSIFICATION", code: "BLACKLISTED", value: "Blacklisted", sortOrder: 3 },
-    // Reservation-level Special Requests (Controls > Reservations), selectable as
-    // chips on the booking dialog — see ReservationSpecialRequest.
-    { category: "SPECIAL_REQUEST", code: "HIGH_FLOOR", value: "High Floor", sortOrder: 1 },
-    { category: "SPECIAL_REQUEST", code: "EARLY_CHECKIN", value: "Early Check-in", sortOrder: 2 },
-    { category: "SPECIAL_REQUEST", code: "LATE_CHECKOUT", value: "Late Checkout", sortOrder: 3 },
-    { category: "SPECIAL_REQUEST", code: "AIRPORT_PICKUP", value: "Airport Pickup", sortOrder: 4 },
-    { category: "SPECIAL_REQUEST", code: "BABY_COT", value: "Baby Cot", sortOrder: 5 },
   ];
-  for (const sc of systemCodes) {
-    await prisma.systemCode.upsert({
-      where: { enterpriseId_category_code: { enterpriseId: veyo.id, category: sc.category, code: sc.code } },
-      update: {},
-      create: { enterpriseId: veyo.id, ...sc },
-    });
-  }
+  // The guest-profile lists above are the ENTERPRISE's (propertyId null); the reservation
+  // lists below are each PROPERTY's own (src/lib/system-code-scope.ts).
+  await ensureSeedSystemCodes(veyo.id, null, systemCodes);
+  // Reservation-level Special Requests (Hub > the property > Reservations), selectable as
+  // chips on the booking dialog — see ReservationSpecialRequest.
+  await ensureSeedSystemCodes(veyo.id, property.id, BEACH_SPECIAL_REQUESTS);
 
   // 9. Guest profiles.
   const guestData = [
@@ -451,6 +475,8 @@ async function main() {
     adminRoleId: systemRoleIds["Admin"],
   });
   const lagoon = demo.lagoon;
+  // The Lagoon keeps its own Special Requests list — overlapping the Beach's, not a copy.
+  await ensureSeedSystemCodes(veyo.id, lagoon.id, LAGOON_SPECIAL_REQUESTS);
 
   // 10c. Module outlet links — per PROPERTY since 2026-09-23: each property's Spa and
   // Excursion charges post through one of its OWN outlets. (Until then one outlet served

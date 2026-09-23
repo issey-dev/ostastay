@@ -9,16 +9,17 @@ export type FeatureOption = { category: string; code: string; value: string }
 
 export const ROOM_FEATURE_CATEGORY_LABELS = Object.fromEntries(ROOM_FEATURE_LOV_CATEGORIES.map((c) => [c.code, c.label]))
 
-// Shared fetch for the enterprise's own Bed Type / View / Amenity option lists — used by
-// both the picker below and any read-only "inherited from Room Type" display.
-export function useRoomFeatureOptions() {
+// Shared fetch for the property's own Bed Type / View / Amenity option lists (each
+// property keeps its own — src/lib/system-code-scope.ts) — used by both the picker below
+// and any read-only "inherited from Room Type" display.
+export function useRoomFeatureOptions(propertyId: string) {
   const [options, setOptions] = useState<FeatureOption[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all(
       ROOM_FEATURE_LOV_CATEGORIES.map((cat) =>
-        fetch(`/api/settings/system-codes?category=${cat.code}`)
+        fetch(`/api/settings/system-codes?propertyId=${propertyId}&category=${cat.code}`)
           .then((res) => res.json())
           .then((data) => (Array.isArray(data) ? data.map((d) => ({ category: cat.code, code: d.code, value: d.value })) : []))
       )
@@ -26,7 +27,7 @@ export function useRoomFeatureOptions() {
       .then((results) => setOptions(results.flat()))
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [propertyId])
 
   return { options, loading }
 }
@@ -40,16 +41,18 @@ export function groupFeaturesByCategory<T extends { category: string }>(items: T
 }
 
 export function RoomFeaturePicker({
+  propertyId,
   selected,
   onChange,
   excluded = [],
 }: {
+  propertyId: string
   selected: RoomFeature[]
   onChange: (next: RoomFeature[]) => void
   /** Codes to hide from the Unselected pool entirely — e.g. features already inherited from the Room Type. */
   excluded?: RoomFeature[]
 }) {
-  const { options: allOptions, loading } = useRoomFeatureOptions()
+  const { options: allOptions, loading } = useRoomFeatureOptions(propertyId)
   const options = allOptions.filter((o) => !excluded.some((e) => e.category === o.category && e.code === o.code))
 
   const isSelected = (category: string, code: string) => selected.some((s) => s.category === category && s.code === code)
@@ -76,7 +79,7 @@ export function RoomFeaturePicker({
   if (allOptions.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No feature options configured yet — add some in the Hub under Dropdown Lists › Room Features.
+        No feature options configured yet — add some in the Hub under this property&apos;s Rooms & Inventory › Room Features.
       </p>
     )
   }

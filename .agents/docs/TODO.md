@@ -15,7 +15,9 @@ becomes setup/health banners.
   property (`PropertySettings`); delete dashboard Controls/Stationaries
 - [x] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
   defaults, Spa/Excursion outlet link) + migration; onboarding chart varies by property
-- [ ] Phase 3 — dropdowns per property + richer entries (**blocked on O-1**: which fields)
+- [x] Phase 3 — dropdowns per property (reservation, housekeeping, transport, room-feature
+  lists; guest-profile lists + Job Functions stay enterprise)
+- [ ] Phase 3b — richer dropdown entries (**blocked on O-1**: which fields — ask the owner)
 - [ ] Phase 4 — Beds24 connection per property (Osta-created), Booking API keys one-or-ALL,
   website/online settings + Green Tax into the property area
 - [ ] Phase 5 — copy from another property (warn + skip, never overwrite)

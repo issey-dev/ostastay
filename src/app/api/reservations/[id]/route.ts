@@ -202,7 +202,7 @@ export async function PUT(
       }
     }
 
-    const specialRequests = await validateSpecialRequestCodes(ctx.enterpriseId, data.specialRequestCodes);
+    const specialRequests = await validateSpecialRequestCodes(existing.propertyId, data.specialRequestCodes);
     if (!specialRequests.ok) {
       return NextResponse.json({ error: specialRequests.error }, { status: 400 });
     }

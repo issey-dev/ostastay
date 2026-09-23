@@ -44,7 +44,7 @@ The property dashboard becomes purely operational.
     email             SMTP / SFTP
     booking-api       API keys + webhooks
     support-access
-    guest-lists       guest-profile dropdowns (see assumption A-1)
+    lists             "Guest & Staff Lists": guest-profile dropdowns (A-1) + Job Functions
 /e/{slug}/hub/p/{propertyId}/…                  PROPERTY — one property at a time
     general           profile, appearance (banner colour, stationery font), session timeout
     inventory         buildings, floors, room types, rooms, amenities, room-feature lists
@@ -160,7 +160,8 @@ Migration above. ~100 source files read these today (`chargeCode` 29 files,
 generates 3) — every lookup switches to the property. Includes the website/booking API and
 channel inbound paths. Onboarding seed variant: see "Charge codes at onboarding" below.
 
-**Phase 3 — Dropdowns per property + richer entries.** Needs O-1 answered first.
+**Phase 3 — Dropdowns per property + richer entries.** The per-property split shipped (see
+As built); the richer entry fields wait on O-1.
 
 **Phase 4 — Integrations and Green Tax per property.**
 - Channel manager: Osta console creates a connection **for a chosen property** and links
@@ -269,12 +270,43 @@ dashboard's working-property cookie).
   post UNTAXED (no row → no tax); every real enterprise had a row, so this only shows in
   test fixtures, which now say "tax off" explicitly where they mean it.
 
+**Phase 3** —
+- Migration `20260924110000_lists_per_property`: nullable `SystemCode.propertyId`. The
+  PROPERTY lists — Housekeeping Requests, Special Requests, Transport Type, Bed Type, View,
+  Amenities — are copied to every property of their enterprise and the enterprise originals
+  deleted; guest-profile lists (A-1) and Job Functions stay the enterprise's (a user is
+  enterprise-wide too). Nothing references a list option by id (every record stores the
+  code), so no re-pointing was needed. Uniqueness is two PARTIAL unique indexes — (enterprise,
+  category, code) where propertyId is null, (property, category, code) where it is set —
+  so two properties may use the same code for different labels. Rehearsed on a DB copy.
+- `src/lib/system-code-scope.ts` (`PROPERTY_LIST_CATEGORIES`, `isPropertyListCategory`) is
+  the one place that says which list lives where.
+- `/api/settings/system-codes`: a property list needs `propertyId` (reads:
+  `assertPropertyAccess`; writes: `requirePropertySetup(CONTROLS)`); an enterprise list is
+  written only from the enterprise area (`requireEnterpriseHub` + CONTROLS) and always saved
+  with `propertyId` null. With no category it returns the enterprise lists plus the given
+  property's.
+- `SystemCodeSelect` / `SystemCodeMultiSelect` take `propertyId`; their cache is keyed by
+  category + property. Operational readers use the property's list: booking form, special
+  request validation (`validateSpecialRequestCodes(propertyId, …)`), housekeeping requests,
+  transport, room-feature picker, the housekeeping report and the Website API's room
+  feature labels.
+- Pages: property **Reservations** gains "Reservation & Housekeeping Lists", property
+  **Rooms & Inventory** gains "Room Features"; the enterprise page is now **Guest & Staff
+  Lists** (profile lists + Job Functions). With that, nothing is "shared for now" any more —
+  the interim sidebar group and page-header wording are gone.
+- Seeds: Veyo's Beach and Lagoon each seed their own Special Requests (overlapping, not
+  identical). Tests: `tests/business-rules/property-lists.test.ts`, plus a sibling-property
+  case in `special-requests.test.ts`.
+- Not done — O-1: the richer entry fields. The split does not depend on them; they add
+  columns to `SystemCode` and inputs to `DropdownsManager` once the owner names them.
+
 ## Assumptions (not explicitly answered — confirm or correct)
 
 - **A-1** Guest-profile dropdowns (Title, Gender, Nationality, ID Type, VIP Level, Dietary,
   Preference, Classification) stay **enterprise**, because guest profiles are enterprise-wide
   (one guest, chain-wide stay totals). Per-property lists would show values another property
-  lacks. Edited under Enterprise → Guest lists.
+  lacks. Edited under Enterprise → Guest & Staff Lists.
 - **A-2** Single-property admins **cannot manage users** (users are enterprise; owner:
   "restrict enterprise related entirely"). Today they can create users at their own property
   — this is removed.
@@ -284,7 +316,8 @@ dashboard's working-property cookie).
 ## Open items
 
 - **O-1** Dropdown entries need more than code + label. Which fields? (Candidates: colour,
-  description, parent for nested lists, default flag, linked charge code.) Blocks Phase 3.
+  description, parent for nested lists, default flag, linked charge code.) The per-property
+  split (Phase 3) shipped without them; only the extra fields wait on this.
 
 ## File map (starting points)
 

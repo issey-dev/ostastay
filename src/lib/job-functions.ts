@@ -49,14 +49,9 @@ export const DEFAULT_JOB_FUNCTIONS: { code: string; value: string; sortOrder: nu
 export async function ensureJobFunctions(client: Client, enterpriseId: string): Promise<number> {
   let created = 0;
   for (const jf of DEFAULT_JOB_FUNCTIONS) {
-    const before = await client.systemCode.findUnique({
-      where: {
-        enterpriseId_category_code: {
-          enterpriseId,
-          category: JOB_FUNCTION_CATEGORY,
-          code: jf.code,
-        },
-      },
+    // An enterprise list (propertyId null) — see src/lib/system-code-scope.ts.
+    const before = await client.systemCode.findFirst({
+      where: { enterpriseId, propertyId: null, category: JOB_FUNCTION_CATEGORY, code: jf.code },
       select: { id: true },
     });
     if (before) continue;

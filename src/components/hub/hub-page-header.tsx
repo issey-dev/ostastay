@@ -13,16 +13,14 @@ export function HubPageHeader({
 }: {
   title: string
   icon?: ComponentType<{ className?: string }>
-  scope: "property" | "enterprise" | "interim"
+  scope: "property" | "enterprise"
   hint?: string
   children?: ReactNode
 }) {
   const scopeLine =
     scope === "property"
       ? "These settings apply to this property only."
-      : scope === "enterprise"
-        ? "Shared by every property in this enterprise."
-        : "Shared by every property for now — these are moving into each property's own setup."
+      : "Shared by every property in this enterprise."
 
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -32,9 +30,7 @@ export function HubPageHeader({
           {title}
           {hint && <InfoHint label={title}>{hint}</InfoHint>}
         </h2>
-        <p className={scope === "interim" ? "mt-1 text-sm text-warning" : "mt-1 text-sm text-muted-foreground"}>
-          {scopeLine}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{scopeLine}</p>
       </div>
       {children}
     </div>

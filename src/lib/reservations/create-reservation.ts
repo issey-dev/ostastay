@@ -179,7 +179,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     }
   }
 
-  const specialRequests = await validateSpecialRequestCodes(ctx.enterpriseId, body.specialRequestCodes);
+  const specialRequests = await validateSpecialRequestCodes(body.propertyId, body.specialRequestCodes);
   if (!specialRequests.ok) {
     return fail(400, specialRequests.error);
   }
