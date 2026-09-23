@@ -1,37 +1,30 @@
 import { requireSession, hasHubAccess, hasEnterpriseHubAccess, hasAnyPropertyModule, hasPermission, resolveCurrentPropertyId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
-import { LogoutButton } from "@/components/logout-button"
-import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
+import { HubUserMenu } from "@/components/hub/hub-user-menu"
 import { HubSidebarNav } from "@/components/hub/hub-sidebar-nav"
 import { ENTERPRISE_NAV, PROPERTY_NAV, visibleKeys } from "@/components/hub/hub-nav"
 import { listHubProperties, loadHubAddons, resolveHubPropertyId } from "@/lib/hub-properties"
 import { APP_VERSION } from "@/lib/version"
-import { initials } from "@/lib/initials"
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import Link from "next/link"
 
 // The Hub's nav — deliberately NOT the permission-filtered AppSidebar. Two areas, kept
 // visibly apart (2026-09-23, .agents/docs/HUB_SETUP_PLAN.md):
-//   "Enterprise · all properties" — shared settings; never shown to a single-property user
-//   "<property name>"             — one property's setup, headed by that property
+//   "Enterprise" — shared settings; never shown to a single-property user
+//   "Property"   — "Controls" and the Channel Manager; which property is named by the
+//                  property band above each page
 // The item lists live in src/components/hub/hub-nav.ts; this server half decides which
 // items the user may see, the client half (HubSidebarNav) knows which page is open.
 //
-// Note this cannot reuse SidebarUserMenu (src/components/ui/sidebar-user-menu.tsx) —
-// that component calls useProperty(), which by design does not exist in the Hub. The
-// property lists below instead come down as server-rendered props; the identity footer
-// matches OstaSidebar's.
+// The footer is HubUserMenu — the property side's Account dialog, with "Open property
+// dashboard" in place of "Switch property". It cannot reuse SidebarUserMenu, which calls
+// useProperty() (no PropertyProvider in the Hub); the property list comes down as props.
 
 export async function HubSidebar({ slug }: { slug: string }) {
   const ctx = await requireSession().catch(() => null)
@@ -39,7 +32,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
 
   const user = await prisma.user.findUnique({
     where: { id: ctx.userId },
-    select: { firstName: true, lastName: true, roles: { select: { role: { select: { name: true } } } } },
+    select: { firstName: true, lastName: true, email: true, roles: { select: { role: { select: { name: true } } } } },
   })
   const name = user ? `${user.firstName} ${user.lastName}` : "Hub"
   // A user may hold several roles; the chrome shows them joined rather than
@@ -94,32 +87,18 @@ export async function HubSidebar({ slug }: { slug: string }) {
           defaultPropertyId={defaultPropertyId}
         />
 
-        {canReturnToProperty && dashboardProperties.length > 0 && (
-          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-            <SidebarGroupLabel>Open property dashboard</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <HubPropertySwitcher slug={slug} properties={dashboardProperties} currentPropertyId={currentPropertyId} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="h-auto py-2" tooltip={name}>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
-                {initials(name) || "U"}
-              </span>
-              <div className="flex flex-col items-start min-w-0">
-                <span className="text-sm font-semibold truncate w-full leading-tight">{name}</span>
-                <span className="text-xs text-sidebar-foreground/70 truncate w-full leading-tight">{roleName}</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem className="mt-2">
-            <LogoutButton />
-          </SidebarMenuItem>
+          <HubUserMenu
+            slug={slug}
+            name={name}
+            roleName={roleName}
+            email={user?.email}
+            properties={dashboardProperties}
+            currentPropertyId={currentPropertyId}
+          />
         </SidebarMenu>
         <p className="mt-2 px-2 text-[10px] text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
           Uppsolut Stay v{APP_VERSION}

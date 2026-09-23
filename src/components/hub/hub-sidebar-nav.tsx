@@ -42,10 +42,12 @@ export function HubSidebarNav({
   const property = properties.find((p) => p.id === propertyId) ?? null
 
   const enterpriseItems = ENTERPRISE_NAV.filter((i) => enterpriseKeys.includes(i.key))
-  const propertyItems = PROPERTY_NAV.filter((i) => propertyKeys.includes(i.key))
+  // "Controls" (the property's landing page, lit on every section reached from it) and the
+  // Channel Manager with its pages — nothing else (owner, 2026-09-23).
+  const propertyItems = PROPERTY_NAV.filter((i) => (i.path === "" || i.ownEntry) && propertyKeys.includes(i.key))
 
   // Longest matching href wins, so "channel-manager/mapping" doesn't also light up
-  // "channel-manager", and a property's "Setup" landing doesn't light up on every page.
+  // "channel-manager", and "Controls" doesn't light up on the Channel Manager's pages.
   const candidates: string[] = [
     ...(showOverview ? [root] : []),
     ...enterpriseItems.map((i) => enterpriseHref(slug, i)),

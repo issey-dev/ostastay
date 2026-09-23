@@ -52,6 +52,10 @@ export type HubNavItem = {
   child?: boolean
   // Only when the enterprise holds this add-on.
   addon?: HubAddon
+  // A property item with its own sidebar entry (the Channel Manager and its pages). Every
+  // other property section is reached from the "Controls" landing page, which is the only
+  // other property entry in the sidebar (owner, 2026-09-23).
+  ownEntry?: boolean
 }
 
 export const ENTERPRISE_NAV: HubNavItem[] = [
@@ -67,7 +71,7 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
 ]
 
 export const PROPERTY_NAV: HubNavItem[] = [
-  { key: "home", title: "Setup", path: "", icon: LayoutDashboard, modules: ["CONTROLS", "INTEGRATIONS", "GREEN_TAX"] },
+  { key: "home", title: "Controls", path: "", icon: LayoutDashboard, modules: ["CONTROLS", "INTEGRATIONS", "GREEN_TAX"] },
   {
     key: "general",
     title: "General",
@@ -157,10 +161,11 @@ export const PROPERTY_NAV: HubNavItem[] = [
     icon: ArrowLeftRight,
     modules: ["INTEGRATIONS"],
     description: "Connection status, mapping, inbound bookings and the exchange log.",
+    ownEntry: true,
   },
-  { key: "channel-mapping", title: "Mapping", path: "channel-manager/mapping", icon: Building2, modules: ["INTEGRATIONS"], child: true },
-  { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true },
-  { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true },
+  { key: "channel-mapping", title: "Mapping", path: "channel-manager/mapping", icon: Building2, modules: ["INTEGRATIONS"], child: true, ownEntry: true },
+  { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true, ownEntry: true },
+  { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true, ownEntry: true },
   {
     key: "online-booking",
     title: "Online Booking",

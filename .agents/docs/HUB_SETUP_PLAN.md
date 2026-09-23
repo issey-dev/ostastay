@@ -367,6 +367,15 @@ dashboard's working-property cookie).
 - Single-property Hub users now get the Overview too, for their own property only. The
   link cards, the job card (`job-status-card.tsx`) and `/api/hub/job-runs` are removed.
 
+**Navigation (owner review, 2026-09-23)** — the sidebar reads just "Enterprise" and
+"Property". Under Property: **Controls** (the property's landing page with a card per
+section; lit on every section reached from it) and **Channel Manager** with Mapping,
+Inbound Bookings and Exchange Log (nav items flagged `ownEntry`). Breadcrumbs under the
+header (`components/hub/hub-breadcrumbs.tsx`: "Enterprise › People", "Controls › Finance",
+"Channel Manager › Mapping"). The footer identity button opens an Account dialog
+(`components/hub/hub-user-menu.tsx`) — profile, "Open property dashboard", log out — the
+same shape as the property side's; the rail's property list is gone.
+
 ## Decisions taken without asking (owner: "complete all phases — do not ask me")
 
 Recorded so they can be reviewed and reversed:

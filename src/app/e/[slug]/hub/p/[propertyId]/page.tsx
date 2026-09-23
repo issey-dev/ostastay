@@ -14,13 +14,13 @@ export default async function HubPropertyHomePage({
   const { slug, propertyId } = await params
   const ctx = await requireSession()
   const keys = visibleKeys(PROPERTY_NAV, (m) => hasPermission(ctx, m, "view"), await loadHubAddons(ctx.enterpriseId))
-  // Sub-pages (a section's children) are reached from their section, not listed as cards.
-  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && !item.child && keys.includes(item.key))
+  // Controls' own sections: not sub-pages, and not the Channel Manager (its own sidebar entry).
+  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && !item.child && !item.ownEntry && keys.includes(item.key))
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Setup</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Controls</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Everything on these pages applies to this property only.
         </p>

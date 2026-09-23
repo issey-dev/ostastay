@@ -4,6 +4,7 @@ import { HubSidebar } from "@/components/hub-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
+import { HubBreadcrumbs } from "@/components/hub/hub-breadcrumbs"
 import { requireSession, hasHubAccess } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -82,6 +83,7 @@ export default async function HubLayout({
         </header>
         <div className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto w-full">
+            <HubBreadcrumbs slug={enterprise.slug} />
             <ConfirmProvider>{children}</ConfirmProvider>
           </div>
         </div>
