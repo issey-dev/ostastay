@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Mail,
+  Moon,
   MonitorPlay,
   Receipt,
   Settings2,
@@ -145,6 +146,14 @@ export const PROPERTY_NAV: HubNavItem[] = [
     modules: ["CONTROLS"],
     addon: "SPA",
     description: "Treatments, therapists, treatment rooms and spa policies.",
+  },
+  {
+    key: "night-audit",
+    title: "Night Audit",
+    path: "night-audit",
+    icon: Moon,
+    modules: ["CONTROLS"],
+    description: "The business date, the taxes posted each night, and what happens to room statuses.",
   },
   {
     key: "stationery",

@@ -3077,3 +3077,23 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
 - **Beds24 is administered by Uppsolut from the Osta console** (owner, same day: "there is an
   enterprise called 'osta' … the bed24 connection to be managed from there by us"). A
   property's connection is created there, for that property, with its Beds24 property id.
+
+## 2026-09-23 — Night Audit controls page; moving the business date by hand (owner)
+
+- Each property gets a **Night Audit** page in its Hub Controls: the business date, which
+  Maldives levies are posted each night (Green Tax, GST, Service Charge — as switches), and
+  what Night Audit does to vacant rooms' status. The levies' **values** (rates, amounts,
+  Green Tax rules) stay under **Finance**. "Prices Include Taxes" moved to Finance and
+  "Require Inspected Room at Check-In" to Rooms & Inventory (Housekeeping).
+- **Business date may be changed by hand** from that page:
+  - **to any date** while the property has **no data at all** (freshly provisioned: no
+    reservations, folios, cashier shifts, audits, spa appointments or excursion bookings);
+  - otherwise **only forward**, and only when there are **no in-house guests**, **no
+    reservations due to arrive before the new date**, and **no financial records** for the
+    days skipped (folio postings on or after the current business date). Also required: no
+    open cashier shift, Night Audit not running, and no spa appointments or excursion
+    bookings on the skipped days (added so nothing is silently skipped).
+  - Checks run before the change is offered and again, under a lock, when it is made
+    (`src/lib/business-date-change.ts`). Property staff are signed out afterwards, as after
+    Night Audit. Needs Property Setup (CONTROLS) plus NIGHT_AUDIT update.
+

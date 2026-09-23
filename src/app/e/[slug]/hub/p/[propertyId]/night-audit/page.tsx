@@ -1,0 +1,58 @@
+import { prisma } from "@/lib/db"
+import { hasPermission } from "@/lib/scope"
+import { propertyPage } from "@/lib/hub-page"
+import { resolveBusinessDate } from "@/lib/business-date"
+import { getPropertySettings } from "@/lib/property-settings"
+import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { ControlsCard } from "@/components/controls/controls-card"
+import { BusinessDateManager } from "@/components/hub/business-date-manager"
+import { NightlyPostingsManager, EodRoomStatusManager } from "@/components/hub/night-audit-settings"
+
+// This property's Night Audit controls (owner, 2026-09-23): its business date (moved by hand
+// only under the rules in src/lib/business-date-change.ts), which Maldives levies are posted
+// each night (their rates stay under Finance), and what happens to vacant rooms' status.
+export default async function HubPropertyNightAuditPage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
+  const { ctx, property, item, canEdit } = await propertyPage(params, "night-audit")
+  const [row, settings] = await Promise.all([
+    prisma.property.findUniqueOrThrow({
+      where: { id: property.id },
+      select: { businessDate: true, eodHousekeepingMode: true, eodHousekeepingTargetStatus: true },
+    }),
+    getPropertySettings(property.id),
+  ])
+  const editable = canEdit("update")
+
+  return (
+    <div className="space-y-6">
+      <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <ControlsCard
+        title="Business Date"
+        description="The property's working day. Night Audit moves it forward one day at a time; it can be moved by hand only when nothing would be skipped over — or to any date while the property has no activity at all."
+      >
+        <BusinessDateManager
+          propertyId={property.id}
+          current={resolveBusinessDate(row).toISOString().slice(0, 10)}
+          canChange={editable && hasPermission(ctx, "NIGHT_AUDIT", "update")}
+        />
+      </ControlsCard>
+      <ControlsCard
+        title="Nightly Tax Postings"
+        description="Which Maldives levies Night Audit calculates and posts each night. Their rates and amounts are set under Finance."
+      >
+        <NightlyPostingsManager
+          propertyId={property.id}
+          canEdit={editable}
+          initial={{ greenTaxEnabled: settings.greenTaxEnabled, tgstEnabled: settings.tgstEnabled, serviceChargeEnabled: settings.serviceChargeEnabled }}
+        />
+      </ControlsCard>
+      <ControlsCard title="Room Status at Night Audit" description="What Night Audit does to vacant rooms' housekeeping status when it runs.">
+        <EodRoomStatusManager
+          propertyId={property.id}
+          canEdit={editable}
+          initialMode={row.eodHousekeepingMode}
+          initialTarget={row.eodHousekeepingTargetStatus}
+        />
+      </ControlsCard>
+    </div>
+  )
+}
