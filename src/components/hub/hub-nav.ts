@@ -9,6 +9,7 @@ import {
   FileText,
   Hash,
   Key,
+  Landmark,
   LayoutDashboard,
   ListChecks,
   Mail,
@@ -62,7 +63,6 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true },
   { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true },
   { key: "booking-api", title: "Booking API", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
-  { key: "green-tax", title: "Green Tax", path: "green-tax", icon: Receipt, modules: ["GREEN_TAX"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
   // Guest-profile lists and Job Functions — a guest profile and a user are shared by every
   // property. Every other dropdown list is the property's own (src/lib/system-code-scope.ts).
@@ -152,6 +152,14 @@ export const PROPERTY_NAV: HubNavItem[] = [
     icon: FileText,
     modules: ["CONTROLS"],
     description: "Wording on invoices, receipts, letters, the registration card and statements.",
+  },
+  {
+    key: "green-tax",
+    title: "Green Tax",
+    path: "green-tax",
+    icon: Landmark,
+    modules: ["GREEN_TAX"],
+    description: "The Reg No register: corrections and monthly MIRA filing.",
   },
   {
     key: "sequences",

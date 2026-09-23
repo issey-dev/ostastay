@@ -1,9 +1,9 @@
-import { ArrowLeftRight, Key, Receipt } from "@/components/icons"
+import { ArrowLeftRight, Key } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobStatusCard } from "@/components/hub/job-status-card"
 import { InfoHint } from "@/components/ui/info-hint"
 import { redirect } from "next/navigation"
-import { requireSession, hasPermission, hasEnterpriseHubAccess } from "@/lib/scope"
+import { requireSession, hasEnterpriseHubAccess } from "@/lib/scope"
 
 // Hub overview. Intentionally thin for now — the Hub shell ships before any
 // channel-manager code, so this is the landing surface that proves the shell works and
@@ -62,22 +62,6 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
             </a>
           </CardContent>
         </Card>
-        {hasPermission(ctx, "GREEN_TAX", "view") && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-                Green Tax Registrations
-                <InfoHint>Correct Reg Nos given in error without leaving a gap, and record each month&apos;s MIRA filing.</InfoHint>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <a href={`/e/${slug}/hub/enterprise/green-tax`} className="text-sm font-medium text-primary hover:underline">
-                Open Green Tax Registrations
-              </a>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       <JobStatusCard />
