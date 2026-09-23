@@ -31,7 +31,18 @@ type AllocationOption = { id: string; code: string; name: string; mode: string; 
 // meal plan is done via a Derived Rate Plan (e.g. "BAR-BB" derived from "BAR"), not
 // here; this list just populates the Reservation form's selector and tags a stay
 // for kitchen/back-office visibility.
-export function MealPlansManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
+export function MealPlansManager({
+  propertyId,
+  title,
+  description,
+  copyAction,
+}: {
+  propertyId: string
+  title: string
+  description?: string
+  /** "Copy from…" another property, shown beside Add Meal Plan. */
+  copyAction?: React.ReactNode
+}) {
   const confirm = useConfirm()
 
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([])
@@ -118,9 +129,12 @@ export function MealPlansManager({ propertyId, title, description }: { propertyI
       title={title}
       description={description}
       action={
-        <Button size="sm" onClick={() => openDialog()}>
-          <Plus className="w-4 h-4 mr-2" /> Add Meal Plan
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {copyAction}
+          <Button size="sm" onClick={() => openDialog()}>
+            <Plus className="w-4 h-4 mr-2" /> Add Meal Plan
+          </Button>
+        </div>
       }
     >
       <div className="-mx-6 -mb-6 border-t border-border">

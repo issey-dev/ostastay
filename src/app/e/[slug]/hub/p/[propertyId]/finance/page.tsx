@@ -1,4 +1,5 @@
 import { propertyPage } from "@/lib/hub-page"
+import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { TaxManager } from "@/components/controls/tax-manager"
@@ -8,15 +9,21 @@ import { GeneralSettingsManager } from "@/components/settings/general-settings-m
 import { FeeRulesManager } from "@/components/controls/fee-rules-manager"
 
 export default async function HubPropertyFinancePage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
-  const { property, item } = await propertyPage(params, "finance")
+  const { property, item, canEdit } = await propertyPage(params, "finance")
+  const canCopy = canEdit("create")
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
-      <ControlsCard title="Tax" description="This property's Maldives Tax (Green Tax, GST, Service Charge) and its Custom Tax profiles. Which charge code each levy posts against is set under Charge Codes › Posting Defaults.">
+      <ControlsCard
+        title="Tax"
+        description="This property's Maldives Tax (Green Tax, GST, Service Charge) and its Custom Tax profiles. Which charge code each levy posts against is set under Charge Codes › Posting Defaults."
+        action={canCopy && <CopyFromPropertyButton propertyId={property.id} section="tax-profiles" title="tax profiles" />}
+      >
         <TaxManager propertyId={property.id} />
       </ControlsCard>
       <PaymentMethodsManager
         propertyId={property.id}
+        copyAction={canCopy && <CopyFromPropertyButton propertyId={property.id} section="payment-methods" title="payment methods" />}
         title="Payment Methods"
         description="The payment methods this property accepts — Cash, Credit Cards, Bank Transfers, City Ledger."
       />

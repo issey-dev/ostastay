@@ -325,6 +325,29 @@ dashboard's working-property cookie).
 - The enterprise area now holds only: Properties, People, Sessions, Email & SFTP, Booking
   API Keys, Support Access, Guest & Staff Lists.
 
+**Phase 5** — "Copy from…" (`src/lib/property-copy.ts`, `/api/properties/[id]/copy`,
+`components/hub/copy-from-property.tsx`):
+- Sections and their match keys: property dropdown lists (category + code), tax profiles
+  (name — they have no code), charge codes (code), payment methods (name), stationery
+  wording (field by field, only into EMPTY target fields), meal plans (code), room types
+  (code), outlets (name, or code).
+- Dependencies pulled along and reported: a charge code brings its subgroup, group, tax
+  profile and what it generates (and the generated codes); a payment method its charge
+  code; a meal plan its allocations and their charge codes; a room type the room-feature
+  options it uses; an outlet its tax profile and charge codes — and its own outlet
+  subgroup then points at the NEW outlet. Not copied: rooms, outlet contact details and
+  check counters, posting-default pointers, anything with bookings behind it.
+- An item the target already has is shown as "Already here" and skipped, never
+  overwritten; the whole copy is one transaction. Target needs Property Setup (CONTROLS
+  create); the source must be a property the caller may open, so a single-property admin
+  is offered no source. Copies are logged in the activity trail.
+- Not done: Allocations on their own (they live on the dashboard's Revenue page, not in the
+  Hub — a meal plan brings its allocations), fee rules (every property is seeded with its
+  own set, so a copy would always skip), and the Spa / Excursion catalogues (therapists,
+  treatment rooms and schedules make them their own job) — see TODO.
+- Also fixed here: `GET /api/properties` listed every property of the enterprise to a
+  single-property user; it now returns only their own.
+
 ## Assumptions (not explicitly answered — confirm or correct)
 
 - **A-1** Guest-profile dropdowns (Title, Gender, Nationality, ID Type, VIP Level, Dietary,

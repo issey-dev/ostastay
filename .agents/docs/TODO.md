@@ -20,10 +20,16 @@ becomes setup/health banners.
 - [ ] Phase 3b — richer dropdown entries (**blocked on O-1**: which fields — ask the owner)
 - [x] Phase 4 — Beds24 connection per property (Osta-created), Booking API keys one-or-ALL,
   website/online settings + Green Tax into the property area
-- [ ] Phase 5 — copy from another property (warn + skip, never overwrite)
+- [x] Phase 5 — copy from another property (warn + skip, never overwrite): lists, tax,
+  charge codes, payment methods, stationery, meal plans, room types, outlets
+- [ ] Phase 5b — copy the Spa and Excursion catalogues (treatments/categories/rooms,
+  excursion types/schedules) and stand-alone Allocations (these live on the dashboard's
+  Revenue page, not in the Hub)
 - [ ] Phase 6 — Overview banners
 
 **Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
+- `GET /api/properties` returned every property of the enterprise to a single-property
+  user — fixed in Phase 5 (their own property only).
 - Stationaries saves every text field to `EnterpriseSettings` while previewing one
   property — edits leak to every property.
 - Outlets / Sequences / Facilities / Amenities managers open on the *first* property,

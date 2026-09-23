@@ -11,8 +11,10 @@ export async function GET() {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "view");
 
+    // A single-property user sees their own property only — never another property's
+    // details (HUB_SETUP_PLAN.md: other properties are not visible from a property's setup).
     const properties = await prisma.property.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { enterpriseId: ctx.enterpriseId, ...(ctx.scope === "PROPERTY" && ctx.propertyId ? { id: ctx.propertyId } : {}) },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(properties);
