@@ -279,6 +279,11 @@ model User {
   // (or demote itself) and lock everyone out with no in-app way back.
   isProtected Boolean @default(false)
 
+  // A system-owned account nobody signs in as — the per-enterprise "Online Bookings" user
+  // the Booking API acts under (src/lib/system-actor.ts). Always inactive with an
+  // unusable password; staff lists and user management filter these out.
+  isSystem Boolean @default(false)
+
   sessions  Session[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3569,6 +3574,18 @@ model ChannelBookingDefaults {
 // and to CREATE bookings in a tenant's PMS, so a DB dump must never hand out a live one.
 // keyPrefix (the first characters of the plaintext) is stored separately purely so the
 // Hub can show "which key is this" in a list without ever showing the key itself.
+// Fixed one-minute request counters for the Booking API rate limiter
+// (src/lib/website-api/rate-limit.ts). In the database, not memory, because production
+// runs several app replicas — a per-process counter would multiply every limit.
+model ApiRateLimitCounter {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
 model WebsiteApiKey {
   id           String     @id @default(uuid())
   enterpriseId String

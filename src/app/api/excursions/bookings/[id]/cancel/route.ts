@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, ForbiddenError, toErrorResponse } from "@/lib/scope";
 import { combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { voidPostedCharge, actorDisplayName } from "@/lib/posting/void-charge";
 
 // Cancels a CONFIRMED booking. Two independent gates, not one:
 //  - Cutoff window (ExcursionType.cutoffHours before departure): within it, any actor
@@ -79,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     await prisma.$transaction(async (tx) => {
       if (willVoid && booking.folioLineItemId) {
-        await tx.folioLineItem.update({ where: { id: booking.folioLineItemId }, data: { isVoid: true } });
+        await voidPostedCharge(tx, { lineItemId: booking.folioLineItemId, reason: `Excursion cancelled: ${reason}`, actorName: await actorDisplayName(tx, ctx.userId) });
       }
       await tx.excursionBooking.update({
         where: { id },

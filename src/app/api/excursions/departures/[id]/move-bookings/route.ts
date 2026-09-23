@@ -6,6 +6,11 @@ import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
+import { bookedHeadcount, headcountLabel as formatHeadcount } from "@/lib/excursion-booking";
+
+// Thrown inside a move's transaction to roll that one move back and report it as failed.
+class MoveRefused extends Error {}
 
 // Moves a batch of already-cancelled bookings (from a departure cancelled via
 // .../departures/[id]/cancel) onto a replacement departure of the SAME excursion type.
@@ -74,15 +79,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const moved: Array<{ bookingId: string; newBookingId: string }> = [];
     const failed: Array<{ bookingId: string; reason: string }> = [];
 
-    // Target capacity: seed with what's already CONFIRMED on the replacement departure,
-    // then account for each move as it lands so a batch can't overfill it (the cancel
-    // route only SUGGESTS a replacement with room; this is the endpoint that must enforce it).
-    const targetBooked = await prisma.excursionBooking.aggregate({
-      where: { departureId: targetDepartureId, status: "CONFIRMED" },
-      _sum: { adultCount: true, childCount: true, infantCount: true },
-    });
-    let targetHeadcount = (targetBooked._sum.adultCount ?? 0) + (targetBooked._sum.childCount ?? 0) + (targetBooked._sum.infantCount ?? 0);
-
     for (const bookingId of bookingIds) {
       const original = await prisma.excursionBooking.findUnique({
         where: { id: bookingId },
@@ -132,10 +128,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       const moveHeadcount = original.adultCount + original.childCount + original.infantCount;
-      if (targetHeadcount + moveHeadcount > targetDeparture.capacity) {
-        failed.push({ bookingId, reason: `The replacement departure is full (capacity ${targetDeparture.capacity}).` });
-        continue;
-      }
 
       const totalAmount = computeBookingTotal(rate, excursionType.pricingMode, {
         adultCount: original.adultCount,
@@ -143,62 +135,78 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         infantCount: original.infantCount,
       });
 
-      const headcountLabel = [
-        original.adultCount ? `${original.adultCount} adult${original.adultCount === 1 ? "" : "s"}` : null,
-        original.childCount ? `${original.childCount} child${original.childCount === 1 ? "" : "ren"}` : null,
-        original.infantCount ? `${original.infantCount} infant${original.infantCount === 1 ? "" : "s"}` : null,
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const headcountLabel = formatHeadcount(original.adultCount, original.childCount, original.infantCount);
 
-      const newBooking = await prisma.$transaction(async (tx) => {
-        // Re-posted through the one posting service, so a moved booking is taxed and
-        // generates exactly like the original booking was.
-        const postableCode = await tx.chargeCode.findUniqueOrThrow({
-          where: { id: excursionType.chargeCodeId },
-          include: chargeCodeInclude(),
-        });
-        const posted = await postCharge(tx, {
-          folioId: folioIdToCharge,
-          chargeCode: postableCode,
-          inputAmount: totalAmount,
-          settings,
-          pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
-          date: resolveBusinessDate(excursionType.property),
-          description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
-          outlet: excursionOutlet,
-          outletId: excursionOutlet.id,
-          shiftId: shift.id,
-          postingContext: { adults: original.adultCount, children: original.childCount, nights: 1 },
-        });
-        const lineItem = posted.parent;
-        const created = await tx.excursionBooking.create({
-          data: {
-            departureId: targetDepartureId,
-            propertyId: excursionType.propertyId,
-            reservationId: original.reservationId,
-            walkInGuestName: original.walkInGuestName,
-            walkInGuestContact: original.walkInGuestContact,
-            adultCount: original.adultCount,
-            childCount: original.childCount,
-            infantCount: original.infantCount,
-            totalAmount,
+      let newBooking;
+      try {
+        newBooking = await prisma.$transaction(async (tx) => {
+          // Target capacity is enforced HERE, under the same departure lock every new
+          // booking takes (src/lib/db-lock.ts), so neither a concurrent desk/API booking nor
+          // a second move batch can overfill it (the cancel route only SUGGESTS a replacement
+          // with room; this is the endpoint that must enforce it). The source departure lock
+          // serializes moves of the same booking, so it can't be moved twice.
+          await lockKeys(tx, [lockKey.excursionDeparture(targetDepartureId), lockKey.excursionDeparture(sourceDepartureId)]);
+          const target = await tx.excursionDeparture.findUniqueOrThrow({ where: { id: targetDepartureId } });
+          if (target.status !== "SCHEDULED") throw new MoveRefused("The replacement departure is no longer taking bookings");
+          if ((await bookedHeadcount(tx, targetDepartureId)) + moveHeadcount > target.capacity) {
+            throw new MoveRefused(`The replacement departure is full (capacity ${target.capacity}).`);
+          }
+          const fresh = await tx.excursionBooking.findUniqueOrThrow({ where: { id: original.id } });
+          if (fresh.movedToBookingId) throw new MoveRefused("This booking has already been moved to a replacement departure");
+
+          // Re-posted through the one posting service, so a moved booking is taxed and
+          // generates exactly like the original booking was.
+          const postableCode = await tx.chargeCode.findUniqueOrThrow({
+            where: { id: excursionType.chargeCodeId },
+            include: chargeCodeInclude(),
+          });
+          const posted = await postCharge(tx, {
             folioId: folioIdToCharge,
-            folioLineItemId: lineItem.id,
-            bookedByUserId: ctx.userId,
-            notes: original.notes,
-            movedFromDepartureId: sourceDepartureId,
-          },
-        });
-        // Marks the OLD booking as spent so it can never be moved again (see the
-        // movedToBookingId check above) — done in the same transaction as creating
-        // its replacement so the two never diverge.
-        await tx.excursionBooking.update({ where: { id: original.id }, data: { movedToBookingId: created.id } });
-        return created;
-      });
+            chargeCode: postableCode,
+            inputAmount: totalAmount,
+            settings,
+            pricesIncludeTaxes: excursionType.property.pricesIncludeTaxes,
+            date: resolveBusinessDate(excursionType.property),
+            description: `${excursionType.name} — ${headcountLabel} (${targetDeparture.departureDate.toISOString().slice(0, 10)} ${targetDeparture.departureTime}) — moved from cancelled departure`,
+            outlet: excursionOutlet,
+            outletId: excursionOutlet.id,
+            shiftId: shift.id,
+            postingContext: { adults: original.adultCount, children: original.childCount, nights: 1 },
+          });
+          const lineItem = posted.parent;
+          const created = await tx.excursionBooking.create({
+            data: {
+              departureId: targetDepartureId,
+              propertyId: excursionType.propertyId,
+              reservationId: original.reservationId,
+              walkInGuestName: original.walkInGuestName,
+              walkInGuestContact: original.walkInGuestContact,
+              adultCount: original.adultCount,
+              childCount: original.childCount,
+              infantCount: original.infantCount,
+              totalAmount,
+              folioId: folioIdToCharge,
+              folioLineItemId: lineItem.id,
+              bookedByUserId: ctx.userId,
+              notes: original.notes,
+              movedFromDepartureId: sourceDepartureId,
+            },
+          });
+          // Marks the OLD booking as spent so it can never be moved again (see the
+          // movedToBookingId check above) — done in the same transaction as creating
+          // its replacement so the two never diverge.
+          await tx.excursionBooking.update({ where: { id: original.id }, data: { movedToBookingId: created.id } });
+          return created;
+        }, BOOKING_TX_OPTIONS);
+      } catch (e) {
+        if (e instanceof MoveRefused) {
+          failed.push({ bookingId, reason: e.message });
+          continue;
+        }
+        throw e;
+      }
 
       moved.push({ bookingId, newBookingId: newBooking.id });
-      targetHeadcount += moveHeadcount;
     }
 
     await logActivity({

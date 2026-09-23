@@ -81,6 +81,19 @@ stay.uppsolut.com, vps-9d96501a.vps.ovh.ca {
 		}
 	}
 
+	# Public Booking API (brand websites: rooms, excursions, spa). The app enforces
+	# per-key limits itself (src/lib/website-api/rate-limit.ts); this is only a coarse
+	# per-IP ceiling in front of it. Generous, because a property's web server calls
+	# from ONE address on behalf of all its visitors.
+	@bookingapi path /api/website/*
+	rate_limit @bookingapi {
+		zone bookingapi {
+			key {remote_host}
+			events 600
+			window 1m
+		}
+	}
+
 	reverse_proxy {
 		# `dynamic a` rather than a plain `reverse_proxy app:3000`, which resolves the
 		# name once and pins every request to a single container. Verified on this host:

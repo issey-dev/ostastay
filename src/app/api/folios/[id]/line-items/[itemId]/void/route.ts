@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { voidPostedCharge, actorDisplayName } from "@/lib/posting/void-charge";
 
 // Voids a posted charge — the ONLY sanctioned way to correct a mis-posted line item.
 // Never deletes: the row stays on the folio flagged isVoid (every balance/print/
@@ -42,31 +43,11 @@ export async function POST(
       return NextResponse.json({ error: "Cannot void a charge on a closed folio" }, { status: 400 });
     }
 
+    // Voids the charge together with the tax/service lines it generated, and writes the
+    // reservation trace — see src/lib/posting/void-charge.ts.
     const updated = await prisma.$transaction(async (tx) => {
-      const item = await tx.folioLineItem.update({
-        where: { id: itemId },
-        data: { isVoid: true },
-      });
-
-      // Reservation-backed folios get a trace row recording who voided what and why —
-      // the audit trail for the correction. (Walk-in folios have no reservation to
-      // attach a trace to; the flagged-not-deleted row itself remains the record.)
-      if (lineItem.folio.reservationId) {
-        const user = await tx.user.findUnique({ where: { id: ctx.userId } });
-        await tx.reservationTrace.create({
-          data: {
-            reservationId: lineItem.folio.reservationId,
-            traceType: "FRONT_DESK",
-            description: `Voided charge "${lineItem.description}" (${lineItem.amount.toFixed(2)}) by ${
-              user ? `${user.firstName} ${user.lastName}` : ctx.userId
-            }. Reason: ${reason}`,
-            actionDate: new Date(),
-            isResolved: true,
-          },
-        });
-      }
-
-      return item;
+      await voidPostedCharge(tx, { lineItemId: itemId, reason, actorName: await actorDisplayName(tx, ctx.userId) });
+      return tx.folioLineItem.findUniqueOrThrow({ where: { id: itemId } });
     });
 
     await logActivity({

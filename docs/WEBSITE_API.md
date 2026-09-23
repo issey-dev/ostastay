@@ -99,6 +99,7 @@ humans. Validation errors add `details` keyed by field path.
 | 409 | `ADD_ONS_NOT_OFFERED` | You sent `addOnIds` but the property does not sell extras online. |
 | 400 | `ADD_ON_NOT_FOUND` | An id is not an extra this property sells separately. |
 | 409 | `IDEMPOTENCY_CONFLICT` | The `Idempotency-Key` was already used for a different property. |
+| 429 | `RATE_LIMITED` | Too many requests for this key, or too many failed authentications from your address. Wait `Retry-After` seconds — see §4. |
 | 500 | `INTERNAL_ERROR` | Something went wrong on our side. Safe to retry a GET; for a booking, retry **with the same `Idempotency-Key`**. |
 
 ### Caching
@@ -466,7 +467,23 @@ There is no cancel endpoint in v1 — cancellations go through the property, whi
 
 ## 4. Rate limits and good behaviour
 
-There is no hard rate limit today. Please:
+Each key may make, per minute:
+
+| Requests | Limit |
+|---|---|
+| `GET` (property details, availability, lookups) | 120 |
+| `POST` (quotes, bookings) | 20 |
+
+Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`
+(seconds until the window resets). Past the limit the API answers
+`429 RATE_LIMITED` with a `Retry-After` header; wait that many seconds and retry. A booking
+retried after a 429 must reuse its `Idempotency-Key`, exactly as after a timeout.
+
+Requests with a missing or wrong key are also counted, per calling address: after 30 in a
+minute that address gets `429` instead of `401` until the window resets. If you see this,
+check the key in your server's configuration rather than retrying.
+
+To stay well inside the limits:
 
 - call `availability` once per search, not once per day of a calendar;
 - cache the property details for a few minutes — they change rarely;
@@ -521,5 +538,7 @@ console.log(booking.confirmationNo);
 
 ## 6. Changelog
 
+- **v1 (2026-09-23)** — rate limits: per-key request limits, `429 RATE_LIMITED`,
+  `RateLimit-*` and `Retry-After` headers (§4). Additive; no existing field changed.
 - **v1 (2026-09-06)** — initial release: properties, property details, availability,
   quote, bookings, booking lookup.

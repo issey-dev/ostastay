@@ -2,6 +2,55 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Booking API for Excursions & Spa — Phase 0 foundations (2026-09-23) — DONE
+
+Plan: [BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md). Phase 0 ships no public
+endpoint yet; it is the ground the Excursion/Spa Booking API stands on, and every piece
+of it also changes what the desk gets:
+
+- **Booking services** — `createExcursionBooking` (`src/lib/excursion-booking.ts`) and
+  `createSpaAppointment` (`src/lib/spa-booking.ts`), extracted from the two POST routes,
+  which are now thin. Refusals are `BookingError` (`src/lib/booking-error.ts`) with a
+  stable `code`; the desk's response shape is unchanged.
+- **Database booking locks** (`src/lib/db-lock.ts`, `pg_advisory_xact_lock`). Excursion
+  capacity is now checked under a per-departure lock (it was count-then-write), and so are
+  whole-departure cancel and move-bookings. Spa's in-process mutex
+  (`spa-resource-lock.ts`, deleted) is replaced by the same DB locks. **This fixes a live
+  production race**: prod runs several app replicas (`deploy/proxy/Caddyfile`), so the
+  in-process mutex never protected two replicas from double-booking a therapist.
+- **Voiding a charge now voids the lines it generated** (`src/lib/posting/void-charge.ts`),
+  used by the folio void route, Excursion cancel and departure cancel. Before, voiding
+  the parent left its generated service/GST lines live — the guest kept being billed tax
+  on a charge that no longer existed.
+- **Spa lifecycle (SPA_PLAN.md Phase 5, server side)** — `src/lib/spa-lifecycle.ts` +
+  `POST /api/spa/appointments/[id]/{check-in,start,complete,cancel,no-show}`. Cutoff and
+  override (SPA delete), CASHIERING-gated voids with graceful degradation, late-cancel
+  and no-show fees from SpaSettings (FULL keeps the charge; PERCENTAGE/FIXED void and
+  re-post the fee; "NONE" = not charged, so the charge is voided), AT_COMPLETION posting
+  from the booking-time priceSnapshot. AT_COMPLETION appointments now keep their billing
+  folioId from booking (paymentStatus NOT_POSTED marks "not posted yet").
+- **System actor** (`src/lib/system-actor.ts`): one inactive, unusable-password
+  "Online Bookings" user per enterprise (`User.isSystem`, migration
+  `20260923100000_user_is_system`), filtered from user management and staff lists.
+- **Booking API rate limits** (`src/lib/website-api/rate-limit.ts`, table
+  `ApiRateLimitCounter`, migration `20260923100100_api_rate_limit_counter`): 120 GET /
+  20 POST per key per minute, 30 failed auths per IP; `429 RATE_LIMITED` + `Retry-After`
+  + `RateLimit-*` headers, wired in `websiteRoute`. Postgres-backed because of the
+  replicas. Plus a coarse per-IP Caddy zone on `/api/website/*`. Documented in
+  `docs/WEBSITE_API.md` §4 and the OpenAPI file.
+- **Tests**: `tests/business-rules/booking-api-foundations.test.ts` (14).
+
+**Still open from Phase 0:**
+- **Spa lifecycle UI** — the routes exist but the Spa page has no buttons for them yet
+  (clicking an appointment only opens the walk-in bill). Planned in Phase 4 (operations
+  UI); until then the desk cannot check in / complete / cancel from the screen.
+- **Docs PDF** (`docs/Uppsolut-Stay-Website-API-Guide.pdf`) still says "no hard rate
+  limit"; it is regenerated in Phase 6 with the docs portal.
+- **Login rate limiter** (`src/lib/login-rate-limit.ts`) is in-memory, so with N replicas
+  a sprayer gets N× the attempts. Same fix as the Booking API limiter; not done here.
+- **Room bookings' last-room race** (WEBSITE_API_PLAN.md open item) — the same advisory
+  lock pattern would close it; not done in Phase 0.
+
 ## Operations Dashboard — brand palette, customisation, DASHBOARD module (2026-09-06) — DONE
 
 Owner brief: the dashboard's colours did not fit Uppsolut ("too many colours"); add a gear
@@ -81,7 +130,8 @@ own site from an API document. Plan and decisions: [WEBSITE_API_PLAN.md](WEBSITE
   `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml`.
 - **Tests**: `tests/business-rules/website-api.test.ts` (21).
 
-**Still open** (see the plan's follow-ups): per-key rate limiting; a transactional guard
+**Still open** (see the plan's follow-ups): ~~per-key rate limiting~~ (done 2026-09-23,
+Booking API Phase 0); a transactional guard
 on the last room (the desk has the same race); a Hub list of website bookings incl. FAILED
 attempts; optional guest confirmation email from the PMS; cancel/modify endpoints;
 multi-room bookings; image upload (URLs only today).

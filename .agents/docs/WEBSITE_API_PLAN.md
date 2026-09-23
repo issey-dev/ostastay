@@ -184,8 +184,9 @@ differently from what it showed.
 
 ## Open items / follow-ups
 
-- **Rate limiting** — none. A misbehaving site can hammer availability. A per-key token
-  bucket in `resolveWebsiteApiKey` is the natural place.
+- ~~**Rate limiting**~~ — DONE 2026-09-23 (BOOKING_API_ADDONS_PLAN.md Phase 0): per-key
+  GET/POST limits and per-IP failed-auth limit in `websiteRoute`, Postgres-backed
+  (`src/lib/website-api/rate-limit.ts`) because production runs several replicas.
 - **Concurrency on the last room** — `createReservation`'s availability check is not
   transactional (same as the desk); two simultaneous website bookings can both pass.
   Low probability for a single property; a `SELECT … FOR UPDATE` on the room type or an

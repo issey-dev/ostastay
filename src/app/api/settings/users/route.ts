@@ -95,8 +95,8 @@ export async function GET() {
     const users = await prisma.user.findMany({
       where:
         ctx.scope === "PROPERTY"
-          ? { enterpriseId: ctx.enterpriseId, scope: "PROPERTY", propertyId: ctx.propertyId }
-          : { enterpriseId: ctx.enterpriseId },
+          ? { enterpriseId: ctx.enterpriseId, scope: "PROPERTY", propertyId: ctx.propertyId, isSystem: false }
+          : { enterpriseId: ctx.enterpriseId, isSystem: false },
       orderBy: { firstName: "asc" },
       select: USER_SELECT,
     });
@@ -193,7 +193,9 @@ export async function PATCH(request: Request) {
     }
 
     const existing = await prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+    // System accounts (the Booking API's "Online Bookings" user) are not staff: never
+    // editable or deletable here, and answered exactly like an unknown id.
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId || existing.isSystem) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     // A property-scoped actor can't touch a user outside their own property, even to
@@ -309,7 +311,9 @@ export async function DELETE(request: Request) {
     }
 
     const existing = await prisma.user.findUnique({ where: { id } });
-    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
+    // System accounts (the Booking API's "Online Bookings" user) are not staff: never
+    // editable or deletable here, and answered exactly like an unknown id.
+    if (!existing || existing.enterpriseId !== ctx.enterpriseId || existing.isSystem) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);

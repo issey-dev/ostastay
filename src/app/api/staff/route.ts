@@ -46,6 +46,7 @@ export async function GET() {
       where: {
         enterpriseId: ctx.enterpriseId,
         isActive: true,
+        isSystem: false,
         ...(ctx.scope === "PROPERTY"
           ? { OR: [{ scope: "ENTERPRISE" }, { propertyId: ctx.propertyId }] }
           : {}),

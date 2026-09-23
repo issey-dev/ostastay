@@ -20,7 +20,13 @@
 > auto-assignment, prep/cleanup-buffer-aware overlap blocking — a real gap was found
 > and fixed mid-phase, see below), `src/lib/spa-resource-lock.ts` (the in-process
 > mutex from §7), `POST/GET /api/spa/appointments` (+ `[id]`, + `availability`), and
-> the front-office booking page at `/e/[slug]/dashboard/spa`. Covered by
+> the front-office booking page at `/e/[slug]/dashboard/spa`.
+> **Update 2026-09-23 (BOOKING_API_ADDONS_PLAN.md Phase 0):** the in-process mutex is gone
+> — production runs several app replicas, so it never protected them from each other.
+> Booking now takes Postgres advisory locks (`src/lib/db-lock.ts`) inside the booking
+> transaction, and the logic lives in `src/lib/spa-booking.ts`. The Phase 5 lifecycle
+> (check-in/start/complete/cancel/no-show, fees, AT_COMPLETION posting) is built server
+> side in `src/lib/spa-lifecycle.ts`; its UI is not. Covered by
 > `tests/business-rules/spa-booking.test.ts` (9 tests: happy path with real folio
 > posting, therapist double-book rejection, room double-book rejection, couple
 > treatment distinct-therapist assignment, and — the one the request called out as
