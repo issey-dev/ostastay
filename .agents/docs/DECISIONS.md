@@ -3137,4 +3137,6 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   no longer possible; the API accepts only a listed post.
 - The Hub's enterprise lists page is now **Guest Lists**. The list editor's example
   placeholders ("e.g. M, F, VEG") were removed at the owner's request.
+- Released as **7.3.0** (owner), with the Night Audit additions of 2026-09-24/25 (no-show
+  handling, scheduled audit, automatic check-out of settled departures).
 
