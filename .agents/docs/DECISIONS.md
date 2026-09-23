@@ -3098,3 +3098,16 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
     Night Audit. Needs Property Setup (CONTROLS) plus NIGHT_AUDIT update.
 - Released as **7.1.0**, with the Hub navigation review of the same day (sidebar "Controls" +
   "Channel Manager", breadcrumbs, the Hub Account dialog).
+- **No-show handling and the scheduled audit** (owner, same round — added on request):
+  - *No-Shows* — when Night Audit marks a never-arrived reservation: at its arrival night's
+    audit (default, the original behaviour), **held one night** for a late arrival and marked
+    at the next audit, or **never automatically** (the front desk marks them). A switch says
+    whether the audit posts the reservation's No-Show fee. Held arrivals stay on the arrivals
+    list as Due In and can be checked in; the audit summary lists them.
+  - *Scheduled Night Audit* — on/off and a time in the property's own time zone. The
+    background jobs (`night-audit-scheduled`) run every End-of-Day step through the same code
+    as the screen; a time before noon runs after midnight (02:00 closes the previous day), from
+    noon on the day itself. It stops at the first step that needs a person (e.g. guests still
+    due out) and never catches up more than one day by itself — both fail the job and show on
+    the Hub Overview (plus a property banner when a scheduled audit is an hour overdue).
+

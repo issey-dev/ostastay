@@ -933,7 +933,8 @@ export async function buildDashboardOverview(
 
     const [arrivalRows, departureRows, alertRows] = await Promise.all([
       prisma.reservation.findMany({
-        where: { propertyId, status: ReservationStatus.RESERVED, checkInDate: { gte: businessDate, lte: todayEnd } },
+        // Held late arrivals (earlier arrival day, still RESERVED) are still due in.
+        where: { propertyId, status: ReservationStatus.RESERVED, checkInDate: { lte: todayEnd } },
         select: rowSelect,
         orderBy: { confirmationNo: "asc" },
         take: 6,

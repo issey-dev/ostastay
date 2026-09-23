@@ -51,6 +51,11 @@ export const PROPERTY_SETTINGS_DEFAULTS: PropertySettingsValues = {
   tgstRate: 17,
   serviceChargeEnabled: true,
   serviceChargeRate: 10,
+  // Night Audit — no-shows and the scheduled run
+  noShowTiming: "FIRST_AUDIT",
+  noShowPostFee: true,
+  autoAuditEnabled: false,
+  autoAuditTime: "02:00",
 }
 
 type Db = Prisma.TransactionClient | typeof prisma
@@ -83,6 +88,10 @@ const currency = z
   .regex(/^[A-Z]{3,8}$/, "Use a currency code like USD or MVR")
 const money = z.coerce.number().min(0, "Can't be negative").max(100_000, "That amount looks too large")
 const percent = z.coerce.number().min(0, "Can't be negative").max(100, "At most 100%")
+
+// When Night Audit marks a never-arrived reservation as a No-Show — see PropertySettings.
+export const NO_SHOW_TIMINGS = ["FIRST_AUDIT", "SECOND_AUDIT", "MANUAL"] as const
+export type NoShowTiming = (typeof NO_SHOW_TIMINGS)[number]
 
 // The PATCH body: every field optional, validated on its own.
 export const propertySettingsPatchSchema = z
@@ -132,6 +141,10 @@ export const propertySettingsPatchSchema = z
     tgstRate: percent,
     serviceChargeEnabled: z.boolean(),
     serviceChargeRate: percent,
+    noShowTiming: z.enum(NO_SHOW_TIMINGS),
+    noShowPostFee: z.boolean(),
+    autoAuditEnabled: z.boolean(),
+    autoAuditTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a 24-hour time, e.g. 02:00"),
   })
   .partial()
   .strict()

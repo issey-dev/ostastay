@@ -189,3 +189,91 @@ export function PropertySwitchSetting({
     </div>
   )
 }
+
+// ── No-shows ────────────────────────────────────────────────────────────────────────
+
+const NO_SHOW_TIMING_OPTIONS = [
+  { value: "FIRST_AUDIT", label: "At the arrival night's audit" },
+  { value: "SECOND_AUDIT", label: "Hold one night for late arrivals, then mark" },
+  { value: "MANUAL", label: "Never automatically — the front desk marks no-shows" },
+]
+
+/** When Night Audit marks a never-arrived reservation as a No-Show, and whether it posts the fee. */
+export function NoShowManager({
+  propertyId,
+  initialTiming,
+  initialPostFee,
+  canEdit,
+}: {
+  propertyId: string
+  initialTiming: string
+  initialPostFee: boolean
+  canEdit: boolean
+}) {
+  const [timing, setTiming] = useState(initialTiming)
+  const [postFee, setPostFee] = useState(initialPostFee)
+  const [saving, setSaving] = useState(false)
+
+  const save = async (patch: { noShowTiming?: string; noShowPostFee?: boolean }, undo: () => void) => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) throw new Error()
+      toast.success("No-show handling saved")
+    } catch {
+      undo()
+      toast.error("Couldn't save — nothing was changed")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="noShowTiming">Mark a reservation that never arrived as a No-Show</Label>
+        <OptionSelect
+          id="noShowTiming"
+          value={timing}
+          disabled={!canEdit || saving}
+          options={NO_SHOW_TIMING_OPTIONS}
+          onChange={(v) => {
+            const previous = timing
+            setTiming(v)
+            void save({ noShowTiming: v }, () => setTiming(previous))
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          {timing === "FIRST_AUDIT" && "Night Audit marks every arrival that has not checked in by tonight's audit."}
+          {timing === "SECOND_AUDIT" &&
+            "A guest arriving after midnight can still be checked in the next day; if they still have not arrived by the following audit, they are marked then."}
+          {timing === "MANUAL" &&
+            "Night Audit leaves arrivals that have not checked in as they are and lists them in its summary. They stay on the arrivals list until the desk checks them in or marks them a no-show."}
+        </p>
+      </div>
+      <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+        <div className="min-w-0">
+          <Label htmlFor="noShowPostFee">Post the no-show fee</Label>
+          <p className="text-xs text-muted-foreground">
+            When Night Audit marks a no-show, post the reservation&apos;s selected No-Show fee rule to its folio. Off: the
+            reservation is marked, and any fee is left to the front desk.
+          </p>
+        </div>
+        <Switch
+          id="noShowPostFee"
+          className="shrink-0"
+          checked={postFee}
+          disabled={!canEdit || saving || timing === "MANUAL"}
+          onCheckedChange={(on) => {
+            setPostFee(!!on)
+            void save({ noShowPostFee: !!on }, () => setPostFee(!on))
+          }}
+        />
+      </div>
+    </div>
+  )
+}

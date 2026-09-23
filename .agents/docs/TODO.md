@@ -28,6 +28,9 @@ becomes setup/health banners.
 - [x] Phase 6 — Overview banners (missing setup, Green Tax issues, channel status, failed
   jobs only); link cards and job card removed; single-property users see their own
 
+- [ ] **Deployment:** run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
+  a property's scheduled Night Audit starts at the first run after its set time.
+
 **Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
 - `GET /api/properties` returned every property of the enterprise to a single-property
   user — fixed in Phase 5 (their own property only).

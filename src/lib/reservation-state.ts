@@ -36,7 +36,9 @@ export function deriveReservationState(
   const bd = dayMs(businessDate)
   // No business date to compare against → fall back to the stored status.
   if (Number.isNaN(bd)) return status as ReservationDerivedState
-  if (status === "RESERVED") return dayMs(checkInDate) === bd ? "DUE_IN" : "RESERVED"
+  // A RESERVED arrival from an earlier day is a late arrival still being held (Night Audit's
+  // "hold one night" / "front desk decides" no-show settings) — still Due In.
+  if (status === "RESERVED") return dayMs(checkInDate) <= bd ? "DUE_IN" : "RESERVED"
   if (status === "IN_HOUSE") return dayMs(checkOutDate) === bd ? "DUE_OUT" : "IN_HOUSE"
   return status as ReservationDerivedState
 }
@@ -55,9 +57,9 @@ export function reservationStateLabel(state: string): string {
   return LABELS[state] ?? state.replace(/_/g, " ")
 }
 
-// Strict check-in gate: a guest can only be checked in on their arrival day — i.e. when
-// the reservation is Due In (arrival = business date). A future arrival is too early; a
-// past-arrival that never checked in is handled by Night Audit as a No-Show.
+// Check-in gate: a guest can be checked in once the reservation is Due In — on their
+// arrival day, or later while Night Audit is still holding a late arrival (see
+// PropertySettings.noShowTiming). A future arrival is too early.
 export function canCheckIn(status: string, checkInDate: Dateish, businessDate: Dateish): boolean {
   return status === "RESERVED" && deriveReservationState(status, checkInDate, null, businessDate) === "DUE_IN"
 }

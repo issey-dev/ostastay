@@ -6,6 +6,8 @@ import { resolveChargeCode } from "@/lib/posting/resolve-charge-code"
 import { registerOverview } from "@/lib/green-tax-registry"
 import { JOBS } from "@/lib/jobs"
 import { daysUntilRefreshTokenExpiry } from "@/lib/channels/beds24"
+import { resolveBusinessDate } from "@/lib/business-date"
+import { minutesPastAuditTime, propertyLocalNow } from "@/lib/night-audit/scheduled"
 
 // The Hub Overview — "maintenance and config" (owner, 2026-09-23; HUB_SETUP_PLAN.md Phase 6).
 // Nothing here is a link card or a dashboard: a banner appears only when something needs
@@ -90,6 +92,14 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
       }
       if (!settings.cityLedgerPaymentMethodId) {
         add({ id: `${p.id}:city-ledger`, severity: "warning", title: "No City Ledger settlement method", detail: "A debtor folio cannot be settled to the city ledger at checkout.", path: "finance", actionLabel: "Set settlement default" })
+      }
+      // A scheduled Night Audit an hour past its time has not run — or stopped at a step
+      // that needs a person (the job's error says which).
+      if (settings.autoAuditEnabled) {
+        const row = await prisma.property.findUnique({ where: { id: p.id }, select: { businessDate: true, timeZone: true } })
+        if (row && minutesPastAuditTime(resolveBusinessDate(row), settings.autoAuditTime, propertyLocalNow(row.timeZone || "UTC")) >= 60) {
+          add({ id: `${p.id}:night-audit-overdue`, severity: "critical", title: "Scheduled Night Audit has not completed", detail: `It was due at ${settings.autoAuditTime}. It may have stopped at a step that needs a person, such as guests still due out.`, path: "night-audit", actionLabel: "Open Night Audit" })
+        }
       }
       if (spaTreatments > 0 && !settings.spaOutletId) {
         add({ id: `${p.id}:spa-outlet`, severity: "critical", title: "Spa charges cannot post", detail: "This property sells spa treatments but no outlet is linked to post them through.", path: "cashiering", actionLabel: "Link the spa outlet" })

@@ -2037,6 +2037,20 @@ model PropertySettings {
   serviceChargeEnabled Boolean @default(true)
   serviceChargeRate    Float   @default(10.00)
 
+  // Night Audit — no-shows (Hub > the property > Night Audit). When a reservation that
+  // never arrived becomes a No-Show: FIRST_AUDIT = at the audit of its arrival night (the
+  // original behaviour); SECOND_AUDIT = held one night so a late arrival can still check
+  // in, then marked at the next audit; MANUAL = never automatically — the desk marks it.
+  noShowTiming  String  @default("FIRST_AUDIT")
+  // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
+  noShowPostFee Boolean @default(true)
+
+  // Night Audit — scheduled run. When on, the background jobs run the whole End-of-Day for
+  // this property at autoAuditTime (HH:MM, the property's own time zone); it stops at the
+  // first step that needs a person and reports it. See src/lib/night-audit/scheduled.ts.
+  autoAuditEnabled Boolean @default(false)
+  autoAuditTime    String  @default("02:00")
+
   updatedAt DateTime @updatedAt
 
   @@index([spaOutletId])
