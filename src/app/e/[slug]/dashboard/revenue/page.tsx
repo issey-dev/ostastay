@@ -250,7 +250,7 @@ export default function RevenueDashboard() {
           <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
           <TabsTrigger value="rate-plans">Rate Plans</TabsTrigger>
           <TabsTrigger value="allocations">Allocations</TabsTrigger>
-          <TabsTrigger value="seasonal-pricing">Rate Details</TabsTrigger>
+          <TabsTrigger value="seasonal-pricing">Rate Seasons</TabsTrigger>
         </TabsList>
 
         <TabsContent value="flash-report" className="m-0">

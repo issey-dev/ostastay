@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { ReportDocument } from "@/components/reports/report-document"
@@ -31,6 +32,9 @@ type Catalog = { modules: { module: string; label: string }[]; reports: ReportMe
 export default function ReportsPage() {
   const { currentProperty } = useProperty()
   const [catalog, setCatalog] = useState<Catalog | null>(null)
+  // Two-step picker: a report group narrows the report list; picking a report (from any
+  // group) also sets the group, so the two dropdowns always agree.
+  const [group, setGroup] = useState("")
   const [selected, setSelected] = useState<ReportMeta | null>(null)
   const [values, setValues] = useState<Record<string, any>>({})
   const [dynOptions, setDynOptions] = useState<Record<string, { label: string; value: string }[]>>({})
@@ -47,6 +51,7 @@ export default function ReportsPage() {
 
   const selectReport = useCallback((r: ReportMeta) => {
     setSelected(r)
+    setGroup(r.module)
     setError(null)
     setPreview(null)
     setPreviewFor(null)
@@ -73,12 +78,43 @@ export default function ReportsPage() {
     }
   }, [currentProperty])
 
-  const grouped = useMemo(() => {
+  const groupLabel = useMemo<Record<string, string>>(
+    () => Object.fromEntries((catalog?.modules ?? []).map((m) => [m.module, m.label])),
+    [catalog]
+  )
+
+  const groupOptions = useMemo(
+    () => [
+      // "" = no group: the Report dropdown then lists everything, under group headings.
+      { label: "All groups", value: "" },
+      ...(catalog?.modules ?? [])
+        .filter((m) => catalog!.reports.some((r) => r.module === m.module))
+        .map((m) => ({ label: m.label, value: m.module })),
+    ],
+    [catalog]
+  )
+
+  // With a group chosen, only its reports; without one, every report under its group's
+  // heading, so a user who knows the report's name can go straight to it.
+  const reportOptions = useMemo(() => {
     if (!catalog) return []
-    return catalog.modules
-      .map((m) => ({ ...m, reports: catalog.reports.filter((r) => r.module === m.module) }))
-      .filter((g) => g.reports.length > 0)
-  }, [catalog])
+    const order = catalog.modules.map((m) => m.module)
+    return [...catalog.reports]
+      .filter((r) => !group || r.module === group)
+      .sort((a, b) => order.indexOf(a.module) - order.indexOf(b.module))
+      .map((r) => ({ label: r.name, value: r.key, group: group ? undefined : groupLabel[r.module] }))
+  }, [catalog, group, groupLabel])
+
+  const changeGroup = (g: string) => {
+    setGroup(g)
+    // Widening to "All groups" keeps the current report; switching to another group drops it.
+    if (g && selected && selected.module !== g) {
+      setSelected(null)
+      setPreview(null)
+      setPreviewFor(null)
+      setError(null)
+    }
+  }
 
   const requestKey = selected ? JSON.stringify({ key: selected.key, values }) : null
   const previewStale = !!preview && previewFor !== requestKey
@@ -154,6 +190,8 @@ export default function ReportsPage() {
     )
   }
 
+  const paramOptions = (p: Param) => p.options ?? dynOptions[p.key] ?? []
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
@@ -165,44 +203,52 @@ export default function ReportsPage() {
         </h2>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-        {/* Catalog */}
-        <div className="space-y-5">
-          {grouped.map((g) => (
-            <div key={g.module}>
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{g.label}</div>
-              <div className="space-y-1">
-                {g.reports.map((r) => (
-                  <button
-                    key={r.key}
-                    onClick={() => selectReport(r)}
-                    className={`w-full text-left rounded-md px-3 py-2 text-sm transition-colors ${
-                      selected?.key === r.key ? "bg-muted font-medium text-foreground" : "hover:bg-muted/60 text-muted-foreground"
-                    }`}
-                  >
-                    {r.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+      <section aria-label="Report selection" className="rounded-xl border border-border bg-card">
+        {/* Step 1 — which report */}
+        <div className="grid gap-4 p-5 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-sm">Report group</Label>
+            <SearchableSelect
+              searchable
+              value={group}
+              onChange={changeGroup}
+              placeholder="All groups"
+              searchPlaceholder="Search groups..."
+              options={groupOptions}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Report</Label>
+            <SearchableSelect
+              searchable
+              value={selected?.key ?? ""}
+              onChange={(key) => {
+                const r = catalog.reports.find((x) => x.key === key)
+                if (r) selectReport(r)
+              }}
+              placeholder={group ? `Select a ${groupLabel[group] ?? ""} report...` : "Select a report..."}
+              searchPlaceholder="Search reports..."
+              emptyText="No report by that name."
+              options={reportOptions}
+            />
+          </div>
         </div>
 
-        {/* Parameter panel */}
-        <div className="rounded-xl border border-border bg-card p-6 min-h-[300px]">
-          {!selected ? (
-            <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground py-16">
-              <FileText className="w-10 h-10 mb-3 opacity-40" />
-              <p>Select a report to set its parameters and generate it.</p>
+        {!selected ? (
+          <div className="flex items-center gap-3 border-t border-border px-5 py-6 text-sm text-muted-foreground">
+            <FileText className="h-5 w-5 shrink-0 opacity-50" />
+            Choose a report to set its parameters, then preview or extract it.
+          </div>
+        ) : (
+          /* Step 2 — its parameters and the actions */
+          <div className="space-y-5 border-t border-border p-5">
+            <div>
+              <h3 className="text-base font-semibold">{selected.name}</h3>
+              <p className="text-sm text-muted-foreground">{selected.description}</p>
             </div>
-          ) : (
-            <div className="space-y-5">
-              <div>
-                <h3 className="text-lg font-semibold">{selected.name}</h3>
-                <p className="text-sm text-muted-foreground">{selected.description}</p>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+            {selected.params.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {selected.params.map((p) => (
                   <div key={p.key} className="space-y-1.5">
                     <Label className="text-sm">{p.label}{p.required && <span className="text-destructive"> *</span>}</Label>
@@ -228,25 +274,21 @@ export default function ReportsPage() {
                         value={values[p.key] || ""}
                         onChange={(v) => setVal(p.key, v)}
                         placeholder="Select..."
-                        options={p.options ?? dynOptions[p.key] ?? []}
+                        options={paramOptions(p)}
                       />
                     )}
                     {p.type === "multiSelect" && (
-                      <div className="rounded-md border border-border p-2 max-h-40 overflow-y-auto space-y-1">
-                        {((p.options ?? dynOptions[p.key]) ?? []).length === 0 ? (
-                          <p className="text-xs text-muted-foreground px-1 py-0.5">No options.</p>
+                      <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-input p-2">
+                        {paramOptions(p).length === 0 ? (
+                          <p className="px-1 py-0.5 text-xs text-muted-foreground">No options.</p>
                         ) : (
-                          (p.options ?? dynOptions[p.key] ?? []).map((o) => {
-                            const checked = (values[p.key] as string[])?.includes(o.value)
+                          paramOptions(p).map((o) => {
+                            const cur = (values[p.key] as string[]) ?? []
                             return (
-                              <label key={o.value} className="flex items-center gap-2 text-sm px-1 py-0.5 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={!!checked}
-                                  onChange={(e) => {
-                                    const cur = (values[p.key] as string[]) ?? []
-                                    setVal(p.key, e.target.checked ? [...cur, o.value] : cur.filter((x) => x !== o.value))
-                                  }}
+                              <label key={o.value} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-muted">
+                                <Checkbox
+                                  checked={cur.includes(o.value)}
+                                  onCheckedChange={(on) => setVal(p.key, on ? [...cur, o.value] : cur.filter((x) => x !== o.value))}
                                 />
                                 {o.label}
                               </label>
@@ -256,8 +298,8 @@ export default function ReportsPage() {
                       </div>
                     )}
                     {p.type === "boolean" && (
-                      <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
-                        <input type="checkbox" checked={!!values[p.key]} onChange={(e) => setVal(p.key, e.target.checked)} />
+                      <label className="flex cursor-pointer items-center gap-2 pt-1 text-sm">
+                        <Checkbox checked={!!values[p.key]} onCheckedChange={(on) => setVal(p.key, !!on)} />
                         {p.help || "Enabled"}
                       </label>
                     )}
@@ -265,34 +307,36 @@ export default function ReportsPage() {
                   </div>
                 ))}
               </div>
+            )}
 
-              {error && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive-muted p-3 text-sm text-destructive flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                <Button onClick={runPreview} disabled={!!busy}>
-                  {busy === "preview" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />} Preview
-                </Button>
-                <Button variant="outline" onClick={() => generate("pdf")} disabled={!!busy}>
-                  {busy === "pdf" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />} PDF
-                </Button>
-                <Button variant="outline" onClick={() => generate("xlsx")} disabled={!!busy}>
-                  {busy === "xlsx" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 mr-2" />} Excel
-                </Button>
-                <Button variant="outline" onClick={() => generate("csv")} disabled={!!busy}>
-                  {busy === "csv" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileType className="w-4 h-4 mr-2" />} CSV
-                </Button>
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive-muted p-3 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
               </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+              <Button onClick={runPreview} disabled={!!busy}>
+                {busy === "preview" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />} Preview
+              </Button>
+              <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
+              <span className="text-xs text-muted-foreground">Extract as</span>
+              <Button variant="outline" onClick={() => generate("pdf")} disabled={!!busy}>
+                {busy === "pdf" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />} PDF
+              </Button>
+              <Button variant="outline" onClick={() => generate("xlsx")} disabled={!!busy}>
+                {busy === "xlsx" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />} Excel
+              </Button>
+              <Button variant="outline" onClick={() => generate("csv")} disabled={!!busy}>
+                {busy === "csv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileType className="mr-2 h-4 w-4" />} CSV
+              </Button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </section>
 
       {preview && selected && (
-        <section id="report-preview" aria-label="Report preview" className="scroll-mt-4 rounded-xl border border-border bg-card">
+        <section id="report-preview" aria-label="Report preview" className="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <div className="mr-auto min-w-0">
               <h3 className="truncate text-sm font-semibold">Preview · {preview.result.title}</h3>
@@ -302,20 +346,20 @@ export default function ReportsPage() {
             </div>
             {previewStale && (
               <Button size="sm" variant="outline" onClick={runPreview} disabled={!!busy}>
-                <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+                <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
               </Button>
             )}
             <Button size="sm" onClick={() => generate("pdf")} disabled={!!busy}>
-              {busy === "pdf" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <FileText className="w-4 h-4 mr-1.5" />} Download PDF
+              {busy === "pdf" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileText className="mr-1.5 h-4 w-4" />} Download PDF
             </Button>
             <Button size="sm" variant="ghost" aria-label="Close preview" onClick={() => { setPreview(null); setPreviewFor(null) }}>
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </Button>
           </div>
-          {/* The report is paper: a white sheet on the muted canvas, scrollable both ways
-              so a wide landscape report never squeezes. */}
-          <div className="max-h-[75vh] overflow-auto bg-muted/50 p-3 sm:p-6">
-            <div className={`mx-auto rounded-md bg-white p-6 shadow-sm ring-1 ring-foreground/5 sm:p-10 ${preview.result.columns.length > 6 ? "min-w-[900px] max-w-[1100px]" : "min-w-[640px] max-w-[800px]"}`}>
+          {/* The paper spans the page container. It scrolls sideways only on a phone,
+              where a many-column table would otherwise be crushed unreadable. */}
+          <div className="overflow-x-auto bg-muted/50 p-3 sm:p-5">
+            <div className="min-w-[720px] rounded-md bg-white p-6 shadow-sm ring-1 ring-foreground/5 sm:p-8 md:min-w-0">
               <ReportDocument result={preview.result} branding={preview.branding} />
             </div>
           </div>
