@@ -41,14 +41,15 @@ export function HubSidebarNav({
   const propertyId = (urlPropertyId && properties.some((p) => p.id === urlPropertyId) ? urlPropertyId : null) ?? defaultPropertyId
   const property = properties.find((p) => p.id === propertyId) ?? null
 
-  const enterpriseItems = ENTERPRISE_NAV.filter((i) => enterpriseKeys.includes(i.key))
+  const enterpriseItems = ENTERPRISE_NAV.filter((i) => enterpriseKeys.includes(i.key) && !i.interim)
+  const interimItems = ENTERPRISE_NAV.filter((i) => enterpriseKeys.includes(i.key) && i.interim)
   const propertyItems = PROPERTY_NAV.filter((i) => propertyKeys.includes(i.key))
 
   // Longest matching href wins, so "channel-manager/mapping" doesn't also light up
   // "channel-manager", and a property's "Setup" landing doesn't light up on every page.
   const candidates: string[] = [
     ...(showOverview ? [root] : []),
-    ...enterpriseItems.map((i) => enterpriseHref(slug, i)),
+    ...[...enterpriseItems, ...interimItems].map((i) => enterpriseHref(slug, i)),
     ...(propertyId ? propertyItems.map((i) => propertyHref(slug, propertyId, i)) : []),
   ]
   const activeHref = candidates
@@ -91,6 +92,17 @@ export function HubSidebarNav({
           <SidebarGroupLabel>Enterprise · all properties</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{enterpriseItems.map((item) => renderItem(item, enterpriseHref(slug, item)))}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      )}
+
+      {interimItems.length > 0 && (
+        <SidebarGroup>
+          {/* Still enterprise-wide, but on their way into each property's own setup —
+              labelled so nobody reads them as settings that are meant to be shared. */}
+          <SidebarGroupLabel>Shared for now · moving per property</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{interimItems.map((item) => renderItem(item, enterpriseHref(slug, item)))}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       )}

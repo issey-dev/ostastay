@@ -94,7 +94,7 @@ export function OutletChargeCodePicker({
   if (sellable.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No sellable charge codes yet — add some under Controls &gt; Cashiering &gt; Charge Codes first.
+        No sellable charge codes yet — add some in the Hub under Charge Codes first.
       </p>
     )
   }

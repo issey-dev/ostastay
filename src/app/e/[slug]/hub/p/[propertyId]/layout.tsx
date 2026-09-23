@@ -43,7 +43,9 @@ export default async function HubPropertyLayout({
         properties={properties}
         cookieName={HUB_PROPERTY_COOKIE}
       />
-      {children}
+      {/* Keyed by property: switching property remounts every screen, so no half-edited
+          form or just-saved value can carry over from one property to another. */}
+      <div key={property.id}>{children}</div>
     </>
   )
 }

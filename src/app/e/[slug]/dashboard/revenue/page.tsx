@@ -336,7 +336,7 @@ export default function RevenueDashboard() {
                   />
                   <p className="text-xs text-muted-foreground">
                     The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
-                    default to use the enterprise-wide accommodation code (Controls &gt; Cashiering).
+                    default to use the enterprise-wide accommodation code (Hub › Charge Codes).
                   </p>
                 </div>
 

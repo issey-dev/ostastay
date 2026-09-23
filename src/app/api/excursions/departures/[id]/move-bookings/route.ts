@@ -69,7 +69,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : null;
     if (!excursionOutlet) {
       return NextResponse.json(
-        { error: "No Excursion Outlet is linked — link one under Controls > Excursions before moving bookings (the move re-posts their charges)." },
+        { error: "No Excursion Outlet is linked — link one in the Hub (Charge Codes › Excursion Outlet) before moving bookings (the move re-posts their charges)." },
         { status: 400 }
       );
     }

@@ -76,7 +76,7 @@ export function RoomFeaturePicker({
   if (allOptions.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No feature options configured yet — add some under Controls &gt; Inventory &gt; Room Features.
+        No feature options configured yet — add some in the Hub under Dropdown Lists › Room Features.
       </p>
     )
   }

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Check, Loader2 } from "@/components/icons"
-import { useProperty } from "@/components/providers/property-provider"
+import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 import { STATIONERY_FONTS, DEFAULT_STATIONERY_FONT, resolveStationeryFontClass } from "@/lib/stationery-fonts"
 import { cn } from "@/lib/utils"
 
@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils"
 // font) is chosen in one place. Persists to Property.stationeryFont via the same
 // /api/properties/[id] PUT the banner picker uses; the two never clobber each other because
 // each sends only its own field (undefined elsewhere leaves the column unchanged).
-export function PropertyStationeryFontManager() {
-  const { currentProperty, setCurrentProperty } = useProperty()
+export function PropertyStationeryFontManager({ property }: { property: HubPropertyDetail }) {
+  const [currentProperty, applySaved] = usePropertyValue(property)
   const [saving, setSaving] = useState<string | null>(null)
 
   if (!currentProperty) {
@@ -32,7 +32,7 @@ export function PropertyStationeryFontManager() {
         body: JSON.stringify({ stationeryFont: font }),
       })
       if (res.ok) {
-        setCurrentProperty({ ...currentProperty, stationeryFont: font })
+        applySaved({ stationeryFont: font })
       }
     } finally {
       setSaving(null)

@@ -11,7 +11,7 @@ methods, dropdowns and stationery become per property; copy-between-properties; 
 becomes setup/health banners.
 
 - [x] Phase 0 — Hub shell, route groups, property band, access helpers (property admins in)
-- [ ] Phase 1 — move per-property Controls sections; stationery + booking format per
+- [x] Phase 1 — move per-property Controls sections; stationery + booking format per
   property (`PropertySettings`); delete dashboard Controls/Stationaries
 - [ ] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
   defaults, Spa/Excursion outlet link) + migration; onboarding chart varies by property
@@ -27,6 +27,10 @@ becomes setup/health banners.
 - Outlets / Sequences / Facilities / Amenities managers open on the *first* property,
   ignoring the property the user has switched to.
 - The enterprise-wide Spa/Excursion outlet link points at an outlet owned by one property.
+- ~~Print-data routes returned the whole `EnterpriseSettings` row, SMTP/SFTP password
+  columns included~~ — fixed in Phase 1 (`loadDocumentSettings`).
+- The Stationery editor is not yet on Zod + React Hook Form (APP STANDARD 001) — it was
+  moved as-is; server-side validation is Zod. Convert when next touched.
 
 ## Booking API for Excursions & Spa — ALL PHASES DONE (2026-09-23)
 

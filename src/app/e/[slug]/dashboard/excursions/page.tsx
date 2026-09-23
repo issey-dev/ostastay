@@ -379,7 +379,7 @@ export default function ExcursionsPage() {
                 {loadError ? (
                   <ErrorState title="Couldn't load excursions" onRetry={fetchDepartures} />
                 ) : departures.length === 0 && !loadingDepartures ? (
-                  <p className="text-sm text-muted-foreground">No upcoming departures — set some up in Controls &gt; Excursions.</p>
+                  <p className="text-sm text-muted-foreground">No upcoming departures — set some up in the Hub under this property&apos;s Excursions.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2">

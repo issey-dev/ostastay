@@ -183,7 +183,7 @@ describe("Spa booking: business rules", () => {
     await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },
       update: { spaOutletId: spaOutlet.id },
-      create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id },
+      create: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id },
     });
 
     const admin = await prisma.user.create({

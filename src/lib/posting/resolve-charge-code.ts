@@ -101,10 +101,10 @@ export class MissingChargeCodeError extends Error {
   constructor(public readonly role: ChargeCodeRole) {
     super(
       role === "ACCOMMODATION"
-        ? "No accommodation charge code configured. Set a default in Controls > Cashiering > Posting Defaults."
+        ? "No accommodation charge code configured. Set a default in the Hub (Charge Codes › Posting Defaults)."
         : role === "GREEN_TAX"
-          ? "No Green Tax charge code configured. Set one in Controls > Cashiering > Posting Defaults."
-          : "No commission charge code configured. Set one in Controls > Cashiering > Posting Defaults."
+          ? "No Green Tax charge code configured. Set one in the Hub (Charge Codes › Posting Defaults)."
+          : "No commission charge code configured. Set one in the Hub (Charge Codes › Posting Defaults)."
     );
   }
 }

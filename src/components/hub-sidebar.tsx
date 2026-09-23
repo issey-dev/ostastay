@@ -4,7 +4,7 @@ import { LogoutButton } from "@/components/logout-button"
 import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
 import { HubSidebarNav } from "@/components/hub/hub-sidebar-nav"
 import { ENTERPRISE_NAV, PROPERTY_NAV, visibleKeys } from "@/components/hub/hub-nav"
-import { listHubProperties, resolveHubPropertyId } from "@/lib/hub-properties"
+import { listHubProperties, loadHubAddons, resolveHubPropertyId } from "@/lib/hub-properties"
 import { APP_VERSION } from "@/lib/version"
 import { initials } from "@/lib/initials"
 import {
@@ -49,7 +49,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
   const canView = (m: Parameters<typeof hasPermission>[1]) => hasPermission(ctx, m, "view")
   const showEnterprise = hasEnterpriseHubAccess(ctx)
   const enterpriseKeys = showEnterprise ? visibleKeys(ENTERPRISE_NAV, canView) : []
-  const propertyKeys = visibleKeys(PROPERTY_NAV, canView)
+  const propertyKeys = visibleKeys(PROPERTY_NAV, canView, await loadHubAddons(ctx.enterpriseId))
   const hubProperties = await listHubProperties(ctx)
   const defaultPropertyId = await resolveHubPropertyId(ctx, hubProperties)
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 
@@ -60,76 +60,7 @@ export async function GET(
     }
 
     const enterpriseId = payment.folio.property.enterpriseId;
-    let settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId }
-    });
-
-    if (!settings) {
-      settings = {
-        id: "default",
-        enterpriseId,
-        resConfirmPrefix: "",
-        resConfirmLength: 6,
-        cashierDefaultFloat: 300,
-        exchangeFromCurrency: "USD",
-        exchangeToCurrency: "MVR",
-        systemDate: new Date(),
-        defaultAccommodationChargeCodeId: null,
-        defaultGreenTaxChargeCodeId: null,
-        cityLedgerPaymentMethodId: null,
-        commissionChargeCodeId: null,
-        invoiceBrandName: "Cozy Guest House",
-        invoiceLogoUrl: "",
-        invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
-        invoiceFontFamily: "Geist",
-        invoiceTaxId: "",
-        invoicePhone: "",
-        invoiceEmail: "",
-        invoiceAddress: "",
-        defaultFolioStyle: "detailed",
-        invoiceHeaderText: "",
-        invoiceFooterText: "Thank you for staying with us!",
-        invoicePaymentTerms: "Payment is due immediately upon check-out.",
-        invoicePaymentAccountName: null,
-        invoicePaymentAccountNumber: null,
-        invoicePaymentIban: null,
-        invoicePaymentBankInfo: null,
-        receiptFooterText: null,
-        receiptTerms: null,
-        statementFooterText: null,
-        statementTerms: null,
-        confirmationLetterMessage: null,
-        registrationCardEnabled: true,
-        eRegistrationEnabled: true,
-        spaOutletId: null,
-        excursionOutletId: null,
-        eRegistrationExpiryHours: 72,
-        eRegistrationMessage: null,
-        registrationCardMessage: null,
-        registrationCardTerms: null,
-        greenTaxEnabled: true,
-        greenTaxAdultAmount: 12.00,
-        greenTaxChildAmount: 6.00,
-        greenTaxExemptAge: 2,
-        greenTaxStayBasis: "ACTUAL",
-        tgstEnabled: true,
-        tgstRate: 17.00,
-        serviceChargeEnabled: true,
-        serviceChargeRate: 10.00,
-        smtpHost: null,
-        smtpPort: null,
-        smtpUsername: null,
-        smtpPassword: null,
-        smtpFromAddress: null,
-        smtpUseTls: true,
-        sftpHost: null,
-        sftpPort: null,
-        sftpUsername: null,
-        sftpPassword: null,
-        sftpRemotePath: null,
-        updatedAt: new Date()
-      };
-    }
+    const settings = await loadDocumentSettings(payment.folio.propertyId);
 
     return NextResponse.json({
       payment,

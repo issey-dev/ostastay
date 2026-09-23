@@ -61,7 +61,7 @@ export function SystemCodeMultiSelect({ category, values, onChange, disabled }: 
     return <p className="text-xs text-muted-foreground">Loading options...</p>
   }
   if (options.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">No options configured yet — add some in Controls.</p>
+    return <p className="text-xs text-muted-foreground italic">No options configured yet — add some in the Hub (Dropdown Lists).</p>
   }
 
   return (

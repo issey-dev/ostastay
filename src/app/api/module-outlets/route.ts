@@ -79,7 +79,7 @@ export async function PUT(request: Request) {
     const settings = await prisma.enterpriseSettings.upsert({
       where: { enterpriseId: ctx.enterpriseId },
       update: data,
-      create: { enterpriseId: ctx.enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, ...data },
+      create: { enterpriseId: ctx.enterpriseId, ...data },
     });
 
     await logActivity({

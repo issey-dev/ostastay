@@ -251,7 +251,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                   <Label htmlFor="password">Password</Label>
                   {/* Deliberately NOT a link. There is no self-service password-reset flow
                       in this app — users are provisioned and reset by an administrator in
-                      Controls > Users & Roles. This was an <a href="#"> that looked
+                      the Hub (People). This was an <a href="#"> that looked
                       actionable, focused like a link and did nothing when clicked. Static
                       text is the honest control until a reset flow actually exists. */}
                   <span className="text-xs text-muted-foreground">Forgot it? Ask your administrator</span>

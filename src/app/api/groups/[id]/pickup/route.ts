@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPropertySettings } from "@/lib/property-settings"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability"
@@ -161,14 +162,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Sequential confirmation number — same REGISTRATION_NO sequence and prefix
     // format as an ordinary reservation (see reservations/route.ts), so group
     // pickups don't get an alien numbering scheme.
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: group.property.enterpriseId }
-    })
+    const settings = await getPropertySettings(group.propertyId)
     // Same fallback rule as reservations/route.ts: no configured prefix → the
     // property's globally-unique code, since bare per-property sequence numbers
     // would collide across properties on the global confirmationNo unique.
-    const prefix = settings?.resConfirmPrefix || `${group.property.code}-`
-    const length = settings?.resConfirmLength || 6
+    const prefix = settings.resConfirmPrefix || `${group.property.code}-`
+    const length = settings.resConfirmLength || 6
     let seq = await allocateSequenceNumber(group.propertyId, "REGISTRATION_NO")
     let confirmationNo = `${prefix}${String(seq).padStart(length, "0")}`
     for (let attempt = 0; attempt < 5; attempt++) {

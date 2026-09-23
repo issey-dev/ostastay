@@ -156,7 +156,7 @@ function requireRateAndOutlet(p: Awaited<ReturnType<typeof loadPricing>>) {
     throw new BookingError(
       400,
       "NO_OUTLET",
-      "No Excursion Outlet is linked — link one under Controls > Excursions (it applies to every property) before posting excursion charges."
+      "No Excursion Outlet is linked — link one in the Hub (Charge Codes › Excursion Outlet) before posting excursion charges."
     );
   }
   return { rate: p.rate, outlet: p.outlet };

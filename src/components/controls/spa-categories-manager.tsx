@@ -14,7 +14,6 @@ import { Switch } from "@/components/ui/switch"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { useProperty } from "@/components/providers/property-provider"
 
 export type SpaTreatmentCategoryDto = {
   id: string
@@ -38,9 +37,7 @@ const emptyValues: CategoryFormValues = { name: "", description: "", displayOrde
 // Fires whenever the category list changes (create/edit/delete) so the sibling
 // SpaTreatmentsManager (which needs the current category list for its own dropdown)
 // can refetch — the two managers don't share React state, only this callback.
-export function SpaCategoriesManager({ onChanged }: { onChanged?: () => void }) {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: string; onChanged?: () => void }) {
 
   const [categories, setCategories] = useState<SpaTreatmentCategoryDto[]>([])
   const [loading, setLoading] = useState(true)

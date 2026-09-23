@@ -149,7 +149,7 @@ describe("Excursions: business rules", () => {
     await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },
       update: { excursionOutletId: excOutlet.id },
-      create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: excOutlet.id },
+      create: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: excOutlet.id },
     });
 
     const admin = await prisma.user.create({

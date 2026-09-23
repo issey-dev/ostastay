@@ -131,7 +131,7 @@ describe("Excursions: tenant isolation", () => {
       await prisma.enterpriseSettings.upsert({
         where: { enterpriseId: entId },
         update: { excursionOutletId: outlet.id },
-        create: { enterpriseId: entId, resConfirmPrefix: "", resConfirmLength: 6, excursionOutletId: outlet.id },
+        create: { enterpriseId: entId, excursionOutletId: outlet.id },
       });
     }
 

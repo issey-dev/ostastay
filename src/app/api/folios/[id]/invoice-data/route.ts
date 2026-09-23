@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
@@ -114,81 +114,11 @@ export async function GET(
       });
     }
 
-    // 2. Fetch Enterprise settings for invoice branding, derived from the folio's own
-    // property → enterprise (not a hardcoded constant) — works the same for a
-    // reservation-backed folio or a walk-in one, since propertyId is always present.
+    // 2. The folio's own property's document settings (per property since 2026-09-23) —
+    // works the same for a reservation-backed folio or a walk-in one, since propertyId is
+    // always present. Only what a document needs; never the raw settings row.
     const enterpriseId = folio.property.enterpriseId;
-    let settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId }
-    });
-
-    // Default settings fallback
-    if (!settings) {
-      settings = {
-        id: "default",
-        enterpriseId,
-        resConfirmPrefix: "",
-        resConfirmLength: 6,
-        cashierDefaultFloat: 300,
-        exchangeFromCurrency: "USD",
-        exchangeToCurrency: "MVR",
-        systemDate: new Date(),
-        defaultAccommodationChargeCodeId: null,
-        defaultGreenTaxChargeCodeId: null,
-        cityLedgerPaymentMethodId: null,
-        commissionChargeCodeId: null,
-        invoiceBrandName: "Cozy Guest House",
-        invoiceLogoUrl: "",
-        invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
-        invoiceFontFamily: "Geist",
-        invoiceTaxId: "",
-        invoicePhone: "",
-        invoiceEmail: "",
-        invoiceAddress: "",
-        defaultFolioStyle: "detailed",
-        invoiceHeaderText: "",
-        invoiceFooterText: "Thank you for staying with us!",
-        invoicePaymentTerms: "Payment is due immediately upon check-out.",
-        invoicePaymentAccountName: null,
-        invoicePaymentAccountNumber: null,
-        invoicePaymentIban: null,
-        invoicePaymentBankInfo: null,
-        receiptFooterText: null,
-        receiptTerms: null,
-        statementFooterText: null,
-        statementTerms: null,
-        confirmationLetterMessage: null,
-        registrationCardEnabled: true,
-        eRegistrationEnabled: true,
-        spaOutletId: null,
-        excursionOutletId: null,
-        eRegistrationExpiryHours: 72,
-        eRegistrationMessage: null,
-        registrationCardMessage: null,
-        registrationCardTerms: null,
-        greenTaxEnabled: true,
-        greenTaxAdultAmount: 12.00,
-        greenTaxChildAmount: 6.00,
-        greenTaxExemptAge: 2,
-        greenTaxStayBasis: "ACTUAL",
-        tgstEnabled: true,
-        tgstRate: 17.00,
-        serviceChargeEnabled: true,
-        serviceChargeRate: 10.00,
-        smtpHost: null,
-        smtpPort: null,
-        smtpUsername: null,
-        smtpPassword: null,
-        smtpFromAddress: null,
-        smtpUseTls: true,
-        sftpHost: null,
-        sftpPort: null,
-        sftpUsername: null,
-        sftpPassword: null,
-        sftpRemotePath: null,
-        updatedAt: new Date()
-      };
-    }
+    const settings = await loadDocumentSettings(folio.propertyId);
 
     // A Proforma quotes the FULL expected cost of the stay — not just whatever has
     // been posted so far (which is empty before/early in a stay, hence the old blank
@@ -226,8 +156,8 @@ export async function GET(
         // beside each must still be the property's real one, resolved by role rather
         // than the literal "ROOM"/"GTX" this used to hardcode.
         const [accommodationCode, greenTaxCode] = await Promise.all([
-          resolveChargeCode(enterpriseId, "ACCOMMODATION", { settings }),
-          resolveChargeCode(enterpriseId, "GREEN_TAX", { settings }),
+          resolveChargeCode(enterpriseId, "ACCOMMODATION"),
+          resolveChargeCode(enterpriseId, "GREEN_TAX"),
         ]);
         const roomCodeLabel = accommodationCode?.code ?? "1000";
         const greenTaxCodeLabel = greenTaxCode?.code ?? "8500";

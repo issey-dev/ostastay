@@ -161,7 +161,7 @@ describe("Booking API foundations (Phase 0)", () => {
       where: { enterpriseId },
       update: { spaOutletId: spaOutlet.id, excursionOutletId: excOutlet.id },
       create: {
-        enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false,
+        enterpriseId, tgstEnabled: false, serviceChargeEnabled: false,
         greenTaxEnabled: false, spaOutletId: spaOutlet.id, excursionOutletId: excOutlet.id,
       },
     });

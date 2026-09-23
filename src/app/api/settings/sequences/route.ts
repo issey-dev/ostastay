@@ -5,7 +5,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { logActivity } from "@/lib/activity-log"
 
 // Just the plain integer counter itself — no prefix/format handling here (that's
-// EnterpriseSettings.resConfirmPrefix's job for confirmation numbers elsewhere). These
+// PropertySettings.resConfirmPrefix's job for confirmation numbers elsewhere). These
 // four are sequential numbers only, never alphanumeric.
 const SEQUENCE_TYPES = ["REGISTRATION_NO", "PROFORMA_FOLIO", "TAX_INVOICE", "RECEIPT_NO", "GUEST_REG_NO"] as const
 

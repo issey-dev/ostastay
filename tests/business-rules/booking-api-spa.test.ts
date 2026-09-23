@@ -91,7 +91,7 @@ describe("Booking API — Spa (Phase 3)", () => {
     await prisma.chargeCodeGenerate.create({ data: { enterpriseId, generatorCodeId: code.id, generatedCodeId: svc.id, method: "PERCENT", value: 10 } });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Spa", code: "CBSP", outletType: "SPA" } });
     await prisma.enterpriseSettings.create({
-      data: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: outlet.id },
+      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: outlet.id },
     });
     const payCode = await customChargeCode(enterpriseId, { code: "CBSPAPAY", description: "Online card", postingType: "PAYMENT" });
     paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Online card", type: "CARD", chargeCodeId: payCode.id } })).id;

@@ -84,7 +84,7 @@ describe("Booking API — webhooks (Phase 5)", () => {
     const code = await customChargeCode(enterpriseId, { code: "CBWEXC", description: "Excursion" });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Tours", code: "CBWT", outletType: "EXCURSION" } });
     await prisma.enterpriseSettings.create({
-      data: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
+      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
     });
     await prisma.activityOnlineSettings.create({ data: { propertyId, module: "EXCURSIONS", enabled: true, maxPartySize: 6 } });
     typeId = (

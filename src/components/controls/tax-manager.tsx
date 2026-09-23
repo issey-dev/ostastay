@@ -312,7 +312,7 @@ export function TaxManager() {
               Calculation order is fixed: Service Charge is a percentage of the base amount, then GST is a percentage
               of (base + Service Charge). Example on a $100 base: SVC 10% = $10.00, GST 17% of $110.00 = $18.70.
               Whether these are added on top of your rates or backed out of them is controlled per-property under
-              Controls &gt; General &gt; Property Information (&quot;Prices Include Taxes&quot;).
+              each property&apos;s General page in the Hub (&quot;Prices Include Taxes&quot;).
             </p>
 
             {/* Maldives Green Tax Settings */}

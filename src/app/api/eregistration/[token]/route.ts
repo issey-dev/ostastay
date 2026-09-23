@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveEregistrationLink, reservationIdsForLink } from "@/lib/eregistration/resolve-link";
 import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
@@ -33,6 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       checkInDate: true,
       checkOutDate: true,
       status: true,
+      propertyId: true,
       property: { select: { name: true, logoUrl: true, bannerColor: true, enterpriseId: true } },
     },
   });
@@ -42,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     return NextResponse.json({ error: "This stay is no longer available for eRegistration." }, { status: 410 });
   }
 
-  const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: activeReservations[0].property.enterpriseId } });
+  const settings = await getPropertySettings(activeReservations[0].propertyId);
 
   const slots = await prisma.eRegistrationGuestSlot.findMany({
     where: { reservationId: { in: activeReservations.map((r) => r.id) } },
@@ -71,7 +73,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     propertyName: property.name,
     logoUrl: property.logoUrl,
     brandColor: resolveInvoiceBrandColor(property.bannerColor),
-    message: settings?.eRegistrationMessage ?? null,
+    message: settings.eRegistrationMessage,
     reservations: byReservation,
   });
 }

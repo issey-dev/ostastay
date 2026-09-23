@@ -294,7 +294,7 @@ export async function updateActivityItem(params: {
     if (!item) throw new ForbiddenError("Treatment not found");
     if (input.publishOnline && !item.isActive) throw new ForbiddenError("An inactive treatment cannot be sold online");
     if (input.publishOnline && !item.allowWalkIn) {
-      throw new ForbiddenError("Online guests book as walk-ins — allow walk-in guests on this treatment first (Controls → Spa)");
+      throw new ForbiddenError("Online guests book as walk-ins — allow walk-in guests on this treatment first (Hub › property › Spa)");
     }
     await prisma.spaTreatment.update({ where: { id: itemId }, data });
     propertyId = item.propertyId;

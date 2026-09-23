@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { prisma } from "@/lib/db"
 import { canSetUpProperty, type AuthContext } from "@/lib/scope"
+import type { HubAddon } from "@/components/hub/hub-nav"
 
 // Which properties a user may open in the Hub's property area, and which one to open
 // when the URL does not say. See .agents/docs/HUB_SETUP_PLAN.md.
@@ -48,4 +49,13 @@ export async function resolveHubPropertyId(ctx: AuthContext, allowed?: HubProper
   if (remembered && ids.has(remembered)) return remembered
   if (ctx.sessionPropertyId && ids.has(ctx.sessionPropertyId)) return ctx.sessionPropertyId
   return properties[0].id
+}
+
+// The sellable add-ons this enterprise holds that have setup pages (Spa, Excursions).
+export async function loadHubAddons(enterpriseId: string): Promise<Set<HubAddon>> {
+  const rows = await prisma.enterpriseAddonAccess.findMany({
+    where: { enterpriseId, enabled: true, module: { in: ["SPA", "EXCURSIONS"] } },
+    select: { module: true },
+  })
+  return new Set(rows.map((r) => r.module as HubAddon))
 }

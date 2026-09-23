@@ -191,7 +191,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
       await prisma.enterpriseSettings.upsert({
         where: { enterpriseId },
         update: { excursionOutletId: outlet.id },
-        create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, excursionOutletId: outlet.id },
+        create: { enterpriseId, excursionOutletId: outlet.id },
       });
       expect((await modulesFor(key)).excursions.code).toBe("NOTHING_PUBLISHED");
 

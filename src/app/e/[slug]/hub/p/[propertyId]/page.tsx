@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requireSession, hasPermission } from "@/lib/scope"
-import { PROPERTY_NAV, propertyHref } from "@/components/hub/hub-nav"
+import { PROPERTY_NAV, propertyHref, visibleKeys } from "@/components/hub/hub-nav"
+import { loadHubAddons } from "@/lib/hub-properties"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 // A property's setup landing page: every section of this property the user may open.
@@ -12,9 +13,8 @@ export default async function HubPropertyHomePage({
 }) {
   const { slug, propertyId } = await params
   const ctx = await requireSession()
-  const sections = PROPERTY_NAV.filter(
-    (item) => item.path !== "" && item.modules.some((m) => hasPermission(ctx, m, "view"))
-  )
+  const keys = visibleKeys(PROPERTY_NAV, (m) => hasPermission(ctx, m, "view"), await loadHubAddons(ctx.enterpriseId))
+  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && keys.includes(item.key))
 
   return (
     <div className="space-y-6">

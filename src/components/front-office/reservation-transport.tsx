@@ -307,7 +307,7 @@ export function ReservationTransport({
                           </SelectContent>
                         </Select>
                         {chargeCodes.length === 0 && (
-                          <p className="text-[11px] text-warning">Add a Transportation charge code in Controls › Finance › Charge Codes.</p>
+                          <p className="text-[11px] text-warning">Add a Transportation charge code in the Hub (Charge Codes).</p>
                         )}
                       </div>
                       <div className="space-y-1.5">

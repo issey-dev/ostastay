@@ -171,7 +171,7 @@ async function postSpaCharge(
     throw new BookingError(
       400,
       "NO_OUTLET",
-      "No Spa Outlet is linked — link one under Controls > Spa (it applies to every property) before posting spa charges."
+      "No Spa Outlet is linked — link one in the Hub (Charge Codes › Spa Outlet) before posting spa charges."
     );
   }
   const chargeCode = await tx.chargeCode.findUniqueOrThrow({

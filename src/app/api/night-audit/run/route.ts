@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     if (greenTaxEnabled) {
       gtxCode = await resolveChargeCode(property.enterpriseId, "GREEN_TAX", { settings })
       if (!gtxCode) {
-        return NextResponse.json({ error: "Missing GTX charge code in system settings. Add a Green Tax charge code in Controls > Cashiering." }, { status: 400 })
+        return NextResponse.json({ error: "Missing GTX charge code in system settings. Add a Green Tax charge code in the Hub (Charge Codes)." }, { status: 400 })
       }
     }
     const impliedGreenTaxGenerate: GenerateRow[] = gtxCode

@@ -169,10 +169,18 @@ describe("eRegistration link generation", () => {
     expect(link.status).toBe("REVOKED");
   });
 
-  it("refuses to generate a link when eRegistration is disabled for the enterprise", async () => {
+  // eRegistration is switched on or off per PROPERTY since 2026-09-23 (PropertySettings).
+  it("refuses to generate a link when eRegistration is turned off for the property", async () => {
+    const { reservationId, adminId, propertyId } = await setup(1);
+    await prisma.propertySettings.create({ data: { propertyId, eRegistrationEnabled: false } });
+    const res = await generate(adminId, reservationId);
+    expect(res.status).toBe(400);
+  });
+
+  it("ignores the enterprise-level switch — only the property's own setting counts", async () => {
     const { reservationId, adminId, enterpriseId } = await setup(1);
     await prisma.enterpriseSettings.create({ data: { enterpriseId, eRegistrationEnabled: false } });
     const res = await generate(adminId, reservationId);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 });

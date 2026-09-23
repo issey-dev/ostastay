@@ -14,6 +14,18 @@ import { isFolioStyle } from "@/lib/folio-presentation";
 // separate, still-open item — needs a key-management decision, see TODO.md.)
 const SECRET_MASK = "********";
 
+// Fields a customer sets per property (PropertySettings) — see the PATCH guard below.
+const PER_PROPERTY_FIELDS = [
+  "resConfirmPrefix", "resConfirmLength", "defaultFolioStyle",
+  "invoiceBrandName", "invoiceLogoUrl", "invoiceBrandColor", "invoiceFontFamily", "invoiceTaxId",
+  "invoicePhone", "invoiceEmail", "invoiceAddress",
+  "invoiceHeaderText", "invoiceFooterText", "invoicePaymentTerms",
+  "invoicePaymentAccountName", "invoicePaymentAccountNumber", "invoicePaymentIban", "invoicePaymentBankInfo",
+  "receiptFooterText", "receiptTerms", "statementFooterText", "statementTerms",
+  "confirmationLetterMessage", "registrationCardEnabled", "registrationCardMessage", "registrationCardTerms",
+  "eRegistrationEnabled", "eRegistrationExpiryHours", "eRegistrationMessage",
+] as const;
+
 function redactSecrets<T extends { smtpPassword: string | null; sftpPassword: string | null }>(settings: T): T {
   return {
     ...settings,
@@ -22,8 +34,8 @@ function redactSecrets<T extends { smtpPassword: string | null; sftpPassword: st
   };
 }
 
-// Enterprise-wide settings (booking codes, invoice branding, Maldives tax defaults,
-// app theme, SMTP/SFTP scaffold) — scoped to the session's own enterprise, never a
+// Enterprise-wide settings (Maldives tax defaults, posting defaults, cashiering,
+// SMTP/SFTP — plus, for the INTERNAL enterprise only, its own license-invoice stationery) — scoped to the session's own enterprise, never a
 // client-supplied or "first enterprise found" shortcut.
 export async function GET() {
   try {
@@ -37,11 +49,7 @@ export async function GET() {
     if (!settings) {
       // Auto-create default settings if none exist
       settings = await prisma.enterpriseSettings.create({
-        data: {
-          enterpriseId: ctx.enterpriseId,
-          resConfirmPrefix: "",
-          resConfirmLength: 6
-        }
+        data: { enterpriseId: ctx.enterpriseId }
       });
     }
 
@@ -59,6 +67,20 @@ export async function PATCH(request: Request) {
 
     const body = await request.json();
     const enterpriseId = ctx.enterpriseId;
+
+    // A customer's document content and booking-number format are per PROPERTY since
+    // 2026-09-23 (PropertySettings, /api/properties/{id}/settings). The enterprise columns
+    // remain only for the INTERNAL (Osta) enterprise's own license invoices, so a customer
+    // enterprise writing them here would save text nothing ever prints — refuse instead.
+    if (!ctx.isInternal) {
+      const perProperty = PER_PROPERTY_FIELDS.filter((f) => body[f] !== undefined);
+      if (perProperty.length > 0) {
+        return NextResponse.json(
+          { error: `These are set per property now (Hub › property › Stationery / Reservations): ${perProperty.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    }
 
     // A round-tripped mask means "unchanged" — never store the literal sentinel.
     if (body.smtpPassword === SECRET_MASK) delete body.smtpPassword;
@@ -107,9 +129,6 @@ export async function PATCH(request: Request) {
     const settings = await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },
       update: {
-        resConfirmPrefix: body.resConfirmPrefix !== undefined ? body.resConfirmPrefix : undefined,
-        resConfirmLength: body.resConfirmLength !== undefined ? parseInt(body.resConfirmLength) : undefined,
-
         cashierDefaultFloat: body.cashierDefaultFloat !== undefined ? Math.max(0, parseFloat(body.cashierDefaultFloat) || 0) : undefined,
         exchangeFromCurrency: body.exchangeFromCurrency !== undefined ? String(body.exchangeFromCurrency).toUpperCase().slice(0, 8) : undefined,
         exchangeToCurrency: body.exchangeToCurrency !== undefined ? String(body.exchangeToCurrency).toUpperCase().slice(0, 8) : undefined,
@@ -170,8 +189,6 @@ export async function PATCH(request: Request) {
       },
       create: {
         enterpriseId,
-        resConfirmPrefix: body.resConfirmPrefix || "",
-        resConfirmLength: body.resConfirmLength ? parseInt(body.resConfirmLength) : 6,
 
         cashierDefaultFloat: body.cashierDefaultFloat !== undefined ? Math.max(0, parseFloat(body.cashierDefaultFloat) || 0) : 300,
         exchangeFromCurrency: body.exchangeFromCurrency ? String(body.exchangeFromCurrency).toUpperCase().slice(0, 8) : "USD",

@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
-import { useProperty } from "@/components/providers/property-provider"
 import { toast } from "@/lib/toast"
 import { useConfirm } from "@/components/providers/confirm-provider"
 
@@ -32,10 +31,8 @@ type AllocationOption = { id: string; code: string; name: string; mode: string; 
 // meal plan is done via a Derived Rate Plan (e.g. "BAR-BB" derived from "BAR"), not
 // here; this list just populates the Reservation form's selector and tags a stay
 // for kitchen/back-office visibility.
-export function MealPlansManager({ title, description }: { title: string; description?: string }) {
-  const { currentProperty } = useProperty()
+export function MealPlansManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
   const confirm = useConfirm()
-  const propertyId = currentProperty?.id ?? ""
 
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([])
   const [allocations, setAllocations] = useState<AllocationOption[]>([])

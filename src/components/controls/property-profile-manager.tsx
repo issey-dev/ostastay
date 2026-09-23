@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { OptionSelect } from "@/components/ui/option-select"
 import { Save } from "@/components/icons"
 import { Switch } from "@/components/ui/switch"
-import { useProperty } from "@/components/providers/property-provider"
+import { useRouter } from "next/navigation"
 
 type PropertyDetail = {
   id: string
@@ -31,29 +31,28 @@ type PropertyDetail = {
   eodHousekeepingTargetStatus: string | null
 }
 
-// Edits the CURRENT property's own profile directly (name, code, times, logo, contact
-// info) — deliberately never shows or accepts an enterprise selector, so a property can
-// never be reassigned to a different enterprise from here.
-export function PropertyProfileManager() {
-  const { currentProperty } = useProperty()
+// Edits ONE property's own profile (name, code, times, logo, contact info) — the property
+// named by the Hub page it sits on. Deliberately never shows or accepts an enterprise
+// selector, so a property can never be reassigned to a different enterprise from here.
+export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
+  const router = useRouter()
   const [detail, setDetail] = useState<PropertyDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
 
   const fetchDetail = useCallback(async () => {
-    if (!currentProperty) return
     setLoading(true)
     try {
       const res = await fetch("/api/properties")
       if (res.ok) {
         const list: PropertyDetail[] = await res.json()
-        setDetail(list.find((p) => p.id === currentProperty.id) ?? null)
+        setDetail(list.find((p) => p.id === propertyId) ?? null)
       }
     } finally {
       setLoading(false)
     }
-  }, [currentProperty])
+  }, [propertyId])
 
   useEffect(() => { fetchDetail() }, [fetchDetail])
 
@@ -71,13 +70,15 @@ export function PropertyProfileManager() {
       if (res.ok) {
         setSavedMsg(true)
         setTimeout(() => setSavedMsg(false), 3000)
+        // The band and sidebar name this property — refresh them if the name changed.
+        router.refresh()
       }
     } finally {
       setSaving(false)
     }
   }
 
-  if (!currentProperty || loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
+  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
   if (!detail) return <div className="py-8 text-center text-muted-foreground">No property found. Create one under Inventory first.</div>
 
   return (

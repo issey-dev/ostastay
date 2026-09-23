@@ -104,7 +104,7 @@ describe("Booking API — Excursions (Phase 2)", () => {
     });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Tours", code: "CBTR", outletType: "EXCURSION" } });
     await prisma.enterpriseSettings.create({
-      data: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
+      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
     });
     const cardCode = await customChargeCode(enterpriseId, { code: "CBPAY", description: "Online card", postingType: "PAYMENT" });
     paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Online card", type: "CARD", chargeCodeId: cardCode.id } })).id;

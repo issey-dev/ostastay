@@ -1,6 +1,6 @@
 # Hub Setup — Enterprise vs Property separation (plan)
 
-Status: **IN PROGRESS** (branch `feat/hub-setup-separation`) — Phase 0 done 2026-09-23.
+Status: **IN PROGRESS** (branch `feat/hub-setup-separation`) — Phases 0–1 done 2026-09-23.
 Owner decisions are recorded in [DECISIONS.md](DECISIONS.md) ("2026-09-23 — Setup moves to
 the Hub, separated by Enterprise and Property"). This file is the build plan.
 
@@ -200,6 +200,39 @@ Spa / Excursions groups when that property actually offers them, and name outlet
 the property's own outlets (e.g. "Veyo Garden Restaurant", "Maaveyo Pool Bar") rather than a
 generic "Restaurant". The Phase 2 migration itself copies the full current set to every
 property (owner: "fine for now").
+
+## As built
+
+**Phase 0** — `src/lib/scope.ts`: `hasHubAccess` (entry), `hasEnterpriseHubAccess` /
+`requireEnterpriseHub` (renamed from `requireHubAccess`), `requirePropertySetup`,
+`canSetUpProperty`. `src/lib/modules.ts`: CONTROLS joined `HUB_MODULES`;
+`PROPERTY_SETUP_MODULES` / `ENTERPRISE_ONLY_MODULES`. Shell: `hub/enterprise/layout.tsx`,
+`hub/p/page.tsx`, `hub/p/[propertyId]/layout.tsx` (+ band `components/hub/hub-property-band.tsx`),
+nav config `components/hub/hub-nav.ts`, `components/hub/hub-sidebar-nav.tsx`,
+`lib/hub-properties.ts` (last-opened property: `hub_property_id` cookie, never the
+dashboard's working-property cookie).
+
+**Phase 1** —
+- `PropertySettings` model + migration `20260924090000_property_settings` (copies each
+  enterprise's values into every property, then drops `resConfirmPrefix/Length` from
+  `EnterpriseSettings`). The enterprise's document-content columns remain ONLY for the
+  INTERNAL (Osta) enterprise's license invoices; `/api/tenant-settings` refuses them for
+  customers.
+- `src/lib/property-settings.ts` (defaults + Zod patch schema), `/api/properties/[id]/settings`
+  (GET: anyone at the property; PATCH: `requirePropertySetup(CONTROLS, update)`).
+- `src/lib/document-settings.ts`: `loadDocumentSettings()` — the print-data routes now
+  return this curated object instead of the raw `EnterpriseSettings` row (which carried the
+  SMTP/SFTP password columns to the browser); `loadEmailBranding()` — emailed documents
+  now use the property's identity like the printed ones.
+- Pages: `hub/p/[propertyId]/{general,inventory,reservations,revenue,finance,outlets,
+  excursions,spa,stationery,sequences}`; enterprise `properties`, `email`,
+  `support-access`, and interim `finance`, `cashiering`, `lists` (labelled "Shared for
+  now"). Guard: `src/lib/hub-page.ts` (`propertyPage` / `enterprisePage`).
+- Every moved manager takes `propertyId` (or a server-loaded `property`) explicitly; the
+  in-page pickers that opened on the first property are gone.
+- Deleted: dashboard `controls` and `stationaries` pages, the dashboard "Setup" nav group,
+  `controls-dashboard.tsx`, and the legacy `/dashboard/financials` redirect into Controls.
+- Tests: `tests/business-rules/property-settings.test.ts`.
 
 ## Assumptions (not explicitly answered — confirm or correct)
 
