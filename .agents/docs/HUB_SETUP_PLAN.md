@@ -301,6 +301,30 @@ dashboard's working-property cookie).
 - Not done — O-1: the richer entry fields. The split does not depend on them; they add
   columns to `SystemCode` and inputs to `DropdownsManager` once the owner names them.
 
+**Phase 4** — three commits:
+- **4a Green Tax** — the Reg No register is under each property (`hub/p/[id]/green-tax`);
+  `/api/hub/green-tax/*` require `requirePropertySetup(GREEN_TAX)` for the named property.
+- **4b Booking API** — migration `20260924120000_api_key_one_or_all`: `WebsiteApiKeyProperty`
+  → nullable `WebsiteApiKey.propertyId` (null = ALL, resolved live in `resolve-key.ts`, so it
+  covers properties added later — A-3). One-property keys keep their property; several-
+  property keys became ALL; a key on no property was revoked. Keys + webhooks stay in the
+  enterprise area ("Booking API Keys"); the form picks one property or "All properties".
+  Each property's website settings, Excursions & Spa online settings and online-bookings
+  list moved to **Online Booking** in the property area; their APIs take the property and
+  `requirePropertySetup(INTEGRATIONS)`. WEBSITE_API_PLAN W-2 and the public docs updated.
+- **4c Channel manager** — migration `20260924130000_channel_connection_per_property`:
+  `ChannelConnection.propertyId` (required, unique), `ChannelPropertyLink.connectionId`
+  unique, `ChannelSyncLog.propertyId`. A connection linked to several properties was split
+  (the split-off rows need a new webhook URL from Osta); an unlinked one was removed.
+  Rehearsed on a DB copy with sample rows. The Osta console connects a PROPERTY (invite code
+  + Beds24 property id, checked before the single-use code is spent) and can correct the
+  Beds24 property id. The Hub's channel pages moved under the property (status/health
+  check, Mapping with the sharing switch, Inbound Bookings, Exchange Log); every route
+  authorises through `src/lib/channels/hub-access.ts`; link create/delete answer 403
+  ("Uppsolut connects/disconnects"). Test helpers: `tests/helpers/channel.ts`.
+- The enterprise area now holds only: Properties, People, Sessions, Email & SFTP, Booking
+  API Keys, Support Access, Guest & Staff Lists.
+
 ## Assumptions (not explicitly answered — confirm or correct)
 
 - **A-1** Guest-profile dropdowns (Title, Gender, Nationality, ID Type, VIP Level, Dietary,

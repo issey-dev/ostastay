@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 process.env.SECRETS_ENCRYPTION_KEY = "test-job-runner-key";
 
 const { prisma } = await import("@/lib/db");
+const { channelTarget } = await import("../helpers/channel");
 const { runJobForEnterprise, runJobForAllEnterprises, reclaimStaleRuns, STALE_RUN_MINUTES, JOB_STATUS } =
   await import("@/lib/jobs/runner");
 const {
@@ -240,8 +241,8 @@ describe("Background job runner", () => {
 
   it("keep-alive refreshes only connections actually due, leaving fresh ones alone", async () => {
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
-    const fresh = await createConnection({ enterpriseId, name: `Fresh ${Date.now()}`, inviteCode: "x" });
-    const stale = await createConnection({ enterpriseId, name: `Stale ${Date.now()}`, inviteCode: "y" });
+    const fresh = await createConnection({ ...(await channelTarget(enterpriseId)), name: `Fresh ${Date.now()}`, inviteCode: "x" });
+    const stale = await createConnection({ ...(await channelTarget(enterpriseId)), name: `Stale ${Date.now()}`, inviteCode: "y" });
 
     // Age one past the keep-alive threshold.
     await prisma.channelConnection.update({
@@ -265,7 +266,7 @@ describe("Background job runner", () => {
 
   it("keep-alive keeps going when one connection's credentials are dead", async () => {
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
-    const dead = await createConnection({ enterpriseId, name: `Dead ${Date.now()}`, inviteCode: "z" });
+    const dead = await createConnection({ ...(await channelTarget(enterpriseId)), name: `Dead ${Date.now()}`, inviteCode: "z" });
     await prisma.channelConnection.update({
       where: { id: dead.id },
       data: { lastTokenRefreshAt: new Date(Date.now() - 28 * DAY_MS) },

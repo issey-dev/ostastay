@@ -545,6 +545,8 @@ model Property {
   taxProfiles                  TaxProfile[]
   paymentMethods               PaymentMethod[]
   systemCodes                  SystemCode[]
+  channelConnection            ChannelConnection?            @relation("PropertyChannelConnection")
+  channelSyncLogs              ChannelSyncLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3333,20 +3335,21 @@ model SpaGuestTherapistPreference {
 }
 
 // A connection to an external channel manager (Beds24 today) — the exchange interface
-// between this enterprise and the booking channels. Lives at the ENTERPRISE level, which
-// is why it is administered from the Hub and not the property dashboard. See
-// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+// between ONE PROPERTY and the booking channels. See .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md
+// and .agents/docs/HUB_SETUP_PLAN.md (Phase 4).
 //
-// Deliberately NOT unique per enterprise. Beds24's own account model puts many properties
-// under one account, but some operators keep a separate account per property — allowing
-// several connections per enterprise supports both without a schema change, so the
-// "one account per enterprise or per property?" question (plan decision D-6) never has to
-// be answered up front. Which ostastay properties a connection covers is a separate
-// mapping concern (ChannelPropertyLink), landing with the Sharing screen.
+// One connection per property (owner, 2026-09-23 — supersedes the per-enterprise invite
+// code). Uppsolut creates it from the Osta console for a chosen property, linking that
+// property's Beds24 property id in the same step (its ChannelPropertyLink); the property's
+// own Hub area then does mapping, availability/rate checks, inbound bookings and logs, but
+// never connects, disconnects or re-authorizes. enterpriseId is kept denormalised for the
+// cross-tenant Osta views and the per-enterprise jobs.
 model ChannelConnection {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String     @unique
+  property     Property   @relation("PropertyChannelConnection", fields: [propertyId], references: [id], onDelete: Cascade)
   // Only "BEDS24" today. A plain string rather than an enum to match the rest of this
   // schema (see Property.status, ChargeCode.category) and to keep adding a provider a
   // code-only change.
@@ -3434,7 +3437,9 @@ model ChannelConnection {
 // connected.
 model ChannelPropertyLink {
   id           String            @id @default(uuid())
-  connectionId String
+  // One link per connection — the connection's own property (a connection is per property
+  // since 2026-09-23), created with the connection by the Osta console.
+  connectionId String            @unique
   connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   propertyId String   @unique
@@ -3517,6 +3522,13 @@ model ChannelSyncLog {
   connection     ChannelConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
   connectionName String
 
+  // The property whose exchange this was (a connection is per property) — denormalised
+  // like enterpriseId, so a property's Logs screen scopes without a join and keeps its
+  // entries after the connection is removed. Null only for an Osta setup attempt that
+  // named no valid property.
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
   // OUTBOUND (we called the channel manager) | INBOUND (it called us, e.g. a webhook).
   direction String
   // Coarse operation name, e.g. "auth.setup", "auth.token", "connection.test".
@@ -3536,6 +3548,7 @@ model ChannelSyncLog {
 
   @@index([enterpriseId, createdAt])
   @@index([connectionId, createdAt])
+  @@index([propertyId, createdAt])
 }
 
 // One execution of a background job for one enterprise — see src/lib/jobs/.

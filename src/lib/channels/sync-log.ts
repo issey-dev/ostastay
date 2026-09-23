@@ -20,6 +20,8 @@ export type PublicSyncLog = {
 };
 
 export type SyncLogFilters = {
+  /** One property's exchanges — what the Hub's property area always asks for. */
+  propertyId?: string;
   connectionId?: string;
   direction?: string;
   /** "ok" | "failed" — troubleshooting almost always starts from the failures. */
@@ -43,6 +45,7 @@ export async function listSyncLogs(
     where: {
       // Always scoped to the caller's own enterprise — never a client-supplied id.
       enterpriseId,
+      ...(filters.propertyId ? { propertyId: filters.propertyId } : {}),
       ...(filters.connectionId ? { connectionId: filters.connectionId } : {}),
       ...(filters.direction ? { direction: filters.direction } : {}),
       ...(filters.outcome === "ok" ? { ok: true } : {}),

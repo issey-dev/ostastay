@@ -39,7 +39,7 @@ describe("Inbound booking conversion", () => {
     propertyId = property.id;
 
     const connection = await prisma.channelConnection.create({
-      data: { enterpriseId, provider: "BEDS24", name: `Conv Conn ${Date.now()}`, refreshToken: "x" },
+      data: { enterpriseId, propertyId, provider: "BEDS24", name: `Conv Conn ${Date.now()}`, refreshToken: "x" },
     });
     connectionId = connection.id;
 

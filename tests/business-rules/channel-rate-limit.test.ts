@@ -16,6 +16,7 @@ vi.mock("next/headers", () => ({
 process.env.SECRETS_ENCRYPTION_KEY = "test-rate-limit-key";
 
 const { prisma } = await import("@/lib/db");
+const { channelTarget } = await import("../helpers/channel");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { ensureRoles, SYSTEM_ROLE_DEFS } = await import("../../prisma/rbac-seed-data");
 const { createConnection, setRateLimitPauseThreshold, isRateLimitPaused } = await import(
@@ -92,7 +93,7 @@ describe("Beds24 rate-limit handling", () => {
       { "X-FiveMinCreditLimit": "300", "X-FiveMinCreditLimit-Remaining": "287", "X-FiveMinCreditLimit-ResetsIn": "120" }
     );
 
-    const created = await createConnection({ enterpriseId, name: `RL Capture ${Date.now()}`, inviteCode: "x" });
+    const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Capture ${Date.now()}`, inviteCode: "x" });
 
     const row = await prisma.channelConnection.findUnique({ where: { id: created.id } });
     expect(row?.rateLimitTotal).toBe(300);
@@ -106,7 +107,7 @@ describe("Beds24 rate-limit handling", () => {
   it("leaves the rate-limit fields untouched when the response carries no such headers", async () => {
     stubBeds24WithHeaders({ refreshToken: "r2", token: "a2", expiresIn: 86400 }, null);
 
-    const created = await createConnection({ enterpriseId, name: `RL Absent ${Date.now()}`, inviteCode: "y" });
+    const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Absent ${Date.now()}`, inviteCode: "y" });
 
     const row = await prisma.channelConnection.findUnique({ where: { id: created.id } });
     expect(row?.rateLimitTotal).toBeNull();
@@ -135,7 +136,7 @@ describe("Beds24 rate-limit handling", () => {
   describe("setRateLimitPauseThreshold", () => {
     it("rejects a negative or non-integer threshold", async () => {
       stubBeds24WithHeaders({ refreshToken: "r3", token: "a3", expiresIn: 86400 }, null);
-      const created = await createConnection({ enterpriseId, name: `RL Validate ${Date.now()}`, inviteCode: "z" });
+      const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Validate ${Date.now()}`, inviteCode: "z" });
 
       await expect(setRateLimitPauseThreshold(created.id, -1)).rejects.toThrow();
       await expect(setRateLimitPauseThreshold(created.id, 2.5)).rejects.toThrow();
@@ -143,7 +144,7 @@ describe("Beds24 rate-limit handling", () => {
 
     it("saves a valid threshold and clears it back to null", async () => {
       stubBeds24WithHeaders({ refreshToken: "r4", token: "a4", expiresIn: 86400 }, null);
-      const created = await createConnection({ enterpriseId, name: `RL Save ${Date.now()}`, inviteCode: "w" });
+      const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Save ${Date.now()}`, inviteCode: "w" });
 
       const saved = await setRateLimitPauseThreshold(created.id, 25);
       expect(saved.rateLimitPauseThreshold).toBe(25);
@@ -155,7 +156,7 @@ describe("Beds24 rate-limit handling", () => {
 
   it("the Hub cannot change the self-throttle floor — it protects Osta's shared pool", async () => {
     stubBeds24WithHeaders({ refreshToken: "r5", token: "a5", expiresIn: 86400 }, null);
-    const created = await createConnection({ enterpriseId, name: `RL Route ${Date.now()}`, inviteCode: "v" });
+    const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Route ${Date.now()}`, inviteCode: "v" });
 
     cookieJar.clear();
     await createSession(adminId);
@@ -177,17 +178,6 @@ describe("Beds24 rate-limit handling", () => {
 
   describe("self-throttle gates push and poll", () => {
     async function makePausedConnectionAndLink() {
-      const connection = await prisma.channelConnection.create({
-        data: {
-          enterpriseId,
-          provider: "BEDS24",
-          name: `RL Paused ${Date.now()}`,
-          refreshToken: "stored",
-          rateLimitPauseThreshold: 10,
-          rateLimitRemaining: 5,
-          rateLimitResetsAt: new Date(Date.now() + DAY_MS),
-        },
-      });
       const property = await prisma.property.create({
         data: {
           enterpriseId,
@@ -198,6 +188,18 @@ describe("Beds24 rate-limit handling", () => {
           timeZone: "UTC",
           checkInTime: "14:00",
           checkOutTime: "11:00",
+        },
+      });
+      const connection = await prisma.channelConnection.create({
+        data: {
+          enterpriseId,
+          propertyId: property.id,
+          provider: "BEDS24",
+          name: `RL Paused ${Date.now()}`,
+          refreshToken: "stored",
+          rateLimitPauseThreshold: 10,
+          rateLimitRemaining: 5,
+          rateLimitResetsAt: new Date(Date.now() + DAY_MS),
         },
       });
       const link = await prisma.channelPropertyLink.create({

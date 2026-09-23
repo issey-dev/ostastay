@@ -14,7 +14,8 @@ export default async function HubPropertyHomePage({
   const { slug, propertyId } = await params
   const ctx = await requireSession()
   const keys = visibleKeys(PROPERTY_NAV, (m) => hasPermission(ctx, m, "view"), await loadHubAddons(ctx.enterpriseId))
-  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && keys.includes(item.key))
+  // Sub-pages (a section's children) are reached from their section, not listed as cards.
+  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && !item.child && keys.includes(item.key))
 
   return (
     <div className="space-y-6">

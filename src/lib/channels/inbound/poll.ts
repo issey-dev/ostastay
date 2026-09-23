@@ -64,6 +64,7 @@ export async function pollConnection(
       rateLimitRemaining: true,
       rateLimitResetsAt: true,
       pollLookbackHours: true,
+      propertyId: true,
     },
   });
   if (!connection) throw new Error("Connection not found");
@@ -94,6 +95,7 @@ export async function pollConnection(
   const provider = getProvider(connection.provider);
   const sink = makeLogSink({
     enterpriseId: connection.enterpriseId,
+    propertyId: connection.propertyId,
     connectionName: connection.name,
     connectionId: connection.id,
   });

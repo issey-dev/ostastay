@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Key } from "@/components/icons"
+import { Key } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobStatusCard } from "@/components/hub/job-status-card"
 import { InfoHint } from "@/components/ui/info-hint"
@@ -28,23 +28,6 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-              Channel Manager
-              <InfoHint>Connect to the channel manager, choose what is shared, and review inbound and outbound sync logs.</InfoHint>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <a
-              href={`/e/${slug}/hub/enterprise/channel-manager`}
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              Open Channel Manager
-            </a>
-          </CardContent>
-        </Card>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

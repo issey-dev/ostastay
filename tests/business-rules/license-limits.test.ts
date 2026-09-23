@@ -165,7 +165,7 @@ describe("PM room types on channels", () => {
     const pseudo = await makeRoomType(property.id, "PMX", true);
 
     const connection = await prisma.channelConnection.create({
-      data: { enterpriseId: ent.id, provider: "BEDS24", name: "Test conn" },
+      data: { enterpriseId: ent.id, propertyId: property.id, provider: "BEDS24", name: "Test conn" },
     });
     const link = await prisma.channelPropertyLink.create({
       data: { connectionId: connection.id, propertyId: property.id, externalPropertyId: "ext-1" },

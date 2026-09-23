@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizeLink } from "@/lib/channels/hub-access";
 import { logActivity } from "@/lib/activity-log";
 import { getBookingDefaults, setBookingDefaults } from "@/lib/channels/defaults";
 
@@ -9,8 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "view");
+    await authorizeLink(ctx, id, "view");
 
     const defaults = await getBookingDefaults(ctx.enterpriseId, id);
     return NextResponse.json(defaults);
@@ -24,8 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
+    await authorizeLink(ctx, id, "update");
 
     const body = await request.json().catch(() => null);
     const ratePlanId = typeof body?.ratePlanId === "string" && body.ratePlanId.trim() ? body.ratePlanId : null;

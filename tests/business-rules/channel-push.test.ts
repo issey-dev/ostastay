@@ -8,6 +8,7 @@ vi.mock("next/headers", () => ({
 }));
 
 const { prisma } = await import("@/lib/db");
+const { connectProperty } = await import("../helpers/channel");
 const { compactNights, buildCalendarPayload, countNights } = await import("@/lib/channels/payload");
 const { pushAvailabilityForLink, pushAllEnabledLinks } = await import("@/lib/channels/push");
 const { ForbiddenError } = await import("@/lib/scope");
@@ -188,7 +189,7 @@ describe("Channel push", () => {
       });
 
       const connection = await prisma.channelConnection.create({
-        data: { enterpriseId, provider: "BEDS24", name: `Push Conn ${Date.now()}`, refreshToken: "stored" },
+        data: { enterpriseId, propertyId: property.id, provider: "BEDS24", name: `Push Conn ${Date.now()}`, refreshToken: "stored" },
       });
       connectionId = connection.id;
 
@@ -289,9 +290,8 @@ describe("Channel push", () => {
           checkOutTime: "11:00",
         },
       });
-      const bareLink = await prisma.channelPropertyLink.create({
-        data: { connectionId, propertyId: bare.id, externalPropertyId: "ext-bare", syncEnabled: true },
-      });
+      // Its own connection — a connection serves exactly one property.
+      const bareLink = (await connectProperty(bare.id, { externalPropertyId: "ext-bare", syncEnabled: true })).link;
 
       const spy = stubFetch({});
       const result = await pushAvailabilityForLink({ enterpriseId, linkId: bareLink.id });
@@ -304,7 +304,7 @@ describe("Channel push", () => {
     });
 
     it("pushAllEnabledLinks only touches links that are actually sharing", async () => {
-      await prisma.channelPropertyLink.updateMany({ where: { connectionId }, data: { syncEnabled: false } });
+      await prisma.channelPropertyLink.updateMany({ where: { connection: { enterpriseId } }, data: { syncEnabled: false } });
       await prisma.channelPropertyLink.update({ where: { id: linkId }, data: { syncEnabled: true } });
       stubFetch({ token: "t", expiresIn: 86400 });
 

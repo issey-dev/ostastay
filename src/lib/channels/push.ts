@@ -118,6 +118,7 @@ export async function pushAvailabilityForLink(opts: {
 
   const sink = makeLogSink({
     enterpriseId,
+    propertyId: link.propertyId,
     connectionName: link.connection.name,
     connectionId: link.connection.id,
   });

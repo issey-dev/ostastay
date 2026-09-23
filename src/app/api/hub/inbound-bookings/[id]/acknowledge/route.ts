@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Acknowledge a flagged inbound booking — "the desk has seen this and is dealing with it".
@@ -17,16 +17,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
-
     const booking = await prisma.channelInboundBooking.findUnique({
       where: { id },
-      select: { id: true, enterpriseId: true, externalBookingId: true, isOverbooking: true },
+      select: { id: true, enterpriseId: true, externalBookingId: true, isOverbooking: true, connection: { select: { propertyId: true } } },
     });
     if (!booking || booking.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
+    // The connection's property decides who may acknowledge it.
+    await requirePropertySetup(ctx, booking.connection.propertyId, "INTEGRATIONS", "update");
 
     await prisma.channelInboundBooking.update({
       where: { id },

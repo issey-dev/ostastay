@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizeLink } from "@/lib/channels/hub-access";
 import { logActivity } from "@/lib/activity-log";
 import {
   setRoomTypeMapping,
   setRatePlanMapping,
   setSyncEnabled,
-  deletePropertyLink,
-  assertLinkInEnterprise,
 } from "@/lib/channels/sharing";
 
 // Mapping edits and the sharing switch for one property link.
@@ -18,10 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
-
-    const link = await assertLinkInEnterprise(id, ctx.enterpriseId);
+    await authorizeLink(ctx, id, "update");
     const body = await request.json().catch(() => null);
 
     if (typeof body?.roomTypeId === "string") {
@@ -74,27 +70,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "delete");
-
-    await deletePropertyLink(ctx.enterpriseId, id);
-
-    await logActivity({
-      ctx,
-      module: "INTEGRATIONS",
-      action: "DELETE",
-      description: "Unlinked a property from the channel manager",
-      entityType: "ChannelPropertyLink",
-      entityId: id,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    const { status, body } = toErrorResponse(error);
-    return NextResponse.json(body, { status });
-  }
+// Unlinking is DISCONNECTING the property, which only Uppsolut does (Osta console).
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Only Uppsolut can disconnect a property from the channel manager. Contact Uppsolut." },
+    { status: 403 }
+  );
 }

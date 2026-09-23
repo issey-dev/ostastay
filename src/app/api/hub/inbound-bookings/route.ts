@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizePropertyParam } from "@/lib/channels/hub-access";
 
-// Bookings received from the channel manager, for the caller's own enterprise.
+// Bookings received through one property's channel-manager connection (?propertyId=,
+// Property Setup with INTEGRATIONS there — src/lib/channels/hub-access.ts). Scoped by the
+// CONNECTION's property, so a booking the parser could not place still shows at the
+// property whose channel manager sent it.
 //
 // Read-only. The raw payload is deliberately NOT returned by default — it is stored so a
 // mis-parse is recoverable, not so it can be browsed; it carries the guest's full details
@@ -10,8 +14,8 @@ import { requireSession, requireEnterpriseHub, requirePermission, toErrorRespons
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "view");
+    const propertyId = await authorizePropertyParam(ctx, request, "view");
+    const scope = { enterpriseId: ctx.enterpriseId, connection: { propertyId } };
 
     const { searchParams } = new URL(request.url);
     const onlyProblems = searchParams.get("filter") === "problems";
@@ -20,7 +24,7 @@ export async function GET(request: Request) {
 
     const rows = await prisma.channelInboundBooking.findMany({
       where: {
-        enterpriseId: ctx.enterpriseId,
+        ...scope,
         ...(onlyOverbookings ? { isOverbooking: true } : {}),
         ...(onlyProblems ? { problem: { not: null } } : {}),
       },
@@ -56,10 +60,10 @@ export async function GET(request: Request) {
     // here that needs a human today, so it is surfaced separately from the plain total.
     const [unacknowledgedOverbookings, withProblems] = await Promise.all([
       prisma.channelInboundBooking.count({
-        where: { enterpriseId: ctx.enterpriseId, isOverbooking: true, acknowledgedAt: null },
+        where: { ...scope, isOverbooking: true, acknowledgedAt: null },
       }),
       prisma.channelInboundBooking.count({
-        where: { enterpriseId: ctx.enterpriseId, problem: { not: null } },
+        where: { ...scope, problem: { not: null } },
       }),
     ]);
 

@@ -17,6 +17,7 @@ vi.mock("next/headers", () => ({
 process.env.SECRETS_ENCRYPTION_KEY = "test-sync-log-key";
 
 const { prisma } = await import("@/lib/db");
+const { channelTarget } = await import("../helpers/channel");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { ensureRoles, SYSTEM_ROLE_DEFS } = await import("../../prisma/rbac-seed-data");
 const { createConnection, testConnection } = await import("@/lib/channels/connection");
@@ -152,7 +153,7 @@ describe("Channel sync log", () => {
     stubBeds24({ refreshToken: REFRESH, token: ACCESS, expiresIn: 86400 });
 
     const created = await createConnection({
-      enterpriseId,
+      ...(await channelTarget(enterpriseId)),
       name: `Logged ${Date.now()}`,
       inviteCode: INVITE,
     });
@@ -181,7 +182,7 @@ describe("Channel sync log", () => {
     stubBeds24({ error: "Token not valid" }, false, 401);
 
     await expect(
-      createConnection({ enterpriseId, name: "Doomed", inviteCode: "bad-code" })
+      createConnection({ ...(await channelTarget(enterpriseId)), name: "Doomed", inviteCode: "bad-code" })
     ).rejects.toThrow();
 
     const rows = await prisma.channelSyncLog.findMany({
@@ -200,7 +201,7 @@ describe("Channel sync log", () => {
 
   it("logs survive deletion of the connection they belong to", async () => {
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
-    const conn = await createConnection({ enterpriseId, name: `Ephemeral ${Date.now()}`, inviteCode: "x" });
+    const conn = await createConnection({ ...(await channelTarget(enterpriseId)), name: `Ephemeral ${Date.now()}`, inviteCode: "x" });
 
     const before = await prisma.channelSyncLog.count({ where: { connectionId: conn.id } });
     expect(before).toBeGreaterThan(0);
@@ -220,7 +221,7 @@ describe("Channel sync log", () => {
 
   it("filters by outcome and scopes to the caller's enterprise", async () => {
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
-    const conn = await createConnection({ enterpriseId, name: `Filter ${Date.now()}`, inviteCode: "x" });
+    const conn = await createConnection({ ...(await channelTarget(enterpriseId)), name: `Filter ${Date.now()}`, inviteCode: "x" });
     stubBeds24({ error: "nope" }, false, 401);
     await testConnection(conn.id);
 
@@ -280,18 +281,23 @@ describe("Channel sync log", () => {
     await destroySession();
   });
 
-  it("GET /api/hub/sync-logs returns only the caller's own enterprise's entries", async () => {
+  it("GET /api/hub/sync-logs returns one property's entries only, and needs the property", async () => {
+    // Each exchange is recorded against its connection's property (one connection per
+    // property), so a property's Logs screen shows that property's traffic alone.
+    const logged = await prisma.channelSyncLog.findFirstOrThrow({ where: { enterpriseId, propertyId: { not: null } } });
+    const propertyId = logged.propertyId!;
+
     cookieJar.clear();
     await createSession(adminId);
-    const res = await syncLogsRoute.GET(new Request("http://localhost/api/hub/sync-logs"));
+    expect((await syncLogsRoute.GET(new Request("http://localhost/api/hub/sync-logs"))).status).toBe(403);
+    const res = await syncLogsRoute.GET(new Request(`http://localhost/api/hub/sync-logs?propertyId=${propertyId}`));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body.logs)).toBe(true);
-    // Every returned row belongs to this enterprise — verified against the DB, not just
-    // trusted from the response.
+    expect(body.logs.length).toBeGreaterThan(0);
+    // Every returned row is this property's — verified against the DB, not just trusted
+    // from the response.
     const ids = body.logs.map((l: { id: string }) => l.id);
-    const mine = await prisma.channelSyncLog.count({ where: { id: { in: ids }, enterpriseId } });
-    expect(mine).toBe(ids.length);
+    expect(await prisma.channelSyncLog.count({ where: { id: { in: ids }, enterpriseId, propertyId } })).toBe(ids.length);
     await destroySession();
   });
 });

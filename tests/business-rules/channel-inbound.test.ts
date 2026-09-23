@@ -181,6 +181,7 @@ describe("Inbound bookings", () => {
       webhookToken = generateWebhookToken();
       const connection = await prisma.channelConnection.create({
         data: {
+          propertyId,
           enterpriseId,
           provider: "BEDS24",
           name: `In Conn ${Date.now()}`,

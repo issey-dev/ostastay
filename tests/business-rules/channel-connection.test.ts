@@ -20,10 +20,11 @@ vi.mock("next/headers", () => ({
 process.env.SECRETS_ENCRYPTION_KEY = "test-channel-connection-key";
 
 const { prisma } = await import("@/lib/db");
+const { channelTarget } = await import("../helpers/channel");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { isEncryptedSecret, decryptSecret } = await import("@/lib/secret-crypto");
 const { ensureRoles, SYSTEM_ROLE_DEFS } = await import("../../prisma/rbac-seed-data");
-const { createConnection, toPublicConnection, testConnection, listConnections } = await import(
+const { createConnection, toPublicConnection, testConnection, getPropertyConnection } = await import(
   "@/lib/channels/connection"
 );
 const { daysUntilRefreshTokenExpiry, needsKeepAlive, isAccessTokenStale, REFRESH_TOKEN_IDLE_DAYS } = await import(
@@ -48,6 +49,7 @@ describe("Channel manager connection (Beds24)", () => {
   let adminAId: string;
   let adminBId: string;
   let propertyScopedUserId: string;
+  let scopedPropertyId: string;
 
   beforeAll(async () => {
     const osta = await prisma.enterprise.upsert({
@@ -86,7 +88,8 @@ describe("Channel manager connection (Beds24)", () => {
     enterpriseBId = b.entId;
     adminBId = b.adminId;
 
-    // A property-scoped user WITH full Admin rights — the Hub must still refuse them.
+    // A property-scoped user WITH full Admin rights — the Hub serves them their own
+    // property's channel manager only (one connection per property, 2026-09-23).
     const property = await prisma.property.create({
       data: {
         enterpriseId: enterpriseAId,
@@ -112,6 +115,7 @@ describe("Channel manager connection (Beds24)", () => {
       },
     });
     propertyScopedUserId = propUser.id;
+    scopedPropertyId = property.id;
   });
 
   afterEach(() => {
@@ -156,7 +160,7 @@ describe("Channel manager connection (Beds24)", () => {
     stubBeds24({ refreshToken: "plaintext-refresh-abc", token: "access-xyz", expiresIn: 86400 });
 
     const created = await createConnection({
-      enterpriseId: enterpriseAId,
+      ...(await channelTarget(enterpriseAId)),
       name: `Enc ${Date.now()}`,
       inviteCode: "invite-123",
     });
@@ -174,7 +178,7 @@ describe("Channel manager connection (Beds24)", () => {
   it("the public connection shape carries no token fields at all", async () => {
     stubBeds24({ refreshToken: "secret-refresh", token: "secret-access", expiresIn: 86400 });
     const created = await createConnection({
-      enterpriseId: enterpriseAId,
+      ...(await channelTarget(enterpriseAId)),
       name: `Redact ${Date.now()}`,
       inviteCode: "invite-456",
     });
@@ -197,7 +201,7 @@ describe("Channel manager connection (Beds24)", () => {
     const before = await prisma.channelConnection.count({ where: { enterpriseId: enterpriseAId } });
 
     await expect(
-      createConnection({ enterpriseId: enterpriseAId, name: `Bad ${Date.now()}`, inviteCode: "nope" })
+      createConnection({ ...(await channelTarget(enterpriseAId)), name: `Bad ${Date.now()}`, inviteCode: "nope" })
     ).rejects.toThrow();
 
     // A saved-but-unusable connection would report a credential it cannot authenticate.
@@ -207,7 +211,7 @@ describe("Channel manager connection (Beds24)", () => {
   it("a failed health check records the reason and marks the connection ERROR", async () => {
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
     const created = await createConnection({
-      enterpriseId: enterpriseAId,
+      ...(await channelTarget(enterpriseAId)),
       name: `Health ${Date.now()}`,
       inviteCode: "invite-789",
     });
@@ -225,36 +229,58 @@ describe("Channel manager connection (Beds24)", () => {
   // Access control
   // ---------------------------------------------------------------------------
 
-  it("GET /api/hub/connections refuses a PROPERTY-scoped user even with Admin rights", async () => {
+  it("a PROPERTY-scoped admin reads their own property's connection, never another property's", async () => {
+    stubBeds24({ refreshToken: "r-own", token: "a-own", expiresIn: 86400 });
+    const own = await createConnection({
+      propertyId: scopedPropertyId,
+      externalPropertyId: `ext-own-${Date.now()}`,
+      name: `Own ${Date.now()}`,
+      inviteCode: "own",
+    });
+    const sibling = await channelTarget(enterpriseAId);
+    await createConnection({ ...sibling, name: `Sibling ${Date.now()}`, inviteCode: "sib" });
+
+    const get = (propertyId: string) =>
+      connectionsRoute.GET(new Request(`http://localhost/api/hub/connections?propertyId=${propertyId}`));
     cookieJar.clear();
     await createSession(propertyScopedUserId);
-    const res = await connectionsRoute.GET();
-    expect(res.status).toBe(403);
+    const mine = await get(scopedPropertyId);
+    expect(mine.status).toBe(200);
+    expect((await mine.json()).connection.id).toBe(own.id);
+    expect((await get(sibling.propertyId)).status).toBe(403);
     await destroySession();
+  });
+
+  it("one connection per property — a second one for the same property is refused before the invite code is spent", async () => {
+    const target = await channelTarget(enterpriseAId);
+    stubBeds24({ refreshToken: "r-1", token: "a-1", expiresIn: 86400 });
+    const first = await createConnection({ ...target, name: `First ${Date.now()}`, inviteCode: "one" });
+    expect(await prisma.channelPropertyLink.count({ where: { connectionId: first.id, propertyId: target.propertyId } })).toBe(1);
+
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    await expect(createConnection({ ...target, name: `Second ${Date.now()}`, inviteCode: "two" })).rejects.toThrow(/already has/);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("connections are scoped to the caller's own enterprise", async () => {
     stubBeds24({ refreshToken: "r-a", token: "a-a", expiresIn: 86400 });
-    await createConnection({ enterpriseId: enterpriseAId, name: `Scoped ${Date.now()}`, inviteCode: "x" });
+    const target = await channelTarget(enterpriseAId);
+    await createConnection({ ...target, name: `Scoped ${Date.now()}`, inviteCode: "x" });
+    expect(await getPropertyConnection(target.propertyId)).not.toBeNull();
 
-    const aList = await listConnections(enterpriseAId);
-    const bList = await listConnections(enterpriseBId);
-    expect(aList.length).toBeGreaterThan(0);
-    expect(bList.length).toBe(0);
-
+    // Enterprise B's admin cannot read enterprise A's property at all.
     cookieJar.clear();
     await createSession(adminBId);
-    const res = await connectionsRoute.GET();
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.connections).toEqual([]);
+    const res = await connectionsRoute.GET(new Request(`http://localhost/api/hub/connections?propertyId=${target.propertyId}`));
+    expect(res.status).toBe(403);
     await destroySession();
   });
 
   it("the Hub cannot delete a connection at all — setup is Osta-level", async () => {
     stubBeds24({ refreshToken: "r-victim", token: "a-victim", expiresIn: 86400 });
     const existing = await createConnection({
-      enterpriseId: enterpriseAId,
+      ...(await channelTarget(enterpriseAId)),
       name: `Victim ${Date.now()}`,
       inviteCode: "y",
     });

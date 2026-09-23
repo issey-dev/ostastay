@@ -17,6 +17,7 @@ vi.mock("next/headers", () => ({
 process.env.SECRETS_ENCRYPTION_KEY = "test-sharing-key";
 
 const { prisma } = await import("@/lib/db");
+const { channelTarget, connectProperty } = await import("../helpers/channel");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { ensureRoles, SYSTEM_ROLE_DEFS } = await import("../../prisma/rbac-seed-data");
 const { createConnection } = await import("@/lib/channels/connection");
@@ -30,6 +31,7 @@ const {
 } = await import("@/lib/channels/sharing");
 const { ForbiddenError } = await import("@/lib/scope");
 const linksRoute = await import("@/app/api/hub/property-links/route");
+const linkRoute = await import("@/app/api/hub/property-links/[id]/route");
 
 function stubBeds24(response: unknown, ok = true, status = 200) {
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok, status, json: async () => response }) as unknown as Response));
@@ -55,6 +57,7 @@ describe("Channel sharing & mapping", () => {
   let otherEnterpriseId: string;
   let adminId: string;
   let propertyScopedUserId: string;
+  let scopedPropertyId: string;
   let connectionId: string;
 
   beforeAll(async () => {
@@ -95,6 +98,7 @@ describe("Channel sharing & mapping", () => {
     ).id;
 
     const scopedProp = await makeProperty(enterpriseId, "Scoped");
+    scopedPropertyId = scopedProp.id;
     propertyScopedUserId = (
       await prisma.user.create({
         data: {
@@ -112,7 +116,7 @@ describe("Channel sharing & mapping", () => {
 
     stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
     connectionId = (
-      await createConnection({ enterpriseId, name: `Share Conn ${Date.now()}`, inviteCode: "x" })
+      await createConnection({ ...(await channelTarget(enterpriseId)), name: `Share Conn ${Date.now()}`, inviteCode: "x" })
     ).id;
     vi.unstubAllGlobals();
   });
@@ -129,17 +133,12 @@ describe("Channel sharing & mapping", () => {
     const property = await makeProperty(enterpriseId, "Double");
     stubBeds24({ refreshToken: "r2", token: "a2", expiresIn: 86400 });
     const secondConnection = await createConnection({
-      enterpriseId,
+      ...(await channelTarget(enterpriseId)),
       name: `Second ${Date.now()}`,
       inviteCode: "y",
     });
 
-    await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: "ext-1",
-    });
+    await connectProperty(property.id, { externalPropertyId: "ext-1" });
 
     // Two connections both pushing availability for the same rooms and both accepting
     // bookings is a double-sell — it surfaces as an overbooked guest at the desk, never as
@@ -190,12 +189,7 @@ describe("Channel sharing & mapping", () => {
 
   it("refuses to enable sharing while an active room type is unmapped, and allows it once mapped", async () => {
     const property = await makeProperty(enterpriseId, "Ready");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-ready-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-ready-${Date.now()}` })).link;
     const rtA = await prisma.roomType.create({
       data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 },
     });
@@ -223,24 +217,14 @@ describe("Channel sharing & mapping", () => {
 
   it("a new link never starts sharing on its own", async () => {
     const property = await makeProperty(enterpriseId, "Fresh");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-fresh-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-fresh-${Date.now()}` })).link;
     // Publishing inventory must be an explicit act, never a side effect of linking.
     expect(link.syncEnabled).toBe(false);
   });
 
   it("disabling sharing is always allowed, even when mapping is incomplete", async () => {
     const property = await makeProperty(enterpriseId, "Stopit");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-stop-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-stop-${Date.now()}` })).link;
     const rt = await prisma.roomType.create({
       data: { propertyId: property.id, name: "Std", code: "S1", maxOccupancy: 2 },
     });
@@ -262,12 +246,7 @@ describe("Channel sharing & mapping", () => {
   it("refuses to map a room type that belongs to a different property", async () => {
     const linked = await makeProperty(enterpriseId, "Linked");
     const elsewhere = await makeProperty(enterpriseId, "Elsewhere");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: linked.id,
-      externalPropertyId: `ext-x-${Date.now()}`,
-    });
+    const link = (await connectProperty(linked.id, { externalPropertyId: `ext-x-${Date.now()}` })).link;
     const strayRoomType = await prisma.roomType.create({
       data: { propertyId: elsewhere.id, name: "Stray", code: "STR", maxOccupancy: 2 },
     });
@@ -280,12 +259,7 @@ describe("Channel sharing & mapping", () => {
 
   it("clearing a mapping removes it and makes the link not ready again", async () => {
     const property = await makeProperty(enterpriseId, "Clear");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-clear-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-clear-${Date.now()}` })).link;
     const rt = await prisma.roomType.create({
       data: { propertyId: property.id, name: "Std", code: "C1", maxOccupancy: 2 },
     });
@@ -302,12 +276,7 @@ describe("Channel sharing & mapping", () => {
 
   it("rate-plan mapping is optional and does not gate readiness", async () => {
     const property = await makeProperty(enterpriseId, "Rates");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-rate-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-rate-${Date.now()}` })).link;
     const rt = await prisma.roomType.create({
       data: { propertyId: property.id, name: "Std", code: "R1", maxOccupancy: 2 },
     });
@@ -326,12 +295,7 @@ describe("Channel sharing & mapping", () => {
   it("refuses to map a rate plan from another property", async () => {
     const a = await makeProperty(enterpriseId, "RPa");
     const b = await makeProperty(enterpriseId, "RPb");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: a.id,
-      externalPropertyId: `ext-rp-${Date.now()}`,
-    });
+    const link = (await connectProperty(a.id, { externalPropertyId: `ext-rp-${Date.now()}` })).link;
     const strayPlan = await prisma.ratePlan.create({ data: { propertyId: b.id, code: "X", name: "Stray" } });
 
     await expect(
@@ -343,39 +307,34 @@ describe("Channel sharing & mapping", () => {
   // Access control
   // ---------------------------------------------------------------------------
 
-  it("a PROPERTY-scoped user is refused, and enterprises cannot see each other's links", async () => {
+  it("a PROPERTY-scoped admin sees their own property's link only, and enterprises cannot see each other's links", async () => {
+    const other = await makeProperty(enterpriseId, "NotMine");
+    await connectProperty(other.id);
+    const scoped = (await connectProperty(scopedPropertyId)).link;
+    const get = (propertyId: string) =>
+      linksRoute.GET(new Request(`http://localhost/api/hub/property-links?propertyId=${propertyId}`));
+
     cookieJar.clear();
     await createSession(propertyScopedUserId);
-    expect((await linksRoute.GET()).status).toBe(403);
+    const own = await get(scopedPropertyId);
+    expect(own.status).toBe(200);
+    expect((await own.json()).link.id).toBe(scoped.id);
+    expect((await get(other.id)).status).toBe(403);
     await destroySession();
 
     // The other enterprise has links of its own in the same DB; none must leak.
     expect(await listPropertyLinks(otherEnterpriseId)).toEqual([]);
-
-    cookieJar.clear();
-    await createSession(adminId);
-    const res = await linksRoute.GET();
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    const ids = body.links.map((l: { propertyId: string }) => l.propertyId);
-    const mine = await prisma.property.count({ where: { id: { in: ids }, enterpriseId } });
-    expect(mine).toBe(ids.length);
-    await destroySession();
   });
 
-  it("availableProperties excludes already-linked properties", async () => {
-    const free = await makeProperty(enterpriseId, "Free");
-
+  it("the Hub cannot link or unlink a property — Uppsolut connects it from the Osta console", async () => {
+    const property = await makeProperty(enterpriseId, "HubLink");
+    const { link } = await connectProperty(property.id);
     cookieJar.clear();
     await createSession(adminId);
-    const res = await linksRoute.GET();
-    const body = await res.json();
-    const availableIds = body.availableProperties.map((p: { id: string }) => p.id);
-    const linkedIds = body.links.map((l: { propertyId: string }) => l.propertyId);
-
-    expect(availableIds).toContain(free.id);
-    // The UI must not offer a property that would immediately be refused.
-    expect(linkedIds.some((id: string) => availableIds.includes(id))).toBe(false);
+    expect((await linksRoute.POST()).status).toBe(403);
+    expect((await linkRoute.DELETE()).status).toBe(403);
     await destroySession();
+    expect(await prisma.channelPropertyLink.count({ where: { id: link.id } })).toBe(1);
   });
+
 });

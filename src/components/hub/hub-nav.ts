@@ -59,10 +59,6 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "people", title: "People", path: "people", icon: Users, modules: ["USERS"] },
   { key: "sessions", title: "Sessions", path: "sessions", icon: Shield, modules: ["USERS"] },
   { key: "email", title: "Email & SFTP", path: "email", icon: Mail, modules: ["CONTROLS"] },
-  { key: "channel-manager", title: "Channel Manager", path: "channel-manager", icon: ArrowLeftRight, modules: ["INTEGRATIONS"] },
-  { key: "channel-mapping", title: "Mapping", path: "channel-manager/mapping", icon: Building2, modules: ["INTEGRATIONS"], child: true },
-  { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true },
-  { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true },
   { key: "booking-api", title: "Booking API Keys", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
   // Guest-profile lists and Job Functions — a guest profile and a user are shared by every
@@ -154,6 +150,17 @@ export const PROPERTY_NAV: HubNavItem[] = [
     modules: ["CONTROLS"],
     description: "Wording on invoices, receipts, letters, the registration card and statements.",
   },
+  {
+    key: "channel-manager",
+    title: "Channel Manager",
+    path: "channel-manager",
+    icon: ArrowLeftRight,
+    modules: ["INTEGRATIONS"],
+    description: "Connection status, mapping, inbound bookings and the exchange log.",
+  },
+  { key: "channel-mapping", title: "Mapping", path: "channel-manager/mapping", icon: Building2, modules: ["INTEGRATIONS"], child: true },
+  { key: "channel-bookings", title: "Inbound Bookings", path: "channel-manager/bookings", icon: ShieldAlert, modules: ["INTEGRATIONS"], child: true },
+  { key: "channel-logs", title: "Exchange Log", path: "channel-manager/logs", icon: FileText, modules: ["INTEGRATIONS"], child: true },
   {
     key: "online-booking",
     title: "Online Booking",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizePropertyParam } from "@/lib/channels/hub-access";
 import { listSyncLogs } from "@/lib/channels/sync-log";
 
 // The Hub's channel-manager exchange log — inbound and outbound, for troubleshooting.
@@ -10,19 +11,19 @@ import { listSyncLogs } from "@/lib/channels/sync-log";
 // much of a troubleshooting record. Retention is a scheduled prune (pruneSyncLogs), not a
 // button.
 //
-// Gated on "view" and, as everywhere in the Hub, requireEnterpriseHub() as well: a
-// PROPERTY-scoped user is refused outright regardless of their role bits.
+// One property's exchanges (a connection is per property): ?propertyId= is required and the
+// caller needs Property Setup (INTEGRATIONS) there — see src/lib/channels/hub-access.ts.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireEnterpriseHub(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "view");
+    const propertyId = await authorizePropertyParam(ctx, request, "view");
 
     const { searchParams } = new URL(request.url);
     const limitParam = searchParams.get("limit");
     const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
 
     const result = await listSyncLogs(ctx.enterpriseId, {
+      propertyId,
       connectionId: searchParams.get("connectionId") ?? undefined,
       direction: searchParams.get("direction") ?? undefined,
       outcome: searchParams.get("outcome") ?? undefined,

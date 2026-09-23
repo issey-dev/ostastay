@@ -11,13 +11,14 @@ import { ErrorState } from "@/components/ui/error-state"
 import { toast } from "@/lib/toast"
 import { type Connection, StatusBadge, formatDateTime } from "@/components/hub/connection-shared"
 
-// The Hub's channel-manager Connection screen — READ-ONLY since 2026-08-03.
+// A property's channel-manager Connection screen — READ-ONLY since 2026-08-03, one
+// connection per property since 2026-09-23 (HUB_SETUP_PLAN.md, Phase 4).
 //
-// Establishing the Beds24 link moved to the Osta console: under the master-account
-// topology the invite code belongs to the app owner's Beds24 account, so the tenant has
-// nothing to connect WITH. What they need from this screen is the answer to "is my
-// property connected, and to which Beds24 property?" — everything downstream of that
-// (mapping, bookings, logs) stays theirs.
+// Uppsolut connects each property from the Osta console: under the master-account topology
+// the invite code belongs to the app owner's Beds24 account, so the tenant has nothing to
+// connect WITH. What they need from this screen is the answer to "is this property
+// connected, and to which Beds24 property?" — everything downstream of that (mapping,
+// checks, bookings, logs) is theirs.
 //
 // The API refuses the setup actions independently (/api/hub/connections* return 403), so
 // this component omitting the buttons is presentation, not the control itself.
@@ -31,7 +32,7 @@ type PropertyLink = {
   connectionId: string
 }
 
-export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
+export function ChannelConnectionStatus({ propertyId, canManage }: { propertyId: string; canManage: boolean }) {
   const [connections, setConnections] = useState<Connection[]>([])
   const [links, setLinks] = useState<PropertyLink[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,20 +44,20 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
     setLoadError(false)
     try {
       const [connRes, linkRes] = await Promise.all([
-        fetch("/api/hub/connections"),
-        fetch("/api/hub/property-links"),
+        fetch(`/api/hub/connections?propertyId=${propertyId}`),
+        fetch(`/api/hub/property-links?propertyId=${propertyId}`),
       ])
       if (!connRes.ok || !linkRes.ok) throw new Error("failed")
       const connData = await connRes.json()
       const linkData = await linkRes.json()
-      setConnections(connData.connections ?? [])
-      setLinks(linkData.links ?? [])
+      setConnections(connData.connection ? [connData.connection] : [])
+      setLinks(linkData.link ? [linkData.link] : [])
     } catch {
       setLoadError(true)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propertyId])
 
   useEffect(() => {
     void load()
@@ -96,8 +97,8 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
     return (
       <EmptyState
         icon={ArrowLeftRight}
-        title="No channel manager connected yet"
-        description="Osta sets up the connection to the channel manager for your enterprise. Once it is connected, your properties and room types can be mapped here. Contact Osta to get started."
+        title="This property is not connected yet"
+        description="Uppsolut connects each property to the channel manager. Once this property is connected, its room types and rates can be mapped here. Contact Uppsolut to request the connection."
       />
     )
   }
@@ -105,8 +106,8 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Your channel-manager connection is managed by Osta. Mapping your properties, room types and rates is done
-        here — see the Mapping tab.
+        This property&apos;s channel-manager connection is managed by Uppsolut. Mapping its room types and rates is
+        done here — see Mapping.
       </p>
 
       {connections.map((c) => {
@@ -120,7 +121,7 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
                     {c.name}
                     <StatusBadge status={c.status} />
                   </CardTitle>
-                  <CardDescription>{c.provider === "BEDS24" ? "Beds24" : c.provider} · managed by Osta</CardDescription>
+                  <CardDescription>{c.provider === "BEDS24" ? "Beds24" : c.provider} · managed by Uppsolut</CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => void handleTest(c)} disabled={busyId === c.id || !canManage}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${busyId === c.id ? "animate-spin" : ""}`} />
@@ -136,23 +137,23 @@ export function ChannelConnectionStatus({ canManage }: { canManage: boolean }) {
                 </div>
                 <div className="flex justify-between gap-4 md:block">
                   <dt className="text-muted-foreground">Inbound webhook</dt>
-                  <dd className="font-medium">{c.hasWebhook ? "Installed by Osta" : "Not set up yet"}</dd>
+                  <dd className="font-medium">{c.hasWebhook ? "Installed by Uppsolut" : "Not set up yet"}</dd>
                 </div>
               </dl>
 
               {c.lastError && (
                 <p className="text-sm text-destructive">
-                  <span className="font-medium">Last error:</span> {c.lastError} — contact Osta if this persists.
+                  <span className="font-medium">Last error:</span> {c.lastError} — contact Uppsolut if this persists.
                 </p>
               )}
 
-              {/* The answer the tenant actually comes to this screen for: which of my
-                  properties is connected, and to which property on the channel side. */}
+              {/* The answer the tenant actually comes to this screen for: which property on the
+                  channel side this one is connected to, and whether it is shared yet. */}
               <div className="space-y-2 rounded-md border border-border p-3">
-                <span className="text-sm font-medium">Mapped properties</span>
+                <span className="text-sm font-medium">Channel-manager property</span>
                 {connLinks.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No property is mapped to this connection yet — set that up under Mapping.
+                    Not linked to a channel-manager property yet — contact Uppsolut.
                   </p>
                 ) : (
                   <ul className="space-y-2">
