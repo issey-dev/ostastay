@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { notifyBookingChange } from "@/lib/booking-events";
 
 // Marks a CONFIRMED booking as NO_SHOW — only meaningful after the departure has
 // actually left (can't know someone's a no-show before then). Deliberately leaves the
@@ -43,6 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       entityId: id,
       description: "Marked excursion booking as no-show",
     });
+    notifyBookingChange("booking.no_show", { excursionBookingId: id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

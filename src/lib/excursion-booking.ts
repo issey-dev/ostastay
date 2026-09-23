@@ -11,6 +11,7 @@ import { rateForDate, computeBookingTotal, combineDepartureDateTime } from "@/li
 import { logActivity } from "@/lib/activity-log";
 import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
 import { BookingError } from "@/lib/booking-error";
+import { notifyBookingChange } from "@/lib/booking-events";
 
 // The ONE place an ExcursionBooking is created, priced and cancelled. Shared by the desk's
 // session routes and the public Booking API (BOOKING_API_ADDONS_PLAN.md Phases 0 and 2),
@@ -482,6 +483,7 @@ export async function cancelExcursionBooking(
     entityId: id,
     description: `Cancelled ${booking.departure.excursionType.name} booking — ${reason}. ${chargeNote}`,
   });
+  notifyBookingChange("booking.cancelled", { excursionBookingId: id });
 
   return { chargeVoided: willVoid, chargeNote };
 }

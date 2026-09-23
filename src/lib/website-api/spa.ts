@@ -10,6 +10,7 @@ import { systemActorContext } from "@/lib/system-actor";
 import type { ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 import { activityGate, guestSchema, newPublicRef, paymentSchema, type ActivityGate } from "@/lib/website-api/activity-common";
 import { activityBookingResult } from "@/lib/website-api/activity-bookings";
+import { notifyBookingChange } from "@/lib/booking-events";
 
 // The Booking API's Spa endpoints (BOOKING_API_ADDONS_PLAN.md Phase 3): treatments, free
 // times, quote, hold, book. Lookup and cancel are module-generic (activity-bookings.ts).
@@ -415,6 +416,7 @@ export async function bookSpa(
     const settlement = paid ? { paymentMethodId: gate.settings!.onlinePaymentMethodId!, referenceNumber: body.payment.reference || publicRef } : null;
     const actor = await systemActorContext(key.enterpriseId);
     let recordId = hold?.id ?? "";
+    let appointmentId = hold?.spaAppointmentId ?? "";
 
     if (hold) {
       await confirmSpaHold(actor, hold.spaAppointmentId!, {
@@ -440,7 +442,7 @@ export async function bookSpa(
       const date = parseDay(body.date, "date");
       assertBookableTime(gate, treatment.property, date, body.startTime!);
       const requirements = requirementsFor(gate, partySize, body.gender);
-      await createSpaAppointment(actor, {
+      const created = await createSpaAppointment(actor, {
         propertyId,
         treatmentId: treatment.id,
         appointmentDate: body.date!,
@@ -474,8 +476,10 @@ export async function bookSpa(
           await tx.spaAppointment.update({ where: { id: appointment.id }, data: { notes: notesFor(total, mismatch(total)) } });
         },
       });
+      appointmentId = created.id;
     }
 
+    notifyBookingChange("booking.confirmed", { spaAppointmentId: appointmentId });
     return { status: 201, body: { booking: await activityBookingResult(recordId, { replayed: false }) } };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

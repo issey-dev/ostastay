@@ -11,6 +11,7 @@ import { round2 } from "@/lib/money";
 import { logActivity } from "@/lib/activity-log";
 import { BookingError } from "@/lib/booking-error";
 import { spaAppointmentInclude } from "@/lib/spa-booking";
+import { notifyBookingChange } from "@/lib/booking-events";
 
 // The Spa appointment lifecycle after booking (SPA_PLAN.md §6 / §9, "Phase 5"):
 //
@@ -374,6 +375,7 @@ export async function cancelSpaAppointment(
     description: `Cancelled ${appointment.treatmentNameSnapshot} (${appointment.appointmentDate.toISOString().slice(0, 10)} ${appointment.startTime}) — ${input.reasonCode}${notes ? `: ${notes}` : ""}${input.waiveFee && isLate ? " — fee waived" : ""}. ${outcome.chargeNote}`,
   });
 
+  notifyBookingChange("booking.cancelled", { spaAppointmentId: id });
   return { ...outcome, lateCancellation: isLate, appointment: await reload(id) };
 }
 
@@ -426,6 +428,7 @@ export async function markSpaNoShow(
     description: `Marked ${appointment.treatmentNameSnapshot} (${appointment.appointmentDate.toISOString().slice(0, 10)} ${appointment.startTime}) as no-show${input.waiveFee ? ` — fee waived: ${notes}` : ""}. ${outcome.chargeNote}`,
   });
 
+  notifyBookingChange("booking.no_show", { spaAppointmentId: id });
   return { ...outcome, appointment: await reload(id) };
 }
 
@@ -482,6 +485,7 @@ export async function completeSpaAppointment(ctx: AuthContext, id: string) {
   });
 
   await logLifecycle(ctx, appointment, posting ? "Completed and posted the charge for" : "Completed");
+  notifyBookingChange("booking.completed", { spaAppointmentId: id });
   return { chargePosted: !!posting, appointment: await reload(id) };
 }
 

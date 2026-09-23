@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, ForbiddenError, toErrorResponse } from "@/lib/scope";
 import { combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { notifyBookingChange } from "@/lib/booking-events";
 import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
 import { BookingError, bookingErrorResponse } from "@/lib/booking-error";
 import { voidPostedCharge, actorDisplayName } from "@/lib/posting/void-charge";
@@ -53,6 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let voidedCount = 0;
     let cancelledCount = 0;
+    const cancelledIds: string[] = [];
     const movableBookingIds: string[] = [];
     const unmovable: Array<{ bookingId: string; reason: string }> = [];
 
@@ -74,6 +76,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const closedFolioIds = new Set(folios.filter((f) => f.isClosed).map((f) => f.id));
 
       cancelledCount = bookings.length;
+      cancelledIds.push(...bookings.map((b) => b.id));
       const actorName = await actorDisplayName(tx, ctx.userId);
       for (const booking of bookings) {
         const canVoid = !!booking.folioLineItem && !booking.folioLineItem.isVoid && !closedFolioIds.has(booking.folioId);
@@ -127,6 +130,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const booked = c.bookings.reduce((s, b) => s + b.adultCount + b.childCount + b.infantCount, 0);
       return booked < c.capacity;
     });
+
+    for (const bookingId of cancelledIds) notifyBookingChange("booking.cancelled", { excursionBookingId: bookingId });
 
     await logActivity({
       ctx,

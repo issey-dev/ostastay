@@ -6,6 +6,7 @@ import { resolveBusinessDate } from "@/lib/business-date";
 import { ensureOpenShift } from "@/lib/cashier-shift";
 import { rateForDate, computeBookingTotal } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { notifyBookingChange } from "@/lib/booking-events";
 import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
 import { occupiedSeats, headcountLabel as formatHeadcount } from "@/lib/excursion-booking";
 
@@ -207,6 +208,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       moved.push({ bookingId, newBookingId: newBooking.id });
+      notifyBookingChange("booking.moved", { excursionBookingId: newBooking.id });
     }
 
     await logActivity({

@@ -18,7 +18,8 @@ import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
-import { Key, Plus, Pencil, RefreshCw, Ban, Check } from "@/components/icons"
+import { Key, Plus, Pencil, RefreshCw, Ban, Check, Bell } from "@/components/icons"
+import { WebsiteWebhooksDialog } from "@/components/hub/website-webhooks-dialog"
 
 type KeyRow = {
   id: string
@@ -121,6 +122,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
   const [submitting, setSubmitting] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [reveal, setReveal] = useState<{ key: string; title: string; note: string } | null>(null)
+  const [webhooksFor, setWebhooksFor] = useState<KeyRow | null>(null)
 
   const form = useForm<KeyFormValues>({ resolver: zodResolver(keySchema), mode: "onChange", defaultValues: emptyValues })
 
@@ -306,6 +308,9 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                           </Button>
                         )}
+                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setWebhooksFor(r)}>
+                          <Bell className="mr-1.5 h-3.5 w-3.5" /> Webhooks
+                        </Button>
                         {canManage && (
                           <Button variant="outline" size="sm" className="h-9 flex-1" disabled={busyId === r.id} onClick={() => rotate(r)}>
                             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Rotate
@@ -369,6 +374,11 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                             {r.status === "ACTIVE" && canManage && (
                               <Button variant="ghost" size="icon" aria-label="Edit key" onClick={() => openEdit(r)}>
                                 <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {r.status === "ACTIVE" && (
+                              <Button variant="ghost" size="icon" aria-label="Webhooks" title="Webhooks" onClick={() => setWebhooksFor(r)}>
+                                <Bell className="h-4 w-4" />
                               </Button>
                             )}
                             {r.status === "ACTIVE" && canManage && (
@@ -515,6 +525,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
       </Dialog>
 
       <RevealKeyDialog key={reveal?.key ?? "none"} reveal={reveal} onClose={() => setReveal(null)} />
+      <WebsiteWebhooksDialog keyRow={webhooksFor} canManage={canManage} onClose={() => setWebhooksFor(null)} />
     </>
   )
 }

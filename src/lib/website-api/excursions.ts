@@ -24,6 +24,7 @@ import {
   type ActivityGate,
 } from "@/lib/website-api/activity-common";
 import { activityBookingResult } from "@/lib/website-api/activity-bookings";
+import { notifyBookingChange } from "@/lib/booking-events";
 
 // The Booking API's Excursions endpoints (BOOKING_API_ADDONS_PLAN.md Phase 2):
 // catalogue, departures, quote, hold, book. Lookup and cancel are module-generic, in
@@ -478,7 +479,7 @@ export async function bookExcursion(
     };
 
     let recordId = hold?.id ?? "";
-    await createExcursionBooking(actor, {
+    const created = await createExcursionBooking(actor, {
       departureId: departure.id,
       guest: { kind: "NEW_WALK_IN", name: guestName, contact },
       ...party,
@@ -518,6 +519,7 @@ export async function bookExcursion(
       },
     });
 
+    notifyBookingChange("booking.confirmed", { excursionBookingId: created.id });
     return { status: 201, body: { booking: await activityBookingResult(recordId, { replayed: false }) } };
   } catch (e) {
     // Two calls with the same Idempotency-Key raced: the loser's row hit the unique index

@@ -3649,6 +3649,7 @@ model WebsiteApiKey {
   properties WebsiteApiKeyProperty[]
   bookings   WebsiteBooking[]
   activityBookings ApiActivityBooking[]
+  webhookEndpoints ApiWebhookEndpoint[]
 
   @@index([enterpriseId])
   @@index([createdByUserId])
@@ -3844,6 +3845,56 @@ model ApiActivityBooking {
   @@index([excursionDepartureId, status])
   @@index([propertyId, createdAt])
   @@index([enterpriseId, createdAt])
+}
+
+// Where a brand website wants to hear about changes to the Excursion/Spa bookings it made
+// (BOOKING_API_ADDONS_PLAN.md Phase 5, B-8): the desk cancelled a departure for weather,
+// moved a guest, marked a no-show, completed a treatment. Owned by one API key; only
+// bookings made with that key are ever sent to it. src/lib/website-api/webhooks.ts.
+model ApiWebhookEndpoint {
+  id           String        @id @default(uuid())
+  enterpriseId String
+  keyId        String
+  key          WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  url          String
+  // Signing secret (whsec_…), encrypted at rest (secret-crypto.ts). Shown once.
+  secretEncrypted String
+  secretPrefix    String
+  // booking.confirmed | booking.cancelled | booking.moved | booking.completed | booking.no_show
+  events       String[]
+  status       String    @default("ACTIVE") // ACTIVE | DISABLED
+  // Consecutive failed deliveries — reset by any success. Shown in the Hub.
+  failureCount Int       @default(0)
+  lastDeliveryAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  deliveries ApiWebhookDelivery[]
+
+  @@index([keyId])
+  @@index([enterpriseId])
+}
+
+// One event sent (or to be sent) to one endpoint. Retried with backoff by the
+// "booking-api-webhooks" job until delivered or given up (FAILED).
+model ApiWebhookDelivery {
+  id            String             @id @default(uuid())
+  enterpriseId  String
+  endpointId    String
+  endpoint      ApiWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event         String
+  payload       Json
+  status        String             @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now())
+  lastStatusCode Int?
+  lastError     String?
+  deliveredAt   DateTime?
+  createdAt     DateTime           @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+  @@index([enterpriseId, status])
 }
 
 model WebsiteBooking {
