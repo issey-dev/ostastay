@@ -13,7 +13,7 @@ becomes setup/health banners.
 - [x] Phase 0 — Hub shell, route groups, property band, access helpers (property admins in)
 - [x] Phase 1 — move per-property Controls sections; stationery + booking format per
   property (`PropertySettings`); delete dashboard Controls/Stationaries
-- [ ] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
+- [x] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
   defaults, Spa/Excursion outlet link) + migration; onboarding chart varies by property
 - [ ] Phase 3 — dropdowns per property + richer entries (**blocked on O-1**: which fields)
 - [ ] Phase 4 — Beds24 connection per property (Osta-created), Booking API keys one-or-ALL,
@@ -26,7 +26,11 @@ becomes setup/health banners.
   property — edits leak to every property.
 - Outlets / Sequences / Facilities / Amenities managers open on the *first* property,
   ignoring the property the user has switched to.
-- The enterprise-wide Spa/Excursion outlet link points at an outlet owned by one property.
+- ~~The enterprise-wide Spa/Excursion outlet link points at an outlet owned by one property~~
+  — fixed in Phase 2 (each property links one of its own outlets).
+- Cashiering page read its float/exchange defaults from `/api/tenant-settings`, which needs
+  CONTROLS — so a cashier without Controls silently got the hard-coded defaults. Fixed in
+  Phase 2 (reads the property's own settings, readable by anyone working there).
 - ~~Print-data routes returned the whole `EnterpriseSettings` row, SMTP/SFTP password
   columns included~~ — fixed in Phase 1 (`loadDocumentSettings`).
 - The Stationery editor is not yet on Zod + React Hook Form (APP STANDARD 001) — it was

@@ -67,7 +67,7 @@ const BLANK_FORM = {
 // dropdown is gone. `postingType` makes explicit what used to be implied by the code
 // string: a TAX code posts at face value and stays out of the GST base, exactly as the
 // hardcoded GTX handling did.
-export function ChargeCodesManager() {
+export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeRow[]>([])
   const [groups, setGroups] = useState<ChargeGroup[]>([])
   const [taxProfiles, setTaxProfiles] = useState<Array<{ id: string; name: string }>>([])
@@ -86,9 +86,9 @@ export function ChargeCodesManager() {
     setLoading(true)
     try {
       const [ccRes, taxRes, grpRes] = await Promise.all([
-        fetch(`/api/charge-codes`),
-        fetch(`/api/taxes`),
-        fetch(`/api/charge-groups`),
+        fetch(`/api/charge-codes?propertyId=${propertyId}`),
+        fetch(`/api/taxes?propertyId=${propertyId}`),
+        fetch(`/api/charge-groups?propertyId=${propertyId}`),
       ])
       if (ccRes.ok) setChargeCodes(await ccRes.json())
       if (taxRes.ok) setTaxProfiles(await taxRes.json())
@@ -98,7 +98,7 @@ export function ChargeCodesManager() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propertyId])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -135,7 +135,7 @@ export function ChargeCodesManager() {
       const res = await fetch(editing ? `/api/charge-codes/${editing.id}` : `/api/charge-codes`, {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(editing ? form : { ...form, propertyId }),
       })
       if (res.ok) {
         setModalOpen(false)

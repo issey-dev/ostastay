@@ -22,7 +22,7 @@ const DEFAULT_FORM: SettingsForm = {
   exchangeToCurrency: "MVR",
 }
 
-export function GeneralSettingsManager() {
+export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState<SettingsForm>(DEFAULT_FORM)
@@ -39,12 +39,12 @@ export function GeneralSettingsManager() {
 
   useEffect(() => {
     fetchSettings()
-  }, [])
+  }, [propertyId])
 
   const fetchSettings = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/tenant-settings`)
+      const res = await fetch(`/api/properties/${propertyId}/settings`)
       if (res.ok) {
         const data = await res.json()
         setFormData({
@@ -65,7 +65,7 @@ export function GeneralSettingsManager() {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch(`/api/tenant-settings`, {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)

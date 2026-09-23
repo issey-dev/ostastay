@@ -65,13 +65,13 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
   const [form, setForm] = useState(BLANK_FORM())
 
   useEffect(() => {
-    fetch("/api/taxes")
+    fetch(`/api/taxes?propertyId=${propertyId}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setTaxProfiles(data) })
-    fetch("/api/charge-codes")
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
-  }, [])
+  }, [propertyId])
 
   const fetchOutlets = useCallback(() => {
     if (!propertyId) return

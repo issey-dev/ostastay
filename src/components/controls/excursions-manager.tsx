@@ -161,7 +161,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
 
   useEffect(() => {
     fetchTypes()
-    fetch("/api/charge-codes")
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps

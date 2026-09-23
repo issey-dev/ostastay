@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
@@ -73,7 +74,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const dayByDate = new Map(days.map((d) => [d.date, d]));
 
     // ── Fold in hotel-booked transport charges on their realization date ────────────
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: reservation.property.enterpriseId } });
+    const settings = await getPropertySettings(reservation.propertyId);
     const pricesIncludeTaxes = reservation.property.pricesIncludeTaxes;
 
     const chargeableLegs = reservation.transports.filter(
@@ -82,7 +83,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const legChargeCodeIds = [...new Set(chargeableLegs.map((t) => t.chargeCodeId!).filter(Boolean))];
     const legChargeCodes = legChargeCodeIds.length
       ? await prisma.chargeCode.findMany({
-          where: { id: { in: legChargeCodeIds }, enterpriseId: reservation.property.enterpriseId },
+          where: { id: { in: legChargeCodeIds }, propertyId: reservation.propertyId },
           include: { taxProfile: { include: { rates: true } } },
         })
       : [];

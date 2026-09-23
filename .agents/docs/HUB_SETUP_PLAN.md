@@ -1,6 +1,6 @@
 # Hub Setup — Enterprise vs Property separation (plan)
 
-Status: **IN PROGRESS** (branch `feat/hub-setup-separation`) — Phases 0–1 done 2026-09-23.
+Status: **IN PROGRESS** (branch `feat/hub-setup-separation`) — Phases 0–2 done 2026-09-23.
 Owner decisions are recorded in [DECISIONS.md](DECISIONS.md) ("2026-09-23 — Setup moves to
 the Hub, separated by Enterprise and Property"). This file is the build plan.
 
@@ -233,6 +233,41 @@ dashboard's working-property cookie).
 - Deleted: dashboard `controls` and `stationaries` pages, the dashboard "Setup" nav group,
   `controls-dashboard.tsx`, and the legacy `/dashboard/financials` redirect into Controls.
 - Tests: `tests/business-rules/property-settings.test.ts`.
+
+**Phase 2** —
+- Migration `20260924100000_finance_per_property`: `propertyId` on ChargeGroup / Subgroup /
+  Code / Generate, TaxProfile, PaymentMethod (unique per property); clone-per-property +
+  re-point every reference by its owning property + delete originals (the FK safety net).
+  An outlet-owned subgroup is cloned only to its outlet's property (plus any property whose
+  records already used one of its codes). Posting defaults, City Ledger method, Spa /
+  Excursion outlet links, Green Tax / GST / Service Charge, cashier float and exchange pair
+  moved from `EnterpriseSettings` to `PropertySettings` (a module outlet link survives only
+  on the property that owns the outlet). Rehearsed on a copy of the dev DB: zero
+  cross-property references afterwards.
+- Code: `ensureChargeTree(client, { propertyId }, modules?)`, `ensureFeeRules(client,
+  { propertyId })`, `chartModulesFor()` (a new property only gets Spa / Excursions groups
+  when the enterprise holds the add-on and the property offers it — `offersSpa` /
+  `offersExcursions` on create), `resolveChargeCode({ propertyId }, role)` — object args on
+  purpose so an old enterprise-id caller fails to compile. Outlet provisioning seeds a missing
+  Spa / Excursions group on demand.
+- APIs: charge-codes, charge-groups, charge-subgroups, generates, payment-methods, taxes and
+  module-outlets take `propertyId` (reads: `assertPropertyAccess`; writes:
+  `requirePropertySetup`); every "same enterprise" ownership check on these became "same
+  property". `/api/tenant-settings` now holds only SMTP/SFTP (+ Osta's own invoice
+  stationery) and names where anything else went.
+- Pages: property **Finance** (tax, payment methods, settlement, cashier defaults, fees) and
+  **Charge Codes** (groups, codes, posting defaults, Spa/Excursion outlet); the interim
+  enterprise Finance / Charge Codes pages are gone. Operational pickers (POS, folio,
+  deposit, check-in, walk-in, cashiering, revenue) ask for their own property's data.
+- Seeds: Veyo seeds finance per property; the Lagoon gets its own "Lagoon Spa" outlet
+  (the demo used to bill the Lagoon's spa through the Resort's Serenity Spa).
+- Known gap (no live data, so accepted): a migrated property may lack the standard
+  band-default outlet codes (e.g. 2001–2004) when another property's outlet had adopted
+  that band's default subgroup — `scripts/seed/seed-charge-codes.ts --apply` refills them.
+- Behaviour note: a property with no settings row reads the Maldives defaults (GST 17%,
+  Service Charge 10%, Green Tax on). An enterprise that never saved its settings used to
+  post UNTAXED (no row → no tax); every real enterprise had a row, so this only shows in
+  test fixtures, which now say "tax off" explicitly where they mean it.
 
 ## Assumptions (not explicitly answered — confirm or correct)
 

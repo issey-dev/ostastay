@@ -135,7 +135,7 @@ export async function PATCH(
     // is actually taken (see /api/folios/[id]/payments). null clears the preference.
     if (defaultPaymentMethodId) {
       const method = await prisma.paymentMethod.findUnique({ where: { id: defaultPaymentMethodId } });
-      if (!method || method.enterpriseId !== ctx.enterpriseId) {
+      if (!method || method.propertyId !== existing.propertyId) {
         return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
       }
     }

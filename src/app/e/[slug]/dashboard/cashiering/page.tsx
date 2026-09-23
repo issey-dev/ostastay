@@ -15,9 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { InfoHint } from "@/components/ui/info-hint"
+import { useProperty } from "@/components/providers/property-provider";
 
 export default function CashieringPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { currentProperty } = useProperty();
   const [status, setStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -125,7 +127,10 @@ export default function CashieringPage() {
 
   useEffect(() => {
     fetchStatus();
-    fetch("/api/tenant-settings")
+    // This property's own cashier defaults (per property since 2026-09-23) — readable by
+    // anyone working here, unlike the old enterprise settings, which needed Controls.
+    if (!currentProperty) return;
+    fetch(`/api/properties/${currentProperty.id}/settings`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -136,7 +141,8 @@ export default function CashieringPage() {
         setExchangeForm((p) => ({ ...p, fromCurrency, toCurrency }));
       })
       .catch(console.error);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProperty?.id]);
 
   const handleOpenShift = async () => {
     setError("");

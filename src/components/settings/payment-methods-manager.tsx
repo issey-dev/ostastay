@@ -24,7 +24,7 @@ type PaymentMethod = {
   isActive: boolean
 }
 
-export function PaymentMethodsManager({ title, description }: { title: string; description?: string }) {
+export function PaymentMethodsManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
   const confirm = useConfirm()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,12 +35,12 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
 
   useEffect(() => {
     fetchMethods()
-  }, [])
+  }, [propertyId])
 
   const fetchMethods = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/payment-methods`)
+      const res = await fetch(`/api/payment-methods?propertyId=${propertyId}`)
       if (res.ok) setMethods(await res.json())
     } catch (e) {
       console.error(e)
@@ -73,7 +73,7 @@ export function PaymentMethodsManager({ title, description }: { title: string; d
         await fetch(`/api/payment-methods`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
+          body: JSON.stringify({ ...formData, propertyId })
         })
       }
       setIsDialogOpen(false)

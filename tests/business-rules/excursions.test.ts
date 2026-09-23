@@ -69,6 +69,7 @@ const cancelDepartureRoute = await import("@/app/api/excursions/departures/[id]/
 const moveBookingsRoute = await import("@/app/api/excursions/departures/[id]/move-bookings/route");
 const enterpriseAddonsRoute = await import("@/app/api/licenses/enterprise-addons/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -140,17 +141,13 @@ describe("Excursions: business rules", () => {
       )
     );
 
-    const chargeCode = await customChargeCode(enterpriseId, { code: "XBR", description: "Excursion BR Charge" });
+    const chargeCode = await customChargeCode({ propertyId }, { code: "XBR", description: "Excursion BR Charge" });
     chargeCodeId = chargeCode.id;
 
     // Hub-wide Excursion Outlet link — posting from the module is refused without one
     // (owner rule 2026-07-30), so every booking test needs it wired.
     const excOutlet = await prisma.outlet.create({ data: { propertyId, name: "BR Dive", code: "BRDV", outletType: "RECREATION" } });
-    await prisma.enterpriseSettings.upsert({
-      where: { enterpriseId },
-      update: { excursionOutletId: excOutlet.id },
-      create: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: excOutlet.id },
-    });
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: excOutlet.id });
 
     const admin = await prisma.user.create({
       data: {
@@ -611,7 +608,7 @@ describe("Excursions: business rules", () => {
         body: JSON.stringify({ enterpriseId: entB.id, module: "EXCURSIONS", enabled: true }),
       }))
     );
-    const ccB = await customChargeCode(entB.id, { code: "VBX", description: "B Excursion" });
+    const ccB = await customChargeCode({ propertyId: propB.id }, { code: "VBX", description: "B Excursion" });
     const typeB = await prisma.excursionType.create({ data: { propertyId: propB.id, code: `VB-${uniq().slice(-6)}`, name: "B Trip", chargeCodeId: ccB.id } });
     await prisma.excursionRate.create({ data: { excursionTypeId: typeB.id, adultPrice: 50, childPrice: 0, infantPrice: 0, effectiveFrom: new Date(2020, 0, 1) } });
     const sourceB = await prisma.excursionDeparture.create({ data: { excursionTypeId: typeB.id, departureDate: day(2), departureTime: "09:00", capacity: 10, status: "CANCELLED" } });

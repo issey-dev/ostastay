@@ -39,7 +39,7 @@ export type ChargeGroup = {
 // is meaningless outside its group. The seven canonical groups are system-managed: their
 // code and reporting bucket are locked (every revenue report keys off the bucket), but a
 // property can rename them and add its own groups and subgroups alongside.
-export function ChargeGroupsManager({ onChanged }: { onChanged?: () => void }) {
+export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: string; onChanged?: () => void }) {
   const [groups, setGroups] = useState<ChargeGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -57,14 +57,14 @@ export function ChargeGroupsManager({ onChanged }: { onChanged?: () => void }) {
   const fetchGroups = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/charge-groups")
+      const res = await fetch(`/api/charge-groups?propertyId=${propertyId}`)
       if (res.ok) setGroups(await res.json())
     } catch (e) {
       console.error("Failed to fetch charge groups", e)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propertyId])
 
   useEffect(() => { fetchGroups() }, [fetchGroups])
 
@@ -88,7 +88,7 @@ export function ChargeGroupsManager({ onChanged }: { onChanged?: () => void }) {
       const res = await fetch(editingGroup ? `/api/charge-groups/${editingGroup.id}` : "/api/charge-groups", {
         method: editingGroup ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(groupForm),
+        body: JSON.stringify(editingGroup ? groupForm : { ...groupForm, propertyId }),
       })
       if (res.ok) {
         setGroupDialogOpen(false)

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { ensureChargeTree } from "@/lib/posting/ensure-charge-tree";
 import {
   OUTLET_SUBGROUP_BANDS,
   OUTLET_CODE_TEMPLATES,
@@ -15,8 +16,8 @@ import {
 // The band's first number is seeded as an unowned default (20RV/30RV/40RV...) so a
 // fresh enterprise can post before any outlet exists — the first outlet of each kind
 // ADOPTS that default (takes ownership and its name) instead of burning a number; every
-// later outlet gets the next free number. Numbering increments across the whole
-// enterprise, matching the chart's own enterprise-wide scope.
+// later outlet gets the next free number. Numbering is per property, matching the
+// chart's own per-property scope (2026-09-23).
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
@@ -34,8 +35,10 @@ export type ProvisionResult = {
  */
 export async function provisionOutletSubgroup(
   client: Client,
-  { enterpriseId, outletId, outletName, outletType }: {
+  { enterpriseId, propertyId, outletId, outletName, outletType }: {
     enterpriseId: string;
+    // The outlet's own property — its subgroup and codes join THAT property's chart.
+    propertyId: string;
     outletId: string;
     outletName: string;
     outletType: string;
@@ -49,13 +52,21 @@ export async function provisionOutletSubgroup(
   const owned = await client.chargeSubgroup.findFirst({ where: { outletId } });
   if (owned) return { subgroupCode: owned.code, adopted: false, codesCreated: 0 };
 
-  const group = await client.chargeGroup.findUnique({
-    where: { enterpriseId_code: { enterpriseId, code: band.groupCode } },
+  let group = await client.chargeGroup.findUnique({
+    where: { propertyId_code: { propertyId, code: band.groupCode } },
   });
+  if (!group && (band.groupCode === "SPA" || band.groupCode === "EXC")) {
+    // A property seeded without this module (it didn't offer Spa / Excursions) is now
+    // opening an outlet for it — add the module's group on demand. The seeder only adds.
+    await ensureChargeTree(client, { propertyId }, { spa: band.groupCode === "SPA", excursions: band.groupCode === "EXC" });
+    group = await client.chargeGroup.findUnique({
+      where: { propertyId_code: { propertyId, code: band.groupCode } },
+    });
+  }
   if (!group) return null; // chart not seeded — nothing to hang the subgroup on
 
   const existingSubgroups = await client.chargeSubgroup.findMany({
-    where: { enterpriseId, chargeGroupId: group.id },
+    where: { propertyId, chargeGroupId: group.id },
     select: { id: true, code: true, outletId: true },
   });
 
@@ -83,6 +94,7 @@ export async function provisionOutletSubgroup(
       : await client.chargeSubgroup.create({
           data: {
             enterpriseId,
+            propertyId,
             chargeGroupId: group.id,
             code: subgroupCode,
             name: outletName,
@@ -101,12 +113,13 @@ export async function provisionOutletSubgroup(
   for (const t of templates) {
     const code = `${nn}${t.suffix}`;
     let row = await client.chargeCode.findUnique({
-      where: { enterpriseId_code: { enterpriseId, code } },
+      where: { propertyId_code: { propertyId, code } },
     });
     if (!row) {
       row = await client.chargeCode.create({
         data: {
           enterpriseId,
+          propertyId,
           code,
           description: t.description,
           chargeSubgroupId: subgroup.id,
@@ -120,12 +133,13 @@ export async function provisionOutletSubgroup(
 
       for (const gen of generatesForTreatment(code, "FULL")) {
         const target = await client.chargeCode.findUnique({
-          where: { enterpriseId_code: { enterpriseId, code: gen.generatedCode } },
+          where: { propertyId_code: { propertyId, code: gen.generatedCode } },
         });
         if (!target) continue;
         await client.chargeCodeGenerate.create({
           data: {
             enterpriseId,
+            propertyId,
             generatorCodeId: row.id,
             generatedCodeId: target.id,
             method: gen.method,

@@ -165,7 +165,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
       })
       .catch(() => setError("Failed to load the reservation."))
       .finally(() => setLoading(false))
-    fetch(`/api/payment-methods`).then((r) => r.json()).then((d) => {
+    fetch(`/api/payment-methods?propertyId=${propertyId}`).then((r) => r.json()).then((d) => {
       if (Array.isArray(d)) setPaymentMethods(d.filter((m: any) => m.isActive !== false))
     }).catch(() => {})
     // Pre-fill the optional payment amount with the balance due (C-2 — don't make staff

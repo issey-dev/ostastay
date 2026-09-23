@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
@@ -140,17 +141,17 @@ export async function POST(
     let commissionChargeCode: PostableChargeCode | null = null;
     let rateLinks: { ratePlanId: string; commissionRate: number | null }[] = [];
     // Hoisted: postCharge needs it inside the transaction below.
-    let settings: Awaited<ReturnType<typeof prisma.enterpriseSettings.findUnique>> = null;
+    let settings: Awaited<ReturnType<typeof getPropertySettings>> | null = null;
     if (creditAccount && reservation.folios.some(qualifiesForAccount)) {
       const [loadedSettings, links] = await Promise.all([
-        prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } }),
+        getPropertySettings(reservation.propertyId),
         prisma.ratePlanAgentAccess.findMany({ where: { upid: creditAccount.upid }, select: { ratePlanId: true, commissionRate: true } }),
       ]);
       settings = loadedSettings;
       rateLinks = links;
       if (settings?.commissionChargeCodeId) {
         commissionChargeCode = await prisma.chargeCode.findFirst({
-          where: { id: settings.commissionChargeCodeId, enterpriseId: ctx.enterpriseId },
+          where: { id: settings.commissionChargeCodeId, propertyId: reservation.propertyId },
           include: chargeCodeInclude(),
         });
       }

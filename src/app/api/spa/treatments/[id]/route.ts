@@ -42,7 +42,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     if (body.chargeCodeId && body.chargeCodeId !== existing.chargeCodeId) {
       const chargeCode = await prisma.chargeCode.findUnique({ where: { id: body.chargeCodeId } });
-      if (!chargeCode || chargeCode.enterpriseId !== existing.property.enterpriseId) {
+      if (!chargeCode || chargeCode.propertyId !== existing.propertyId) {
         return NextResponse.json({ error: "Charge code does not belong to this enterprise" }, { status: 400 });
       }
     }

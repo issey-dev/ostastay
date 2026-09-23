@@ -19,6 +19,7 @@ const holdsRoute = await import("@/app/api/website/v1/properties/[propertyId]/ex
 const bookingsRoute = await import("@/app/api/website/v1/properties/[propertyId]/excursions/bookings/route");
 const lookupRoute = await import("@/app/api/website/v1/activity-bookings/[reference]/route");
 const { listOnlineBookings } = await import("@/lib/website-api/online-bookings");
+import { setPropertySettings } from "../helpers/property-settings";
 const cancelRoute = await import("@/app/api/website/v1/activity-bookings/[reference]/cancel/route");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -97,17 +98,15 @@ describe("Booking API — Excursions (Phase 2)", () => {
 
     // A code that generates a 10% service line: the quote must include it, and equal what
     // the booking posts.
-    const code = await customChargeCode(enterpriseId, { code: "CBEXC", description: "Excursion" });
-    const svc = await customChargeCode(enterpriseId, { code: "CBSVC", description: "Service" });
+    const code = await customChargeCode({ propertyId }, { code: "CBEXC", description: "Excursion" });
+    const svc = await customChargeCode({ propertyId }, { code: "CBSVC", description: "Service" });
     await prisma.chargeCodeGenerate.create({
-      data: { enterpriseId, generatorCodeId: code.id, generatedCodeId: svc.id, method: "PERCENT", value: 10 },
+      data: { enterpriseId, propertyId, generatorCodeId: code.id, generatedCodeId: svc.id, method: "PERCENT", value: 10 },
     });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Tours", code: "CBTR", outletType: "EXCURSION" } });
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
-    });
-    const cardCode = await customChargeCode(enterpriseId, { code: "CBPAY", description: "Online card", postingType: "PAYMENT" });
-    paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Online card", type: "CARD", chargeCodeId: cardCode.id } })).id;
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id });
+    const cardCode = await customChargeCode({ propertyId }, { code: "CBPAY", description: "Online card", postingType: "PAYMENT" });
+    paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Online card", type: "CARD", chargeCodeId: cardCode.id } })).id;
     await prisma.activityOnlineSettings.create({
       data: { propertyId, module: "EXCURSIONS", enabled: true, holdMinutes: 10, leadHours: 2, maxPartySize: 6, onlinePaymentMethodId: paymentMethodId, deskRemark: "Check ID at the jetty" },
     });

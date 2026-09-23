@@ -161,8 +161,9 @@ async function postSpaCharge(
   appointment: LoadedAppointment,
   input: { folioId: string; amount: number; description: string; shiftId: string }
 ) {
-  const settings = await tx.enterpriseSettings.findUnique({
-    where: { enterpriseId: appointment.property.enterpriseId },
+  // The property's own Spa Outlet (per property since 2026-09-23).
+  const settings = await tx.propertySettings.findUnique({
+    where: { propertyId: appointment.propertyId },
     include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
   const spaOutlet = settings?.spaOutlet ?? null;

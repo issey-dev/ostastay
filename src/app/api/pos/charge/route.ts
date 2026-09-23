@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPropertySettings } from "@/lib/property-settings"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { postCharge } from "@/lib/posting/post-charge"
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       where: { id: chargeCodeId },
       include: { taxProfile: { include: { rates: true } } }
     })
-    if (!chargeCode || chargeCode.enterpriseId !== ctx.enterpriseId) {
+    if (!chargeCode || chargeCode.propertyId !== folio.propertyId) {
       return NextResponse.json({ error: "Charge code not found" }, { status: 404 })
     }
 
@@ -111,12 +112,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
-    // property → enterprise (not a hardcoded constant) — works the same whether the
-    // folio is reservation-backed or a walk-in.
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: folio.property.enterpriseId }
-    });
+    // The folio's own property's tax configuration — works the same whether the folio
+    // is reservation-backed or a walk-in (per property since 2026-09-23).
+    const settings = await getPropertySettings(folio.propertyId);
 
     const lineDescription = (typeof description === "string" && description.trim()) ? description.trim() : chargeCode.description
     // Reference is now its own field (was concatenated into the description before).

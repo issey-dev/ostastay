@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, assertPropertyAccess, requirePropertySetup, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log"
-import { getPropertySettings, propertySettingsPatchSchema, updatePropertySettings } from "@/lib/property-settings"
+import { checkSettingsPointers, getPropertySettings, propertySettingsPatchSchema, updatePropertySettings } from "@/lib/property-settings"
 
-// One property's document content + booking-number format (PropertySettings) — see
-// .agents/docs/HUB_SETUP_PLAN.md, Phase 1.
+// One property's own settings (PropertySettings) — document content and booking-number
+// format (Phase 1), posting defaults, tax switches and rates, cashier defaults and the
+// Spa/Excursion outlet links (Phase 2). See .agents/docs/HUB_SETUP_PLAN.md.
 //
 // GET is readable by anyone who works at the property (front desk needs to know whether
 // the registration card step is on, which folio layout to open on) — it holds no secrets.
@@ -38,6 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         { status: 400 }
       )
     }
+
+    const pointerError = await checkSettingsPointers(id, parsed.data)
+    if (pointerError) return NextResponse.json({ error: pointerError }, { status: 400 })
 
     const settings = await updatePropertySettings(id, parsed.data)
     const property = await prisma.property.findUnique({ where: { id }, select: { name: true, code: true } })

@@ -24,6 +24,7 @@ const ratePlansRoute = await import("@/app/api/rate-plans/route");
 const ratePlansIdRoute = await import("@/app/api/rate-plans/[id]/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -120,7 +121,8 @@ describe("Base Rate Plan: lock enforcement", () => {
     const base = await prisma.ratePlan.create({
       data: { propertyId: property.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
     });
-    const chargeCode = await customChargeCode(enterpriseId, { code: "BFC", description: "Breakfast" });
+    const chargeCode = await customChargeCode({ propertyId: property.id }, { code: "BFC", description: "Breakfast" });
+    await setPropertySettings(property.id, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false });
     const allocation = await prisma.allocation.create({
       data: {
         propertyId: property.id, code: "BF", name: "Breakfast", chargeCodeId: chargeCode.id,
@@ -285,8 +287,10 @@ describe("Base Rate Plan: Night Audit fallback", () => {
       });
     }
 
-    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
+    const roomCode = await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room" });
     void roomCode;
+    // The fallback-price maths, untaxed — a charted property starts on the Maldives tax defaults.
+    await setPropertySettings(property.id, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false });
 
     const guest = await prisma.profile.create({
       data: { enterpriseId, profileType: "GUEST", firstName: "Guest", lastName: "Test" },

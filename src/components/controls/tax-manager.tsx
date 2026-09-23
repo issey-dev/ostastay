@@ -25,7 +25,7 @@ const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculat
 // ControlsCard (src/components/controls/charge-codes-manager.tsx), since they're
 // grouped by category for reporting and only ever reference a Tax profile, not the
 // other way around.
-export function TaxManager() {
+export function TaxManager({ propertyId }: { propertyId: string }) {
   const [taxProfiles, setTaxProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -57,14 +57,14 @@ export function TaxManager() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [propertyId])
 
   const fetchData = async () => {
     setLoading(true)
     try {
       const [taxRes, settingsRes] = await Promise.all([
-        fetch(`/api/taxes`),
-        fetch(`/api/tenant-settings`)
+        fetch(`/api/taxes?propertyId=${propertyId}`),
+        fetch(`/api/properties/${propertyId}/settings`)
       ])
       if (taxRes.ok) setTaxProfiles(await taxRes.json())
       if (settingsRes.ok) {
@@ -92,7 +92,7 @@ export function TaxManager() {
     e.preventDefault()
     setSavingSettings(true)
     try {
-      const res = await fetch(`/api/tenant-settings`, {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsForm)
@@ -148,7 +148,7 @@ export function TaxManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taxForm)
+        body: JSON.stringify(isTaxEditMode ? taxForm : { ...taxForm, propertyId })
       })
       if (res.ok) {
         setIsTaxModalOpen(false)

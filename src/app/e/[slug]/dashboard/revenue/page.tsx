@@ -127,7 +127,7 @@ export default function RevenueDashboard() {
   useEffect(() => {
     fetchRatePlans()
     fetchAllocations()
-    fetch(`/api/charge-codes`)
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps

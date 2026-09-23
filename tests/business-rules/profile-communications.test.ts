@@ -298,8 +298,8 @@ describe("Profile: origin property + stay history", () => {
     });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: "101" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "Best Available" } });
-    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
-    const fbCode = await customChargeCode(enterpriseId, { code: "FB", description: "F&B" });
+    const roomCode = await customChargeCode({ propertyId }, { code: "1000", description: "Room" });
+    const fbCode = await customChargeCode({ propertyId }, { code: "FB", description: "F&B" });
     const guest = await prisma.profile.create({ data: { enterpriseId, profileType: "GUEST", firstName: "Stay" } });
 
     const today = new Date();

@@ -152,7 +152,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
 
   useEffect(() => {
     fetchTreatments()
-    fetch("/api/charge-codes").then((r) => r.json()).then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
+    fetch(`/api/charge-codes?propertyId=${propertyId}`).then((r) => r.json()).then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, refreshKey])
 

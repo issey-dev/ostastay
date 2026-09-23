@@ -34,7 +34,7 @@ describe("Reporting engine — Reservations reports", () => {
     await prisma.room.create({ data: { propertyId, roomTypeId: rtId, roomNumber: "3", status: "OUT_OF_ORDER" } });
     ratePlanId = (await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } })).id;
     guestId = (await prisma.profile.create({ data: { enterpriseId: ent.id, profileType: "GUEST", firstName: "Res", lastName: "Guest" } })).upid;
-    methodId = (await prisma.paymentMethod.create({ data: { enterpriseId: ent.id, name: "Cash", type: "CASH" } })).id;
+    methodId = (await prisma.paymentMethod.create({ data: { enterpriseId: ent.id, propertyId, name: "Cash", type: "CASH" } })).id;
 
     // In-house reservation occupying the night of BIZ (1 of 2 sellable sold).
     await prisma.reservation.create({

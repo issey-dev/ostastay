@@ -93,10 +93,10 @@ describe("Walk-in folios (no reservation): tenant isolation", () => {
     });
     propertyBId = propertyB.id;
 
-    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "WI-SPA", description: "Spa" });
+    const chargeCodeA = await customChargeCode({ propertyId: propertyAId }, { code: "WI-SPA", description: "Spa" });
     chargeCodeAId = chargeCodeA.id;
     const paymentMethodA = await prisma.paymentMethod.create({
-      data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },
+      data: { enterpriseId: enterpriseA.id, propertyId: propertyAId, name: "Cash", type: "CASH" },
     });
     paymentMethodAId = paymentMethodA.id;
 

@@ -55,6 +55,8 @@ type ModuleSettings = {
 
 type PropertyRow = {
   property: { id: string; code: string; name: string; currency: string }
+  // This property's own payment methods (per property since 2026-09-23).
+  paymentMethods: PaymentMethod[]
   modules: ModuleSettings[]
 }
 
@@ -115,7 +117,6 @@ async function readError(res: Response, fallback: string): Promise<string> {
 
 export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
   const [rows, setRows] = useState<PropertyRow[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -138,7 +139,6 @@ export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
       if (!res.ok) throw new Error()
       const data = await res.json()
       setRows(data.properties ?? [])
-      setPaymentMethods(data.paymentMethods ?? [])
     } catch {
       setError(true)
     } finally {
@@ -399,7 +399,7 @@ export function WebsiteActivitySettings({ canManage }: { canManage: boolean }) {
                         placeholder="None — pay at the property"
                         options={[
                           { label: "None — pay at the property", value: "" },
-                          ...paymentMethods.map((p) => ({ label: p.name, value: p.id })),
+                          ...(editing?.row.paymentMethods ?? []).map((p) => ({ label: p.name, value: p.id })),
                         ]}
                       />
                       <p className="text-xs text-muted-foreground">When the website says the guest has paid, the bill is settled with this.</p>

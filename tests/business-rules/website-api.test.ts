@@ -24,6 +24,7 @@ const { createWebsiteApiKey, revokeWebsiteApiKey } = await import("@/lib/website
 const { updateWebsitePropertySettings } = await import("@/lib/website-api/settings");
 const { hashWebsiteApiKey } = await import("@/lib/website-api/key");
 const { ensureChart, customChargeCode } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 const propertiesRoute = await import("@/app/api/website/v1/properties/route");
 const propertyRoute = await import("@/app/api/website/v1/properties/[propertyId]/route");
@@ -90,9 +91,6 @@ describe("Website API", () => {
     });
     enterpriseAId = enterpriseA.id;
     await prisma.enterpriseLicense.create({ data: { enterpriseId: enterpriseAId, tier: "STANDARD", maxProperties: 5 } });
-    // The quote prices nothing without an accommodation charge code (see
-    // computeReservationQuote) — every real enterprise has the canonical chart.
-    await ensureChart(enterpriseAId);
     const enterpriseB = await prisma.enterprise.create({
       data: { name: `Web Ent B ${stamp}`, slug: `test-web-b-${stamp}`, type: "STANDARD" },
     });
@@ -120,6 +118,13 @@ describe("Website API", () => {
     propertyAId = propertyA.id;
     const propertyA2 = await makeProperty(enterpriseAId, "WPA2", "Web Property A2");
     propertyA2Id = propertyA2.id;
+    // The quote prices nothing without an accommodation charge code (see
+    // computeReservationQuote) — every real property has its own canonical chart.
+    for (const id of [propertyAId, propertyA2Id]) {
+      await ensureChart({ propertyId: id });
+      // Untaxed on purpose — a charted property starts on the Maldives tax defaults.
+      await setPropertySettings(id, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false });
+    }
     const propertyB = await makeProperty(enterpriseBId, "WPB", "Web Property B");
     propertyBId = propertyB.id;
 
@@ -529,7 +534,7 @@ describe("Website API", () => {
           { propertyId: propertyAId, code: "BB", name: "Bed & Breakfast" },
         ],
       });
-      const code = await customChargeCode(enterpriseAId, { code: "TRF", description: "Transfers", subgroupCode: "20RV" });
+      const code = await customChargeCode({ propertyId: propertyAId }, { code: "TRF", description: "Transfers", subgroupCode: "20RV" });
 
       // Sellable on its own — what the desk Add-ons picker offers, and now the website too.
       transferId = (

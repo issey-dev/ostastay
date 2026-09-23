@@ -23,9 +23,9 @@ export async function assignRegistrationNumbers(
   // assigned to at least one non-pseudo (real) room. Ordered by actual check-in time.
   const property = await prisma.property.findUniqueOrThrow({
     where: { id: propertyId },
-    select: { timeZone: true, checkInTime: true, checkOutTime: true, enterprise: { select: { settings: { select: { greenTaxStayBasis: true } } } } },
+    select: { timeZone: true, checkInTime: true, checkOutTime: true, settings: { select: { greenTaxStayBasis: true } } },
   });
-  const configuredBasis = property.enterprise.settings?.greenTaxStayBasis;
+  const configuredBasis = property.settings?.greenTaxStayBasis;
   const basis = isStayBasis(configuredBasis) ? configuredBasis : "ACTUAL";
 
   const candidates = await prisma.reservation.findMany({

@@ -93,8 +93,8 @@ describe("Operations Dashboard — per-section permission gating", () => {
 
     // The canonical chart's own Room Revenue code, so the line buckets as ROOM exactly
     // the way a real Night Audit posting would.
-    await ensureChart(enterprise.id);
-    const roomCode = (await chargeCode(enterprise.id, "1000")).id;
+    await ensureChart({ propertyId });
+    const roomCode = (await chargeCode({ propertyId }, "1000")).id;
 
     // 10 rooms: 6 clean, 2 dirty, 1 inspected, 1 out of order.
     const roomType = await prisma.roomType.create({

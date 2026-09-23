@@ -525,6 +525,12 @@ model Property {
   apiActivityBookings          ApiActivityBooking[]
   dashboardLayouts             UserDashboardLayout[]
   settings                     PropertySettings?
+  chargeGroups                 ChargeGroup[]
+  chargeSubgroups              ChargeSubgroup[]
+  chargeCodes                  ChargeCode[]
+  chargeCodeGenerates          ChargeCodeGenerate[]
+  taxProfiles                  TaxProfile[]
+  paymentMethods               PaymentMethod[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -705,10 +711,15 @@ model RoomFeature {
   @@unique([roomId, category, code])
 }
 
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model TaxProfile {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name         String
   description  String?
 
@@ -717,6 +728,7 @@ model TaxProfile {
   outlets     Outlet[]
 
   @@index([enterpriseId])
+  @@index([propertyId])
 }
 
 model TaxRate {
@@ -745,10 +757,15 @@ model TaxRate {
 // (via ChargeCode.chargeSubgroup.chargeGroup) instead of the old free-text
 // ChargeCode.category string. See src/lib/posting/charge-tree.ts for the canonical set
 // seeded at onboarding.
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model ChargeGroup {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   code         String // ACCOMMODATION | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM
   name         String
   // ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM — the one
@@ -763,7 +780,7 @@ model ChargeGroup {
 
   subgroups ChargeSubgroup[]
 
-  @@unique([enterpriseId, code])
+  @@unique([propertyId, code])
 }
 
 // Level 2 — the reporting sub-classification inside a group (e.g. 10RV Room Revenue
@@ -772,6 +789,8 @@ model ChargeSubgroup {
   id            String      @id @default(uuid())
   enterpriseId  String
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId    String
+  property      Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   chargeGroupId String
   chargeGroup   ChargeGroup @relation(fields: [chargeGroupId], references: [id], onDelete: Cascade)
   code          String
@@ -787,7 +806,7 @@ model ChargeSubgroup {
 
   chargeCodes ChargeCode[]
 
-  @@unique([enterpriseId, code])
+  @@unique([propertyId, code])
   @@index([chargeGroupId])
   @@index([outletId])
 }
@@ -796,6 +815,8 @@ model ChargeCode {
   id               String         @id @default(uuid())
   enterpriseId     String
   enterprise       Enterprise     @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId       String
+  property         Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   code             String
   description      String
   // Level 3 of the hierarchy — and the ONLY classification: the deprecated free-text
@@ -844,7 +865,7 @@ model ChargeCode {
   excursionTypes ExcursionType[]
   spaTreatments  SpaTreatment[]
 
-  @@unique([enterpriseId, code])
+  @@unique([propertyId, code])
   @@index([chargeSubgroupId])
   @@index([taxProfileId])
 }
@@ -856,6 +877,8 @@ model ChargeCodeGenerate {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   generatorCodeId String
   generatorCode   ChargeCode @relation("GeneratorCode", fields: [generatorCodeId], references: [id], onDelete: Cascade)
@@ -874,15 +897,20 @@ model ChargeCodeGenerate {
   isActive        Boolean @default(true)
 
   @@unique([generatorCodeId, generatedCodeId])
-  @@index([enterpriseId, generatorCodeId])
+  @@index([propertyId, generatorCodeId])
   @@index([generatedCodeId])
 }
 
 // PaymentType: CASH, CARD, TRANSFER
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model PaymentMethod {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name         String
   type         String // Replaces PaymentType
   isActive     Boolean    @default(true)
@@ -905,6 +933,7 @@ model PaymentMethod {
 
   @@index([chargeCodeId])
   @@index([enterpriseId])
+  @@index([propertyId])
 }
 
 // ProfileType: GUEST, COMPANY, TRAVEL_AGENT, STAFF (GUEST/STAFF are "individual
@@ -1748,8 +1777,8 @@ model Outlet {
   chargeSubgroups      ChargeSubgroup[]
   // Hub-wide module links (see EnterpriseSettings.spaOutlet / excursionOutlet) —
   // array-typed back-relations though each enterprise links at most one per module.
-  spaModuleLinks       EnterpriseSettings[] @relation("EnterpriseSpaOutlet")
-  excursionModuleLinks EnterpriseSettings[] @relation("EnterpriseExcursionOutlet")
+  spaModuleLinks       PropertySettings[] @relation("PropertySpaOutlet")
+  excursionModuleLinks PropertySettings[] @relation("PropertyExcursionOutlet")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1810,34 +1839,11 @@ model EnterpriseSettings {
   enterpriseId String     @unique
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
 
-  // Booking-number format (resConfirmPrefix/Length) moved to PropertySettings 2026-09-23.
-
-  // Cashiering defaults (Controls > General) — previously hardcoded in the
-  // cashiering page ($300 float, USD→MVR exchange). Defaults match those
-  // hardcodes so existing enterprises see no behavior change.
-  cashierDefaultFloat  Float  @default(300)
-  exchangeFromCurrency String @default("USD")
-  exchangeToCurrency   String @default("MVR")
+  // Moved to PropertySettings 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md): booking-number
+  // format (Phase 1); posting defaults, City Ledger settlement method, Spa/Excursion outlet
+  // links, Maldives tax switches and rates, cashier defaults (Phase 2).
 
   systemDate DateTime @default(now())
-
-  // Posting & settlement defaults (see Controls > Finance). Plain nullable id pointers
-  // (not FK relations) validated in the API — a dangling id is tolerated by falling
-  // back at posting time. defaultAccommodationChargeCodeId: the ChargeCode a rate
-  // plan's nightly room charge posts against when the plan itself doesn't specify one
-  // (RatePlan.chargeCodeId). cityLedgerPaymentMethodId: the PaymentMethod (a
-  // CITY_LEDGER-type method) used to record a settlement payment when a City Ledger
-  // folio transfers to a debtor account at checkout.
-  defaultAccommodationChargeCodeId String?
-  // The ChargeCode the nightly Green Tax levy posts against, resolved by role instead of
-  // the old literal `code: "GTX"` lookup (see resolveChargeCode in
-  // src/lib/posting/resolve-charge-code.ts). Falls back to the system-seeded GTX code.
-  defaultGreenTaxChargeCodeId      String?
-  cityLedgerPaymentMethodId        String?
-  // The (typically NON_REVENUE-categorized) ChargeCode a Travel Agent commission posts
-  // against as a credit line at checkout — see RatePlanAgentAccess.commissionRate.
-  // Null disables commission posting entirely, even if a rate plan has a rate set.
-  commissionChargeCodeId           String?
 
   // DEPRECATED branding identity (name/logo/colour/font/tax/contact/address). Stationery
   // branding now comes from the property's own General profile + Appearance (Property.name,
@@ -1865,15 +1871,6 @@ model EnterpriseSettings {
   // different one for an individual document; this is only what the picker defaults to.
   defaultFolioStyle String @default("detailed")
 
-  // Hub-wide module outlet links (owner ruling 2026-07-30): Spa and Excursions each
-  // post through ONE outlet shared across every property in the enterprise — a spa
-  // appointment at property A may bill through an outlet homed at property B. While a
-  // module's link is null, folio posting FROM that module is refused (bookings can
-  // still be created); the pickers live first in Controls > Spa / Excursions.
-  spaOutletId         String?
-  spaOutlet           Outlet? @relation("EnterpriseSpaOutlet", fields: [spaOutletId], references: [id])
-  excursionOutletId   String?
-  excursionOutlet     Outlet? @relation("EnterpriseExcursionOutlet", fields: [excursionOutletId], references: [id])
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
@@ -1922,27 +1919,6 @@ model EnterpriseSettings {
   eRegistrationExpiryHours Int     @default(72)
   eRegistrationMessage     String?
 
-  // Maldives Green Tax Settings — charged per person per night, split by age band;
-  // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
-  greenTaxEnabled     Boolean @default(true)
-  greenTaxAdultAmount Float   @default(12.00)
-  greenTaxChildAmount Float   @default(6.00)
-  // How a stay's length is measured for the Green Tax registration rule (a stay under
-  // 12 hours gets no Reg No): ACTUAL = from the actual check-in time; STANDARD = from
-  // the property's standard check-in time to its standard check-out time on the stay's
-  // dates. See src/lib/green-tax-sheet.ts (stayHours).
-  greenTaxStayBasis   String  @default("ACTUAL")
-  greenTaxExemptAge   Int     @default(2)
-
-  // Maldives GST (formerly "TGST") and Service Charge Settings. Calculation order is
-  // fixed: Service Charge is a percentage of the base amount, then GST is a percentage
-  // of (base + Service Charge) — e.g. on a $100 base: SVC 10% = $10, GST 17% of $110 =
-  // $18.70. Not yet wired into any actual charge-posting logic (Night Audit/Folios).
-  tgstEnabled          Boolean @default(true)
-  tgstRate             Float   @default(17.00)
-  serviceChargeEnabled Boolean @default(true)
-  serviceChargeRate    Float   @default(10.00)
-
   // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
   // NOTE: stored as plain text; do not build real email/file-transfer sending on top of
   // this without first adding proper secret encryption at rest.
@@ -1960,9 +1936,6 @@ model EnterpriseSettings {
   sftpRemotePath String?
 
   updatedAt DateTime @updatedAt
-
-  @@index([excursionOutletId])
-  @@index([spaOutletId])
 }
 
 // One property's own document content and booking-number format (2026-09-23, owner: "each
@@ -2011,7 +1984,47 @@ model PropertySettings {
   eRegistrationExpiryHours Int     @default(72)
   eRegistrationMessage     String?
 
+  // ── Phase 2 (2026-09-23): posting, tax and cashiering, per property ─────────────────
+  // Which charge code plays each system role (resolveChargeCode in
+  // src/lib/posting/resolve-charge-code.ts). Plain ids validated in the API; a dangling one
+  // falls back to the property's system-seeded code.
+  defaultAccommodationChargeCodeId String?
+  defaultGreenTaxChargeCodeId      String?
+  commissionChargeCodeId           String?
+  // The CITY_LEDGER payment method that settles a debtor folio at checkout.
+  cityLedgerPaymentMethodId        String?
+
+  // The outlet this property's Spa / Excursion charges post through (one of its OWN
+  // outlets). While null, posting from that module is refused.
+  spaOutletId       String?
+  spaOutlet         Outlet? @relation("PropertySpaOutlet", fields: [spaOutletId], references: [id], onDelete: SetNull)
+  excursionOutletId String?
+  excursionOutlet   Outlet? @relation("PropertyExcursionOutlet", fields: [excursionOutletId], references: [id], onDelete: SetNull)
+
+  // Cashiering page defaults.
+  cashierDefaultFloat  Float  @default(300)
+  exchangeFromCurrency String @default("USD")
+  exchangeToCurrency   String @default("MVR")
+
+  // Maldives Green Tax — per person per night by age band; below greenTaxExemptAge exempt.
+  // greenTaxStayBasis: ACTUAL (from actual check-in) | STANDARD (standard times) — see
+  // src/lib/green-tax-sheet.ts (stayHours).
+  greenTaxEnabled     Boolean @default(true)
+  greenTaxAdultAmount Float   @default(12.00)
+  greenTaxChildAmount Float   @default(6.00)
+  greenTaxStayBasis   String  @default("ACTUAL")
+  greenTaxExemptAge   Int     @default(2)
+
+  // Maldives GST and Service Charge — SVC % of base, then GST % of (base + SVC).
+  tgstEnabled          Boolean @default(true)
+  tgstRate             Float   @default(17.00)
+  serviceChargeEnabled Boolean @default(true)
+  serviceChargeRate    Float   @default(10.00)
+
   updatedAt DateTime @updatedAt
+
+  @@index([spaOutletId])
+  @@index([excursionOutletId])
 }
 
 // TraceType: GUEST_MESSAGE, WAKE_UP_CALL, MAINTENANCE, FRONT_DESK

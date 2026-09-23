@@ -129,6 +129,41 @@ describe("Per-property settings (stationery + booking number format)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("refuses posting defaults, payment methods and outlets that belong to another property", async () => {
+    const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
+    await ensureChargeTree(prisma, { propertyId: lagoonId });
+    const lagoonRoom = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId: lagoonId, code: "1000" } } });
+    const lagoonLedger = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId: lagoonId, name: "CL", type: "CITY_LEDGER" } });
+    const lagoonOutlet = await prisma.outlet.create({ data: { propertyId: lagoonId, name: "Lagoon Spa", code: `LS${uniq().slice(-4)}`, outletType: "SPA" } });
+
+    // Each is Lagoon's — so Beach may not point at it.
+    expect((await patch(adminId, beachId, { defaultAccommodationChargeCodeId: lagoonRoom.id })).status).toBe(400);
+    expect((await patch(adminId, beachId, { cityLedgerPaymentMethodId: lagoonLedger.id })).status).toBe(400);
+    expect((await patch(adminId, beachId, { spaOutletId: lagoonOutlet.id })).status).toBe(400);
+
+    // ...while Lagoon itself may.
+    const ok = await patch(adminId, lagoonId, {
+      defaultAccommodationChargeCodeId: lagoonRoom.id,
+      cityLedgerPaymentMethodId: lagoonLedger.id,
+      spaOutletId: lagoonOutlet.id,
+    });
+    expect(ok.status).toBe(200);
+    const lagoon = await getPropertySettings(lagoonId);
+    expect(lagoon.spaOutletId).toBe(lagoonOutlet.id);
+    expect((await getPropertySettings(beachId)).spaOutletId).toBeNull();
+  });
+
+  it("keeps tax switches and rates per property", async () => {
+    expect((await patch(adminId, beachId, { tgstRate: 12, serviceChargeEnabled: false })).status).toBe(200);
+    const beach = await getPropertySettings(beachId);
+    const lagoon = await getPropertySettings(lagoonId);
+    expect(beach.tgstRate).toBe(12);
+    expect(beach.serviceChargeEnabled).toBe(false);
+    expect(lagoon.tgstRate).toBe(17);
+    expect(lagoon.serviceChargeEnabled).toBe(true);
+    expect((await patch(adminId, beachId, { tgstRate: 150 })).status).toBe(400);
+  });
+
   it("hands documents their property's content and never the SMTP/SFTP secrets", async () => {
     await prisma.enterpriseSettings.upsert({
       where: { enterpriseId },

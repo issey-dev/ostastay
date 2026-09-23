@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { EnterpriseSettings, FolioLineItem } from "@prisma/client";
+import type { FolioLineItem, PropertySettings } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resolveOutletChargeTax } from "@/lib/tax-calc";
 import {
@@ -29,6 +29,19 @@ export type PostableChargeCode = Prisma.ChargeCodeGetPayload<{
   include: { taxProfile: { include: { rates: true } } };
 }>;
 
+// The slice of a property's settings posting reads: Service Charge / GST for the tax
+// engine, Green Tax for the generates.
+export type PostingTaxSettings = Pick<
+  PropertySettings,
+  | "serviceChargeEnabled"
+  | "serviceChargeRate"
+  | "tgstEnabled"
+  | "tgstRate"
+  | "greenTaxEnabled"
+  | "greenTaxAdultAmount"
+  | "greenTaxChildAmount"
+>;
+
 export function chargeCodeInclude() {
   return TAX_INCLUDE;
 }
@@ -54,7 +67,8 @@ export type PostChargeInput = {
    * over an already-net base would silently double-tax the bill.
    */
   amounts?: { baseAmount: number; taxAmount: number; serviceChargeAmount: number };
-  settings: EnterpriseSettings | null;
+  /** The posting property's own tax configuration (getPropertySettings). */
+  settings: PostingTaxSettings | null;
   pricesIncludeTaxes: boolean;
   /** Business date the line is stamped with — never wall-clock. */
   date: Date;

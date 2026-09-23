@@ -11,6 +11,7 @@ const { customChargeCode } = await import("../helpers/charge-codes");
 const { createWebsiteApiKey } = await import("@/lib/website-api/keys");
 const { _resetWebsiteRateLimiter } = await import("@/lib/website-api/rate-limit");
 const { expireStaleSpaHolds } = await import("@/lib/spa-booking");
+import { setPropertySettings } from "../helpers/property-settings";
 const treatmentsRoute = await import("@/app/api/website/v1/properties/[propertyId]/spa/treatments/route");
 const availabilityRoute = await import("@/app/api/website/v1/properties/[propertyId]/spa/availability/route");
 const quoteRoute = await import("@/app/api/website/v1/properties/[propertyId]/spa/quote/route");
@@ -86,15 +87,13 @@ describe("Booking API — Spa (Phase 3)", () => {
     });
     await prisma.enterpriseAddonAccess.create({ data: { enterpriseId, module: "SPA", enabled: true } });
 
-    const code = await customChargeCode(enterpriseId, { code: "CBSPA", description: "Spa" });
-    const svc = await customChargeCode(enterpriseId, { code: "CBSPASVC", description: "Spa service" });
-    await prisma.chargeCodeGenerate.create({ data: { enterpriseId, generatorCodeId: code.id, generatedCodeId: svc.id, method: "PERCENT", value: 10 } });
+    const code = await customChargeCode({ propertyId }, { code: "CBSPA", description: "Spa" });
+    const svc = await customChargeCode({ propertyId }, { code: "CBSPASVC", description: "Spa service" });
+    await prisma.chargeCodeGenerate.create({ data: { enterpriseId, propertyId, generatorCodeId: code.id, generatedCodeId: svc.id, method: "PERCENT", value: 10 } });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Spa", code: "CBSP", outletType: "SPA" } });
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: outlet.id },
-    });
-    const payCode = await customChargeCode(enterpriseId, { code: "CBSPAPAY", description: "Online card", postingType: "PAYMENT" });
-    paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, name: "Online card", type: "CARD", chargeCodeId: payCode.id } })).id;
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: outlet.id });
+    const payCode = await customChargeCode({ propertyId }, { code: "CBSPAPAY", description: "Online card", postingType: "PAYMENT" });
+    paymentMethodId = (await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Online card", type: "CARD", chargeCodeId: payCode.id } })).id;
     await prisma.spaSettings.create({ data: { propertyId, defaultOpeningTime: "08:00", defaultClosingTime: "20:00", slotIntervalMinutes: 30, cancellationCutoffHours: 4 } });
     await prisma.activityOnlineSettings.create({
       data: { propertyId, module: "SPA", enabled: true, holdMinutes: 10, leadHours: 2, offerGenderPreference: true, onlinePaymentMethodId: paymentMethodId },

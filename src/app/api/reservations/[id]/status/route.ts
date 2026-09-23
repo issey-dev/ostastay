@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { ReservationStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -216,9 +217,7 @@ export async function PATCH(
             where: { id: cancellationRule.chargeCodeId },
             include: chargeCodeInclude(),
           });
-          const feeSettings = await tx.enterpriseSettings.findUnique({
-            where: { enterpriseId: existing.property.enterpriseId },
-          });
+          const feeSettings = await getPropertySettings(existing.propertyId, tx);
           await postCharge(tx, {
             folioId: folio.id,
             chargeCode: feeCode,

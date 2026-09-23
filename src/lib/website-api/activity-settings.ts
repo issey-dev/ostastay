@@ -38,19 +38,23 @@ export type ActivityModuleSettingsDto = {
   onlinePaymentMethodId: string | null;
   deskRemark: string | null;
   policies: string | null;
-  /** The hub-wide outlet this module posts through is linked (Controls). */
+  /** This property's own outlet for the module is linked (Hub › the property › Charge Codes). */
   outletLinked: boolean;
   items: ActivityItemDto[];
 };
 
 export type ActivityPropertyDto = {
   property: { id: string; code: string; name: string; currency: string };
+  // This property's own active payment methods — the only ones its online sales may use.
+  paymentMethods: { id: string; name: string; type: string }[];
   modules: ActivityModuleSettingsDto[];
 };
 
 export type ActivitySettingsList = {
   modules: ActivityModule[];
   properties: ActivityPropertyDto[];
+  // Per property since 2026-09-23 — each property's online payment method is one of its
+  // own; see properties[].paymentMethods. Kept (empty) for older clients.
   paymentMethods: { id: string; name: string; type: string }[];
 };
 
@@ -87,16 +91,24 @@ export async function listActivitySettings(enterpriseId: string): Promise<Activi
     prisma.paymentMethod.findMany({
       where: { enterpriseId, isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, propertyId: true },
     }),
-    prisma.enterpriseSettings.findUnique({ where: { enterpriseId }, select: { excursionOutletId: true, spaOutletId: true } }),
+    // Each property's own module outlet links (per property since 2026-09-23).
+    prisma.propertySettings.findMany({
+      where: { property: propertyScope },
+      select: { propertyId: true, excursionOutletId: true, spaOutletId: true },
+    }),
   ]);
+  const linksByProperty = new Map(links.map((l) => [l.propertyId, l]));
 
   return {
     modules,
-    paymentMethods,
+    paymentMethods: [],
     properties: properties.map((p) => ({
       property: { id: p.id, code: p.code, name: p.name, currency: p.defaultCurrency },
+      paymentMethods: paymentMethods
+        .filter((m) => m.propertyId === p.id)
+        .map(({ id, name, type }) => ({ id, name, type })),
       modules: modules.map((module) => {
         const s = p.activityOnlineSettings.find((r) => r.module === module);
         const items: ActivityItemDto[] =
@@ -138,7 +150,7 @@ export async function listActivitySettings(enterpriseId: string): Promise<Activi
           onlinePaymentMethodId: s?.onlinePaymentMethodId ?? DEFAULTS.onlinePaymentMethodId,
           deskRemark: s?.deskRemark ?? DEFAULTS.deskRemark,
           policies: s?.policies ?? DEFAULTS.policies,
-          outletLinked: !!(module === "EXCURSIONS" ? links?.excursionOutletId : links?.spaOutletId),
+          outletLinked: !!(module === "EXCURSIONS" ? linksByProperty.get(p.id)?.excursionOutletId : linksByProperty.get(p.id)?.spaOutletId),
           items,
         };
       }),
@@ -209,7 +221,8 @@ export async function updateActivityModuleSettings(params: {
 
   if (input.onlinePaymentMethodId) {
     const method = await prisma.paymentMethod.findFirst({
-      where: { id: input.onlinePaymentMethodId, enterpriseId, isActive: true },
+      // One of THIS property's own payment methods.
+      where: { id: input.onlinePaymentMethodId, propertyId, isActive: true },
       select: { id: true },
     });
     if (!method) throw new ForbiddenError("Payment method not found");

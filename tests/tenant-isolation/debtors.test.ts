@@ -125,10 +125,10 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
     });
     ratePlanAId = ratePlanA.id;
 
-    const roomCode = await customChargeCode(enterpriseA.id, { code: "1000", description: "Room Charge" });
+    const roomCode = await customChargeCode({ propertyId: propertyAId }, { code: "1000", description: "Room Charge" });
 
     const paymentMethodA = await prisma.paymentMethod.create({
-      data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },
+      data: { enterpriseId: enterpriseA.id, propertyId: propertyAId, name: "Cash", type: "CASH" },
     });
     paymentMethodAId = paymentMethodA.id;
 

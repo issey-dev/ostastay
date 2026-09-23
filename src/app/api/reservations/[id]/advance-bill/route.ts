@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -91,12 +92,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Charge-code resolution mirrors Night Audit, but by ROLE rather than by literal code
     // string: per-plan accommodation code → the enterprise's ACCOMMODATION code; Green Tax
     // via the GREEN_TAX role. See src/lib/posting/resolve-charge-code.ts.
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: reservation.property.enterpriseId } });
-    const fallbackRoom = await resolveChargeCode(reservation.property.enterpriseId, "ACCOMMODATION", { settings });
+    const settings = await getPropertySettings(reservation.propertyId);
+    const fallbackRoom = await resolveChargeCode({ propertyId: reservation.propertyId }, "ACCOMMODATION", { settings });
     if (!fallbackRoom) {
       return NextResponse.json({ error: new MissingChargeCodeError("ACCOMMODATION").message }, { status: 400 });
     }
-    const gtxCode = await resolveChargeCode(reservation.property.enterpriseId, "GREEN_TAX", { settings });
+    const gtxCode = await resolveChargeCode({ propertyId: reservation.propertyId }, "GREEN_TAX", { settings });
 
     const quote = await computeReservationQuote({
       propertyId: reservation.propertyId,
@@ -130,7 +131,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     ])];
     const codeById = new Map(
       (await prisma.chargeCode.findMany({
-        where: { id: { in: neededCodeIds }, enterpriseId: reservation.property.enterpriseId },
+        where: { id: { in: neededCodeIds }, propertyId: reservation.propertyId },
         include: chargeCodeInclude(),
       })).map((c) => [c.id, c])
     );
@@ -266,7 +267,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (legs.length > 0) {
         const codeIds = [...new Set(legs.map((l) => l.chargeCodeId!).filter(Boolean))];
         const codes = await tx.chargeCode.findMany({
-          where: { id: { in: codeIds }, enterpriseId: reservation.property.enterpriseId },
+          where: { id: { in: codeIds }, propertyId: reservation.propertyId },
           include: { taxProfile: { include: { rates: true } } },
         });
         const cmap = new Map(codes.map((c) => [c.id, c]));

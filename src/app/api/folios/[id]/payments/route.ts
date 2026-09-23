@@ -43,7 +43,7 @@ export async function POST(
     }
 
     const paymentMethod = await prisma.paymentMethod.findUnique({ where: { id: body.paymentMethodId } });
-    if (!paymentMethod || paymentMethod.enterpriseId !== ctx.enterpriseId) {
+    if (!paymentMethod || paymentMethod.propertyId !== folio.propertyId) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
 

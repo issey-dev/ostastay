@@ -171,7 +171,7 @@ export function AllocationsManager() {
 
   useEffect(() => {
     fetchAllocations()
-    fetch("/api/charge-codes")
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setChargeCodes(data)

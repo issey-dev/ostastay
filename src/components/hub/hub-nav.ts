@@ -69,10 +69,7 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "green-tax", title: "Green Tax", path: "green-tax", icon: Receipt, modules: ["GREEN_TAX"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
 
-  // Still shared by every property — each moves into the property's own setup (Phase 2
-  // for tax / payments / charge codes, Phase 3 for dropdown lists).
-  { key: "shared-finance", title: "Tax & Payments", path: "finance", icon: Wallet, modules: ["CONTROLS"], interim: true },
-  { key: "shared-cashiering", title: "Charge Codes", path: "cashiering", icon: Receipt, modules: ["CONTROLS"], interim: true },
+  // Still shared by every property — moves into the property's own setup in Phase 3.
   { key: "shared-lists", title: "Dropdown Lists", path: "lists", icon: ListChecks, modules: ["CONTROLS"], interim: true },
 ]
 
@@ -116,7 +113,15 @@ export const PROPERTY_NAV: HubNavItem[] = [
     path: "finance",
     icon: Wallet,
     modules: ["CONTROLS"],
-    description: "Deposit, cancellation and no-show fee rules.",
+    description: "Tax, payment methods, settlement, cashier defaults and fee rules.",
+  },
+  {
+    key: "cashiering",
+    title: "Charge Codes",
+    path: "cashiering",
+    icon: Receipt,
+    modules: ["CONTROLS"],
+    description: "This property's chart of accounts, posting defaults and module outlets.",
   },
   {
     key: "outlets",

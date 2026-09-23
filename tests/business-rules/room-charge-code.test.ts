@@ -21,6 +21,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -67,8 +68,8 @@ async function setup(opts: {
   });
 
   // Legacy ROOM code always present as the last-resort fallback.
-  await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
-  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
+  await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room" });
+  const accom = await customChargeCode({ propertyId: property.id }, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
 
   const ratePlan = await prisma.ratePlan.create({
     data: {
@@ -77,12 +78,9 @@ async function setup(opts: {
     },
   });
 
-  await prisma.enterpriseSettings.create({
-    data: {
-      enterpriseId: enterprise.id,
-      greenTaxEnabled: false,
-      ...(opts.defaultChargeCode === "ACCOM" ? { defaultAccommodationChargeCodeId: accom.id } : {}),
-    },
+  await setPropertySettings(property.id, {
+    greenTaxEnabled: false,
+    ...(opts.defaultChargeCode === "ACCOM" ? { defaultAccommodationChargeCodeId: accom.id } : {}),
   });
 
   const guest = await prisma.profile.create({

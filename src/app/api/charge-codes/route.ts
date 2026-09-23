@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, assertPropertyAccess, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { POSTING_TYPES, TAX_CODES, type PostingType } from "@/lib/posting/charge-tree";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 
+// Per property since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): GET takes
+// ?propertyId= and lists that property's chart only — readable by anyone working there
+// (posting screens need the codes); creating one is Property Setup for that property.
+//
 // Level 3 of the charge hierarchy. Classification is a ChargeSubgroup FK — the
 // free-text `category` string it replaced (three mutually contradictory "authoritative"
 // lists, CHARGE_CODE_PLAN.md §1.4) was dropped in phase 4 once every reader was migrated.
@@ -15,12 +19,15 @@ export const CHARGE_CODE_INCLUDE = {
   generatesFrom: { include: { generatedCode: { select: { id: true, code: true, description: true } } }, orderBy: { sortOrder: "asc" as const } },
 } as const;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    const propertyId = new URL(request.url).searchParams.get("propertyId");
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await assertPropertyAccess(ctx, propertyId);
 
     const chargeCodes = await prisma.chargeCode.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { propertyId },
       include: CHARGE_CODE_INCLUDE,
       orderBy: { code: "asc" },
     });
@@ -34,9 +41,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
-
     const body = await request.json();
+    const propertyId: string | undefined = body.propertyId;
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await requirePropertySetup(ctx, propertyId, "CONTROLS", "create");
 
     if (!body.code || !body.description) {
       return NextResponse.json({ error: "Code and description are required" }, { status: 400 });
@@ -49,7 +57,7 @@ export async function POST(request: Request) {
       where: { id: body.chargeSubgroupId },
       include: { chargeGroup: true },
     });
-    if (!subgroup || subgroup.enterpriseId !== ctx.enterpriseId) {
+    if (!subgroup || subgroup.propertyId !== propertyId) {
       return NextResponse.json({ error: "Charge subgroup not found" }, { status: 404 });
     }
 
@@ -57,7 +65,7 @@ export async function POST(request: Request) {
 
     const code = String(body.code).trim().toUpperCase();
     const clash = await prisma.chargeCode.findUnique({
-      where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code } },
+      where: { propertyId_code: { propertyId, code } },
     });
     if (clash) {
       return NextResponse.json({ error: `A charge code ${code} already exists` }, { status: 400 });
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "A Custom Tax profile is required when not using the default tax" }, { status: 400 });
       }
       const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
-      if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+      if (!taxProfile || taxProfile.propertyId !== propertyId) {
         return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
       }
       taxProfileId = body.taxProfileId;
@@ -81,6 +89,7 @@ export async function POST(request: Request) {
       const created = await tx.chargeCode.create({
         data: {
           enterpriseId: ctx.enterpriseId,
+          propertyId,
           code,
           description: body.description,
           chargeSubgroupId: subgroup.id,
@@ -104,12 +113,13 @@ export async function POST(request: Request) {
         ];
         for (const w of wanted) {
           const target = await tx.chargeCode.findUnique({
-            where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code: w.code } },
+            where: { propertyId_code: { propertyId, code: w.code } },
           });
           if (!target || target.id === created.id) continue;
           await tx.chargeCodeGenerate.create({
             data: {
               enterpriseId: ctx.enterpriseId,
+              propertyId,
               generatorCodeId: created.id,
               generatedCodeId: target.id,
               method: w.method,
@@ -123,11 +133,12 @@ export async function POST(request: Request) {
         // Green Tax is a rule about ACCOMMODATION, not about one code: a property that
         // adds a second room charge code (say, per rate plan) must keep levying it.
         if (subgroup.chargeGroup.reportBucket === "ROOM") {
-          const gtx = await resolveChargeCode(ctx.enterpriseId, "GREEN_TAX", { client: tx });
+          const gtx = await resolveChargeCode({ propertyId }, "GREEN_TAX", { client: tx });
           if (gtx && gtx.id !== created.id) {
             await tx.chargeCodeGenerate.create({
               data: {
                 enterpriseId: ctx.enterpriseId,
+                propertyId,
                 generatorCodeId: created.id,
                 generatedCodeId: gtx.id,
                 method: "GREEN_TAX",

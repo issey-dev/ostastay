@@ -33,7 +33,7 @@ async function setup() {
   const property = await prisma.property.create({
     data: { enterpriseId: enterprise.id, name: "P", code: `OSB-${uniq()}`, legalName: "P LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" },
   });
-  await ensureChargeTree(prisma, enterprise.id);
+  await ensureChargeTree(prisma, { propertyId: property.id });
   const passwordHash = await bcrypt.hash("password123", 10);
   const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `osb-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
   return { enterpriseId: enterprise.id, propertyId: property.id, adminId: admin.id };
@@ -70,20 +70,20 @@ describe("outlet subgroup provisioning (DB)", () => {
     const { enterpriseId, propertyId } = await setup();
 
     const outletA = await prisma.outlet.create({ data: { propertyId, name: "Main Restaurant", code: "REST", outletType: "RESTAURANT" } });
-    const first = await provisionOutletSubgroup(prisma, { enterpriseId, outletId: outletA.id, outletName: outletA.name, outletType: "RESTAURANT" });
+    const first = await provisionOutletSubgroup(prisma, { enterpriseId, propertyId, outletId: outletA.id, outletName: outletA.name, outletType: "RESTAURANT" });
     expect(first).toMatchObject({ subgroupCode: "20RV", adopted: true });
 
-    const adopted = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "20RV" } } });
+    const adopted = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "20RV" } } });
     expect(adopted.outletId).toBe(outletA.id);
     expect(adopted.name).toBe("Main Restaurant");
 
     const outletB = await prisma.outlet.create({ data: { propertyId, name: "Beach Grill", code: "GRILL", outletType: "RESTAURANT" } });
-    const second = await provisionOutletSubgroup(prisma, { enterpriseId, outletId: outletB.id, outletName: outletB.name, outletType: "RESTAURANT" });
+    const second = await provisionOutletSubgroup(prisma, { enterpriseId, propertyId, outletId: outletB.id, outletName: outletB.name, outletType: "RESTAURANT" });
     expect(second).toMatchObject({ subgroupCode: "21RV", adopted: false });
 
     // Its template codes exist under 21RV, wired to the global tax codes.
     const dinner = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "2103" } },
+      where: { propertyId_code: { propertyId, code: "2103" } },
       include: { chargeSubgroup: true, generatesFrom: { include: { generatedCode: true } } },
     });
     expect(dinner.chargeSubgroup.code).toBe("21RV");
@@ -99,8 +99,8 @@ describe("outlet subgroup provisioning (DB)", () => {
   it("re-provisioning the same outlet is a no-op — never burns a second band number", async () => {
     const { enterpriseId, propertyId } = await setup();
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Spa One", code: "SPA1", outletType: "SPA" } });
-    const first = await provisionOutletSubgroup(prisma, { enterpriseId, outletId: outlet.id, outletName: outlet.name, outletType: "SPA" });
-    const again = await provisionOutletSubgroup(prisma, { enterpriseId, outletId: outlet.id, outletName: outlet.name, outletType: "SPA" });
+    const first = await provisionOutletSubgroup(prisma, { enterpriseId, propertyId, outletId: outlet.id, outletName: outlet.name, outletType: "SPA" });
+    const again = await provisionOutletSubgroup(prisma, { enterpriseId, propertyId, outletId: outlet.id, outletName: outlet.name, outletType: "SPA" });
     expect(first?.subgroupCode).toBe("30RV");
     expect(again).toMatchObject({ subgroupCode: "30RV", codesCreated: 0 });
     expect(await prisma.chargeSubgroup.count({ where: { outletId: outlet.id } })).toBe(1);
@@ -119,7 +119,7 @@ describe("outlet subgroup provisioning (DB)", () => {
     const body = await res.json();
     expect(body.provisionedSubgroup).toBe("40RV");
 
-    const sub = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "40RV" } } });
+    const sub = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "40RV" } } });
     expect(sub.outletId).toBe(body.id);
   });
 });

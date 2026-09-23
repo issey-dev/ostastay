@@ -148,7 +148,7 @@ const production: ReportDef = {
     const propertyId = await propertyOrThrow(rc);
     const range = rc.params.range as { from: Date; to: Date };
     const { gte, lt } = rangeBounds(range.from, range.to);
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { commissionChargeCodeId: true } });
+    const settings = await prisma.propertySettings.findUnique({ where: { propertyId }, select: { commissionChargeCodeId: true } });
 
     const reservations = await prisma.reservation.findMany({
       where: { propertyId, travelAgentId: { not: null }, checkInDate: { gte, lt } },

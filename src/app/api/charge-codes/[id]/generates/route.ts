@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { GENERATE_METHODS, CALCULATE_ON, hasGenerateCycle, isTaxRoutingMethod } from "@/lib/posting/run-generates";
 import { canGenerateTax, POSTING_TYPE_LABELS, type PostingType } from "@/lib/posting/charge-tree";
@@ -38,9 +38,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     requirePermission(ctx, "CONTROLS", "view");
 
     const { id } = await params;
-    if (!(await loadOwnCode(ctx.enterpriseId, id))) {
-      return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
-    }
+    const code = await loadOwnCode(ctx.enterpriseId, id);
+    if (!code) return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
+    await assertPropertyAccess(ctx, code.propertyId);
 
     const rows = await prisma.chargeCodeGenerate.findMany({
       where: { generatorCodeId: id },
@@ -62,6 +62,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const generator = await loadOwnCode(ctx.enterpriseId, id);
     if (!generator) return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
+    await requirePropertySetup(ctx, generator.propertyId, "CONTROLS", "create");
 
     const body = await request.json();
     const method = typeof body.method === "string" ? body.method : "";
@@ -78,7 +79,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const generated = await loadOwnCode(ctx.enterpriseId, body.generatedCodeId);
-    if (!generated) return NextResponse.json({ error: "Generated charge code not found" }, { status: 404 });
+    // Generates stay inside one property's chart.
+    if (!generated || generated.propertyId !== generator.propertyId) {
+      return NextResponse.json({ error: "Generated charge code not found" }, { status: 404 });
+    }
     if (generated.id === generator.id) {
       return NextResponse.json({ error: "A charge code can't generate itself." }, { status: 400 });
     }
@@ -92,10 +96,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: `${generator.code} already generates ${generated.code}.` }, { status: 400 });
     }
 
-    // Cycle guard over the enterprise's whole generate graph WITH the proposed edge —
+    // Cycle guard over the property's whole generate graph WITH the proposed edge —
     // a cascade that loops would otherwise be a night-audit hang waiting to happen.
     const edges = await prisma.chargeCodeGenerate.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { propertyId: generator.propertyId },
       select: { generatorCodeId: true, generatedCodeId: true },
     });
     if (hasGenerateCycle([...edges, { generatorCodeId: generator.id, generatedCodeId: generated.id }])) {
@@ -122,10 +126,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const row = await prisma.chargeCodeGenerate.create({
       data: {
         enterpriseId: ctx.enterpriseId,
+        propertyId: generator.propertyId,
         generatorCodeId: generator.id,
         generatedCodeId: generated.id,
         method,
-        // GREEN_TAX draws its rates from the enterprise's Maldives Tax config, so it
+        // GREEN_TAX draws its rates from the property's Maldives Tax config, so it
         // carries no value of its own — see src/lib/posting/run-generates.ts.
         value: method === "GREEN_TAX" ? 0 : Number(body.value) || 0,
         calculateOn,

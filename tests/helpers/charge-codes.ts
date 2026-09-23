@@ -8,27 +8,33 @@ import { ensureChargeTree } from "@/lib/posting/ensure-charge-tree";
 // create bare codes with just a code and description; they now need a subgroup, and
 // nearly all of them only care that the code EXISTS, not where it sits.
 //
-// So: seed the enterprise's canonical chart once, then hand back codes from it. That
-// also means a test exercises the same chart the app actually ships, rather than a
-// hand-built stub that can drift from it.
+// So: seed the property's canonical chart once, then hand back codes from it. That also
+// means a test exercises the same chart the app actually ships, rather than a hand-built
+// stub that can drift from it.
+//
+// Per PROPERTY since 2026-09-23 — every property keeps its own chart. The first argument
+// is `{ propertyId }` (not a bare string) so a test that still passes an enterprise id
+// fails to compile instead of silently finding nothing.
+
+type Scope = { propertyId: string };
 
 const seeded = new Set<string>();
 
-/** Idempotent per enterprise, and cheap after the first call in a test file. */
-export async function ensureChart(enterpriseId: string): Promise<void> {
-  if (seeded.has(enterpriseId)) return;
-  await ensureChargeTree(prisma, enterpriseId);
-  seeded.add(enterpriseId);
+/** Idempotent per property, and cheap after the first call in a test file. */
+export async function ensureChart({ propertyId }: Scope): Promise<void> {
+  if (seeded.has(propertyId)) return;
+  await ensureChargeTree(prisma, { propertyId });
+  seeded.add(propertyId);
 }
 
 /**
- * A charge code from the enterprise's canonical chart, seeding the chart if needed.
+ * A charge code from the property's canonical chart, seeding the chart if needed.
  * `code` is a code from STANDARD_CHARGE_CODES — "1000", "8500", "2001", "2901"…
  */
-export async function chargeCode(enterpriseId: string, code: string) {
-  await ensureChart(enterpriseId);
+export async function chargeCode(scope: Scope, code: string) {
+  await ensureChart(scope);
   return prisma.chargeCode.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId, code } },
+    where: { propertyId_code: { propertyId: scope.propertyId, code } },
   });
 }
 
@@ -45,19 +51,24 @@ export async function chargeCode(enterpriseId: string, code: string) {
  * ROOM with a custom tax profile gets exactly that.
  */
 export async function customChargeCode(
-  enterpriseId: string,
+  scope: Scope,
   data: { code: string; description?: string; subgroupCode?: string } & Record<string, unknown>
 ) {
-  await ensureChart(enterpriseId);
+  await ensureChart(scope);
+  const { propertyId } = scope;
   const { code, description, subgroupCode, ...rest } = data;
-  const subgroup = await prisma.chargeSubgroup.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId, code: subgroupCode ?? "60RV" } },
-  });
+  const [subgroup, property] = await Promise.all([
+    prisma.chargeSubgroup.findUniqueOrThrow({
+      where: { propertyId_code: { propertyId, code: subgroupCode ?? "60RV" } },
+    }),
+    prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { enterpriseId: true } }),
+  ]);
   return prisma.chargeCode.upsert({
-    where: { enterpriseId_code: { enterpriseId, code } },
+    where: { propertyId_code: { propertyId, code } },
     update: { ...(description ? { description } : {}), ...rest },
     create: {
-      enterpriseId,
+      enterpriseId: property.enterpriseId,
+      propertyId,
       code,
       description: description ?? code,
       chargeSubgroupId: subgroup.id,
@@ -67,10 +78,10 @@ export async function customChargeCode(
 }
 
 /** The subgroup id for a code from the canonical chart — for a direct prisma create. */
-export async function subgroupId(enterpriseId: string, subgroupCode: string): Promise<string> {
-  await ensureChart(enterpriseId);
+export async function subgroupId(scope: Scope, subgroupCode: string): Promise<string> {
+  await ensureChart(scope);
   const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId, code: subgroupCode } },
+    where: { propertyId_code: { propertyId: scope.propertyId, code: subgroupCode } },
   });
   return sub.id;
 }

@@ -32,6 +32,25 @@ export const PROPERTY_SETTINGS_DEFAULTS: PropertySettingsValues = {
   eRegistrationEnabled: true,
   eRegistrationExpiryHours: 72,
   eRegistrationMessage: null,
+  // Phase 2 — posting, tax and cashiering
+  defaultAccommodationChargeCodeId: null,
+  defaultGreenTaxChargeCodeId: null,
+  commissionChargeCodeId: null,
+  cityLedgerPaymentMethodId: null,
+  spaOutletId: null,
+  excursionOutletId: null,
+  cashierDefaultFloat: 300,
+  exchangeFromCurrency: "USD",
+  exchangeToCurrency: "MVR",
+  greenTaxEnabled: true,
+  greenTaxAdultAmount: 12,
+  greenTaxChildAmount: 6,
+  greenTaxStayBasis: "ACTUAL",
+  greenTaxExemptAge: 2,
+  tgstEnabled: true,
+  tgstRate: 17,
+  serviceChargeEnabled: true,
+  serviceChargeRate: 10,
 }
 
 type Db = Prisma.TransactionClient | typeof prisma
@@ -51,6 +70,19 @@ const text = (max: number) =>
     .max(max, `Keep this under ${max} characters`)
     .nullable()
     .transform((v) => (v === null || v.trim() === "" ? null : v))
+
+// An id pointer: a non-empty string, or null / "" to clear it.
+const pointer = z
+  .string()
+  .nullable()
+  .transform((v) => (v === null || v.trim() === "" ? null : v))
+const currency = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3,8}$/, "Use a currency code like USD or MVR")
+const money = z.coerce.number().min(0, "Can't be negative").max(100_000, "That amount looks too large")
+const percent = z.coerce.number().min(0, "Can't be negative").max(100, "At most 100%")
 
 // The PATCH body: every field optional, validated on its own.
 export const propertySettingsPatchSchema = z
@@ -79,6 +111,27 @@ export const propertySettingsPatchSchema = z
     eRegistrationEnabled: z.boolean(),
     eRegistrationExpiryHours: z.coerce.number().int().min(1, "At least 1 hour").max(24 * 30, "At most 30 days"),
     eRegistrationMessage: text(2000),
+
+    // Phase 2 — pointers are checked against THIS property's own records in the route
+    // (assertSettingsPointersOwned), never trusted from the body.
+    defaultAccommodationChargeCodeId: pointer,
+    defaultGreenTaxChargeCodeId: pointer,
+    commissionChargeCodeId: pointer,
+    cityLedgerPaymentMethodId: pointer,
+    spaOutletId: pointer,
+    excursionOutletId: pointer,
+    cashierDefaultFloat: z.coerce.number().min(0, "Can't be negative").max(1_000_000, "That float looks too large"),
+    exchangeFromCurrency: currency,
+    exchangeToCurrency: currency,
+    greenTaxEnabled: z.boolean(),
+    greenTaxAdultAmount: money,
+    greenTaxChildAmount: money,
+    greenTaxStayBasis: z.enum(["ACTUAL", "STANDARD"]),
+    greenTaxExemptAge: z.coerce.number().int().min(0).max(18, "Exempt age above 18 isn't a child"),
+    tgstEnabled: z.boolean(),
+    tgstRate: percent,
+    serviceChargeEnabled: z.boolean(),
+    serviceChargeRate: percent,
   })
   .partial()
   .strict()
@@ -96,4 +149,29 @@ export async function updatePropertySettings(
     update: patch,
   })
   return getPropertySettings(propertyId, db)
+}
+
+// The id pointers in a settings patch must name records of THIS property — a charge code,
+// payment method or outlet of another property (or enterprise) is refused. Returns an
+// error message, or null when everything checks out.
+export async function checkSettingsPointers(propertyId: string, patch: PropertySettingsPatch, db: Db = prisma): Promise<string | null> {
+  const codeFields = ["defaultAccommodationChargeCodeId", "defaultGreenTaxChargeCodeId", "commissionChargeCodeId"] as const
+  for (const f of codeFields) {
+    const id = patch[f]
+    if (!id) continue
+    const code = await db.chargeCode.findUnique({ where: { id }, select: { propertyId: true } })
+    if (!code || code.propertyId !== propertyId) return `${f}: that charge code isn't one of this property's`
+  }
+  if (patch.cityLedgerPaymentMethodId) {
+    const pm = await db.paymentMethod.findUnique({ where: { id: patch.cityLedgerPaymentMethodId }, select: { propertyId: true, type: true } })
+    if (!pm || pm.propertyId !== propertyId) return "cityLedgerPaymentMethodId: that payment method isn't one of this property's"
+    if (pm.type !== "CITY_LEDGER") return "The City Ledger settlement method must be a CITY_LEDGER payment method"
+  }
+  for (const f of ["spaOutletId", "excursionOutletId"] as const) {
+    const id = patch[f]
+    if (!id) continue
+    const outlet = await db.outlet.findUnique({ where: { id }, select: { propertyId: true } })
+    if (!outlet || outlet.propertyId !== propertyId) return `${f}: that outlet isn't one of this property's`
+  }
+  return null
 }

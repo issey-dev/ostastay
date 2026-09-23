@@ -1,4 +1,5 @@
 import { prisma as defaultPrisma } from "@/lib/db";
+import { getPropertySettings } from "@/lib/property-settings";
 import { resolveChargeTax, type TaxBreakdownLine } from "@/lib/tax-calc";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 import { applyRateAdjustment } from "@/lib/derived-rate";
@@ -139,13 +140,13 @@ export async function computeReservationQuote(
 
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error("Property not found");
-  const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: property.enterpriseId } });
+  const settings = await getPropertySettings(property.id);
   const pricesIncludeTaxes = property.pricesIncludeTaxes;
 
   const taxInclude = { taxProfile: { include: { rates: true } } } as const;
 
   // Role lookup, not a literal `code: "ROOM"` — see src/lib/posting/resolve-charge-code.ts.
-  const fallbackRoomCode = await resolveChargeCode(property.enterpriseId, "ACCOMMODATION", { settings });
+  const fallbackRoomCode = await resolveChargeCode({ propertyId: property.id }, "ACCOMMODATION", { settings });
   if (!fallbackRoomCode) {
     warnings.push("No accommodation charge code configured — room charges cannot be quoted.");
   }

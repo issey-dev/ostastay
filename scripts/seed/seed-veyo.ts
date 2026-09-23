@@ -4,7 +4,8 @@ import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/r
 import { expandScheduleDates } from "../../src/lib/excursions";
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
 import { generatesForTreatment } from "../../src/lib/posting/charge-tree";
-import { seedDemoData, seedSpaAndExcursionBookings, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
+import { seedDemoData, seedSpaAndExcursionBookings, ensureSeedPaymentMethods, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
+import { provisionOutletSubgroup } from "../../src/lib/posting/outlet-subgroup";
 
 const prisma = new PrismaClient();
 
@@ -181,40 +182,44 @@ async function main() {
     create: { propertyId: property.id, code: "NRF", name: "Non-Refundable", description: "Discounted non-refundable rate" },
   });
 
-  // 7. Tax profile + charge codes + payment methods.
-  let taxProfile = await prisma.taxProfile.findFirst({ where: { enterpriseId: veyo.id } });
+  // 7. Tax profile + charge codes + payment methods — per PROPERTY since 2026-09-23 (each
+  // property keeps its own chart, tax profiles and payment methods). This block sets up
+  // the Beach Resort; the Lagoon Retreat gets its own in seedDemoData + section 10c.
+  await ensureSeedPaymentMethods(prisma, veyo.id, property.id);
+  await ensureChargeTree(prisma, { propertyId: property.id });
+  let taxProfile = await prisma.taxProfile.findFirst({ where: { propertyId: property.id } });
   if (!taxProfile) {
     taxProfile = await prisma.taxProfile.create({
       data: {
         enterpriseId: veyo.id,
+        propertyId: property.id,
         name: "Standard Taxes",
         rates: { create: [{ ratePercent: 16, effectiveFrom: new Date("2020-01-01") }] },
       },
     });
   }
-  await ensureChargeTree(prisma, veyo.id);
-  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId: veyo.id } });
-  const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id;
 
   // A revenue code beyond the standard template (per-treatment spa codes, per-tour
-  // excursion codes), created inside its band subgroup and wired to the global Service
-  // Charge + GST generates exactly as Controls > Cashiering would.
-  const ensureRevenueCode = async (code: string, description: string, subgroupCode: string): Promise<string> => {
+  // excursion codes), created inside its band subgroup OF THAT PROPERTY and wired to its
+  // Service Charge + GST generates exactly as the Hub's Charge Codes page would.
+  const ensureRevenueCodeAt = (propertyId: string) => async (code: string, description: string, subgroupCode: string): Promise<string> => {
     const existing = await prisma.chargeCode.findUnique({
-      where: { enterpriseId_code: { enterpriseId: veyo.id, code } },
+      where: { propertyId_code: { propertyId, code } },
     });
     if (existing) return existing.id;
+    const subgroup = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: subgroupCode } } });
     const created = await prisma.chargeCode.create({
-      data: { enterpriseId: veyo.id, code, description, chargeSubgroupId: subgroupId(subgroupCode), postingType: "CHARGE", useDefaultTax: true },
+      data: { enterpriseId: veyo.id, propertyId, code, description, chargeSubgroupId: subgroup.id, postingType: "CHARGE", useDefaultTax: true },
     });
     for (const gen of generatesForTreatment(code, "FULL")) {
       const target = await prisma.chargeCode.findUnique({
-        where: { enterpriseId_code: { enterpriseId: veyo.id, code: gen.generatedCode } },
+        where: { propertyId_code: { propertyId, code: gen.generatedCode } },
       });
       if (!target) continue;
       await prisma.chargeCodeGenerate.create({
         data: {
           enterpriseId: veyo.id,
+          propertyId,
           generatorCodeId: created.id,
           generatedCodeId: target.id,
           method: gen.method,
@@ -227,31 +232,27 @@ async function main() {
     return created.id;
   };
 
-  // The canonical chart is the ONLY chart. This used to seed a parallel numeric one
-  // (10RV / 60RV / 50RV / 40RV) alongside it, which meant two codes for every real
-  // concept and two answers to "what does accommodation post against". Everything below
-  // now points at the chart ensureChargeTree just created.
-  const chartCodes = await prisma.chargeCode.findMany({ where: { enterpriseId: veyo.id }, select: { id: true, code: true } });
+  // The canonical chart is the ONLY chart — everything below points at the Beach
+  // Resort's own chart, which ensureChargeTree just created.
+  const chartCodes = await prisma.chargeCode.findMany({ where: { propertyId: property.id }, select: { id: true, code: true } });
   const chargeCodeByCode: Record<string, string> = Object.fromEntries(chartCodes.map((c) => [c.code, c.id]));
   const gtxCode = await prisma.chargeCode.findUniqueOrThrow({
-    where: { enterpriseId_code: { enterpriseId: veyo.id, code: "8500" } },
+    where: { propertyId_code: { propertyId: property.id, code: "8500" } },
   });
+  const pmCityLedger = await prisma.paymentMethod.findFirstOrThrow({ where: { propertyId: property.id, type: "CITY_LEDGER" } });
 
-  let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CARD" } });
-  if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Credit Card", type: "CARD" } });
-  const pmCash = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CASH" } });
-  if (!pmCash) await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Cash", type: "CASH" } });
-  const pmTransfer = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "TRANSFER" } });
-  if (!pmTransfer) await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "Bank Transfer", type: "TRANSFER" } });
-  let pmCityLedger = await prisma.paymentMethod.findFirst({ where: { enterpriseId: veyo.id, type: "CITY_LEDGER" } });
-  if (!pmCityLedger) pmCityLedger = await prisma.paymentMethod.create({ data: { enterpriseId: veyo.id, name: "City Ledger", type: "CITY_LEDGER" } });
-
-  // Role -> charge code pointers (Controls > Cashiering > Posting Defaults). These are
-  // what resolveChargeCode() reads, so the runtime never looks a code up by name. The
-  // City Ledger method (Controls > Finance) settles debtor-account folios at checkout.
-  await prisma.enterpriseSettings.update({
-    where: { enterpriseId: veyo.id },
-    data: {
+  // Role -> charge code pointers (Hub › the property › Charge Codes › Posting Defaults).
+  // These are what resolveChargeCode() reads, so the runtime never looks a code up by
+  // name. The City Ledger method settles debtor-account folios at checkout.
+  await prisma.propertySettings.upsert({
+    where: { propertyId: property.id },
+    update: {
+      defaultAccommodationChargeCodeId: chargeCodeByCode["1000"],
+      defaultGreenTaxChargeCodeId: gtxCode.id,
+      cityLedgerPaymentMethodId: pmCityLedger.id,
+    },
+    create: {
+      propertyId: property.id,
       defaultAccommodationChargeCodeId: chargeCodeByCode["1000"],
       defaultGreenTaxChargeCodeId: gtxCode.id,
       cityLedgerPaymentMethodId: pmCityLedger.id,
@@ -451,16 +452,39 @@ async function main() {
   });
   const lagoon = demo.lagoon;
 
-  // Hub-wide module outlet links (owner rule 2026-07-30): ONE Spa outlet and ONE
-  // Excursion outlet shared across both properties — cross-property by design (the spa
-  // module runs on the Lagoon while Serenity Spa is homed at the Resort), and posting
-  // from either module is refused without its link.
-  const serenitySpa = await prisma.outlet.findFirst({ where: { name: "Serenity Spa" } });
-  const diveCentre = await prisma.outlet.findFirst({ where: { name: "Blue Water Dive Centre" } });
-  await prisma.enterpriseSettings.update({
-    where: { enterpriseId: veyo.id },
-    data: { spaOutletId: serenitySpa?.id ?? null, excursionOutletId: diveCentre?.id ?? null },
+  // 10c. Module outlet links — per PROPERTY since 2026-09-23: each property's Spa and
+  // Excursion charges post through one of its OWN outlets. (Until then one outlet served
+  // the whole enterprise, so the Lagoon's spa billed through the Resort's Serenity Spa.)
+  // The Resort keeps Serenity Spa; the Lagoon gets its own spa outlet and posts
+  // excursions through its dive centre. Its City Ledger pointer is set the same way as
+  // the Resort's above.
+  const serenitySpa = await prisma.outlet.findFirst({ where: { propertyId: property.id, name: "Serenity Spa" } });
+  const diveCentre = await prisma.outlet.findFirst({ where: { propertyId: lagoon.id, name: "Blue Water Dive Centre" } });
+  let lagoonSpa = await prisma.outlet.findFirst({ where: { propertyId: lagoon.id, outletType: "SPA" } });
+  if (!lagoonSpa) {
+    lagoonSpa = await prisma.outlet.create({
+      data: { propertyId: lagoon.id, code: "LSPA", name: "Lagoon Spa", outletType: "SPA", address: "Raa Atoll, Maldives" },
+    });
+    await provisionOutletSubgroup(prisma, {
+      enterpriseId: veyo.id,
+      propertyId: lagoon.id,
+      outletId: lagoonSpa.id,
+      outletName: lagoonSpa.name,
+      outletType: "SPA",
+    });
+  }
+  await prisma.propertySettings.upsert({
+    where: { propertyId: property.id },
+    update: { spaOutletId: serenitySpa?.id ?? null },
+    create: { propertyId: property.id, spaOutletId: serenitySpa?.id ?? null },
   });
+  const lagoonCityLedger = await prisma.paymentMethod.findFirst({ where: { propertyId: lagoon.id, type: "CITY_LEDGER" } });
+  await prisma.propertySettings.upsert({
+    where: { propertyId: lagoon.id },
+    update: { spaOutletId: lagoonSpa.id, excursionOutletId: diveCentre?.id ?? null, cityLedgerPaymentMethodId: lagoonCityLedger?.id ?? null },
+    create: { propertyId: lagoon.id, spaOutletId: lagoonSpa.id, excursionOutletId: diveCentre?.id ?? null, cityLedgerPaymentMethodId: lagoonCityLedger?.id ?? null },
+  });
+  const ensureLagoonRevenueCode = ensureRevenueCodeAt(lagoon.id);
 
   // 11. Excursions Booking add-on (see .agents/docs/EXCURSIONS_PLAN.md) — Osta-enabled
   // for the Veyo enterprise (defaults OFF everywhere else, same as a real customer
@@ -481,7 +505,7 @@ async function main() {
   ];
   const excursionChargeCodeByCode: Record<string, string> = {};
   for (const cc of excursionChargeCodes) {
-    excursionChargeCodeByCode[cc.code] = await ensureRevenueCode(cc.code, cc.description, "40RV");
+    excursionChargeCodeByCode[cc.code] = await ensureLagoonRevenueCode(cc.code, cc.description, "40RV");
   }
 
   const excursionDefs: Array<{
@@ -605,7 +629,7 @@ async function main() {
   ];
   const spaChargeCodeByCode: Record<string, string> = {};
   for (const cc of spaChargeCodes) {
-    spaChargeCodeByCode[cc.code] = await ensureRevenueCode(cc.code, cc.description, "30RV");
+    spaChargeCodeByCode[cc.code] = await ensureLagoonRevenueCode(cc.code, cc.description, "30RV");
   }
 
   const spaCategoryDefs: Array<{ name: string; description: string }> = [

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
+import { Switch } from "@/components/ui/switch"
 
 const propertyFormSchema = z.object({
   name: z.string().min(2, { message: "Property name must be at least 2 characters." }),
@@ -28,11 +29,25 @@ const propertyFormSchema = z.object({
   // business date, which Night Audit then rolls forward. Create-only: once the
   // property is live, moving the business date is Night Audit's job, not a form's.
   goLiveDate: z.string().min(1, { message: "Pick the go-live date." }).optional(),
+  // Create-only: which add-on modules THIS property offers. Its chart of accounts is
+  // seeded with Spa / Excursions codes only when it does (each property keeps its own
+  // chart — .agents/docs/HUB_SETUP_PLAN.md). Adding one later is harmless.
+  offersSpa: z.boolean().optional(),
+  offersExcursions: z.boolean().optional(),
 })
 
 import { useEffect } from "react"
 
-export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => void, initialData?: any }) {
+export function PropertyForm({
+  onSuccess,
+  initialData,
+  addons = { spa: false, excursions: false },
+}: {
+  onSuccess?: () => void
+  initialData?: any
+  // The add-ons the enterprise holds — only those are offered as per-property choices.
+  addons?: { spa: boolean; excursions: boolean }
+}) {
   const isEditing = !!initialData
   const form = useForm<z.infer<typeof propertyFormSchema>>({
     resolver: zodResolver(propertyFormSchema),
@@ -45,6 +60,8 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
       checkInTime: "14:00",
       checkOutTime: "11:00",
       goLiveDate: todayKey(),
+      offersSpa: true,
+      offersExcursions: true,
     },
   })
 
@@ -61,6 +78,8 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
         checkInTime: "14:00",
         checkOutTime: "11:00",
         goLiveDate: todayKey(),
+        offersSpa: true,
+        offersExcursions: true,
       })
     }
   }, [initialData, form])
@@ -178,6 +197,38 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
               </FormItem>
             )}
           />
+        )}
+        {!isEditing && (addons.spa || addons.excursions) && (
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-medium">This property offers</p>
+            {addons.spa && (
+              <FormField
+                control={form.control}
+                name="offersSpa"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-3">
+                    <FormControl><Switch checked={field.value ?? true} onCheckedChange={field.onChange} /></FormControl>
+                    <FormLabel className="!mt-0 font-normal">Spa</FormLabel>
+                  </FormItem>
+                )}
+              />
+            )}
+            {addons.excursions && (
+              <FormField
+                control={form.control}
+                name="offersExcursions"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-3">
+                    <FormControl><Switch checked={field.value ?? true} onCheckedChange={field.onChange} /></FormControl>
+                    <FormLabel className="!mt-0 font-normal">Excursions</FormLabel>
+                  </FormItem>
+                )}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              Its charge codes are set up to match — a property without a spa gets no spa codes.
+            </p>
+          </div>
         )}
         <Button type="submit" className="w-full">{isEditing ? 'Update Property' : 'Create Property'}</Button>
       </form>

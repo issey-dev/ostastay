@@ -54,7 +54,7 @@ export function FeeRulesManager({ propertyId }: { propertyId: string }) {
     setLoading(true)
     Promise.all([
       fetch(`/api/settings/fee-rules?propertyId=${propertyId}`).then((r) => r.json()),
-      fetch(`/api/charge-codes`).then((r) => r.json()),
+      fetch(`/api/charge-codes?propertyId=${propertyId}`).then((r) => r.json()),
     ])
       .then(([ruleData, codeData]) => {
         if (Array.isArray(ruleData)) {

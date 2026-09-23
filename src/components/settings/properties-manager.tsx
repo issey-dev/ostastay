@@ -36,7 +36,7 @@ type Property = {
   checkOutTime: string
 }
 
-export function PropertiesManager({ title, description }: { title: string; description?: string }) {
+export function PropertiesManager({ title, description, addons }: { title: string; description?: string; addons?: { spa: boolean; excursions: boolean } }) {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -115,6 +115,7 @@ export function PropertiesManager({ title, description }: { title: string; descr
           </DialogHeader>
           <PropertyForm
             initialData={selectedProperty}
+            addons={addons}
             onSuccess={() => {
               setIsDialogOpen(false)
               setSelectedProperty(null)

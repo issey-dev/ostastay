@@ -67,9 +67,9 @@ describe("Per-outlet sales-check numbering", () => {
     const property = await prisma.property.create({ data: { enterpriseId, name: "OC Prop", code: `OC-${uniq()}`, legalName: "OC LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
     propertyId = property.id;
 
-    const spaCode = await customChargeCode(enterpriseId, { code: `SPA${uniq()}`, description: "Spa Service" });
+    const spaCode = await customChargeCode({ propertyId }, { code: `SPA${uniq()}`, description: "Spa Service" });
     spaChargeCodeId = spaCode.id;
-    const barCode = await customChargeCode(enterpriseId, { code: `BAR${uniq()}`, description: "Bar Drink" });
+    const barCode = await customChargeCode({ propertyId }, { code: `BAR${uniq()}`, description: "Bar Drink" });
     barChargeCodeId = barCode.id;
 
     const spa = await prisma.outlet.create({ data: { propertyId, name: "Ocean Spa", code: "SPA", chargeCodes: { create: [{ chargeCodeId: spaChargeCodeId }] } } });

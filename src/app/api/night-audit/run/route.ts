@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPropertySettings } from "@/lib/property-settings"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
@@ -99,16 +100,15 @@ export async function POST(request: Request) {
       )
     }
 
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: property.enterpriseId }
-    })
+    // This property's own posting defaults and tax configuration.
+    const settings = await getPropertySettings(property.id)
 
     // Accommodation charge code the nightly room charge posts against, resolved per
     // reservation in the loop as: the reservation's rate plan's own chargeCode -> the
     // role-resolved enterprise accommodation code. The role lookup replaces the old
     // literal `code: "ROOM"` findFirst — see src/lib/posting/resolve-charge-code.ts.
     const taxInclude = { taxProfile: { include: { rates: true } } } as const
-    const fallbackRoomCode = await resolveChargeCode(property.enterpriseId, "ACCOMMODATION", { settings })
+    const fallbackRoomCode = await resolveChargeCode({ propertyId: property.id }, "ACCOMMODATION", { settings })
 
     if (!fallbackRoomCode) {
       return NextResponse.json(
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     const greenTaxEnabled = settings?.greenTaxEnabled ?? false
     let gtxCode = null
     if (greenTaxEnabled) {
-      gtxCode = await resolveChargeCode(property.enterpriseId, "GREEN_TAX", { settings })
+      gtxCode = await resolveChargeCode({ propertyId: property.id }, "GREEN_TAX", { settings })
       if (!gtxCode) {
         return NextResponse.json({ error: "Missing GTX charge code in system settings. Add a Green Tax charge code in the Hub (Charge Codes)." }, { status: 400 })
       }
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
     const noShowCodeMap = new Map(
       (noShowFees.length
         ? await prisma.chargeCode.findMany({
-            where: { id: { in: [...new Set(noShowFees.map((f) => f.chargeCodeId))] }, enterpriseId: property.enterpriseId },
+            where: { id: { in: [...new Set(noShowFees.map((f) => f.chargeCodeId))] }, propertyId: property.id },
             include: taxInclude,
           })
         : []
@@ -312,7 +312,7 @@ export async function POST(request: Request) {
     const transportCodeIds = [...new Set(dueTransport.map((l) => l.chargeCodeId).filter((x): x is string => !!x))]
     const transportCodeMap = new Map(
       (transportCodeIds.length
-        ? await prisma.chargeCode.findMany({ where: { id: { in: transportCodeIds }, enterpriseId: property.enterpriseId }, include: taxInclude })
+        ? await prisma.chargeCode.findMany({ where: { id: { in: transportCodeIds }, propertyId: property.id }, include: taxInclude })
         : []
       ).map((c) => [c.id, c])
     )

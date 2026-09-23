@@ -1,4 +1,4 @@
-import type { EnterpriseSettings } from "@prisma/client";
+import type { PropertySettings } from "@prisma/client";
 
 // Opera's "generates" mechanism, as a pure calculation. Posting a charge code can
 // automatically post derived codes — taxes, bed levies, municipal fees — declared as
@@ -9,7 +9,7 @@ import type { EnterpriseSettings } from "@prisma/client";
 // src/lib/tax-calc.ts, applied to the parent line; generates only produce *additional
 // lines* for levies that are separate charges in their own right. The Maldives Green
 // Tax is exactly that shape, and method GREEN_TAX reads its rates straight from the
-// enterprise's existing Maldives Tax configuration (EnterpriseSettings.greenTax*) —
+// property's own Maldives Tax configuration (PropertySettings.greenTax*) —
 // Controls > Finance > Tax remains the single place those amounts are edited.
 
 export const GENERATE_METHODS = [
@@ -96,7 +96,7 @@ export type GeneratedAmount = {
   isFinal: boolean;
 };
 
-type GreenTaxSettings = Pick<EnterpriseSettings, "greenTaxEnabled" | "greenTaxAdultAmount" | "greenTaxChildAmount">;
+type GreenTaxSettings = Pick<PropertySettings, "greenTaxEnabled" | "greenTaxAdultAmount" | "greenTaxChildAmount">;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -157,7 +157,7 @@ function computeOne(
 ): number {
   switch (g.method as GenerateMethod) {
     case "GREEN_TAX": {
-      // Reads the enterprise's own Maldives Tax config rather than duplicating the
+      // Reads the property's own Maldives Tax config rather than duplicating the
       // rates onto the generate row — so switching Green Tax off, or changing the
       // per-adult amount, takes effect here with no charge-code edit.
       if (!env.settings?.greenTaxEnabled) return 0;

@@ -141,8 +141,9 @@ async function loadPricing(departureId: string) {
   if (!departure) throw new BookingError(404, "DEPARTURE_NOT_FOUND", "Departure not found");
   const { excursionType } = departure;
   const rate = rateForDate(excursionType.rates, departure.departureDate);
-  const settings = await prisma.enterpriseSettings.findUnique({
-    where: { enterpriseId: excursionType.property.enterpriseId },
+  // The property's own Excursion Outlet and tax configuration (per property since 2026-09-23).
+  const settings = await prisma.propertySettings.findUnique({
+    where: { propertyId: excursionType.propertyId },
     include: { excursionOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
   return { departure, excursionType, rate, settings, outlet: settings?.excursionOutlet ?? null };
@@ -290,7 +291,7 @@ export async function createExcursionBooking(ctx: AuthContext, input: CreateExcu
       throw new BookingError(400, "SETTLEMENT_NOT_ALLOWED", "Pay-now settlement is only available for in-house guests.");
     }
     const method = await prisma.paymentMethod.findUnique({ where: { id: input.settlement.paymentMethodId } });
-    if (!method || method.enterpriseId !== ctx.enterpriseId) {
+    if (!method || method.propertyId !== excursionType.propertyId) {
       throw new BookingError(404, "PAYMENT_METHOD_NOT_FOUND", "Payment method not found");
     }
     settlement = { paymentMethodId: method.id, referenceNumber: input.settlement.referenceNumber };

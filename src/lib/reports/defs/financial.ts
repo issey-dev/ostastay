@@ -245,7 +245,7 @@ const greenTax: ReportDef = {
     const { gte, lt } = rangeBounds(range.from, range.to);
     const [property, settings] = await Promise.all([
       prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { timeZone: true, checkInTime: true, checkOutTime: true } }),
-      prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { greenTaxExemptAge: true } }),
+      prisma.propertySettings.findUnique({ where: { propertyId }, select: { greenTaxExemptAge: true } }),
     ]);
     const infantAge = settings?.greenTaxExemptAge ?? 2;
 
@@ -358,7 +358,7 @@ const greenTaxMissing: ReportDef = {
     const { gte, lt } = rangeBounds(range.from, range.to);
     const [property, settings] = await Promise.all([
       prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { timeZone: true, checkInTime: true, checkOutTime: true } }),
-      prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { greenTaxStayBasis: true } }),
+      prisma.propertySettings.findUnique({ where: { propertyId }, select: { greenTaxStayBasis: true } }),
     ]);
     const basis = isStayBasis(settings?.greenTaxStayBasis) ? settings.greenTaxStayBasis : "ACTUAL";
 

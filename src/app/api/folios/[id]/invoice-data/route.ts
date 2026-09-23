@@ -156,8 +156,8 @@ export async function GET(
         // beside each must still be the property's real one, resolved by role rather
         // than the literal "ROOM"/"GTX" this used to hardcode.
         const [accommodationCode, greenTaxCode] = await Promise.all([
-          resolveChargeCode(enterpriseId, "ACCOMMODATION"),
-          resolveChargeCode(enterpriseId, "GREEN_TAX"),
+          resolveChargeCode({ propertyId: folio.propertyId }, "ACCOMMODATION", { settings }),
+          resolveChargeCode({ propertyId: folio.propertyId }, "GREEN_TAX", { settings }),
         ]);
         const roomCodeLabel = accommodationCode?.code ?? "1000";
         const greenTaxCodeLabel = greenTaxCode?.code ?? "8500";
@@ -167,7 +167,7 @@ export async function GET(
         // level). The proforma has to split the same way the folio will, or the estimate
         // and the eventual bill would read differently line for line.
         const codesWithGenerates = await prisma.chargeCode.findMany({
-          where: { enterpriseId },
+          where: { propertyId: folio.propertyId },
           select: {
             code: true,
             generatesFrom: {
@@ -295,7 +295,7 @@ export async function GET(
         if (legs.length > 0) {
           const codeIds = [...new Set(legs.map((t) => t.chargeCodeId!).filter(Boolean))];
           const codes = await prisma.chargeCode.findMany({
-            where: { id: { in: codeIds }, enterpriseId },
+            where: { id: { in: codeIds }, propertyId: folio.propertyId },
             include: { taxProfile: { include: { rates: true } } },
           });
           const codeMap = new Map(codes.map((c) => [c.id, c]));

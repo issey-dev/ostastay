@@ -16,6 +16,7 @@ const { createWebsiteApiKey } = await import("@/lib/website-api/keys");
 const { _resetWebsiteRateLimiter } = await import("@/lib/website-api/rate-limit");
 const { systemActorContext } = await import("@/lib/system-actor");
 const { cancelExcursionBooking, createExcursionBooking } = await import("@/lib/excursion-booking");
+import { setPropertySettings } from "../helpers/property-settings";
 const webhooks = await import("@/lib/website-api/webhooks");
 const bookingsRoute = await import("@/app/api/website/v1/properties/[propertyId]/excursions/bookings/route");
 
@@ -81,11 +82,9 @@ describe("Booking API — webhooks (Phase 5)", () => {
       },
     });
     await prisma.enterpriseAddonAccess.create({ data: { enterpriseId, module: "EXCURSIONS", enabled: true } });
-    const code = await customChargeCode(enterpriseId, { code: "CBWEXC", description: "Excursion" });
+    const code = await customChargeCode({ propertyId }, { code: "CBWEXC", description: "Excursion" });
     const outlet = await prisma.outlet.create({ data: { propertyId, name: "Tours", code: "CBWT", outletType: "EXCURSION" } });
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id },
-    });
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, excursionOutletId: outlet.id });
     await prisma.activityOnlineSettings.create({ data: { propertyId, module: "EXCURSIONS", enabled: true, maxPartySize: 6 } });
     typeId = (
       await prisma.excursionType.create({
