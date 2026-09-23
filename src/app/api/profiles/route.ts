@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { isBookingMethod } from "@/lib/green-tax-sheet";
 import { logActivity } from "@/lib/activity-log";
 
 const PROFILE_CHILD_INCLUDE = {
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
         photoUrl: body.photoUrl,
         iataNumber: body.iataNumber,
         commissionRate: body.commissionRate ? parseFloat(body.commissionRate) : null,
+        // MIRA Booking Method — only the fixed list is accepted; anything else clears it.
+        bookingMethod: isBookingMethod(body.bookingMethod) ? body.bookingMethod : null,
         greenTaxExempt: body.greenTaxExempt !== undefined ? body.greenTaxExempt : false,
         gender: body.gender,
         membershipNumber: body.membershipNumber,

@@ -80,6 +80,9 @@ export type ReportDef = {
   description: string;
   params: ReportParam[];
   run: (rc: ReportRunContext) => Promise<ReportResult>;
+  // Replaces the generic styled workbook when the Excel file must match an external
+  // template exactly (e.g. the MIRA Green Tax sheet) — no title block, no totals.
+  renderXlsx?: (result: ReportResult) => Promise<Buffer>;
 };
 
 export type ReportFormat = "pdf" | "xlsx" | "csv";

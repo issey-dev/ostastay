@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Percent, ShieldAlert, Save, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -35,6 +36,7 @@ export function TaxManager() {
     greenTaxAdultAmount: 12.00,
     greenTaxChildAmount: 6.00,
     greenTaxExemptAge: 2,
+    greenTaxStayBasis: "ACTUAL",
     tgstEnabled: true,
     tgstRate: 17.00,
     serviceChargeEnabled: true,
@@ -72,6 +74,7 @@ export function TaxManager() {
           greenTaxAdultAmount: data.greenTaxAdultAmount !== undefined ? data.greenTaxAdultAmount : 12.00,
           greenTaxChildAmount: data.greenTaxChildAmount !== undefined ? data.greenTaxChildAmount : 6.00,
           greenTaxExemptAge: data.greenTaxExemptAge !== undefined ? data.greenTaxExemptAge : 2,
+          greenTaxStayBasis: data.greenTaxStayBasis === "STANDARD" ? "STANDARD" : "ACTUAL",
           tgstEnabled: data.tgstEnabled !== undefined ? data.tgstEnabled : true,
           tgstRate: data.tgstRate !== undefined ? data.tgstRate : 17.00,
           serviceChargeEnabled: data.serviceChargeEnabled !== undefined ? data.serviceChargeEnabled : true,
@@ -378,6 +381,22 @@ export function TaxManager() {
                       <p className="text-[11px] text-muted-foreground">
                         Guests below this age are completely exempt. (MIRA regulations exempt infants under <strong>2</strong> years of age).
                       </p>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-start gap-3">
+                        <Switch
+                          id="greenTaxStayBasis"
+                          checked={settingsForm.greenTaxStayBasis === "STANDARD"}
+                          onCheckedChange={(on) => setSettingsForm(p => ({ ...p, greenTaxStayBasis: on ? "STANDARD" : "ACTUAL" }))}
+                        />
+                        <div>
+                          <Label htmlFor="greenTaxStayBasis" className="cursor-pointer">Measure the 12-hour stay on standard check-in/check-out times</Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            A guest staying under 12 hours gets no Green Tax registration number. Off: measured from the guest&apos;s <strong>actual</strong> check-in time. On: measured from the property&apos;s standard check-in time to its standard check-out time.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

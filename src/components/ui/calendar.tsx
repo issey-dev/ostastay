@@ -462,7 +462,15 @@ function YearGrid({
   setNavView: React.Dispatch<React.SetStateAction<NavView>>
   navView: NavView
 } & React.HTMLAttributes<HTMLDivElement>) {
-  const { goToMonth, selected } = useDayPicker()
+  const { goToMonth, selected, months } = useDayPicker()
+
+  // `selected` is a Date in single mode, a { from, to } range in range mode and a
+  // Date[] in multiple mode — keep the month of whichever date applies, falling back
+  // to the month currently on screen.
+  const sel = selected as Date | Date[] | { from?: Date } | undefined
+  const selectedDate =
+    sel instanceof Date ? sel : Array.isArray(sel) ? sel[0] : sel?.from
+  const keepMonth = (selectedDate ?? months[0]?.date)?.getMonth() ?? 0
 
   return (
     <div className={cn("grid grid-cols-4 gap-y-2", className)} {...props}>
@@ -493,12 +501,7 @@ function YearGrid({
               variant="ghost"
               onClick={() => {
                 setNavView("days")
-                goToMonth(
-                  new Date(
-                    displayYears.from + i,
-                    (selected as Date | undefined)?.getMonth() ?? 0
-                  )
-                )
+                goToMonth(new Date(displayYears.from + i, keepMonth))
               }}
               disabled={navView === "years" ? isDisabled : undefined}
             >

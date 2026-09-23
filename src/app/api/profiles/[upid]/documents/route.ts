@@ -54,6 +54,7 @@ export async function POST(
         issuingCountry: body.issuingCountry || null,
         expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
         isPrimary,
+        isWorkPermit: !!body.isWorkPermit,
       },
     });
     return NextResponse.json(document, { status: 201 });

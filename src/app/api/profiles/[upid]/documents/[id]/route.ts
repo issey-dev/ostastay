@@ -43,6 +43,7 @@ export async function PUT(
         issuingCountry: body.issuingCountry !== undefined ? body.issuingCountry : existing.issuingCountry,
         expiryDate: body.expiryDate !== undefined ? (body.expiryDate ? new Date(body.expiryDate) : null) : existing.expiryDate,
         isPrimary: body.isPrimary !== undefined ? !!body.isPrimary : existing.isPrimary,
+        isWorkPermit: body.isWorkPermit !== undefined ? !!body.isWorkPermit : existing.isWorkPermit,
       },
     });
     return NextResponse.json(updated);

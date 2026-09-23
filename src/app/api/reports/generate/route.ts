@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     let file = format === "pdf" ? await chromePdf() : null;
-    if (!file) file = await renderReport(def.key, result, branding, format);
+    if (!file) file = await renderReport(def, result, branding, format);
 
     return new NextResponse(new Uint8Array(file.body), {
       status: 200,

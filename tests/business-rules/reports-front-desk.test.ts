@@ -61,12 +61,12 @@ describe("Reporting engine — Front Desk reports + renderers", () => {
 
   it("renders a report to PDF, XLSX, and CSV", async () => {
     const res = await run("fd-arrivals", { date: BIZ }, propertyId);
-    const pdf = await renderReport("fd-arrivals", res, branding as any, "pdf");
+    const pdf = await renderReport({ key: "fd-arrivals" }, res, branding as any, "pdf");
     expect(pdf.contentType).toBe("application/pdf");
     expect(pdf.body.length).toBeGreaterThan(500);
     expect(pdf.filename.endsWith(".pdf")).toBe(true);
 
-    const xlsx = await renderReport("fd-arrivals", res, branding as any, "xlsx");
+    const xlsx = await renderReport({ key: "fd-arrivals" }, res, branding as any, "xlsx");
     expect(xlsx.body.length).toBeGreaterThan(500);
     expect(xlsx.filename.endsWith(".xlsx")).toBe(true);
 
