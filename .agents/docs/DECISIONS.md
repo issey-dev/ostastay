@@ -3071,3 +3071,9 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   fails. The current link cards are not wanted.
 - **Supersedes:** "Stationaries page" (2026-07-19) placement in the dashboard sidebar and its
   enterprise-wide storage; "Beds24 topology" (2026-08-02) invite code per enterprise.
+- **Release:** shipped as **7.0.0** (owner: "make sure this is marked as version 7.0.0").
+  The owner then asked for all phases to be completed without further questions — the calls
+  made on their behalf are listed in HUB_SETUP_PLAN.md, "Decisions taken without asking".
+- **Beds24 is administered by Uppsolut from the Osta console** (owner, same day: "there is an
+  enterprise called 'osta' … the bed24 connection to be managed from there by us"). A
+  property's connection is created there, for that property, with its Beds24 property id.
