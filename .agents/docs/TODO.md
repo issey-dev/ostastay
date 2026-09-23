@@ -2,7 +2,7 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Hub Setup — Enterprise vs Property separation (2026-09-23) — IN PROGRESS
+## Hub Setup — Enterprise vs Property separation (2026-09-23) — DONE (7.0.0), follow-ups open
 
 Plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md). Owner decisions in DECISIONS.md (2026-09-23).
 Controls + Stationaries move from the property dashboard into the Hub, split into an
@@ -25,7 +25,8 @@ becomes setup/health banners.
 - [ ] Phase 5b — copy the Spa and Excursion catalogues (treatments/categories/rooms,
   excursion types/schedules) and stand-alone Allocations (these live on the dashboard's
   Revenue page, not in the Hub)
-- [ ] Phase 6 — Overview banners
+- [x] Phase 6 — Overview banners (missing setup, Green Tax issues, channel status, failed
+  jobs only); link cards and job card removed; single-property users see their own
 
 **Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
 - `GET /api/properties` returned every property of the enterprise to a single-property

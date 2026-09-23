@@ -1,6 +1,8 @@
 # Hub Setup — Enterprise vs Property separation (plan)
 
-Status: **IN PROGRESS** (branch `feat/hub-setup-separation`) — Phases 0–2 done 2026-09-23.
+Status: **DONE** (branch `feat/hub-setup-separation`, release 7.0.0) — Phases 0–6 built
+2026-09-23. Open follow-ups: O-1 (richer dropdown fields) and Phase 5b (more copyable
+sections) — see TODO.md and "Decisions taken without asking" below.
 Owner decisions are recorded in [DECISIONS.md](DECISIONS.md) ("2026-09-23 — Setup moves to
 the Hub, separated by Enterprise and Property"). This file is the build plan.
 
@@ -347,6 +349,44 @@ dashboard's working-property cookie).
   treatment rooms and schedules make them their own job) — see TODO.
 - Also fixed here: `GET /api/properties` listed every property of the enterprise to a
   single-property user; it now returns only their own.
+
+**Phase 6** — the Overview (`src/lib/hub-overview.ts`, `hub/page.tsx`) is banners only:
+- Per property, only what the user may see (CONTROLS / INTEGRATIONS / GREEN_TAX view):
+  no room types or rooms; no accommodation charge code; Green Tax on with no Green Tax
+  code; no payment methods; no City Ledger settlement method (warning); invoices with no
+  payment details (warning); spa treatments or excursions sold with no module outlet;
+  channel connection failing, credential within 7 days of lapsing, unacknowledged channel
+  overbookings; a website that takes bookings with no rate plan (warning); Green Tax
+  register exceptions or numbering gaps, and past months with guests not marked filed
+  (warning).
+- Enterprise (enterprise users only): email not set up (warning); a background job whose
+  latest run FAILED (no link — contact support).
+- Each banner names its property and links to the section that fixes it; critical first;
+  "Everything is set up" when there is nothing. A channel-manager strip shows each
+  property as Active / Inactive / Error / Not connected.
+- Single-property Hub users now get the Overview too, for their own property only. The
+  link cards, the job card (`job-status-card.tsx`) and `/api/hub/job-runs` are removed.
+
+## Decisions taken without asking (owner: "complete all phases — do not ask me")
+
+Recorded so they can be reviewed and reversed:
+- **Booking API keys on several properties** were migrated to ALL (the one-or-ALL rule
+  leaves no narrower choice that keeps a group portal working); a key on no property was
+  revoked. No live enterprise had such a key.
+- **Channel connections covering several properties** were split one per property; the
+  split-off rows need a new webhook URL from Osta. An unlinked connection was removed. No
+  live enterprise had a connection.
+- **Property admins keep the sharing on/off switch, mapping, defaults, availability checks
+  and pushes** (the owner listed mapping and rate/availability checks); only connect /
+  link / unlink / disconnect / re-authorize are Osta-only.
+- **Phase 3b (richer dropdown fields)** was not built — O-1 is still unanswered.
+- **Copy (Phase 5)** covers lists, tax, charge codes, payment methods, stationery, meal
+  plans, room types and outlets; Spa/Excursion catalogues and stand-alone Allocations are
+  left for Phase 5b. Fee rules are not copyable (each property is seeded with its own).
+- **Overview checks** are the list above; stationery is checked only for invoice payment
+  details, and sequences are not checked (they are created on first use).
+- **Green Tax "filed" warning** counts past months of the current year that had Green Tax
+  guests and are not marked filed — there is no MIRA due date in the system to be stricter.
 
 ## Assumptions (not explicitly answered — confirm or correct)
 

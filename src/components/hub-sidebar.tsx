@@ -87,7 +87,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
       <SidebarContent>
         <HubSidebarNav
           slug={slug}
-          showOverview={showEnterprise}
+          showOverview
           enterpriseKeys={enterpriseKeys}
           propertyKeys={propertyKeys}
           properties={hubProperties}
