@@ -104,6 +104,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         greenTaxAdultAmount: 12.0,
         greenTaxChildAmount: 6.0,
         greenTaxExemptAge: 2,
+        greenTaxStayBasis: "ACTUAL",
         tgstEnabled: true,
         tgstRate: 17.0,
         serviceChargeEnabled: true,

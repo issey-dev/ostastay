@@ -466,6 +466,8 @@ model Property {
 
   eodRuns            EodRun[]
   guestRegistrations GuestRegistration[]
+  greenTaxFilings     GreenTaxFiling[]
+  greenTaxCorrections GreenTaxCorrection[]
   eodReports         EodReport[]
   cashierShifts      CashierShift[]
 
@@ -926,6 +928,10 @@ model Profile {
   preferredLanguage String     @default("en")
   iataNumber        String?
   commissionRate    Float?
+  // MIRA Green Tax "Booking Method" for COMPANY/TRAVEL_AGENT profiles — one of the fixed
+  // values in src/lib/green-tax-sheet.ts (BOOKING_METHODS). A reservation takes it from
+  // its travel agent; a booking with no agent reports "FIT".
+  bookingMethod     String?
   greenTaxExempt    Boolean    @default(false)
   gender            String?
   membershipNumber  String?
@@ -1052,6 +1058,9 @@ model ProfileDocument {
   // is applied here; the same file is never copied, just pointed at from both places.
   documentImageStoragePath String?
   isPrimary        Boolean   @default(true)
+  // The guest holds a Maldives work permit (Green Tax sheet category 3). Ticked on the
+  // identification it applies to; any flagged document makes the profile a permit holder.
+  isWorkPermit     Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1916,6 +1925,11 @@ model EnterpriseSettings {
   greenTaxEnabled     Boolean @default(true)
   greenTaxAdultAmount Float   @default(12.00)
   greenTaxChildAmount Float   @default(6.00)
+  // How a stay's length is measured for the Green Tax registration rule (a stay under
+  // 12 hours gets no Reg No): ACTUAL = from the actual check-in time; STANDARD = from
+  // the property's standard check-in time to its standard check-out time on the stay's
+  // dates. See src/lib/green-tax-sheet.ts (stayHours).
+  greenTaxStayBasis   String  @default("ACTUAL")
   greenTaxExemptAge   Int     @default(2)
 
   // Maldives GST (formerly "TGST") and Service Charge Settings. Calculation order is
@@ -2337,6 +2351,45 @@ model GuestRegistration {
   @@unique([reservationId, profileId])
 
   @@index([profileId])
+}
+
+// A month's Green Tax sheet marked as submitted to MIRA. Once filed, no registration
+// number any guest of that month carries may change — a correction that would renumber
+// one is refused (src/lib/green-tax-registry.ts). No un-file in the app, deliberately.
+model GreenTaxFiling {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  year       Int
+  month      Int // 1-12
+  filedAt    DateTime @default(now())
+  filedById  String
+  note       String?
+
+  @@unique([propertyId, year, month])
+}
+
+// Audit trail of every Green Tax registration correction made in the Hub. The removed
+// guest is snapshotted (name/confirmation) since the registration row itself is gone.
+// shiftFrom..shiftTo is the range of numbers that each moved down by one to keep the
+// year's sequence gap-free (null when nothing followed).
+model GreenTaxCorrection {
+  id             String   @id @default(uuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  year           Int
+  action         String // REMOVE | CLOSE_GAP
+  registrationNo Int
+  guestName      String?
+  confirmationNo String?
+  issue          String? // the exception that prompted it, e.g. PM_ROOM | SHORT_STAY
+  reason         String
+  shiftFrom      Int?
+  shiftTo        Int?
+  userId         String
+  createdAt      DateTime @default(now())
+
+  @@index([propertyId, year])
 }
 
 // An immutable per-business-date report snapshot generated during EOD's reports

@@ -2,6 +2,16 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Green Tax — open items (2026-09-23)
+
+- ~~Hub correction tool for wrong Reg Nos~~ — DONE 2026-09-23 (Hub › Green Tax).
+- Hub › Green Tax month counts use the year's own registrations, so January's "guests
+  stayed" leaves out stay-overs numbered the previous December (the MIRA report itself
+  includes them). Cosmetic; fix if it confuses anyone.
+- Existing agent/company profiles have no Booking Method yet — rows for their bookings
+  show blank and are flagged in the report note until each profile is set.
+
+
 ## Operations Dashboard — brand palette, customisation, DASHBOARD module (2026-09-06) — DONE
 
 Owner brief: the dashboard's colours did not fit Uppsolut ("too many colours"); add a gear

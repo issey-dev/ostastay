@@ -57,6 +57,11 @@ export const MODULES = [
   // manage staff. The operational "list people I can assign work to" lookup is NOT this
   // module — see /api/staff, gated on HOUSEKEEPING/MAINTENANCE.
   "USERS",
+  // The THIRD Hub module (2026-09-23, owner): Green Tax registration numbers — review a
+  // property's yearly Reg No sequence, remove a number wrongly given (PM room, stay under
+  // 12 h) with the gap-free renumbering that implies, and mark months filed with MIRA,
+  // which locks them. `view` opens the page; `update` makes corrections and files months.
+  "GREEN_TAX",
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -84,6 +89,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   DASHBOARD: "Dashboard",
   INTEGRATIONS: "Integrations",
   USERS: "Users & Access",
+  GREEN_TAX: "Green Tax Registrations",
 };
 
 // ── Service add-ons ───────────────────────────────────────────────────────────────
@@ -137,7 +143,7 @@ export function addonLabel(key: string): string {
 // location and can never hold Hub access, whatever their role says (see hasHubAccess in
 // src/lib/scope.ts). Without the grouping an admin can tick Integrations for a
 // property-scoped user, save successfully, and have nothing happen.
-export const HUB_MODULES = ["INTEGRATIONS", "USERS"] as const satisfies readonly Module[];
+export const HUB_MODULES = ["INTEGRATIONS", "USERS", "GREEN_TAX"] as const satisfies readonly Module[];
 
 export type ModuleScope = "PROPERTY" | "HUB";
 
@@ -152,5 +158,5 @@ export const MODULE_SCOPE_LABELS: Record<ModuleScope, string> = {
 
 export const MODULE_SCOPE_DESCRIPTIONS: Record<ModuleScope, string> = {
   PROPERTY: "Day-to-day operation of a property. Available to every user who has a work location.",
-  HUB: "Enterprise-wide connectivity and credentials. Only an All-Properties user can hold these — a user pinned to a single property is blocked from the Hub regardless of their role.",
+  HUB: "Enterprise-wide connectivity, credentials and compliance. Only an All-Properties user can hold these — a user pinned to a single property is blocked from the Hub regardless of their role.",
 };

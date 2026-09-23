@@ -27,6 +27,7 @@ import { NotesPanel } from "@/components/profiles/notes-panel"
 import { PreferencesEditor } from "@/components/profiles/preferences-editor"
 import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-manager"
 import { InfoHint } from "@/components/ui/info-hint"
+import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
 
 const profileFormSchema = z.object({
   profileType: z.string(),
@@ -48,6 +49,7 @@ const profileFormSchema = z.object({
   marketingOptIn: z.boolean().default(false),
   isIncognito: z.boolean().default(false),
   iataNumber: z.string().optional(),
+  bookingMethod: z.string().optional(),
   commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   arNumber: z.string().optional(),
   creditLimit: z.coerce.number().min(0).optional().nullable(),
@@ -131,6 +133,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       marketingOptIn: initialData?.marketingOptIn ?? false,
       isIncognito: initialData?.isIncognito ?? false,
       iataNumber: initialData?.iataNumber || "",
+      bookingMethod: initialData?.bookingMethod || "",
       commissionRate: initialData?.commissionRate || null,
       arNumber: initialData?.arNumber || "",
       creditLimit: initialData?.creditLimit || null,
@@ -813,6 +816,32 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                             <FormControl>
                               <Input placeholder="e.g. 12345678" {...field} value={field.value || ""} />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="bookingMethod"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel className="flex items-center gap-1">
+                              Booking Method
+                              <InfoHint label="Booking Method">Reported on the MIRA Green Tax sheet for every reservation booked through this profile as its Travel Agent. Guests booked without an agent are reported as FIT.</InfoHint>
+                            </FormLabel>
+                            <Select value={field.value || ""} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select booking method" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="NONE">Not set</SelectItem>
+                                {BOOKING_METHODS.map((m) => (
+                                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}

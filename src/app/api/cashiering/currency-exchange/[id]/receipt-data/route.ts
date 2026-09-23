@@ -91,6 +91,7 @@ export async function GET(
         greenTaxAdultAmount: 12.00,
         greenTaxChildAmount: 6.00,
         greenTaxExemptAge: 2,
+        greenTaxStayBasis: "ACTUAL",
         tgstEnabled: true,
         tgstRate: 17.00,
         serviceChargeEnabled: true,

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { AuthContext } from "@/lib/scope";
-import type { ReportBranding, ReportFormat, ReportResult } from "@/lib/reports/types";
+import type { ReportBranding, ReportDef, ReportFormat, ReportResult } from "@/lib/reports/types";
 import { renderPdf } from "@/lib/reports/render/pdf";
 import { renderXlsx } from "@/lib/reports/render/xlsx";
 import { renderCsv } from "@/lib/reports/render/csv";
@@ -40,17 +40,18 @@ export function reportFilename(key: string, branding: ReportBranding, ext: strin
 // Render a report result to the requested format, returning the bytes plus the
 // HTTP content-type and a download filename.
 export async function renderReport(
-  key: string,
+  def: Pick<ReportDef, "key" | "renderXlsx">,
   result: ReportResult,
   branding: ReportBranding,
   format: ReportFormat
 ): Promise<{ body: Buffer; contentType: string; filename: string }> {
+  const { key } = def;
   if (format === "csv") {
     return { body: Buffer.from(renderCsv(result), "utf8"), contentType: "text/csv; charset=utf-8", filename: reportFilename(key, branding, "csv") };
   }
   if (format === "xlsx") {
     return {
-      body: await renderXlsx(result, branding),
+      body: def.renderXlsx ? await def.renderXlsx(result) : await renderXlsx(result, branding),
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       filename: reportFilename(key, branding, "xlsx"),
     };

@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/db";
 import { toUtcMidnight } from "@/lib/business-date";
+import { isStayBasis, meetsMinStay } from "@/lib/green-tax-sheet";
+import { lockPropertySequence } from "@/lib/green-tax-registry";
 
 // Assign the per-guest Green Tax Registration Number to every guest who arrived on a
 // business date. Runs as an EOD step. Numbered in arrival order (check-in time),
 // primary guest then accompanying guests. Rooms of a pseudo room type (which covers
-// day-use) are excluded. The GUEST_REG_NO sequence resets on the first assignment of
+// day-use) are excluded, and so is a stay under 12 hours (MIN_STAY_HOURS, measured per
+// EnterpriseSettings.greenTaxStayBasis — at EOD the departure is still the booked one,
+// so a guest who leaves unexpectedly early is corrected in the Hub). The GUEST_REG_NO sequence resets on the first assignment of
 // a new calendar year (every 1st January). Idempotent — a guest already registered
 // for their stay is skipped, so a re-run never double-numbers.
 export async function assignRegistrationNumbers(
@@ -17,7 +21,14 @@ export async function assignRegistrationNumbers(
 
   // Arrivals for this business date: checked-in reservations scheduled to arrive today,
   // assigned to at least one non-pseudo (real) room. Ordered by actual check-in time.
-  const arrivals = await prisma.reservation.findMany({
+  const property = await prisma.property.findUniqueOrThrow({
+    where: { id: propertyId },
+    select: { timeZone: true, checkInTime: true, checkOutTime: true, enterprise: { select: { settings: { select: { greenTaxStayBasis: true } } } } },
+  });
+  const configuredBasis = property.enterprise.settings?.greenTaxStayBasis;
+  const basis = isStayBasis(configuredBasis) ? configuredBasis : "ACTUAL";
+
+  const candidates = await prisma.reservation.findMany({
     where: {
       propertyId,
       status: "IN_HOUSE",
@@ -30,9 +41,13 @@ export async function assignRegistrationNumbers(
     },
     orderBy: [{ checkedInAt: "asc" }, { createdAt: "asc" }],
   });
+  const arrivals = candidates.filter((r) => meetsMinStay(r, property, basis));
 
   let assigned = 0;
   await prisma.$transaction(async (tx) => {
+    // Same lock the Hub's Green Tax corrections take — numbering never interleaves with
+    // a renumbering.
+    await lockPropertySequence(tx, propertyId);
     const seq = await tx.propertySequence.findUnique({
       where: { propertyId_sequenceType: { propertyId, sequenceType: "GUEST_REG_NO" } },
     });

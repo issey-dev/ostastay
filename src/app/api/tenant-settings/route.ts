@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isStayBasis } from "@/lib/green-tax-sheet";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
@@ -149,6 +150,7 @@ export async function PATCH(request: Request) {
         greenTaxAdultAmount: body.greenTaxAdultAmount !== undefined ? parseFloat(body.greenTaxAdultAmount) : undefined,
         greenTaxChildAmount: body.greenTaxChildAmount !== undefined ? parseFloat(body.greenTaxChildAmount) : undefined,
         greenTaxExemptAge: body.greenTaxExemptAge !== undefined ? parseInt(body.greenTaxExemptAge) : undefined,
+        greenTaxStayBasis: isStayBasis(body.greenTaxStayBasis) ? body.greenTaxStayBasis : undefined,
         tgstEnabled: body.tgstEnabled !== undefined ? body.tgstEnabled : undefined,
         tgstRate: body.tgstRate !== undefined ? parseFloat(body.tgstRate) : undefined,
         serviceChargeEnabled: body.serviceChargeEnabled !== undefined ? body.serviceChargeEnabled : undefined,
@@ -207,6 +209,7 @@ export async function PATCH(request: Request) {
         greenTaxAdultAmount: body.greenTaxAdultAmount !== undefined ? parseFloat(body.greenTaxAdultAmount) : 12.00,
         greenTaxChildAmount: body.greenTaxChildAmount !== undefined ? parseFloat(body.greenTaxChildAmount) : 6.00,
         greenTaxExemptAge: body.greenTaxExemptAge !== undefined ? parseInt(body.greenTaxExemptAge) : 2,
+        greenTaxStayBasis: isStayBasis(body.greenTaxStayBasis) ? body.greenTaxStayBasis : "ACTUAL",
         tgstEnabled: body.tgstEnabled !== undefined ? body.tgstEnabled : true,
         tgstRate: body.tgstRate !== undefined ? parseFloat(body.tgstRate) : 17.00,
         serviceChargeEnabled: body.serviceChargeEnabled !== undefined ? body.serviceChargeEnabled : true,
