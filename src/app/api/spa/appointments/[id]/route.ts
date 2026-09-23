@@ -15,6 +15,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         room: { select: { id: true, name: true } },
         folio: { select: { id: true, isClosed: true } },
         folioLineItem: { select: { id: true, amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
+        // Present when a brand website booked or is holding this (Booking API).
+        apiBooking: {
+          select: { publicRef: true, status: true, paymentStatus: true, paymentReference: true, paymentProvider: true, amountMismatch: true, guestEmail: true, guestPhone: true, quotedTotal: true },
+        },
         participants: {
           include: {
             reservation: { include: { primaryGuest: true, assignments: { include: { room: true } } } },

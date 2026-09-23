@@ -49,6 +49,7 @@ model Enterprise {
   eRegistrationLinks    ERegistrationLink[]
   websiteApiKeys        WebsiteApiKey[]
   websiteBookings       WebsiteBooking[]
+  apiActivityBookings   ApiActivityBooking[]
   addonAccess           EnterpriseAddonAccess[]
   emailLogs             EmailLog[]
 
@@ -278,6 +279,11 @@ model User {
   // guaranteed enterprise-scoped admin a tenant could strip its own last full-access role
   // (or demote itself) and lock everyone out with no in-app way back.
   isProtected Boolean @default(false)
+
+  // A system-owned account nobody signs in as — the per-enterprise "Online Bookings" user
+  // the Booking API acts under (src/lib/system-actor.ts). Always inactive with an
+  // unusable password; staff lists and user management filter these out.
+  isSystem Boolean @default(false)
 
   sessions  Session[]
   createdAt DateTime @default(now())
@@ -513,8 +519,10 @@ model Property {
   eRegistrationLinks           ERegistrationLink[]
   // Website API (brand site per property) — see .agents/docs/WEBSITE_API_PLAN.md.
   websiteSettings              WebsitePropertySettings?
+  activityOnlineSettings       ActivityOnlineSettings[]
   websiteApiKeys               WebsiteApiKeyProperty[]
   websiteBookings              WebsiteBooking[]
+  apiActivityBookings          ApiActivityBooking[]
   dashboardLayouts             UserDashboardLayout[]
 
   createdAt DateTime @default(now())
@@ -895,6 +903,8 @@ model PaymentMethod {
   payments Payment[]
   // Folios that pre-select this method on their Post Payment form.
   defaultForFolios Folio[]
+  // Settles PAID Booking API bookings (ActivityOnlineSettings.onlinePaymentMethodId).
+  activityOnlineSettings ActivityOnlineSettings[]
 
   @@index([chargeCodeId])
   @@index([enterpriseId])
@@ -2698,6 +2708,15 @@ model ExcursionType {
   cutoffHours  Int        @default(24)
   isActive     Boolean    @default(true)
 
+  // Booking API (BOOKING_API_ADDONS_PLAN.md): whether brand websites may sell this, and
+  // the guest-facing copy they show. Set in the Hub, not Controls — distribution is the
+  // Hub's job, the same split as Allocation.publishToApi. Off by default: nothing goes
+  // online until someone chooses it.
+  publishOnline     Boolean  @default(false)
+  publicDescription String?
+  imageUrls         String[] @default([])
+  inclusions        String?
+
   rates      ExcursionRate[]
   schedules  ExcursionSchedule[]
   departures ExcursionDeparture[]
@@ -2776,6 +2795,8 @@ model ExcursionDeparture {
   notes  String?
 
   bookings          ExcursionBooking[] @relation("DepartureBookings")
+  // Booking API holds on this departure (seats kept while a website takes payment).
+  apiHolds ApiActivityBooking[] @relation("ApiExcursionHolds")
   // Bookings that exist because THIS departure was cancelled (e.g. weather) and the
   // guest was moved to a replacement — see ExcursionBooking.movedFromDepartureId.
   movedBookingsAway ExcursionBooking[] @relation("MovedFromDeparture")
@@ -2815,6 +2836,10 @@ model ExcursionBooking {
   totalAmount Float
 
   status String @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
+  // DESK | API — an API booking was made by a brand website through the Booking API
+  // (ApiActivityBooking holds its guest, payment and public reference).
+  source String @default("DESK")
+  apiBooking ApiActivityBooking? @relation("ApiExcursionBooking")
 
   // folioId is always set — either the guest's existing open room folio (in-house) or
   // a fresh walk-in folio created for this booking (walk-in). folioLineItemId is set
@@ -2908,6 +2933,15 @@ model SpaTreatment {
   allowInHouseGuest        Boolean              @default(true)
   displayOrder             Int                  @default(0)
   isActive                 Boolean              @default(true)
+
+  // Booking API (BOOKING_API_ADDONS_PLAN.md): whether brand websites may sell this, and
+  // the guest-facing copy they show. Set in the Hub, not Controls — distribution is the
+  // Hub's job, the same split as Allocation.publishToApi. Off by default: nothing goes
+  // online until someone chooses it.
+  publishOnline     Boolean  @default(false)
+  publicDescription String?
+  imageUrls         String[] @default([])
+  inclusions        String?
 
   rates           SpaTreatmentRate[]
   therapistSkills SpaTherapistTreatment[]
@@ -3136,6 +3170,10 @@ model SpaAppointment {
   appointmentStatus String @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
   paymentStatus     String @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
   source            String @default("FRONT_DESK")
+  apiBooking ApiActivityBooking? @relation("ApiSpaAppointment")
+  // A Booking API hold (TENTATIVE, source WEBSITE_API) blocks its therapist(s) and room
+  // until this time; null = the older createdAt + SpaSettings.tentativeHoldMinutes rule.
+  holdExpiresAt DateTime?
 
   // Billing is single-folio — resolved from the participantIndex: 1 participant's
   // guest identity, regardless of partySize.
@@ -3622,6 +3660,18 @@ model ChannelBookingDefaults {
 // and to CREATE bookings in a tenant's PMS, so a DB dump must never hand out a live one.
 // keyPrefix (the first characters of the plaintext) is stored separately purely so the
 // Hub can show "which key is this" in a list without ever showing the key itself.
+// Fixed one-minute request counters for the Booking API rate limiter
+// (src/lib/website-api/rate-limit.ts). In the database, not memory, because production
+// runs several app replicas — a per-process counter would multiply every limit.
+model ApiRateLimitCounter {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
 model WebsiteApiKey {
   id           String     @id @default(uuid())
   enterpriseId String
@@ -3634,6 +3684,11 @@ model WebsiteApiKey {
   // the API directly from a page. Empty = server-to-server only, which is the recommended
   // topology (the key never reaches a browser). Matched exactly against the Origin header.
   allowedOrigins String[] @default([])
+  // What the key may use: ROOMS | EXCURSIONS | SPA (src/lib/website-api/scopes.ts). One
+  // key serves a site's rooms, excursions and spa (BOOKING_API_ADDONS_PLAN.md B-1). An
+  // add-on scope is checked again LIVE on every request against EnterpriseAddonAccess, so
+  // switching the add-on off stops the API even though the key still lists the scope.
+  scopes       String[]   @default(["ROOMS"])
   expiresAt    DateTime?
   lastUsedAt   DateTime?
 
@@ -3646,6 +3701,8 @@ model WebsiteApiKey {
 
   properties WebsiteApiKeyProperty[]
   bookings   WebsiteBooking[]
+  activityBookings ApiActivityBooking[]
+  webhookEndpoints ApiWebhookEndpoint[]
 
   @@index([enterpriseId])
   @@index([createdByUserId])
@@ -3737,6 +3794,162 @@ model WebsitePropertySettings {
 // (keyId, idempotencyKey) is the retry guard: a website whose request timed out can
 // resend the same Idempotency-Key and get the SAME confirmation back rather than a
 // second reservation for the same guest.
+// What a property sells ONLINE through the Booking API for one activity module — one row
+// per (property, EXCURSIONS | SPA). Configured in the Hub (Booking API → Excursions & Spa),
+// the same place and permission (INTEGRATIONS) as WebsitePropertySettings. No row = the
+// module is not sold online at that property. See BOOKING_API_ADDONS_PLAN.md.
+model ActivityOnlineSettings {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  module     String // EXCURSIONS | SPA
+
+  // Master switch. Off: the catalogue may still be read, nothing can be held or booked.
+  enabled               Boolean @default(false)
+  // How long a hold keeps seats / a slot while the website takes payment (B-4).
+  holdMinutes           Int     @default(10)
+  // Earliest a departure / treatment may be booked online, in hours before its start.
+  leadHours             Int     @default(2)
+  // Excursions: the largest party one online booking may carry. Spa uses each treatment's
+  // own maxParticipants instead, so this stays null there.
+  maxPartySize          Int?
+  // Spa: whether the site may pass a therapist gender preference (B-9).
+  offerGenderPreference Boolean @default(true)
+  // The payment method a PAID online booking is settled with, so the folio closes at 0
+  // and the money reports under its own line (B-6). Required before PAID is accepted.
+  onlinePaymentMethodId String?
+  onlinePaymentMethod   PaymentMethod? @relation(fields: [onlinePaymentMethodId], references: [id], onDelete: SetNull)
+  // Added to every online booking's notes for the desk.
+  deskRemark            String?
+  // Cancellation / what-to-bring text the site shows. Not enforced by the system.
+  policies              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, module])
+  @@index([onlinePaymentMethodId])
+}
+
+// One Booking API attempt for an Excursion or Spa booking (BOOKING_API_ADDONS_PLAN.md
+// Phase 2/3) — the activity counterpart of WebsiteBooking. It is, in turn:
+//  - a HOLD: seats kept on a departure while the website takes payment. Held seats count
+//    against capacity until holdExpiresAt; an expired hold simply stops counting (lazy,
+//    no job). Holds live HERE rather than as ExcursionBooking rows so the desk's manifest
+//    only ever shows real bookings.
+//  - the IDEMPOTENCY record for the booking call (keyId + idempotencyKey),
+//  - the AUDIT row, FAILED attempts included,
+//  - the guest's PUBLIC REFERENCE (publicRef, random — never sequential), and the
+//    guest/payment details the website sent, which the walk-in folio has no place for.
+// Live booking status is read from the linked ExcursionBooking / SpaAppointment, never
+// copied here, so a cancellation at the desk is what the website sees.
+model ApiActivityBooking {
+  id           String        @id @default(uuid())
+  enterpriseId String
+  enterprise   Enterprise    @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  keyId        String
+  key          WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  module       String // EXCURSIONS | SPA
+  publicRef    String        @unique
+
+  // HELD | CONFIRMED | EXPIRED | FAILED
+  status         String    @default("HELD")
+  problem        String?
+  idempotencyKey String?
+  holdExpiresAt  DateTime?
+
+  // What is held / booked (excursions).
+  excursionDepartureId String?
+  excursionDeparture   ExcursionDeparture? @relation("ApiExcursionHolds", fields: [excursionDepartureId], references: [id], onDelete: SetNull)
+  adults               Int                 @default(0)
+  children             Int                 @default(0)
+  infants              Int                 @default(0)
+
+  guestFirstName String?
+  guestLastName  String?
+  guestEmail     String?
+  guestPhone     String?
+  remarks        String?
+
+  // PAID | UNPAID — as the website reported it. The PMS takes no payment itself.
+  paymentStatus    String?
+  paymentProvider  String?
+  paymentReference String?
+  paymentAmount    Float?
+  paymentCurrency  String?
+  // The website's paid amount differs from our total — booked anyway, flagged for the desk.
+  amountMismatch   Boolean @default(false)
+
+  quotedTotal Float?
+  currency    String?
+  requestIp   String?
+
+  excursionBookingId String?           @unique
+  excursionBooking   ExcursionBooking? @relation("ApiExcursionBooking", fields: [excursionBookingId], references: [id], onDelete: SetNull)
+  spaAppointmentId   String?           @unique
+  spaAppointment     SpaAppointment?   @relation("ApiSpaAppointment", fields: [spaAppointmentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([keyId, idempotencyKey])
+  @@index([excursionDepartureId, status])
+  @@index([propertyId, createdAt])
+  @@index([enterpriseId, createdAt])
+}
+
+// Where a brand website wants to hear about changes to the Excursion/Spa bookings it made
+// (BOOKING_API_ADDONS_PLAN.md Phase 5, B-8): the desk cancelled a departure for weather,
+// moved a guest, marked a no-show, completed a treatment. Owned by one API key; only
+// bookings made with that key are ever sent to it. src/lib/website-api/webhooks.ts.
+model ApiWebhookEndpoint {
+  id           String        @id @default(uuid())
+  enterpriseId String
+  keyId        String
+  key          WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  url          String
+  // Signing secret (whsec_…), encrypted at rest (secret-crypto.ts). Shown once.
+  secretEncrypted String
+  secretPrefix    String
+  // booking.confirmed | booking.cancelled | booking.moved | booking.completed | booking.no_show
+  events       String[]
+  status       String    @default("ACTIVE") // ACTIVE | DISABLED
+  // Consecutive failed deliveries — reset by any success. Shown in the Hub.
+  failureCount Int       @default(0)
+  lastDeliveryAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  deliveries ApiWebhookDelivery[]
+
+  @@index([keyId])
+  @@index([enterpriseId])
+}
+
+// One event sent (or to be sent) to one endpoint. Retried with backoff by the
+// "booking-api-webhooks" job until delivered or given up (FAILED).
+model ApiWebhookDelivery {
+  id            String             @id @default(uuid())
+  enterpriseId  String
+  endpointId    String
+  endpoint      ApiWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event         String
+  payload       Json
+  status        String             @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now())
+  lastStatusCode Int?
+  lastError     String?
+  deliveredAt   DateTime?
+  createdAt     DateTime           @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+  @@index([enterpriseId, status])
+}
+
 model WebsiteBooking {
   id            String        @id @default(uuid())
   enterpriseId  String

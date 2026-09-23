@@ -32,7 +32,7 @@ export function hashWebsiteApiKey(key: string): string {
 /**
  * Pull the key off a request. Two spellings are accepted so the website can use whichever
  * its HTTP client makes easy:
- *   Authorization: Bearer wsk_…      (preferred — what docs/WEBSITE_API.md shows)
+ *   Authorization: Bearer wsk_…      (preferred — what the /docs portal shows)
  *   X-Api-Key: wsk_…
  * Never the query string: URLs land in access logs, browser history and Referer headers.
  */

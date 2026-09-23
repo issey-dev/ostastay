@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/db";
 import { addMinutesToTime } from "@/lib/spa";
+import type { SpaTreatment, SpaSettings } from "@prisma/client";
 
 export const BLOCKING_STATUSES = ["CONFIRMED", "CHECKED_IN", "IN_TREATMENT"] as const;
 
@@ -35,8 +36,8 @@ type BlockingAppointment = {
 };
 
 // Appointments that occupy a room/therapist for the requested date — CONFIRMED/
-// CHECKED_IN/IN_TREATMENT always block; TENTATIVE only blocks within
-// tentativeHoldMinutes of creation (a stale tentative hold stops blocking on its own,
+// CHECKED_IN/IN_TREATMENT always block; TENTATIVE only blocks until its holdExpiresAt
+// (Booking API holds) or, without one, within tentativeHoldMinutes of creation (a stale tentative hold stops blocking on its own,
 // no expiry job needed — see SPA_PLAN.md §7). CANCELLED/COMPLETED/NO_SHOW never block.
 // `excludeAppointmentId` lets a reschedule (Phase 5) check against every appointment
 // except the one being moved. Each row's own blockedFromTime is derived from its
@@ -48,7 +49,8 @@ async function getBlockingAppointments(
   tentativeHoldMinutes: number,
   excludeAppointmentId?: string
 ): Promise<BlockingAppointment[]> {
-  const holdCutoff = new Date(Date.now() - tentativeHoldMinutes * 60 * 1000);
+  const now = new Date();
+  const holdCutoff = new Date(now.getTime() - tentativeHoldMinutes * 60 * 1000);
   const rows = await prisma.spaAppointment.findMany({
     where: {
       propertyId,
@@ -56,7 +58,9 @@ async function getBlockingAppointments(
       id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
       OR: [
         { appointmentStatus: { in: [...BLOCKING_STATUSES] } },
-        { appointmentStatus: "TENTATIVE", createdAt: { gte: holdCutoff } },
+        // A Booking API hold carries its own expiry; a desk tentative uses the setting.
+        { appointmentStatus: "TENTATIVE", holdExpiresAt: { gt: now } },
+        { appointmentStatus: "TENTATIVE", holdExpiresAt: null, createdAt: { gte: holdCutoff } },
       ],
     },
     select: {
@@ -349,4 +353,84 @@ export async function isSlotFeasible(params: {
   const requirements = params.requirements ?? Array.from({ length: params.partySize }, () => ({}));
   const therapists = await autoAssignTherapists({ ...params, requirements });
   return therapists !== null;
+}
+
+// ---------------------------------------------------------------------------------------
+// Slot listing — moved here from GET /api/spa/appointments/availability so the desk's
+// slot picker and the Booking API list free times with the same code.
+// Shared by both response modes below — every bookable start time on ONE calendar day,
+// each checked against the exact same per-participant requirements the booking route
+// will re-validate at save time (never trust a cached slot list, same rule as
+// Excursions). `requirements.length` IS the party size; a mismatch with the `partySize`
+// query param is rejected by the caller before this runs.
+export async function computeSlotsForDay(params: {
+  propertyId: string;
+  treatmentId: string;
+  date: Date;
+  treatment: Pick<SpaTreatment, "defaultDurationMinutes" | "cleanupBufferMinutes" | "preparationBufferMinutes">;
+  settings: Pick<SpaSettings, "defaultOpeningTime" | "defaultClosingTime" | "slotIntervalMinutes"> | null;
+  partySize: number;
+  requirements?: TherapistRequirement[];
+}): Promise<{ startTime: string; available: boolean }[]> {
+  const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
+  const openingTime = settings?.defaultOpeningTime ?? "09:00";
+  const closingTime = settings?.defaultClosingTime ?? "18:00";
+  const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
+
+  const slots: { startTime: string; available: boolean }[] = [];
+  let cursor = openingTime;
+  while (cursor < closingTime) {
+    const treatmentEndTime = addMinutesToTime(cursor, treatment.defaultDurationMinutes);
+    const blockedUntilTime = addMinutesToTime(treatmentEndTime, treatment.cleanupBufferMinutes);
+    const blockedFromTime = addMinutesToTime(cursor, -treatment.preparationBufferMinutes);
+
+    if (blockedUntilTime > closingTime) break; // wouldn't fit before closing
+
+    const available = await isSlotFeasible({
+      propertyId,
+      treatmentId,
+      partySize,
+      date,
+      blockedFromTime,
+      blockedUntilTime,
+      requirements,
+    });
+    slots.push({ startTime: cursor, available });
+    cursor = addMinutesToTime(cursor, slotIntervalMinutes);
+  }
+  return slots;
+}
+
+// Same day-loop as computeSlotsForDay, but for the from/to range mode below, which
+// only needs a yes/no per day — stops at the FIRST feasible slot instead of always
+// computing the full day's grid. A 60-day horizon (the therapist-first DatePicker's
+// real call) doing a full per-slot scan on every day would be a genuine, needless
+// N-times-slower cost for the common case (most open days have an early slot free);
+// this only pays the full-day cost on days that turn out to have nothing available.
+export async function isDayFeasible(params: {
+  propertyId: string;
+  treatmentId: string;
+  date: Date;
+  treatment: Pick<SpaTreatment, "defaultDurationMinutes" | "cleanupBufferMinutes" | "preparationBufferMinutes">;
+  settings: Pick<SpaSettings, "defaultOpeningTime" | "defaultClosingTime" | "slotIntervalMinutes"> | null;
+  partySize: number;
+  requirements?: TherapistRequirement[];
+}): Promise<boolean> {
+  const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
+  const openingTime = settings?.defaultOpeningTime ?? "09:00";
+  const closingTime = settings?.defaultClosingTime ?? "18:00";
+  const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
+
+  let cursor = openingTime;
+  while (cursor < closingTime) {
+    const treatmentEndTime = addMinutesToTime(cursor, treatment.defaultDurationMinutes);
+    const blockedUntilTime = addMinutesToTime(treatmentEndTime, treatment.cleanupBufferMinutes);
+    const blockedFromTime = addMinutesToTime(cursor, -treatment.preparationBufferMinutes);
+    if (blockedUntilTime > closingTime) break;
+
+    const available = await isSlotFeasible({ propertyId, treatmentId, partySize, date, blockedFromTime, blockedUntilTime, requirements });
+    if (available) return true;
+    cursor = addMinutesToTime(cursor, slotIntervalMinutes);
+  }
+  return false;
 }

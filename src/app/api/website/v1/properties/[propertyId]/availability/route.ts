@@ -1,4 +1,5 @@
 import { websiteRoute, websitePreflight, apiJson, apiError } from "@/lib/website-api/http";
+import { requireScope } from "@/lib/website-api/scopes";
 import { keyCanAccessProperty } from "@/lib/website-api/resolve-key";
 import { computeWebsiteAvailability } from "@/lib/website-api/availability";
 
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
  * Implements the D-7 publication rules — see src/lib/website-api/availability.ts.
  */
 export const GET = websiteRoute<{ propertyId: string }>(async ({ request, key, params, cors }) => {
+  requireScope(key, "ROOMS");
   if (!keyCanAccessProperty(key, params.propertyId)) {
     return apiError(404, "PROPERTY_NOT_FOUND", "Property not found.", { headers: cors });
   }

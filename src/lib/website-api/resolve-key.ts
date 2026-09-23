@@ -8,6 +8,8 @@ export type ResolvedWebsiteKey = {
   /** ACTIVE properties this key may act on. A pending/rejected property is invisible. */
   propertyIds: string[];
   allowedOrigins: string[];
+  /** ROOMS | EXCURSIONS | SPA — see src/lib/website-api/scopes.ts. */
+  scopes: string[];
 };
 
 export type WebsiteKeyResolution =
@@ -49,6 +51,7 @@ export async function resolveWebsiteApiKey(request: Request): Promise<WebsiteKey
       expiresAt: true,
       lastUsedAt: true,
       allowedOrigins: true,
+      scopes: true,
       properties: { select: { property: { select: { id: true, status: true } } } },
     },
   });
@@ -79,6 +82,7 @@ export async function resolveWebsiteApiKey(request: Request): Promise<WebsiteKey
       name: row.name,
       propertyIds: row.properties.filter((p) => p.property.status === "ACTIVE").map((p) => p.property.id),
       allowedOrigins: row.allowedOrigins,
+      scopes: row.scopes,
     },
   };
 }

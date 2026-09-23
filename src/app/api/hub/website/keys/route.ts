@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { listWebsiteApiKeys, createWebsiteApiKey } from "@/lib/website-api/keys";
+import { API_SCOPES, enabledActivityModules } from "@/lib/website-api/scopes";
 
 // Website API keys for the Hub — see .agents/docs/WEBSITE_API_PLAN.md. Every handler goes
 // through requireHubAccess() as well as requirePermission(), the same rule as the rest of
@@ -16,15 +17,18 @@ export async function GET() {
     requireHubAccess(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
-    const [keys, properties] = await Promise.all([
+    const [keys, properties, addons] = await Promise.all([
       listWebsiteApiKeys(ctx.enterpriseId),
       prisma.property.findMany({
         where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" },
         select: { id: true, name: true, code: true },
         orderBy: { name: "asc" },
       }),
+      enabledActivityModules(ctx.enterpriseId),
     ]);
-    return NextResponse.json({ keys, properties });
+    // Which scopes the form may offer: Rooms always, an add-on only while it is enabled.
+    const availableScopes = API_SCOPES.filter((s) => s === "ROOMS" || addons.has(s));
+    return NextResponse.json({ keys, properties, availableScopes });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -35,6 +39,8 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   propertyIds: z.array(z.string().min(1)).min(1),
   allowedOrigins: z.array(z.string()).default([]),
+  // Omitted by older clients: such a key is a rooms key, exactly as before scopes existed.
+  scopes: z.array(z.string()).min(1).default(["ROOMS"]),
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
@@ -51,6 +57,7 @@ export async function POST(request: Request) {
       name: data.name,
       propertyIds: data.propertyIds,
       allowedOrigins: data.allowedOrigins,
+      scopes: data.scopes,
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
     });
 
@@ -58,7 +65,7 @@ export async function POST(request: Request) {
       ctx,
       module: "INTEGRATIONS",
       action: "CREATE",
-      description: `Created Website API key "${row.name}" for ${row.properties.map((p) => p.name).join(", ")}`,
+      description: `Created Booking API key "${row.name}" (${row.scopes.join(", ")}) for ${row.properties.map((p) => p.name).join(", ")}`,
       entityType: "WebsiteApiKey",
       entityId: row.id,
     });

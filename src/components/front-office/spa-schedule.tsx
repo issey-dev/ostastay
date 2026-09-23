@@ -21,6 +21,8 @@ type SpaAppt = {
   startTime: string
   treatmentEndTime: string
   appointmentStatus: string
+  source?: string
+  holdExpiresAt?: string | null
   folioId: string | null
   treatment: { id: string; name: string }
   room: { id: string; name: string } | null
@@ -60,7 +62,16 @@ const therapistLabel = (a: SpaAppt) => {
   return names.join(", ")
 }
 
-export function SpaSchedule({ propertyId, onSelectAppointment }: { propertyId: string; onSelectAppointment?: (a: SpaAppt) => void }) {
+export function SpaSchedule({
+  propertyId,
+  onSelectAppointment,
+  refreshKey = 0,
+}: {
+  propertyId: string
+  onSelectAppointment?: (a: SpaAppt) => void
+  /** Bump to reload after an appointment changed elsewhere (e.g. the appointment panel). */
+  refreshKey?: number
+}) {
   const isMobile = useIsMobile()
   const [view, setView] = useState<ViewMode>("week")
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
@@ -89,7 +100,7 @@ export function SpaSchedule({ propertyId, onSelectAppointment }: { propertyId: s
       .then((d) => { if (Array.isArray(d)) setAppts(d) })
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, view, anchorDate, therapistId])
+  }, [propertyId, view, anchorDate, therapistId, refreshKey])
 
   const colorIndex = useMemo(() => {
     const order = new Map<string, number>()
@@ -117,18 +128,22 @@ export function SpaSchedule({ propertyId, onSelectAppointment }: { propertyId: s
     : format(anchorDate, "EEEE, d MMM yyyy")
 
   const cancelled = (a: SpaAppt) => a.appointmentStatus === "CANCELLED"
+  // A brand website's hold while its guest pays (Booking API) — blocks the therapist and
+  // room but is not a booking yet.
+  const heldOnline = (a: SpaAppt) => a.appointmentStatus === "TENTATIVE" && a.source === "WEBSITE_API"
 
   const Chip = ({ a, dense }: { a: SpaAppt; dense: boolean }) => (
     <button
       type="button"
       onClick={() => onSelectAppointment?.(a)}
-      className={`w-full text-left rounded-md border-l-4 bg-card border border-border ${chipColor(a).border} px-2 py-1 hover:bg-muted transition-colors ${dense ? "text-xs" : "text-sm"} ${cancelled(a) ? "opacity-50" : ""}`}
+      className={`w-full text-left rounded-md border-l-4 bg-card border border-border ${chipColor(a).border} px-2 py-1 hover:bg-muted transition-colors ${dense ? "text-xs" : "text-sm"} ${cancelled(a) ? "opacity-50" : ""} ${heldOnline(a) ? "border-dashed" : ""}`}
     >
       <span className={`font-medium block truncate ${cancelled(a) ? "line-through text-muted-foreground" : "text-foreground"}`}>
         {a.startTime} {a.treatment.name}
       </span>
       <span className={`block truncate text-muted-foreground ${dense ? "text-[10px]" : "text-xs"}`}>
-        {guestName(a)}{therapistLabel(a) ? ` · ${therapistLabel(a)}` : ""}
+        {heldOnline(a) ? "Held online" : guestName(a)}{therapistLabel(a) ? ` · ${therapistLabel(a)}` : ""}
+        {a.source === "WEBSITE_API" && !heldOnline(a) ? " · Online" : ""}
       </span>
     </button>
   )

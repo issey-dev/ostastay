@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Enterprise not found" }, { status: 404 });
     }
 
-    const existingUsers = await prisma.user.count({ where: { enterpriseId: id } });
+    const existingUsers = await prisma.user.count({ where: { enterpriseId: id, isSystem: false } });
     if (existingUsers > 0) {
       return NextResponse.json(
         { error: "This enterprise already has users — its own admin manages accounts from Controls." },

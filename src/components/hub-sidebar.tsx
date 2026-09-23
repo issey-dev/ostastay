@@ -38,7 +38,7 @@ const items = [
   // API keys for each property's own brand website, and what it may show and sell
   // (2026-09-06) — see .agents/docs/WEBSITE_API_PLAN.md. Integrations-gated like the
   // channel manager: a website is an integration.
-  { title: "Website API", url: "hub/website", icon: Key },
+  { title: "Booking API", url: "hub/website", icon: Key },
   // Staff administration moved here from Controls (2026-08-04): identity is
   // enterprise-wide, and the Hub is the only shell a property-scoped user can't reach.
   { title: "People", url: "hub/people", icon: Users },

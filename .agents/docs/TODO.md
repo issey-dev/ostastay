@@ -2,6 +2,29 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Booking API for Excursions & Spa — ALL PHASES DONE (2026-09-23)
+
+Branch `feat/booking-api-addons`. Full record — decisions, file map, deviations — in
+[BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md) ("as built" sections).
+
+- **Phase 0** — shared booking services, Postgres advisory booking locks (fixes a live
+  multi-replica race on spa/excursion capacity), voids reverse generated tax/service
+  lines, Spa lifecycle, "Online Bookings" system user, Postgres-backed API rate limits.
+- **Phase 1** — one key for Rooms/Excursions/Spa (scopes), `modules` block, Hub
+  "Booking API" with Excursions & Spa online settings and per-item publishing.
+- **Phase 2** — public Excursions endpoints (catalogue, departures, quote, hold, book),
+  lookup and guest self-cancel.
+- **Phase 3** — public Spa endpoints (treatments, free times, quote, hold, book).
+- **Phase 4** — Spa appointment panel with lifecycle actions, Online markers on the spa
+  schedule and excursion manifest, Hub "Online bookings" list.
+- **Phase 5** — signed webhooks with retries, Hub webhook management.
+- **Phase 6** — public docs portal at `/docs`, OpenAPI at `/docs/booking-api.openapi.yaml`,
+  PDF from the portal (`npm run docs:pdf`), `npm run docs:check` guard.
+
+**Still open:** see "Open follow-ups" in the plan (room webhooks/self-cancel/last-room lock,
+login limiter across replicas, early hold release, webhook delivery retention, interactive
+API reference).
+
 ## Green Tax — open items (2026-09-23)
 
 - ~~Hub correction tool for wrong Reg Nos~~ — DONE 2026-09-23 (Hub › Green Tax).
@@ -87,11 +110,12 @@ own site from an API document. Plan and decisions: [WEBSITE_API_PLAN.md](WEBSITE
 - **Shared helpers extracted**: `systemContext()` → `src/lib/reservations/system-context.ts`,
   `resolveGuestProfile()` → `src/lib/profiles/resolve-guest-profile.ts` (channel
   conversion now imports them).
-- **Docs for the property's web developer**: `docs/WEBSITE_API.md`,
-  `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml`.
+- **Docs for the property's web developer**: since 2026-09-23 the public portal at `/docs`
+  (`src/app/docs`) and `public/docs/booking-api.openapi.yaml` (the `docs/*.md` files are pointers).
 - **Tests**: `tests/business-rules/website-api.test.ts` (21).
 
-**Still open** (see the plan's follow-ups): per-key rate limiting; a transactional guard
+**Still open** (see the plan's follow-ups): ~~per-key rate limiting~~ (done 2026-09-23,
+Booking API Phase 0); a transactional guard
 on the last room (the desk has the same race); a Hub list of website bookings incl. FAILED
 attempts; optional guest confirmation email from the PMS; cancel/modify endpoints;
 multi-room bookings; image upload (URLs only today).

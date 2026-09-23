@@ -32,9 +32,16 @@ read `.agents/docs/`:
 - [`.agents/docs/WEBSITE_API_PLAN.md`](.agents/docs/WEBSITE_API_PLAN.md) — the public
   Website API (a property's own brand website reading availability/prices and creating
   bookings through a Hub-minted key): decisions W-1…W-11, file map, open items. The
-  external docs a property's web developer gets are `docs/WEBSITE_API.md`,
-  `docs/PROPERTY_WEBSITE_GUIDE.md` and `docs/website-api.openapi.yaml` — keep them in
-  step with `src/app/api/website/v1/**`.
+  external docs are the public portal at `/docs` (`src/app/docs`, one page per module),
+  the OpenAPI spec `public/docs/booking-api.openapi.yaml` and the PDF built from the portal
+  (`npm run docs:pdf`) — keep them in step with `src/app/api/website/v1/**`, and run
+  `npm run docs:check` (published docs must carry no secret, real customer or internal detail).
+
+- [`.agents/docs/BOOKING_API_ADDONS_PLAN.md`](.agents/docs/BOOKING_API_ADDONS_PLAN.md) —
+  extending that API so brand websites can sell Excursions and Spa on the same key
+  (scopes per key, instant booking, holds, guest self-cancel, webhooks, a public
+  `/docs` portal). Phase status and decisions B-1…B-11. Read before touching
+  `src/lib/excursion-booking.ts`, `spa-booking.ts`, `spa-lifecycle.ts` or `db-lock.ts`.
 
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to

@@ -11,6 +11,8 @@ import { sendPlatformMail, MAIL_KINDS } from "@/lib/mail-sender";
 import { buildChannelAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
 import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
+import { processDueWebhooks } from "@/lib/website-api/webhooks";
+import { expireStaleSpaHolds } from "@/lib/spa-booking";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
 // /api/jobs/run iterates this list.
@@ -307,6 +309,41 @@ export const sessionIdleSweepJob: Job = {
   },
 };
 
+/**
+ * Booking API webhooks: send every delivery that is due — first attempts that didn't go
+ * out at once, and retries on their backoff (src/lib/website-api/webhooks.ts).
+ */
+const bookingApiWebhooksJob: Job = {
+  name: "booking-api-webhooks",
+  description: "Deliver and retry Booking API webhooks to brand websites",
+  async run(enterpriseId) {
+    const r = await processDueWebhooks(enterpriseId);
+    return {
+      itemsProcessed: r.processed,
+      summary: r.processed === 0 ? "Nothing due" : `${r.DELIVERED} delivered, ${r.RETRY} to retry, ${r.FAILED} given up`,
+    };
+  },
+};
+
+/**
+ * Booking API holds that expired: they already stopped counting against capacity on their
+ * own; this tidies their rows so the Spa schedule stops showing them and the Hub list says
+ * "expired" rather than "held".
+ */
+const bookingApiHoldSweepJob: Job = {
+  name: "booking-api-hold-sweep",
+  description: "Tidy expired Booking API holds (excursion seats, spa slots)",
+  async run(enterpriseId) {
+    const properties = await prisma.property.findMany({ where: { enterpriseId }, select: { id: true } });
+    for (const p of properties) await expireStaleSpaHolds(p.id);
+    const { count } = await prisma.apiActivityBooking.updateMany({
+      where: { enterpriseId, status: "HELD", holdExpiresAt: { lte: new Date() } },
+      data: { status: "EXPIRED" },
+    });
+    return { itemsProcessed: count, summary: count === 0 ? "No expired holds" : `${count} expired hold(s) tidied` };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -314,6 +351,8 @@ export const JOBS: readonly Job[] = [
   channelBookingPollJob,
   channelBookingConvertJob,
   sessionIdleSweepJob,
+  bookingApiWebhooksJob,
+  bookingApiHoldSweepJob,
 ];
 
 export function findJob(name: string): Job | undefined {

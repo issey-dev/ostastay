@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, ForbiddenError, toErrorResponse } from "@/lib/scope";
 import { combineDepartureDateTime } from "@/lib/excursions";
 import { logActivity } from "@/lib/activity-log";
+import { notifyBookingChange } from "@/lib/booking-events";
+import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
+import { BookingError, bookingErrorResponse } from "@/lib/booking-error";
+import { voidPostedCharge, actorDisplayName } from "@/lib/posting/void-charge";
 
 // Cancels an ENTIRE departure (e.g. weather) — cascades to every CONFIRMED booking on
 // it. Manager-only (EXCURSIONS delete) regardless of the cutoff window: this is an
@@ -29,10 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const departure = await prisma.excursionDeparture.findUnique({
       where: { id },
-      include: {
-        excursionType: true,
-        bookings: { where: { status: "CONFIRMED" }, include: { folioLineItem: true } },
-      },
+      include: { excursionType: true },
     });
     if (!departure) {
       return NextResponse.json({ error: "Departure not found" }, { status: 404 });
@@ -51,21 +52,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!(e instanceof ForbiddenError)) throw e;
     }
 
-    const folioIds = [...new Set(departure.bookings.map((b) => b.folioId))];
-    const folios = await prisma.folio.findMany({ where: { id: { in: folioIds } }, select: { id: true, isClosed: true } });
-    const closedFolioIds = new Set(folios.filter((f) => f.isClosed).map((f) => f.id));
-
     let voidedCount = 0;
+    let cancelledCount = 0;
+    const cancelledIds: string[] = [];
     const movableBookingIds: string[] = [];
     const unmovable: Array<{ bookingId: string; reason: string }> = [];
 
     await prisma.$transaction(async (tx) => {
-      for (const booking of departure.bookings) {
+      // Take the departure lock every booking takes (src/lib/db-lock.ts) and read the
+      // bookings UNDER it, so a desk or Booking API booking can't land between reading
+      // the manifest and flipping the departure to CANCELLED.
+      await lockKeys(tx, [lockKey.excursionDeparture(id)]);
+      const current = await tx.excursionDeparture.findUniqueOrThrow({ where: { id } });
+      if (current.status !== "SCHEDULED") {
+        throw new BookingError(400, "DEPARTURE_CLOSED", `Cannot cancel a departure with status ${current.status}`);
+      }
+      const bookings = await tx.excursionBooking.findMany({
+        where: { departureId: id, status: "CONFIRMED" },
+        include: { folioLineItem: true },
+      });
+      const folioIds = [...new Set(bookings.map((b) => b.folioId))];
+      const folios = await tx.folio.findMany({ where: { id: { in: folioIds } }, select: { id: true, isClosed: true } });
+      const closedFolioIds = new Set(folios.filter((f) => f.isClosed).map((f) => f.id));
+
+      cancelledCount = bookings.length;
+      cancelledIds.push(...bookings.map((b) => b.id));
+      const actorName = await actorDisplayName(tx, ctx.userId);
+      for (const booking of bookings) {
         const canVoid = !!booking.folioLineItem && !booking.folioLineItem.isVoid && !closedFolioIds.has(booking.folioId);
         const willVoid = canVoid && hasCashieringAccess;
 
         if (willVoid && booking.folioLineItemId) {
-          await tx.folioLineItem.update({ where: { id: booking.folioLineItemId }, data: { isVoid: true } });
+          await voidPostedCharge(tx, { lineItemId: booking.folioLineItemId, reason: `Departure cancelled: ${reason}`, actorName });
           voidedCount++;
         }
 
@@ -87,7 +105,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       await tx.excursionDeparture.update({ where: { id }, data: { status: "CANCELLED" } });
-    });
+    }, BOOKING_TX_OPTIONS);
 
     // Auto-suggest the next scheduled departure of the same excursion type with room
     // left — the UI offers a one-click "move these guests here" on top of this.
@@ -113,18 +131,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return booked < c.capacity;
     });
 
+    for (const bookingId of cancelledIds) notifyBookingChange("booking.cancelled", { excursionBookingId: bookingId });
+
     await logActivity({
       ctx,
       module: "EXCURSIONS",
       action: "UPDATE",
       entityType: "ExcursionDeparture",
       entityId: id,
-      description: `Cancelled departure for "${departure.excursionType.name}" (${departure.bookings.length} booking(s), ${voidedCount} voided) — ${reason}`,
+      description: `Cancelled departure for "${departure.excursionType.name}" (${cancelledCount} booking(s), ${voidedCount} voided) — ${reason}`,
     });
 
     return NextResponse.json({
       success: true,
-      cancelledCount: departure.bookings.length,
+      cancelledCount,
       voidedCount,
       movableBookingIds,
       unmovable,
@@ -133,6 +153,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         : null,
     });
   } catch (error) {
+    if (error instanceof BookingError) return bookingErrorResponse(error);
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
   }
