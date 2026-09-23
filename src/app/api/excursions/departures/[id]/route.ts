@@ -19,6 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         bookings: {
           where: { status: { not: "CANCELLED" } },
           include: {
+            apiBooking: { select: { publicRef: true, paymentStatus: true, amountMismatch: true } },
             reservation: {
               include: {
                 primaryGuest: { select: { firstName: true, lastName: true } },
@@ -48,12 +49,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       totalAmount: b.totalAmount,
       status: b.status,
       notes: b.notes,
+      // Booked by a brand website through the Booking API.
+      source: b.source,
+      onlineRef: b.apiBooking?.publicRef ?? null,
+      paidOnline: b.apiBooking?.paymentStatus === "PAID",
+      paymentFlagged: b.apiBooking?.amountMismatch ?? false,
       folioId: b.folioId,
       folioLineItemId: b.folioLineItemId,
       createdAt: b.createdAt,
     }));
 
+    // Seats a website is holding right now while its guest pays — not bookings yet, but
+    // not available to sell either.
+    const held = await prisma.apiActivityBooking.aggregate({
+      where: { excursionDepartureId: departure.id, status: "HELD", holdExpiresAt: { gt: new Date() } },
+      _sum: { adults: true, children: true, infants: true },
+    });
+
     return NextResponse.json({
+      heldOnline: (held._sum.adults ?? 0) + (held._sum.children ?? 0) + (held._sum.infants ?? 0),
       id: departure.id,
       excursionType: departure.excursionType,
       departureDate: departure.departureDate,

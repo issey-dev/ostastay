@@ -7,6 +7,7 @@ import { useParams } from "next/navigation"
 import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, ClipboardList } from "@/components/icons"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SpaSchedule } from "@/components/front-office/spa-schedule"
+import { SpaAppointmentSheet } from "@/components/front-office/spa-appointment-sheet"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
 import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
 import { Button } from "@/components/ui/button"
@@ -146,6 +147,10 @@ export default function SpaPage() {
   const [notes, setNotes] = useState("")
   const [inHousePayment, setInHousePayment] = useState<InHousePayment>({ settleNow: false, paymentMethodId: "" })
   const [booking, setBooking] = useState(false)
+  // The appointment open in the side panel (lifecycle actions), and a counter that makes
+  // the schedule reload after one of them.
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
+  const [scheduleRefresh, setScheduleRefresh] = useState(0)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const [_todaysAppointments, setTodaysAppointments] = useState<AppointmentListItem[]>([])
@@ -902,7 +907,8 @@ export default function SpaPage() {
             <div className="bg-card rounded-xl shadow-sm border border-border p-6">
               <SpaSchedule
                 propertyId={currentProperty.id}
-                onSelectAppointment={(a) => { if (a.folioId) { setWalkInFolioId(a.folioId); setIsWalkInPanelOpen(true) } }}
+                refreshKey={scheduleRefresh}
+                onSelectAppointment={(a) => setSelectedAppointmentId(a.id)}
               />
             </div>
           )}
@@ -919,6 +925,13 @@ export default function SpaPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <SpaAppointmentSheet
+        appointmentId={selectedAppointmentId}
+        onClose={() => setSelectedAppointmentId(null)}
+        onChanged={() => { setScheduleRefresh((n) => n + 1); setHistoryRefresh((n) => n + 1) }}
+        onOpenBill={(folioId) => { setSelectedAppointmentId(null); setWalkInFolioId(folioId); setIsWalkInPanelOpen(true) }}
+      />
 
       <WalkInFolioPanel
         folioId={walkInFolioId}

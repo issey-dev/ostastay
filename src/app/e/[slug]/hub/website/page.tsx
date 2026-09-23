@@ -4,6 +4,7 @@ import { InfoHint } from "@/components/ui/info-hint"
 import { WebsiteApiKeys } from "@/components/hub/website-api-keys"
 import { WebsitePropertySettings } from "@/components/hub/website-property-settings"
 import { WebsiteActivitySettings } from "@/components/hub/website-activity-settings"
+import { WebsiteOnlineBookings } from "@/components/hub/website-online-bookings"
 import { enabledActivityModules } from "@/lib/website-api/scopes"
 
 // Booking API (was "Website API") — API keys for each property's own brand website, and
@@ -23,7 +24,8 @@ export default async function HubWebsitePage() {
   const canCreate = hasPermission(ctx, "INTEGRATIONS", "create")
   const canRevoke = hasPermission(ctx, "INTEGRATIONS", "delete")
   // The Excursions & Spa tab only exists for an enterprise that has either add-on.
-  const hasActivityAddons = (await enabledActivityModules(ctx.enterpriseId)).size > 0
+  const activityModules = [...(await enabledActivityModules(ctx.enterpriseId))].sort()
+  const hasActivityAddons = activityModules.length > 0
 
   return (
     <div className="space-y-6">
@@ -47,6 +49,7 @@ export default async function HubWebsitePage() {
           <TabsTrigger value="keys">API Keys</TabsTrigger>
           <TabsTrigger value="properties">Properties</TabsTrigger>
           {hasActivityAddons && <TabsTrigger value="activities">Excursions &amp; Spa</TabsTrigger>}
+          <TabsTrigger value="bookings">Online bookings</TabsTrigger>
         </TabsList>
         <TabsContent value="keys">
           <WebsiteApiKeys canCreate={canCreate} canManage={canManage} canRevoke={canRevoke} />
@@ -59,6 +62,9 @@ export default async function HubWebsitePage() {
             <WebsiteActivitySettings canManage={canManage} />
           </TabsContent>
         )}
+        <TabsContent value="bookings">
+          <WebsiteOnlineBookings modules={["ROOMS", ...activityModules]} />
+        </TabsContent>
       </Tabs>
     </div>
   )

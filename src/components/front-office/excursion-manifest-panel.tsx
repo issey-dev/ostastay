@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { Badge } from "@/components/ui/badge"
 import { Printer, XCircle, UserX, CloudRain, ArrowRightCircle } from "@/components/icons"
 
 type ManifestBooking = {
@@ -21,6 +22,10 @@ type ManifestBooking = {
   totalAmount: number
   status: string
   notes: string | null
+  source?: string
+  onlineRef?: string | null
+  paidOnline?: boolean
+  paymentFlagged?: boolean
 }
 
 type Manifest = {
@@ -34,6 +39,20 @@ type Manifest = {
   minCapacity: number | null
   status: string
   bookings: ManifestBooking[]
+  heldOnline?: number
+}
+
+// Booked by the property's own website (Booking API) — the reference the guest was given.
+function OnlineTag({ b }: { b: ManifestBooking }) {
+  if (b.source !== "API") return null
+  return (
+    <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs">
+      <Badge variant="outline">Online</Badge>
+      {b.onlineRef && <span className="font-mono text-muted-foreground">{b.onlineRef}</span>}
+      {b.paidOnline && <span className="text-muted-foreground">· paid online</span>}
+      {b.paymentFlagged && <span className="text-destructive">· check payment</span>}
+    </span>
+  )
 }
 
 type CascadeResult = {
@@ -198,6 +217,9 @@ export function ExcursionManifestPanel({
                     </div>
                     <p className="text-sm font-medium mt-1">
                       {manifest.bookings.reduce((s, b) => s + b.adultCount + b.childCount + b.infantCount, 0)}/{manifest.capacity} booked
+                      {!!manifest.heldOnline && (
+                        <span className="font-normal text-muted-foreground"> · {manifest.heldOnline} held online while the guest pays</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
@@ -262,6 +284,7 @@ export function ExcursionManifestPanel({
                           <div className="min-w-0">
                             <p className="font-medium truncate">{b.guestName}</p>
                             <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
+                            <OnlineTag b={b} />
                           </div>
                           <StatusBadge label={b.status} status={b.status} />
                         </div>
@@ -305,7 +328,8 @@ export function ExcursionManifestPanel({
                           <TableCell>
                             <p className="font-medium">{b.guestName}</p>
                             <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
-                            {b.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{b.notes}</p>}
+                            <OnlineTag b={b} />
+                            {b.notes && <p className="text-xs text-muted-foreground italic mt-0.5 whitespace-pre-line">{b.notes}</p>}
                           </TableCell>
                           <TableCell className="text-sm">
                             {b.adultCount}A{b.childCount ? ` ${b.childCount}C` : ""}{b.infantCount ? ` ${b.infantCount}I` : ""}

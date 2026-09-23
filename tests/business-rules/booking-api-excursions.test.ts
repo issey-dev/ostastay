@@ -18,6 +18,7 @@ const quoteRoute = await import("@/app/api/website/v1/properties/[propertyId]/ex
 const holdsRoute = await import("@/app/api/website/v1/properties/[propertyId]/excursions/holds/route");
 const bookingsRoute = await import("@/app/api/website/v1/properties/[propertyId]/excursions/bookings/route");
 const lookupRoute = await import("@/app/api/website/v1/activity-bookings/[reference]/route");
+const { listOnlineBookings } = await import("@/lib/website-api/online-bookings");
 const cancelRoute = await import("@/app/api/website/v1/activity-bookings/[reference]/cancel/route");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -382,5 +383,25 @@ describe("Booking API — Excursions (Phase 2)", () => {
     } finally {
       await prisma.enterpriseAddonAccess.update({ where: { enterpriseId_module: { enterpriseId, module: "EXCURSIONS" } }, data: { enabled: true } });
     }
+  });
+
+  it("the Hub's online bookings list shows confirmed, failed and expired attempts with their state", async () => {
+    const dep = await makeDeparture({ capacity: 1 });
+    const ok = (await (await book(propertyId, serverKey, { departureId: dep.id, adults: 1, guest: guest(), payment: unpaid })).json()).booking;
+    const failed = await book(propertyId, serverKey, { departureId: dep.id, adults: 1, guest: guest(), payment: unpaid });
+    expect(failed.status).toBe(409);
+    const other = await makeDeparture();
+    const { hold } = await (
+      await holdsRoute.POST(req(`/properties/${propertyId}/excursions/holds`, serverKey, { body: { departureId: other.id, adults: 1 } }), p({ propertyId }))
+    ).json();
+    await prisma.apiActivityBooking.update({ where: { id: hold.holdId }, data: { holdExpiresAt: new Date(Date.now() - 1000) } });
+
+    const rows = await listOnlineBookings(enterpriseId, { module: "EXCURSIONS" });
+    const confirmed = rows.find((r) => r.reference === ok.reference);
+    expect(confirmed).toMatchObject({ status: "CONFIRMED", module: "EXCURSIONS", payment: "Pay at property" });
+    expect(rows.some((r) => r.status === "FAILED" && r.problem?.startsWith("SOLD_OUT"))).toBe(true);
+    expect(rows.find((r) => r.id === hold.holdId)?.status).toBe("EXPIRED");
+    const onlyFailed = await listOnlineBookings(enterpriseId, { status: "FAILED" });
+    expect(onlyFailed.every((r) => r.status === "FAILED")).toBe(true);
   });
 });
