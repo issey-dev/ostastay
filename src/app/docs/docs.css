@@ -1,0 +1,245 @@
+/*
+ * The public documentation portal (/docs) — developer and administrator guides for the
+ * Booking API. Scoped under .docs-page so none of it leaks into the application. Same
+ * brand language as the marketing pages (src/app/info/info.css): Obsidian ink, Crimson
+ * accent, square corners, Inter — tuned for long-form reading rather than for a pitch.
+ * Tokens by ROLE, redefined for dark mode, as in info.css.
+ */
+.docs-page {
+  --canvas: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #0d0f11;
+  --ink-strong: rgba(13, 15, 17, 0.86);
+  --ink-muted: rgba(13, 15, 17, 0.62);
+  --accent: #8b0000;
+  --accent-ink: #8b0000;
+  --line: rgba(13, 15, 17, 0.14);
+  --line-soft: rgba(13, 15, 17, 0.07);
+  --code-bg: #0d0f11;
+  --code-ink: #e8ebee;
+  --inline-code-bg: rgba(13, 15, 17, 0.06);
+  --note: #0e5a8a;
+  --note-bg: rgba(14, 90, 138, 0.07);
+  --warn: #8a5a00;
+  --warn-bg: rgba(160, 110, 0, 0.09);
+
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .docs-page {
+    --canvas: #0d0f11;
+    --surface: #15181b;
+    --ink: #f4f6f8;
+    --ink-strong: rgba(244, 246, 248, 0.86);
+    --ink-muted: rgba(244, 246, 248, 0.58);
+    --accent-ink: #f05252;
+    --line: rgba(244, 246, 248, 0.14);
+    --line-soft: rgba(244, 246, 248, 0.07);
+    --code-bg: #07080a;
+    --inline-code-bg: rgba(244, 246, 248, 0.08);
+    --note: #7cc4f2;
+    --note-bg: rgba(124, 196, 242, 0.08);
+    --warn: #f0c060;
+    --warn-bg: rgba(240, 192, 96, 0.08);
+  }
+}
+
+.docs-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.docs-header a { color: inherit; text-decoration: none; }
+.docs-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.docs-brand-sep { color: var(--ink-muted); font-weight: 400; }
+.docs-header-links { margin-left: auto; display: flex; gap: 16px; font-size: 14px; color: var(--ink-muted); }
+.docs-header-links a:hover { color: var(--ink); }
+
+.docs-shell { display: flex; max-width: 1280px; margin: 0 auto; }
+
+.docs-sidebar {
+  position: sticky;
+  top: 56px;
+  flex: 0 0 260px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 24px 16px 48px;
+  border-right: 1px solid var(--line-soft);
+  font-size: 14px;
+}
+.docs-sidebar h4 {
+  margin: 20px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.docs-sidebar > div:first-child h4 { margin-top: 0; }
+.docs-sidebar a {
+  display: block;
+  padding: 5px 10px;
+  border-left: 2px solid transparent;
+  color: var(--ink-strong);
+  text-decoration: none;
+}
+.docs-sidebar a:hover { background: var(--line-soft); }
+.docs-sidebar a[aria-current="page"] { border-left-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+.docs-main { flex: 1 1 auto; min-width: 0; padding: 40px 48px 96px; }
+.docs-article { max-width: 780px; }
+
+.docs-article h1 { margin: 0 0 8px; font-size: 32px; line-height: 1.2; letter-spacing: -0.01em; }
+.docs-lead { margin: 0 0 32px; font-size: 18px; color: var(--ink-muted); }
+.docs-article h2 {
+  margin: 48px 0 12px;
+  padding-top: 8px;
+  font-size: 22px;
+  line-height: 1.3;
+  border-top: 1px solid var(--line-soft);
+  scroll-margin-top: 72px;
+}
+.docs-article h3 { margin: 28px 0 8px; font-size: 17px; scroll-margin-top: 72px; }
+.docs-article p { margin: 0 0 14px; color: var(--ink-strong); }
+.docs-article ul, .docs-article ol { margin: 0 0 14px; padding-left: 22px; color: var(--ink-strong); }
+.docs-article li { margin: 4px 0; }
+.docs-article a { color: var(--accent-ink); text-underline-offset: 2px; }
+.docs-article code {
+  padding: 1px 5px;
+  background: var(--inline-code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+.docs-article strong { color: var(--ink); }
+
+.docs-code { position: relative; margin: 0 0 18px; border: 1px solid var(--line); background: var(--code-bg); }
+.docs-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: rgba(232, 235, 238, 0.6);
+}
+.docs-code-copy {
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: rgba(232, 235, 238, 0.85);
+  font-size: 12px;
+  cursor: pointer;
+}
+.docs-code-copy:hover { background: rgba(255, 255, 255, 0.08); }
+.docs-code pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  color: var(--code-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.docs-article .docs-code code { padding: 0; background: none; font-size: inherit; }
+
+.docs-endpoint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+.docs-method { padding: 2px 8px; font-size: 12px; font-weight: 700; color: #fff; }
+.docs-method-GET { background: #0e5a8a; }
+.docs-method-POST { background: var(--accent); }
+.docs-endpoint-path { word-break: break-all; }
+.docs-endpoint-tag { font-family: var(--font-inter), sans-serif; font-size: 12px; color: var(--ink-muted); }
+
+.docs-callout { margin: 0 0 18px; padding: 12px 16px; border-left: 3px solid var(--note); background: var(--note-bg); }
+.docs-callout-warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.docs-callout p:last-child { margin-bottom: 0; }
+.docs-callout-title { margin-bottom: 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.docs-table-wrap { margin: 0 0 18px; overflow-x: auto; border: 1px solid var(--line); }
+.docs-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.docs-table th, .docs-table td { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+.docs-table th { background: var(--line-soft); font-weight: 600; white-space: nowrap; }
+.docs-table tr:last-child td { border-bottom: none; }
+
+.docs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 0 0 24px; }
+.docs-card { display: block; padding: 16px; border: 1px solid var(--line); background: var(--surface); color: inherit !important; text-decoration: none; }
+.docs-card:hover { border-color: var(--accent); }
+.docs-card-title { margin-bottom: 4px; font-weight: 600; }
+.docs-card-body { font-size: 14px; color: var(--ink-muted); }
+
+.docs-steps { counter-reset: step; list-style: none; padding-left: 0 !important; }
+.docs-steps > li { position: relative; padding-left: 36px; margin: 12px 0; }
+.docs-steps > li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 24px;
+}
+
+.docs-pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 14px; }
+.docs-pager a { text-decoration: none; }
+
+.docs-menu-toggle { display: none; }
+.docs-menu-state { position: absolute; opacity: 0; pointer-events: none; }
+
+@media (max-width: 900px) {
+  .docs-sidebar { display: none; }
+  .docs-menu-state:checked ~ .docs-shell .docs-sidebar {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0 0;
+    z-index: 30;
+    height: auto;
+    background: var(--surface);
+  }
+  .docs-menu-toggle {
+    display: inline-flex;
+    margin-left: auto;
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+  }
+  .docs-header-links { display: none; }
+  .docs-main { padding: 24px 16px 72px; }
+  .docs-article h1 { font-size: 26px; }
+}
+
+@media print {
+  .docs-header, .docs-sidebar, .docs-pager, .docs-code-copy { display: none !important; }
+  .docs-main { padding: 0; }
+  .docs-page { background: #fff; color: #000; }
+  .docs-article { max-width: none; }
+  .docs-code { break-inside: avoid; }
+  .docs-article h2 { break-after: avoid; }
+}

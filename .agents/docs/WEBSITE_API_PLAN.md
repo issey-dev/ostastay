@@ -1,8 +1,9 @@
 # Website API — plan, decisions and status
 
 > Status (2026-09-06): **BUILT** — schema, public API, Hub management UI/API, tests and the
-> external docs (`docs/WEBSITE_API.md`, `docs/PROPERTY_WEBSITE_GUIDE.md`,
-> `docs/website-api.openapi.yaml`). Open items are listed at the bottom.
+> external docs — since 2026-09-23 the public portal at `/docs` (`src/app/docs`) and
+> `public/docs/booking-api.openapi.yaml`; see BOOKING_API_ADDONS_PLAN.md. Open items are
+> listed at the bottom.
 
 ## What it is
 
@@ -36,7 +37,7 @@ build their own brand website from the API document."
 | Hub UI | `src/app/e/[slug]/hub/website/page.tsx`, `src/components/hub/website-api-keys.tsx`, `src/components/hub/website-property-settings.tsx` |
 | Shared helpers extracted for this | `src/lib/reservations/system-context.ts`, `src/lib/profiles/resolve-guest-profile.ts` (both used to live inside `channels/inbound/convert.ts`) |
 | Tests | `tests/business-rules/website-api.test.ts` (27) |
-| External docs | `docs/WEBSITE_API.md`, `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml` |
+| External docs | Portal `src/app/docs` (served at `/docs`), `public/docs/booking-api.openapi.yaml`, PDF via `npm run docs:pdf`; `docs/*.md` are pointers |
 
 ## Decisions
 

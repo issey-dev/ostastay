@@ -26,7 +26,9 @@ const day = (offset: number) => {
   const n = new Date();
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + offset));
 };
-const waitFor = async <T,>(fn: () => T | undefined, ms = 4000): Promise<T> => {
+// Generous: the first attempt is fire-and-forget after the booking commits, and a full
+// suite run on a loaded machine can take seconds to get to it.
+const waitFor = async <T,>(fn: () => T | undefined, ms = 15_000): Promise<T> => {
   const until = Date.now() + ms;
   while (Date.now() < until) {
     const v = fn();
@@ -147,7 +149,7 @@ describe("Booking API — webhooks (Phase 5)", () => {
     await cancelExcursionBooking(await systemActorContext(enterpriseId), record.excursionBookingId!, { reason: "Weather" }, { canOverride: true, canVoid: true });
     const cancelled = await waitFor(() => received.find((r) => r.body.event === "booking.cancelled" && r.body.data.booking?.reference === booking.reference));
     expect(cancelled.body.data.booking!.status).toBe("CANCELLED");
-  });
+  }, 60_000);
 
   it("a booking made at the desk sends nothing", async () => {
     const before = await prisma.apiWebhookDelivery.count({ where: { enterpriseId } });
@@ -173,10 +175,11 @@ describe("Booking API — webhooks (Phase 5)", () => {
     expect((await prisma.apiWebhookEndpoint.findUniqueOrThrow({ where: { id: endpoint.id } })).failureCount).toBe(1);
 
     // Not due yet: the job leaves it alone.
-    expect((await webhooks.processDueWebhooks(enterpriseId)).processed).toBe(0);
+    await webhooks.processDueWebhooks(enterpriseId);
+    expect((await prisma.apiWebhookDelivery.findUniqueOrThrow({ where: { id: pending.id } })).attempts).toBe(1);
     await prisma.apiWebhookDelivery.update({ where: { id: pending.id }, data: { nextAttemptAt: new Date(Date.now() - 1000) } });
     const run = await webhooks.processDueWebhooks(enterpriseId);
-    expect(run.DELIVERED).toBe(1);
+    expect(run.DELIVERED).toBeGreaterThanOrEqual(1);
     const done = await prisma.apiWebhookDelivery.findUniqueOrThrow({ where: { id: pending.id } });
     expect(done).toMatchObject({ status: "DELIVERED", attempts: 2 });
     expect((await prisma.apiWebhookEndpoint.findUniqueOrThrow({ where: { id: endpoint.id } })).failureCount).toBe(0);

@@ -1,7 +1,8 @@
 # Booking API: Excursions & Spa — plan
 
-> Status (2026-09-23): **Phases 0–1 DONE** (branch `feat/booking-api-addons`) — see
-> "Phase 0 as built" and "Phase 1 as built" below. Phases 2–6 not started. This extends the Website API
+> Status (2026-09-23): **ALL PHASES (0–6) DONE** on branch `feat/booking-api-addons` — see the
+> "as built" sections below, which record every deviation from the original plan further
+> down. Open follow-ups are listed at the end of "Phases 2–6 as built". This extends the Website API
 > (`WEBSITE_API_PLAN.md`) so a property's own website can sell Excursions and Spa
 > treatments, using the same `wsk_` key.
 
@@ -64,7 +65,31 @@
 | Online settings | `src/lib/website-api/activity-settings.ts`, `api/hub/website/activities[/propertyId]`, `api/hub/website/activity-items/[id]` | **Per-item publishing lives in the Hub, not the Controls editors** (deviation from the plan): same precedent as `Allocation.publishToApi` — distribution is the Hub's job under INTEGRATIONS; what an item IS stays in Controls. A spa treatment closed to walk-ins can't be published (online guests are walk-ins, B-8 answer). |
 | Hub UI | `src/components/hub/website-api-keys.tsx` ("May use" checkboxes, scope badges), `src/components/hub/website-activity-settings.tsx` (new "Excursions & Spa" tab, shown only with an add-on) | Nav renamed "Website API" → "Booking API". B-10 (browser keys can't book activities) is warned about in the key dialog; enforced in the Phase 2/3 write routes. |
 | Tests | `tests/business-rules/booking-api-scopes.test.ts` (10) | |
-| Docs | `docs/WEBSITE_API.md` (Scopes, `modules`, `SCOPE_NOT_GRANTED`), OpenAPI (also fixed 3 pre-existing YAML errors), `docs/PROPERTY_WEBSITE_GUIDE.md` | |
+| Docs | Written into the portal in Phase 6; OpenAPI also had 3 pre-existing YAML errors fixed | |
+
+## Phases 2–6 as built (2026-09-23)
+
+| Phase | Where | Notes vs the plan below |
+|---|---|---|
+| 2 Excursions API | `src/lib/website-api/excursions.ts`, `activity-common.ts`, `activity-bookings.ts`; routes under `api/website/v1/properties/[propertyId]/excursions/**` and `api/website/v1/activity-bookings/**` | **Holds live in `ApiActivityBooking` (status HELD), not as HELD `ExcursionBooking` rows** — the manifest only ever shows real bookings and `ExcursionBooking.folioId` stays required. Held seats count against capacity for desk and web alike (`occupiedSeats`). Quotes run the real `postCharge` in a rolled-back transaction (`src/lib/posting/preview-charge.ts`), so quote == posting. Online guests are `NEW_WALK_IN` guests whose bill is opened inside the booking transaction. Cancellation moved into `cancelExcursionBooking`. |
+| 3 Spa API | `src/lib/website-api/spa.ts`; `createSpaAppointment` gains `newWalkIn`, `hold`, `forceChargeAtBooking`, `onCreated`; `confirmSpaHold`, `quoteSpaTreatment`, `expireStaleSpaHolds` | A spa hold is a real TENTATIVE `SpaAppointment` (therapist + room assigned) blocking until `SpaAppointment.holdExpiresAt`. **Online bookings always post at booking**, even under `chargeTiming = AT_COMPLETION`. `expectedTotal` is checked against the actual posting inside the transaction. Slot listing moved into `spa-availability.ts`. |
+| 4 Operations UI | `src/components/front-office/spa-appointment-sheet.tsx` (lifecycle actions), Online markers in `spa-schedule.tsx` and `excursion-manifest-panel.tsx`, Hub "Online bookings" tab (`src/lib/website-api/online-bookings.ts`) | The Spa lifecycle UI (check-in / start / complete / no-show / cancel) closes the Phase 0 gap. The list merges `WebsiteBooking` and `ApiActivityBooking`, failed and expired included. |
+| 5 Webhooks | `src/lib/website-api/webhooks.ts`, `src/lib/booking-events.ts`, `ApiWebhookEndpoint` / `ApiWebhookDelivery`, jobs `booking-api-webhooks` and `booking-api-hold-sweep` | Endpoints per key (max 5), secret encrypted at rest (`secret-crypto.ts`), HMAC `v1=` over `timestamp.body`, lease-claimed attempts, backoff ~1 day, SSRF guard at save and send. Emitted after commit from the shared services and desk routes; loaded lazily to avoid an import cycle. **Excursion and Spa only** — room bookings don't emit webhooks yet. |
+| 6 Docs portal | `src/app/docs/**` (15 pages), `public/docs/booking-api.openapi.yaml` (moved from `docs/website-api.openapi.yaml`), `scripts/docs-pdf.ts` → `public/docs/uppsolut-stay-booking-api-guide.pdf`, `src/lib/docs-check.ts` + `npm run docs:check` + `tests/business-rules/docs-check.test.ts` | **No MDX dependency**: pages are server components on a small docs kit (`src/app/docs/components.tsx`); no interactive OpenAPI viewer (the spec is downloadable). The old hand-made PDF used a real customer as its example and was removed; the examples use "Coral Bay Resort" and example.com. `docs/WEBSITE_API.md` / `PROPERTY_WEBSITE_GUIDE.md` are now pointers to the portal. |
+
+**Tests added across phases:** `booking-api-foundations` (14), `booking-api-scopes` (10),
+`booking-api-excursions` (12), `booking-api-spa` (9), `booking-api-webhooks` (5),
+`docs-check` (3).
+
+**Open follow-ups**
+- Room bookings: no webhooks, no guest self-cancel, and the last-room race is still
+  unguarded (the advisory-lock pattern in `db-lock.ts` would close it).
+- Login rate limiter (`src/lib/login-rate-limit.ts`) is still in-memory across replicas.
+- A hold can't be released early by the website (it simply expires) — a
+  `POST /activity-holds/{id}/release` would free seats faster when a payment fails.
+- Webhook deliveries are pruned by nobody yet; add retention to the hold-sweep job if the
+  table grows.
+- Interactive API reference (Scalar/Redoc) on the portal, if wanted.
 
 ## Prerequisites (Phase 0) — gaps found in the current code
 

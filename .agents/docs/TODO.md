@@ -2,66 +2,28 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Booking API for Excursions & Spa — Phase 1 scopes & online settings (2026-09-23) — DONE
+## Booking API for Excursions & Spa — ALL PHASES DONE (2026-09-23)
 
-One key now serves Rooms, Excursions and Spa (`WebsiteApiKey.scopes`); rooms endpoints
-need `ROOMS` (`403 SCOPE_NOT_GRANTED`); `GET /properties/{id}` reports a live `modules`
-block. Hub → **Booking API** (renamed) gains "May use" on keys and an **Excursions & Spa**
-tab: per-property online settings (`ActivityOnlineSettings`) and per-item publishing with
-guest-facing copy. Details: BOOKING_API_ADDONS_PLAN.md "Phase 1 as built". Tests:
-`tests/business-rules/booking-api-scopes.test.ts`.
+Branch `feat/booking-api-addons`. Full record — decisions, file map, deviations — in
+[BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md) ("as built" sections).
 
-**Next:** Phase 2 — the Excursions endpoints (catalogue, departures, quote, hold, book,
-lookup, cancel) on top of `createExcursionBooking` and the system actor.
+- **Phase 0** — shared booking services, Postgres advisory booking locks (fixes a live
+  multi-replica race on spa/excursion capacity), voids reverse generated tax/service
+  lines, Spa lifecycle, "Online Bookings" system user, Postgres-backed API rate limits.
+- **Phase 1** — one key for Rooms/Excursions/Spa (scopes), `modules` block, Hub
+  "Booking API" with Excursions & Spa online settings and per-item publishing.
+- **Phase 2** — public Excursions endpoints (catalogue, departures, quote, hold, book),
+  lookup and guest self-cancel.
+- **Phase 3** — public Spa endpoints (treatments, free times, quote, hold, book).
+- **Phase 4** — Spa appointment panel with lifecycle actions, Online markers on the spa
+  schedule and excursion manifest, Hub "Online bookings" list.
+- **Phase 5** — signed webhooks with retries, Hub webhook management.
+- **Phase 6** — public docs portal at `/docs`, OpenAPI at `/docs/booking-api.openapi.yaml`,
+  PDF from the portal (`npm run docs:pdf`), `npm run docs:check` guard.
 
-## Booking API for Excursions & Spa — Phase 0 foundations (2026-09-23) — DONE
-
-Plan: [BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md). Phase 0 ships no public
-endpoint yet; it is the ground the Excursion/Spa Booking API stands on, and every piece
-of it also changes what the desk gets:
-
-- **Booking services** — `createExcursionBooking` (`src/lib/excursion-booking.ts`) and
-  `createSpaAppointment` (`src/lib/spa-booking.ts`), extracted from the two POST routes,
-  which are now thin. Refusals are `BookingError` (`src/lib/booking-error.ts`) with a
-  stable `code`; the desk's response shape is unchanged.
-- **Database booking locks** (`src/lib/db-lock.ts`, `pg_advisory_xact_lock`). Excursion
-  capacity is now checked under a per-departure lock (it was count-then-write), and so are
-  whole-departure cancel and move-bookings. Spa's in-process mutex
-  (`spa-resource-lock.ts`, deleted) is replaced by the same DB locks. **This fixes a live
-  production race**: prod runs several app replicas (`deploy/proxy/Caddyfile`), so the
-  in-process mutex never protected two replicas from double-booking a therapist.
-- **Voiding a charge now voids the lines it generated** (`src/lib/posting/void-charge.ts`),
-  used by the folio void route, Excursion cancel and departure cancel. Before, voiding
-  the parent left its generated service/GST lines live — the guest kept being billed tax
-  on a charge that no longer existed.
-- **Spa lifecycle (SPA_PLAN.md Phase 5, server side)** — `src/lib/spa-lifecycle.ts` +
-  `POST /api/spa/appointments/[id]/{check-in,start,complete,cancel,no-show}`. Cutoff and
-  override (SPA delete), CASHIERING-gated voids with graceful degradation, late-cancel
-  and no-show fees from SpaSettings (FULL keeps the charge; PERCENTAGE/FIXED void and
-  re-post the fee; "NONE" = not charged, so the charge is voided), AT_COMPLETION posting
-  from the booking-time priceSnapshot. AT_COMPLETION appointments now keep their billing
-  folioId from booking (paymentStatus NOT_POSTED marks "not posted yet").
-- **System actor** (`src/lib/system-actor.ts`): one inactive, unusable-password
-  "Online Bookings" user per enterprise (`User.isSystem`, migration
-  `20260923100000_user_is_system`), filtered from user management and staff lists.
-- **Booking API rate limits** (`src/lib/website-api/rate-limit.ts`, table
-  `ApiRateLimitCounter`, migration `20260923100100_api_rate_limit_counter`): 120 GET /
-  20 POST per key per minute, 30 failed auths per IP; `429 RATE_LIMITED` + `Retry-After`
-  + `RateLimit-*` headers, wired in `websiteRoute`. Postgres-backed because of the
-  replicas. Plus a coarse per-IP Caddy zone on `/api/website/*`. Documented in
-  `docs/WEBSITE_API.md` §4 and the OpenAPI file.
-- **Tests**: `tests/business-rules/booking-api-foundations.test.ts` (14).
-
-**Still open from Phase 0:**
-- **Spa lifecycle UI** — the routes exist but the Spa page has no buttons for them yet
-  (clicking an appointment only opens the walk-in bill). Planned in Phase 4 (operations
-  UI); until then the desk cannot check in / complete / cancel from the screen.
-- **Docs PDF** (`docs/Uppsolut-Stay-Website-API-Guide.pdf`) still says "no hard rate
-  limit"; it is regenerated in Phase 6 with the docs portal.
-- **Login rate limiter** (`src/lib/login-rate-limit.ts`) is in-memory, so with N replicas
-  a sprayer gets N× the attempts. Same fix as the Booking API limiter; not done here.
-- **Room bookings' last-room race** (WEBSITE_API_PLAN.md open item) — the same advisory
-  lock pattern would close it; not done in Phase 0.
+**Still open:** see "Open follow-ups" in the plan (room webhooks/self-cancel/last-room lock,
+login limiter across replicas, early hold release, webhook delivery retention, interactive
+API reference).
 
 ## Operations Dashboard — brand palette, customisation, DASHBOARD module (2026-09-06) — DONE
 
@@ -138,8 +100,8 @@ own site from an API document. Plan and decisions: [WEBSITE_API_PLAN.md](WEBSITE
 - **Shared helpers extracted**: `systemContext()` → `src/lib/reservations/system-context.ts`,
   `resolveGuestProfile()` → `src/lib/profiles/resolve-guest-profile.ts` (channel
   conversion now imports them).
-- **Docs for the property's web developer**: `docs/WEBSITE_API.md`,
-  `docs/PROPERTY_WEBSITE_GUIDE.md`, `docs/website-api.openapi.yaml`.
+- **Docs for the property's web developer**: since 2026-09-23 the public portal at `/docs`
+  (`src/app/docs`) and `public/docs/booking-api.openapi.yaml` (the `docs/*.md` files are pointers).
 - **Tests**: `tests/business-rules/website-api.test.ts` (21).
 
 **Still open** (see the plan's follow-ups): ~~per-key rate limiting~~ (done 2026-09-23,

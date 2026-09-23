@@ -10,7 +10,7 @@ import { enabledActivityModules } from "@/lib/website-api/scopes"
 // Booking API (was "Website API") — API keys for each property's own brand website, and
 // what that website may show and sell: rooms, and — when the enterprise has the add-ons —
 // excursions and spa. See .agents/docs/WEBSITE_API_PLAN.md,
-// .agents/docs/BOOKING_API_ADDONS_PLAN.md and docs/WEBSITE_API.md.
+// .agents/docs/BOOKING_API_ADDONS_PLAN.md and the public docs at /docs/api-integration.
 //
 // Configuration, not operation (the Hub's rule): a key is an enterprise-level credential
 // covering one or more properties, and the per-property settings take an explicit

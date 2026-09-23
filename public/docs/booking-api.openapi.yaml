@@ -1,13 +1,12 @@
 openapi: 3.1.0
 info:
-  title: Uppsolut Stay — Website API
-  version: "1.0.0"
-  summary: Property information, live availability and prices, and bookings for a property's own brand website.
+  title: Uppsolut Stay — Booking API
+  version: "1.1.0"
+  summary: Property information, live availability and prices, and bookings — rooms, excursions and spa — for a property's own brand website.
   description: |
-    Key-authenticated API for a property's brand website ("front" site + simple booking page).
-    Keys are created in the enterprise Hub (Website API → API Keys) and grant access to one or
-    more of the enterprise's properties. See docs/WEBSITE_API.md for the narrative reference and
-    docs/PROPERTY_WEBSITE_GUIDE.md for the build guide.
+    Key-authenticated API for a property's brand website. Keys are created in the enterprise Hub
+    (Booking API → API Keys), grant access to one or more of the enterprise's properties, and are
+    enabled for Rooms, Excursions and/or Spa. The full guide is at /docs/api-integration.
 
     Conventions: dates are `YYYY-MM-DD` calendar days; check-out is exclusive; money is a number
     in the property's currency; every response is `Cache-Control: no-store`; errors carry a
@@ -16,7 +15,7 @@ servers:
   - url: https://{host}/api/website/v1
     variables:
       host:
-        default: stay.example.com
+        default: stay.uppsolut.com
         description: The Uppsolut Stay host for the enterprise.
 
 security:
@@ -25,8 +24,17 @@ security:
 
 tags:
   - name: Properties
+    description: The property page, and which modules this key can book there.
   - name: Availability
+    description: Rooms — live availability and nightly prices.
   - name: Bookings
+    description: Rooms — quotes, bookings and booking lookup.
+  - name: Excursions
+    description: Excursion catalogue, departures, quotes, holds and bookings. Needs the EXCURSIONS scope.
+  - name: Spa
+    description: Spa treatments, free times, quotes, holds and bookings. Needs the SPA scope.
+  - name: Activity bookings
+    description: Look up and cancel excursion and spa bookings by reference and email.
 
 paths:
   /properties:
@@ -221,6 +229,339 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /properties/{propertyId}/excursions:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Excursions]
+      summary: Excursions sold online, with today's prices and the online booking rules
+      operationId: listExcursions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExcursionCatalogue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/excursions/departures:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Excursions]
+      summary: Scheduled departures with live seats left (at most 62 days per call)
+      operationId: listDepartures
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: to, in: query, required: true, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: excursionId, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DepartureList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/excursions/quote:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Excursions]
+      summary: The authoritative price for a party on a departure. Writes nothing.
+      operationId: quoteExcursion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExcursionPartyRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quote: { $ref: "#/components/schemas/ExcursionQuote" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/excursions/holds:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Excursions]
+      summary: Keep seats while your site takes payment (server-only keys)
+      operationId: holdExcursion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExcursionPartyRequest" }
+      responses:
+        "201":
+          description: Held
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hold: { $ref: "#/components/schemas/ExcursionHold" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/excursions/bookings:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+      - $ref: "#/components/parameters/idempotencyKey"
+    post:
+      tags: [Excursions]
+      summary: Book an excursion — instant, from a hold or directly (server-only keys)
+      operationId: bookExcursion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExcursionBookingRequest" }
+      responses:
+        "201":
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "200":
+          description: Replay of an earlier request with the same Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/spa/treatments:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Spa]
+      summary: Treatments sold online, by category, with today's prices and the online booking rules
+      operationId: listTreatments
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpaCatalogue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/spa/availability:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    get:
+      tags: [Spa]
+      summary: Free start times on a date, or which days in a range (at most 31) have any
+      operationId: spaAvailability
+      parameters:
+        - { name: treatmentId, in: query, required: true, schema: { type: string } }
+        - { name: date, in: query, required: false, schema: { $ref: "#/components/schemas/Day" }, description: One day's start times. }
+        - { name: from, in: query, required: false, schema: { $ref: "#/components/schemas/Day" }, description: With `to` instead of `date` — free days. }
+        - { name: to, in: query, required: false, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: partySize, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: gender, in: query, required: false, schema: { type: string, enum: [MALE, FEMALE] }, description: "Therapist gender, where the property offers it." }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpaAvailability" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/spa/quote:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Spa]
+      summary: The authoritative price for a treatment on a date. Writes nothing.
+      operationId: quoteSpa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [treatmentId, date]
+              properties:
+                treatmentId: { type: string }
+                date: { $ref: "#/components/schemas/Day" }
+                partySize: { type: integer, minimum: 1, default: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quote: { $ref: "#/components/schemas/SpaQuote" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/spa/holds:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+    post:
+      tags: [Spa]
+      summary: Keep a therapist per guest and a room while your site takes payment (server-only keys)
+      operationId: holdSpa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpaSlotRequest" }
+      responses:
+        "201":
+          description: Held
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hold: { $ref: "#/components/schemas/SpaHold" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /properties/{propertyId}/spa/bookings:
+    parameters:
+      - $ref: "#/components/parameters/propertyId"
+      - $ref: "#/components/parameters/idempotencyKey"
+    post:
+      tags: [Spa]
+      summary: Book a treatment — instant, from a hold or directly (server-only keys)
+      operationId: bookSpa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpaBookingRequest" }
+      responses:
+        "201":
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "200":
+          description: Replay of an earlier request with the same Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /activity-bookings/{reference}:
+    parameters:
+      - { name: reference, in: path, required: true, schema: { type: string, example: EXC-7K3QX9MD } }
+    get:
+      tags: [Activity bookings]
+      summary: Look up an excursion or spa booking made with this key
+      operationId: getActivityBooking
+      parameters:
+        - { name: email, in: query, required: true, schema: { type: string, format: email } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /activity-bookings/{reference}/cancel:
+    parameters:
+      - { name: reference, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Activity bookings]
+      summary: Guest self-cancel, until the free-cancellation deadline (server-only keys)
+      operationId: cancelActivityBooking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/ActivityBooking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
 components:
   securitySchemes:
     bearerKey:
@@ -234,6 +575,12 @@ components:
       description: Alternative to the bearer header.
 
   parameters:
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+      description: A fresh value (e.g. a UUID) per booking attempt. Retry with the same value and you get the same booking back.
     propertyId:
       name: propertyId
       in: path
@@ -348,6 +695,24 @@ components:
             - IDEMPOTENCY_CONFLICT
             - RATE_LIMITED
             - SCOPE_NOT_GRANTED
+            - MODULE_NOT_ENABLED
+            - SERVER_KEY_REQUIRED
+            - IDEMPOTENCY_KEY_REQUIRED
+            - INVALID_PARTY
+            - PARTY_TOO_LARGE
+            - DEPARTURE_NOT_FOUND
+            - TREATMENT_NOT_FOUND
+            - DEPARTURE_CLOSED
+            - SLOT_UNAVAILABLE
+            - BOOKING_CUTOFF
+            - HOLD_NOT_FOUND
+            - HOLD_EXPIRED
+            - HOLD_USED
+            - TOO_MANY_HOLDS
+            - PRICE_CHANGED
+            - PAYMENT_NOT_CONFIGURED
+            - ALREADY_CANCELLED
+            - CANCEL_CUTOFF_PASSED
             - INTERNAL_ERROR
         details:
           type: object
@@ -687,7 +1052,7 @@ components:
       required: [bookingId, confirmationNo, reservationId, status, replayed, property, guest, quote]
       properties:
         bookingId: { type: string }
-        confirmationNo: { type: string, example: VILLA-000482 }
+        confirmationNo: { type: string, example: CBR-000482 }
         reservationId: { type: string }
         status:
           type: string
@@ -709,3 +1074,286 @@ components:
             lastName: { type: [string, "null"] }
             email: { type: string }
         quote: { $ref: "#/components/schemas/Quote" }
+
+    ActivityRules:
+      type: object
+      description: The property's online booking rules for this module.
+      properties:
+        enabled: { type: boolean, description: False while the property is not taking online bookings for this module. }
+        code: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+        holdMinutes: { type: integer, description: How long a hold keeps its place. }
+        leadHours: { type: integer, description: Online booking closes this many hours before the start. }
+        maxPartySize: { type: integer, description: Excursions — the largest party per booking. }
+        genderPreferenceOffered: { type: boolean, description: Spa — whether a therapist gender may be requested. }
+        freeCancellationHours: { type: integer, description: Spa — free cancellation until this long before the start. }
+        paidOnlineAccepted: { type: boolean, description: Whether a booking may be sent as PAID. }
+        policies: { type: [string, "null"] }
+
+    ExcursionCatalogue:
+      type: object
+      properties:
+        propertyId: { type: string }
+        currency: { type: string, example: USD }
+        pricesIncludeTaxes: { type: boolean }
+        booking: { $ref: "#/components/schemas/ActivityRules" }
+        excursions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              code: { type: string }
+              name: { type: string, example: Sunset Dolphin Cruise }
+              description: { type: [string, "null"] }
+              inclusions: { type: [string, "null"] }
+              imageUrls: { type: array, items: { type: string } }
+              pricingMode: { type: string, enum: [PER_PERSON, FLAT] }
+              prices:
+                type: [object, "null"]
+                description: "PER_PERSON: adult/child/infant. FLAT: one price for the party. Before tax handling — quote for the total."
+                properties:
+                  adult: { type: number }
+                  child: { type: number }
+                  infant: { type: number }
+                  flat: { type: number }
+              freeCancellationHours: { type: integer }
+
+    Departure:
+      type: object
+      properties:
+        id: { type: string }
+        excursionId: { type: string }
+        date: { $ref: "#/components/schemas/Day" }
+        time: { type: string, example: "17:00" }
+        meetingTime: { type: [string, "null"] }
+        meetingPoint: { type: [string, "null"] }
+        capacity: { type: integer }
+        seatsLeft: { type: integer, description: "Live: bookings and other websites' holds already taken off." }
+        minGuests: { type: [integer, "null"] }
+        guaranteed: { type: boolean, description: False while below its minimum — the property may still call it off. }
+        bookingClosesAt: { type: string, format: date-time }
+        prices: { type: [object, "null"] }
+        bookable: { type: boolean }
+
+    DepartureList:
+      type: object
+      properties:
+        propertyId: { type: string }
+        from: { $ref: "#/components/schemas/Day" }
+        to: { $ref: "#/components/schemas/Day" }
+        currency: { type: string }
+        bookingEnabled: { type: boolean }
+        departures: { type: array, items: { $ref: "#/components/schemas/Departure" } }
+
+    ExcursionPartyRequest:
+      type: object
+      required: [departureId, adults]
+      properties:
+        departureId: { type: string }
+        adults: { type: integer, minimum: 0 }
+        children: { type: integer, minimum: 0, default: 0 }
+        infants: { type: integer, minimum: 0, default: 0 }
+
+    ActivityTotals:
+      type: object
+      properties:
+        base: { type: number }
+        serviceCharge: { type: number }
+        taxes: { type: number }
+        levies: { type: number }
+        grandTotal: { type: number, description: What the guest pays — show this. }
+
+    ExcursionQuote:
+      type: object
+      properties:
+        departureId: { type: string }
+        excursionId: { type: string }
+        adults: { type: integer }
+        children: { type: integer }
+        infants: { type: integer }
+        currency: { type: string }
+        pricesIncludeTaxes: { type: boolean }
+        totals: { $ref: "#/components/schemas/ActivityTotals" }
+        lines: { type: array, items: { type: object, properties: { description: { type: string }, amount: { type: number } } } }
+        available: { type: boolean }
+        seatsLeft: { type: integer }
+
+    ExcursionHold:
+      type: object
+      properties:
+        holdId: { type: string }
+        expiresAt: { type: string, format: date-time }
+        quote: { $ref: "#/components/schemas/ExcursionQuote" }
+
+    ActivityGuest:
+      type: object
+      required: [firstName, email]
+      properties:
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        email: { type: string, format: email }
+        phone: { type: string, maxLength: 40 }
+
+    ActivityPayment:
+      type: object
+      required: [status]
+      description: What your site did about payment. Uppsolut Stay takes no payment itself.
+      properties:
+        status: { type: string, enum: [PAID, UNPAID], description: "PAID: you took payment. UNPAID: the guest pays at the property." }
+        provider: { type: string, maxLength: 60, example: Stripe }
+        reference: { type: string, maxLength: 120, description: Your payment reference — shown to the desk. }
+        amount: { type: number }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+
+    ExcursionBookingRequest:
+      type: object
+      required: [guest, payment]
+      description: Either `holdId`, or `departureId` + `adults` (+ `children`, `infants`).
+      properties:
+        holdId: { type: string }
+        departureId: { type: string }
+        adults: { type: integer, minimum: 0 }
+        children: { type: integer, minimum: 0 }
+        infants: { type: integer, minimum: 0 }
+        guest: { $ref: "#/components/schemas/ActivityGuest" }
+        payment: { $ref: "#/components/schemas/ActivityPayment" }
+        expectedTotal: { type: number, description: The grandTotal you showed — refused with PRICE_CHANGED if it moved. }
+        remarks: { type: string, maxLength: 1000 }
+
+    SpaCatalogue:
+      type: object
+      properties:
+        propertyId: { type: string }
+        currency: { type: string }
+        pricesIncludeTaxes: { type: boolean }
+        booking: { $ref: "#/components/schemas/ActivityRules" }
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, example: Massage }
+              treatments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string, example: Aromatherapy Massage }
+                    description: { type: [string, "null"] }
+                    inclusions: { type: [string, "null"] }
+                    imageUrls: { type: array, items: { type: string } }
+                    durationMinutes: { type: integer }
+                    maxGuests: { type: integer }
+                    pricingMode: { type: string, enum: [PER_PERSON, FLAT] }
+                    price: { type: [number, "null"] }
+
+    SpaAvailability:
+      type: object
+      description: "With `date`: `slots`. With `from`/`to`: `days`."
+      properties:
+        treatmentId: { type: string }
+        date: { $ref: "#/components/schemas/Day" }
+        partySize: { type: integer }
+        durationMinutes: { type: integer }
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              startTime: { type: string, example: "10:00" }
+              endTime: { type: string, example: "11:00" }
+              available: { type: boolean }
+        days:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { $ref: "#/components/schemas/Day" }
+              available: { type: boolean }
+
+    SpaQuote:
+      type: object
+      properties:
+        treatmentId: { type: string }
+        date: { $ref: "#/components/schemas/Day" }
+        partySize: { type: integer }
+        currency: { type: string }
+        pricesIncludeTaxes: { type: boolean }
+        totals: { $ref: "#/components/schemas/ActivityTotals" }
+        lines: { type: array, items: { type: object, properties: { description: { type: string }, amount: { type: number } } } }
+
+    SpaSlotRequest:
+      type: object
+      required: [treatmentId, date, startTime]
+      properties:
+        treatmentId: { type: string }
+        date: { $ref: "#/components/schemas/Day" }
+        startTime: { type: string, example: "10:00" }
+        partySize: { type: integer, minimum: 1, default: 1 }
+        gender: { type: string, enum: [MALE, FEMALE] }
+
+    SpaHold:
+      type: object
+      properties:
+        holdId: { type: string }
+        expiresAt: { type: string, format: date-time }
+        startTime: { type: string }
+        quote: { $ref: "#/components/schemas/SpaQuote" }
+
+    SpaBookingRequest:
+      type: object
+      required: [guest, payment]
+      description: Either `holdId`, or `treatmentId` + `date` + `startTime` (+ `partySize`, `gender`).
+      properties:
+        holdId: { type: string }
+        treatmentId: { type: string }
+        date: { $ref: "#/components/schemas/Day" }
+        startTime: { type: string }
+        partySize: { type: integer, minimum: 1 }
+        gender: { type: string, enum: [MALE, FEMALE] }
+        guest: { $ref: "#/components/schemas/ActivityGuest" }
+        companions: { type: array, items: { type: string }, description: "Names of the other guests, in order." }
+        payment: { $ref: "#/components/schemas/ActivityPayment" }
+        expectedTotal: { type: number }
+        remarks: { type: string, maxLength: 1000 }
+
+    ActivityBooking:
+      type: object
+      description: An excursion or spa booking. Fields under "Excursions" or "Spa" appear for that module only.
+      properties:
+        reference: { type: string, example: EXC-7K3QX9MD, description: Give this to the guest. }
+        module: { type: string, enum: [EXCURSIONS, SPA] }
+        status: { type: string, description: "CONFIRMED | CANCELLED | COMPLETED | NO_SHOW (spa also CHECKED_IN | IN_TREATMENT)" }
+        replayed: { type: boolean }
+        property: { type: object, properties: { id: { type: string }, name: { type: string } } }
+        guest: { type: object, properties: { firstName: { type: string }, lastName: { type: [string, "null"] }, email: { type: string } } }
+        payment: { type: object, properties: { status: { type: string }, reference: { type: [string, "null"] } } }
+        total: { type: object, properties: { grandTotal: { type: number }, currency: { type: string } } }
+        cancellation:
+          type: object
+          properties:
+            allowed: { type: boolean, description: Whether the guest can still cancel online. }
+            freeUntil: { type: string, format: date-time }
+            cancelledAt: { type: [string, "null"], format: date-time }
+            refundRequired: { type: boolean, description: Cancelled after being paid online — refund through your provider. }
+        moved: { type: boolean, description: Excursions — the property moved the guest to another departure. }
+        excursion: { type: object, properties: { id: { type: string }, name: { type: string } } }
+        departure:
+          type: object
+          properties:
+            id: { type: string }
+            date: { $ref: "#/components/schemas/Day" }
+            time: { type: string }
+            meetingTime: { type: [string, "null"] }
+            meetingPoint: { type: [string, "null"] }
+        adults: { type: integer }
+        children: { type: integer }
+        infants: { type: integer }
+        treatment: { type: object, properties: { id: { type: string }, name: { type: string } } }
+        date: { $ref: "#/components/schemas/Day" }
+        startTime: { type: string }
+        endTime: { type: string }
+        partySize: { type: integer }
+        guests: { type: array, items: { type: string } }

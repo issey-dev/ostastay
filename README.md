@@ -6,9 +6,9 @@ for what's done and what's left, kept in-repo so any contributor (human or agent
 pick up the project's progress without needing prior chat history.
 
 For a property's own brand website (the public Website API and how to build against
-it), see [`docs/WEBSITE_API.md`](docs/WEBSITE_API.md),
-[`docs/PROPERTY_WEBSITE_GUIDE.md`](docs/PROPERTY_WEBSITE_GUIDE.md) and the OpenAPI spec
-[`docs/website-api.openapi.yaml`](docs/website-api.openapi.yaml).
+it), see the documentation portal the app serves at `/docs` (source in
+[`src/app/docs`](src/app/docs)) and the OpenAPI spec
+[`public/docs/booking-api.openapi.yaml`](public/docs/booking-api.openapi.yaml).
 
 ## Quick start
 
