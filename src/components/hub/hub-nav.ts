@@ -66,9 +66,9 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "email", title: "Email & SFTP", path: "email", icon: Mail, modules: ["CONTROLS"] },
   { key: "booking-api", title: "Booking API Keys", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
-  // Guest-profile lists and Job Functions — a guest profile and a user are shared by every
+  // Guest-profile lists, nationalities included — a guest profile is shared by every
   // property. Every other dropdown list is the property's own (src/lib/system-code-scope.ts).
-  { key: "lists", title: "Guest & Staff Lists", path: "lists", icon: ListChecks, modules: ["CONTROLS"] },
+  { key: "lists", title: "Guest Lists", path: "lists", icon: ListChecks, modules: ["CONTROLS"] },
 ]
 
 export const PROPERTY_NAV: HubNavItem[] = [

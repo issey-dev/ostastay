@@ -14,6 +14,10 @@ export interface SearchableSelectOption {
   /** Optional heading this option sits under. Consecutive options sharing a group render
    *  beneath one sticky header — pass options already sorted by group. */
   group?: string
+  /** Shown before the label, in the list and on the closed field (e.g. a country flag). */
+  icon?: React.ReactNode
+  /** Extra text the search matches besides the label (e.g. a country's name and codes). */
+  keywords?: string
 }
 
 /** Lists longer than this get a search box; shorter ones are a plain pick-list. */
@@ -59,7 +63,8 @@ export function SearchableSelect({
     if (!search) return options
     const lowerSearch = search.toLowerCase()
     return options.filter(option =>
-      option.label.toLowerCase().includes(lowerSearch)
+      option.label.toLowerCase().includes(lowerSearch) ||
+      !!option.keywords?.toLowerCase().includes(lowerSearch)
     )
   }, [options, search])
 
@@ -112,7 +117,10 @@ export function SearchableSelect({
               className
             )}
           >
-            <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              {selectedOption?.icon}
+              <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+            </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -190,6 +198,7 @@ export function SearchableSelect({
                   onMouseMove={() => setActive(index)}
                   onClick={() => choose(option)}
                 >
+                  {option.icon}
                   <span className="truncate">{option.label}</span>
                   {value === option.value && (
                     <Check className="absolute right-2 h-4 w-4" />

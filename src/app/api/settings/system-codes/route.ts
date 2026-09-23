@@ -36,6 +36,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const propertyId = searchParams.get('propertyId')
+    // Managers need the switched-off rows too (to bring one back rather than collide with
+    // it); every picker reads active rows only.
+    const includeInactive = searchParams.get('includeInactive') === '1'
 
     if (propertyId) await assertPropertyAccess(ctx, propertyId)
 
@@ -57,7 +60,7 @@ export async function GET(request: Request) {
     }
 
     const codes = await prisma.systemCode.findMany({
-      where: { ...where, isActive: true },
+      where: { ...where, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: {
         sortOrder: 'asc'
       }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { resolveEregistrationLink, reservationIdsForLink } from "@/lib/eregistration/resolve-link";
 import { sniffImageType, MAX_UPLOAD_BYTES } from "@/lib/eregistration/storage";
 import { extractText, parseMrzPassport, parseMaldivianNid } from "@/lib/eregistration/ocr";
-import { countryNameFor } from "@/lib/countries";
+import { alpha2For } from "@/lib/countries";
 
 // Experimental auto-fill: OCR's an uploaded ID photo and returns best-guess fields for the
 // client to offer as suggestions — this never writes to the slot itself, so a bad/blurry
@@ -58,11 +58,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
         lastName: passport.surname || null,
         dateOfBirth: passport.dateOfBirth,
         gender: passport.sex,
-        // MRZ codes are ISO alpha-3 ("GBR") — resolve to a readable name ("United
-        // Kingdom") before handing this to the guest form; falls back to the raw code
-        // if it's somehow unrecognized rather than dropping the field.
-        nationality: countryNameFor(passport.nationality),
-        issuingCountry: countryNameFor(passport.issuingCountry),
+        // MRZ codes are ISO alpha-3 ("GBR") — resolve to the alpha-2 code ("GB") the
+        // guest form's picker and the profile store; falls back to the raw code if it's
+        // somehow unrecognized rather than dropping the field.
+        nationality: alpha2For(passport.nationality) ?? passport.nationality,
+        issuingCountry: alpha2For(passport.issuingCountry) ?? passport.issuingCountry,
         documentNumber: passport.documentNumber,
         documentExpiryDate: passport.expiryDate,
       },

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { buildNationalities, countryLabel, nationalityLabel } from "@/lib/nationalities"
 
 // Read-only display helper for pages that show a SystemCode-backed field (Title,
 // Gender, Nationality, Classification, VIP Level, ID/Document Type, ...) as plain
@@ -33,10 +34,21 @@ export function useSystemCodeLabels() {
       .catch(() => {})
   }, [])
 
+  // Nationality / country codes resolve through the master ISO list plus this enterprise's
+  // own renames and additions (src/lib/nationalities.ts).
+  const nationalities = useMemo(() => buildNationalities(codes.filter((c) => c.category === "NATIONALITY")), [codes])
+
   function label(category: string, code: string | null | undefined): string | undefined {
     if (!code) return undefined
+    if (category === "NATIONALITY") return nationalityLabel(code, nationalities) ?? code
     return codes.find((c) => c.category === category && c.code === code)?.value ?? code
   }
 
-  return { label }
+  /** A country field's display name — "Maldives" for MV. */
+  function country(code: string | null | undefined): string | undefined {
+    if (!code) return undefined
+    return countryLabel(code, nationalities) ?? code
+  }
+
+  return { label, country }
 }

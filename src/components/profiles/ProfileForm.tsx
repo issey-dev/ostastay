@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { NationalitySelect } from "@/components/ui/nationality-select"
 import { useRouter, useParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, Resolver } from "react-hook-form"
@@ -488,7 +489,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Country</FormLabel>
                           <FormControl>
-                            <SystemCodeSelect category="NATIONALITY" value={field.value || ""} onValueChange={field.onChange} placeholder="Select country" />
+                            <NationalitySelect mode="country" value={field.value || ""} onValueChange={field.onChange} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -544,7 +545,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Nationality</FormLabel>
                           <FormControl>
-                            <SystemCodeSelect category="NATIONALITY" value={field.value || ""} onValueChange={field.onChange} placeholder="Select nationality" />
+                            <NationalitySelect value={field.value || ""} onValueChange={field.onChange} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

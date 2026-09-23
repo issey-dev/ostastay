@@ -55,7 +55,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   const { slug } = useParams<{ slug: string }>()
   const goBack = useSmartBack(`/e/${slug}/dashboard/profiles`)
   const { currentProperty } = useProperty()
-  const { label } = useSystemCodeLabels()
+  const { label, country } = useSystemCodeLabels()
 
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -244,7 +244,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                       <p className="font-medium mt-1">{a.fullAddress || "—"}</p>
                       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {a.country && <CountryFlag value={a.country} />}
-                        {[a.city, a.stateProvince, a.postalCode, label("NATIONALITY", a.country)].filter(Boolean).join(", ") || "—"}
+                        {[a.city, a.stateProvince, a.postalCode, country(a.country)].filter(Boolean).join(", ") || "—"}
                       </p>
                     </div>
                   ))}
@@ -271,7 +271,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                           <span className="font-medium">{d.documentNumber}</span>
                           {d.issuingCountry && (
                             <span className="inline-flex items-center gap-1 text-muted-foreground">
-                              · <CountryFlag value={d.issuingCountry} /> {label("NATIONALITY", d.issuingCountry)}
+                              · <CountryFlag value={d.issuingCountry} /> {country(d.issuingCountry)}
                             </span>
                           )}
                           {d.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}

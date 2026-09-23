@@ -15,7 +15,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
-import { SystemCodeSelect } from "@/components/ui/system-code-select"
+import { OptionSelect } from "@/components/ui/option-select"
+import { JOB_FUNCTIONS, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
@@ -117,19 +118,6 @@ export function UsersRolesManager({
   const [savingUser, setSavingUser] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
   const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null)
-  // code -> label for the Post column. The dialog uses SystemCodeSelect, which fetches
-  // and caches this itself; the table only needs to resolve labels it already has.
-  const [jobFunctionLabels, setJobFunctionLabels] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    fetch("/api/settings/system-codes?category=JOB_FUNCTION")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: { code: string; value: string }[]) => {
-        if (Array.isArray(rows)) setJobFunctionLabels(Object.fromEntries(rows.map((r) => [r.code, r.value])))
-      })
-      .catch(() => {})
-  }, [])
-
   const openNewUserDialog = () => {
     setEditingUser(null)
     setUserForm({
@@ -351,7 +339,7 @@ export function UsersRolesManager({
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>Post: {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}</span>
+                      <span>Post: {jobFunctionLabel(user.jobFunction) ?? "—"}</span>
                       <span>
                         {user.scope === "ENTERPRISE"
                           ? "All properties"
@@ -402,7 +390,7 @@ export function UsersRolesManager({
                     {/* Post, not role — an unset one reads as a dash rather than being
                         guessed from the role, which is exactly the conflation being undone. */}
                     <TableCell className="text-sm text-muted-foreground">
-                      {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}
+                      {jobFunctionLabel(user.jobFunction) ?? "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {user.scope === "ENTERPRISE"
@@ -571,11 +559,10 @@ export function UsersRolesManager({
                 lets them see; this decides where they show up as assignable staff. */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-1"><Briefcase className="w-4 h-4 text-primary" /> Job Function</label>
-              <SystemCodeSelect
-                category="JOB_FUNCTION"
+              <OptionSelect
                 value={userForm.jobFunction}
-                onValueChange={(v) => setUserForm({ ...userForm, jobFunction: v ?? "" })}
-                placeholder="No post assigned"
+                onChange={(v) => setUserForm({ ...userForm, jobFunction: v })}
+                options={[{ label: "No post assigned", value: "" }, ...JOB_FUNCTIONS.map((j) => ({ label: j.label, value: j.code }))]}
               />
               <p className="text-xs text-muted-foreground">
                 Their post at the property. Housekeeping and Maintenance decide who appears in

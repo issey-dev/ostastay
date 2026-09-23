@@ -77,7 +77,7 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
 export default function ProfilesDashboard() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
-  const { label } = useSystemCodeLabels()
+  const { label, country } = useSystemCodeLabels()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -316,7 +316,7 @@ export default function ProfilesDashboard() {
                           {p.addresses?.[0]?.country && (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
                               <CountryFlag value={p.addresses[0].country} />
-                              {label("NATIONALITY", p.addresses[0].country)}
+                              {country(p.addresses[0].country)}
                             </span>
                           )}
                         </div>

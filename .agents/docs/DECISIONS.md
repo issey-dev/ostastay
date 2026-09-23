@@ -3116,3 +3116,25 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   check-out (`src/lib/reservations/check-out.ts`), and stops only for guests who owe money,
   are owed a refund, or settle by City Ledger (that raises an invoice the desk should see).
 
+## 2026-09-25 — Nationalities from an international master list; Job Functions fixed (owner)
+
+- **Nationality is a master list, not something to set up.** Every enterprise and property
+  gets every country ready-made: **ISO 3166-1** codes (alpha-2 is what every nationality /
+  country field stores; alpha-3 is the passport / ICAO 9303 code), **Unicode CLDR** English
+  country names, an English nationality ("Maldivian"), and the **country-flag-icons** SVG
+  flag (`src/lib/countries.ts`). An enterprise may **rename** an entry or **add its own**
+  (e.g. XXA "Stateless") — its NATIONALITY rows, layered on top
+  (`src/lib/nationalities.ts`); Hub > Enterprise > Guest Lists > Nationalities. One picker
+  (`NationalitySelect`) serves every nationality and country field: flag, search by
+  nationality, country or either code; nationality fields list "Maldivian", country fields
+  (address, document issuing country) list "Maldives". The guest's eRegistration form uses the
+  standard list; a scanned passport's alpha-3 and any older free-text answer ("British") are
+  stored as the alpha-2 code.
+- **Job Functions are a fixed list** picked on the People form (src/lib/job-functions.ts) —
+  the Hub's editable Job Functions list is removed as redundant (owner: "seems like a
+  redundant feature — remove if so"). The field itself stays: Housekeeping and Maintenance
+  decide who appears in the housekeeping and maintenance assignment pickers. Custom posts are
+  no longer possible; the API accepts only a listed post.
+- The Hub's enterprise lists page is now **Guest Lists**. The list editor's example
+  placeholders ("e.g. M, F, VEG") were removed at the owner's request.
+

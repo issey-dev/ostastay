@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { NationalitySelect } from "@/components/ui/nationality-select"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { ErrorState } from "@/components/ui/error-state"
 import { cn } from "@/lib/utils"
 
@@ -142,7 +142,7 @@ export function AddressManager({ upid }: { upid: string }) {
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs">Country</Label>
-              <SystemCodeSelect category="NATIONALITY" value={form.country} onValueChange={(v) => setForm((p) => ({ ...p, country: v }))} placeholder="Select country" />
+              <NationalitySelect mode="country" value={form.country} onValueChange={(v) => setForm((p) => ({ ...p, country: v }))} />
             </div>
           </div>
           <div className="grid gap-1.5">

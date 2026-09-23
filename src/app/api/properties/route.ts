@@ -4,7 +4,6 @@ import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
-import { ensureJobFunctions } from "@/lib/job-functions";
 
 export async function GET() {
   try {
@@ -84,9 +83,6 @@ export async function POST(request: Request) {
     // charge code. Seeded inactive at zero — the wiring is provisioned, the policy stays
     // the owner's (Hub › the property › Finance).
     await ensureFeeRules(prisma, { propertyId: newProperty.id });
-    // ...and the JOB_FUNCTION list, so the housekeeping and maintenance boards have posts
-    // to filter on from day one. Enterprise-scoped and idempotent, like the tree above.
-    await ensureJobFunctions(prisma, enterpriseId);
 
     await logActivity({
       ctx,

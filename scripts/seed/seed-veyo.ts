@@ -357,9 +357,6 @@ async function main() {
     { category: "TITLE", code: "MR", value: "Mr", sortOrder: 1 },
     { category: "TITLE", code: "MRS", value: "Mrs", sortOrder: 2 },
     { category: "TITLE", code: "MS", value: "Ms", sortOrder: 3 },
-    { category: "NATIONALITY", code: "MV", value: "Maldivian", sortOrder: 1 },
-    { category: "NATIONALITY", code: "US", value: "American", sortOrder: 2 },
-    { category: "NATIONALITY", code: "GB", value: "British", sortOrder: 3 },
     { category: "ID_TYPE", code: "PASSPORT", value: "Passport", sortOrder: 1 },
     // Profiles redesign (2026-07-20) — VIP Level replaces the old free-text Loyalty
     // Tier; Preferences is a new general multi-select distinct from Dietary/Room prefs.

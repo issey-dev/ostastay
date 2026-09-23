@@ -41,8 +41,9 @@ type SystemCode = {
 
 export type DropdownCategory = { code: string; label: string }
 
-// Split by where they are managed. The profile lists and Job Functions are ENTERPRISE
-// lists (Hub > Enterprise > Guest & Staff Lists); the reservation, housekeeping and
+// Split by where they are managed. The profile lists are ENTERPRISE lists (Hub >
+// Enterprise > Guest Lists — nationalities have their own manager there, over the ISO
+// master list); the reservation, housekeeping and
 // room-feature lists are each PROPERTY's own (Hub > the property > Reservations /
 // Inventory) — see src/lib/system-code-scope.ts. Every page instantiates the same
 // DropdownsManager with a different `categories` prop (and a `propertyId` for a property
@@ -50,19 +51,11 @@ export type DropdownCategory = { code: string; label: string }
 export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "GENDER",      label: "Gender" },
   { code: "TITLE",       label: "Title (Mr, Mrs)" },
-  { code: "NATIONALITY", label: "Nationality" },
   { code: "ID_TYPE",     label: "ID / Document Type" },
   { code: "CLASSIFICATION", label: "Profile Classification" },
   { code: "VIP_LEVEL",   label: "VIP Level" },
   { code: "DIETARY_REQ", label: "Dietary Requirements" },
   { code: "PREFERENCE",  label: "Preferences" },
-]
-
-// Enterprise — a user's POST, as opposed to their role. HOUSEKEEPING and MAINTENANCE
-// drive the assignment pickers — see src/lib/job-functions.ts before renaming or removing
-// them.
-export const STAFF_LOV_CATEGORIES: DropdownCategory[] = [
-  { code: "JOB_FUNCTION", label: "Job Functions (staff posts)" },
 ]
 
 // Property lists.
@@ -235,7 +228,6 @@ export function DropdownsManager({
           <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
             <Input
-              placeholder="e.g. M, F, VEG"
               value={form.code}
               onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
             />
@@ -243,7 +235,6 @@ export function DropdownsManager({
           <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Display Value</Label>
             <Input
-              placeholder="e.g. Male, Female, Vegan"
               value={form.value}
               onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
             />

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   JOB_FUNCTION,
-  JOB_FUNCTION_CATEGORY,
-  DEFAULT_JOB_FUNCTIONS,
+  JOB_FUNCTIONS,
+  isJobFunction,
+  jobFunctionLabel,
   staffWithJobFunction,
   housekeepingStaff,
   maintenanceStaff,
@@ -69,19 +70,22 @@ describe("Selecting staff by post", () => {
   });
 });
 
-describe("The seeded list", () => {
+describe("The job function list", () => {
   it("includes the two codes business logic depends on", () => {
-    const codes = DEFAULT_JOB_FUNCTIONS.map((j) => j.code);
+    const codes = JOB_FUNCTIONS.map((j) => j.code);
     expect(codes).toContain(JOB_FUNCTION.HOUSEKEEPING);
     expect(codes).toContain(JOB_FUNCTION.MAINTENANCE);
   });
 
-  it("has no duplicate codes — they are a unique key per enterprise", () => {
-    const codes = DEFAULT_JOB_FUNCTIONS.map((j) => j.code);
+  it("has no duplicate codes", () => {
+    const codes = JOB_FUNCTIONS.map((j) => j.code);
     expect(new Set(codes).size).toBe(codes.length);
   });
 
-  it("names the category the migration and the Controls list both use", () => {
-    expect(JOB_FUNCTION_CATEGORY).toBe("JOB_FUNCTION");
+  it("labels a known post and shows an unknown one as stored", () => {
+    expect(jobFunctionLabel("HOUSEKEEPING")).toBe("Housekeeping");
+    expect(jobFunctionLabel("BOAT_CAPTAIN")).toBe("BOAT_CAPTAIN");
+    expect(isJobFunction("SPA")).toBe(true);
+    expect(isJobFunction("BOAT_CAPTAIN")).toBe(false);
   });
 });
