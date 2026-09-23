@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { dayStart } from "@/lib/spa-availability";
-import { createSpaAppointment, spaAppointmentInclude as includeShape, type SpaParticipantInput } from "@/lib/spa-booking";
+import { createSpaAppointment, expireStaleSpaHolds, spaAppointmentInclude as includeShape, type SpaParticipantInput } from "@/lib/spa-booking";
 import { BookingError, bookingErrorResponse } from "@/lib/booking-error";
 
 // Lists a property's appointments for one date — the booking page's "today's
@@ -22,6 +22,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
     }
     await assertPropertyModuleAccess(ctx, propertyId, "SPA");
+    // Online holds past their time show as cancelled (HOLD_EXPIRED), not tentative forever.
+    await expireStaleSpaHolds(propertyId);
 
     if (searchParams.get("openWalkIns") === "true") {
       const appointments = await prisma.spaAppointment.findMany({

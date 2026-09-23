@@ -1,86 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
-import { addMinutesToTime, rateForDate, computeAppointmentTotal } from "@/lib/spa";
-import { isSlotFeasible, type TherapistRequirement } from "@/lib/spa-availability";
-import type { SpaTreatment, SpaSettings } from "@prisma/client";
-
-// Shared by both response modes below — every bookable start time on ONE calendar day,
-// each checked against the exact same per-participant requirements the booking route
-// will re-validate at save time (never trust a cached slot list, same rule as
-// Excursions). `requirements.length` IS the party size; a mismatch with the `partySize`
-// query param is rejected by the caller before this runs.
-async function computeSlotsForDay(params: {
-  propertyId: string;
-  treatmentId: string;
-  date: Date;
-  treatment: Pick<SpaTreatment, "defaultDurationMinutes" | "cleanupBufferMinutes" | "preparationBufferMinutes">;
-  settings: Pick<SpaSettings, "defaultOpeningTime" | "defaultClosingTime" | "slotIntervalMinutes"> | null;
-  partySize: number;
-  requirements?: TherapistRequirement[];
-}): Promise<{ startTime: string; available: boolean }[]> {
-  const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
-  const openingTime = settings?.defaultOpeningTime ?? "09:00";
-  const closingTime = settings?.defaultClosingTime ?? "18:00";
-  const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
-
-  const slots: { startTime: string; available: boolean }[] = [];
-  let cursor = openingTime;
-  while (cursor < closingTime) {
-    const treatmentEndTime = addMinutesToTime(cursor, treatment.defaultDurationMinutes);
-    const blockedUntilTime = addMinutesToTime(treatmentEndTime, treatment.cleanupBufferMinutes);
-    const blockedFromTime = addMinutesToTime(cursor, -treatment.preparationBufferMinutes);
-
-    if (blockedUntilTime > closingTime) break; // wouldn't fit before closing
-
-    const available = await isSlotFeasible({
-      propertyId,
-      treatmentId,
-      partySize,
-      date,
-      blockedFromTime,
-      blockedUntilTime,
-      requirements,
-    });
-    slots.push({ startTime: cursor, available });
-    cursor = addMinutesToTime(cursor, slotIntervalMinutes);
-  }
-  return slots;
-}
-
-// Same day-loop as computeSlotsForDay, but for the from/to range mode below, which
-// only needs a yes/no per day — stops at the FIRST feasible slot instead of always
-// computing the full day's grid. A 60-day horizon (the therapist-first DatePicker's
-// real call) doing a full per-slot scan on every day would be a genuine, needless
-// N-times-slower cost for the common case (most open days have an early slot free);
-// this only pays the full-day cost on days that turn out to have nothing available.
-async function isDayFeasible(params: {
-  propertyId: string;
-  treatmentId: string;
-  date: Date;
-  treatment: Pick<SpaTreatment, "defaultDurationMinutes" | "cleanupBufferMinutes" | "preparationBufferMinutes">;
-  settings: Pick<SpaSettings, "defaultOpeningTime" | "defaultClosingTime" | "slotIntervalMinutes"> | null;
-  partySize: number;
-  requirements?: TherapistRequirement[];
-}): Promise<boolean> {
-  const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
-  const openingTime = settings?.defaultOpeningTime ?? "09:00";
-  const closingTime = settings?.defaultClosingTime ?? "18:00";
-  const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
-
-  let cursor = openingTime;
-  while (cursor < closingTime) {
-    const treatmentEndTime = addMinutesToTime(cursor, treatment.defaultDurationMinutes);
-    const blockedUntilTime = addMinutesToTime(treatmentEndTime, treatment.cleanupBufferMinutes);
-    const blockedFromTime = addMinutesToTime(cursor, -treatment.preparationBufferMinutes);
-    if (blockedUntilTime > closingTime) break;
-
-    const available = await isSlotFeasible({ propertyId, treatmentId, partySize, date, blockedFromTime, blockedUntilTime, requirements });
-    if (available) return true;
-    cursor = addMinutesToTime(cursor, slotIntervalMinutes);
-  }
-  return false;
-}
+import { rateForDate, computeAppointmentTotal } from "@/lib/spa";
+import { computeSlotsForDay, isDayFeasible, type TherapistRequirement } from "@/lib/spa-availability";
 
 // Server-computed bookable time slots for a treatment on a given date — the booking
 // screen's slot picker calls this, and POST /api/spa/appointments re-runs the exact

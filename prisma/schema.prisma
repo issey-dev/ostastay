@@ -3118,6 +3118,9 @@ model SpaAppointment {
   paymentStatus     String @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
   source            String @default("FRONT_DESK")
   apiBooking ApiActivityBooking? @relation("ApiSpaAppointment")
+  // A Booking API hold (TENTATIVE, source WEBSITE_API) blocks its therapist(s) and room
+  // until this time; null = the older createdAt + SpaSettings.tentativeHoldMinutes rule.
+  holdExpiresAt DateTime?
 
   // Billing is single-folio — resolved from the participantIndex: 1 participant's
   // guest identity, regardless of partySize.

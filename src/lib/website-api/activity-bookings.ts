@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { BookingError } from "@/lib/booking-error";
 import { cancelDeadline, cancelExcursionBooking } from "@/lib/excursion-booking";
+import { cancelSpaAppointment } from "@/lib/spa-lifecycle";
+import { combineAppointmentDateTime } from "@/lib/spa";
 import { systemActorContext } from "@/lib/system-actor";
 import type { ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 import { requireScope, type ActivityModule } from "@/lib/website-api/scopes";
@@ -83,7 +85,38 @@ export async function activityBookingResult(recordId: string, opts: { replayed: 
       },
     };
   }
+  if (record.module === "SPA" && record.spaAppointmentId) {
+    const appt = await prisma.spaAppointment.findUniqueOrThrow({
+      where: { id: record.spaAppointmentId },
+      include: { participants: { orderBy: { participantIndex: "asc" }, select: { walkInGuestName: true } } },
+    });
+    const deadline = await spaCancelDeadline(appt);
+    return {
+      ...base,
+      // CONFIRMED | CHECKED_IN | IN_TREATMENT | COMPLETED | NO_SHOW | CANCELLED
+      status: appt.appointmentStatus,
+      treatment: { id: appt.treatmentId, name: appt.treatmentNameSnapshot },
+      date: appt.appointmentDate.toISOString().slice(0, 10),
+      startTime: appt.startTime,
+      endTime: appt.treatmentEndTime,
+      partySize: appt.partySize,
+      guests: appt.participants.map((p) => p.walkInGuestName),
+      cancellation: {
+        allowed: appt.appointmentStatus === "CONFIRMED" && new Date() < deadline,
+        freeUntil: deadline.toISOString(),
+        cancelledAt: appt.cancelledAt?.toISOString() ?? null,
+        refundRequired: appt.appointmentStatus === "CANCELLED" && record.paymentStatus === "PAID",
+      },
+    };
+  }
   throw new BookingError(404, "BOOKING_NOT_FOUND", "Booking not found.");
+}
+
+/** When free cancellation of a spa appointment closes (SpaSettings.cancellationCutoffHours). */
+async function spaCancelDeadline(appt: { propertyId: string; appointmentDate: Date; startTime: string }): Promise<Date> {
+  const s = await prisma.spaSettings.findUnique({ where: { propertyId: appt.propertyId }, select: { cancellationCutoffHours: true } });
+  const hours = s?.cancellationCutoffHours ?? 4;
+  return new Date(combineAppointmentDateTime(appt.appointmentDate, appt.startTime).getTime() - hours * 3_600_000);
 }
 
 /**
@@ -151,6 +184,19 @@ export async function cancelActivityBooking(
         },
       });
     }
+    return { booking: await activityBookingResult(record.id, { replayed: false }) };
+  }
+  if (record.module === "SPA" && record.spaAppointmentId) {
+    const appt = await prisma.spaAppointment.findUniqueOrThrow({ where: { id: record.spaAppointmentId } });
+    if (appt.appointmentStatus !== "CONFIRMED") {
+      throw new BookingError(409, "ALREADY_CANCELLED", `This booking is ${appt.appointmentStatus.toLowerCase().replace("_", " ")} and can't be cancelled online.`);
+    }
+    if (new Date() >= (await spaCancelDeadline(appt))) {
+      throw new BookingError(409, "CANCEL_CUTOFF_PASSED", "It's too late to cancel online. Please contact the property.");
+    }
+    // Same rule as excursions: the system actor may void its own charge, never override.
+    // The lifecycle marks a paid booking REFUND_REQUIRED for the desk.
+    await cancelSpaAppointment(actor, appt.id, { reasonCode: "GUEST_REQUEST", notes: reason }, { canOverride: false, canVoid: true });
     return { booking: await activityBookingResult(record.id, { replayed: false }) };
   }
   throw new BookingError(404, "BOOKING_NOT_FOUND", "Booking not found.");

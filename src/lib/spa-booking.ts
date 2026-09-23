@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { assertPropertyModuleAccess, type AuthContext } from "@/lib/scope";
 import { resolvePaymentChargeCodeId } from "@/lib/posting/post-payment";
@@ -9,6 +10,7 @@ import { ensureOpenShift } from "@/lib/cashier-shift";
 import { logActivity } from "@/lib/activity-log";
 import { lockKeys, lockKey, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
 import { BookingError } from "@/lib/booking-error";
+import { previewCharge, type ChargePreview } from "@/lib/posting/preview-charge";
 
 // The ONE place a SpaAppointment is created. Extracted from POST /api/spa/appointments
 // (BOOKING_API_ADDONS_PLAN.md Phase 0 §2) so the desk and the public Booking API share one
@@ -58,9 +60,26 @@ export type CreateSpaAppointmentInput = {
   roomId?: string | null;
   notes?: string | null;
   participants: SpaParticipantInput[];
-  /** "Charge & pay now" — in-house only, AT_BOOKING only. */
+  /** Settle the posted gross now — "charge & pay now" at the desk (in-house), or a booking
+   *  the website reports as PAID (new walk-in). AT_BOOKING only. */
   settlement?: { paymentMethodId: string; referenceNumber: string | null } | null;
+  /** Participant 1 is a NEW walk-in (the Booking API — online guests are never linked to
+   *  a stay): their bill is opened inside the booking transaction. participants[0] then
+   *  carries only preferences (requestedGender, notes). */
+  newWalkIn?: { name: string; contact: string | null } | null;
+  /** A Booking API hold: TENTATIVE, therapist(s) and room assigned and blocked until
+   *  expiresAt, nothing posted and no bill yet. Confirmed with confirmSpaHold. */
+  hold?: { expiresAt: Date } | null;
+  /** Post now even under AT_COMPLETION — an online guest has been quoted, and may have
+   *  paid, a fixed price, so the charge is on the bill from the start. */
+  forceChargeAtBooking?: boolean;
+  source?: "FRONT_DESK" | "WEBSITE_API";
+  /** Runs inside the booking transaction, under the resource locks, after the appointment
+   *  is written — the Booking API records its own row here so the two commit together. */
+  onCreated?: (tx: Prisma.TransactionClient, appointment: CreatedAppointment, posted: { grandTotal: number } | null) => Promise<void>;
 };
+
+type CreatedAppointment = Prisma.SpaAppointmentGetPayload<{ include: typeof spaAppointmentInclude }>;
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -75,9 +94,15 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
   if (participantsInput.length === 0) {
     throw new BookingError(400, "VALIDATION", "At least one participant is required");
   }
+  const newWalkIn = input.newWalkIn ?? null;
+  if (newWalkIn && !newWalkIn.name.trim()) throw new BookingError(400, "VALIDATION", "The guest's name is required");
   for (let i = 0; i < participantsInput.length; i++) {
     const p = participantsInput[i];
     const identityCount = [p.reservationId, p.folioId, p.walkInGuestName].filter(Boolean).length;
+    if (i === 0 && newWalkIn) {
+      if (identityCount !== 0) throw new BookingError(400, "VALIDATION", "Participant 1 is the new walk-in guest");
+      continue;
+    }
     if (identityCount !== 1) {
       throw new BookingError(400, "VALIDATION", `Participant ${i + 1} needs exactly one of reservationId, folioId, or walkInGuestName`);
     }
@@ -107,7 +132,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
   if (primary.reservationId && !treatment.allowInHouseGuest) {
     throw new BookingError(400, "IN_HOUSE_NOT_ALLOWED", "This treatment cannot be booked for in-house guests");
   }
-  if (primary.folioId && !treatment.allowWalkIn) {
+  if ((primary.folioId || newWalkIn) && !treatment.allowWalkIn) {
     throw new BookingError(400, "WALK_IN_NOT_ALLOWED", "This treatment cannot be booked for walk-in guests");
   }
   const partySize = participantsInput.length;
@@ -150,10 +175,14 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
 
   // The billing folio, from participant 1 — never a reservation's own folio smuggled in
   // through folioId.
-  let billingFolioId: string;
+  let billingFolioId: string | null;
   let billingGuestLabel: string;
   let primaryWalkInIdentity: { walkInGuestName: string; walkInGuestContact: string | null } | null = null;
-  if (primary.reservationId) {
+  if (newWalkIn) {
+    billingFolioId = null; // opened inside the transaction (or, for a hold, at confirmation)
+    billingGuestLabel = newWalkIn.name.trim();
+    primaryWalkInIdentity = { walkInGuestName: newWalkIn.name.trim(), walkInGuestContact: newWalkIn.contact };
+  } else if (primary.reservationId) {
     const reservation = reservationById.get(primary.reservationId)!;
     // In-house appointments must fall WITHIN the guest's stay — the charge is realized on
     // their room folio. An out-of-stay date should be booked as a walk-in instead.
@@ -192,7 +221,8 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
   const allowAutoAssignment = settings?.allowAutoAssignment ?? true;
   const requireRoomAtBooking = settings?.requireRoomAtBooking ?? true;
   const requireTherapistAtBooking = settings?.requireTherapistAtBooking ?? true;
-  const chargeTiming = settings?.chargeTiming ?? "AT_BOOKING";
+  // A hold posts nothing; an online booking always posts now (see forceChargeAtBooking).
+  const chargeTiming = input.hold ? "ON_CONFIRM" : input.forceChargeAtBooking ? "AT_BOOKING" : settings?.chargeTiming ?? "AT_BOOKING";
 
   // No outlet, no posting (owner rule 2026-07-30). AT_COMPLETION bookings can still be
   // created — their posting is blocked at completion instead (src/lib/spa-lifecycle.ts).
@@ -206,7 +236,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
 
   let settlement: { paymentMethodId: string; referenceNumber: string | null } | null = null;
   if (input.settlement) {
-    if (!primary.reservationId) {
+    if (!primary.reservationId && !newWalkIn) {
       throw new BookingError(400, "SETTLEMENT_NOT_ALLOWED", "Pay-now settlement is only available for in-house guests.");
     }
     if (chargeTiming !== "AT_BOOKING") {
@@ -310,9 +340,18 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
     // completion (spa-lifecycle.ts). Either way the appointment remembers the folio it
     // bills to, so completion lands on the walk-in bill the desk opened for it rather than
     // a new one (paymentStatus NOT_POSTED + no folioLineItemId = "nothing posted yet").
-    const folioId: string = billingFolioId;
+    const folioId: string | null =
+      billingFolioId ??
+      (newWalkIn && !input.hold
+        ? (
+            await tx.folio.create({
+              data: { propertyId, folioNumber: 1, walkInGuestName: newWalkIn.name.trim(), walkInGuestContact: newWalkIn.contact },
+            })
+          ).id
+        : null);
     let folioLineItemId: string | null = null;
     let paymentStatus = "NOT_POSTED";
+    let postedTotal: number | null = null;
     if (chargeTiming === "AT_BOOKING") {
       const postableCode = await tx.chargeCode.findUniqueOrThrow({
         where: { id: treatment.chargeCodeId },
@@ -321,7 +360,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
       // Through the one posting service: the outlet's Tax Rule wins, and the Spa group's
       // own SVC/GST codes post alongside via this code's generates.
       const posted = await postCharge(tx, {
-        folioId: billingFolioId,
+        folioId: folioId!,
         chargeCode: postableCode,
         inputAmount: priceSnapshot,
         settings: enterpriseSettings,
@@ -335,12 +374,13 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
       });
       folioLineItemId = posted.parent.id;
       paymentStatus = "POSTED_TO_FOLIO";
+      postedTotal = posted.grandTotal;
 
       // Charge & pay now: settle the WHOLE posting (charge plus everything it generated).
       if (settlement && shiftId) {
         await tx.payment.create({
           data: {
-            folioId: billingFolioId,
+            folioId: folioId!,
             paymentMethodId: settlement.paymentMethodId,
             shiftId,
             chargeCodeId: await resolvePaymentChargeCodeId(tx, settlement.paymentMethodId),
@@ -352,7 +392,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
       }
     }
 
-    return tx.spaAppointment.create({
+    const created = await tx.spaAppointment.create({
       data: {
         propertyId,
         treatmentId,
@@ -368,16 +408,20 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
         treatmentEndTime,
         blockedUntilTime,
         roomId,
-        appointmentStatus: "CONFIRMED",
+        appointmentStatus: input.hold ? "TENTATIVE" : "CONFIRMED",
+        holdExpiresAt: input.hold?.expiresAt ?? null,
         paymentStatus,
         folioId,
         folioLineItemId,
         notes: input.notes || null,
         bookedByUserId: ctx.userId,
+        ...(input.source ? { source: input.source } : {}),
         participants: { create: resolvedParticipants },
       },
       include: spaAppointmentInclude,
     });
+    if (input.onCreated) await input.onCreated(tx, created, postedTotal === null ? null : { grandTotal: postedTotal });
+    return created;
   }, BOOKING_TX_OPTIONS);
 
   // Remember the request for next time — ONLY when it reflects a genuine, honored ask
@@ -404,8 +448,197 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
     action: "CREATE",
     entityType: "SpaAppointment",
     entityId: appointment.id,
-    description: `Booked ${treatment.name} for ${billingGuestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}${settlement ? " — paid now" : ""}`,
+    description: `${input.hold ? "Held (online)" : "Booked"} ${treatment.name} for ${billingGuestLabel}${partySize > 1 ? ` + ${partySize - 1} other(s)` : ""}${settlement ? " — paid now" : ""}${input.source === "WEBSITE_API" && !input.hold ? " (online)" : ""}`,
   });
 
   return appointment;
+}
+
+// ---------------------------------------------------------------------------------------
+// Booking API: quotes, confirming holds, expiring stale holds
+
+export type SpaQuote = {
+  treatmentId: string;
+  partySize: number;
+  /** The rate-card amount before the tax engine (what postCharge is given). */
+  priceBeforeTax: number;
+  charge: ChargePreview;
+  currency: string;
+  pricesIncludeTaxes: boolean;
+};
+
+/** What this treatment for this party on this date would cost, computed by the posting
+ *  code the booking uses (previewCharge). Writes nothing. */
+export async function quoteSpaTreatment(treatmentId: string, date: Date, partySize: number): Promise<SpaQuote> {
+  const treatment = await prisma.spaTreatment.findUnique({ where: { id: treatmentId }, include: { rates: true, property: true } });
+  if (!treatment) throw new BookingError(404, "TREATMENT_NOT_FOUND", "Treatment not found.");
+  if (partySize < 1 || partySize > treatment.maxParticipants) {
+    throw new BookingError(400, "PARTY_TOO_LARGE", `This treatment is for 1 to ${treatment.maxParticipants} guest(s).`);
+  }
+  const rate = rateForDate(treatment.rates, date);
+  if (!rate) throw new BookingError(400, "NO_RATE", "No price is configured for this treatment on this date");
+  const enterpriseSettings = await prisma.enterpriseSettings.findUnique({
+    where: { enterpriseId: treatment.property.enterpriseId },
+    include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
+  });
+  const spaOutlet = enterpriseSettings?.spaOutlet ?? null;
+  if (!spaOutlet) throw new BookingError(400, "NO_OUTLET", "No Spa Outlet is linked.");
+  const priceBeforeTax = computeAppointmentTotal(rate, treatment.pricingMode, partySize);
+  const chargeCode = await prisma.chargeCode.findUniqueOrThrow({ where: { id: treatment.chargeCodeId }, include: chargeCodeInclude() });
+  const charge = await previewCharge(treatment.propertyId, {
+    chargeCode,
+    inputAmount: priceBeforeTax,
+    settings: enterpriseSettings,
+    pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
+    date: resolveBusinessDate(treatment.property),
+    description: treatment.name,
+    outlet: spaOutlet,
+    outletId: spaOutlet.id,
+    postingContext: { adults: partySize, children: 0, nights: 1 },
+  });
+  return {
+    treatmentId,
+    partySize,
+    priceBeforeTax,
+    charge,
+    currency: treatment.property.defaultCurrency,
+    pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
+  };
+}
+
+/**
+ * Turn a Booking API hold (TENTATIVE) into a CONFIRMED appointment: name the guests, open
+ * their walk-in bill, post the charge from the price fixed when the hold was made, and
+ * settle it if the website reports it paid. Runs under the hold's own resource locks and
+ * only while the hold is still live — once it has expired its therapist and room may
+ * already belong to someone else, so an expired hold is refused, never re-checked.
+ */
+export async function confirmSpaHold(
+  ctx: AuthContext,
+  appointmentId: string,
+  input: {
+    guest: { name: string; contact: string | null };
+    companions: string[];
+    notes?: string | null;
+    settlement?: { paymentMethodId: string; referenceNumber: string | null } | null;
+    onConfirmed?: (tx: Prisma.TransactionClient, appointment: CreatedAppointment, posted: { grandTotal: number }) => Promise<void>;
+  }
+) {
+  const hold = await prisma.spaAppointment.findUnique({
+    where: { id: appointmentId },
+    include: { participants: { orderBy: { participantIndex: "asc" } }, treatment: true, property: true },
+  });
+  if (!hold) throw new BookingError(404, "HOLD_NOT_FOUND", "Hold not found.");
+  await assertPropertyModuleAccess(ctx, hold.propertyId, "SPA");
+
+  const enterpriseSettings = await prisma.enterpriseSettings.findUnique({
+    where: { enterpriseId: hold.property.enterpriseId },
+    include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
+  });
+  const spaOutlet = enterpriseSettings?.spaOutlet ?? null;
+  if (!spaOutlet) throw new BookingError(400, "NO_OUTLET", "No Spa Outlet is linked.");
+  if (input.settlement) {
+    const method = await prisma.paymentMethod.findUnique({ where: { id: input.settlement.paymentMethodId } });
+    if (!method || method.enterpriseId !== ctx.enterpriseId) throw new BookingError(404, "PAYMENT_METHOD_NOT_FOUND", "Payment method not found");
+  }
+  const chargeCode = await prisma.chargeCode.findUniqueOrThrow({ where: { id: hold.treatment.chargeCodeId }, include: chargeCodeInclude() });
+  const shift = await ensureOpenShift(ctx, hold.propertyId);
+  const locks = [
+    ...(hold.roomId ? [lockKey.spaRoom(hold.propertyId, hold.roomId)] : []),
+    ...hold.participants.filter((p) => p.therapistId).map((p) => lockKey.spaTherapist(hold.propertyId, p.therapistId!)),
+  ];
+  const name = input.guest.name.trim();
+  if (!name) throw new BookingError(400, "VALIDATION", "The guest's name is required");
+
+  const appointment = await prisma.$transaction(async (tx) => {
+    await lockKeys(tx, locks);
+    const current = await tx.spaAppointment.findUniqueOrThrow({ where: { id: appointmentId } });
+    if (current.appointmentStatus !== "TENTATIVE") throw new BookingError(409, "HOLD_USED", "This hold has already been booked.");
+    if (!current.holdExpiresAt || current.holdExpiresAt <= new Date()) {
+      throw new BookingError(409, "HOLD_EXPIRED", "The hold has expired. Check availability and try again.");
+    }
+
+    const folio = await tx.folio.create({
+      data: { propertyId: hold.propertyId, folioNumber: 1, walkInGuestName: name, walkInGuestContact: input.guest.contact },
+    });
+    const posted = await postCharge(tx, {
+      folioId: folio.id,
+      chargeCode,
+      inputAmount: hold.priceSnapshot,
+      settings: enterpriseSettings,
+      pricesIncludeTaxes: hold.property.pricesIncludeTaxes,
+      date: resolveBusinessDate(hold.property),
+      description: `${hold.treatmentNameSnapshot} — ${hold.appointmentDate.toISOString().slice(0, 10)} ${hold.startTime}${hold.partySize > 1 ? ` (${hold.partySize} guests)` : ""}`,
+      outlet: spaOutlet,
+      outletId: spaOutlet.id,
+      shiftId: shift.id,
+      postingContext: { adults: hold.partySize, children: 0, nights: 1 },
+    });
+    if (input.settlement) {
+      await tx.payment.create({
+        data: {
+          folioId: folio.id,
+          paymentMethodId: input.settlement.paymentMethodId,
+          shiftId: shift.id,
+          chargeCodeId: await resolvePaymentChargeCodeId(tx, input.settlement.paymentMethodId),
+          amount: posted.grandTotal,
+          referenceNumber: input.settlement.referenceNumber,
+        },
+      });
+    }
+    // Name the party: participant 1 is the booking guest, the rest their companions.
+    for (const p of hold.participants) {
+      const guestName = p.participantIndex === 1 ? name : input.companions[p.participantIndex - 2]?.trim() || `Guest ${p.participantIndex}`;
+      await tx.spaAppointmentParticipant.update({
+        where: { id: p.id },
+        data: { walkInGuestName: guestName, walkInGuestContact: p.participantIndex === 1 ? input.guest.contact : null },
+      });
+    }
+    await tx.spaAppointment.update({
+      where: { id: appointmentId },
+      data: {
+        appointmentStatus: "CONFIRMED",
+        holdExpiresAt: null,
+        folioId: folio.id,
+        folioLineItemId: posted.parent.id,
+        paymentStatus: input.settlement ? "PAID" : "POSTED_TO_FOLIO",
+        notes: input.notes || null,
+      },
+    });
+    const confirmed = await tx.spaAppointment.findUniqueOrThrow({ where: { id: appointmentId }, include: spaAppointmentInclude });
+    if (input.onConfirmed) await input.onConfirmed(tx, confirmed, { grandTotal: posted.grandTotal });
+    return confirmed;
+  }, BOOKING_TX_OPTIONS);
+
+  await logActivity({
+    ctx,
+    module: "SPA",
+    action: "CREATE",
+    entityType: "SpaAppointment",
+    entityId: appointmentId,
+    description: `Booked ${hold.treatmentNameSnapshot} for ${name}${hold.partySize > 1 ? ` + ${hold.partySize - 1} other(s)` : ""} (online)${input.settlement ? " — paid online" : ""}`,
+  });
+  return appointment;
+}
+
+/**
+ * Lazy expiry (SPA_PLAN.md §7): Booking API holds past their time stop blocking on their
+ * own (getBlockingAppointments); this tidies the rows so the desk's schedule doesn't show
+ * them as tentative forever. Called from the read paths that would display them.
+ */
+export async function expireStaleSpaHolds(propertyId: string): Promise<void> {
+  const now = new Date();
+  const stale = await prisma.spaAppointment.findMany({
+    where: { propertyId, appointmentStatus: "TENTATIVE", holdExpiresAt: { lte: now } },
+    select: { id: true },
+  });
+  if (stale.length === 0) return;
+  const ids = stale.map((a) => a.id);
+  await prisma.$transaction([
+    prisma.spaAppointment.updateMany({
+      where: { id: { in: ids }, appointmentStatus: "TENTATIVE" },
+      data: { appointmentStatus: "CANCELLED", cancelledAt: now, cancellationReasonCode: "HOLD_EXPIRED" },
+    }),
+    prisma.apiActivityBooking.updateMany({ where: { spaAppointmentId: { in: ids }, status: "HELD" }, data: { status: "EXPIRED" } }),
+  ]);
 }
