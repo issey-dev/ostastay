@@ -2045,6 +2045,11 @@ model PropertySettings {
   // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
   noShowPostFee Boolean @default(true)
 
+  // Night Audit — departures. When on, the departures step first checks out every guest
+  // due out whose folios all net to zero (through the desk's own check-out), and stops only
+  // for those who still owe or are owed money, or settle by City Ledger.
+  autoCheckOutZeroBalance Boolean @default(false)
+
   // Night Audit — scheduled run. When on, the background jobs run the whole End-of-Day for
   // this property at autoAuditTime (HH:MM, the property's own time zone); it stops at the
   // first step that needs a person and reports it. See src/lib/night-audit/scheduled.ts.

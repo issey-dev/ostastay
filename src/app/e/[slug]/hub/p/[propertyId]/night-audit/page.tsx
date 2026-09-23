@@ -6,7 +6,7 @@ import { getPropertySettings } from "@/lib/property-settings"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { BusinessDateManager } from "@/components/hub/business-date-manager"
-import { NightlyPostingsManager, EodRoomStatusManager, NoShowManager } from "@/components/hub/night-audit-settings"
+import { NightlyPostingsManager, EodRoomStatusManager, NoShowManager, DeparturesManager } from "@/components/hub/night-audit-settings"
 import { ScheduledAuditManager } from "@/components/hub/scheduled-audit-manager"
 
 // This property's Night Audit controls (owner, 2026-09-23): its business date (moved by hand
@@ -53,6 +53,9 @@ export default async function HubPropertyNightAuditPage({ params }: { params: Pr
           canEdit={editable}
           initial={{ greenTaxEnabled: settings.greenTaxEnabled, tgstEnabled: settings.tgstEnabled, serviceChargeEnabled: settings.serviceChargeEnabled }}
         />
+      </ControlsCard>
+      <ControlsCard title="Departures" description="What Night Audit does with guests still due out when it runs.">
+        <DeparturesManager propertyId={property.id} canEdit={editable} initial={settings.autoCheckOutZeroBalance} />
       </ControlsCard>
       <ControlsCard title="No-Shows" description="When Night Audit marks a reservation that never arrived as a No-Show, and whether it posts the no-show fee.">
         <NoShowManager

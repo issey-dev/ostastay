@@ -125,6 +125,69 @@ describe("Night Audit controls", () => {
     });
   });
 
+  describe("checking out settled departures", () => {
+    // A guest due out tonight, in a room, with one folio: settled (nothing on it), owing
+    // (a charge, no payment) or settling by City Ledger.
+    async function dueOut(p: { id: string; roomTypeId: string }, kind: "settled" | "owing" | "ledger") {
+      const ratePlan = await prisma.ratePlan.upsert({
+        where: { propertyId_code: { propertyId: p.id, code: "BAR" } },
+        update: {},
+        create: { propertyId: p.id, code: "BAR", name: "BAR" },
+      });
+      const room = await prisma.room.create({ data: { propertyId: p.id, roomTypeId: p.roomTypeId, roomNumber: `R${uniq().slice(-6)}`, status: "CLEAN" } });
+      const r = await prisma.reservation.create({
+        data: {
+          propertyId: p.id, primaryGuestId: guestId, confirmationNo: `NA${uniq()}`, status: "IN_HOUSE",
+          checkInDate: D("2026-09-08"), checkOutDate: D("2026-09-10"),
+          assignments: { create: { roomTypeId: p.roomTypeId, roomId: room.id, ratePlanId: ratePlan.id, overrideRate: 100, startDate: D("2026-09-08"), endDate: D("2026-09-10") } },
+          folios: { create: { folioNumber: 1, propertyId: p.id, settlementMethod: kind === "ledger" ? "CITY_LEDGER" : undefined } },
+        },
+        include: { folios: true },
+      });
+      if (kind === "owing") {
+        const code = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId: p.id, code: "1000" } } });
+        await prisma.folioLineItem.create({ data: { folioId: r.folios[0].id, chargeCodeId: code.id, date: D("2026-09-09"), description: "Room", amount: 100 } });
+      }
+      return r;
+    }
+    const status = async (id: string) => (await prisma.reservation.findUniqueOrThrow({ where: { id } })).status;
+
+    it("checks out the settled guest and stops only for the one who still owes, or settles by City Ledger", async () => {
+      const p = await makeProperty("AutoCheckOut");
+      await setPropertySettings(p.id, { autoCheckOutZeroBalance: true, autoAuditEnabled: true, autoAuditTime: "02:00" });
+      const settled = await dueOut(p, "settled");
+      const owing = await dueOut(p, "owing");
+      const ledger = await dueOut(p, "ledger");
+
+      await expect(runScheduledAudits(enterpriseId, new Date("2026-09-11T02:30:00Z"))).rejects.toThrow(
+        /1 settled guest was checked out automatically; 2 guests are still due out/
+      );
+      expect(await status(settled.id)).toBe("CHECKED_OUT");
+      expect(await status(owing.id)).toBe("IN_HOUSE");
+      expect(await status(ledger.id)).toBe("IN_HOUSE");
+      await setPropertySettings(p.id, { autoAuditEnabled: false });
+    });
+
+    it("completes the whole audit when every departure is settled", async () => {
+      const p = await makeProperty("AllSettled");
+      await setPropertySettings(p.id, { autoCheckOutZeroBalance: true, autoAuditEnabled: true, autoAuditTime: "02:00" });
+      const settled = await dueOut(p, "settled");
+      const result = await runScheduledAudits(enterpriseId, new Date("2026-09-11T02:30:00Z"));
+      expect(result.summary).toContain("AllSettled: audited 2026-09-10");
+      expect(await status(settled.id)).toBe("CHECKED_OUT");
+      await setPropertySettings(p.id, { autoAuditEnabled: false });
+    });
+
+    it("leaves every departure to the desk when the setting is off", async () => {
+      const p = await makeProperty("DeskDecides");
+      await setPropertySettings(p.id, { autoAuditEnabled: true, autoAuditTime: "02:00" });
+      const settled = await dueOut(p, "settled");
+      await expect(runScheduledAudits(enterpriseId, new Date("2026-09-11T02:30:00Z"))).rejects.toThrow(/DeskDecides: stopped at "Resolve departures": 1 guest is still due out/);
+      expect(await status(settled.id)).toBe("IN_HOUSE");
+      await setPropertySettings(p.id, { autoAuditEnabled: false });
+    });
+  });
+
   describe("scheduled audit", () => {
     it("works out when an audit is due, in the property's own time zone", () => {
       const bd = D("2026-09-10");

@@ -3110,4 +3110,9 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
     noon on the day itself. It stops at the first step that needs a person (e.g. guests still
     due out) and never catches up more than one day by itself — both fail the job and show on
     the Hub Overview (plus a property banner when a scheduled audit is an hour overdue).
+- **Check out settled departures automatically** (owner, same round): a Night Audit setting,
+  off by default. When on, the departures step — from the Night Audit screen or on schedule —
+  first checks out every guest due out whose folios ALL net to zero, through the desk's own
+  check-out (`src/lib/reservations/check-out.ts`), and stops only for guests who owe money,
+  are owed a refund, or settle by City Ledger (that raises an invoice the desk should see).
 

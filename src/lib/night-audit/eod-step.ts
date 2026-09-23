@@ -9,6 +9,9 @@ import { snapshotEodReports } from "@/lib/eod-reports";
 import { logActivity } from "@/lib/activity-log";
 import { purgeExpiredSessions } from "@/lib/session-store";
 import { runNightAudit } from "@/lib/night-audit/run";
+import { checkOutReservation } from "@/lib/reservations/check-out";
+import { computeFolioBalance } from "@/lib/debtor-accounts";
+import { getPropertySettings } from "@/lib/property-settings";
 
 // Advance one EOD step for a property. Steps run in order; each is idempotent —
 // re-running a done step is a no-op. See src/lib/eod.ts.
@@ -37,16 +40,29 @@ export async function runEodStep(ctx: AuthContext, body: EodStepInput): Promise<
     // nothing else — just ensures a run exists
   } else if (step === "departures") {
     if (!isStepDone(run, "departures")) {
+      // With "check out settled departures" on (Hub > Night Audit), every guest due out
+      // whose folios all net to zero is checked out first, through the desk's own
+      // check-out; only the rest need a person.
+      const autoCheckedOut = (await getPropertySettings(propertyId)).autoCheckOutZeroBalance
+        ? await checkOutSettledDepartures(ctx, propertyId, businessDate)
+        : [];
       const stillDue = await prisma.reservation.count({
         where: { propertyId, status: "IN_HOUSE", checkOutDate: { lte: businessDate } },
       });
       if (stillDue > 0) {
+        const done = autoCheckedOut.length
+          ? `${autoCheckedOut.length} settled guest${autoCheckedOut.length > 1 ? "s were" : " was"} checked out automatically; `
+          : "";
         return NextResponse.json(
-          { error: `${stillDue} guest${stillDue > 1 ? "s are" : " is"} still due out — force check-out or extend each before continuing.` },
+          {
+            error: `${done}${stillDue} guest${stillDue > 1 ? "s are" : " is"} still due out — force check-out or extend each before continuing.`,
+            autoCheckedOut,
+          },
           { status: 400 }
         );
       }
       await completeEodStep(run.id, "departures");
+      stepResult = { autoCheckedOut };
     }
   } else if (step === "cashier") {
     if (!isStepDone(run, "cashier")) {
@@ -147,4 +163,42 @@ export async function runEodStep(ctx: AuthContext, body: EodStepInput): Promise<
     steps: stepStates(fresh),
     nextStep: fresh ? nextEodStep(fresh) : null,
   });
+}
+
+/**
+ * Check out every guest due out (IN_HOUSE, check-out on or before the business date) whose
+ * folios ALL net to zero — nothing owed either way, and nothing settling by City Ledger
+ * (that creates an invoice at check-out, which the desk should see). Each goes through the
+ * desk's own check-out, so its rules still apply; one it refuses is simply left due out.
+ * Returns the confirmation numbers checked out.
+ */
+async function checkOutSettledDepartures(ctx: AuthContext, propertyId: string, businessDate: Date): Promise<string[]> {
+  const due = await prisma.reservation.findMany({
+    where: { propertyId, status: "IN_HOUSE", checkOutDate: { lte: businessDate } },
+    select: {
+      id: true,
+      confirmationNo: true,
+      folios: {
+        select: {
+          settlementMethod: true,
+          lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
+          payments: { select: { amount: true, isRefund: true, paymentMethod: { select: { type: true } } } },
+        },
+      },
+    },
+    orderBy: { confirmationNo: "asc" },
+  });
+  const checkedOut: string[] = [];
+  for (const r of due) {
+    const settled = r.folios.every(
+      (f) =>
+        f.settlementMethod !== "CITY_LEDGER" &&
+        !f.payments.some((p) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER") &&
+        Math.abs(computeFolioBalance(f.lineItems, f.payments)) <= 0.01
+    );
+    if (!settled) continue;
+    const res = await checkOutReservation(ctx, r.id);
+    if (res.ok) checkedOut.push(r.confirmationNo);
+  }
+  return checkedOut;
 }

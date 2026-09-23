@@ -277,3 +277,58 @@ export function NoShowManager({
     </div>
   )
 }
+
+// ── Departures ──────────────────────────────────────────────────────────────────────
+
+/** Whether Night Audit checks out settled (zero-balance) departures by itself. */
+export function DeparturesManager({
+  propertyId,
+  initial,
+  canEdit,
+}: {
+  propertyId: string
+  initial: boolean
+  canEdit: boolean
+}) {
+  const [on, setOn] = useState(initial)
+  const [saving, setSaving] = useState(false)
+
+  const toggle = async (next: boolean) => {
+    setSaving(true)
+    setOn(next)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoCheckOutZeroBalance: next }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(next ? "Night Audit will check out settled departures" : "Night Audit will wait for the desk to check departures out")
+    } catch {
+      setOn(!next)
+      toast.error("Couldn't save — nothing was changed")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+      <div className="min-w-0">
+        <Label htmlFor="autoCheckOutZeroBalance">Check out settled departures automatically</Label>
+        <p className="text-xs text-muted-foreground">
+          On: when Night Audit resolves departures — run from the Night Audit screen or on schedule — it checks out every
+          guest due out whose folios are fully settled, through the normal check-out. It still stops for guests who owe
+          money, are owed a refund, or settle by City Ledger. Off: every departure is left for the front desk.
+        </p>
+      </div>
+      <Switch
+        id="autoCheckOutZeroBalance"
+        className="shrink-0"
+        checked={on}
+        disabled={!canEdit || saving}
+        onCheckedChange={(v) => void toggle(!!v)}
+      />
+    </div>
+  )
+}

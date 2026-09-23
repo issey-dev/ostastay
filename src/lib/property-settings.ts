@@ -54,6 +54,7 @@ export const PROPERTY_SETTINGS_DEFAULTS: PropertySettingsValues = {
   // Night Audit — no-shows and the scheduled run
   noShowTiming: "FIRST_AUDIT",
   noShowPostFee: true,
+  autoCheckOutZeroBalance: false,
   autoAuditEnabled: false,
   autoAuditTime: "02:00",
 }
@@ -143,6 +144,7 @@ export const propertySettingsPatchSchema = z
     serviceChargeRate: percent,
     noShowTiming: z.enum(NO_SHOW_TIMINGS),
     noShowPostFee: z.boolean(),
+    autoCheckOutZeroBalance: z.boolean(),
     autoAuditEnabled: z.boolean(),
     autoAuditTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a 24-hour time, e.g. 02:00"),
   })

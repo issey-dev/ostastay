@@ -59,7 +59,8 @@ export function ScheduledAuditManager({
               <FormLabel>Run Night Audit automatically</FormLabel>
               <FormDescription>
                 Runs every End-of-Day step with no one at the desk. It stops at the first step that needs a person — guests
-                still due out, for example — and the Hub Overview says so; finish it from the Night Audit screen.
+                still due out, for example (settled ones can be checked out automatically, under Departures) — and the Hub
+                Overview says so; finish it from the Night Audit screen.
               </FormDescription>
             </div>
             <FormControl>
