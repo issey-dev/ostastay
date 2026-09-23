@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Acknowledge a flagged inbound booking — "the desk has seen this and is dealing with it".
@@ -17,7 +17,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
 
     const booking = await prisma.channelInboundBooking.findUnique({

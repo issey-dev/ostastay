@@ -8,6 +8,7 @@ import {
   MODULE_LABELS,
   MODULE_SCOPE_LABELS,
   MODULE_SCOPE_DESCRIPTIONS,
+  ENTERPRISE_ONLY_MODULES,
   moduleScope,
   type Module,
   type Action,
@@ -22,10 +23,10 @@ export function emptyPermissionMatrix(): PermissionMatrix {
   ) as PermissionMatrix
 }
 
-/** True when this role grants any Hub module — used to warn before it is given to a
- *  property-scoped user, who can never actually reach the Hub. */
-export function grantsHubAccess(value: PermissionMatrix): boolean {
-  return MODULES.some((m) => moduleScope(m) === "HUB" && value[m]?.canView)
+/** True when this role grants an enterprise-only module (Users & Access) — used to warn
+ *  before it is given to a single-property user, for whom it can never take effect. */
+export function grantsEnterpriseOnlyAccess(value: PermissionMatrix): boolean {
+  return (ENTERPRISE_ONLY_MODULES as readonly Module[]).some((m) => value[m]?.canView)
 }
 
 const ACTIONS: { key: Action; label: string; field: keyof PermissionMatrix[Module] }[] = [

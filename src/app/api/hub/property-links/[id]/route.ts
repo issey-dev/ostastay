@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import {
   setRoomTypeMapping,
@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
 
     const link = await assertLinkInEnterprise(id, ctx.enterpriseId);
@@ -78,7 +78,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "delete");
 
     await deletePropertyLink(ctx.enterpriseId, id);

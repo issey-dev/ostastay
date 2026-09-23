@@ -2,6 +2,32 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Hub Setup — Enterprise vs Property separation (2026-09-23) — IN PROGRESS
+
+Plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md). Owner decisions in DECISIONS.md (2026-09-23).
+Controls + Stationaries move from the property dashboard into the Hub, split into an
+Enterprise area and a per-property area (property in the URL); tax, charge codes, payment
+methods, dropdowns and stationery become per property; copy-between-properties; Overview
+becomes setup/health banners.
+
+- [x] Phase 0 — Hub shell, route groups, property band, access helpers (property admins in)
+- [ ] Phase 1 — move per-property Controls sections; stationery + booking format per
+  property (`PropertySettings`); delete dashboard Controls/Stationaries
+- [ ] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
+  defaults, Spa/Excursion outlet link) + migration; onboarding chart varies by property
+- [ ] Phase 3 — dropdowns per property + richer entries (**blocked on O-1**: which fields)
+- [ ] Phase 4 — Beds24 connection per property (Osta-created), Booking API keys one-or-ALL,
+  website/online settings + Green Tax into the property area
+- [ ] Phase 5 — copy from another property (warn + skip, never overwrite)
+- [ ] Phase 6 — Overview banners
+
+**Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
+- Stationaries saves every text field to `EnterpriseSettings` while previewing one
+  property — edits leak to every property.
+- Outlets / Sequences / Facilities / Amenities managers open on the *first* property,
+  ignoring the property the user has switched to.
+- The enterprise-wide Spa/Excursion outlet link points at an outlet owned by one property.
+
 ## Booking API for Excursions & Spa — ALL PHASES DONE (2026-09-23)
 
 Branch `feat/booking-api-addons`. Full record — decisions, file map, deviations — in

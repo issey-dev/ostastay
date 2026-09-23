@@ -2,7 +2,8 @@ import { ArrowLeftRight, Key, Receipt } from "@/components/icons"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobStatusCard } from "@/components/hub/job-status-card"
 import { InfoHint } from "@/components/ui/info-hint"
-import { requireSession, hasPermission } from "@/lib/scope"
+import { redirect } from "next/navigation"
+import { requireSession, hasPermission, hasEnterpriseHubAccess } from "@/lib/scope"
 
 // Hub overview. Intentionally thin for now — the Hub shell ships before any
 // channel-manager code, so this is the landing surface that proves the shell works and
@@ -13,6 +14,9 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
   // The layout already gated access; this is only here so the page renders per-request
   // rather than being statically prerendered without a session.
   const ctx = await requireSession()
+  // The Overview is enterprise-wide. A single-property user goes straight to their own
+  // property's setup. (Phase 6 of .agents/docs/HUB_SETUP_PLAN.md rebuilds this page.)
+  if (!hasEnterpriseHubAccess(ctx)) redirect(`/e/${slug}/hub/p`)
 
   return (
     <div className="space-y-6">
@@ -34,7 +38,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           </CardHeader>
           <CardContent>
             <a
-              href={`/e/${slug}/hub/channel-manager`}
+              href={`/e/${slug}/hub/enterprise/channel-manager`}
               className="text-sm font-medium text-primary hover:underline"
             >
               Open Channel Manager
@@ -51,7 +55,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           </CardHeader>
           <CardContent>
             <a
-              href={`/e/${slug}/hub/website`}
+              href={`/e/${slug}/hub/enterprise/booking-api`}
               className="text-sm font-medium text-primary hover:underline"
             >
               Open Booking API
@@ -68,7 +72,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <a href={`/e/${slug}/hub/green-tax`} className="text-sm font-medium text-primary hover:underline">
+              <a href={`/e/${slug}/hub/enterprise/green-tax`} className="text-sm font-medium text-primary hover:underline">
                 Open Green Tax Registrations
               </a>
             </CardContent>

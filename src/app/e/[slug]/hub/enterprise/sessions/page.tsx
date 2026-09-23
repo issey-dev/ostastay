@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, requirePermission, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { ActiveSessions } from "@/components/hub/active-sessions"
 import { InfoHint } from "@/components/ui/info-hint"
 
@@ -8,7 +8,7 @@ import { InfoHint } from "@/components/ui/info-hint"
 // record, so there was nothing to list and nothing to revoke. See src/lib/session-store.ts.
 export default async function HubSessionsPage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
   requirePermission(ctx, "USERS", "view")
 
   // Viewing who is signed in and ending someone's session are different acts.

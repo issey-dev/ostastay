@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { rotateWebhookSecret } from "@/lib/website-api/webhooks";
 
@@ -8,7 +8,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
     const { secret, row } = await rotateWebhookSecret(ctx.enterpriseId, id);
     await logActivity({ ctx, module: "INTEGRATIONS", action: "UPDATE", description: `Rotated the signing secret of webhook ${row.url}`, entityType: "ApiWebhookEndpoint", entityId: id });

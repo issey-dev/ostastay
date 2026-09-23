@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, requirePermission, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { InfoHint } from "@/components/ui/info-hint"
 import { WebsiteApiKeys } from "@/components/hub/website-api-keys"
@@ -17,7 +17,7 @@ import { enabledActivityModules } from "@/lib/website-api/scopes"
 // property rather than an ambient "current" one.
 export default async function HubWebsitePage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
   requirePermission(ctx, "INTEGRATIONS", "view")
 
   const canManage = hasPermission(ctx, "INTEGRATIONS", "update")

@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { ChannelConnectionStatus } from "@/components/hub/channel-connection-status"
 import { InfoHint } from "@/components/ui/info-hint"
 
@@ -11,7 +11,8 @@ export default async function ChannelManagerPage() {
   const ctx = await requireSession()
   // The Hub layout already gated the shell; re-asserting here keeps the page honest on
   // its own terms rather than relying on an ancestor for authorization.
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
+  requirePermission(ctx, "INTEGRATIONS", "view")
 
   // Only gates the health-check button now — establishing the link is an Osta action and
   // is refused by the API for every tenant regardless of permission (see

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, getOstaEnterpriseId, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, getOstaEnterpriseId, toErrorResponse } from "@/lib/scope";
 import { MODULES, MODULE_LABELS, moduleScope, type Module } from "@/lib/modules";
 import { resolveStationeryBrand } from "@/lib/stationery-brand";
 
@@ -13,7 +13,7 @@ import { resolveStationeryBrand } from "@/lib/stationery-brand";
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "USERS", "view");
 
     const ostaEnterpriseId = await getOstaEnterpriseId();

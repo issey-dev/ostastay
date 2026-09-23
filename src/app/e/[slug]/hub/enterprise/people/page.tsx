@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, requirePermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission } from "@/lib/scope"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
 import { InfoHint } from "@/components/ui/info-hint"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,7 @@ export default async function HubPeoplePage({ params }: { params: Promise<{ slug
   const { slug } = await params
   const ctx = await requireSession()
   // Re-asserted here rather than relying on the layout, so the page is honest on its own.
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
   requirePermission(ctx, "USERS", "view")
 
   return (
@@ -37,7 +37,7 @@ export default async function HubPeoplePage({ params }: { params: Promise<{ slug
       </div>
 
       <div>
-        <Button variant="outline" render={<a href={`/e/${slug}/hub/permission-matrix`} target="_blank" rel="noreferrer" />}>
+        <Button variant="outline" nativeButton={false} render={<a href={`/e/${slug}/hub/enterprise/permission-matrix`} target="_blank" rel="noreferrer" />}>
           <FileText className="mr-2 h-4 w-4" /> Permission matrix report
         </Button>
       </div>

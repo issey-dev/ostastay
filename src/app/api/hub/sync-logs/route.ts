@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { listSyncLogs } from "@/lib/channels/sync-log";
 
 // The Hub's channel-manager exchange log — inbound and outbound, for troubleshooting.
@@ -10,12 +10,12 @@ import { listSyncLogs } from "@/lib/channels/sync-log";
 // much of a troubleshooting record. Retention is a scheduled prune (pruneSyncLogs), not a
 // button.
 //
-// Gated on "view" and, as everywhere in the Hub, requireHubAccess() as well: a
+// Gated on "view" and, as everywhere in the Hub, requireEnterpriseHub() as well: a
 // PROPERTY-scoped user is refused outright regardless of their role bits.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const { searchParams } = new URL(request.url);

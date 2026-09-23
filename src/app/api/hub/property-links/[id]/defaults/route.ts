@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { getBookingDefaults, setBookingDefaults } from "@/lib/channels/defaults";
 
@@ -9,7 +9,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const defaults = await getBookingDefaults(ctx.enterpriseId, id);
@@ -24,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
 
     const body = await request.json().catch(() => null);

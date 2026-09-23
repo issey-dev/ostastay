@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { listConnections } from "@/lib/channels/connection";
 
 // Channel-manager connections for the session's own enterprise — see
 // .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
 //
-// Every handler in the Hub calls requireHubAccess(ctx) IN ADDITION to requirePermission().
-// The two are not redundant: requireHubAccess enforces the enterprise-level rule (a
+// Every handler in the Hub calls requireEnterpriseHub(ctx) IN ADDITION to requirePermission().
+// The two are not redundant: requireEnterpriseHub enforces the enterprise-level rule (a
 // PROPERTY-scoped user is refused outright, whatever their role bits say), while
 // requirePermission enforces the per-action CRUD bit. The Hub layout's own check guards
 // the UI shell only and is no substitute for either.
@@ -18,7 +18,7 @@ import { listConnections } from "@/lib/channels/connection";
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     return NextResponse.json({ connections: await listConnections(ctx.enterpriseId) });

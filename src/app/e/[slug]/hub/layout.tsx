@@ -25,10 +25,11 @@ export const dynamic = "force-dynamic"
 // property-centric component in the codebase fails to mount. A PMS feature cannot be
 // added to the Hub by accident — it will not render. Do not add PropertyProvider here.
 //
-// The Hub may still reference properties as CONFIGURATION objects (which property maps
-// to which channel-manager property, which room types are shared) — that is config, not
+// The Hub may still reference properties as CONFIGURATION objects — that is config, not
 // operation, and such screens take an explicit propertyId rather than an ambient
-// "current property".
+// "current property". Since 2026-09-23 every property's setup lives here, under
+// /hub/p/{propertyId} (see .agents/docs/HUB_SETUP_PLAN.md): the property is always in
+// the URL, and hub/p/[propertyId]/layout.tsx is the gate for it.
 export default async function HubLayout({
   children,
   params,
@@ -56,7 +57,8 @@ export default async function HubLayout({
   if (!enterprise) redirect("/api/auth/session-expired")
   if (enterprise.slug !== slug) redirect(`/e/${enterprise.slug}/hub`)
 
-  // Page-level gate. Hub API routes must call requireHubAccess(ctx) themselves — this
+  // Page-level gate for the shell. Enterprise-area API routes must call
+  // requireEnterpriseHub(ctx) and property-area ones requirePropertySetup() themselves — this
   // check protects the UI shell only and is not a substitute for guarding each endpoint.
   if (!hasHubAccess(ctx)) redirect(`/e/${enterprise.slug}/dashboard`)
 
@@ -72,7 +74,7 @@ export default async function HubLayout({
             <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight truncate">
               {enterprise.name}
             </h1>
-            <p className="text-xs text-muted-foreground leading-tight">Enterprise Hub</p>
+            <p className="text-xs text-muted-foreground leading-tight">Hub · setup &amp; administration</p>
           </div>
           <div className="ml-auto">
             <ThemeToggle />

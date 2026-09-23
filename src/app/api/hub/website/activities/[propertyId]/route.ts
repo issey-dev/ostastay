@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { updateActivityModuleSettings } from "@/lib/website-api/activity-settings";
 
@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
   try {
     const { propertyId } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
 
     const { module, ...input } = patchSchema.parse(await request.json());

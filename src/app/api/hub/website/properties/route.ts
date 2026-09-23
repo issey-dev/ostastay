@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { listWebsitePropertySettings } from "@/lib/website-api/settings";
 
 // Per-property website configuration (what the brand site shows and sells) — see
@@ -7,7 +7,7 @@ import { listWebsitePropertySettings } from "@/lib/website-api/settings";
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const properties = await listWebsitePropertySettings(ctx.enterpriseId);

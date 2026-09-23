@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { InboundBookingsManager } from "@/components/hub/inbound-bookings-manager"
 import { InfoHint } from "@/components/ui/info-hint"
 
@@ -8,7 +8,8 @@ import { InfoHint } from "@/components/ui/info-hint"
 // into Reservations automatically. See the note on ChannelInboundBooking in schema.prisma.
 export default async function ChannelManagerBookingsPage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
+  requirePermission(ctx, "INTEGRATIONS", "view")
 
   const canManage = hasPermission(ctx, "INTEGRATIONS", "update")
 

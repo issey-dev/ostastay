@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { ForbiddenError, requireHubAccess, requirePermission, requireSession, toErrorResponse, type AuthContext } from "@/lib/scope";
+import { ForbiddenError, requireEnterpriseHub, requirePermission, requireSession, toErrorResponse, type AuthContext } from "@/lib/scope";
 import { GreenTaxError } from "@/lib/green-tax-registry";
 import type { Action } from "@/lib/modules";
 
@@ -10,7 +10,7 @@ import type { Action } from "@/lib/modules";
 // ambient current property — see the Hub layout).
 export async function greenTaxContext(action: Action, propertyId: unknown): Promise<{ ctx: AuthContext; propertyId: string; propertyName: string }> {
   const ctx = await requireSession();
-  requireHubAccess(ctx);
+  requireEnterpriseHub(ctx);
   requirePermission(ctx, "GREEN_TAX", action);
   const id = typeof propertyId === "string" ? propertyId : "";
   const property = id ? await prisma.property.findFirst({ where: { id, enterpriseId: ctx.enterpriseId }, select: { id: true, name: true } }) : null;

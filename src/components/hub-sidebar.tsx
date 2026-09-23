@@ -1,8 +1,10 @@
-import { LayoutDashboard, ArrowLeftRight, Building2, FileText, ShieldAlert, Users, Shield, Key, Receipt } from "@/components/icons"
-import { requireSession, hasHubAccess, hasAnyPropertyModule, hasPermission, resolveCurrentPropertyId } from "@/lib/scope"
+import { requireSession, hasHubAccess, hasEnterpriseHubAccess, hasAnyPropertyModule, hasPermission, resolveCurrentPropertyId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
 import { HubPropertySwitcher } from "@/components/hub/hub-property-switcher"
+import { HubSidebarNav } from "@/components/hub/hub-sidebar-nav"
+import { ENTERPRISE_NAV, PROPERTY_NAV, visibleKeys } from "@/components/hub/hub-nav"
+import { listHubProperties, resolveHubPropertyId } from "@/lib/hub-properties"
 import { APP_VERSION } from "@/lib/version"
 import { initials } from "@/lib/initials"
 import {
@@ -19,34 +21,17 @@ import {
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import Link from "next/link"
 
-// The Hub's nav — a small static list, same approach as OstaSidebar
-// (src/components/osta-sidebar.tsx) and deliberately NOT the permission-filtered
-// AppSidebar. Everyone who reaches /e/{slug}/hub has already passed requireHubAccess()
-// in the layout, and for now the Hub is a single module (INTEGRATIONS); when a second
-// Hub module lands, filter this list against HUB_MODULES the way AppSidebar does.
+// The Hub's nav — deliberately NOT the permission-filtered AppSidebar. Two areas, kept
+// visibly apart (2026-09-23, .agents/docs/HUB_SETUP_PLAN.md):
+//   "Enterprise · all properties" — shared settings; never shown to a single-property user
+//   "<property name>"             — one property's setup, headed by that property
+// The item lists live in src/components/hub/hub-nav.ts; this server half decides which
+// items the user may see, the client half (HubSidebarNav) knows which page is open.
 //
 // Note this cannot reuse SidebarUserMenu (src/components/ui/sidebar-user-menu.tsx) —
 // that component calls useProperty(), which by design does not exist in the Hub. The
-// property list below instead comes down as server-rendered props (see
-// HubPropertySwitcher); the identity footer itself matches OstaSidebar's.
-const items = [
-  { title: "Overview", url: "hub", icon: LayoutDashboard },
-  { title: "Channel Manager", url: "hub/channel-manager", icon: ArrowLeftRight },
-  { title: "Mapping", url: "hub/channel-manager/mapping", icon: Building2 },
-  { title: "Inbound Bookings", url: "hub/channel-manager/bookings", icon: ShieldAlert },
-  { title: "Exchange Log", url: "hub/channel-manager/logs", icon: FileText },
-  // API keys for each property's own brand website, and what it may show and sell
-  // (2026-09-06) — see .agents/docs/WEBSITE_API_PLAN.md. Integrations-gated like the
-  // channel manager: a website is an integration.
-  { title: "Booking API", url: "hub/website", icon: Key },
-  // Staff administration moved here from Controls (2026-08-04): identity is
-  // enterprise-wide, and the Hub is the only shell a property-scoped user can't reach.
-  { title: "People", url: "hub/people", icon: Users },
-  { title: "Sessions", url: "hub/sessions", icon: Shield },
-  // Green Tax Reg No corrections + monthly MIRA filing (2026-09-23). Its own Hub module
-  // (GREEN_TAX), so the entry is shown only to roles that can view it.
-  { title: "Green Tax", url: "hub/green-tax", icon: Receipt, module: "GREEN_TAX" as const },
-]
+// property lists below instead come down as server-rendered props; the identity footer
+// matches OstaSidebar's.
 
 export async function HubSidebar({ slug }: { slug: string }) {
   const ctx = await requireSession().catch(() => null)
@@ -61,13 +46,24 @@ export async function HubSidebar({ slug }: { slug: string }) {
   // picking one arbitrarily.
   const roleName = user?.roles.map((ur) => ur.role.name).join(", ") ?? ""
 
-  // A Hub-only administrator has nowhere to go back to — only offer the return link
-  // when the user actually holds a property-operational module.
+  const canView = (m: Parameters<typeof hasPermission>[1]) => hasPermission(ctx, m, "view")
+  const showEnterprise = hasEnterpriseHubAccess(ctx)
+  const enterpriseKeys = showEnterprise ? visibleKeys(ENTERPRISE_NAV, canView) : []
+  const propertyKeys = visibleKeys(PROPERTY_NAV, canView)
+  const hubProperties = await listHubProperties(ctx)
+  const defaultPropertyId = await resolveHubPropertyId(ctx, hubProperties)
+
+  // "Open a property's dashboard" — only when the user actually works in properties. A
+  // single-property user only ever has their own.
   const canReturnToProperty = hasAnyPropertyModule(ctx)
-  const [properties, currentPropertyId] = canReturnToProperty
+  const [dashboardProperties, currentPropertyId] = canReturnToProperty
     ? await Promise.all([
         prisma.property.findMany({
-          where: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" },
+          where: {
+            enterpriseId: ctx.enterpriseId,
+            status: "ACTIVE",
+            ...(ctx.scope === "PROPERTY" ? { id: ctx.propertyId ?? "" } : {}),
+          },
           select: { id: true, name: true, bannerColor: true },
           orderBy: { createdAt: "asc" },
         }),
@@ -89,27 +85,20 @@ export async function HubSidebar({ slug }: { slug: string }) {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Hub</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.filter((item) => !("module" in item && item.module) || hasPermission(ctx, item.module, "view")).map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton tooltip={item.title} render={<a href={`/e/${slug}/${item.url}`} />}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <HubSidebarNav
+          slug={slug}
+          showOverview={showEnterprise}
+          enterpriseKeys={enterpriseKeys}
+          propertyKeys={propertyKeys}
+          properties={hubProperties}
+          defaultPropertyId={defaultPropertyId}
+        />
 
-        {canReturnToProperty && properties.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Switch to a property</SidebarGroupLabel>
+        {canReturnToProperty && dashboardProperties.length > 0 && (
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel>Open property dashboard</SidebarGroupLabel>
             <SidebarGroupContent>
-              <HubPropertySwitcher slug={slug} properties={properties} currentPropertyId={currentPropertyId} />
+              <HubPropertySwitcher slug={slug} properties={dashboardProperties} currentPropertyId={currentPropertyId} />
             </SidebarGroupContent>
           </SidebarGroup>
         )}

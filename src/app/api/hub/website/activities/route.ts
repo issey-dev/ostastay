@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { listActivitySettings } from "@/lib/website-api/activity-settings";
 
 // What each property sells online for Excursions and Spa through the Booking API — see
@@ -8,7 +8,7 @@ import { listActivitySettings } from "@/lib/website-api/activity-settings";
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
     return NextResponse.json(await listActivitySettings(ctx.enterpriseId));
   } catch (error) {

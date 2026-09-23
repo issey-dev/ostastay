@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, requirePermission, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { InfoHint } from "@/components/ui/info-hint"
 import { GreenTaxRegister } from "@/components/hub/green-tax-register"
@@ -9,7 +9,7 @@ import { GreenTaxRegister } from "@/components/hub/green-tax-register"
 // sheet". Takes an explicit property (the Hub has no current property).
 export default async function HubGreenTaxPage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
   requirePermission(ctx, "GREEN_TAX", "view")
 
   const properties = await prisma.property.findMany({

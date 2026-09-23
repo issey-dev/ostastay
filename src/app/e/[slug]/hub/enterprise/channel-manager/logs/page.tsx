@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission } from "@/lib/scope"
 import { SyncLogViewer } from "@/components/hub/sync-log-viewer"
 import { InfoHint } from "@/components/ui/info-hint"
 
@@ -8,7 +8,8 @@ import { InfoHint } from "@/components/ui/info-hint"
 // rather than a black box.
 export default async function ChannelManagerLogsPage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
+  requirePermission(ctx, "INTEGRATIONS", "view")
 
   return (
     <div className="space-y-6">

@@ -3031,3 +3031,43 @@ Room Type to the sheet's own columns.
 - **Primary wins:** with several identification documents, the one marked primary is the
   one reported (else the earliest added) — on both this report and the MIRA sheet.
   Nationality is a single profile field, so there is nothing to choose between.
+
+## 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
+
+Owner, on the Controls and Stationaries pages: move them to the Hub "as there is we will be
+doing the actual setup of the properties", and make it clear "for which property the
+settings are shown", keeping "anything that is common — belongs to enterprise — separated
+from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
+
+- **Enterprise (shared):** users, roles & permissions, integrations, support access,
+  Email/SFTP. **Everything else is per property**, explicitly including tax definitions,
+  charge codes *including groups and subgroups*, payment methods, dropdowns and stationery
+  ("each property to have their own stationary").
+- **No live sharing between properties.** What the owner meant by "shared configs" is a
+  **copy** option — copy selected settings from one property to another, to ease
+  onboarding. If an item already exists at the target: **warn and skip; no overwrite option**.
+- **Work location is one property or ALL — never a subset** ("no option to give 2 of 3").
+  Single-property users reach one property; enterprise users reach all. Same rule for
+  Booking API keys.
+- **Single-property admins may enter the Hub**, but see only their own property's settings;
+  everything enterprise is restricted from them entirely.
+- **Controls leaves the property dashboard outright** — "no need for additional things"
+  (no redirect or stub).
+- **Beds24: one connection per property** — supersedes the per-enterprise invite code in
+  "Beds24 topology" (2026-08-02). The single master account stays. **Uppsolut creates the
+  invite code and connects each property** from its own side; a property requests it.
+  Property admins can map rooms/rates, check rates and availability, and view bookings and
+  logs — not connect, disconnect or re-authorize. Logs are seen per property.
+- **Booking API**: per-property website and Excursions/Spa online settings move to the
+  property's setup.
+- **Green Tax** stays in the Hub (highly sensitive: Hub admins, or property admins with Hub
+  access), separated by property like everything else.
+- **Existing data** gets one copy per property when split (fine for now). **Charge codes
+  should vary by property** — a property without Spa/Excursions needs no such codes, and
+  descriptions should be the property's own ("Veyo Garden Restaurant", "Maaveyo Pool Bar").
+- **Hub Overview is for "Maintenance and Config"**: banners only when important setup is
+  missing (hidden when complete, one click to the fix), Green Tax only when there are
+  issues, channel manager active/inactive; background jobs only when something critical
+  fails. The current link cards are not wanted.
+- **Supersedes:** "Stationaries page" (2026-07-19) placement in the dashboard sidebar and its
+  enterprise-wide storage; "Beds24 topology" (2026-08-02) invite code per enterprise.

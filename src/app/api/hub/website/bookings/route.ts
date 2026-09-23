@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { listOnlineBookings, type OnlineBookingModule, type OnlineBookingStatus } from "@/lib/website-api/online-bookings";
 
 const MODULES = ["ROOMS", "EXCURSIONS", "SPA"];
@@ -10,7 +10,7 @@ const STATUSES = ["CONFIRMED", "CANCELLED", "FAILED", "HELD", "EXPIRED", "COMPLE
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const s = new URL(request.url).searchParams;

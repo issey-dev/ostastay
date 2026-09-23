@@ -1,4 +1,4 @@
-import { requireSession, requireHubAccess, hasPermission } from "@/lib/scope"
+import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { MappingManager } from "@/components/hub/mapping-manager"
 import { InfoHint } from "@/components/ui/info-hint"
 
@@ -9,7 +9,8 @@ import { InfoHint } from "@/components/ui/info-hint"
 // range, and the defaults used to fill in what an inbound booking doesn't say.
 export default async function ChannelManagerMappingPage() {
   const ctx = await requireSession()
-  requireHubAccess(ctx)
+  requireEnterpriseHub(ctx)
+  requirePermission(ctx, "INTEGRATIONS", "view")
 
   const canManage = hasPermission(ctx, "INTEGRATIONS", "update")
 

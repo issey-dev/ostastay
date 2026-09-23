@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { JOBS } from "@/lib/jobs";
 
 // Latest run of each background job, for the caller's own enterprise.
@@ -14,7 +14,7 @@ import { JOBS } from "@/lib/jobs";
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const runs = await Promise.all(

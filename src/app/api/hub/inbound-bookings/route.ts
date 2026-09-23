@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 
 // Bookings received from the channel manager, for the caller's own enterprise.
 //
@@ -10,7 +10,7 @@ import { requireSession, requireHubAccess, requirePermission, toErrorResponse } 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
 
     const { searchParams } = new URL(request.url);
