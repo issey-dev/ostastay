@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "@/components/icons"
 
 import { cn } from "@/lib/utils"
+import { parseDateKey, toDateKey } from "@/lib/date-only"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -33,16 +34,17 @@ interface DatePickerProps {
 }
 
 export function DatePicker({ value, onChange, placeholder = "Pick a date", className, disabled, minDate, maxDate, availableDates }: DatePickerProps) {
-  // Try to parse the incoming value securely
-  const dateValue = typeof value === 'string' && value ? new Date(value) : (value instanceof Date ? value : undefined)
-  const minDateValue = typeof minDate === 'string' && minDate ? new Date(minDate) : (minDate instanceof Date ? minDate : undefined)
-  const maxDateValue = typeof maxDate === 'string' && maxDate ? new Date(maxDate) : (maxDate instanceof Date ? maxDate : undefined)
+  // Read every incoming day as LOCAL midnight of that day. `new Date("2026-09-23")` is UTC
+  // midnight, which the calendar would highlight as the 22nd anywhere west of UTC and
+  // compare a day off against min/max — see src/lib/date-only.ts.
+  const dateValue = parseDateKey(value)
+  const minDateValue = parseDateKey(minDate)
+  const maxDateValue = parseDateKey(maxDate)
   const availableSet = availableDates ? new Set(availableDates) : null
 
   const handleSelect = (date: Date | undefined) => {
     if (date) {
-      // Format to YYYY-MM-DD to easily store in form states
-      onChange(format(date, "yyyy-MM-dd"))
+      onChange(toDateKey(date))
     } else {
       onChange("")
     }

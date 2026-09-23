@@ -1,7 +1,8 @@
 "use client"
 
+import { parseDateKey, toDateKey, todayKey } from "@/lib/date-only"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { FileText, FileSpreadsheet, FileType, Loader2, AlertTriangle } from "@/components/icons"
+import { FileText, FileSpreadsheet, FileType, Loader2, AlertTriangle, Eye, RefreshCw, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -10,6 +11,8 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { ReportDocument } from "@/components/reports/report-document"
+import type { ReportPreview } from "@/lib/reports/types"
 
 type Param = {
   key: string
@@ -24,7 +27,6 @@ type Param = {
 type ReportMeta = { key: string; module: string; name: string; description: string; params: Param[] }
 type Catalog = { modules: { module: string; label: string }[]; reports: ReportMeta[] }
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
 
 export default function ReportsPage() {
   const { currentProperty } = useProperty()
@@ -34,6 +36,10 @@ export default function ReportsPage() {
   const [dynOptions, setDynOptions] = useState<Record<string, { label: string; value: string }[]>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The on-screen preview, and the exact request it was built from — so a parameter
+  // change after previewing is flagged instead of silently showing stale numbers.
+  const [preview, setPreview] = useState<ReportPreview | null>(null)
+  const [previewFor, setPreviewFor] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/reports/catalog").then((r) => (r.ok ? r.json() : null)).then(setCatalog).catch(console.error)
@@ -42,10 +48,15 @@ export default function ReportsPage() {
   const selectReport = useCallback((r: ReportMeta) => {
     setSelected(r)
     setError(null)
+    setPreview(null)
+    setPreviewFor(null)
+    // "Today" for a report is the property's BUSINESS date (what the server defaults to
+    // as well), not the computer's calendar — they differ until Night Audit rolls.
+    const today = currentProperty?.businessDate ? toDateKey(parseDateKey(currentProperty.businessDate)!) : todayKey()
     const init: Record<string, any> = {}
     for (const p of r.params) {
-      if (p.type === "date") init[p.key] = p.defaultToday ? todayIso() : ""
-      else if (p.type === "dateRange") init[p.key] = p.defaultToday ? { from: todayIso(), to: todayIso() } : { from: "", to: "" }
+      if (p.type === "date") init[p.key] = p.defaultToday ? today : ""
+      else if (p.type === "dateRange") init[p.key] = p.defaultToday ? { from: today, to: today } : { from: "", to: "" }
       else if (p.type === "multiSelect") init[p.key] = []
       else if (p.type === "boolean") init[p.key] = false
       else init[p.key] = ""
@@ -60,7 +71,7 @@ export default function ReportsPage() {
           .catch(() => {})
       }
     }
-  }, [])
+  }, [currentProperty])
 
   const grouped = useMemo(() => {
     if (!catalog) return []
@@ -68,6 +79,35 @@ export default function ReportsPage() {
       .map((m) => ({ ...m, reports: catalog.reports.filter((r) => r.module === m.module) }))
       .filter((g) => g.reports.length > 0)
   }, [catalog])
+
+  const requestKey = selected ? JSON.stringify({ key: selected.key, values }) : null
+  const previewStale = !!preview && previewFor !== requestKey
+
+  const runPreview = async () => {
+    if (!selected) return
+    setBusy("preview")
+    setError(null)
+    try {
+      const res = await fetch("/api/reports/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: selected.key, format: "json", params: values }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(j.error || "Failed to build the preview.")
+        return
+      }
+      setPreview(j as ReportPreview)
+      setPreviewFor(requestKey)
+      // Bring the preview into view on smaller screens, where it lands below the fold.
+      requestAnimationFrame(() => document.getElementById("report-preview")?.scrollIntoView({ behavior: "smooth", block: "start" }))
+    } catch {
+      setError("Unexpected error building the preview.")
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const generate = async (format: "pdf" | "xlsx" | "csv") => {
     if (!selected) return
@@ -172,13 +212,13 @@ export default function ReportsPage() {
                     {p.type === "dateRange" && (
                       <DateRangePicker
                         value={{
-                          from: values[p.key]?.from ? new Date(values[p.key].from) : undefined,
-                          to: values[p.key]?.to ? new Date(values[p.key].to) : undefined,
+                          from: parseDateKey(values[p.key]?.from),
+                          to: parseDateKey(values[p.key]?.to),
                         }}
                         onChange={(range) =>
                           setVal(p.key, {
-                            from: range?.from ? range.from.toISOString().slice(0, 10) : "",
-                            to: range?.to ? range.to.toISOString().slice(0, 10) : "",
+                            from: range?.from ? toDateKey(range.from) : "",
+                            to: range?.to ? toDateKey(range.to) : "",
                           })
                         }
                       />
@@ -233,7 +273,10 @@ export default function ReportsPage() {
               )}
 
               <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                <Button onClick={() => generate("pdf")} disabled={!!busy}>
+                <Button onClick={runPreview} disabled={!!busy}>
+                  {busy === "preview" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />} Preview
+                </Button>
+                <Button variant="outline" onClick={() => generate("pdf")} disabled={!!busy}>
                   {busy === "pdf" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />} PDF
                 </Button>
                 <Button variant="outline" onClick={() => generate("xlsx")} disabled={!!busy}>
@@ -247,6 +290,37 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {preview && selected && (
+        <section id="report-preview" aria-label="Report preview" className="scroll-mt-4 rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+            <div className="mr-auto min-w-0">
+              <h3 className="truncate text-sm font-semibold">Preview · {preview.result.title}</h3>
+              <p className={previewStale ? "text-xs text-warning" : "text-xs text-muted-foreground"}>
+                {previewStale ? "Parameters changed since this preview — refresh to see the new figures." : "This is exactly what the PDF will contain."}
+              </p>
+            </div>
+            {previewStale && (
+              <Button size="sm" variant="outline" onClick={runPreview} disabled={!!busy}>
+                <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+              </Button>
+            )}
+            <Button size="sm" onClick={() => generate("pdf")} disabled={!!busy}>
+              {busy === "pdf" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <FileText className="w-4 h-4 mr-1.5" />} Download PDF
+            </Button>
+            <Button size="sm" variant="ghost" aria-label="Close preview" onClick={() => { setPreview(null); setPreviewFor(null) }}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          {/* The report is paper: a white sheet on the muted canvas, scrollable both ways
+              so a wide landscape report never squeezes. */}
+          <div className="max-h-[75vh] overflow-auto bg-muted/50 p-3 sm:p-6">
+            <div className={`mx-auto rounded-md bg-white p-6 shadow-sm ring-1 ring-foreground/5 sm:p-10 ${preview.result.columns.length > 6 ? "min-w-[900px] max-w-[1100px]" : "min-w-[640px] max-w-[800px]"}`}>
+              <ReportDocument result={preview.result} branding={preview.branding} />
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

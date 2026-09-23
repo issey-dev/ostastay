@@ -1,5 +1,6 @@
 "use client"
 
+import { todayKey } from "@/lib/date-only"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -43,7 +44,7 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
       timeZone: "UTC",
       checkInTime: "14:00",
       checkOutTime: "11:00",
-      goLiveDate: new Date().toISOString().slice(0, 10),
+      goLiveDate: todayKey(),
     },
   })
 
@@ -59,7 +60,7 @@ export function PropertyForm({ onSuccess, initialData }: { onSuccess?: () => voi
         timeZone: "UTC",
         checkInTime: "14:00",
         checkOutTime: "11:00",
-        goLiveDate: new Date().toISOString().slice(0, 10),
+        goLiveDate: todayKey(),
       })
     }
   }, [initialData, form])

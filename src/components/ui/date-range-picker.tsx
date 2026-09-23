@@ -1,5 +1,6 @@
 "use client"
 
+import { parseDateKey } from "@/lib/date-only"
 import * as React from "react"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "@/components/icons"
@@ -29,6 +30,13 @@ export function DateRangePicker({
   className,
   disabled
 }: DateRangePickerProps) {
+  // Callers often build the value from stored "yyyy-MM-dd" strings via `new Date(...)`,
+  // which is UTC midnight — normalise to local midnight so the highlighted days match.
+  // What goes OUT is the calendar's own local-midnight Dates: callers must serialise
+  // them with toDateKey()/format(), never toISOString() (see src/lib/date-only.ts).
+  const range: DateRange | undefined = value
+    ? { from: parseDateKey(value.from), to: parseDateKey(value.to) }
+    : undefined
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
@@ -39,18 +47,18 @@ export function DateRangePicker({
             disabled={disabled}
             className={cn(
               "w-full justify-start text-left font-normal",
-              !value && "text-muted-foreground"
+              !range?.from && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {value?.from ? (
-              value.to ? (
+            {range?.from ? (
+              range.to ? (
                 <>
-                  {format(value.from, "LLL dd, y")} -{" "}
-                  {format(value.to, "LLL dd, y")}
+                  {format(range.from, "LLL dd, y")} -{" "}
+                  {format(range.to, "LLL dd, y")}
                 </>
               ) : (
-                format(value.from, "LLL dd, y")
+                format(range.from, "LLL dd, y")
               )
             ) : (
               <span>{placeholder}</span>
@@ -61,8 +69,8 @@ export function DateRangePicker({
           <Calendar
             autoFocus
             mode="range"
-            defaultMonth={value?.from}
-            selected={value}
+            defaultMonth={range?.from}
+            selected={range}
             onSelect={onChange}
             numberOfMonths={2}
           />

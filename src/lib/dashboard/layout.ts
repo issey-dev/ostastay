@@ -82,11 +82,17 @@ export type WidgetCatalogEntry = {
 export const LAYOUT_VERSION = 1;
 export const DEFAULT_PAGE_ID = "overview";
 
+/**
+ * A fresh dashboard shows NOTHING: every widget is listed in Customise dashboard but
+ * switched off, and the user turns on the ones their job needs (app-owner decision,
+ * 2026-09-23 — see DECISIONS.md). The catalogue order is kept so a widget lands in a
+ * sensible place when it is switched on.
+ */
 export function defaultLayout(catalog: readonly WidgetCatalogEntry[]): DashboardLayout {
   return {
     version: LAYOUT_VERSION,
     pages: [{ id: DEFAULT_PAGE_ID, name: "Overview" }],
-    widgets: catalog.map((w) => ({ id: w.id, pageId: DEFAULT_PAGE_ID, size: w.defaultSize, hidden: false })),
+    widgets: catalog.map((w) => ({ id: w.id, pageId: DEFAULT_PAGE_ID, size: w.defaultSize, hidden: true })),
   };
 }
 
@@ -96,9 +102,9 @@ export function defaultLayout(catalog: readonly WidgetCatalogEntry[]): Dashboard
  * Four things can be stale by the time a layout is read back, and silently rendering any
  * of them is a broken page rather than a stale preference:
  *   · a widget that no longer ships (dropped)
- *   · a widget that shipped since the layout was saved (appended, visible — a new tile
- *     appearing is the right default; a user who does not want it can hide it, whereas a
- *     new tile that defaults to hidden is invisible and undiscoverable)
+ *   · a widget that shipped since the layout was saved (appended, hidden — like a fresh
+ *     dashboard, nothing appears until the user switches it on; it is listed in Customise
+ *     dashboard so it stays discoverable)
  *   · a widget pointing at a page that has been deleted (moved to the first page)
  *   · no pages at all (one is recreated)
  *
@@ -131,7 +137,7 @@ export function reconcile(stored: DashboardLayout | null, catalog: readonly Widg
 
   for (const entry of catalog) {
     if (seen.has(entry.id)) continue;
-    widgets.push({ id: entry.id, pageId: firstPage, size: entry.defaultSize, hidden: false });
+    widgets.push({ id: entry.id, pageId: firstPage, size: entry.defaultSize, hidden: true });
   }
 
   return { version: LAYOUT_VERSION, pages, widgets };

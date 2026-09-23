@@ -1,5 +1,6 @@
 "use client";
 
+import { toDateKey } from "@/lib/date-only"
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -80,7 +81,7 @@ export function TapeChartGrid() {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `/api/reservations/tape-chart?propertyId=${currentProperty.id}&startDate=${start.toISOString()}&days=${daysToShow}`
+        `/api/reservations/tape-chart?propertyId=${currentProperty.id}&startDate=${toDateKey(start)}&days=${daysToShow}`
       );
       const json = await res.json();
       if (json.success) {
