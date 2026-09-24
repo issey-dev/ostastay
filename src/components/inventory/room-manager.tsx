@@ -1,16 +1,29 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Building2, Map, Pencil, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DoorOpen } from "@/components/icons"
 import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { toast } from "@/lib/toast"
+import {
+  buildingFormSchema,
+  emptyRoomForm,
+  floorFormSchema,
+  readApiError,
+  roomFormSchema,
+  type BuildingFormValues,
+  type FloorFormValues,
+  type RoomFormValues,
+} from "@/lib/inventory-form-schemas"
 import {
   Select,
   SelectContent,
@@ -36,9 +49,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 
+/** Inline server-error line shown above a dialog's buttons. */
+function ServerError({ message }: { message: string | null }) {
+  if (!message) return null
+  return <p role="alert" className="rounded-md bg-destructive-muted p-3 text-sm text-destructive">{message}</p>
+}
+
 // addSignal/hideAddButton: when embedded in FacilitiesManager the Add button lives in
 // the shared tab row. This manager hides its own per-view Add button and opens the
 // dialog for the currently-shown `view` when the parent bumps addSignal.
+//
+// Forms: APP STANDARD 001 (Zod + React Hook Form, inline validation) — schemas in
+// src/lib/inventory-form-schemas.ts. A server refusal on save (duplicate room number,
+// licence cap, inactive room type, ...) is shown inside the dialog; a refused delete (the
+// building/floor/room has reservation or maintenance history) as a toast.
 export function RoomManager({
   propertyId,
   view,
@@ -54,34 +78,48 @@ export function RoomManager({
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  
+  const [saving, setSaving] = useState(false)
+
   const [isBuildingDialogOpen, setIsBuildingDialogOpen] = useState(false)
   const [isFloorDialogOpen, setIsFloorDialogOpen] = useState(false)
   const [isRoomDialogOpen, setIsRoomDialogOpen] = useState(false)
 
   // Building Edit/Delete State
-  const [isBuildingEditMode, setIsBuildingEditMode] = useState(false)
   const [editingBuildingId, setEditingBuildingId] = useState<string | null>(null)
+  const isBuildingEditMode = editingBuildingId !== null
   const [isBuildingDeleteDialogOpen, setIsBuildingDeleteDialogOpen] = useState(false)
   const [deletingBuildingId, setDeletingBuildingId] = useState<string | null>(null)
+  const [buildingError, setBuildingError] = useState<string | null>(null)
 
   // Floor Edit/Delete State
-  const [isFloorEditMode, setIsFloorEditMode] = useState(false)
   const [editingFloorId, setEditingFloorId] = useState<string | null>(null)
+  const isFloorEditMode = editingFloorId !== null
   const [isFloorDeleteDialogOpen, setIsFloorDeleteDialogOpen] = useState(false)
   const [deletingFloorId, setDeletingFloorId] = useState<string | null>(null)
+  const [floorError, setFloorError] = useState<string | null>(null)
 
-
-  // Form states
-  const [buildingName, setBuildingName] = useState("")
-  const [floorData, setFloorData] = useState({ name: "", buildingId: "" })
-  const [roomData, setRoomData] = useState({ roomNumber: "", buildingId: "", floorId: "", roomTypeId: "", features: [] as RoomFeature[] })
-
-  const [isRoomEditMode, setIsRoomEditMode] = useState(false)
+  // Room Edit/Delete State
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
-
+  const isRoomEditMode = editingRoomId !== null
   const [isRoomDeleteDialogOpen, setIsRoomDeleteDialogOpen] = useState(false)
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
+  const [roomError, setRoomError] = useState<string | null>(null)
+
+  const buildingForm = useForm<BuildingFormValues>({
+    resolver: zodResolver(buildingFormSchema),
+    mode: "onChange",
+    defaultValues: { name: "" },
+  })
+  const floorForm = useForm<FloorFormValues>({
+    resolver: zodResolver(floorFormSchema),
+    mode: "onChange",
+    defaultValues: { name: "", buildingId: "" },
+  })
+  const roomForm = useForm<RoomFormValues>({
+    resolver: zodResolver(roomFormSchema),
+    mode: "onChange",
+    defaultValues: emptyRoomForm,
+  })
 
   const fetchData = async () => {
     setLoading(true)
@@ -91,16 +129,16 @@ export function RoomManager({
         fetch(`/api/room-types?propertyId=${propertyId}`),
         fetch(`/api/rooms?propertyId=${propertyId}`)
       ])
-      
+
       const bData = await buildingsRes.json()
       const rtData = await roomTypesRes.json()
       const rData = await roomsRes.json()
-      
+
       if (Array.isArray(bData)) setBuildings(bData)
       if (Array.isArray(rtData)) setRoomTypes(rtData)
       if (Array.isArray(rData)) setRooms(rData)
-    } catch (e) {
-      console.error(e)
+    } catch {
+      toast.error("Could not load rooms and buildings")
     } finally {
       setLoading(false)
     }
@@ -108,45 +146,79 @@ export function RoomManager({
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleCreateBuilding = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const url = isBuildingEditMode ? `/api/buildings/${editingBuildingId}` : "/api/buildings"
-    const method = isBuildingEditMode ? "PUT" : "POST"
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ propertyId, name: buildingName })
-    })
-    if (res.ok) {
-      resetBuildingForm()
-      setIsBuildingDialogOpen(false)
-      fetchData()
+  /** POST/PUT a form; returns the error message, or null on success. */
+  const save = async (url: string, method: "POST" | "PUT", body: unknown, fallback: string): Promise<string | null> => {
+    setSaving(true)
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) return null
+      return await readApiError(res, fallback)
+    } catch {
+      return "Could not reach the server — please try again."
+    } finally {
+      setSaving(false)
     }
+  }
+
+  /** DELETE; a refusal (e.g. history exists → 409) is shown as a toast. */
+  const remove = async (url: string, what: string): Promise<boolean> => {
+    setSaving(true)
+    try {
+      const res = await fetch(url, { method: "DELETE" })
+      if (res.ok) {
+        toast.success(`${what} deleted`)
+        fetchData()
+        return true
+      }
+      toast.error(await readApiError(res, `Could not delete the ${what.toLowerCase()}`))
+      return false
+    } catch {
+      toast.error("Could not reach the server — please try again.")
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ---- Buildings ----
+  const onSubmitBuilding = async (values: BuildingFormValues) => {
+    setBuildingError(null)
+    const error = await save(
+      isBuildingEditMode ? `/api/buildings/${editingBuildingId}` : "/api/buildings",
+      isBuildingEditMode ? "PUT" : "POST",
+      { propertyId, name: values.name },
+      "Could not save the building"
+    )
+    if (error) return setBuildingError(error)
+    toast.success(isBuildingEditMode ? "Building saved" : "Building added")
+    resetBuildingForm()
+    setIsBuildingDialogOpen(false)
+    fetchData()
   }
 
   const handleDeleteBuilding = async () => {
     if (!deletingBuildingId) return
-    const res = await fetch(`/api/buildings/${deletingBuildingId}`, { method: "DELETE" })
-    if (res.ok) {
-      setIsBuildingDeleteDialogOpen(false)
-      setDeletingBuildingId(null)
-      fetchData()
-    }
+    await remove(`/api/buildings/${deletingBuildingId}`, "Building")
+    setIsBuildingDeleteDialogOpen(false)
+    setDeletingBuildingId(null)
   }
 
   const resetBuildingForm = () => {
-    setBuildingName("")
-    setIsBuildingEditMode(false)
+    buildingForm.reset({ name: "" })
     setEditingBuildingId(null)
+    setBuildingError(null)
   }
 
   const openBuildingEdit = (building: any) => {
-    setBuildingName(building.name)
-    setIsBuildingEditMode(true)
+    buildingForm.reset({ name: building.name })
+    setBuildingError(null)
     setEditingBuildingId(building.id)
     setIsBuildingDialogOpen(true)
   }
@@ -156,43 +228,38 @@ export function RoomManager({
     setIsBuildingDeleteDialogOpen(true)
   }
 
-  const handleCreateFloor = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const url = isFloorEditMode ? `/api/floors/${editingFloorId}` : "/api/floors"
-    const method = isFloorEditMode ? "PUT" : "POST"
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...floorData, propertyId })
-    })
-    if (res.ok) {
-      resetFloorForm()
-      setIsFloorDialogOpen(false)
-      fetchData()
-    }
+  // ---- Floors ----
+  const onSubmitFloor = async (values: FloorFormValues) => {
+    setFloorError(null)
+    const error = await save(
+      isFloorEditMode ? `/api/floors/${editingFloorId}` : "/api/floors",
+      isFloorEditMode ? "PUT" : "POST",
+      { ...values, propertyId },
+      "Could not save the floor"
+    )
+    if (error) return setFloorError(error)
+    toast.success(isFloorEditMode ? "Floor saved" : "Floor added")
+    resetFloorForm()
+    setIsFloorDialogOpen(false)
+    fetchData()
   }
 
   const handleDeleteFloor = async () => {
     if (!deletingFloorId) return
-    const res = await fetch(`/api/floors/${deletingFloorId}`, { method: "DELETE" })
-    if (res.ok) {
-      setIsFloorDeleteDialogOpen(false)
-      setDeletingFloorId(null)
-      fetchData()
-    }
+    await remove(`/api/floors/${deletingFloorId}`, "Floor")
+    setIsFloorDeleteDialogOpen(false)
+    setDeletingFloorId(null)
   }
 
   const resetFloorForm = () => {
-    setFloorData({ name: "", buildingId: "" })
-    setIsFloorEditMode(false)
+    floorForm.reset({ name: "", buildingId: "" })
     setEditingFloorId(null)
+    setFloorError(null)
   }
 
   const openFloorEdit = (floor: any) => {
-    setFloorData({ name: floor.name, buildingId: floor.buildingId })
-    setIsFloorEditMode(true)
+    floorForm.reset({ name: floor.name, buildingId: floor.buildingId })
+    setFloorError(null)
     setEditingFloorId(floor.id)
     setIsFloorDialogOpen(true)
   }
@@ -202,60 +269,64 @@ export function RoomManager({
     setIsFloorDeleteDialogOpen(true)
   }
 
-  const selectedRoomRoomType = roomTypes.find(rt => rt.id === roomData.roomTypeId)
+  // ---- Rooms ----
+  const roomTypeId = roomForm.watch("roomTypeId")
+  const roomBuildingId = roomForm.watch("buildingId")
+  const selectedRoomRoomType = roomTypes.find(rt => rt.id === roomTypeId)
   const isPseudoRoom = !!selectedRoomRoomType?.isPseudo
   const inheritedFeatures: RoomFeature[] = selectedRoomRoomType?.features || []
 
-  const handleCreateRoom = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const url = isRoomEditMode ? `/api/rooms/${editingRoomId}` : "/api/rooms"
-    const method = isRoomEditMode ? "PUT" : "POST"
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  const onSubmitRoom = async (values: RoomFormValues) => {
+    setRoomError(null)
+    const error = await save(
+      isRoomEditMode ? `/api/rooms/${editingRoomId}` : "/api/rooms",
+      isRoomEditMode ? "PUT" : "POST",
+      {
         propertyId,
-        roomNumber: roomData.roomNumber,
-        roomTypeId: roomData.roomTypeId,
-        floorId: isPseudoRoom ? null : roomData.floorId,
-        features: isPseudoRoom ? [] : roomData.features,
-      })
-    })
-    if (res.ok) {
-      resetRoomForm()
-      setIsRoomDialogOpen(false)
-      fetchData()
+        roomNumber: values.roomNumber,
+        roomTypeId: values.roomTypeId,
+        floorId: values.isPseudo ? null : values.floorId,
+        features: values.isPseudo ? [] : values.features,
+      },
+      "Could not save the room"
+    )
+    if (error) {
+      // A duplicate number belongs next to the Room Number field.
+      if (/already exists/i.test(error)) roomForm.setError("roomNumber", { type: "server", message: error })
+      else setRoomError(error)
+      return
     }
+    toast.success(isRoomEditMode ? "Room saved" : "Room added")
+    resetRoomForm()
+    setIsRoomDialogOpen(false)
+    fetchData()
   }
 
   const handleDeleteRoom = async () => {
     if (!deletingRoomId) return
-    const res = await fetch(`/api/rooms/${deletingRoomId}`, { method: "DELETE" })
-    if (res.ok) {
-      setIsRoomDeleteDialogOpen(false)
-      setDeletingRoomId(null)
-      fetchData()
-    }
+    await remove(`/api/rooms/${deletingRoomId}`, "Room")
+    setIsRoomDeleteDialogOpen(false)
+    setDeletingRoomId(null)
   }
 
   const resetRoomForm = () => {
-    setRoomData({ roomNumber: "", buildingId: "", floorId: "", roomTypeId: "", features: [] })
-    setIsRoomEditMode(false)
+    roomForm.reset(emptyRoomForm)
     setEditingRoomId(null)
+    setRoomError(null)
   }
 
   const openRoomEdit = (room: any) => {
     const floor = allFloors.find(f => f.id === room.floorId)
-    setRoomData({
+    const type = roomTypes.find(rt => rt.id === room.roomTypeId)
+    roomForm.reset({
       roomNumber: room.roomNumber,
+      roomTypeId: room.roomTypeId || "",
+      isPseudo: !!type?.isPseudo,
       buildingId: floor?.buildingId || "",
       floorId: room.floorId || "",
-      roomTypeId: room.roomTypeId || "",
       features: (room.features || []).map((f: any) => ({ category: f.category, code: f.code })),
     })
-    setIsRoomEditMode(true)
+    setRoomError(null)
     setEditingRoomId(room.id)
     setIsRoomDialogOpen(true)
   }
@@ -269,9 +340,14 @@ export function RoomManager({
   // existing floor by id, regardless of which building it belongs to)
   const allFloors = buildings.flatMap(b => b.floors || [])
   // The Floor select is dependent on which Building is selected — only that building's own floors
-  const floorsForSelectedBuilding: any[] = buildings.find(b => b.id === roomData.buildingId)?.floors || []
+  const floorsForSelectedBuilding: any[] = buildings.find(b => b.id === roomBuildingId)?.floors || []
   const { options: featureOptions } = useRoomFeatureOptions(propertyId)
   const featureLabel = (f: RoomFeature) => featureOptions.find(o => o.category === f.category && o.code === f.code)?.value || f.code
+
+  // A new room can't go on an inactive room type (the API refuses it too); an existing
+  // room keeps its current type in the list even if that type has since been deactivated.
+  const currentRoomTypeId = isRoomEditMode ? rooms.find(r => r.id === editingRoomId)?.roomTypeId : undefined
+  const selectableRoomTypes = roomTypes.filter(rt => rt.isActive || rt.id === currentRoomTypeId)
 
   // Open this view's Add dialog when FacilitiesManager's shared Add button fires. Compare
   // the signal's VALUE against the last-seen one rather than a "first run" flag — a flag
@@ -301,7 +377,7 @@ export function RoomManager({
       {!hideAddButton && (
         <ControlsSectionHeader
           action={
-            <Button onClick={() => setIsBuildingDialogOpen(true)} className="shadow-sm">
+            <Button onClick={() => { resetBuildingForm(); setIsBuildingDialogOpen(true) }} className="shadow-sm">
               <Building2 className="mr-2 h-4 w-4" /> Add Building
             </Button>
           }
@@ -312,17 +388,25 @@ export function RoomManager({
           if (!open) resetBuildingForm()
         }}>
             <DialogContent>
-              <form onSubmit={handleCreateBuilding}>
+              <Form {...buildingForm}>
+              <form onSubmit={buildingForm.handleSubmit(onSubmitBuilding)} noValidate>
                 <DialogHeader><DialogTitle>{isBuildingEditMode ? "Edit Building" : "Add Building"}</DialogTitle></DialogHeader>
-                <div className="py-4">
-                  <Label>Building Name</Label>
-                  <Input value={buildingName} onChange={e => setBuildingName(e.target.value)} placeholder="e.g. Main Tower" required />
+                <div className="py-4 space-y-4">
+                  <FormField control={buildingForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Building Name *</FormLabel>
+                      <FormControl><Input placeholder="e.g. Main Tower" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <ServerError message={buildingError} />
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsBuildingDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">Save</Button>
+                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
                 </DialogFooter>
               </form>
+              </Form>
             </DialogContent>
           </Dialog>
 
@@ -332,12 +416,12 @@ export function RoomManager({
           <DialogHeader>
             <DialogTitle>Delete Building</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building.
+              Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building. If any of those rooms has reservation or maintenance history, the delete is refused.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={() => setIsBuildingDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteBuilding}>Delete Permanently</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteBuilding} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -419,7 +503,7 @@ export function RoomManager({
       {!hideAddButton && (
         <ControlsSectionHeader
           action={
-            <Button onClick={() => setIsFloorDialogOpen(true)} className="shadow-sm">
+            <Button onClick={() => { resetFloorForm(); setIsFloorDialogOpen(true) }} className="shadow-sm">
               <Map className="mr-2 h-4 w-4" /> Add Floor
             </Button>
           }
@@ -430,32 +514,46 @@ export function RoomManager({
           if (!open) resetFloorForm()
         }}>
             <DialogContent>
-              <form onSubmit={handleCreateFloor}>
+              <Form {...floorForm}>
+              <form onSubmit={floorForm.handleSubmit(onSubmitFloor)} noValidate>
                 <DialogHeader><DialogTitle>{isFloorEditMode ? "Edit Floor" : "Add Floor"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label>Select Building</Label>
-                    <Select value={floorData.buildingId} onValueChange={(v) => setFloorData({...floorData, buildingId: v ?? ""})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Building">
-                          {floorData.buildingId ? buildings.find(b => b.id === floorData.buildingId)?.name : "Select Building"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Floor Name/Number</Label>
-                    <Input value={floorData.name} onChange={e => setFloorData({...floorData, name: e.target.value})} placeholder="e.g. 1st Floor" required />
-                  </div>
+                  <FormField control={floorForm.control} name="buildingId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Building *</FormLabel>
+                      <Select value={field.value} onValueChange={(v) => field.onChange(v ?? "")}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Building">
+                              {field.value ? buildings.find(b => b.id === field.value)?.name : "Select Building"}
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {buildings.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Add a building first (Buildings tab).</p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={floorForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Floor Name/Number *</FormLabel>
+                      <FormControl><Input placeholder="e.g. 1st Floor" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <ServerError message={floorError} />
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsFloorDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">Save</Button>
+                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
                 </DialogFooter>
               </form>
+              </Form>
             </DialogContent>
           </Dialog>
 
@@ -465,12 +563,12 @@ export function RoomManager({
           <DialogHeader>
             <DialogTitle>Delete Floor</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this floor? This will permanently delete all rooms on this floor.
+              Are you sure you want to delete this floor? This will permanently delete all rooms on this floor. If any of them has reservation or maintenance history, the delete is refused.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={() => setIsFloorDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteFloor}>Delete Permanently</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteFloor} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -560,7 +658,7 @@ export function RoomManager({
       {!hideAddButton && (
         <ControlsSectionHeader
           action={
-            <Button onClick={() => setIsRoomDialogOpen(true)} className="shadow-sm">
+            <Button onClick={() => { resetRoomForm(); setIsRoomDialogOpen(true) }} className="shadow-sm">
               <Plus className="mr-2 h-4 w-4" /> Add Room
             </Button>
           }
@@ -571,29 +669,51 @@ export function RoomManager({
           if (!open) resetRoomForm()
         }}>
             <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
-              <form onSubmit={handleCreateRoom}>
+              <Form {...roomForm}>
+              <form onSubmit={roomForm.handleSubmit(onSubmitRoom)} noValidate>
                 <DialogHeader><DialogTitle>{isRoomEditMode ? "Edit Room" : "Create Room"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label>Room Number / Name</Label>
-                    <Input value={roomData.roomNumber} onChange={e => setRoomData({...roomData, roomNumber: e.target.value})} placeholder="e.g. 101" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Room Type</Label>
-                    <Select
-                      value={roomData.roomTypeId}
-                      onValueChange={(v) => setRoomData({...roomData, roomTypeId: v ?? "", buildingId: "", floorId: "", features: []})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Type">
-                          {roomData.roomTypeId ? roomTypes.find(rt => rt.id === roomData.roomTypeId)?.name : "Select Type"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roomTypes.map(rt => <SelectItem key={rt.id} value={rt.id}>{rt.name}{rt.isPseudo ? " (Pseudo)" : ""}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <FormField control={roomForm.control} name="roomNumber" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Room Number / Name *</FormLabel>
+                      <FormControl><Input placeholder="e.g. 101" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={roomForm.control} name="roomTypeId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Room Type *</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          const next = roomTypes.find(rt => rt.id === v)
+                          field.onChange(v ?? "")
+                          // Changing the type clears the location/features picked for the old one.
+                          roomForm.setValue("isPseudo", !!next?.isPseudo)
+                          roomForm.setValue("buildingId", "")
+                          roomForm.setValue("floorId", "")
+                          roomForm.setValue("features", [])
+                          roomForm.clearErrors(["buildingId", "floorId"])
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Type">
+                              {field.value ? roomTypes.find(rt => rt.id === field.value)?.name : "Select Type"}
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {selectableRoomTypes.map(rt => (
+                            <SelectItem key={rt.id} value={rt.id}>
+                              {rt.name}{rt.isPseudo ? " (Pseudo)" : ""}{!rt.isActive ? " (Inactive)" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
 
                   {isPseudoRoom ? (
                     <p className="text-xs text-muted-foreground rounded-md border border-border p-3">
@@ -602,39 +722,52 @@ export function RoomManager({
                   ) : (
                     <>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Building</Label>
-                          <Select
-                            value={roomData.buildingId}
-                            onValueChange={(v) => setRoomData({...roomData, buildingId: v ?? "", floorId: ""})}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Building">
-                                {roomData.buildingId ? buildings.find(b => b.id === roomData.buildingId)?.name : "Select Building"}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Floor</Label>
-                          <Select
-                            value={roomData.floorId}
-                            onValueChange={(v) => setRoomData({...roomData, floorId: v ?? ""})}
-                            disabled={!roomData.buildingId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={roomData.buildingId ? "Select Floor" : "Select a building first"}>
-                                {roomData.floorId ? floorsForSelectedBuilding.find(f => f.id === roomData.floorId)?.name : undefined}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {floorsForSelectedBuilding.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <FormField control={roomForm.control} name="buildingId" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Building *</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={(v) => {
+                                field.onChange(v ?? "")
+                                roomForm.setValue("floorId", "", { shouldValidate: roomForm.formState.isSubmitted })
+                              }}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select Building">
+                                    {field.value ? buildings.find(b => b.id === field.value)?.name : "Select Building"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {buildings.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={roomForm.control} name="floorId" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Floor *</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={(v) => field.onChange(v ?? "")}
+                              disabled={!roomBuildingId}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={roomBuildingId ? "Select Floor" : "Select a building first"}>
+                                    {field.value ? floorsForSelectedBuilding.find(f => f.id === field.value)?.name : undefined}
+                                  </SelectValue>
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {floorsForSelectedBuilding.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
                       </div>
 
                       <div className="border-t border-border pt-4">
@@ -652,21 +785,25 @@ export function RoomManager({
                           </div>
                         )}
                         <p className="text-xs text-muted-foreground mb-2">Additional features specific to this room:</p>
-                        <RoomFeaturePicker
-                          propertyId={propertyId}
-                          selected={roomData.features}
-                          onChange={(next) => setRoomData({ ...roomData, features: next })}
-                          excluded={inheritedFeatures}
-                        />
+                        <FormField control={roomForm.control} name="features" render={({ field }) => (
+                          <RoomFeaturePicker
+                            propertyId={propertyId}
+                            selected={field.value}
+                            onChange={(next) => field.onChange(next)}
+                            excluded={inheritedFeatures}
+                          />
+                        )} />
                       </div>
                     </>
                   )}
+                  <ServerError message={roomError} />
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsRoomDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">Save</Button>
+                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
                 </DialogFooter>
               </form>
+              </Form>
             </DialogContent>
           </Dialog>
 
@@ -676,12 +813,12 @@ export function RoomManager({
           <DialogHeader>
             <DialogTitle>Delete Room</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this room? This action cannot be undone.
+              Are you sure you want to delete this room? This action cannot be undone. A room with reservation or maintenance history can&apos;t be deleted — set it Out of Service instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={() => setIsRoomDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteRoom}>Delete Permanently</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteRoom} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

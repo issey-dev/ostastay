@@ -11,7 +11,7 @@ import { ModuleOutletPicker } from "@/components/controls/module-outlet-picker"
 // This property's own chart of accounts (per property since 2026-09-23 — each property
 // keeps its own groups, subgroups and codes; .agents/docs/HUB_SETUP_PLAN.md, Phase 2).
 export default async function HubPropertyChargeCodesPage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
-  const { ctx, property, item, canEdit } = await propertyPage(params, "cashiering")
+  const { ctx, property, item, canEdit } = await propertyPage(params, "charge-codes")
   const addons = await loadHubAddons(ctx.enterpriseId)
   return (
     <div className="space-y-6">

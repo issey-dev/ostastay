@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { isUniqueViolation } from "@/lib/revenue-usage";
 
 export async function GET(request: Request) {
   try {
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     const mealPlan = await prisma.mealPlan.create({
       data: {
         propertyId: body.propertyId,
-        code: body.code.toUpperCase(),
+        code: String(body.code).trim().toUpperCase(),
         name: body.name,
         isActive: body.isActive !== undefined ? !!body.isActive : true,
         allocationLinks: allocationIds.length > 0
@@ -84,9 +85,9 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(mealPlan, { status: 201 });
-  } catch (error: any) {
-    if (error.code === "P2002") {
-      return NextResponse.json({ error: "A meal plan with this code already exists for this property" }, { status: 400 });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "A meal plan with this code already exists for this property" }, { status: 409 });
     }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

@@ -46,10 +46,7 @@ export default function Email() {
         </li>
       </ol>
       <Callout title="Always test after saving" tone="warn">
-        <p>
-          The test uses the <em>saved</em> settings. After any change, save first, then test. If a test fails, reload the page to
-          check your changes were actually saved.
-        </p>
+        <p>The test uses the <em>saved</em> settings. After any change, save first, then test.</p>
       </Callout>
 
       <H2>SFTP (file transfer)</H2>

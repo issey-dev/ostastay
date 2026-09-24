@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks } from "@/components/icons"
+import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks, RotateCcw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { toast } from "@/lib/toast"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -89,16 +91,25 @@ export function DropdownsManager({
   const [editValue, setEditValue] = useState("")
   const [form, setForm] = useState({ code: "", value: "" })
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  // Deleting an option only switches it off (records already using it keep resolving).
+  // The manager always loads the switched-off rows too, and this toggle lists them with a
+  // Restore action — before, a deleted option vanished for good and its code could never
+  // be added again.
+  const [showDeleted, setShowDeleted] = useState(false)
 
   const fetchCodes = useCallback(() => {
     setLoading(true)
-    fetch(systemCodesUrl(category, propertyId))
+    fetch(`${systemCodesUrl(category, propertyId)}&includeInactive=1`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCodes(data)
       })
       .finally(() => setLoading(false))
   }, [category, propertyId])
+
+  // The live list (what every dropdown shows, and what the arrows reorder) and the deleted one.
+  const activeCodes = codes.filter(c => c.isActive)
+  const deletedCodes = codes.filter(c => !c.isActive)
 
   useEffect(() => {
     fetchCodes()
@@ -113,14 +124,19 @@ export function DropdownsManager({
       const res = await fetch("/api/settings/system-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, category, propertyId, sortOrder: codes.length + 1 })
+        body: JSON.stringify({ ...form, category, propertyId, sortOrder: activeCodes.length + 1 })
       })
 
       if (res.ok) {
+        const saved = await res.json().catch(() => null)
         setForm({ code: "", value: "" })
         invalidateSystemCodeCache(category)
         fetchCodes()
-        setFeedback({ message: "Code added successfully", type: "success" })
+        // Re-adding a deleted code brings that option back rather than failing.
+        setFeedback({
+          message: saved?.restored ? `Restored deleted option ${saved.code}` : "Code added successfully",
+          type: "success",
+        })
         setTimeout(() => setFeedback(null), 4000)
       } else {
         const error = await res.json()
@@ -136,21 +152,29 @@ export function DropdownsManager({
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const setActive = async (id: string, isActive: boolean, extra: { sortOrder?: number } = {}) => {
     try {
       const res = await fetch("/api/settings/system-codes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, isActive: false })
+        body: JSON.stringify({ id, isActive, ...extra })
       })
       if (res.ok) {
         invalidateSystemCodeCache(category)
         fetchCodes()
+        if (isActive) toast.success("Option restored")
+      } else {
+        const body = await res.json().catch(() => null)
+        toast.error(body?.error || (isActive ? "Could not restore the option" : "Could not delete the option"))
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
+      toast.error("Could not reach the server — please try again.")
     }
   }
+  const handleDelete = (id: string) => setActive(id, false)
+  // A restored option goes to the end of the live list.
+  const handleRestore = (id: string) =>
+    setActive(id, true, { sortOrder: activeCodes.reduce((m, c) => Math.max(m, c.sortOrder), 0) + 1 })
 
   const handleInlineEdit = async (id: string) => {
     if (!editValue.trim()) return
@@ -164,28 +188,36 @@ export function DropdownsManager({
         setEditingId(null)
         invalidateSystemCodeCache(category)
         fetchCodes()
+      } else {
+        const body = await res.json().catch(() => null)
+        toast.error(body?.error || "Could not save the option")
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
+      toast.error("Could not reach the server — please try again.")
     }
   }
 
+  // Reorders the LIVE list only — deleted options keep whatever order they had.
   const reorder = async (index: number, direction: "up" | "down") => {
     const swapIndex = direction === "up" ? index - 1 : index + 1
-    if (swapIndex < 0 || swapIndex >= codes.length) return
+    if (swapIndex < 0 || swapIndex >= activeCodes.length) return
 
-    const newCodes = [...codes]
+    const newCodes = activeCodes.map(c => ({ ...c }))
     const tempSort = newCodes[index].sortOrder
     newCodes[index].sortOrder = newCodes[swapIndex].sortOrder
     newCodes[swapIndex].sortOrder = tempSort
     newCodes.sort((a, b) => a.sortOrder - b.sortOrder)
-    setCodes(newCodes)
+    setCodes([...newCodes, ...deletedCodes])
 
-    await fetch("/api/settings/system-codes", {
+    const res = await fetch("/api/settings/system-codes", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newCodes.map(c => ({ id: c.id, sortOrder: c.sortOrder, isActive: c.isActive, value: c.value })))
-    })
+    }).catch(() => null)
+    if (!res?.ok) {
+      toast.error("Could not save the new order")
+      fetchCodes()
+    }
     invalidateSystemCodeCache(category)
   }
 
@@ -250,6 +282,14 @@ export function DropdownsManager({
         <ControlsSectionHeader
           title={`Current ${currentCategoryLabel} Options`}
           description="Use the arrows to reorder — that order is the dropdown order throughout the system."
+          action={
+            <div className="flex items-center gap-2">
+              <Switch id="show-deleted-options" checked={showDeleted} onCheckedChange={(v) => setShowDeleted(!!v)} />
+              <Label htmlFor="show-deleted-options" className="text-sm font-normal text-muted-foreground">
+                Show deleted{deletedCodes.length > 0 ? ` (${deletedCodes.length})` : ""}
+              </Label>
+            </div>
+          }
         />
         <ControlsSectionBody>
           {/* Phone — reorderable card stack. Table below takes over at md. */}
@@ -260,7 +300,7 @@ export function DropdownsManager({
                   <Skeleton key={i} className="h-20 w-full rounded-lg" />
                 ))}
               </div>
-            ) : codes.length === 0 ? (
+            ) : activeCodes.length === 0 ? (
               <EmptyState
                 icon={ListChecks}
                 title={`No items found for ${currentCategoryLabel}`}
@@ -268,7 +308,7 @@ export function DropdownsManager({
               />
             ) : (
               <div className="space-y-3">
-                {codes.map((c, i) => (
+                {activeCodes.map((c, i) => (
                   <div key={c.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -332,7 +372,7 @@ export function DropdownsManager({
                       <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === 0} onClick={() => reorder(i, "up")}>
                         <ChevronUp className="w-3.5 h-3.5 mr-1.5" /> Move up
                       </Button>
-                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === codes.length - 1} onClick={() => reorder(i, "down")}>
+                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === activeCodes.length - 1} onClick={() => reorder(i, "down")}>
                         <ChevronDown className="w-3.5 h-3.5 mr-1.5" /> Move down
                       </Button>
                     </div>
@@ -357,7 +397,7 @@ export function DropdownsManager({
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                 ))
-              ) : codes.length === 0 ? (
+              ) : activeCodes.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="py-0">
                     <EmptyState
@@ -368,7 +408,7 @@ export function DropdownsManager({
                   </TableCell>
                 </TableRow>
               ) : (
-                codes.map((c, i) => (
+                activeCodes.map((c, i) => (
                   <TableRow key={c.id}>
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
@@ -383,7 +423,7 @@ export function DropdownsManager({
                         <button
                           type="button"
                           onClick={() => reorder(i, "down")}
-                          disabled={i === codes.length - 1}
+                          disabled={i === activeCodes.length - 1}
                           className="p-0.5 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
@@ -456,6 +496,34 @@ export function DropdownsManager({
           </div>
         </ControlsSectionBody>
       </div>
+
+      {showDeleted && (
+        <div>
+          <ControlsSectionHeader
+            title={`Deleted ${currentCategoryLabel} Options`}
+            description="Hidden from every dropdown. Restore one to put it back at the end of the list (adding its code again above does the same)."
+          />
+          <ControlsSectionBody>
+            {deletedCodes.length === 0 ? (
+              <EmptyState icon={ListChecks} title="No deleted options" description={`Nothing has been deleted from ${currentCategoryLabel}.`} />
+            ) : (
+              <div className="divide-y divide-border">
+                {deletedCodes.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">{c.code}</p>
+                      <p className="truncate text-sm font-medium text-muted-foreground line-through">{c.value}</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => handleRestore(c.id)}>
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ControlsSectionBody>
+        </div>
+      )}
     </div>
   )
 }

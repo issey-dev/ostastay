@@ -156,7 +156,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading stationary configuration...</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading stationery settings...</div>
   }
 
   // Branding for the preview: the current property (name/logo/colour/font/contact/address),
@@ -356,7 +356,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
           <TabsContent value="statement" className="mt-5 space-y-5">
             <div className="flex items-start gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>The full statement layout will be finalised once you share its template. For now you can set its footer and terms; the preview uses the interim layout.</p>
+              <p>Set the footer and terms printed on account statements. The preview shows the current statement layout.</p>
             </div>
             <div className="space-y-2">
               <Label>Footer Text / Greeting</Label>
@@ -375,7 +375,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
           </Button>
           <Button type="submit" disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving..." : "Save Stationary Settings"}
+            {saving ? "Saving..." : "Save Stationery Settings"}
           </Button>
         </div>
       </form>

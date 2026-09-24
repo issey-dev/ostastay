@@ -100,6 +100,17 @@ export async function PATCH(request: Request) {
     if (typeof body.smtpPassword === "string" && body.smtpPassword) body.smtpPassword = encryptSecret(body.smtpPassword);
     if (typeof body.sftpPassword === "string" && body.sftpPassword) body.sftpPassword = encryptSecret(body.sftpPassword);
 
+    // A port that isn't a whole number 1–65535 is refused with a readable message; it used
+    // to reach the DB as NaN and come back as a bare 500, which the form showed as "Saved".
+    for (const key of ["smtpPort", "sftpPort"] as const) {
+      const value = body[key];
+      if (value === undefined || value === null || value === "") continue;
+      const port = Number(value);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return NextResponse.json({ error: `${key === "smtpPort" ? "SMTP" : "SFTP"} port must be a whole number from 1 to 65535` }, { status: 400 });
+      }
+    }
+
     const allowed: readonly string[] = ctx.isInternal ? [...TRANSFER_FIELDS, ...OSTA_DOCUMENT_FIELDS] : TRANSFER_FIELDS;
     const data: Record<string, unknown> = {};
     for (const key of allowed) {

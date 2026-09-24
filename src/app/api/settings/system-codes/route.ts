@@ -90,6 +90,37 @@ export async function POST(request: Request) {
     }
     await authorizeWrite(ctx, propertyId, 'create')
 
+    // Deleting an option only switches it off (isActive false) so records that already
+    // use the code keep resolving — but the code stays taken in the unique index. Adding
+    // the same code again therefore RESTORES that row (with the label just typed) rather
+    // than failing on the index; only a code that is still active is a real duplicate.
+    const sameCode = await prisma.systemCode.findFirst({
+      where: propertyId
+        ? { propertyId, category, code }
+        : { enterpriseId: ctx.enterpriseId, propertyId: null, category, code },
+    })
+    if (sameCode?.isActive) {
+      return NextResponse.json(
+        { error: `Code ${code} is already in this list ("${sameCode.value}")` },
+        { status: 400 }
+      )
+    }
+    if (sameCode) {
+      const restored = await prisma.systemCode.update({
+        where: { id: sameCode.id },
+        data: { isActive: true, value, sortOrder: sortOrder || sameCode.sortOrder },
+      })
+      await logActivity({
+        ctx,
+        module: 'CONTROLS',
+        action: 'UPDATE',
+        entityType: 'SystemCode',
+        entityId: restored.id,
+        description: `Restored deleted system code ${restored.code} ("${restored.value}") in ${restored.category}`,
+      })
+      return NextResponse.json({ ...restored, restored: true })
+    }
+
     const newCode = await prisma.systemCode.create({
       data: {
         enterpriseId: ctx.enterpriseId,

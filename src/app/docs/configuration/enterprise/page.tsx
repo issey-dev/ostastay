@@ -54,6 +54,7 @@ export default function EnterpriseSetup() {
         <li>
           <strong>Time zone</strong>: the scheduled night audit, business-day rollover and timestamps all follow it.
         </li>
+        <li>Both are fixed once a property is active.</li>
         <li>
           <strong>Go-live date</strong>: this becomes the property&apos;s first business date. You can still move it on the Night Audit
           page until the property records its first activity.
@@ -72,18 +73,20 @@ export default function EnterpriseSetup() {
           ["Property Name", "At least 2 characters."],
           ["Short Code", "2–5 characters, unique across Uppsolut Stay. Choose it carefully: it prefixes booking numbers."],
           ["Legal Entity Name", "The company name printed on invoices."],
+          ["Currency", "3 letters, e.g. USD. Every price and posting at the property is in it."],
+          ["Time zone", "Where the property is, e.g. Indian/Maldives. Night audit and the business day follow it."],
           ["Check-in / Check-out Time", "HH:MM, 24-hour. Defaults 14:00 and 11:00."],
           ["Go-live date", "The property's first business date."],
           ["This property offers: Spa / Excursions", "Only if your enterprise has these add-ons. A property without a spa gets no spa charge codes."],
         ]}
       />
-      <p>Choose <strong>Create Property</strong>. The new property is <strong>PENDING</strong> until Uppsolut approves it, and it can&apos;t be configured until then.</p>
-      <Callout title="Tell Uppsolut the currency and time zone" tone="warn">
-        <p>
-          This form does not ask for currency or time zone. When you request approval, tell Uppsolut which ones the property uses, so
-          they are set before you start. Your licence also limits how many properties you can have. If the form will not save, you
-          may have reached that limit, so contact Uppsolut.
-        </p>
+      <p>
+        Choose <strong>Create Property</strong>. The new property is <strong>PENDING</strong> until Uppsolut approves it, and it
+        can&apos;t be configured until then. While it is pending you can still edit it, including its currency and time zone; once it
+        is active, those two are fixed.
+      </p>
+      <Callout title="Property limit" tone="warn">
+        <p>Your licence limits how many properties you can have. If the form says the limit is reached, contact Uppsolut.</p>
       </Callout>
       <p>
         Once approved, pick the property from the switcher on any property page and follow the{" "}

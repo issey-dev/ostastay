@@ -146,7 +146,17 @@ describe("Copy from another property", () => {
   it("copies a meal plan with the allocations it includes, and their charge codes", async () => {
     const [a, b] = [await makeProperty("MealA"), await makeProperty("MealB")];
     const code = await customChargeCode({ propertyId: a.id }, { code: "2201", description: "Breakfast revenue" });
-    const bf = await prisma.allocation.create({ data: { propertyId: a.id, code: "BF", name: "Breakfast", chargeCodeId: code.id } });
+    const bf = await prisma.allocation.create({
+      data: {
+        propertyId: a.id, code: "BF", name: "Breakfast", chargeCodeId: code.id,
+        rates: {
+          create: [
+            { adultPrice: 10, childPrice: 5, effectiveFrom: new Date("2026-01-01"), effectiveTo: new Date("2026-06-30") },
+            { adultPrice: 12, childPrice: 6, effectiveFrom: new Date("2026-07-01"), effectiveTo: null },
+          ],
+        },
+      },
+    });
     const bb = await prisma.mealPlan.create({ data: { propertyId: a.id, code: "BB", name: "Bed & Breakfast" } });
     await prisma.mealPlanAllocation.create({ data: { mealPlanId: bb.id, allocationId: bf.id } });
 
@@ -155,10 +165,21 @@ describe("Copy from another property", () => {
     expect(report.pulled.map((i) => i.key)).toEqual(expect.arrayContaining(["BF", "2201"]));
     const plan = await prisma.mealPlan.findUniqueOrThrow({
       where: { propertyId_code: { propertyId: b.id, code: "BB" } },
-      include: { allocationLinks: { include: { allocation: { include: { chargeCode: true } } } } },
+      include: {
+        allocationLinks: {
+          include: { allocation: { include: { chargeCode: true, rates: { orderBy: { effectiveFrom: "asc" } } } } },
+        },
+      },
     });
     expect(plan.allocationLinks[0].allocation.propertyId).toBe(b.id);
     expect(plan.allocationLinks[0].allocation.chargeCode.propertyId).toBe(b.id);
+    // The pulled-along allocation brings its dated price rows — otherwise it posts nothing.
+    expect(
+      plan.allocationLinks[0].allocation.rates.map((r) => [r.adultPrice, r.childPrice, r.effectiveFrom.toISOString().slice(0, 10), r.effectiveTo?.toISOString().slice(0, 10) ?? null])
+    ).toEqual([
+      [10, 5, "2026-01-01", "2026-06-30"],
+      [12, 6, "2026-07-01", null],
+    ]);
   });
 
   it("copies a room type (never its rooms) and brings the room-feature options it uses", async () => {

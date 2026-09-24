@@ -30,7 +30,16 @@ const schema = z.object({
 type FormInput = z.input<typeof schema>
 type FormValues = z.output<typeof schema>
 
-export function BookingNumberFormatForm({ propertyId, propertyCode }: { propertyId: string; propertyCode: string }) {
+export function BookingNumberFormatForm({
+  propertyId,
+  propertyCode,
+  nextNumber = 1,
+}: {
+  propertyId: string
+  propertyCode: string
+  /** The REGISTRATION_NO counter + 1 — the number the next booking will be given. */
+  nextNumber?: number
+}) {
   const [loading, setLoading] = useState(true)
   const [serverError, setServerError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -74,7 +83,7 @@ export function BookingNumberFormatForm({ propertyId, propertyCode }: { property
   const preview = formatConfirmationNumber(
     { resConfirmPrefix: prefix.toUpperCase(), resConfirmLength: Number.isInteger(length) && length >= 3 && length <= 12 ? length : 6 },
     propertyCode,
-    1
+    nextNumber
   )
 
   if (loading) return <Skeleton className="h-32 w-full rounded-lg" />

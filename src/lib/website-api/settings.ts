@@ -151,6 +151,22 @@ export async function updateWebsitePropertySettings(params: {
     if (!plan) throw new ForbiddenError("Rate plan does not belong to this property");
     if (plan.isNegotiated) throw new ForbiddenError("A negotiated rate plan cannot be sold on the website");
   }
+  // Booking on needs a rate plan to sell — without one every availability/booking call
+  // would fail. Checked against the settings as they will be after this save (a partial
+  // update merges with what is stored; a property with no row yet reads as booking on),
+  // and only when this save touches either field, so an unrelated edit (the headline) is
+  // never refused because of an older state.
+  if (input.bookingEnabled !== undefined || input.ratePlanId !== undefined) {
+    const stored = await prisma.websitePropertySettings.findUnique({
+      where: { propertyId },
+      select: { bookingEnabled: true, ratePlanId: true },
+    });
+    const bookingOn = input.bookingEnabled ?? stored?.bookingEnabled ?? DEFAULTS.bookingEnabled;
+    const plan = input.ratePlanId !== undefined ? input.ratePlanId || null : stored?.ratePlanId ?? null;
+    if (bookingOn && !plan) {
+      throw new ForbiddenError("Choose the rate plan to sell, or turn online booking off");
+    }
+  }
   if (input.maxNightsAhead !== undefined && (!Number.isInteger(input.maxNightsAhead) || input.maxNightsAhead < 1 || input.maxNightsAhead > 730)) {
     throw new ForbiddenError("Booking window must be between 1 and 730 nights");
   }

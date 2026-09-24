@@ -163,7 +163,10 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
     expect(body.error).toMatch(/inactive/i);
   });
 
-  it("re-activating the room type does not auto-restore its rooms", async () => {
+  // Changed 2026-09-24: re-activating now brings back the rooms the deactivation itself took
+  // out of service — to DIRTY (for inspection), never straight to CLEAN. See
+  // tests/business-rules/inventory-setup.test.ts for the full rule.
+  it("re-activating the room type brings its rooms back as DIRTY", async () => {
     const res = await asUser(adminId, () =>
       roomTypesIdRoute.PUT(
         new Request(`http://localhost/api/room-types/${roomTypeId}`, {
@@ -177,6 +180,6 @@ describe("Deactivating a room type blocks new reservations and takes its rooms o
     expect(res.status).toBe(200);
 
     const room = await prisma.room.findUnique({ where: { id: roomId } });
-    expect(room?.status).toBe("OUT_OF_SERVICE");
+    expect(room?.status).toBe("DIRTY");
   });
 });

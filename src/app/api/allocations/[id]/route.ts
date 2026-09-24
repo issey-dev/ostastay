@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { countAllocationUsage, isUniqueViolation, usageMessages } from "@/lib/revenue-usage";
 import { ALLOCATION_TYPES, POSTING_RHYTHMS, ALLOCATION_MODES, parseRatesInput } from "@/lib/allocations";
 
 export async function PUT(
@@ -34,6 +35,16 @@ export async function PUT(
       return NextResponse.json({ error: `mode must be one of ${ALLOCATION_MODES.join(", ")}` }, { status: 400 });
     }
 
+    // The code is frozen once the allocation is attached to a reservation — it's how
+    // folios, reports and staff know it.
+    const nextCode = body.code ? String(body.code).trim().toUpperCase() : undefined;
+    if (nextCode !== undefined && nextCode !== existing.code) {
+      const used = await countAllocationUsage(id);
+      if (used > 0) {
+        return NextResponse.json({ error: usageMessages.allocationCode(existing.code, used) }, { status: 409 });
+      }
+    }
+
     if (body.chargeCodeId && body.chargeCodeId !== existing.chargeCodeId) {
       const chargeCode = await prisma.chargeCode.findUnique({ where: { id: body.chargeCodeId } });
       if (!chargeCode || chargeCode.propertyId !== existing.propertyId) {
@@ -55,7 +66,7 @@ export async function PUT(
     const allocation = await prisma.allocation.update({
       where: { id },
       data: {
-        code: body.code ? String(body.code).toUpperCase() : undefined,
+        code: nextCode,
         name: body.name ?? undefined,
         type: body.type ?? undefined,
         chargeCodeId: body.chargeCodeId ?? undefined,
@@ -82,8 +93,8 @@ export async function PUT(
 
     return NextResponse.json(allocation);
   } catch (error: unknown) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {
-      return NextResponse.json({ error: "An allocation with this code already exists for this property" }, { status: 400 });
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "An allocation with this code already exists for this property" }, { status: 409 });
     }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -107,12 +118,9 @@ export async function DELETE(
 
     // Reservations referencing this allocation block deletion (the FK is RESTRICT on
     // purpose) — deactivating preserves history while hiding it from new use.
-    const usageCount = await prisma.reservationAllocation.count({ where: { allocationId: id } });
+    const usageCount = await countAllocationUsage(id);
     if (usageCount > 0) {
-      return NextResponse.json(
-        { error: "This allocation is attached to reservations and cannot be deleted — deactivate it instead" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: usageMessages.allocationDelete(existing.code, usageCount) }, { status: 409 });
     }
 
     await prisma.allocation.delete({ where: { id } });

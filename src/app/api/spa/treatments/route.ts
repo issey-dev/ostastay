@@ -80,6 +80,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
+    // Buffers not sent fall back to the property's Spa settings defaults (Hub › Spa ›
+    // Settings), then to the column defaults — the same values the New Treatment form
+    // pre-fills.
+    const spaDefaults = await prisma.spaSettings.findUnique({
+      where: { propertyId: body.propertyId },
+      select: { defaultPreparationBufferMinutes: true, defaultCleanupBufferMinutes: true },
+    });
+
     const treatment = await prisma.spaTreatment.create({
       data: {
         propertyId: body.propertyId,
@@ -88,8 +96,8 @@ export async function POST(request: Request) {
         shortName: body.shortName || null,
         description: body.description || null,
         defaultDurationMinutes: parseInt(body.defaultDurationMinutes),
-        preparationBufferMinutes: body.preparationBufferMinutes !== undefined ? parseInt(body.preparationBufferMinutes) : 0,
-        cleanupBufferMinutes: body.cleanupBufferMinutes !== undefined ? parseInt(body.cleanupBufferMinutes) : 0,
+        preparationBufferMinutes: body.preparationBufferMinutes !== undefined ? parseInt(body.preparationBufferMinutes) : spaDefaults?.defaultPreparationBufferMinutes ?? 0,
+        cleanupBufferMinutes: body.cleanupBufferMinutes !== undefined ? parseInt(body.cleanupBufferMinutes) : spaDefaults?.defaultCleanupBufferMinutes ?? 15,
         chargeCodeId: body.chargeCodeId,
         maxParticipants,
         pricingMode,

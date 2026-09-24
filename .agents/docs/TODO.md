@@ -12,55 +12,38 @@ with 41 screenshots; one PDF per area; `npm run docs:demo` / `docs:shots` (DECIS
 Open:
 - **`/docs/operations`** has only "Online bookings at the desk" — the operations user guide
   is still to write (owner: later).
-- **Logo upload** (branch `feat/property-logo-upload`): the General page and its screenshot
-  describe the current "Logo URL" field — update both when that branch lands.
-- The guide promises nothing the code doesn't do; where the product is rough it tells users
-  to work around it. Found along the way — **ask the owner before fixing** (each is quoted,
-  softened, in the guide):
-  - Hub › Enterprise › Properties: no Currency / Time zone fields, so a tenant-added property
-    is USD/UTC with no tenant way to change it; the form also shows no error on a failed save
-    (duplicate code, property limit).
-  - People: sign-in lowercases the email but the People form doesn't (a mixed-case email can't
-    sign in); no Active/Inactive control although the API deactivates; no password rule for
-    users created here (the forced change needs 12).
-  - Roles: "All-Properties users only" badge on the Hub modules group is wrong for Property
-    Setup / Integrations / Green Tax; "N users assigned" on shared system roles may count
-    across tenants.
-  - Email & SFTP: shows "Saved" even when the save fails; SFTP isn't wired to anything; the
-    Overview's "Email is not set up" shows even with Uppsolut Mail Service.
-  - General: no validation (times free text; a clashing short code is a raw DB error).
-  - Finance: Service Charge min 10 in the browser, 0 in the API; Green Tax labelled USD
-    whatever the currency; a Custom Tax profile can be deleted while a code uses it.
-  - Charge Codes: its URL is `/cashiering`; the Spa/Excursion outlet picker still says
-    "— shared across all properties".
-  - Rooms & Inventory: room type / building / floor / room forms swallow errors (console only,
-    not Zod+RHF); room type code not unique; deleting a room type deletes its rooms outside a
-    transaction and can then fail on RESTRICT (rooms already gone); licence-cap message never
-    shown; re-activating a room type doesn't restore its rooms' status.
-  - Lists (room features, reservation lists, guest lists): a deleted option can't be restored
-    and its code can't be re-added.
-  - Revenue: rate plan delete always toasts success; meal plan delete hides server errors;
-    priority 0 on create becomes 10; duplicate rate code has no friendly message; meal plan
-    codes editable/deletable after use (reservations store the code as text); "Include in
-    Rate" carves any allocation, not only packages; derived plan calendar shows "No Rate"
-    where night audit would post base + adjustment; Meal/Rate plan dialogs not Zod+RHF;
-    "Add Meal Plan" shown to users without REVENUE; Meal Plans card still says meal plans are
-    priced via derived rate plans; Copy-from pulls allocations without their price rows.
-  - Reservations: booking-number preview always shows counter 1.
-  - Sequences: no lock or duplicate guard (duplicate invoice/receipt numbers possible; editing
-    Guest Registration No bypasses the Green Tax register's gap-free rules).
-  - Outlets: Amenities can't be edited or deleted (trash button has no handler, no API).
-  - Excursions: no way to deactivate a schedule; deleting one has no confirmation.
-  - Spa: Compatible Rooms text says "compatible by type" but any active room is offered;
-    EXTENDED HOURS exceptions have no effect; default prep/cleanup buffers, "Allow tentative
-    holds" and "Require cancellation/reschedule reason" are saved but unused; no open < close
-    or percentage ≤ 100 checks.
-  - Stationery: Statement tab text is addressed to the owner ("once you share its
-    template"); button reads "Save Stationary Settings".
-  - Channel Manager › Inbound Bookings footer says conversion is manual (it is automatic)
-    and shows an internal `.agents/docs/…` path to customers.
-  - Online Booking: "Rate plan to sell *" isn't enforced; the key's Expires is a plain date
-    input.
+- ~~Logo upload: General page and screenshot~~ — updated after #59 landed.
+- **Fixed in 7.5.0** (the Hub issues found while writing the guide): tenant property form
+  asks currency + time zone (fixed once ACTIVE) and shows save errors; emails stored
+  lower-case, sign-in also matches older mixed-case emails; Active switch + 12-char password
+  rule on People; roles badge + per-enterprise user counts; Email & SFTP save errors; Overview
+  email banner respects Uppsolut Mail Service; General form Zod+RHF (codes 2–12 incl. dashes
+  for existing properties); service charge ≥10% in UI and API; Green Tax labelled in the
+  property currency; tax profile delete in-use check; Charge Codes moved to `/charge-codes`
+  (old `/cashiering` redirects); room/building/floor/room-type forms Zod+RHF with errors
+  shown, room type code unique (migration `20260924180000`), safe deletes (409 when used),
+  re-activation restores rooms to Dirty; deleted list options restorable; revenue delete/
+  duplicate/priority fixes, codes locked once used, effective prices on the calendar,
+  Zod+RHF dialogs, REVENUE-gated meal plan actions, copy-from brings allocation prices;
+  real next booking number in the preview; sequence guards; amenities edit/delete; excursion
+  schedule on/off + delete confirm; spa extended hours, settings wired or removed, validation;
+  stationery wording; inbound bookings show conversion; online booking rate plan required;
+  key expiry date picker. Also: adding a user from People always failed (`role` vs `roles`).
+- **Owner to confirm:**
+  - Room type re-activation now restores its rooms (to Dirty) — this amends the 2026-07-18
+    "no auto-restore" rule (DECISIONS.md, Room Types).
+  - "Include in Rate": owner docs say it applies to rate-plan-linked allocations only, but
+    night audit and the quote carve out EVERY include-in-rate allocation (meal plan, manual).
+    Decide, and how a meal-plan include-in-rate allocation should post in Meal Plan mode.
+- Still open:
+  - Spa extended hours can't go past the spa's closing time (slots stay within opening hours).
+  - Housekeeping status changes don't clear `Room.statusBeforeTypeDeactivation`.
+  - Renaming/deleting a meal plan isn't checked against channel defaults / website settings.
+  - Deleting a parent rate plan silently turns its derived plans independent.
+  - The change-password route keeps its own copy of the 12-char rule
+    (`src/lib/user-account-rules.ts` has the shared one); tax-manager.tsx is still plain state.
+  - Pre-existing lint error: `idle-session-watch.tsx` calls `Date.now()` during render.
+
 ## Property logo upload (2026-09-24) — DONE
 
 See DECISIONS.md (2026-09-24, "Property logo is uploaded"). Open:

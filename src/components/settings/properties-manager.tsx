@@ -25,6 +25,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { PropertyForm } from "@/components/property-form"
+import { toast } from "@/lib/toast"
 
 type Property = {
   id: string
@@ -32,8 +33,17 @@ type Property = {
   code: string
   status: string
   rejectionReason?: string | null
+  legalName: string
+  defaultCurrency: string
+  timeZone: string
   checkInTime: string
   checkOutTime: string
+}
+
+// The API's error message, or a fallback — so a failed action says why instead of nothing.
+async function errorFrom(res: Response, fallback: string): Promise<string> {
+  const data = await res.json().catch(() => ({}))
+  return typeof data?.error === "string" && data.error ? data.error : fallback
 }
 
 export function PropertiesManager({ title, description, addons }: { title: string; description?: string; addons?: { spa: boolean; excursions: boolean } }) {
@@ -59,10 +69,14 @@ export function PropertiesManager({ title, description, addons }: { title: strin
     setResubmitting(propertyId)
     try {
       const res = await fetch(`/api/properties/${propertyId}/resubmit`, { method: "POST" })
-      if (!res.ok) throw new Error("Failed to resubmit property")
+      if (!res.ok) {
+        toast.error(await errorFrom(res, "Could not resubmit the property."))
+        return
+      }
       fetchProperties()
     } catch (error) {
       console.error(error)
+      toast.error("Could not reach the server. Try again.")
     } finally {
       setResubmitting(null)
     }
@@ -73,11 +87,15 @@ export function PropertiesManager({ title, description, addons }: { title: strin
     
     try {
       const res = await fetch(`/api/properties/${propertyToDelete.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete property')
+      if (!res.ok) {
+        toast.error(await errorFrom(res, "Could not delete the property."))
+        return
+      }
       setPropertyToDelete(null)
       fetchProperties()
     } catch (error) {
       console.error(error)
+      toast.error("Could not reach the server. Try again.")
     }
   }
 
@@ -179,6 +197,7 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">{property.code}</p>
                         <p className="font-semibold text-foreground truncate">{property.name}</p>
+                        <p className="text-xs text-muted-foreground">{property.defaultCurrency} · {property.timeZone}</p>
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-1">
                         <StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />
@@ -279,7 +298,10 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                 sortedProperties.map((property) => (
                   <TableRow key={property.id} className="group border-border transition-colors hover:bg-muted/40 cursor-pointer">
                     <TableCell className="text-sm font-medium px-6 py-4 text-foreground">{property.code}</TableCell>
-                    <TableCell className="text-sm px-6 py-4 font-semibold text-foreground">{property.name}</TableCell>
+                    <TableCell className="text-sm px-6 py-4">
+                      <div className="font-semibold text-foreground">{property.name}</div>
+                      <div className="text-xs text-muted-foreground">{property.defaultCurrency} · {property.timeZone}</div>
+                    </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />

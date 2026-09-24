@@ -51,8 +51,9 @@ export default function ChannelManager() {
       <H2>3. Inbound Bookings and the Exchange Log</H2>
       <ul>
         <li>
-          <strong>Inbound Bookings</strong> lists bookings received from the channel manager. Problems, such as an unmapped room or
-          no default rate plan, are shown in red and retried automatically once fixed. An <strong>Overbooking</strong> badge means
+          <strong>Inbound Bookings</strong> lists bookings received from the channel manager and what became of each: the
+          reservation it created, or why it is waiting (such as an unmapped room or no default rate plan). Waiting bookings are
+          retried automatically once fixed. An <strong>Overbooking</strong> badge means
           more rooms were sold than you have. Resolve it before arrival, then <strong>Acknowledge</strong> it.
         </li>
         <li><strong>Exchange Log</strong> records every message sent and received, for troubleshooting with Uppsolut.</li>

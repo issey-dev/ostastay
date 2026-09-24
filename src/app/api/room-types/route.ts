@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
 import { assertRoomTypeCapacity } from '@/lib/license'
 import { logActivity } from '@/lib/activity-log'
+import { assertRoomTypeCodeFree, inventoryErrorResponse } from '@/lib/inventory-guards'
 
 const featureSchema = z.object({
   category: z.enum(["BED_TYPE", "ROOM_VIEW", "ROOM_AMENITY"]),
@@ -12,8 +13,8 @@ const featureSchema = z.object({
 
 const createSchema = z.object({
   propertyId: z.string().uuid(),
-  name: z.string().min(2),
-  code: z.string().min(2),
+  name: z.string().trim().min(2),
+  code: z.string().trim().min(2),
   maxOccupancy: z.number().int().positive(),
   baseOccupancy: z.number().int().positive().optional(),
   description: z.string().optional(),
@@ -21,6 +22,9 @@ const createSchema = z.object({
   isPseudo: z.boolean().optional(),
   housekeepingEnabled: z.boolean().optional(),
   features: z.array(featureSchema).optional(),
+}).refine((d) => d.baseOccupancy === undefined || d.baseOccupancy <= d.maxOccupancy, {
+  message: 'Base occupancy cannot be more than max occupancy',
+  path: ['baseOccupancy'],
 })
 
 export async function GET(request: Request) {
@@ -55,6 +59,7 @@ export async function POST(request: Request) {
     const json = await request.json()
     const { features, ...data } = createSchema.parse(json)
     await assertPropertyAccess(ctx, data.propertyId)
+    await assertRoomTypeCodeFree(data.propertyId, data.code)
 
     // License cap — pseudo (PM) room types are outside the licensed count by rule,
     // so only a real room type consumes an allowance slot.
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 })
     }
-    const { status, body } = toErrorResponse(error)
+    const { status, body } = inventoryErrorResponse(error, toErrorResponse, 'That room type code is already used in this property.')
     return NextResponse.json(body, { status })
   }
 }

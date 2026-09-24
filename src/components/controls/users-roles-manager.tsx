@@ -14,12 +14,14 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
 import { OptionSelect } from "@/components/ui/option-select"
 import { JOB_FUNCTIONS, isJobFunction, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
+import { MIN_PASSWORD_LENGTH, normalizeEmail, userIdentitySchema } from "@/lib/user-account-rules"
 
 type Role = {
   id: string
@@ -106,8 +108,22 @@ export function UsersRolesManager({
   const [userForm, setUserForm] = useState({
     firstName: "", lastName: "", email: "", password: "",
     roleIds: [] as string[], scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
-    jobFunction: "",
+    jobFunction: "", isActive: true,
   })
+  // Inline, as-you-type validation of the identity fields (APP STANDARD 001), with the
+  // same Zod rules the API applies (src/lib/user-account-rules.ts). A field's message
+  // shows once it has been touched, so an empty new dialog doesn't open covered in red.
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const identityCheck = userIdentitySchema(editingUser ? "edit" : "create").safeParse(userForm)
+  const identityErrors: Record<string, string> = {}
+  if (!identityCheck.success) {
+    for (const issue of identityCheck.error.issues) {
+      const key = String(issue.path[0] ?? "")
+      if (key && !identityErrors[key]) identityErrors[key] = issue.message
+    }
+  }
+  const fieldError = (key: string) => (touched[key] ? identityErrors[key] : undefined)
+  const touch = (key: string) => setTouched((t) => (t[key] ? t : { ...t, [key]: true }))
   // Whether ANY role currently chosen in the user dialog carries an enterprise-only
   // module — access is the union, so one such role among several is enough.
   const enterpriseOnlyRoles = roles.filter(
@@ -124,8 +140,9 @@ export function UsersRolesManager({
       firstName: "", lastName: "", email: "", password: "", roleIds: roles[0] ? [roles[0].id] : [],
       scope: isPropertyLockedActor ? "PROPERTY" : "ENTERPRISE",
       propertyId: isPropertyLockedActor ? (actorPropertyId ?? "") : "",
-      jobFunction: "",
+      jobFunction: "", isActive: true,
     })
+    setTouched({})
     setUserErrorMsg(null)
     setIsUserDialogOpen(true)
   }
@@ -135,8 +152,9 @@ export function UsersRolesManager({
     setUserForm({
       firstName: user.firstName, lastName: user.lastName, email: user.email, password: "",
       roleIds: user.roles.map((ur) => ur.role.id), scope: user.scope, propertyId: user.propertyId ?? "",
-      jobFunction: user.jobFunction ?? "",
+      jobFunction: user.jobFunction ?? "", isActive: user.isActive,
     })
+    setTouched({})
     setUserErrorMsg(null)
     setIsUserDialogOpen(true)
   }
@@ -148,10 +166,13 @@ export function UsersRolesManager({
     const method = editingUser ? "PATCH" : "POST"
     const body: any = {
       ...userForm,
+      // Sign-in lower-cases the address, so it is stored that way (the API does too).
+      email: normalizeEmail(userForm.email),
       roles: userForm.roleIds,
       propertyId: userForm.scope === "PROPERTY" ? userForm.propertyId : null,
     }
     if (editingUser) body.id = editingUser.id
+    else delete body.isActive // a new account is always created active
     if (!body.password) delete body.password
 
     try {
@@ -164,7 +185,7 @@ export function UsersRolesManager({
         setIsUserDialogOpen(false)
         fetchAll()
       } else {
-        const error = await res.json()
+        const error = await res.json().catch(() => ({}))
         setUserErrorMsg(error.error || "Failed to save user")
       }
     } catch (e) {
@@ -501,23 +522,72 @@ export function UsersRolesManager({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">First Name</label>
-                <Input value={userForm.firstName} onChange={(e) => setUserForm({ ...userForm, firstName: e.target.value })} placeholder="John" />
+                <Input value={userForm.firstName} onChange={(e) => { touch("firstName"); setUserForm({ ...userForm, firstName: e.target.value }) }} onBlur={() => touch("firstName")} placeholder="John" aria-invalid={!!fieldError("firstName")} />
+                {fieldError("firstName") && <p className="text-xs text-destructive">{fieldError("firstName")}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Last Name</label>
-                <Input value={userForm.lastName} onChange={(e) => setUserForm({ ...userForm, lastName: e.target.value })} placeholder="Doe" />
+                <Input value={userForm.lastName} onChange={(e) => { touch("lastName"); setUserForm({ ...userForm, lastName: e.target.value }) }} onBlur={() => touch("lastName")} placeholder="Doe" aria-invalid={!!fieldError("lastName")} />
+                {fieldError("lastName") && <p className="text-xs text-destructive">{fieldError("lastName")}</p>}
               </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Email Address</label>
-              <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} placeholder="john.doe@example.com" />
+              <Input
+                type="email"
+                value={userForm.email}
+                onChange={(e) => { touch("email"); setUserForm({ ...userForm, email: e.target.value }) }}
+                onBlur={() => { touch("email"); setUserForm((f) => ({ ...f, email: normalizeEmail(f.email) })) }}
+                placeholder="john.doe@example.com"
+                aria-invalid={!!fieldError("email")}
+              />
+              {fieldError("email") ? (
+                <p className="text-xs text-destructive">{fieldError("email")}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Used to sign in. Saved in lower case.</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Password {editingUser && <span className="text-muted-foreground font-normal">(Leave blank to keep unchanged)</span>}
               </label>
-              <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder={editingUser ? "••••••••" : "Create a secure password"} />
+              <Input
+                type="password"
+                value={userForm.password}
+                onChange={(e) => { touch("password"); setUserForm({ ...userForm, password: e.target.value }) }}
+                onBlur={() => touch("password")}
+                placeholder={editingUser ? "••••••••" : "Create a secure password"}
+                aria-invalid={!!fieldError("password")}
+              />
+              {fieldError("password") ? (
+                <p className="text-xs text-destructive">{fieldError("password")}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">At least {MIN_PASSWORD_LENGTH} characters.</p>
+              )}
             </div>
+            {/* Edit only — a new account is always active. Deactivating ends the user's
+                live sessions at once (the API revokes them); the onboarding account can
+                never be deactivated (USER_MANAGEMENT_PLAN.md decision 9). */}
+            {editingUser && (
+              <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+                <div className="space-y-0.5">
+                  <label htmlFor="user-active" className="text-sm font-medium">Active</label>
+                  <p className="text-xs text-muted-foreground">
+                    {editingUser.isProtected
+                      ? "The onboarding account can’t be deactivated."
+                      : userForm.isActive
+                        ? "Can sign in."
+                        : "Can’t sign in. Saving signs them out of every session."}
+                  </p>
+                </div>
+                <Switch
+                  id="user-active"
+                  checked={userForm.isActive}
+                  onCheckedChange={(checked) => setUserForm({ ...userForm, isActive: !!checked })}
+                  disabled={editingUser.isProtected}
+                />
+              </div>
+            )}
             {/* Roles are MANY per user: access is the union of what each grants, so
                 holding "Cashier" and "Reservations" means both sets of permissions. */}
             <div className="space-y-2">
@@ -637,7 +707,7 @@ export function UsersRolesManager({
             <Button
               className=""
               onClick={handleSaveUser}
-              disabled={savingUser || !userForm.email || userForm.roleIds.length === 0 || (!editingUser && !userForm.password) || !userForm.firstName}
+              disabled={savingUser || !identityCheck.success || userForm.roleIds.length === 0}
             >
               {savingUser ? "Saving..." : "Save User"}
             </Button>

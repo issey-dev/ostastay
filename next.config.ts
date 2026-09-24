@@ -79,6 +79,9 @@ const nextConfig: NextConfig = {
       { source: "/docs/api-integration/:path*", destination: "/docs/api/:path*", permanent: true },
       { source: "/docs/guides/online-booking-setup", destination: "/docs/configuration/property/online-booking", permanent: true },
       { source: "/docs/guides/front-desk", destination: "/docs/operations/front-desk", permanent: true },
+      // Hub › property › Charge Codes was at …/cashiering until 2026-09-24 (the dashboard's
+      // own /dashboard/cashiering page is unrelated and unaffected).
+      { source: "/e/:slug/hub/p/:propertyId/cashiering", destination: "/e/:slug/hub/p/:propertyId/charge-codes", permanent: true },
     ];
   },
 

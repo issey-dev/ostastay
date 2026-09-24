@@ -19,6 +19,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { therapistExceptionSchema, THERAPIST_EXCEPTION_TYPES } from "@/lib/spa-exception"
 
 type TreatmentOption = { id: string; name: string }
 
@@ -60,7 +61,8 @@ const emptyValues: TherapistFormValues = {
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const EXCEPTION_TYPES = ["DAY_OFF", "LEAVE", "TRAINING", "SICK", "EXTENDED_HOURS", "UNAVAILABLE"] as const
+type ExceptionFormInput = z.input<typeof therapistExceptionSchema>
+type ExceptionFormValues = z.output<typeof therapistExceptionSchema>
 
 export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
 
@@ -580,37 +582,31 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
 
 function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapist: SpaTherapistDto; onClose: () => void; onChanged: () => void }) {
   const [exceptions, setExceptions] = useState<ExceptionRow[]>(therapist.exceptions)
-  const [date, setDate] = useState<string | null>(null)
-  const [exceptionType, setExceptionType] = useState<string>("DAY_OFF")
-  const [reason, setReason] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const empty: ExceptionFormInput = { date: "", exceptionType: "DAY_OFF", startTime: "", endTime: "", reason: "" }
+  const form = useForm<ExceptionFormInput, unknown, ExceptionFormValues>({
+    resolver: zodResolver(therapistExceptionSchema),
+    mode: "onChange",
+    defaultValues: empty,
+  })
+  const exceptionType = form.watch("exceptionType")
+  const isExtended = exceptionType === "EXTENDED_HOURS"
 
-  const add = async () => {
-    if (!date) {
-      setError("Date is required")
-      return
-    }
-    setSaving(true)
+  const add = async (values: ExceptionFormValues) => {
     setError(null)
-    try {
-      const res = await fetch(`/api/spa/therapists/${therapist.id}/exceptions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, exceptionType, reason: reason || null }),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        setExceptions((prev) => [...prev, created])
-        setDate(null)
-        setReason("")
-        onChanged()
-      } else {
-        const body = await res.json().catch(() => null)
-        setError(body?.error || "Failed to add exception")
-      }
-    } finally {
-      setSaving(false)
+    const res = await fetch(`/api/spa/therapists/${therapist.id}/exceptions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      setExceptions((prev) => [...prev, created])
+      form.reset({ ...empty, exceptionType: values.exceptionType })
+      onChanged()
+    } else {
+      const body = await res.json().catch(() => null)
+      setError(body?.error || "Failed to add exception")
     }
   }
 
@@ -630,22 +626,68 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
           <DialogDescription>Day off, leave, sick day, or a temporary change to normal working hours.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-2 items-end py-2 md:grid-cols-[1fr_1fr]">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Date *</p>
-            <DatePicker value={date} onChange={setDate} placeholder="Select date" />
-          </div>
-          <Select value={exceptionType} onValueChange={(v) => setExceptionType(v ?? "DAY_OFF")}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {EXCEPTION_TYPES.map((t) => <SelectItem key={t} value={t}>{t.replace(/_/g, " ")}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="md:col-span-2" />
-          <Button type="button" onClick={add} disabled={saving} className="md:col-span-2">
-            <Plus className="h-4 w-4 mr-1.5" /> Add Exception
-          </Button>
-        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(add)} className="grid grid-cols-1 gap-2 items-start py-2 md:grid-cols-[1fr_1fr]">
+            <FormField control={form.control} name="date" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs text-muted-foreground">Date *</FormLabel>
+                <DatePicker value={field.value || null} onChange={(v) => field.onChange(v ?? "")} placeholder="Select date" />
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="exceptionType" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs text-muted-foreground">Type *</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v ?? "DAY_OFF")
+                    // Re-check the times against the new type's rule.
+                    void form.trigger(["startTime", "endTime"])
+                  }}
+                >
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {THERAPIST_EXCEPTION_TYPES.map((t) => <SelectItem key={t} value={t}>{t.replace(/_/g, " ")}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="startTime" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs text-muted-foreground">{isExtended ? "Available from *" : "From (optional)"}</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} value={field.value ?? ""} onChange={(e) => { field.onChange(e.target.value); void form.trigger("endTime") }} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="endTime" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs text-muted-foreground">{isExtended ? "Available until *" : "Until (optional)"}</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} value={field.value ?? ""} onChange={(e) => { field.onChange(e.target.value); void form.trigger("startTime") }} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <p className="text-xs text-muted-foreground md:col-span-2">
+              {isExtended
+                ? "The therapist can be booked between these times on this date, even outside their weekly schedule (within the spa's opening hours)."
+                : "Leave the times empty to block the whole day, or give both to block only part of it."}
+            </p>
+            <FormField control={form.control} name="reason" render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormControl><Input placeholder="Reason (optional)" {...field} value={field.value ?? ""} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isValid} className="md:col-span-2">
+              <Plus className="h-4 w-4 mr-1.5" /> Add Exception
+            </Button>
+          </form>
+        </Form>
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="max-h-[35vh] overflow-y-auto space-y-2">
@@ -657,6 +699,7 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
                 <div className="min-w-0">
                   <span className="font-medium">{new Date(e.date).toDateString()}</span>
                   <Badge variant="outline" className="ml-2">{e.exceptionType.replace(/_/g, " ")}</Badge>
+                  {e.startTime && <span className="ml-2 tabular-nums">{e.startTime}–{e.endTime ?? "23:59"}</span>}
                   {e.reason && <span className="text-muted-foreground ml-2">{e.reason}</span>}
                 </div>
                 <Button variant="ghost" size="icon" aria-label="Delete exception" className="text-destructive hover:text-destructive" onClick={() => remove(e.id)}>

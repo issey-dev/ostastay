@@ -5,6 +5,21 @@ import bcrypt from "bcryptjs";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId, type AuthContext } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { revokeAllForUser } from "@/lib/session-store";
+import * as z from "zod";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT, normalizeEmail } from "@/lib/user-account-rules";
+
+const isEmail = (v: string) => z.string().email().safeParse(v).success;
+
+// Is this address already someone's sign-in? Compared case-insensitively: accounts written
+// before emails were normalised may still hold mixed case, and "Jane@x" and "jane@x" must
+// not become two accounts that the lower-casing login can only ever find one of.
+async function emailTaken(email: string, exceptUserId?: string): Promise<boolean> {
+  const hit = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" }, ...(exceptUserId ? { NOT: { id: exceptUserId } } : {}) },
+    select: { id: true },
+  });
+  return !!hit;
+}
 
 // Accepts either a real Role id, or (for compatibility with the existing role-name
 // dropdown in team-manager.tsx) a role name — resolved against the enterprise's own
@@ -115,19 +130,33 @@ export async function POST(request: Request) {
     requirePermission(ctx, "USERS", "create");
 
     const body = await request.json();
-    const { email, password, firstName, lastName, role, scope, propertyId, jobFunction } = body;
+    const { password, firstName, lastName, role, scope, propertyId, jobFunction } = body;
+    // Stored trimmed + lower-case: sign-in lower-cases before its lookup, so a mixed-case
+    // address saved here was an account that could never sign in.
+    const email = normalizeEmail(body.email);
     // A post from the fixed list (src/lib/job-functions.ts), or none.
     if (jobFunction && !isJobFunction(jobFunction)) {
       return NextResponse.json({ error: "Unknown job function" }, { status: 400 });
     }
     const enterpriseId = ctx.enterpriseId; // never client-supplied
 
-    if (!email || !password || !firstName || !lastName || !role) {
+    // Roles arrive as `roles` (the People dialog — many per user) or the older single
+    // `role`. Requiring `role` alone refused every create from the dialog as "Missing
+    // required fields" once it switched to sending `roles`.
+    const hasRoles = (Array.isArray(body.roles) && body.roles.length > 0) || !!role;
+    if (!email || !password || !firstName || !lastName || !hasRoles) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    if (!isEmail(email)) {
+      return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
+    }
+    // Same floor as the handover change-password flow (src/lib/user-account-rules.ts).
+    if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
+      return NextResponse.json({ error: PASSWORD_TOO_SHORT }, { status: 400 });
+    }
+
+    if (await emailTaken(email)) {
       return NextResponse.json({ error: "Email already exists" }, { status: 400 });
     }
 
@@ -188,7 +217,9 @@ export async function PATCH(request: Request) {
     requirePermission(ctx, "USERS", "update");
 
     const body = await request.json();
-    const { id, email, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
+    const { id, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
+    // Normalised like create — see POST. Absent/empty leaves the address unchanged.
+    const email = body.email === undefined ? "" : normalizeEmail(body.email);
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -219,6 +250,28 @@ export async function PATCH(request: Request) {
       if (wouldDeactivate || wouldDemote || wouldChangeRoles) {
         return NextResponse.json({ error: PROTECTED_USER_MESSAGE, protectedUser: true }, { status: 400 });
       }
+    }
+
+    // Deactivating yourself would sign you out mid-save and could strand the enterprise
+    // without an administrator; another admin has to do it.
+    if (isActive === false && id === ctx.userId) {
+      return NextResponse.json({ error: "You can't deactivate your own account. Ask another administrator." }, { status: 400 });
+    }
+    if (isActive !== undefined && typeof isActive !== "boolean") {
+      return NextResponse.json({ error: "isActive must be true or false" }, { status: 400 });
+    }
+
+    if (email && email !== existing.email) {
+      if (!isEmail(email)) {
+        return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
+      }
+      if (await emailTaken(email, id)) {
+        return NextResponse.json({ error: "Email already exists" }, { status: 400 });
+      }
+    }
+    // A reset password meets the same floor as a new one.
+    if (password && (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH)) {
+      return NextResponse.json({ error: PASSWORD_TOO_SHORT }, { status: 400 });
     }
 
     const updateData: any = {};

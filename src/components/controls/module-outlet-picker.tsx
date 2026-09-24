@@ -69,7 +69,7 @@ export function ModuleOutletPicker({ propertyId, module }: { propertyId: string;
   return (
     <div className="space-y-3">
       <div className="max-w-md space-y-2">
-        <Label>{moduleLabel} Outlet <span className="font-normal text-muted-foreground">— shared across all properties</span></Label>
+        <Label>{moduleLabel} Outlet <span className="font-normal text-muted-foreground">— this property only</span></Label>
         <SearchableSelect
           value={outletId}
           onChange={(v) => setOutletId(v ?? "")}
@@ -77,8 +77,9 @@ export function ModuleOutletPicker({ propertyId, module }: { propertyId: string;
           options={outlets.map((o) => ({ value: o.id, label: o.name }))}
         />
         <p className="text-xs text-muted-foreground">
-          Every {moduleLabel.toLowerCase()} charge at this property posts through this outlet —
-          attributing the revenue to it and applying its Tax Rule.
+          One of this property&apos;s own outlets. Every {moduleLabel.toLowerCase()} charge at this
+          property posts through it — attributing the revenue to it and applying its Tax Rule.
+          Each property links its own; other properties are not affected.
         </p>
       </div>
 

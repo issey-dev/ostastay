@@ -115,4 +115,14 @@ describe("Hub Overview", () => {
     expect(banners.every((b) => b.id.startsWith(`${lagoonId}:`))).toBe(true);
     expect(channels?.map((c) => c.propertyId)).toEqual([lagoonId]);
   });
+
+  it("says email is not set up only when neither own SMTP nor the Uppsolut Mail Service can send", async () => {
+    // No SMTP of its own and no service: guest mail is blocked — the banner is right.
+    expect((await overviewFor(adminId)).banners.some((b) => b.id === "enterprise:smtp")).toBe(true);
+    // Granted the Uppsolut Mail Service (PLATFORM_EMAIL): mail goes through it, so there is
+    // nothing for the enterprise to set up (resolveEnterpriseSender, src/lib/mail-sender.ts).
+    await prisma.enterpriseAddonAccess.create({ data: { enterpriseId, module: "PLATFORM_EMAIL", enabled: true } });
+    expect((await overviewFor(adminId)).banners.some((b) => b.id === "enterprise:smtp")).toBe(false);
+    await prisma.enterpriseAddonAccess.deleteMany({ where: { enterpriseId, module: "PLATFORM_EMAIL" } });
+  });
 });

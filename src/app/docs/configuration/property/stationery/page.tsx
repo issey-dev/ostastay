@@ -14,7 +14,7 @@ export default function Stationery() {
       <p>
         The logo, name, address, tax ID, contact details, colour and font come from{" "}
         <a href="/docs/configuration/property/general">General</a>. This page adds the wording. Each tab shows a live preview as you
-        type. Choose <strong>Save</strong> at the bottom when done; <strong>Reset</strong> discards unsaved changes.
+        type. Choose <strong>Save Stationery Settings</strong> at the bottom when done; <strong>Reset</strong> discards unsaved changes.
       </p>
       <Shot name="prop-stationery" alt="The Stationery page: tabs for invoices, receipts, letter, registration card and statement, with the invoice settings and a live preview." />
 

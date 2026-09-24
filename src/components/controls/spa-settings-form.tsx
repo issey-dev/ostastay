@@ -14,14 +14,21 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 const intString = z.string().refine((v) => !isNaN(parseInt(v)) && parseInt(v) >= 0, "Must be a non-negative number")
 const optionalNumString = z.string().refine((v) => v === "" || !isNaN(parseFloat(v)), "Must be a number")
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+// Not on this form (kept in SpaSettings, left untouched on save):
+// - allowTentativeAppointments / tentativeHoldMinutes: the desk never creates a
+//   TENTATIVE appointment — every desk booking is CONFIRMED. The only tentative spa
+//   appointments are Booking API holds, whose length is the Online Booking setting
+//   (SpaOnlineSettings.holdMinutes), so the switch had no effect.
+// - requireRescheduleReason: there is no reschedule action yet (SPA_PLAN.md Phase 5);
+//   add the switch back together with it.
 const settingsSchema = z.object({
-  defaultOpeningTime: z.string().min(1),
-  defaultClosingTime: z.string().min(1),
-  slotIntervalMinutes: intString,
+  defaultOpeningTime: z.string().regex(HHMM, "Enter a time"),
+  defaultClosingTime: z.string().regex(HHMM, "Enter a time"),
+  slotIntervalMinutes: intString.refine((v) => parseInt(v) >= 5, "At least 5 minutes"),
   defaultPreparationBufferMinutes: intString,
   defaultCleanupBufferMinutes: intString,
-  allowTentativeAppointments: z.boolean(),
-  tentativeHoldMinutes: intString,
   requireTherapistAtBooking: z.boolean(),
   requireRoomAtBooking: z.boolean(),
   allowAutoAssignment: z.boolean(),
@@ -33,8 +40,25 @@ const settingsSchema = z.object({
   noShowChargeValue: optionalNumString,
   noShowGraceMinutes: intString,
   requireCancellationReason: z.boolean(),
-  requireRescheduleReason: z.boolean(),
 })
+  // "HH:MM" strings compare correctly as text (zero-padded 24h).
+  .refine((v) => v.defaultOpeningTime < v.defaultClosingTime, { message: "Closing time must be after opening time", path: ["defaultClosingTime"] })
+  .refine((v) => v.lateCancellationChargeType !== "PERCENTAGE" || (v.lateCancellationChargeValue !== "" && parseFloat(v.lateCancellationChargeValue) >= 0 && parseFloat(v.lateCancellationChargeValue) <= 100), {
+    message: "Enter a percentage from 0 to 100",
+    path: ["lateCancellationChargeValue"],
+  })
+  .refine((v) => v.noShowChargeType !== "PERCENTAGE" || (v.noShowChargeValue !== "" && parseFloat(v.noShowChargeValue) >= 0 && parseFloat(v.noShowChargeValue) <= 100), {
+    message: "Enter a percentage from 0 to 100",
+    path: ["noShowChargeValue"],
+  })
+  .refine((v) => v.lateCancellationChargeType !== "FIXED" || (v.lateCancellationChargeValue !== "" && parseFloat(v.lateCancellationChargeValue) >= 0), {
+    message: "Enter the amount",
+    path: ["lateCancellationChargeValue"],
+  })
+  .refine((v) => v.noShowChargeType !== "FIXED" || (v.noShowChargeValue !== "" && parseFloat(v.noShowChargeValue) >= 0), {
+    message: "Enter the amount",
+    path: ["noShowChargeValue"],
+  })
 
 type SettingsFormValues = z.infer<typeof settingsSchema>
 
@@ -44,8 +68,6 @@ const defaults: SettingsFormValues = {
   slotIntervalMinutes: "15",
   defaultPreparationBufferMinutes: "0",
   defaultCleanupBufferMinutes: "15",
-  allowTentativeAppointments: true,
-  tentativeHoldMinutes: "20",
   requireTherapistAtBooking: true,
   requireRoomAtBooking: true,
   allowAutoAssignment: true,
@@ -57,7 +79,6 @@ const defaults: SettingsFormValues = {
   noShowChargeValue: "",
   noShowGraceMinutes: "15",
   requireCancellationReason: true,
-  requireRescheduleReason: false,
 }
 
 const CHARGE_TYPE_LABELS: Record<string, string> = { NONE: "No charge", FULL: "Full charge", PERCENTAGE: "Percentage", FIXED: "Fixed amount" };
@@ -85,8 +106,6 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
             slotIntervalMinutes: String(data.slotIntervalMinutes),
             defaultPreparationBufferMinutes: String(data.defaultPreparationBufferMinutes),
             defaultCleanupBufferMinutes: String(data.defaultCleanupBufferMinutes),
-            allowTentativeAppointments: data.allowTentativeAppointments,
-            tentativeHoldMinutes: String(data.tentativeHoldMinutes),
             requireTherapistAtBooking: data.requireTherapistAtBooking,
             requireRoomAtBooking: data.requireRoomAtBooking,
             allowAutoAssignment: data.allowAutoAssignment,
@@ -98,7 +117,6 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
             noShowChargeValue: data.noShowChargeValue != null ? String(data.noShowChargeValue) : "",
             noShowGraceMinutes: String(data.noShowGraceMinutes),
             requireCancellationReason: data.requireCancellationReason,
-            requireRescheduleReason: data.requireRescheduleReason,
           })
         } else {
           form.reset(defaults)
@@ -119,7 +137,6 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
         slotIntervalMinutes: parseInt(values.slotIntervalMinutes),
         defaultPreparationBufferMinutes: parseInt(values.defaultPreparationBufferMinutes),
         defaultCleanupBufferMinutes: parseInt(values.defaultCleanupBufferMinutes),
-        tentativeHoldMinutes: parseInt(values.tentativeHoldMinutes),
         cancellationCutoffHours: parseInt(values.cancellationCutoffHours),
         lateCancellationChargeValue: values.lateCancellationChargeValue !== "" ? parseFloat(values.lateCancellationChargeValue) : null,
         noShowChargeValue: values.noShowChargeValue !== "" ? parseFloat(values.noShowChargeValue) : null,
@@ -164,15 +181,9 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
           <FormField control={form.control} name="defaultCleanupBufferMinutes" render={({ field }) => (
             <FormItem><FormLabel>Default Cleanup Buffer (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
-          <FormField control={form.control} name="tentativeHoldMinutes" render={({ field }) => (
-            <FormItem><FormLabel>Tentative Hold (min)</FormLabel><FormControl><Input type="number" min="0" {...field} disabled={!form.watch("allowTentativeAppointments")} /></FormControl><FormMessage /></FormItem>
-          )} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-          <FormField control={form.control} name="allowTentativeAppointments" render={({ field }) => (
-            <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Allow tentative holds</FormLabel></FormItem>
-          )} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           <FormField control={form.control} name="requireTherapistAtBooking" render={({ field }) => (
             <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Require therapist at booking</FormLabel></FormItem>
           )} />
@@ -247,9 +258,6 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormField control={form.control} name="requireCancellationReason" render={({ field }) => (
             <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Require cancellation reason</FormLabel></FormItem>
-          )} />
-          <FormField control={form.control} name="requireRescheduleReason" render={({ field }) => (
-            <FormItem className="flex items-center gap-3"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal cursor-pointer">Require reschedule reason</FormLabel></FormItem>
           )} />
         </div>
 

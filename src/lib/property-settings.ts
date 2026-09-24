@@ -3,6 +3,7 @@ import type { Prisma, PropertySettings } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { FOLIO_STYLES } from "@/lib/folio-presentation"
 import { auditTimeSchema } from "@/lib/night-audit/audit-window"
+import { MIN_SERVICE_CHARGE_RATE } from "@/lib/tax-calc"
 
 // One property's document content and booking-number format (PropertySettings). Every
 // reader goes through getPropertySettings() so a property that has never saved anything
@@ -142,7 +143,8 @@ export const propertySettingsPatchSchema = z
     tgstEnabled: z.boolean(),
     tgstRate: percent,
     serviceChargeEnabled: z.boolean(),
-    serviceChargeRate: percent,
+    // Floor shared with the Finance › Tax form — see MIN_SERVICE_CHARGE_RATE.
+    serviceChargeRate: percent.min(MIN_SERVICE_CHARGE_RATE, `Maldives law requires at least ${MIN_SERVICE_CHARGE_RATE}% Service Charge (switch posting off on the Night Audit page instead)`),
     noShowTiming: z.enum(NO_SHOW_TIMINGS),
     noShowPostFee: z.boolean(),
     autoCheckOutZeroBalance: z.boolean(),

@@ -1,9 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form"
 import {
   Table,
   TableBody,
@@ -13,7 +17,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type Sequence = { sequenceType: string; currentValue: number; updatedAt: string | null }
+type Sequence = {
+  sequenceType: string
+  currentValue: number
+  updatedAt: string | null
+  /** Highest number already on an issued document — the counter can't go below it. */
+  highestIssued: number | null
+  /** Guest Registration No once the Green Tax register holds numbers this year. */
+  locked: boolean
+}
 
 const SEQUENCE_LABELS: Record<string, string> = {
   REGISTRATION_NO: "Reservation No (confirmation)",
@@ -24,12 +36,114 @@ const SEQUENCE_LABELS: Record<string, string> = {
 }
 const SEQUENCE_TYPES = Object.keys(SEQUENCE_LABELS)
 
+// The counter holds the LAST number issued; the next document gets currentValue + 1.
+// The floor mirrors the API guard (src/lib/sequence-guard.ts) so the user sees why a
+// value is refused before saving — the API re-checks against the live documents.
+function sequenceSchema(highestIssued: number | null) {
+  const floor = highestIssued ?? 0
+  return z.object({
+    currentValue: z.coerce
+      .number({ message: "Enter a number" })
+      .int("Whole numbers only")
+      .nonnegative("Can't be negative")
+      .max(2_000_000_000, "That number is too large")
+      .refine((v) => v >= floor, {
+        message: `Number ${floor} has already been issued — use ${floor} or higher so no number is issued twice.`,
+      }),
+  })
+}
+
+function EditSequenceForm({
+  propertyId,
+  seq,
+  compact,
+  onCancel,
+  onSaved,
+}: {
+  propertyId: string
+  seq: Sequence
+  compact?: boolean
+  onCancel: () => void
+  onSaved: () => void
+}) {
+  const schema = useMemo(() => sequenceSchema(seq.highestIssued), [seq.highestIssued])
+  type FormInput = z.input<typeof schema>
+  type FormValues = z.output<typeof schema>
+  const [serverError, setServerError] = useState<string | null>(null)
+  const form = useForm<FormInput, unknown, FormValues>({
+    resolver: zodResolver(schema),
+    mode: "onChange",
+    defaultValues: { currentValue: seq.currentValue },
+  })
+
+  const onSubmit = async (values: FormValues) => {
+    setServerError(null)
+    const res = await fetch("/api/settings/sequences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ propertyId, sequenceType: seq.sequenceType, currentValue: values.currentValue }),
+    })
+    if (res.ok) {
+      onSaved()
+      return
+    }
+    const body = await res.json().catch(() => null)
+    setServerError(typeof body?.error === "string" ? body.error : "Couldn't save the sequence.")
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className={compact ? "space-y-3" : "flex flex-wrap items-start justify-end gap-2"}>
+        <FormField
+          control={form.control}
+          name="currentValue"
+          render={({ field }) => (
+            <FormItem className={compact ? "" : "w-full max-w-xs text-left"}>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={seq.highestIssued ?? 0}
+                  step={1}
+                  name={field.name}
+                  ref={field.ref}
+                  onBlur={field.onBlur}
+                  value={field.value === undefined || field.value === null ? "" : String(field.value)}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  className={compact ? "h-9" : "h-8"}
+                  autoFocus
+                  aria-label="Current sequence"
+                />
+              </FormControl>
+              <FormMessage />
+              {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+            </FormItem>
+          )}
+        />
+        <div className={compact ? "flex gap-2" : "flex gap-2"}>
+          <Button type="button" variant="outline" size={compact ? "default" : "sm"} className={compact ? "h-9 flex-1" : ""} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            size={compact ? "default" : "sm"}
+            className={compact ? "h-9 flex-1" : ""}
+            disabled={!form.formState.isValid || form.formState.isSubmitting}
+          >
+            Save
+          </Button>
+        </div>
+      </form>
+    </Form>
+  )
+}
+
+const GREEN_TAX_LOCKED_NOTE =
+  "Numbers have been given this year — correct them on the Green Tax register (Hub › Green Tax)."
+
 export function SequenceManager({ propertyId }: { propertyId: string }) {
   const [sequences, setSequences] = useState<Sequence[]>([])
   const [loading, setLoading] = useState(true)
   const [editingType, setEditingType] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState("")
-  const [saving, setSaving] = useState(false)
 
   const fetchSequences = useCallback(() => {
     if (!propertyId) return
@@ -45,29 +159,20 @@ export function SequenceManager({ propertyId }: { propertyId: string }) {
 
   useEffect(() => { fetchSequences() }, [fetchSequences])
 
-  const startEdit = (sequenceType: string, currentValue: number) => {
-    setEditingType(sequenceType)
-    setEditValue(String(currentValue))
+  const seqFor = (sequenceType: string): Sequence =>
+    sequences.find((s) => s.sequenceType === sequenceType) ?? { sequenceType, currentValue: 0, updatedAt: null, highestIssued: null, locked: false }
+
+  const onSaved = () => {
+    setEditingType(null)
+    fetchSequences()
   }
 
-  const saveEdit = async (sequenceType: string) => {
-    const parsed = Number(editValue)
-    if (!Number.isInteger(parsed) || parsed < 0) return
-    setSaving(true)
-    try {
-      const res = await fetch("/api/settings/sequences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId, sequenceType, currentValue: parsed }),
-      })
-      if (res.ok) {
-        setEditingType(null)
-        fetchSequences()
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
+  const note = (seq: Sequence) =>
+    seq.locked
+      ? GREEN_TAX_LOCKED_NOTE
+      : seq.highestIssued
+        ? `Highest issued: ${seq.highestIssued} · next: ${seq.currentValue + 1}`
+        : `Next: ${seq.currentValue + 1}`
 
   return (
     <div className="space-y-4">
@@ -80,34 +185,21 @@ export function SequenceManager({ propertyId }: { propertyId: string }) {
               Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
             ) : (
               SEQUENCE_TYPES.map((sequenceType) => {
-                const seq = sequences.find((s) => s.sequenceType === sequenceType)
-                const currentValue = seq?.currentValue ?? 0
+                const seq = seqFor(sequenceType)
                 const isEditing = editingType === sequenceType
                 return (
                   <div key={sequenceType} className="rounded-lg border border-border bg-card p-4 space-y-3">
                     <p className="font-medium text-foreground">{SEQUENCE_LABELS[sequenceType]}</p>
                     {isEditing ? (
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="h-9"
-                        autoFocus
-                      />
+                      <EditSequenceForm propertyId={propertyId} seq={seq} compact onCancel={() => setEditingType(null)} onSaved={onSaved} />
                     ) : (
-                      <p className="text-lg tabular-nums">{currentValue}</p>
-                    )}
-                    {isEditing ? (
-                      <div className="flex gap-2">
-                        <Button variant="outline" className="h-9 flex-1" onClick={() => setEditingType(null)}>Cancel</Button>
-                        <Button className="h-9 flex-1" onClick={() => saveEdit(sequenceType)} disabled={saving}>Save</Button>
-                      </div>
-                    ) : (
-                      <Button variant="outline" className="h-9 w-full" onClick={() => startEdit(sequenceType, currentValue)}>
-                        Start from new sequence
-                      </Button>
+                      <>
+                        <p className="text-lg tabular-nums">{seq.currentValue}</p>
+                        <p className="text-xs text-muted-foreground">{note(seq)}</p>
+                        <Button variant="outline" className="h-9 w-full" disabled={seq.locked} onClick={() => setEditingType(sequenceType)}>
+                          Start from new sequence
+                        </Button>
+                      </>
                     )}
                   </div>
                 )
@@ -131,39 +223,28 @@ export function SequenceManager({ propertyId }: { propertyId: string }) {
                 ))
               ) : (
                 SEQUENCE_TYPES.map((sequenceType) => {
-                  const seq = sequences.find((s) => s.sequenceType === sequenceType)
-                  const currentValue = seq?.currentValue ?? 0
+                  const seq = seqFor(sequenceType)
                   const isEditing = editingType === sequenceType
                   return (
                     <TableRow key={sequenceType}>
                       <TableCell className="font-medium">{SEQUENCE_LABELS[sequenceType]}</TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="h-8 w-32"
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="tabular-nums">{currentValue}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setEditingType(null)}>Cancel</Button>
-                            <Button size="sm" onClick={() => saveEdit(sequenceType)} disabled={saving}>Save</Button>
-                          </div>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => startEdit(sequenceType, currentValue)}>
-                            Start from new sequence
-                          </Button>
-                        )}
-                      </TableCell>
+                      {isEditing ? (
+                        <TableCell colSpan={2}>
+                          <EditSequenceForm propertyId={propertyId} seq={seq} onCancel={() => setEditingType(null)} onSaved={onSaved} />
+                        </TableCell>
+                      ) : (
+                        <>
+                          <TableCell>
+                            <span className="tabular-nums">{seq.currentValue}</span>
+                            <p className="text-xs text-muted-foreground">{note(seq)}</p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" disabled={seq.locked} onClick={() => setEditingType(sequenceType)}>
+                              Start from new sequence
+                            </Button>
+                          </TableCell>
+                        </>
+                      )}
                     </TableRow>
                   )
                 })
