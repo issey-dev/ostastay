@@ -3157,3 +3157,4 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   placeholders ("e.g. M, F, VEG") were removed at the owner's request.
 - Released as **7.3.0** (owner), with the Night Audit additions of 2026-09-24/25 (no-show
   handling, scheduled audit, automatic check-out of settled departures).
+
