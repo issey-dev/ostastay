@@ -14,7 +14,7 @@ import { renderCsv } from "@/lib/reports/render/csv";
 // fall back to Crimson OS).
 export async function loadBranding(ctx: AuthContext, propertyId: string | null): Promise<ReportBranding> {
   const [property, enterprise, user] = await Promise.all([
-    propertyId ? prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, defaultCurrency: true, timeZone: true } }) : null,
+    propertyId ? prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, defaultCurrency: true, timeZone: true, logoUrl: true } }) : null,
     prisma.enterprise.findUnique({ where: { id: ctx.enterpriseId }, select: { name: true } }),
     prisma.user.findUnique({ where: { id: ctx.userId }, select: { firstName: true, lastName: true, email: true } }),
   ]);
@@ -24,6 +24,7 @@ export async function loadBranding(ctx: AuthContext, propertyId: string | null):
     enterpriseName: enterprise?.name ?? "",
     currency: property?.defaultCurrency ?? "",
     brandColor: null,
+    logoUrl: property?.logoUrl ?? null,
     generatedBy: user ? `${user.firstName} ${user.lastName ?? ""}`.trim() : (user as { email?: string } | null)?.email ?? "System",
     generatedAt: new Date(),
     timeZone: property?.timeZone ?? null,

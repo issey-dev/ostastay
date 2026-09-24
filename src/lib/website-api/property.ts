@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate } from "@/lib/business-date";
+import { absoluteLogoUrl } from "@/lib/property-logo";
 
 // The property as a brand website sees it. Shaped narrowly and deliberately: identity,
 // location, contact, policies, sellable room types with their features, and the booking
@@ -281,7 +282,8 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
     headline: p.websiteSettings?.headline ?? null,
     description: p.websiteSettings?.description ?? null,
     imageUrls: p.websiteSettings?.imageUrls ?? [],
-    logoUrl: p.logoUrl,
+    // Absolute — read by the property's own website, not this app.
+    logoUrl: absoluteLogoUrl(p.logoUrl),
     brandColor: p.bannerColor,
     starRating: p.starRating,
     address: p.address,

@@ -2,6 +2,7 @@
 
 import { useProperty } from "@/components/providers/property-provider"
 import { Building2, CalendarClock } from "@/components/icons"
+import { LogoTile } from "@/components/ui/logo-tile"
 
 // The header brand block: the active property's logo + name, with the enterprise
 // name beneath. Property data is client-side (PropertyProvider) so it updates on a
@@ -12,8 +13,8 @@ export function HeaderBrand({ enterpriseName }: { enterpriseName: string }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       {currentProperty?.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={currentProperty.logoUrl} alt="" className="h-9 w-9 rounded-md object-cover shrink-0 shadow-elevation-1" />
+        // The 3:2 logo on a white tile — readable on the dark header whatever its colours.
+        <LogoTile src={currentProperty.logoUrl} className="h-9 w-[54px] shadow-elevation-1" />
       ) : (
         <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center shrink-0">
           <Building2 className="h-5 w-5 text-muted-foreground" />

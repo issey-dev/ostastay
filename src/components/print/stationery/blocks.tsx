@@ -43,8 +43,9 @@ export type StationeryTotalLine = {
 function BrandMark({ brand }: { brand: StationeryBrand }) {
   if (brand.logoUrl) {
     return (
+      // The property's 3:2 logo (Hub › General), shown whole.
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={brand.logoUrl} alt={brand.name} className="h-11 w-11 rounded-md object-contain" />
+      <img src={brand.logoUrl} alt={brand.name} className="h-16 w-24 shrink-0 object-contain object-left" />
     )
   }
   return (

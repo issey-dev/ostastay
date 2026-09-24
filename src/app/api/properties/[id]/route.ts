@@ -53,7 +53,7 @@ export async function PUT(
         timeZone: body.timeZone,
         checkInTime: body.checkInTime,
         checkOutTime: body.checkOutTime,
-        logoUrl: body.logoUrl,
+        // logoUrl is set only by uploading (POST /api/properties/[id]/logo).
         taxId: body.taxId,
         contactPhone: body.contactPhone,
         contactEmail: body.contactEmail,

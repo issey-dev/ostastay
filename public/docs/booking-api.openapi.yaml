@@ -834,7 +834,7 @@ components:
         headline: { type: [string, "null"] }
         description: { type: [string, "null"] }
         imageUrls: { type: array, items: { type: string, format: uri } }
-        logoUrl: { type: [string, "null"] }
+        logoUrl: { type: [string, "null"], format: uri, description: "Absolute URL of the property's logo — a 3:2 (900 × 600) PNG." }
         brandColor: { type: [string, "null"], description: Hex colour. }
         starRating: { type: [integer, "null"] }
         address: { type: [string, "null"] }

@@ -101,6 +101,8 @@ export type ReportBranding = {
   currency: string;
   brandColor?: string | null; // hex, e.g. "#4f46e5"
   logoDataUrl?: string | null; // data: URI (PDF embeds bytes; kept optional)
+  // The property's logo (Hub › General) — a URL the printed page loads; null for all properties.
+  logoUrl?: string | null;
   generatedBy: string;
   generatedAt: Date;
   // IANA zone the "Generated …" stamp is shown in — the property's own clock.
