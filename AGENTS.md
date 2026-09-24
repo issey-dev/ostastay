@@ -32,7 +32,7 @@ read `.agents/docs/`:
 - [`.agents/docs/WEBSITE_API_PLAN.md`](.agents/docs/WEBSITE_API_PLAN.md) — the public
   Website API (a property's own brand website reading availability/prices and creating
   bookings through a Hub-minted key): decisions W-1…W-11, file map, open items. The
-  external docs are the public portal at `/docs` (`src/app/docs`, one page per module),
+  external docs are the public portal at `/docs/api` (`src/app/docs`, one page per module),
   the OpenAPI spec `public/docs/booking-api.openapi.yaml` and the PDF built from the portal
   (`npm run docs:pdf`) — keep them in step with `src/app/api/website/v1/**`, and run
   `npm run docs:check` (published docs must carry no secret, real customer or internal detail).
@@ -49,6 +49,15 @@ read `.agents/docs/`:
   one property at a time, property always in the URL). Read before adding any setting:
   decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
   `requirePropertySetup()` from `src/lib/scope.ts`.
+
+- **The public docs portal** (`src/app/docs`, table of contents in `src/app/docs/nav.ts`) has
+  three areas: `/docs/api` (Booking API, for developers), `/docs/configuration` (setting up
+  an enterprise and its properties in the Hub, for the client's admin and property team) and
+  `/docs/operations` (day-to-day staff guides). **When you change a Hub setup screen, update
+  its page under `src/app/docs/configuration`**, and re-shoot its screenshot: `npm run
+  docs:demo` (the fictional Coral Bay Hotels enterprise) then `npm run docs:shots -- <name>`
+  (shot list in `scripts/docs-shots.config.ts`; main content only, never app chrome).
+  Rebuild the PDFs with `npm run docs:pdf` and run `npm run docs:check`.
 
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to

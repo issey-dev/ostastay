@@ -12,6 +12,8 @@
     "db:reset": "prisma migrate reset --force --skip-seed && npm run seed",
     "docs:check": "vite-node -c vitest.config.ts scripts/docs-check.ts",
     "docs:pdf": "vite-node -c vitest.config.ts scripts/docs-pdf.ts",
+    "docs:demo": "vite-node -c vitest.config.ts scripts/docs-demo.ts",
+    "docs:shots": "vite-node -c vitest.config.ts scripts/docs-shots.ts",
     "charges:cleanup-demo": "vite-node -c vitest.config.ts scripts/cleanup-demo-charge-codes.ts"
   },
   "dependencies": {

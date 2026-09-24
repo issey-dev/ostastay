@@ -3187,3 +3187,22 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
 - **Copy from another property is a plain copy.** Codes keep their numbers; nothing is
   renumbered or invented. A number (or an outlet's own subgroup number) the target already
   uses is skipped and reported, never linked to the target's existing code.
+
+## 2026-09-24 — Documentation portal split into areas; Configuration guide (owner)
+
+- `/docs` is split into areas, each with its own sidebar, pager and PDF: **`/docs/api`**
+  (the Booking API, was `/docs/api-integration`), **`/docs/configuration`** (onboarding and
+  setup) and **`/docs/operations`** (day-to-day user guides, to be filled in later). The old
+  `/docs/api-integration/*` and `/docs/guides/*` addresses **redirect permanently** (next.config.ts)
+  because they are already shared with developers.
+- The Configuration guide's reader is the **client's admin user**; the **property team** does
+  the configuration. It separates **Enterprise** setup from **Property** setup and walks a
+  newly provisioned property to its first reservation, in dependency order (General → Tax &
+  payments → Charge codes → Outlets → Rooms → Rates → Numbering → Night audit → Stationery,
+  then the add-ons and channels, then a go-live checklist).
+- Configuration docs are **public**, like the API docs (and so are covered by `docs:check`).
+- Pages carry **screenshots**: compact WebP, **main content only** — never the app's sidebar,
+  header or footer — or just the open dialog. Taken from the fictional *Coral Bay Hotels*
+  enterprise (`npm run docs:demo`, `npm run docs:shots`), never from a customer's data.
+- **One PDF per area** (`npm run docs:pdf [area]`). The Booking API PDF keeps its address.
+

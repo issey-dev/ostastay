@@ -102,7 +102,7 @@ function RevealKeyDialog({ reveal, onClose }: { reveal: { key: string; title: st
           <p className="text-xs text-muted-foreground">
             Send it as <code className="font-mono">Authorization: Bearer &lt;key&gt;</code>. Keep it on the website&apos;s
             server; never put it in page source. Developer guide:{" "}
-            <a className="underline" href="/docs/api-integration" target="_blank" rel="noreferrer">/docs/api-integration</a>.
+            <a className="underline" href="/docs/api" target="_blank" rel="noreferrer">/docs/api</a>.
           </p>
         </div>
         <DialogFooter>

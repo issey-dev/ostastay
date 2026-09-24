@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ALL_DOC_LINKS } from "./nav"
+import { DOC_AREAS, areaLinks } from "./nav"
 
 // The handful of building blocks every docs page is written with. Plain server components:
 // the pages are static content and ship no JavaScript beyond the copy buttons.
@@ -74,15 +74,46 @@ export function Cards({ items }: { items: { href: string; title: string; body: s
   )
 }
 
-/** Previous / next page, in table-of-contents order. */
+/** Previous / next page, in the area's table-of-contents order. */
 export function Pager({ href }: { href: string }) {
-  const i = ALL_DOC_LINKS.findIndex((l) => l.href === href)
-  const prev = i > 0 ? ALL_DOC_LINKS[i - 1] : null
-  const next = i >= 0 && i < ALL_DOC_LINKS.length - 1 ? ALL_DOC_LINKS[i + 1] : null
+  const links = areaLinks(DOC_AREAS.find((a) => areaLinks(a).some((l) => l.href === href)) ?? DOC_AREAS[0])
+  const i = links.findIndex((l) => l.href === href)
+  const prev = i > 0 ? links[i - 1] : null
+  const next = i >= 0 && i < links.length - 1 ? links[i + 1] : null
   return (
     <nav className="docs-pager" aria-label="Pages">
       <span>{prev && <Link href={prev.href}>← {prev.title}</Link>}</span>
       <span>{next && <Link href={next.href}>{next.title} →</Link>}</span>
     </nav>
+  )
+}
+
+/**
+ * A screenshot of the app — the main content only, never the app's sidebar or header —
+ * captured by `npm run docs:shots` into public/docs/img. `name` is the file name without
+ * its extension; the image is lazy-loaded so a long guide stays light.
+ */
+export function Shot({ name, alt, caption }: { name: string; alt: string; caption?: string }) {
+  return (
+    <figure className="docs-shot">
+      {/* eslint-disable-next-line @next/next/no-img-element -- static docs asset, next/image is disabled app-wide */}
+      <img src={`/docs/img/${name}.webp`} alt={alt} loading="lazy" decoding="async" />
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
+  )
+}
+
+/** "Where": the menu path to the screen a section describes, and who may open it. */
+export function Where({ path, who }: { path: string; who?: string }) {
+  return (
+    <p className="docs-where">
+      <strong>Where:</strong> {path}
+      {who && (
+        <>
+          {" · "}
+          <strong>Who:</strong> {who}
+        </>
+      )}
+    </p>
   )
 }

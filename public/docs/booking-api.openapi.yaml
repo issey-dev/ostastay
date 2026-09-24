@@ -6,7 +6,7 @@ info:
   description: |
     Key-authenticated API for a property's brand website. Keys are created in the enterprise Hub
     (Booking API → API Keys), grant access to one or more of the enterprise's properties, and are
-    enabled for Rooms, Excursions and/or Spa. The full guide is at /docs/api-integration.
+    enabled for Rooms, Excursions and/or Spa. The full guide is at /docs/api.
 
     Conventions: dates are `YYYY-MM-DD` calendar days; check-out is exclusive; money is a number
     in the property's currency; every response is `Cache-Control: no-store`; errors carry a

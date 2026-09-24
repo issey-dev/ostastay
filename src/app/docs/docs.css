@@ -64,6 +64,16 @@
 .docs-header a { color: inherit; text-decoration: none; }
 .docs-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .docs-brand-sep { color: var(--ink-muted); font-weight: 400; }
+.docs-areas { display: flex; align-self: stretch; gap: 4px; margin-left: 16px; font-size: 14px; }
+.docs-areas a {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-muted);
+}
+.docs-areas a:hover { color: var(--ink); }
+.docs-areas a[aria-current="true"] { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
 .docs-header-links { margin-left: auto; display: flex; gap: 16px; font-size: 14px; color: var(--ink-muted); }
 .docs-header-links a:hover { color: var(--ink); }
 
@@ -96,6 +106,8 @@
   text-decoration: none;
 }
 .docs-sidebar a:hover { background: var(--line-soft); }
+.docs-sidebar-areas[data-in-area] { display: none; }
+.docs-sidebar-areas a[aria-current="true"] { color: var(--accent-ink); font-weight: 600; }
 .docs-sidebar a[aria-current="page"] { border-left-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
 .docs-main { flex: 1 1 auto; min-width: 0; padding: 40px 48px 96px; }
@@ -204,6 +216,15 @@
   line-height: 24px;
 }
 
+/* A screenshot of the app's main content, with its caption. */
+.docs-shot { margin: 4px 0 22px; }
+.docs-shot img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); background: #fff; }
+.docs-shot figcaption { margin-top: 6px; font-size: 13px; color: var(--ink-muted); }
+
+/* A labelled step list for the configuration walkthrough: where, then what. */
+.docs-where { margin: -4px 0 16px; font-size: 14px; color: var(--ink-muted); }
+.docs-where strong { color: var(--ink-strong); font-weight: 600; }
+
 .docs-pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 14px; }
 .docs-pager a { text-decoration: none; }
 
@@ -230,7 +251,8 @@
     color: inherit;
     font-size: 14px;
   }
-  .docs-header-links { display: none; }
+  .docs-header-links, .docs-areas { display: none; }
+  .docs-sidebar-areas[data-in-area] { display: block; }
   .docs-main { padding: 24px 16px 72px; }
   .docs-article h1 { font-size: 26px; }
 }
@@ -240,6 +262,6 @@
   .docs-main { padding: 0; }
   .docs-page { background: #fff; color: #000; }
   .docs-article { max-width: none; }
-  .docs-code { break-inside: avoid; }
+  .docs-code, .docs-shot { break-inside: avoid; }
   .docs-article h2 { break-after: avoid; }
 }
