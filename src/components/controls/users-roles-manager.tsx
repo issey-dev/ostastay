@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
 import { OptionSelect } from "@/components/ui/option-select"
-import { JOB_FUNCTIONS, jobFunctionLabel } from "@/lib/job-functions"
+import { JOB_FUNCTIONS, isJobFunction, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
@@ -562,7 +562,14 @@ export function UsersRolesManager({
               <OptionSelect
                 value={userForm.jobFunction}
                 onChange={(v) => setUserForm({ ...userForm, jobFunction: v })}
-                options={[{ label: "No post assigned", value: "" }, ...JOB_FUNCTIONS.map((j) => ({ label: j.label, value: j.code }))]}
+                options={[
+                  { label: "No post assigned", value: "" },
+                  ...JOB_FUNCTIONS.map((j) => ({ label: j.label, value: j.code })),
+                  // A post stored before the list was fixed stays selectable for this user.
+                  ...(editingUser?.jobFunction && !isJobFunction(editingUser.jobFunction)
+                    ? [{ label: `${jobFunctionLabel(editingUser.jobFunction)} (no longer listed)`, value: editingUser.jobFunction }]
+                    : []),
+                ]}
               />
               <p className="text-xs text-muted-foreground">
                 Their post at the property. Housekeeping and Maintenance decide who appears in

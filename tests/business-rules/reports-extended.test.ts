@@ -174,9 +174,9 @@ describe("Reporting engine — Revenue / Financial / Housekeeping", () => {
     expect(res.totals!.net).toBe(151);
   });
 
-  it("Nationality Statistics tallies room nights by nationality", async () => {
+  it("Nationality Statistics tallies room nights by nationality (master-list label)", async () => {
     const res = await run("rev-nationality", { range: { from: BIZ, to: D(2026, 7, 11) } });
-    const gb = res.rows!.find((r) => r.nationality === "GB");
+    const gb = res.rows!.find((r) => r.nationality === "British");
     expect(gb).toBeTruthy();
     expect(gb!.roomNights).toBe(2);
   });

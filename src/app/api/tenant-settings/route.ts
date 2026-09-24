@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requireEnterpriseHub, toErrorResponse } from "@/lib/scope";
 import { encryptSecret } from "@/lib/secret-crypto";
 import { logActivity } from "@/lib/activity-log";
 import { isFolioStyle } from "@/lib/folio-presentation";
@@ -57,6 +57,8 @@ export async function GET() {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "view");
+    // Enterprise-wide (SMTP/SFTP): never a single-property admin's, whatever their CONTROLS.
+    requireEnterpriseHub(ctx);
 
     const settings = await prisma.enterpriseSettings.upsert({
       where: { enterpriseId: ctx.enterpriseId },
@@ -74,6 +76,8 @@ export async function PATCH(request: Request) {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "update");
+    // Enterprise-wide (SMTP/SFTP): never a single-property admin's, whatever their CONTROLS.
+    requireEnterpriseHub(ctx);
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid body" }, { status: 400 });

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { getPropertySettings } from "@/lib/property-settings"
 import { systemContext } from "@/lib/reservations/system-context"
-import { EOD_STEPS } from "@/lib/eod"
+import { EOD_STEPS, getActiveEodRun } from "@/lib/eod"
 import { runEodStep } from "@/lib/night-audit/eod-step"
 import type { JobResult } from "@/lib/jobs/runner"
 
@@ -49,45 +49,29 @@ export function minutesPastAuditTime(businessDate: Date, auditTime: string, loca
   return (local.date.getTime() - dueDay) / 60000 + (local.minutes - auditMinutes)
 }
 
+const SCHEDULER_USER_ID = "scheduled-night-audit"
+const ymd = (d: Date) => d.toISOString().slice(0, 10)
+
 export type ScheduledAuditOutcome = { propertyName: string; status: "RAN" | "STOPPED" | "BEHIND"; detail: string }
 
 export async function runScheduledAudits(enterpriseId: string, now: Date = new Date()): Promise<JobResult> {
   const properties = await prisma.property.findMany({
     where: { enterpriseId, status: "ACTIVE" },
     select: { id: true, name: true, timeZone: true, businessDate: true },
+    orderBy: { name: "asc" },
   })
-  const ctx = systemContext(enterpriseId, "scheduled-night-audit")
+  const ctx = systemContext(enterpriseId, SCHEDULER_USER_ID)
   const outcomes: ScheduledAuditOutcome[] = []
 
+  // Each property on its own: one property's fault (a throw anywhere in a step) is
+  // reported for that property and never keeps the others from being audited.
   for (const property of properties) {
-    const settings = await getPropertySettings(property.id)
-    if (!settings.autoAuditEnabled) continue
-    const businessDate = resolveBusinessDate(property)
-    const late = minutesPastAuditTime(businessDate, settings.autoAuditTime, propertyLocalNow(property.timeZone || "UTC", now))
-    if (late < 0) continue
-    if (late >= 24 * 60) {
-      outcomes.push({
-        propertyName: property.name,
-        status: "BEHIND",
-        detail: `business date ${businessDate.toISOString().slice(0, 10)} is more than a day behind — run Night Audit from the property`,
-      })
-      continue
+    try {
+      const outcome = await auditProperty(ctx, property, now)
+      if (outcome) outcomes.push(outcome)
+    } catch (err) {
+      outcomes.push({ propertyName: property.name, status: "STOPPED", detail: `failed: ${err instanceof Error ? err.message : String(err)}` })
     }
-
-    let stopped: string | null = null
-    for (const step of EOD_STEPS) {
-      const res = await runEodStep(ctx, { propertyId: property.id, step: step.key })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        stopped = `stopped at "${step.label}": ${body.error ?? `HTTP ${res.status}`}`
-        break
-      }
-    }
-    outcomes.push(
-      stopped
-        ? { propertyName: property.name, status: "STOPPED", detail: stopped }
-        : { propertyName: property.name, status: "RAN", detail: `audited ${businessDate.toISOString().slice(0, 10)}` }
-    )
   }
 
   const ran = outcomes.filter((o) => o.status === "RAN")
@@ -99,4 +83,50 @@ export async function runScheduledAudits(enterpriseId: string, now: Date = new D
     throw new Error([...problems.map(line), ...ran.map(line)].join("; "))
   }
   return { itemsProcessed: ran.length, summary: ran.length ? ran.map(line).join("; ") : "No scheduled audit due" }
+}
+
+async function auditProperty(
+  ctx: ReturnType<typeof systemContext>,
+  property: { id: string; name: string; timeZone: string | null; businessDate: Date | null },
+  now: Date
+): Promise<ScheduledAuditOutcome | null> {
+  const settings = await getPropertySettings(property.id)
+  if (!settings.autoAuditEnabled) return null
+
+  // A run the scheduler started and couldn't finish (a later step failed after "post"
+  // had already rolled the business date) is resumed first, whatever the time — otherwise
+  // the rolled date makes it look not-due, its failure drops off the Overview on the next
+  // tick, and its remaining steps (registration numbers, report snapshots) are skipped.
+  // A run a person started is theirs to finish from the Night Audit screen.
+  const active = await getActiveEodRun(property.id)
+  if (active && active.startedByUserId === SCHEDULER_USER_ID) {
+    return runAllSteps(ctx, property, active.businessDate)
+  }
+
+  const businessDate = resolveBusinessDate(property)
+  const late = minutesPastAuditTime(businessDate, settings.autoAuditTime, propertyLocalNow(property.timeZone || "UTC", now))
+  if (late < 0) return null
+  if (late >= 24 * 60) {
+    return {
+      propertyName: property.name,
+      status: "BEHIND",
+      detail: `business date ${ymd(businessDate)} is more than a day behind — run Night Audit from the property`,
+    }
+  }
+  return runAllSteps(ctx, property, businessDate)
+}
+
+async function runAllSteps(
+  ctx: ReturnType<typeof systemContext>,
+  property: { id: string; name: string },
+  auditedDate: Date
+): Promise<ScheduledAuditOutcome> {
+  for (const step of EOD_STEPS) {
+    const res = await runEodStep(ctx, { propertyId: property.id, step: step.key })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return { propertyName: property.name, status: "STOPPED", detail: `stopped at "${step.label}": ${body.error ?? `HTTP ${res.status}`}` }
+    }
+  }
+  return { propertyName: property.name, status: "RAN", detail: `audited ${ymd(auditedDate)}` }
 }

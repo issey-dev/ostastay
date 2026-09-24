@@ -2,6 +2,50 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Review of 7.3.0 (#53) + tax fix (#54) — 2026-09-24
+
+Fixed:
+- ~~Scheduled Night Audit: one property's throw stopped every later property~~ — each property
+  now runs in its own try/catch (`night-audit/scheduled.ts`), ordered by name.
+- ~~A scheduled run that failed after "post" rolled the date was never resumed~~ — its failure
+  vanished on the next tick and registration/report snapshots for that day were skipped. The
+  scheduler now resumes its OWN in-progress run first (a person's run is left to them).
+- ~~Held late arrivals (no-show SECOND_AUDIT / MANUAL) never got a Green Tax Reg No~~ — the
+  registration step also takes IN_HOUSE guests whose arrival date is earlier, checked in
+  around this day, with no registration yet (`guest-registration.ts`).
+- ~~People: a user with a post from the old editable Job Functions list couldn't be saved~~ —
+  PATCH accepts the unchanged stored value; the picker shows it as "(no longer listed)".
+- ~~`/api/tenant-settings` (SMTP/SFTP) open to single-property admins with CONTROLS~~ — now
+  `requireEnterpriseHub`, as is `/api/tenant-settings/smtp-test`.
+- ~~Copy from property: a copied outlet could be linked to ANOTHER outlet's codes~~ (every
+  first restaurant is 20RV / 2001-2004). Its own codes come only when their numbers are free
+  at the target; otherwise reported skipped and the outlet gets a fresh subgroup
+  (`provisionOutletSubgroup`).
+- ~~Copy from property: a generate on ANOTHER_GENERATE could lose its basis and post 0~~ —
+  two-pass copy; an unmappable basis falls back to NET.
+- ~~Nationality: old stored country names ("Turkey", "Hong Kong", …28 renamed by CLDR) and
+  German passports' MRZ "D" no longer resolved~~ — alias tables in `countries.ts`;
+  `NationalitySelect` converts a resolvable legacy value to its code and shows an
+  unresolvable one as "(not on the list)" instead of an empty field.
+- ~~Nationalities manager offered editing to roles without CONTROLS create~~ (every rename of
+  a standard entry is a POST) — needs create + update now.
+- eRegistration review dialog shows nationality / country names, not bare codes.
+- `reports-extended` Nationality Statistics test expected the code "GB"; the report now
+  shows the master-list label ("British") — test updated.
+
+Open (need an owner decision — not changed):
+- [ ] **Held late arrival's missed night is never billed.** Under no-show SECOND_AUDIT /
+  MANUAL, a guest checked in a day late keeps their original `checkInDate`; the night that
+  was already audited posted no room charge, and a one-night booking is due out the moment
+  they check in. Options: move `checkInDate` to the business date on a late check-in, or post
+  the missed night at check-in. Ask the owner which.
+- [ ] **Scheduled audit time is not range-checked.** Any time from 12:00 runs on the same day
+  (13:00 would roll the date at 1pm and, under FIRST_AUDIT, no-show that day's arrivals).
+  Consider limiting it to e.g. 20:00–06:00 or warning in the form.
+- [ ] Copy from property: codes an outlet added to its own subgroup beyond the standard set
+  aren't carried when its subgroup number is taken at the target (reported as skipped).
+- [ ] Stale `.next/dev/types` breaks `tsc` after the route moves — delete `.next` locally.
+
 ## Tax-inclusive rounding — FIXED (2026-09-23)
 
 - ~~Inclusive postings could be a cent off the gross~~ — DONE. `computeTaxLines` rounded

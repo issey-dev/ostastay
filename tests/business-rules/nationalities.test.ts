@@ -7,6 +7,18 @@ import * as Flags from "country-flag-icons/react/3x2";
 // renames and additions on top of it — src/lib/countries.ts, src/lib/nationalities.ts.
 
 describe("The master list", () => {
+  it("still resolves the country names stored before the CLDR list, and ICAO passport codes", () => {
+    // eRegistration OCR stored names from the previous list.
+    expect(alpha2For("Turkey")).toBe("TR");
+    expect(alpha2For("Hong Kong")).toBe("HK");
+    expect(alpha2For("Myanmar")).toBe("MM");
+    expect(alpha2For("Côte d'Ivoire")).toBe("CI");
+    expect(alpha2For("Saint Lucia")).toBe("LC");
+    // A German passport's MRZ nationality is "D"; British national categories are GBx.
+    expect(alpha2For("D")).toBe("DE");
+    expect(alpha2For("GBD")).toBe("GB");
+  });
+
   it("covers ISO 3166-1 with unique alpha-2 and alpha-3 codes, a name and a nationality each", () => {
     expect(COUNTRIES.length).toBe(250);
     expect(new Set(COUNTRIES.map((c) => c.alpha2)).size).toBe(COUNTRIES.length);
