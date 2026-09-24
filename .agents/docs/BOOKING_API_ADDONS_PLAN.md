@@ -23,7 +23,7 @@
 - Expose as much of the app's model through the API as possible. **Expose nothing that the
   app itself does not support.** The API is a window onto the app, not a second
   booking engine.
-- Add a public docs portal at `/docs/api-integration`
+- Add a public docs portal at `/docs/api`
   (`https://stay.uppsolut.com/docs/...`; locally `http://localhost:3000/docs/...`).
   The portal must contain no secrets and nothing sensitive.
 
@@ -232,9 +232,9 @@ discover modules → catalogue → availability → quote → hold (optional, re
 
 - **Public routes.** Add `/docs` to the public paths in `src/proxy.ts`.
   - `/docs` is the landing page.
-  - `/docs/api-integration` has `getting-started`, `authentication`, `rooms`,
+  - `/docs/api` has `getting-started`, `authentication`, `rooms`,
     `excursions`, `spa`, `webhooks`, `errors`, `rate-limits`, `changelog` and `go-live`.
-  - `/docs/guides/*` holds admin and front-desk user guides.
+  - Admin guides now live under `/docs/configuration`, staff guides under `/docs/operations` (2026-09-24; old `/docs/guides/*` redirects).
 - **Source.** MDX pages in the repo (`@next/mdx`), themed like the `/info` marketing site.
   They have sidebar navigation, a copy button on code blocks and a page table of contents.
 - **One OpenAPI file**, `docs/booking-api.openapi.yaml`, with tags Rooms, Excursions, Spa

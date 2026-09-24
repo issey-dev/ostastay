@@ -70,6 +70,18 @@ const nextConfig: NextConfig = {
   // logoUrl is tenant-supplied.
   images: { unoptimized: true },
 
+  // The docs portal was split into areas (src/app/docs/nav.ts). The old addresses are
+  // already in developers' bookmarks, emails and the published PDF, so they redirect
+  // permanently rather than 404.
+  async redirects() {
+    return [
+      { source: "/docs/api-integration", destination: "/docs/api", permanent: true },
+      { source: "/docs/api-integration/:path*", destination: "/docs/api/:path*", permanent: true },
+      { source: "/docs/guides/online-booking-setup", destination: "/docs/configuration/property/online-booking", permanent: true },
+      { source: "/docs/guides/front-desk", destination: "/docs/operations/front-desk", permanent: true },
+    ];
+  },
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

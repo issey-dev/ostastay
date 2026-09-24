@@ -4,7 +4,7 @@ import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { WebsiteApiKeys } from "@/components/hub/website-api-keys"
 
 // Booking API keys (and each key's webhooks) — see .agents/docs/WEBSITE_API_PLAN.md,
-// .agents/docs/BOOKING_API_ADDONS_PLAN.md and the public docs at /docs/api-integration.
+// .agents/docs/BOOKING_API_ADDONS_PLAN.md and the public docs at /docs/api.
 //
 // A key is an enterprise-level credential covering ONE property or ALL of them, so it is
 // managed here. What each property's website shows and sells, and the bookings it made,

@@ -3,9 +3,9 @@
 The developer reference now lives in the documentation portal, which is the single source
 of truth for the Booking API — rooms, excursions, spa, webhooks, errors and limits:
 
-- **Portal:** `/docs/api-integration` on the Uppsolut Stay host
-  (e.g. `https://stay.uppsolut.com/docs/api-integration`; locally
-  `http://localhost:3000/docs/api-integration`).
+- **Portal:** `/docs/api` on the Uppsolut Stay host
+  (e.g. `https://stay.uppsolut.com/docs/api`; locally
+  `http://localhost:3000/docs/api`).
 - **OpenAPI 3.1:** `/docs/booking-api.openapi.yaml` (source: `public/docs/booking-api.openapi.yaml`).
 - **PDF:** `/docs/uppsolut-stay-booking-api-guide.pdf`, generated from the portal with
   `npm run docs:pdf`.
