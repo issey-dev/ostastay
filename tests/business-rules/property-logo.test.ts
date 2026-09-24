@@ -88,7 +88,9 @@ describe("logo checks (pure)", () => {
       expect(absoluteLogoUrl("https://cdn.example.com/l.png")).toBe("https://cdn.example.com/l.png");
       expect(absoluteLogoUrl(null)).toBeNull();
     } finally {
-      process.env.APP_URL = before;
+      // Assigning undefined would store the string "undefined" — unset it instead.
+      if (before === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = before;
     }
   });
 });
