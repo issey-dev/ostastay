@@ -22,6 +22,7 @@ const { setPropertySettings } = await import("../helpers/property-settings");
 const { previewCopy, runCopy } = await import("@/lib/property-copy");
 const { getPropertySettings } = await import("@/lib/property-settings");
 const copyRoute = await import("@/app/api/properties/[id]/copy/route");
+const { provisionOutletSubgroup } = await import("@/lib/posting/outlet-subgroup");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -193,6 +194,47 @@ describe("Copy from another property", () => {
     expect(copied.chargeCodes).toHaveLength(1);
     expect(copied.chargeCodes[0].chargeCode.propertyId).toBe(b.id);
     expect(copied.chargeCodes[0].chargeCode.chargeSubgroup.outletId).toBe(copied.id);
+  });
+
+  it("never links a copied outlet to another outlet's codes that share its numbers", async () => {
+    const [a, b] = [await makeProperty("ColA"), await makeProperty("ColB")];
+    await ensureChart({ propertyId: a.id });
+    await ensureChart({ propertyId: b.id });
+    const beachBar = await prisma.outlet.create({ data: { propertyId: a.id, name: "Beach Bar", outletType: "RESTAURANT" } });
+    const main = await prisma.outlet.create({ data: { propertyId: b.id, name: "Main Restaurant", outletType: "RESTAURANT" } });
+    await provisionOutletSubgroup(prisma, { enterpriseId, propertyId: a.id, outletId: beachBar.id, outletName: "Beach Bar", outletType: "RESTAURANT" });
+    await provisionOutletSubgroup(prisma, { enterpriseId, propertyId: b.id, outletId: main.id, outletName: "Main Restaurant", outletType: "RESTAURANT" });
+
+    await runCopy("outlets", a.id, b.id, ["Beach Bar"]);
+    const copied = await prisma.outlet.findFirstOrThrow({
+      where: { propertyId: b.id, name: "Beach Bar" },
+      include: { chargeCodes: { include: { chargeCode: { include: { chargeSubgroup: true } } } } },
+    });
+    expect(copied.chargeCodes.length).toBeGreaterThan(0);
+    for (const l of copied.chargeCodes) expect(l.chargeCode.chargeSubgroup.outletId).toBe(copied.id);
+    const mainSub = await prisma.chargeSubgroup.findFirstOrThrow({ where: { outletId: main.id } });
+    expect(mainSub.propertyId).toBe(b.id);
+  });
+
+  it("copies generates calculated on another generate with the basis re-pointed, whatever their order", async () => {
+    const [a, b] = [await makeProperty("GenA"), await makeProperty("GenB")];
+    await ensureChart({ propertyId: a.id });
+    await ensureChart({ propertyId: b.id });
+    const group = await prisma.chargeGroup.findUniqueOrThrow({ where: { propertyId_code: { propertyId: a.id, code: "FNB" } } });
+    const sub = await prisma.chargeSubgroup.create({ data: { enterpriseId, propertyId: a.id, chargeGroupId: group.id, code: "KSK", name: "Kiosk" } });
+    const snack = await prisma.chargeCode.create({ data: { enterpriseId, propertyId: a.id, code: "KSK01", description: "Snack", chargeSubgroupId: sub.id } });
+    const sc = await prisma.chargeCode.create({ data: { enterpriseId, propertyId: a.id, code: "KSKSC", description: "Kiosk SC", chargeSubgroupId: sub.id } });
+    const gst = await prisma.chargeCode.create({ data: { enterpriseId, propertyId: a.id, code: "KSKGST", description: "Kiosk GST", chargeSubgroupId: sub.id } });
+    const scGen = await prisma.chargeCodeGenerate.create({ data: { enterpriseId, propertyId: a.id, generatorCodeId: snack.id, generatedCodeId: sc.id, method: "PERCENT", value: 10, calculateOn: "NET", sortOrder: 20 } });
+    // Sorts BEFORE its basis.
+    await prisma.chargeCodeGenerate.create({ data: { enterpriseId, propertyId: a.id, generatorCodeId: snack.id, generatedCodeId: gst.id, method: "PERCENT", value: 17, calculateOn: "ANOTHER_GENERATE", basisGenerateId: scGen.id, sortOrder: 10 } });
+
+    await runCopy("charge-codes", a.id, b.id, ["KSK01"]);
+    const gens = await prisma.chargeCodeGenerate.findMany({ where: { propertyId: b.id, generatorCode: { code: "KSK01" } }, include: { generatedCode: true } });
+    const newSc = gens.find((g) => g.generatedCode.code === "KSKSC")!;
+    const newGst = gens.find((g) => g.generatedCode.code === "KSKGST")!;
+    expect(newGst.calculateOn).toBe("ANOTHER_GENERATE");
+    expect(newGst.basisGenerateId).toBe(newSc.id);
   });
 
   it("offers no source to a single-property admin, and refuses a copy from a property they cannot open", async () => {

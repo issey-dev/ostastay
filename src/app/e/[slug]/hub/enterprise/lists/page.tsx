@@ -15,7 +15,9 @@ export default async function HubEnterpriseListsPage({ params }: { params: Promi
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="enterprise" />
       <ControlsCard title="Nationalities" description="Every country's nationality, with its flag, used for guests' nationality, address country and document issuing country at every property.">
-        <NationalitiesManager canEdit={hasPermission(ctx, "CONTROLS", "update")} />
+        {/* Renaming a standard entry creates the enterprise's row for it, and editing one
+            updates it — so both are needed. */}
+        <NationalitiesManager canEdit={hasPermission(ctx, "CONTROLS", "create") && hasPermission(ctx, "CONTROLS", "update")} />
       </ControlsCard>
       <ControlsCard title="Guest Profile Lists" description="Genders, titles, ID types, dietary requirements and more — used on guest, company and travel-agent profiles at every property.">
         <DropdownsManager categories={PROFILE_LOV_CATEGORIES} />

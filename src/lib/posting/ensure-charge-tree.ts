@@ -54,8 +54,8 @@ export async function ensureChargeTree(
   const property = await client.property.findUniqueOrThrow({ where: { id: propertyId }, select: { enterpriseId: true } });
   const enterpriseId = property.enterpriseId;
   const wanted = (groupCode: string) => {
-    const module = MODULE_GROUPS[groupCode];
-    return !module || modules[module] !== false;
+    const moduleKey = MODULE_GROUPS[groupCode];
+    return !moduleKey || modules[moduleKey] !== false;
   };
 
   // 1. Groups + subgroups. Both are unique on [propertyId, code], so an existing row is

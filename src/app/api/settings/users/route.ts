@@ -189,10 +189,6 @@ export async function PATCH(request: Request) {
 
     const body = await request.json();
     const { id, email, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
-    // A post from the fixed list (src/lib/job-functions.ts), or none.
-    if (jobFunction && !isJobFunction(jobFunction)) {
-      return NextResponse.json({ error: "Unknown job function" }, { status: 400 });
-    }
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -207,6 +203,12 @@ export async function PATCH(request: Request) {
     // A property-scoped actor can't touch a user outside their own property, even to
     // just rename them — checked against the user's *current* scope/property first.
     assertWithinActorPropertyScope(ctx, existing.scope as "ENTERPRISE" | "PROPERTY", existing.propertyId);
+    // A post from the fixed list (src/lib/job-functions.ts), or none. A post stored before
+    // the list was fixed is kept as-is when the form sends it back unchanged, so the user
+    // can still be edited; it just can't be newly chosen.
+    if (jobFunction && jobFunction !== existing.jobFunction && !isJobFunction(jobFunction)) {
+      return NextResponse.json({ error: "Unknown job function" }, { status: 400 });
+    }
 
     // The onboarding account may be renamed and have its password reset — everything that
     // could strand the enterprise is refused.

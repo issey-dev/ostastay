@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { ForbiddenError } from "@/lib/scope"
 import { getPropertySettings, type PropertySettingsValues } from "@/lib/property-settings"
 import { PROPERTY_LIST_CATEGORIES } from "@/lib/system-code-scope"
+import { provisionOutletSubgroup } from "@/lib/posting/outlet-subgroup"
 
 // "Copy from another property" — onboarding help, not sharing (owner, 2026-09-23;
 // .agents/docs/HUB_SETUP_PLAN.md Phase 5). Each property keeps its own copy of everything;
@@ -167,7 +168,13 @@ async function ensureChargeSubgroup(tx: Tx, ctx: CopyCtx, sourceSubgroupId: stri
   const groupId = await ensureChargeGroup(tx, ctx, sg.chargeGroupId)
   // An outlet subgroup keeps its outlet only when that outlet was copied in this run —
   // otherwise the outlet is physically the source property's and the copy carries none.
-  const outletId = sg.outletId ? ctx.outletMap.get(sg.outletId) ?? null : null
+  // A copied outlet already got a subgroup of its own when it was created (see outlets
+  // below), and an outlet owns one subgroup — so this one then arrives unowned.
+  const mappedOutletId = sg.outletId ? ctx.outletMap.get(sg.outletId) ?? null : null
+  const outletId =
+    mappedOutletId && !(await tx.chargeSubgroup.findFirst({ where: { outletId: mappedOutletId }, select: { id: true } }))
+      ? mappedOutletId
+      : null
   const created = await tx.chargeSubgroup.create({
     data: { enterpriseId: ctx.enterpriseId, propertyId: ctx.to, chargeGroupId: groupId, code: sg.code, name: sg.name, isSystem: sg.isSystem, sortOrder: sg.sortOrder, outletId },
   })
@@ -225,7 +232,10 @@ const chargeCodes: SectionDef = {
       where: { propertyId: ctx.from, generatorCodeId: { in: copiedSourceIds } },
       orderBy: { sortOrder: "asc" },
     })
+    // Two passes: a generate calculated on ANOTHER generate needs that one's new id, and
+    // sortOrder (ties at the default 10, or edited) says nothing about which comes first.
     const generateIdMap = new Map<string, string>()
+    const created: { source: (typeof generates)[number]; id: string }[] = []
     for (const g of generates) {
       const generator = await ensureChargeCode(tx, ctx, g.generatorCodeId, true)
       const generated = await ensureChargeCode(tx, ctx, g.generatedCodeId, true)
@@ -233,15 +243,29 @@ const chargeCodes: SectionDef = {
         where: { generatorCodeId_generatedCodeId: { generatorCodeId: generator.id, generatedCodeId: generated.id } },
         select: { id: true },
       })
-      if (exists) continue
+      if (exists) {
+        generateIdMap.set(g.id, exists.id)
+        continue
+      }
       const row = await tx.chargeCodeGenerate.create({
         data: {
           enterpriseId: ctx.enterpriseId, propertyId: ctx.to, generatorCodeId: generator.id, generatedCodeId: generated.id,
           method: g.method, value: g.value, calculateOn: g.calculateOn, sortOrder: g.sortOrder, isActive: g.isActive,
-          basisGenerateId: g.basisGenerateId ? generateIdMap.get(g.basisGenerateId) ?? null : null,
+          basisGenerateId: null,
         },
       })
       generateIdMap.set(g.id, row.id)
+      created.push({ source: g, id: row.id })
+    }
+    for (const { source: g, id } of created) {
+      if (!g.basisGenerateId && g.calculateOn !== "ANOTHER_GENERATE") continue
+      const basis = g.basisGenerateId ? generateIdMap.get(g.basisGenerateId) : undefined
+      // A basis that didn't come across falls back to NET, as deleting a basis does —
+      // never ANOTHER_GENERATE with no basis, which posts 0.
+      await tx.chargeCodeGenerate.update({
+        where: { id },
+        data: basis ? { basisGenerateId: basis } : { basisGenerateId: null, calculateOn: "NET" },
+      })
     }
   },
 }
@@ -451,7 +475,11 @@ const outlets: SectionDef = {
     }))
   },
   async copy(tx, ctx, keys) {
-    const source = await tx.outlet.findMany({ where: { propertyId: ctx.from }, include: { chargeCodes: true }, orderBy: { name: "asc" } })
+    const source = await tx.outlet.findMany({
+      where: { propertyId: ctx.from },
+      include: { chargeCodes: { include: { chargeCode: { select: { code: true, description: true, chargeSubgroup: { select: { code: true, outletId: true } } } } } } },
+      orderBy: { name: "asc" },
+    })
     for (const o of source) {
       if (!keys.has(o.name)) continue
       const exists = await tx.outlet.findFirst({
@@ -472,14 +500,33 @@ const outlets: SectionDef = {
       })
       ctx.outletMap.set(o.id, outlet.id)
       ctx.report.copied.push({ key: o.name, label: o.name })
-      // Its codes come with it (and with them the outlet's own subgroup, now pointing at
-      // the new outlet — see ensureChargeSubgroup).
+      // Its own subgroup comes with it, pointing at the new outlet (ensureChargeSubgroup) —
+      // but only when that subgroup's number is free at the target. Every property's first
+      // restaurant is 20RV / 2001-2004, so matching by number would hand the copy ANOTHER
+      // outlet's codes and its sales would post under that outlet: those are reported as
+      // skipped, and the outlet gets a fresh subgroup of its own, as creating it would.
+      const ownSubgroupCode = o.chargeCodes.find((l) => l.chargeCode.chargeSubgroup.outletId === o.id)?.chargeCode.chargeSubgroup.code
+      const ownTaken =
+        !!ownSubgroupCode &&
+        !!(await tx.chargeSubgroup.findUnique({ where: { propertyId_code: { propertyId: ctx.to, code: ownSubgroupCode } }, select: { id: true } }))
       for (const link of o.chargeCodes) {
+        const own = link.chargeCode.chargeSubgroup.outletId === o.id
+        const numberTaken =
+          own && !!(await tx.chargeCode.findUnique({ where: { propertyId_code: { propertyId: ctx.to, code: link.chargeCode.code } }, select: { id: true } }))
+        if (own && (ownTaken || numberTaken)) {
+          ctx.report.skipped.push({ key: link.chargeCode.code, label: `${link.chargeCode.code} ${link.chargeCode.description} (number already used at this property)` })
+          continue
+        }
         const code = await ensureChargeCode(tx, ctx, link.chargeCodeId, true)
         await tx.outletChargeCode.upsert({
           where: { outletId_chargeCodeId: { outletId: outlet.id, chargeCodeId: code.id } },
           update: {},
           create: { outletId: outlet.id, chargeCodeId: code.id },
+        })
+      }
+      if (!(await tx.chargeSubgroup.findFirst({ where: { outletId: outlet.id }, select: { id: true } }))) {
+        await provisionOutletSubgroup(tx, {
+          enterpriseId: ctx.enterpriseId, propertyId: ctx.to, outletId: outlet.id, outletName: outlet.name, outletType: outlet.outletType,
         })
       }
     }

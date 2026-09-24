@@ -32,7 +32,18 @@ export async function assignRegistrationNumbers(
     where: {
       propertyId,
       status: "IN_HOUSE",
-      checkInDate: { gte: bizDate, lt: nextDay },
+      OR: [
+        { checkInDate: { gte: bizDate, lt: nextDay } },
+        // A late arrival held past its arrival night (Night Audit's no-show "hold one
+        // night" / "front desk decides") and checked in today: its checkInDate is an
+        // earlier day that was already audited, so it arrives on THIS day's register.
+        // Bounded by the check-in time so older in-house stays are never swept in.
+        {
+          checkInDate: { lt: bizDate },
+          checkedInAt: { gte: new Date(bizDate.getTime() - 86_400_000), lt: new Date(nextDay.getTime() + 86_400_000) },
+          guestRegistrations: { none: {} },
+        },
+      ],
       assignments: { some: { roomType: { isPseudo: false } } },
     },
     include: {

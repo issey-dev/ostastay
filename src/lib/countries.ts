@@ -269,6 +269,51 @@ const BY_ALPHA3 = new Map(COUNTRIES.map((c) => [c.alpha3, c]));
 const BY_NAME = new Map(COUNTRIES.map((c) => [c.name.toUpperCase(), c]));
 const BY_NATIONALITY = new Map(COUNTRIES.map((c) => [c.nationality.toUpperCase(), c]));
 
+// Names the list used before it moved to CLDR (2026-09-25). eRegistration OCR stored
+// country NAMES then, so profiles still hold e.g. "Turkey" — they must keep resolving.
+const LEGACY_NAMES = new Map<string, string>([
+  ["ANTIGUA AND BARBUDA", "AG"],
+  ["BOSNIA AND HERZEGOVINA", "BA"],
+  ["SAINT BARTHÉLEMY", "BL"],
+  ["BONAIRE, SINT EUSTATIUS AND SABA", "BQ"],
+  ["DR CONGO", "CD"],
+  ["CONGO", "CG"],
+  ["CÔTE D'IVOIRE", "CI"],
+  ["CABO VERDE", "CV"],
+  ["SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS", "GS"],
+  ["HONG KONG", "HK"],
+  ["HEARD ISLAND AND MCDONALD ISLANDS", "HM"],
+  ["SAINT KITTS AND NEVIS", "KN"],
+  ["SAINT LUCIA", "LC"],
+  ["SAINT MARTIN", "MF"],
+  ["MYANMAR", "MM"],
+  ["MACAO", "MO"],
+  ["SAINT PIERRE AND MIQUELON", "PM"],
+  ["PALESTINE", "PS"],
+  ["SAINT HELENA", "SH"],
+  ["SVALBARD AND JAN MAYEN", "SJ"],
+  ["SAO TOME AND PRINCIPE", "ST"],
+  ["TURKS AND CAICOS ISLANDS", "TC"],
+  ["TURKEY", "TR"],
+  ["TRINIDAD AND TOBAGO", "TT"],
+  ["UNITED STATES MINOR OUTLYING ISLANDS", "UM"],
+  ["SAINT VINCENT AND THE GRENADINES", "VC"],
+  ["UNITED STATES VIRGIN ISLANDS", "VI"],
+  ["WALLIS AND FUTUNA", "WF"],
+  ["COTE D'IVOIRE", "CI"],
+]);
+
+// ICAO Doc 9303 MRZ codes that are not ISO 3166-1 alpha-3: Germany's "D" (the MRZ pads it
+// to "D<<", read as "D") and the British national categories.
+const ICAO_CODES = new Map<string, string>([
+  ["D", "DE"],
+  ["GBD", "GB"],
+  ["GBN", "GB"],
+  ["GBO", "GB"],
+  ["GBP", "GB"],
+  ["GBS", "GB"],
+]);
+
 // Accepts an alpha-2 code, an alpha-3 code, a country name or a nationality ("British") —
 // this app has all of them depending on the path the value came in through (a picker,
 // guest-typed eRegistration text, an OCR'd MRZ). Exact matches only; returns undefined
@@ -277,6 +322,8 @@ export function findCountry(value: string | null | undefined): CountryRecord | u
   if (!value) return undefined;
   const v = value.trim().toUpperCase();
   if (!v) return undefined;
+  const aliased = ICAO_CODES.get(v) ?? LEGACY_NAMES.get(v);
+  if (aliased) return BY_ALPHA2.get(aliased);
   if (v.length === 2) return BY_ALPHA2.get(v);
   if (v.length === 3) return BY_ALPHA3.get(v) ?? BY_NAME.get(v) ?? BY_NATIONALITY.get(v);
   return BY_NAME.get(v) ?? BY_NATIONALITY.get(v);

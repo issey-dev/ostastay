@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CountryFlag } from "@/components/ui/country-flag"
+import { useNationalities } from "@/components/ui/nationality-select"
 import { Loader2 } from "@/components/icons"
 
 type Slot = {
@@ -50,6 +51,7 @@ const FIELD_GROUPS: { key: "personal" | "contact" | "address" | "document"; labe
 // wizard's own Identification step already lets staff hand-edit DOB/nationality moments
 // earlier in the same session.
 export function EregistrationReviewDialog({ reservationId, slot, onClose, onApplied }: Props) {
+  const nationalities = useNationalities()
   const [selected, setSelected] = useState<Set<string>>(new Set(FIELD_GROUPS.map((f) => f.key)))
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +111,7 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
             <div className="text-muted-foreground">Name</div><div>{fullName || "—"}</div>
             <div className="text-muted-foreground">Date of Birth</div><div>{slot.dateOfBirth ? new Date(slot.dateOfBirth).toLocaleDateString() : "—"}</div>
             <div className="text-muted-foreground">Nationality</div>
-            <div className="inline-flex items-center gap-1">{slot.nationality && <CountryFlag value={slot.nationality} />}{slot.nationality || "—"}</div>
+            <div className="inline-flex items-center gap-1">{slot.nationality && <CountryFlag value={slot.nationality} />}{nationalities.nationality(slot.nationality) || "—"}</div>
             <div className="text-muted-foreground">Email / Mobile</div><div>{[slot.email, slot.mobile].filter(Boolean).join(" / ") || "—"}</div>
             <div className="text-muted-foreground">Address</div>
             <div className="inline-flex items-center gap-1">
@@ -119,7 +121,7 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
             <div className="text-muted-foreground">Document</div>
             <div className="inline-flex items-center gap-1">
               {slot.issuingCountry && <CountryFlag value={slot.issuingCountry} />}
-              {[slot.documentType, slot.documentNumber, slot.issuingCountry].filter(Boolean).join(" · ") || "—"}
+              {[slot.documentType, slot.documentNumber, nationalities.country(slot.issuingCountry)].filter(Boolean).join(" · ") || "—"}
             </div>
           </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { CountryFlag } from "@/components/ui/country-flag"
+import { alpha2For } from "@/lib/countries"
 import { buildNationalities, countryLabel, nationalityLabel, type NationalityOption, type NationalityOverride } from "@/lib/nationalities"
 
 // The one picker for every nationality and country field — the master ISO 3166-1 list with
@@ -88,11 +89,23 @@ export function NationalitySelect({
       }))
   }, [list, mode])
 
+  // A value saved before the master list (free text such as "British", an old country
+  // name such as "Turkey", a passport's alpha-3) is converted to its code, as the list's
+  // rule says it is stored; one that matches nothing is still shown rather than an empty
+  // field that isn't empty.
+  const known = !value || options.some((o) => o.value === value)
+  const resolved = known ? undefined : alpha2For(value)
+  useEffect(() => {
+    if (resolved && resolved !== value && options.some((o) => o.value === resolved)) onValueChange(resolved)
+  }, [resolved, value, options, onValueChange])
+  const shown =
+    known || resolved ? options : [...options, { value, label: `${value} (not on the list)`, icon: <FlagSlot code="" />, keywords: value }]
+
   return (
     <SearchableSelect
       value={value}
       onChange={(v) => onValueChange(v ?? "")}
-      options={options}
+      options={shown}
       searchable
       disabled={disabled}
       placeholder={placeholder ?? (mode === "country" ? "Select country" : "Select nationality")}

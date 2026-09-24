@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requireEnterpriseHub, toErrorResponse } from "@/lib/scope";
 import { verifySmtp, SmtpNotConfiguredError, PlatformSmtpNotConfiguredError } from "@/lib/mailer";
 import { sendEnterpriseMail, resolveEnterpriseSender, MAIL_KINDS, MAIL_SENDER } from "@/lib/mail-sender";
 import { buildSmtpTestEmail } from "@/lib/email-templates";
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "update");
+    requireEnterpriseHub(ctx);
 
     const body = await request.json().catch(() => null);
     const to = typeof body?.to === "string" ? body.to.trim() : "";
