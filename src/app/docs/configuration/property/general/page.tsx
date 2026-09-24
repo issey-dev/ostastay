@@ -22,13 +22,17 @@ export default function General() {
           ["Short Code", "The property's code. Unless you set a prefix on the Reservations page, booking numbers start with it (CBR-000123). Codes are unique across Uppsolut Stay, so avoid changing it."],
           ["Star Rating", "0–5. Shown to your website through the Booking API."],
           ["Check-in / Check-out Time", "Your standard times, as HH:MM (24-hour), e.g. 14:00. The Green Tax 12-hour rule can use them."],
-          ["Logo", "The logo printed on documents and shown in the app header."],
+          ["Logo", "Choose Upload logo (PNG, JPG, WebP or SVG, up to 10 MB), then crop it to the 3:2 frame; previews show the app header and a document header. Choose Save logo. It appears in the app header, on every document, report and email, and on your website."],
           ["Tax ID", "Your tax registration number (TIN). Printed on tax invoices."],
           ["Contact Phone / Contact Email", "Printed on documents, and given to your website."],
           ["Address", "Printed in the header of every document: invoices, receipts, letters, registration cards and statements."],
         ]}
       />
-      <p>Choose <strong>Save Property</strong>. Changes apply to documents printed from now on.</p>
+      <p>
+        Choose <strong>Save Property</strong>. Changes apply to documents printed from now on. The logo saves on its own when you
+        choose <strong>Save logo</strong>. For a crisp result, upload a logo with little empty space around it; zoom in on the crop
+        to trim what is left.
+      </p>
       <Callout title="Check before you save" tone="warn">
         <p>
           This form does not check your entries: type times as <code>14:00</code>, and double-check the email and phone number. They
