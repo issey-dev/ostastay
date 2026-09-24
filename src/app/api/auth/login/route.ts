@@ -27,10 +27,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { enterprise: { select: { slug: true } } }
-    });
+    // Emails are stored lower-case since 2026-09-24 (People form + users API), but older
+    // accounts may have been saved with capitals — fall back to a case-insensitive match
+    // so they can still sign in. The exact match wins if both somehow exist.
+    const user =
+      (await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+        include: { enterprise: { select: { slug: true } } }
+      })) ??
+      (await prisma.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+        include: { enterprise: { select: { slug: true } } }
+      }));
 
     // A wrong enterprise code, a wrong email, and a wrong password all produce the
     // identical generic error — no enumeration of which one was actually wrong.

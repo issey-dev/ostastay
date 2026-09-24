@@ -46,7 +46,8 @@ The property dashboard becomes purely operational.
     email             SMTP / SFTP
     booking-api       API keys + webhooks
     support-access
-    lists             "Guest & Staff Lists": guest-profile dropdowns (A-1) + Job Functions
+    lists             "Guest Lists": guest-profile dropdowns (A-1) + Nationalities (Job
+                      Functions are a fixed list since 2026-09-25 — DECISIONS.md)
 /e/{slug}/hub/p/{propertyId}/…                  PROPERTY — one property at a time
     general           profile, appearance (banner colour, stationery font), session timeout
     inventory         buildings, floors, room types, rooms, amenities, room-feature lists
@@ -294,8 +295,9 @@ dashboard's working-property cookie).
   transport, room-feature picker, the housekeeping report and the Website API's room
   feature labels.
 - Pages: property **Reservations** gains "Reservation & Housekeeping Lists", property
-  **Rooms & Inventory** gains "Room Features"; the enterprise page is now **Guest & Staff
-  Lists** (profile lists + Job Functions). With that, nothing is "shared for now" any more —
+  **Rooms & Inventory** gains "Room Features"; the enterprise page is now **Guest Lists**
+  (profile lists; it was "Guest & Staff Lists" with Job Functions until those became a fixed
+  list on 2026-09-25). With that, nothing is "shared for now" any more —
   the interim sidebar group and page-header wording are gone.
 - Seeds: Veyo's Beach and Lagoon each seed their own Special Requests (overlapping, not
   identical). Tests: `tests/business-rules/property-lists.test.ts`, plus a sibling-property
@@ -325,7 +327,7 @@ dashboard's working-property cookie).
   authorises through `src/lib/channels/hub-access.ts`; link create/delete answer 403
   ("Uppsolut connects/disconnects"). Test helpers: `tests/helpers/channel.ts`.
 - The enterprise area now holds only: Properties, People, Sessions, Email & SFTP, Booking
-  API Keys, Support Access, Guest & Staff Lists.
+  API Keys, Support Access, Guest Lists.
 
 **Phase 5** — "Copy from…" (`src/lib/property-copy.ts`, `/api/properties/[id]/copy`,
 `components/hub/copy-from-property.tsx`):
@@ -402,7 +404,7 @@ Recorded so they can be reviewed and reversed:
 - **A-1** Guest-profile dropdowns (Title, Gender, Nationality, ID Type, VIP Level, Dietary,
   Preference, Classification) stay **enterprise**, because guest profiles are enterprise-wide
   (one guest, chain-wide stay totals). Per-property lists would show values another property
-  lacks. Edited under Enterprise → Guest & Staff Lists.
+  lacks. Edited under Enterprise → Guest Lists.
 - **A-2** Single-property admins **cannot manage users** (users are enterprise; owner:
   "restrict enterprise related entirely"). Today they can create users at their own property
   — this is removed.

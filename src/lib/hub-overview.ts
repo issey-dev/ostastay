@@ -8,6 +8,8 @@ import { JOBS } from "@/lib/jobs"
 import { daysUntilRefreshTokenExpiry } from "@/lib/channels/beds24"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { minutesPastAuditTime, propertyLocalNow } from "@/lib/night-audit/scheduled"
+import { isTenantSmtpConfigured } from "@/lib/mailer"
+import { hasPlatformEmailAddon } from "@/lib/mail-sender"
 
 // The Hub Overview — "maintenance and config" (owner, 2026-09-23; HUB_SETUP_PLAN.md Phase 6).
 // Nothing here is a link card or a dashboard: a banner appears only when something needs
@@ -79,10 +81,10 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
         add({ id: `${p.id}:rooms`, severity: "critical", title: "No rooms yet", detail: "Room types are set up but there are no rooms to assign guests to.", path: "inventory", actionLabel: "Add rooms" })
       }
       if (!room) {
-        add({ id: `${p.id}:accommodation-code`, severity: "critical", title: "Room charges have no charge code", detail: "Night Audit cannot post room revenue until a default accommodation charge code is set.", path: "cashiering", actionLabel: "Set posting defaults" })
+        add({ id: `${p.id}:accommodation-code`, severity: "critical", title: "Room charges have no charge code", detail: "Night Audit cannot post room revenue until a default accommodation charge code is set.", path: "charge-codes", actionLabel: "Set posting defaults" })
       }
       if (!greenTax) {
-        add({ id: `${p.id}:green-tax-code`, severity: "critical", title: "Green Tax has no charge code", detail: "Green Tax is switched on but there is no charge code to post it against.", path: "cashiering", actionLabel: "Set posting defaults" })
+        add({ id: `${p.id}:green-tax-code`, severity: "critical", title: "Green Tax has no charge code", detail: "Green Tax is switched on but there is no charge code to post it against.", path: "charge-codes", actionLabel: "Set posting defaults" })
       }
       if (paymentMethods === 0) {
         add({ id: `${p.id}:payment-methods`, severity: "critical", title: "No payment methods", detail: "Folios cannot be settled until this property accepts at least one payment method.", path: "finance", actionLabel: "Add payment methods" })
@@ -102,10 +104,10 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
         }
       }
       if (spaTreatments > 0 && !settings.spaOutletId) {
-        add({ id: `${p.id}:spa-outlet`, severity: "critical", title: "Spa charges cannot post", detail: "This property sells spa treatments but no outlet is linked to post them through.", path: "cashiering", actionLabel: "Link the spa outlet" })
+        add({ id: `${p.id}:spa-outlet`, severity: "critical", title: "Spa charges cannot post", detail: "This property sells spa treatments but no outlet is linked to post them through.", path: "charge-codes", actionLabel: "Link the spa outlet" })
       }
       if (excursionTypes > 0 && !settings.excursionOutletId) {
-        add({ id: `${p.id}:excursion-outlet`, severity: "critical", title: "Excursion charges cannot post", detail: "This property sells excursions but no outlet is linked to post them through.", path: "cashiering", actionLabel: "Link the excursion outlet" })
+        add({ id: `${p.id}:excursion-outlet`, severity: "critical", title: "Excursion charges cannot post", detail: "This property sells excursions but no outlet is linked to post them through.", path: "charge-codes", actionLabel: "Link the excursion outlet" })
       }
     }
 
@@ -178,9 +180,26 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
     const enterpriseBanner = (b: Omit<OverviewBanner, "scope">) => banners.push({ ...b, scope: "Enterprise" })
 
     if (hasPermission(ctx, "CONTROLS", "view")) {
-      const smtp = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId }, select: { smtpHost: true } })
-      if (!smtp?.smtpHost) {
-        enterpriseBanner({ id: "enterprise:smtp", severity: "warning", title: "Email is not set up", detail: "Invoices, confirmations and receipts cannot be emailed to guests until an outgoing mail server is configured.", href: `/e/${slug}/hub/enterprise/email`, actionLabel: "Set up email" })
+      // Same test the sender uses (resolveEnterpriseSender in src/lib/mail-sender.ts): own
+      // SMTP complete → it sends; otherwise the Uppsolut Mail Service (PLATFORM_EMAIL,
+      // granted by Osta) sends on the enterprise's behalf. Only when neither applies is
+      // guest mail actually blocked — an enterprise on the service has nothing to set up,
+      // and being told otherwise sent them to fill in SMTP they pay us not to need.
+      const smtp = await prisma.enterpriseSettings.findUnique({
+        where: { enterpriseId: ctx.enterpriseId },
+        select: { smtpHost: true, smtpPort: true, smtpUsername: true, smtpPassword: true, smtpFromAddress: true, smtpUseTls: true },
+      })
+      if (!isTenantSmtpConfigured(smtp) && !(await hasPlatformEmailAddon(ctx.enterpriseId))) {
+        enterpriseBanner({
+          id: "enterprise:smtp",
+          severity: "warning",
+          title: "Email is not set up",
+          detail: smtp?.smtpHost
+            ? "The outgoing mail settings are incomplete, so invoices, confirmations and receipts cannot be emailed to guests."
+            : "Invoices, confirmations and receipts cannot be emailed to guests until an outgoing mail server is configured.",
+          href: `/e/${slug}/hub/enterprise/email`,
+          actionLabel: "Set up email",
+        })
       }
     }
 

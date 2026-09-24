@@ -37,7 +37,11 @@
   Room rows to `OUT_OF_SERVICE`** — but never deletes anything (history is preserved).
   Re-activating does **not** auto-restore room status (a deliberate asymmetry — someone
   has to manually bring rooms back into service, since "was this room actually fixed/
-  cleaned/ready" isn't knowable automatically). Every code path that assigns a
+  cleaned/ready" isn't knowable automatically). **Amended 2026-09-24 (7.5.0, pending owner
+  confirmation):** re-activating now brings back only the rooms the deactivation itself
+  took out of service (`Room.statusBeforeTypeDeactivation`), and to **Dirty**, never Clean —
+  so housekeeping still has to clean/inspect them; a room that was Out of Order goes back
+  to Out of Order, and one taken out of service for another reason stays out. Every code path that assigns a
   room/room-type checks this: reservation create, reservation edit (only when the
   room/room-type is actually *changing*, so editing a booking that already sits in a
   since-deactivated type isn't blocked), room-move, reassign, group pickup, new room

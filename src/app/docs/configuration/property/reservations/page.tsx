@@ -22,7 +22,8 @@ export default function Reservations() {
         ]}
       />
       <p>
-        With prefix <code>CB</code> and 6 digits, bookings are numbered <code>CB000001</code>, <code>CB000002</code>… Choose{" "}
+        With prefix <code>CB</code> and 6 digits, bookings are numbered <code>CB000001</code>, <code>CB000002</code>… The preview
+        shows your real next booking number. Choose{" "}
         <strong>Save format</strong>. Existing bookings keep their numbers. Every booking uses this format, whether made at the desk,
         from a group, through the channel manager or on your website.
       </p>
@@ -39,8 +40,8 @@ export default function Reservations() {
       />
       <p>
         Add each with a <strong>Code (Internal)</strong> and a <strong>Display Value</strong>. The arrows set the order in the
-        drop-down. The code can&apos;t be changed and a deleted code can&apos;t be added again, so choose codes carefully. Use{" "}
-        <strong>Copy from…</strong> to take another property&apos;s lists.
+        drop-down. The code can&apos;t be changed; a deleted entry comes back with <strong>Show deleted</strong> and{" "}
+        <strong>Restore</strong>. Use <strong>Copy from…</strong> to take another property&apos;s lists.
       </p>
       <Callout title="Where are cancellation and deposit policies?">
         <p>
@@ -70,10 +71,12 @@ export default function Reservations() {
         carry on from your previous system, for example so your first invoice is 10501 after 10500. Choose{" "}
         <strong>Start from new sequence</strong>, enter the last number your old system used, and <strong>Save</strong>.
       </p>
-      <Callout title="Never lower a sequence after go-live" tone="warn">
+      <Callout title="Numbers already issued are protected" tone="warn">
         <p>
-          Numbers are not checked for duplicates. Setting a counter back would issue invoice and receipt numbers that already exist,
-          and break the Green Tax register. Tax invoice numbers must be continuous for your auditors.
+          A counter can&apos;t be set below the highest number already issued; each row shows it. Guest Registration No is locked
+          once this year&apos;s Green Tax register has numbers: correct it in the{" "}
+          <a href="/docs/configuration/property/green-tax">Green Tax register</a> instead. Tax invoice numbers must be continuous for
+          your auditors, so change counters only before go-live.
         </p>
       </Callout>
       <Pager href="/docs/configuration/property/reservations" />

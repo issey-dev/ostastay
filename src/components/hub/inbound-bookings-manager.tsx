@@ -31,6 +31,9 @@ type InboundBooking = {
   totalAmount: number | null
   currency: string | null
   channelStatus: string | null
+  /** RECEIVED (not converted yet) | CONVERTED | IGNORED | FAILED — see convert.ts. */
+  status: string
+  reservation: { confirmationNo: string } | null
   problem: string | null
   isOverbooking: boolean
   overbookingNote: string | null
@@ -45,6 +48,35 @@ const FILTER_LABELS: Record<string, string> = {
   [ALL]: "All bookings",
   overbookings: "Overbookings only",
   problems: "Problems only",
+}
+
+// What happened to the booking on our side: received bookings are converted into
+// reservations automatically (src/lib/channels/inbound/convert.ts, run by the scheduled
+// channel-booking-convert job). `problem` is what a waiting or failed booking is stuck on.
+function conversionStatus(b: InboundBooking): { label: string; tone: "ok" | "wait" | "bad" | "muted" } {
+  switch (b.status) {
+    case "CONVERTED":
+      return { label: b.reservation ? `Reservation ${b.reservation.confirmationNo}` : "Reservation created (since removed)", tone: "ok" }
+    case "IGNORED":
+      return { label: "Not converted: cancelled at the channel", tone: "muted" }
+    case "FAILED":
+      return { label: `Conversion failed: ${b.problem ?? "unknown error"}`, tone: "bad" }
+    default:
+      return { label: `Waiting: ${b.problem ?? "next conversion run"}`, tone: "wait" }
+  }
+}
+
+function ConversionStatus({ b }: { b: InboundBooking }) {
+  const c = conversionStatus(b)
+  const cls =
+    c.tone === "ok"
+      ? "text-success"
+      : c.tone === "bad"
+        ? "text-destructive"
+        : c.tone === "wait"
+          ? "text-warning"
+          : "text-muted-foreground"
+  return <span className={`text-xs font-medium ${cls}`}>{c.label}</span>
 }
 
 function fmtDate(iso: string | null) {
@@ -188,12 +220,10 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
                   {b.channelName ?? "—"} · {b.source === "WEBHOOK" ? "webhook" : "poll"}
                 </div>
 
-                {(b.problem || b.overbookingNote) && (
-                  <div className="space-y-1">
-                    {b.problem && <p className="text-xs text-destructive">{b.problem}</p>}
-                    {b.overbookingNote && <p className="text-xs text-destructive">{b.overbookingNote}</p>}
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <p><ConversionStatus b={b} /></p>
+                  {b.overbookingNote && <p className="text-xs text-destructive">{b.overbookingNote}</p>}
+                </div>
 
                 {canManage && b.isOverbooking && !b.acknowledgedAt && (
                   <Button
@@ -253,7 +283,7 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
                         </Badge>
                       )}
                       {b.channelStatus && !b.isOverbooking && <Badge variant="secondary">{b.channelStatus}</Badge>}
-                      {b.problem && <span className="text-xs text-destructive">{b.problem}</span>}
+                      <ConversionStatus b={b} />
                       {b.overbookingNote && <span className="text-xs text-destructive">{b.overbookingNote}</span>}
                     </div>
                   </TableCell>
@@ -280,8 +310,9 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
       )}
 
       <p className="text-xs text-muted-foreground">
-        Received bookings are recorded here for review. Turning one into a reservation is still done by hand — see{" "}
-        <code className="text-xs">.agents/docs/HUB_CHANNEL_MANAGER_PLAN.md</code>.
+        Received bookings become reservations automatically on the next scheduled run once their room type is mapped and
+        this property has a default rate plan for channel bookings. A booking that is waiting says what it needs —
+        fix that and it converts on the next run. Bookings cancelled at the channel before conversion are not converted.
       </p>
     </div>
   )

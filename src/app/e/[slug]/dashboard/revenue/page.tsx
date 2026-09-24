@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
@@ -12,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -24,6 +26,13 @@ import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import {
+  emptyRatePlanForm,
+  ratePlanFormSchema,
+  ratePlanPayload,
+  readApiError,
+  type RatePlanFormValues,
+} from "@/lib/revenue-plan-schemas"
 
 const ALLOCATION_TYPE_LABELS: Record<string, string> = {
   FNB: "Food & Beverage",
@@ -76,22 +85,18 @@ export default function RevenueDashboard() {
   // Custom Notification State
   const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
 
-  // Form State
-  const [form, setForm] = useState({
-    code: "",
-    name: "",
-    description: "",
-    priority: 10,
-    isNegotiated: false,
-    isComplimentary: false,
-    isHouseUse: false,
-    parentRatePlanId: "",
-    derivedAdjustmentType: "PERCENT",
-    derivedAdjustmentValue: "",
-    chargeCodeId: "",
+  // Form State — Zod + React Hook Form (APP STANDARD 001).
+  const form = useForm<RatePlanFormValues>({
+    resolver: zodResolver(ratePlanFormSchema),
+    mode: "onChange",
+    defaultValues: emptyRatePlanForm,
   })
-  // Package contents — which allocations this rate plan carries.
-  const [selectedAllocationIds, setSelectedAllocationIds] = useState<string[]>([])
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const parentRatePlanId = form.watch("parentRatePlanId")
+  const derivedAdjustmentType = form.watch("derivedAdjustmentType")
+  const selectedAllocationIds = form.watch("allocationIds")
   const [allocations, setAllocations] = useState<AllocationDto[]>([])
   // Charge codes (enterprise-wide) for the accommodation charge code selector.
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
@@ -134,68 +139,47 @@ export default function RevenueDashboard() {
   }, [propertyId])
 
   const resetForm = () => {
-    setForm({
-      code: "",
-      name: "",
-      description: "",
-      priority: 10,
-      isNegotiated: false,
-      isComplimentary: false,
-      isHouseUse: false,
-      parentRatePlanId: "",
-      derivedAdjustmentType: "PERCENT",
-      derivedAdjustmentValue: "",
-      chargeCodeId: "",
-    })
-    setSelectedAllocationIds([])
+    form.reset(emptyRatePlanForm)
+    setServerError(null)
     setSelectedPlan(null)
   }
 
   const handleEdit = (plan: RatePlan) => {
     setSelectedPlan(plan)
-    setForm({
+    setServerError(null)
+    form.reset({
+      isLocked: plan.isLocked,
       code: plan.code,
       name: plan.name,
       description: plan.description || "",
-      priority: plan.priority,
+      priority: String(plan.priority),
       isNegotiated: plan.isNegotiated,
       isComplimentary: plan.isComplimentary,
       isHouseUse: plan.isHouseUse,
       parentRatePlanId: plan.parentRatePlanId || "",
-      derivedAdjustmentType: plan.derivedAdjustmentType || "PERCENT",
+      derivedAdjustmentType: plan.derivedAdjustmentType === "FLAT" ? "FLAT" : "PERCENT",
       derivedAdjustmentValue: plan.derivedAdjustmentValue != null ? plan.derivedAdjustmentValue.toString() : "",
       chargeCodeId: plan.chargeCodeId || "",
+      allocationIds: (plan.allocationLinks ?? []).map(l => l.allocation.id),
     })
-    setSelectedAllocationIds((plan.allocationLinks ?? []).map(l => l.allocation.id))
     setIsDialogOpen(true)
   }
 
   const handleDeletePrompt = (plan: RatePlan) => {
     setSelectedPlan(plan)
+    setDeleteError(null)
     setIsDeleteModalOpen(true)
   }
 
-  const handleCreateOrUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const onSubmit = async (values: RatePlanFormValues) => {
     setSubmitting(true)
+    setServerError(null)
     try {
-      const payload = {
-        ...form,
-        propertyId,
-        parentRatePlanId: form.parentRatePlanId || null,
-        derivedAdjustmentType: form.parentRatePlanId ? form.derivedAdjustmentType : null,
-        derivedAdjustmentValue: form.parentRatePlanId && form.derivedAdjustmentValue !== "" ? parseFloat(form.derivedAdjustmentValue) : null,
-        chargeCodeId: form.chargeCodeId || null,
-        allocationIds: selectedAllocationIds,
-      }
-
       const url = selectedPlan ? `/api/rate-plans/${selectedPlan.id}` : `/api/rate-plans`
-      const method = selectedPlan ? "PUT" : "POST"
-
       const res = await fetch(url, {
-        method,
+        method: selectedPlan ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(ratePlanPayload(values, propertyId)),
       })
 
       if (res.ok) {
@@ -204,11 +188,11 @@ export default function RevenueDashboard() {
         fetchRatePlans()
         setNotification({ title: "Success", message: "Rate plan saved successfully." })
       } else {
-        const err = await res.json()
-        setNotification({ title: "Error", message: `Failed to save: ${JSON.stringify(err)}`, isError: true })
+        // Shown inside the dialog so the user can fix the field and retry.
+        setServerError(await readApiError(res, "Failed to save the rate plan."))
       }
     } catch {
-      setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
+      setServerError("An unexpected error occurred.")
     } finally {
       setSubmitting(false)
     }
@@ -216,13 +200,22 @@ export default function RevenueDashboard() {
 
   const confirmDelete = async () => {
     if (!selectedPlan) return
+    setDeleting(true)
+    setDeleteError(null)
     try {
-      await fetch(`/api/rate-plans/${selectedPlan.id}`, { method: "DELETE" })
+      const res = await fetch(`/api/rate-plans/${selectedPlan.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        // e.g. 409 — reservations are priced on this plan. Keep the dialog open with the reason.
+        setDeleteError(await readApiError(res, "Failed to delete the rate plan."))
+        return
+      }
       setIsDeleteModalOpen(false)
       fetchRatePlans()
       setNotification({ title: "Success", message: "Rate plan deleted successfully." })
     } catch {
-      setNotification({ title: "Error", message: "Failed to delete rate plan.", isError: true })
+      setDeleteError("Failed to delete the rate plan.")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -273,7 +266,8 @@ export default function RevenueDashboard() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
-            <form onSubmit={handleCreateOrUpdate}>
+            <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   {isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}
@@ -294,134 +288,230 @@ export default function RevenueDashboard() {
                 {/* Left column — rate definition */}
                 <div className="flex flex-col gap-6">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>Rate Code <span className="text-destructive">*</span></Label>
-                    <Input required disabled={isLockedPlan} placeholder="e.g. BAR" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Priority</Label>
-                    <Input type="number" min="0" disabled={isLockedPlan} value={form.priority} onChange={e => setForm(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} />
-                    <p className="text-xs text-muted-foreground">Lower number = higher priority</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Plan Name <span className="text-destructive">*</span></Label>
-                  <Input required disabled={isLockedPlan} placeholder="Best Available Rate" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Description</Label>
-                  <textarea
-                    disabled={isLockedPlan}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter details about this rate plan..."
-                    value={form.description}
-                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  <FormField
+                    control={form.control}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Rate Code <span className="text-destructive">*</span></FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. BAR"
+                            {...field}
+                            disabled={isLockedPlan}
+                            onChange={e => field.onChange(e.target.value.toUpperCase())}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Priority</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="1" {...field} disabled={isLockedPlan} />
+                        </FormControl>
+                        <FormDescription className="text-xs">Lower number = higher priority</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
 
-                <div className="grid gap-2">
-                  <Label>Accommodation Charge Code</Label>
-                  <SearchableSelect
-                    value={form.chargeCodeId}
-                    onChange={(v) => setForm(p => ({ ...p, chargeCodeId: v }))}
-                    placeholder="Enterprise default (Accommodation)"
-                    options={[
-                      { value: "", label: "Enterprise default (Accommodation)" },
-                      // Classification comes from the hierarchy now, not the deprecated
-                      // `category` string — see src/lib/charge-code-options.ts.
-                      ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] }),
-                    ]}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
-                    default to use the enterprise-wide accommodation code (Hub › Charge Codes).
-                  </p>
-                </div>
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Plan Name <span className="text-destructive">*</span></FormLabel>
+                      <FormControl>
+                        <Input placeholder="Best Available Rate" {...field} disabled={isLockedPlan} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <textarea
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                          placeholder="Enter details about this rate plan..."
+                          {...field}
+                          disabled={isLockedPlan}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="chargeCodeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Accommodation Charge Code</FormLabel>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="Enterprise default (Accommodation)"
+                        options={[
+                          { value: "", label: "Enterprise default (Accommodation)" },
+                          // Classification comes from the hierarchy now, not the deprecated
+                          // `category` string — see src/lib/charge-code-options.ts.
+                          ...chargeCodeOptions(chargeCodes, { buckets: ["ROOM"] }),
+                        ]}
+                      />
+                      <FormDescription className="text-xs">
+                        The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
+                        default to use the enterprise-wide accommodation code (Hub › Charge Codes).
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {!isLockedPlan && (
                 <div className="grid gap-2 border rounded-lg p-4 bg-muted/30">
-                  <Label>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></Label>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Instead of its own Price Calendar, this plan&apos;s price is computed live as the parent plan&apos;s price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
-                  </p>
-                  <SearchableSelect
-                    value={form.parentRatePlanId}
-                    onChange={(v) => setForm(p => ({ ...p, parentRatePlanId: v ?? "" }))}
-                    placeholder="None — independent rate plan"
-                    options={[
-                      { value: "", label: "None — independent rate plan" },
-                      ...ratePlans
-                        .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id && !r.isLocked)
-                        .map(r => ({ value: r.id, label: `${r.name} (${r.code})` })),
-                    ]}
+                  <FormField
+                    control={form.control}
+                    name="parentRatePlanId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></FormLabel>
+                        <FormDescription className="text-xs mb-1">
+                          Instead of its own Price Calendar, this plan&apos;s price is computed live as the parent plan&apos;s price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
+                        </FormDescription>
+                        <SearchableSelect
+                          value={field.value}
+                          onChange={(v) => field.onChange(v ?? "")}
+                          placeholder="None — independent rate plan"
+                          options={[
+                            { value: "", label: "None — independent rate plan" },
+                            ...ratePlans
+                              .filter(r => !r.parentRatePlanId && r.id !== selectedPlan?.id && !r.isLocked)
+                              .map(r => ({ value: r.id, label: `${r.name} (${r.code})` })),
+                          ]}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
 
-                  {form.parentRatePlanId && (
+                  {parentRatePlanId && (
                     <div className="grid grid-cols-1 gap-4 mt-3 sm:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label className="text-xs">Adjustment Type</Label>
-                        <Select value={form.derivedAdjustmentType} onValueChange={(v) => setForm(p => ({ ...p, derivedAdjustmentType: v ?? "PERCENT" }))}>
-                          <SelectTrigger>
-                            <SelectValue>{form.derivedAdjustmentType === "FLAT" ? "Flat Amount ($)" : "Percent (%)"}</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="PERCENT">Percent (%)</SelectItem>
-                            <SelectItem value="FLAT">Flat Amount ($)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-xs">Adjustment Value</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          required
-                          placeholder={form.derivedAdjustmentType === "FLAT" ? "e.g. 20 or -20" : "e.g. 10 or -10"}
-                          value={form.derivedAdjustmentValue}
-                          onChange={e => setForm(p => ({ ...p, derivedAdjustmentValue: e.target.value }))}
-                        />
-                      </div>
+                      <FormField
+                        control={form.control}
+                        name="derivedAdjustmentType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Adjustment Type</FormLabel>
+                            <Select value={field.value} onValueChange={(v) => field.onChange(v === "FLAT" ? "FLAT" : "PERCENT")}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue>{field.value === "FLAT" ? "Flat Amount ($)" : "Percent (%)"}</SelectValue>
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="PERCENT">Percent (%)</SelectItem>
+                                <SelectItem value="FLAT">Flat Amount ($)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="derivedAdjustmentValue"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Adjustment Value</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder={derivedAdjustmentType === "FLAT" ? "e.g. 20 or -20" : "e.g. 10 or -10"}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   )}
                 </div>
                 )}
 
                 <div className="flex flex-col gap-2 mt-auto">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="negotiated"
-                      disabled={isLockedPlan}
-                      checked={form.isNegotiated}
-                      onCheckedChange={(checked) => setForm(p => ({ ...p, isNegotiated: !!checked }))}
-                    />
-                    <Label htmlFor="negotiated" className="font-normal cursor-pointer">
-                      This is a negotiated rate (Corporate/Wholesale)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="complimentary"
-                      disabled={isLockedPlan}
-                      checked={form.isComplimentary}
-                      onCheckedChange={(checked) => setForm(p => ({ ...p, isComplimentary: !!checked }))}
-                    />
-                    <Label htmlFor="complimentary" className="font-normal cursor-pointer">
-                      Complimentary
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="houseUse"
-                      disabled={isLockedPlan}
-                      checked={form.isHouseUse}
-                      onCheckedChange={(checked) => setForm(p => ({ ...p, isHouseUse: !!checked }))}
-                    />
-                    <Label htmlFor="houseUse" className="font-normal cursor-pointer">
-                      House Use
-                    </Label>
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="isNegotiated"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            id="negotiated"
+                            disabled={isLockedPlan}
+                            checked={field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="negotiated" className="font-normal cursor-pointer">
+                          This is a negotiated rate (Corporate/Wholesale)
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isComplimentary"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            id="complimentary"
+                            disabled={isLockedPlan}
+                            checked={field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="complimentary" className="font-normal cursor-pointer">
+                          Complimentary
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isHouseUse"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            id="houseUse"
+                            disabled={isLockedPlan}
+                            checked={field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="houseUse" className="font-normal cursor-pointer">
+                          House Use
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
                 </div>
                 </div>
                 {/* End left column */}
@@ -429,7 +519,7 @@ export default function RevenueDashboard() {
                 {/* Right column — package allocations chip picker */}
                 <div className="flex flex-col gap-2 border rounded-lg p-4 bg-muted/30 min-h-[240px]">
                   <div className="flex items-center justify-between">
-                    <Label>Package Allocations</Label>
+                    <span className="text-sm font-medium">Package Allocations</span>
                     <span className="text-xs text-muted-foreground">
                       {selectedAllocationIds.length} selected
                     </span>
@@ -462,8 +552,10 @@ export default function RevenueDashboard() {
                                     type="button"
                                     key={a.id}
                                     onClick={() =>
-                                      setSelectedAllocationIds(prev =>
-                                        selected ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                                      form.setValue(
+                                        "allocationIds",
+                                        selected ? selectedAllocationIds.filter(id => id !== a.id) : [...selectedAllocationIds, a.id],
+                                        { shouldDirty: true, shouldValidate: true }
                                       )
                                     }
                                     title={a.mode === "INCLUDE_IN_RATE" ? "Included in rate" : "Added to rate"}
@@ -490,11 +582,18 @@ export default function RevenueDashboard() {
                 {/* End right column */}
               </div>
 
+              {serverError && (
+                <p role="alert" className="mb-4 rounded-md border border-destructive/30 bg-destructive-muted px-3 py-2 text-sm text-destructive">
+                  {serverError}
+                </p>
+              )}
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Rate Plan"}</Button>
               </DialogFooter>
             </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>
@@ -654,9 +753,16 @@ export default function RevenueDashboard() {
               Are you sure you want to delete the rate plan &quot;{selectedPlan?.name}&quot;? This action cannot be undone and will permanently remove all associated price calendars.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive-muted px-3 py-2 text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete Rate Plan</Button>
+            <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
+              {deleting ? "Deleting..." : "Delete Rate Plan"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

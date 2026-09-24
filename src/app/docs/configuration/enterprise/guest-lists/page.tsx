@@ -48,8 +48,8 @@ export default function GuestLists() {
         <li>The <strong>display value</strong> is what staff see. Edit it any time with the pencil.</li>
         <li>The <strong>arrows</strong> set the order the drop-down shows everywhere.</li>
         <li>
-          <strong>Delete</strong> hides an entry from new choices; profiles that already use it keep it. A deleted code cannot be
-          added again, so rename rather than delete-and-re-add.
+          <strong>Delete</strong> hides an entry from new choices; profiles that already use it keep it. <strong>Show deleted</strong>{" "}
+          lists deleted entries so you can <strong>Restore</strong> one, and adding a deleted code again restores it.
         </li>
       </ul>
       <p>

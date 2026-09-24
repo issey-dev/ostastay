@@ -28,7 +28,7 @@ export default function OnlineBooking() {
         head={["Setting", "Notes"]}
         rows={[
           ["Accept bookings from the website", "The master switch for rooms."],
-          ["Rate plan to sell", "The plan whose prices the website shows. Needed to sell anything. Negotiated plans can't be sold online. Keep this plan's prices filled: nights without a price are not sold."],
+          ["Rate plan to sell", "The plan whose prices the website shows. Required while online booking is on. Negotiated plans can't be sold online. Keep this plan's prices filled: nights without a price are not sold."],
           ["Let guests choose their meal plan / Meal plan", "Offer your meal plans, or sell one fixed meal plan (or none)."],
           ["Offer paid extras online", "Offer allocations marked Sell Separately, e.g. a speedboat transfer. Tick which ones."],
           ["Minimum stay (nights)", "1–30."],

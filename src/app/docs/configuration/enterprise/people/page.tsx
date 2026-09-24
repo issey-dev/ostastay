@@ -80,26 +80,23 @@ export default function People() {
         head={["Field", "Notes"]}
         rows={[
           ["First Name, Last Name", "Both required."],
-          ["Email Address", "The person signs in with it. It must be unique across Uppsolut Stay. Type it in lower case."],
-          ["Password", "Set a first password and give it to the person privately. When editing, leave it blank to keep the current one."],
+          ["Email Address", "The person signs in with it. It must be unique across Uppsolut Stay, and is saved in lower case."],
+          ["Password", "At least 12 characters. Give it to the person privately. When editing, leave it blank to keep the current one."],
           ["Roles", "At least one."],
           ["Job Function", "Optional: Management, Front Office, Reservations, Cashier, Housekeeping, Maintenance, Food & Beverage, Spa."],
           ["Access", "All Properties, or Single Property with a Work Location."],
+          ["Active", "When editing. Switch off to stop the person signing in; their sessions end at once. The onboarding account is always active."],
         ]}
       />
-      <Callout title="Good practice" tone="warn">
-        <ul>
-          <li>Enter email addresses in lower case. An address saved with capital letters may not be able to sign in.</li>
-          <li>Choose a strong first password of at least 12 characters. The form does not enforce this for you.</li>
-          <li>One account per person. Never share an account: the activity log records who did what.</li>
-        </ul>
+      <Callout title="Good practice">
+        <p>One account per person. Never share an account: the activity log records who did what.</p>
       </Callout>
 
       <H3>When someone leaves</H3>
       <p>
-        Delete their account. If they have worked in the system (for example opened a cashier shift), deletion is refused to keep
-        the history intact. In that case change their password so the account can&apos;t be used, remove their roles except the
-        least powerful one, and end their sessions on the <a href="/docs/configuration/enterprise/security">Sessions</a> page.
+        Edit their account and switch <strong>Active</strong> off. They are signed out at once and can&apos;t sign in again, and
+        everything they did stays in the history. An account that has never been used can be deleted; one with history (for
+        example a cashier shift) can only be deactivated.
       </p>
       <p>To reset a forgotten password, edit the person and type a new password.</p>
       <Pager href="/docs/configuration/enterprise/people" />

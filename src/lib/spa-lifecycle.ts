@@ -315,14 +315,18 @@ async function settleEndedAppointment(
 export async function cancelSpaAppointment(
   ctx: AuthContext,
   id: string,
-  input: { reasonCode: string; notes?: string | null; waiveFee?: boolean },
+  input: { reasonCode?: string | null; notes?: string | null; waiveFee?: boolean },
   authority: SpaAuthority
 ) {
-  if (!SPA_CANCELLATION_REASONS.includes(input.reasonCode as SpaCancellationReason)) {
+  // A reason, when given, must be one of the known codes. Whether one is REQUIRED is the
+  // property's "Require cancellation reason" Spa setting (default on), checked below
+  // once the appointment's property is known.
+  const reasonCode = input.reasonCode?.trim() || null;
+  if (reasonCode && !SPA_CANCELLATION_REASONS.includes(reasonCode as SpaCancellationReason)) {
     throw new BookingError(400, "VALIDATION", "A valid cancellation reason is required");
   }
   const notes = input.notes?.trim() || null;
-  if (input.reasonCode === "OTHER" && !notes) {
+  if (reasonCode === "OTHER" && !notes) {
     throw new BookingError(400, "VALIDATION", "Describe the reason when choosing Other");
   }
 
@@ -334,6 +338,9 @@ export async function cancelSpaAppointment(
   }
 
   const settings = await prisma.spaSettings.findUnique({ where: { propertyId: appointment.propertyId } });
+  if (!reasonCode && (settings?.requireCancellationReason ?? true)) {
+    throw new BookingError(400, "VALIDATION", "A cancellation reason is required");
+  }
   const cutoffHours = settings?.cancellationCutoffHours ?? 4;
   const cutoffAt = new Date(appointmentStart(appointment).getTime() - cutoffHours * 3_600_000);
   const isLate = new Date() > cutoffAt;
@@ -358,7 +365,7 @@ export async function cancelSpaAppointment(
       appointmentStatus: "CANCELLED",
       cancelledAt: new Date(),
       cancelledByUserId: ctx.userId,
-      cancellationReasonCode: input.reasonCode,
+      cancellationReasonCode: reasonCode,
       cancellationNotes: notes,
       paymentStatus: money.paymentStatus,
       folioId: money.folioId,
@@ -373,7 +380,7 @@ export async function cancelSpaAppointment(
     action: "UPDATE",
     entityType: "SpaAppointment",
     entityId: id,
-    description: `Cancelled ${appointment.treatmentNameSnapshot} (${appointment.appointmentDate.toISOString().slice(0, 10)} ${appointment.startTime}) — ${input.reasonCode}${notes ? `: ${notes}` : ""}${input.waiveFee && isLate ? " — fee waived" : ""}. ${outcome.chargeNote}`,
+    description: `Cancelled ${appointment.treatmentNameSnapshot} (${appointment.appointmentDate.toISOString().slice(0, 10)} ${appointment.startTime}) — ${reasonCode ?? "no reason given"}${notes ? `: ${notes}` : ""}${input.waiveFee && isLate ? " — fee waived" : ""}. ${outcome.chargeNote}`,
   });
 
   notifyBookingChange("booking.cancelled", { spaAppointmentId: id });

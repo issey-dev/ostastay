@@ -1,4 +1,5 @@
 import { propertyPage } from "@/lib/hub-page"
+import { hasPermission } from "@/lib/scope"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { ControlsCard } from "@/components/controls/controls-card"
@@ -6,7 +7,14 @@ import { AllocationCalculationManager } from "@/components/controls/allocation-c
 import { MealPlansManager } from "@/components/controls/meal-plans-manager"
 
 export default async function HubPropertyRevenuePage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
-  const { property, item, canEdit } = await propertyPage(params, "revenue")
+  const { ctx, property, item, canEdit } = await propertyPage(params, "revenue")
+  // The page opens on CONTROLS, but meal plans are saved through /api/meal-plans, which
+  // needs REVENUE — so the add/edit/delete actions follow the REVENUE rights.
+  const mealPlanPermissions = {
+    create: hasPermission(ctx, "REVENUE", "create"),
+    update: hasPermission(ctx, "REVENUE", "update"),
+    delete: hasPermission(ctx, "REVENUE", "delete"),
+  }
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
@@ -16,8 +24,9 @@ export default async function HubPropertyRevenuePage({ params }: { params: Promi
       <MealPlansManager
         propertyId={property.id}
         copyAction={canEdit("create") && <CopyFromPropertyButton propertyId={property.id} section="meal-plans" title="meal plans" />}
+        permissions={mealPlanPermissions}
         title="Meal Plans"
-        description="Meal plan codes offered on this property's reservations (Bed & Breakfast, Half Board, etc.). Link each plan to its Allocations (Revenue > Allocations, e.g. BB → BF) for per-person nightly pricing; a Derived Rate Plan remains an option for flat room-rate adjustments."
+        description="Meal plan codes offered on this property's reservations (Bed & Breakfast, Half Board, etc.). A meal plan is priced per person through the Allocations it includes (Revenue > Allocations, e.g. BB → BF), which post at Night Audit when Allocation Calculation is set to Meal Plan level. A code can't be changed or deleted once reservations use it — deactivate it instead."
       />
     </div>
   )

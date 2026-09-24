@@ -54,11 +54,9 @@ export default function Outlets() {
       <p>
         The <strong>Amenities</strong> card lists the property&apos;s facilities, such as the pool, gym, dive centre or kids&apos;
         club, with an optional description. They are shown to guests on your website through the Booking API. Type a{" "}
-        <strong>Facility Name</strong> and choose <strong>Add</strong>.
+        <strong>Facility Name</strong> and choose <strong>Add</strong>. Each name can be used once; edit or delete an amenity from
+        its row.
       </p>
-      <Callout tone="warn">
-        <p>Amenities can&apos;t be edited or removed once added yet. Check the spelling before adding.</p>
-      </Callout>
       <Pager href="/docs/configuration/property/outlets" />
     </>
   )

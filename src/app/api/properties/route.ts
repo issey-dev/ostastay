@@ -4,6 +4,8 @@ import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
+import { isValidCurrency, isValidTimeZone, normalizeCurrency } from "@/lib/properties/property-input";
+import { PROFILE_MESSAGES } from "@/lib/properties/profile-schema";
 
 export async function GET() {
   try {
@@ -28,8 +30,30 @@ export async function POST(request: Request) {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "create");
 
-    const body = await request.json();
+    const body = (await request.json().catch(() => null)) ?? {};
     const enterpriseId = ctx.enterpriseId;
+
+    // Validated here, not just in the form — the fields used to fall straight through,
+    // and a property created without currency / time zone silently became USD/UTC (every
+    // business date then computed in the wrong zone). Name / legal name follow the
+    // Property Information rules (profile-schema.ts); currency and zone the Osta console's
+    // create route. A 400 carries fieldErrors so the form can put the message on the input.
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+    const legalName = typeof body.legalName === "string" ? body.legalName.trim() : "";
+    const defaultCurrency = normalizeCurrency(body.defaultCurrency);
+    const timeZone = typeof body.timeZone === "string" ? body.timeZone.trim() : "";
+    const fieldErrors: Record<string, string> = {};
+    if (name.length < 2) fieldErrors.name = PROFILE_MESSAGES.name;
+    // The form holds the code to PROPERTY_CODE (2–5 letters/digits); the API only insists
+    // on one being there, as the Osta console route does (its codes run to 12 with dashes).
+    if (code.length < 2) fieldErrors.code = "A short code of at least 2 characters is required.";
+    if (legalName.length < 2) fieldErrors.legalName = PROFILE_MESSAGES.legalName;
+    if (!isValidCurrency(defaultCurrency)) fieldErrors.defaultCurrency = "Currency must be a 3-letter code (e.g. USD, MVR).";
+    if (!isValidTimeZone(timeZone)) fieldErrors.timeZone = "Pick a valid time zone (e.g. Indian/Maldives).";
+    if (Object.keys(fieldErrors).length > 0) {
+      return NextResponse.json({ error: Object.values(fieldErrors)[0], fieldErrors }, { status: 400 });
+    }
 
     const license = await prisma.enterpriseLicense.findUnique({ where: { enterpriseId } });
     const maxProperties = license?.maxProperties ?? 1;
@@ -41,14 +65,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Property codes are globally unique (they prefix document sequences); a friendly
+    // 409 the form can show beats a raw P2002 surfacing as a 500.
+    if (await prisma.property.findUnique({ where: { code } })) {
+      const message = `Short code "${code}" is already in use by another property. Choose a different code.`;
+      return NextResponse.json({ error: message, fieldErrors: { code: message } }, { status: 409 });
+    }
+
     const newProperty = await prisma.property.create({
       data: {
         enterpriseId,
-        name: body.name,
-        code: body.code,
-        legalName: body.legalName,
-        defaultCurrency: body.defaultCurrency,
-        timeZone: body.timeZone,
+        name,
+        code,
+        legalName,
+        defaultCurrency,
+        timeZone,
         checkInTime: body.checkInTime,
         checkOutTime: body.checkOutTime,
         // logoUrl is set only by uploading (POST /api/properties/[id]/logo).

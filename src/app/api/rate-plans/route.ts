@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { isUniqueViolation } from "@/lib/revenue-usage";
+
+// Priority is "lower number = offered first"; 0 is a real value, only blank/garbage
+// falls back to the default.
+function parsePriority(value: unknown): number {
+  const n = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : 10;
+}
 
 export async function GET(request: Request) {
   try {
@@ -57,6 +65,15 @@ export async function POST(request: Request) {
       );
     }
     await assertPropertyAccess(ctx, body.propertyId);
+
+    const code = String(body.code).trim().toUpperCase();
+    const duplicate = await prisma.ratePlan.findUnique({
+      where: { propertyId_code: { propertyId: body.propertyId, code } },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return NextResponse.json({ error: `A rate plan with code ${code} already exists at this property` }, { status: 409 });
+    }
 
     // Derived Rate Plans: a plan can inherit its per-night price from another plan at
     // this property plus a percent/flat adjustment, resolved live at every lookup
@@ -117,10 +134,10 @@ export async function POST(request: Request) {
     const newRatePlan = await prisma.ratePlan.create({
       data: {
         propertyId: body.propertyId,
-        code: body.code.toUpperCase(),
+        code,
         name: body.name,
         description: body.description,
-        priority: parseInt(body.priority) || 10,
+        priority: parsePriority(body.priority),
         isNegotiated: !!body.isNegotiated,
         isComplimentary: !!body.isComplimentary,
         isHouseUse: !!body.isHouseUse,
@@ -150,6 +167,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newRatePlan, { status: 201 });
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "A rate plan with this code already exists at this property" }, { status: 409 });
+    }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
   }

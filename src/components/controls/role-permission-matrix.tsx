@@ -39,11 +39,11 @@ const ACTIONS: { key: Action; label: string; field: keyof PermissionMatrix[Modul
 const SCOPE_ORDER: ModuleScope[] = ["PROPERTY", "HUB"]
 
 // Grouped by scope level rather than listed flat, because the two are not
-// interchangeable: a Hub module gates the enterprise-wide shell (channel-manager
-// credentials, sharing, sync logs) and is unreachable for a user pinned to one property,
-// whatever their role says. Ticking Integrations for such a user used to save happily and
-// then do nothing — the grouping and the note below make that rule visible where the
-// decision is actually made.
+// interchangeable: a Hub module is setup and administration, reached through the Hub.
+// A single-property user still gets Property Setup, Integrations and Green Tax — for
+// their own property only — but never an ENTERPRISE_ONLY module (Users & Access), whatever
+// their role says. That one row carries the "All-Properties users only" badge; the whole
+// group used to, which wrongly read as the other Hub modules being out of reach too.
 export function RolePermissionMatrix({
   value,
   onChange,
@@ -119,9 +119,6 @@ export function RolePermissionMatrix({
                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
                       {MODULE_SCOPE_LABELS[scope]}
                     </span>
-                    {scope === "HUB" && (
-                      <Badge variant="outline" className="font-normal">All-Properties users only</Badge>
-                    )}
                   </div>
                   <p className="mt-0.5 text-xs font-normal text-muted-foreground">
                     {MODULE_SCOPE_DESCRIPTIONS[scope]}
@@ -143,6 +140,12 @@ export function RolePermissionMatrix({
                   <TableRow key={module} className="group">
                     <TableCell className="sticky left-0 z-10 whitespace-nowrap bg-card pl-6 font-medium group-hover:bg-muted/50">
                       {MODULE_LABELS[module]}
+                      {/* Only the enterprise-only rows (Users & Access) are out of reach for
+                          a single-property user — Property Setup, Integrations and Green Tax
+                          still work for their own property (PROPERTY_SETUP_MODULES). */}
+                      {(ENTERPRISE_ONLY_MODULES as readonly Module[]).includes(module) && (
+                        <Badge variant="outline" className="ml-2 font-normal">All-Properties users only</Badge>
+                      )}
                     </TableCell>
                     {ACTIONS.map((a) => (
                       <TableCell key={a.key} className="text-center">

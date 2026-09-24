@@ -49,7 +49,9 @@ export default function Rates() {
       </p>
       <p>
         To check or fine-tune, open the plan&apos;s <strong>Calendar</strong> from the Rate Plans tab: a month view per room type,
-        where empty days show <strong>No Rate</strong>, with a <strong>Bulk Update</strong> form for date ranges.
+        with a <strong>Bulk Update</strong> form for date ranges. Each day shows the price night audit will actually charge, marked{" "}
+        <strong>Derived</strong>, <strong>Base + adj.</strong> or <strong>Base fallback</strong> when it doesn&apos;t come from the
+        plan itself. <strong>No Rate</strong> means nothing is priced and the night would post zero.
       </p>
 
       <H2>2. Rate plans</H2>
@@ -84,8 +86,7 @@ export default function Rates() {
         </ol>
       </Callout>
       <p>
-        Deleting a plan deletes its prices, and it can&apos;t be deleted once reservations use it. Reload the page after deleting to
-        make sure it is gone.
+        Deleting a plan deletes its prices. Once reservations use a plan, its code can&apos;t be changed and it can&apos;t be deleted.
       </p>
 
       <H2>3. Allocations</H2>
@@ -110,8 +111,8 @@ export default function Rates() {
         ]}
       />
       <p>
-        An allocation posts nothing on nights no price range covers. Once used on a reservation it can&apos;t be deleted, only made
-        inactive.
+        An allocation posts nothing on nights no price range covers. Once used on a reservation its code can&apos;t be changed and it
+        can&apos;t be deleted, only made inactive.
       </p>
 
       <H2>4. Allocation Calculation: meal plan or rate plan?</H2>
@@ -134,8 +135,8 @@ export default function Rates() {
       <Shot name="prop-revenue" alt="The Hub Revenue page: the Allocation Calculation choice, and meal plans BB, FB and HB with their included allocations." />
       <p>
         Choose <strong>Add Meal Plan</strong>: a <strong>Code</strong> (e.g. BB, HB, FB, AI), a <strong>Name</strong>, and tick the{" "}
-        <strong>Included Allocations</strong>. &quot;Room only&quot; needs no meal plan: it is built in. Meal plan codes are stored on
-        reservations, so don&apos;t change or delete a code once it has been used.
+        <strong>Included Allocations</strong>. &quot;Room only&quot; needs no meal plan: it is built in. Once a reservation uses a
+        meal plan, its code can&apos;t be changed and it can&apos;t be deleted; switch it inactive instead.
       </p>
       <Pager href="/docs/configuration/property/rates" />
     </>

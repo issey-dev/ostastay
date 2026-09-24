@@ -53,6 +53,8 @@ export async function GET(request: Request) {
         receivedAt: true,
         roomType: { select: { name: true } },
         property: { select: { name: true } },
+        // The reservation this booking was converted into (status CONVERTED).
+        reservation: { select: { confirmationNo: true } },
       },
     });
 

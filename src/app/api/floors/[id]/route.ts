@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from '@/lib/scope'
 import { logActivity } from '@/lib/activity-log'
+import {
+  describeHistory,
+  findInventoryHistory,
+  hasHistory,
+  inventoryErrorResponse,
+  InventoryConflictError,
+  roomList,
+} from '@/lib/inventory-guards'
 
 export async function PUT(
   request: Request,
@@ -13,9 +21,10 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json()
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
 
-    if (!body.name || !body.buildingId) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!name || !body.buildingId) {
+      return NextResponse.json({ error: "Floor name and building are required" }, { status: 400 })
     }
 
     const existing = await prisma.floor.findUnique({ where: { id }, include: { building: true } })
@@ -35,7 +44,7 @@ export async function PUT(
     const floor = await prisma.floor.update({
       where: { id: id },
       data: {
-        name: body.name,
+        name,
         buildingId: body.buildingId,
       },
     })
@@ -71,13 +80,20 @@ export async function DELETE(
     }
     await assertPropertyAccess(ctx, existing.building.propertyId)
 
-    // Manually cascade delete rooms associated with this floor to avoid FK constraint errors
-    await prisma.room.deleteMany({
-      where: { floorId: id }
-    })
-
-    await prisma.floor.delete({
-      where: { id: id },
+    // Deleting a floor deletes the rooms on it — so it is refused when any of them carries
+    // booking/ticket history (src/lib/inventory-guards.ts). Check and delete in one
+    // transaction.
+    const deletedRooms = await prisma.$transaction(async (tx) => {
+      const rooms = await tx.room.findMany({ where: { floorId: id }, select: { id: true } })
+      const history = await findInventoryHistory(tx, { roomIds: rooms.map((r) => r.id) })
+      if (hasHistory(history)) {
+        throw new InventoryConflictError(
+          `Floor "${existing.name}" has rooms with ${describeHistory(history)} (${roomList(history.roomNumbers)}) — move those rooms to another floor first.`
+        )
+      }
+      const { count } = await tx.room.deleteMany({ where: { floorId: id } })
+      await tx.floor.delete({ where: { id } })
+      return count
     })
 
     await logActivity({
@@ -86,12 +102,12 @@ export async function DELETE(
       action: 'DELETE',
       entityType: 'Floor',
       entityId: id,
-      description: `Deleted floor "${existing.name}" from building "${existing.building.name}" and its rooms`,
+      description: `Deleted floor "${existing.name}" from building "${existing.building.name}" and its ${deletedRooms} room(s)`,
     })
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    const { status, body } = toErrorResponse(error)
+    const { status, body } = inventoryErrorResponse(error, toErrorResponse)
     return NextResponse.json(body, { status })
   }
 }

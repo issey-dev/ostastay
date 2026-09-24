@@ -22,7 +22,17 @@ import { toast } from "@/lib/toast"
 
 type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
 type RoomType = { id: string; name: string; code: string }
-type PriceEntry = { date: string; price: number; extraAdultPrice: number | null; extraChildPrice: number | null }
+// `source`/`derived` say how the price was resolved — the same way Night Audit posts it
+// (src/lib/effective-price-calendar.ts): the plan's own (or, for a derived plan, its
+// parent's) calendar, else the Base Rate plan's, plus a derived plan's adjustment.
+type PriceEntry = {
+  date: string
+  price: number
+  extraAdultPrice: number | null
+  extraChildPrice: number | null
+  source?: "OWN" | "BASE_FALLBACK"
+  derived?: boolean
+}
 
 export default function PriceCalendarPage() {
   return (
@@ -270,6 +280,7 @@ function PriceCalendarPageContent() {
                     ? ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${selectedRatePlan?.derivedAdjustmentValue} flat`
                     : ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${selectedRatePlan?.derivedAdjustmentValue}%`}
                   . It has no calendar of its own to edit here — change the parent plan&apos;s prices, or edit this plan&apos;s adjustment on the Rate Plans tab.
+                  The grid shows what Night Audit posts: nights where the parent has no price use the Base Rate price plus the adjustment (marked &quot;Base + adj.&quot;).
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -421,7 +432,25 @@ function PriceCalendarPageContent() {
                         <div className="mt-auto pt-1 flex flex-col gap-0.5 sm:pt-2">
                           {entry !== null ? (
                             <>
-                              <span className="text-xs font-bold text-success tabular-nums sm:text-lg">${entry.price.toFixed(2)}</span>
+                              <span
+                                className={`text-xs font-bold tabular-nums sm:text-lg ${entry.source === "BASE_FALLBACK" ? "text-muted-foreground" : entry.derived ? "text-info" : "text-success"}`}
+                                title={
+                                  entry.source === "BASE_FALLBACK"
+                                    ? entry.derived
+                                      ? "No parent price for this night — Base Rate price plus this plan's adjustment (what Night Audit posts)"
+                                      : "No price set for this night — Night Audit falls back to the Base Rate price"
+                                    : entry.derived
+                                      ? "Parent plan's price plus this plan's adjustment"
+                                      : undefined
+                                }
+                              >
+                                ${entry.price.toFixed(2)}
+                              </span>
+                              {(entry.derived || entry.source === "BASE_FALLBACK") && (
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">
+                                  {entry.source === "BASE_FALLBACK" ? (entry.derived ? "Base + adj." : "Base fallback") : "Derived"}
+                                </span>
+                              )}
                               {(entry.extraAdultPrice != null || entry.extraChildPrice != null) && (
                                 <span className="hidden text-[11px] text-muted-foreground leading-tight sm:block">
                                   {entry.extraAdultPrice != null && `+$${entry.extraAdultPrice.toFixed(2)} adult`}

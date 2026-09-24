@@ -4,6 +4,7 @@ import { RoomStatus } from "@/lib/enums";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { assertRoomCapacity } from "@/lib/license";
 import { logActivity } from "@/lib/activity-log";
+import { assertRoomNumberFree, inventoryErrorResponse } from "@/lib/inventory-guards";
 
 export async function GET(request: Request) {
   try {
@@ -42,11 +43,14 @@ export async function POST(request: Request) {
     requirePermission(ctx, "CONTROLS", "create");
 
     const body = await request.json();
+    const roomNumber = body.roomNumber == null ? "" : String(body.roomNumber).trim();
 
-    if (!body.roomNumber || !body.propertyId || !body.roomTypeId) {
+    if (!roomNumber || !body.propertyId || !body.roomTypeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, body.propertyId);
+    // A duplicate room number used to surface as a bare 500 (the unique index firing).
+    await assertRoomNumberFree(body.propertyId, roomNumber);
 
     const roomType = await prisma.roomType.findUnique({ where: { id: body.roomTypeId } });
     if (!roomType || roomType.propertyId !== body.propertyId) {
@@ -82,7 +86,7 @@ export async function POST(request: Request) {
         propertyId: body.propertyId,
         roomTypeId: body.roomTypeId,
         floorId,
-        roomNumber: body.roomNumber,
+        roomNumber,
         status: (body.status as RoomStatus) || RoomStatus.CLEAN,
         features: features.length > 0 && !roomType.isPseudo ? { create: features } : undefined,
       },
@@ -104,7 +108,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newRoom, { status: 201 });
   } catch (error) {
-    const { status, body } = toErrorResponse(error);
+    const { status, body } = inventoryErrorResponse(error, toErrorResponse, "That room number already exists in this property.");
     return NextResponse.json(body, { status });
   }
 }
@@ -132,7 +136,9 @@ export async function PATCH(request: Request) {
 
       const result = await prisma.room.updateMany({
         where: { id: { in: rooms.map((r) => r.id) } },
-        data: { status: body.status as RoomStatus },
+        // A manual status change ends "out of service because the room type was
+        // deactivated" — see Room.statusBeforeTypeDeactivation.
+        data: { status: body.status as RoomStatus, statusBeforeTypeDeactivation: null },
       });
 
       await logActivity({
@@ -158,7 +164,7 @@ export async function PATCH(request: Request) {
 
     const updatedRoom = await prisma.room.update({
       where: { id: body.id },
-      data: { status: body.status as RoomStatus },
+      data: { status: body.status as RoomStatus, statusBeforeTypeDeactivation: null },
     });
 
     await logActivity({

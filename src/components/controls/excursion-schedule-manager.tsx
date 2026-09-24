@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Plus, Trash2, Pencil, X } from "@/components/icons"
@@ -28,6 +30,9 @@ export function ExcursionScheduleManager({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [listError, setListError] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const [generateThrough, setGenerateThrough] = useState<string>("")
   const [generating, setGenerating] = useState(false)
@@ -99,10 +104,46 @@ export function ExcursionScheduleManager({
     }
   }
 
-  const deleteSchedule = async (id: string) => {
-    await fetch(`/api/excursions/schedules/${id}`, { method: "DELETE" })
-    if (editingId === id) cancelEdit()
+  const describe = (s: ExcursionScheduleDto) => `${s.daysOfWeek.split(",").join(", ")} at ${s.departureTime}`
+
+  const deleteSchedule = async (s: ExcursionScheduleDto) => {
+    const ok = await confirm({
+      title: "Delete this schedule?",
+      description: `The ${describe(s)} schedule will be removed. Departures already generated from it stay on the booking screen — cancel those individually if the trip is not running. To pause it instead, switch it to inactive.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
+    setListError(null)
+    const res = await fetch(`/api/excursions/schedules/${s.id}`, { method: "DELETE" })
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setListError(body?.error || "Failed to delete schedule")
+      return
+    }
+    if (editingId === s.id) cancelEdit()
     onChanged()
+  }
+
+  // Inactive schedules are skipped by "Generate departures"; existing departures stay.
+  const setActive = async (s: ExcursionScheduleDto, isActive: boolean) => {
+    setListError(null)
+    setTogglingId(s.id)
+    try {
+      const res = await fetch(`/api/excursions/schedules/${s.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setListError(body?.error || `Failed to ${isActive ? "reactivate" : "deactivate"} schedule`)
+        return
+      }
+      onChanged()
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   const generateDepartures = async () => {
@@ -143,7 +184,7 @@ export function ExcursionScheduleManager({
           excursionType.schedules.map((s: ExcursionScheduleDto) => (
             <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-lg p-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium">{s.daysOfWeek.split(",").join(", ")} at {s.departureTime}</p>
+                <p className="text-sm font-medium">{describe(s)}</p>
                 <p className="text-xs text-muted-foreground">
                   Capacity {s.capacity}{s.minCapacity ? ` (min ${s.minCapacity})` : ""}
                   {s.meetingPoint && ` · Meet at ${s.meetingPoint}${s.meetingTime ? ` (${s.meetingTime})` : ""}`}
@@ -151,15 +192,28 @@ export function ExcursionScheduleManager({
               </div>
               <div className="flex items-center gap-2">
                 {!s.isActive && <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>}
+                <Switch
+                  checked={s.isActive}
+                  disabled={togglingId === s.id}
+                  onCheckedChange={(v) => setActive(s, v)}
+                  aria-label={s.isActive ? "Deactivate schedule" : "Reactivate schedule"}
+                  title={s.isActive ? "Active — switch off to stop generating departures" : "Inactive — switch on to generate departures again"}
+                />
                 <Button variant="ghost" size="icon" aria-label="Edit schedule" onClick={() => startEdit(s)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="Delete schedule" className="text-destructive hover:text-destructive" onClick={() => deleteSchedule(s.id)}>
+                <Button variant="ghost" size="icon" aria-label="Delete schedule" className="text-destructive hover:text-destructive" onClick={() => deleteSchedule(s)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           ))
+        )}
+        {listError && <p className="text-sm text-destructive">{listError}</p>}
+        {excursionType.schedules.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Switch a schedule off to pause it: inactive schedules are skipped when generating departures.
+          </p>
         )}
       </div>
 

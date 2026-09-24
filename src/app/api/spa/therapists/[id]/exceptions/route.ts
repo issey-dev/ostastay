@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-
-const EXCEPTION_TYPES = ["DAY_OFF", "LEAVE", "TRAINING", "SICK", "EXTENDED_HOURS", "UNAVAILABLE"] as const;
+import { therapistExceptionSchema } from "@/lib/spa-exception";
 
 // Same permission gate as schedule/skills (CONTROLS) for v1 — see SPA_PLAN.md §3's
 // nuance note on this being a genuine, not-yet-settled judgment call (a same-day
@@ -14,12 +13,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requirePermission(ctx, "CONTROLS", "create");
 
     const { id } = await params;
-    const body = await request.json();
-    if (!body.date || !body.exceptionType) {
-      return NextResponse.json({ error: "Missing required fields (date, exceptionType)" }, { status: 400 });
+    const parsed = therapistExceptionSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid exception" }, { status: 400 });
     }
-    if (!EXCEPTION_TYPES.includes(body.exceptionType)) {
-      return NextResponse.json({ error: `exceptionType must be one of ${EXCEPTION_TYPES.join(", ")}` }, { status: 400 });
+    const body = parsed.data;
+    const date = new Date(body.date);
+    if (Number.isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400 });
     }
 
     const therapist = await prisma.spaTherapist.findUnique({ where: { id } });
@@ -31,17 +32,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const exception = await prisma.spaTherapistAvailabilityException.create({
       data: {
         therapistId: id,
-        date: new Date(body.date),
-        startTime: body.startTime || null,
-        endTime: body.endTime || null,
+        date,
+        startTime: body.startTime,
+        endTime: body.endTime,
         exceptionType: body.exceptionType,
-        reason: body.reason || null,
+        reason: body.reason,
       },
     });
 
     await logActivity({
       ctx, module: "CONTROLS", action: "CREATE", entityType: "SpaTherapistAvailabilityException", entityId: exception.id,
-      description: `Added ${body.exceptionType} exception for spa therapist "${therapist.displayName}" on ${new Date(body.date).toDateString()}`,
+      description: `Added ${body.exceptionType} exception for spa therapist "${therapist.displayName}" on ${date.toDateString()}${body.startTime ? ` ${body.startTime}–${body.endTime}` : ""}`,
     });
 
     return NextResponse.json(exception, { status: 201 });

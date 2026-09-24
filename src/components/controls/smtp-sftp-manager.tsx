@@ -37,7 +37,8 @@ const EMPTY: SmtpSftpForm = {
 // (handover credentials, channel alerts) and is configured in the environment, not here.
 // See the two-sender note in src/lib/mailer.ts.
 //
-// SFTP remains scaffold — those fields save but nothing transfers files yet.
+// SFTP remains scaffold — those fields save but nothing transfers files yet, and the
+// section says so ("Not in use yet") rather than looking like a live integration.
 type TestResult = {
   ok: boolean
   stage: "connect" | "send"
@@ -83,7 +84,7 @@ export function SmtpSftpManager() {
     setSaving(true)
     setSavedMsg(false)
     try {
-      await fetch("/api/tenant-settings", {
+      const res = await fetch("/api/tenant-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -92,10 +93,18 @@ export function SmtpSftpManager() {
           sftpPort: form.sftpPort ? parseInt(form.sftpPort) : null,
         }),
       })
+      // Only a 2xx is "Saved" — this used to show Saved whatever the server answered.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error ?? "Could not save the email settings")
+        return
+      }
       setSavedMsg(true)
       setTimeout(() => setSavedMsg(false), 3000)
       // Saving changes what a test would exercise, so a previous verdict is now stale.
       setTestResult(null)
+    } catch {
+      toast.error("Could not reach the server. Your changes were not saved.")
     } finally {
       setSaving(false)
     }
@@ -221,6 +230,9 @@ export function SmtpSftpManager() {
             SFTP (File Transfer)
             <InfoHint label="SFTP (File Transfer)">Not yet wired to any actual transfer — saved for when a file-export feature is built.</InfoHint>
           </h3>
+        <p className="text-xs text-muted-foreground">
+          Not in use yet — nothing is sent over SFTP today. Details saved here are kept for a future file-export feature.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Host</Label>

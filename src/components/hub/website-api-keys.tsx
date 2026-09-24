@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DatePicker } from "@/components/ui/date-picker"
+import { todayKey } from "@/lib/date-only"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -510,7 +512,14 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                 <FormField control={form.control} name="expiresAt" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Expires (optional)</FormLabel>
-                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <DatePicker value={field.value || null} onChange={(v) => field.onChange(v ?? "")} minDate={todayKey()} placeholder="Never" />
+                      </div>
+                      {field.value && (
+                        <Button type="button" variant="outline" onClick={() => field.onChange("")}>Clear</Button>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )} />
