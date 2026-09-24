@@ -154,3 +154,77 @@ describe("tax-calc: resolveChargeTax connection point", () => {
     expect(result.breakdown[0].name).toBe("Current");
   });
 });
+
+describe("tax-calc: inclusive postings always add back to the gross entered", () => {
+  const settings = { serviceChargeEnabled: true, serviceChargeRate: 10, tgstEnabled: true, tgstRate: 17 };
+  const cents = (n: number) => Math.round(n * 100);
+  const partsCents = (r: { baseAmount: number; breakdown: { amount: number }[] }) =>
+    cents(r.baseAmount) + r.breakdown.reduce((s, l) => s + cents(l.amount), 0);
+
+  it("215.00 (2 × 85 + 1 × 45): the residual cent goes on the base, tax lines keep their own rounding", () => {
+    // Unrounded: base 167.0552, SC 16.7055, GST 31.2393 → independently rounded they
+    // sum to 215.01; the base gives up the cent instead.
+    const r = computeDefaultEngineTax(215, settings, true);
+    expect(r.serviceChargeAmount).toBe(16.71);
+    expect(r.taxAmount).toBe(31.24);
+    expect(r.baseAmount).toBe(167.05);
+    expect(partsCents(r)).toBe(21500);
+  });
+
+  it.each([
+    [650, 505.05, 50.51, 94.44],
+    [340, 264.18, 26.42, 49.4],
+  ])("%s splits exactly as before (no residual to move)", (gross, base, sc, gst) => {
+    const r = computeDefaultEngineTax(gross, settings, true);
+    expect(r.baseAmount).toBe(base);
+    expect(r.serviceChargeAmount).toBe(sc);
+    expect(r.taxAmount).toBe(gst);
+    expect(partsCents(r)).toBe(cents(gross));
+  });
+
+  it("every amount from 0.01 to 2,000.00 (and its negative) adds back exactly on the default engine", () => {
+    const mismatches: number[] = [];
+    for (let c = 1; c <= 200_000; c++) {
+      for (const gross of [c / 100, -c / 100]) {
+        const r = computeDefaultEngineTax(gross, settings, true);
+        const rawBase = gross / 1.287;
+        if (
+          partsCents(r) !== cents(gross) ||
+          // The base only ever moves by the one residual cent, never more.
+          Math.abs(cents(r.baseAmount) - Math.round(rawBase * 100)) > 1
+        ) {
+          mismatches.push(gross);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("a three-line custom profile adds back exactly across a sweep, and taxAmount matches its lines", () => {
+    const lines = [
+      { name: "Service Charge", ratePercent: 10, calculateOn: "BASE", order: 0 },
+      { name: "Levy", ratePercent: 2.5, calculateOn: "BASE", order: 1 },
+      { name: "GST", ratePercent: 17, calculateOn: "COMPOUND", order: 2 },
+    ];
+    const mismatches: number[] = [];
+    for (let c = 1; c <= 50_000; c += 7) {
+      const gross = c / 100;
+      const r = computeCustomProfileTax(gross, lines, true);
+      const linesCents = r.breakdown.reduce((s, l) => s + cents(l.amount), 0);
+      if (partsCents(r) !== cents(gross) || cents(r.taxAmount) !== linesCents) mismatches.push(gross);
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("an inclusive amount with more than two decimals adds back to its rounded gross", () => {
+    const r = computeDefaultEngineTax(215.004, settings, true);
+    expect(partsCents(r)).toBe(21500);
+  });
+
+  it("the exclusive path is untouched: base stays the entered amount, taxes ride on top", () => {
+    const r = computeDefaultEngineTax(167.06, settings, false);
+    expect(r.baseAmount).toBe(167.06);
+    expect(r.serviceChargeAmount).toBe(16.71);
+    expect(r.taxAmount).toBe(31.24);
+  });
+});
