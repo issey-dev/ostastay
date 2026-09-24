@@ -2,6 +2,16 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Property logo upload (2026-09-24) — DONE
+
+See DECISIONS.md (2026-09-24, "Property logo is uploaded"). Open:
+- [ ] The pdf-lib report FALLBACK (used only when headless Chrome fails) draws no logo —
+  it would need the PNG bytes embedded (`ReportBranding.logoDataUrl` exists, unused).
+- [ ] Osta's own licence invoices still use `EnterpriseSettings.invoiceLogoUrl` (a URL
+  field) — move to the same upload if the owner wants it there too.
+- [ ] Backups: `storage/logos` lives on the `osta-uploads` volume with the eRegistration
+  photos — include that volume in VPS backups.
+
 ## Review of 7.3.0 (#53) + tax fix (#54) — 2026-09-24
 
 Fixed:

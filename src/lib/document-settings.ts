@@ -1,5 +1,6 @@
 import { getPropertySettings, type PropertySettingsValues } from "@/lib/property-settings"
 import { resolveStationeryBrand, type PropertyBrandInput } from "@/lib/stationery-brand"
+import { absoluteLogoUrl } from "@/lib/property-logo"
 
 // What a printed or emailed document needs to know about its property's settings — and
 // NOTHING else. The document data routes used to return the whole EnterpriseSettings row
@@ -28,7 +29,8 @@ export async function loadEmailBranding(property: PropertyBrandInput & { id: str
     settings: {
       ...content,
       invoiceBrandName: brand.name,
-      invoiceLogoUrl: brand.logoUrl,
+      // Absolute — a mail client can't resolve a path on this deployment.
+      invoiceLogoUrl: absoluteLogoUrl(brand.logoUrl),
       invoiceAddress: brand.address,
       invoicePhone: brand.phone,
       invoiceEmail: brand.email,
