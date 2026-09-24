@@ -9,9 +9,11 @@
   hitting every inclusive `postCharge` incl. Booking API quotes. The base now absorbs the
   residual cent; rule in [DECISIONS.md](DECISIONS.md) (2026-09-23). Exclusive path
   untouched. Tests: `tax-calc.test.ts` (215/650/340, ±0.01–2,000.00 sweep, 3-line profile).
-- Not changed: `post-charge.ts` stores `grossAmount: baseAmount + taxAmount +
-  serviceChargeAmount` as an unrounded float sum — equal in cents now, but could carry
-  float noise (167.05 + 31.24 + 16.71 === 215.00000000000003 in JS). Worth routing through `round2`/`money.ts`.
+- ~~`postCharge` summed amounts as floats~~ — DONE. The `grossAmount` handed to generates
+  (39.05 + 7.3 + 3.9 = 50.24999999999999) made a 10% GROSS generate on inclusive 50.25 post
+  5.02 instead of 5.03 — about a third of inclusive amounts carried the noise. `grossAmount`,
+  `taxTotal`, `leviesTotal` and `grandTotal` now go through `addMoney` (`money.ts`, integer
+  cents). Stored line columns were already exact. Test: `charge-hierarchy.test.ts`.
 
 ## Hub Setup — Enterprise vs Property separation (2026-09-23) — DONE (7.0.0), follow-ups open
 

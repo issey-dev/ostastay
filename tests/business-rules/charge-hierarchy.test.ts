@@ -320,3 +320,32 @@ describe("tax never generates on a payment — enforced at posting time", () => 
     expect(lines).toHaveLength(1);
   });
 });
+
+describe("postCharge: a GROSS-based generate sees the exact gross", () => {
+  it("inclusive 50.25 with a 10% GROSS fee posts 5.03, not the float-sum 5.02", async () => {
+    // 50.25 inclusive splits 39.05 + 3.90 + 7.30. Summed as floats that is
+    // 50.24999999999999, whose 10% rounds DOWN to 5.02 — the gross must be summed in cents.
+    const { ent, propertyId } = await freshProperty("gross-generate");
+    await ensureChargeTree(prisma, { propertyId });
+    const folio = await prisma.folio.create({ data: { propertyId, folioNumber: 1 } });
+
+    const excursion = await chargeCode({ propertyId }, "4001");
+    const fee = await customChargeCode({ propertyId }, { code: "FEE10", description: "Booking Fee", postingType: "TAX" });
+    await prisma.chargeCodeGenerate.create({
+      data: { enterpriseId: ent.id, propertyId, generatorCodeId: excursion.id, generatedCodeId: fee.id, method: "PERCENT", value: 10, calculateOn: "GROSS", sortOrder: 90 },
+    });
+    const settings = await setPropertySettings(propertyId, { tgstEnabled: true, tgstRate: 17, serviceChargeEnabled: true, serviceChargeRate: 10 });
+
+    const postable = await prisma.chargeCode.findUniqueOrThrow({ where: { id: excursion.id }, include: chargeCodeInclude() });
+    const posted = await prisma.$transaction((tx) =>
+      postCharge(tx, { folioId: folio.id, chargeCode: postable, inputAmount: 50.25, settings, pricesIncludeTaxes: true, date: new Date() })
+    );
+
+    expect(posted.baseAmount).toBe(39.05);
+    expect(posted.taxTotal).toBe(11.2);
+    const feeLine = posted.generated.find((l) => l.chargeCodeId === fee.id);
+    expect(feeLine?.amount).toBe(5.03);
+    expect(posted.leviesTotal).toBe(5.03);
+    expect(posted.grandTotal).toBe(55.28);
+  });
+});

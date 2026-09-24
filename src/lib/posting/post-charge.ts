@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { FolioLineItem, PropertySettings } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resolveOutletChargeTax } from "@/lib/tax-calc";
+import { addMoney } from "@/lib/money";
 import {
   computeGeneratedAmounts,
   isTaxRoutingMethod,
@@ -259,7 +260,9 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
       const amounts = computeGeneratedAmounts({
         generates: rows,
         netAmount: baseAmount,
-        grossAmount: baseAmount + taxAmount + serviceChargeAmount,
+        // Summed in cents: a plain float sum (39.05 + 7.3 + 3.9 = 50.24999999999999) can
+        // tip a GROSS-based percentage across a half cent and post it a cent short.
+        grossAmount: addMoney(baseAmount, taxAmount, serviceChargeAmount),
         settings,
         context: postingContext ?? null,
       });
@@ -306,7 +309,7 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
             runGenerates: false,
           });
           generated.push(line.parent);
-          leviesTotal += line.grandTotal;
+          leviesTotal = addMoney(leviesTotal, line.grandTotal);
         }
       }
     }
@@ -315,14 +318,14 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
   // taxTotal is the parent charge's tax however it was posted — in its own columns, or
   // moved onto routed tax lines. Callers that total "tax collected" must use this and
   // NOT also walk `generated`, or routed tax would be counted twice.
-  const taxTotal = taxAmount + serviceChargeAmount;
+  const taxTotal = addMoney(taxAmount, serviceChargeAmount);
   return {
     parent,
     generated,
     baseAmount,
     taxTotal,
-    leviesTotal: round2(leviesTotal),
-    grandTotal: round2(baseAmount + taxTotal + leviesTotal),
+    leviesTotal,
+    grandTotal: addMoney(baseAmount, taxTotal, leviesTotal),
   };
 }
 
