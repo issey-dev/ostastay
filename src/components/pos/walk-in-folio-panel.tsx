@@ -34,6 +34,8 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
+  // Same rule as the guest folio: the amount is the balance until the cashier edits it.
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
   // Folio the print-style picker is open for (null = closed).
   const [printFolioId, setPrintFolioId] = useState<string | null>(null)
@@ -51,6 +53,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     if (isOpen && folioId) {
       setFolio(null)
       setFeedback(null)
+      setPaymentAmountTouched(false)
       fetchFolio()
       if (currentProperty) fetch(`/api/payment-methods?propertyId=${currentProperty.id}`)
         .then((res) => res.json())
@@ -65,6 +68,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
       folio.payments.reduce((sum: number, p: any) => sum + (p.isRefund ? -p.amount : p.amount), 0)
     : 0
   const closed = !!folio?.isClosed
+  const paymentAmount = paymentAmountTouched ? paymentForm.amount : balance > 0.005 ? balance.toFixed(2) : ""
 
   const flash = (message: string, type: "success" | "error") => {
     setFeedback({ message, type })
@@ -77,10 +81,11 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     setSubmitting(true)
     try {
       const res = await fetch(`/api/folios/${folioId}/payments`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(paymentForm),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...paymentForm, amount: paymentAmount }),
       })
       if (res.ok) {
         setPaymentForm({ paymentMethodId: "", amount: "", referenceNumber: "" })
+        setPaymentAmountTouched(false)
         fetchFolio()
         flash("Payment posted.", "success")
       } else {
@@ -240,14 +245,14 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Amount *</Label>
-                    <Input required type="number" step="0.01" min="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))} />
+                    <Input required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={(e) => { setPaymentAmountTouched(true); setPaymentForm((p) => ({ ...p, amount: e.target.value })) }} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Reference No. (optional)</Label>
                   <Input value={paymentForm.referenceNumber} onChange={(e) => setPaymentForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
                 </div>
-                <Button type="submit" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentForm.amount}>
+                <Button type="submit" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
                   {submitting ? "Posting…" : "Post Payment"}
                 </Button>
               </form>

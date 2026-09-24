@@ -37,6 +37,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   const [postType, setPostType] = useState<"charge" | "payment">("charge")
   const [chargeForm, setChargeForm] = useState({ chargeCodeId: "", amount: "", description: "", reference: "" })
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
+  // Until the cashier types an amount, the payment amount IS the folio balance (see
+  // paymentAmount below) — settling in full is the common case, and a stale copy of the
+  // balance would be wrong after every posting. Typing takes over; posting hands it back.
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false)
   
   // Multi-Folio State
   const [selectedLineItemIds, setSelectedLineItemIds] = useState<string[]>([])
@@ -225,10 +229,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       const res = await fetch(`/api/folios/${activeFolioId}/payments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentForm)
+        body: JSON.stringify({ ...paymentForm, amount: paymentAmount })
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
+        setPaymentAmountTouched(false)
         // Reset back to the folio's default rather than blank — taking a second payment
         // shouldn't mean re-picking the method the folio is configured to settle with.
         setPaymentForm({ paymentMethodId: activeFolio?.defaultPaymentMethodId || "", amount: "", referenceNumber: "" })
@@ -448,6 +453,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   }
 
   const balance = (totalBaseCharges + totalServiceCharges + totalTaxes) - totalPayments
+  // What the Amount field shows: the outstanding balance until the cashier edits it. A
+  // folio in credit or settled suggests nothing.
+  const paymentAmount = paymentAmountTouched ? paymentForm.amount : balance > 0.005 ? balance.toFixed(2) : ""
 
   // A reservation folio that hasn't opened yet: the guest hasn't arrived, so nothing can
   // be posted and no fiscal document exists to raise. A walk-in/outlet folio (no
@@ -488,6 +496,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     onClick={() => {
                       setActiveFolioId(f.id)
                       setSelectedLineItemIds([])
+                      setPaymentAmountTouched(false)
                     }}
                     className={`px-4 py-2 rounded-t-md text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                       activeFolioId === f.id
@@ -563,8 +572,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-1">
-                        <p className={`text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
+                      {/* Phone: the balance on its own line, the document buttons in an even
+                          two-column grid under it. From sm up: one wrapping row, as before. */}
+                      <div className="mt-1 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                        <p className={`col-span-2 text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
                         {/* Before arrival the only document that exists is a quote. A tax
@@ -577,7 +588,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("tax")}
-                            className="h-9 shadow-sm border-border"
+                            className="h-9 w-full shadow-sm sm:w-auto border-border"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                           </Button>
@@ -586,7 +597,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={() => setPrintDocType("proforma")}
-                          className="h-9 shadow-sm border-border"
+                          className="h-9 w-full shadow-sm sm:w-auto border-border"
                           title={preArrival ? "Quoted charges for the stay — not a tax invoice" : undefined}
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
@@ -596,7 +607,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("interim")}
-                            className="h-9 shadow-sm border-border"
+                            className="h-9 w-full shadow-sm sm:w-auto border-border"
                             title="Information statement of charges posted so far — not a tax invoice"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Interim Bill
@@ -606,7 +617,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={openRouting}
-                          className="h-9 shadow-sm border-border"
+                          className="h-9 w-full shadow-sm sm:w-auto border-border"
                         >
                           <ArrowRightLeft className="w-4 h-4 mr-2" /> Routing
                         </Button>
@@ -615,7 +626,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="destructive"
                             onClick={handleDeleteFolio}
-                            className="h-9 shadow-sm"
+                            className="h-9 w-full shadow-sm sm:w-auto"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </Button>
@@ -820,7 +831,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 </div>
 
                 {/* Right Column: Actions */}
-                <div className="lg:col-span-1 flex flex-col gap-6 sticky top-0 shrink-0">
+                <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-0 shrink-0">
                   <Tabs value={postType} onValueChange={(v: any) => setPostType(v)} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="charge"><Plus className="w-4 h-4 mr-2"/> Post Charge</TabsTrigger>
@@ -905,7 +916,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <Label>Amount <span className="text-destructive">*</span></Label>
                           <div className="relative">
                             <span className="absolute left-3 top-2 text-muted-foreground">$</span>
-                            <Input className="pl-7" required type="number" step="0.01" min="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(p => ({...p, amount: e.target.value}))} />
+                            <Input className="pl-7" required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={e => { setPaymentAmountTouched(true); setPaymentForm(p => ({...p, amount: e.target.value})) }} />
                           </div>
                         </div>
                         <div className="space-y-2">
