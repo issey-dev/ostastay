@@ -45,8 +45,11 @@ Owner decisions (2026-09-24, DECISIONS.md) — DONE:
 
 Still open:
 - [ ] Existing properties created before 2026-09-24 still carry the demo codes (2001–2004,
-  2901–2904, 3001…, and outlet subgroups). Deleting them is the owner's call per property —
-  a code with postings can only be deactivated.
+  2901–2904, 3001…, and outlet subgroups). Cleanup script ready (owner asked 2026-09-24):
+  `npm run charges:cleanup-demo` (dry run) then `-- --apply`, per environment. Rules in
+  `src/lib/posting/demo-code-cleanup.ts`: unused → deleted, posted → deactivated, still used
+  by setup → kept and reported; renamed and system codes never touched. Not yet applied
+  anywhere.
 - [ ] Stale `.next/dev/types` breaks `tsc` after the route moves — delete `.next` locally.
 
 ## Tax-inclusive rounding — FIXED (2026-09-23)
