@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizeConnection } from "@/lib/channels/hub-access";
 import { testConnection } from "@/lib/channels/connection";
 
 // Exercise the stored credentials against Beds24 and record the outcome.
@@ -18,13 +18,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "update");
-
-    const existing = await prisma.channelConnection.findUnique({ where: { id } });
-    if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
-      return NextResponse.json({ error: "Connection not found" }, { status: 404 });
-    }
+    await authorizeConnection(ctx, id, "update");
 
     return NextResponse.json({ connection: await testConnection(id) });
   } catch (error) {

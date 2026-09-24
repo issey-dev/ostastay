@@ -25,33 +25,33 @@ model Enterprise {
   type      String   @default("STANDARD")
   createdAt DateTime @default(now())
 
-  properties            Property[]
-  taxProfiles           TaxProfile[]
-  chargeGroups          ChargeGroup[]
-  chargeSubgroups       ChargeSubgroup[]
-  chargeCodes           ChargeCode[]
-  chargeCodeGenerates   ChargeCodeGenerate[]
-  paymentMethods        PaymentMethod[]
-  profiles              Profile[]
-  cashierShifts         CashierShift[]
-  settings              EnterpriseSettings?
-  users                 User[]
-  roles                 Role[]
-  nightAuditLogs        NightAuditLog[]
-  systemCodes           SystemCode[]
-  roomAttendants        RoomAttendant[]
-  license               EnterpriseLicense?
-  licenseInvoices       LicenseInvoice[]
-  channelConnections    ChannelConnection[]
-  channelSyncLogs       ChannelSyncLog[]
+  properties             Property[]
+  taxProfiles            TaxProfile[]
+  chargeGroups           ChargeGroup[]
+  chargeSubgroups        ChargeSubgroup[]
+  chargeCodes            ChargeCode[]
+  chargeCodeGenerates    ChargeCodeGenerate[]
+  paymentMethods         PaymentMethod[]
+  profiles               Profile[]
+  cashierShifts          CashierShift[]
+  settings               EnterpriseSettings?
+  users                  User[]
+  roles                  Role[]
+  nightAuditLogs         NightAuditLog[]
+  systemCodes            SystemCode[]
+  roomAttendants         RoomAttendant[]
+  license                EnterpriseLicense?
+  licenseInvoices        LicenseInvoice[]
+  channelConnections     ChannelConnection[]
+  channelSyncLogs        ChannelSyncLog[]
   channelInboundBookings ChannelInboundBooking[]
-  jobRuns               JobRun[]
-  eRegistrationLinks    ERegistrationLink[]
-  websiteApiKeys        WebsiteApiKey[]
-  websiteBookings       WebsiteBooking[]
-  apiActivityBookings   ApiActivityBooking[]
-  addonAccess           EnterpriseAddonAccess[]
-  emailLogs             EmailLog[]
+  jobRuns                JobRun[]
+  eRegistrationLinks     ERegistrationLink[]
+  websiteApiKeys         WebsiteApiKey[]
+  websiteBookings        WebsiteBooking[]
+  apiActivityBookings    ApiActivityBooking[]
+  addonAccess            EnterpriseAddonAccess[]
+  emailLogs              EmailLog[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
 }
@@ -77,14 +77,14 @@ model EnterpriseLicense {
   // sessions die too). Osta/internal users and a missing license row are exempt — the
   // row is created lazily and absence must not brick a tenant (same fail-open stance as
   // TierModuleAccess).
-  status     String    @default("ACTIVE")
-  validFrom  DateTime?
-  expiresAt  DateTime?
-  graceDays  Int       @default(7)
+  status        String    @default("ACTIVE")
+  validFrom     DateTime?
+  expiresAt     DateTime?
+  graceDays     Int       @default(7)
   // Manual monthly price (owner decision: no formula) — the four attribute caps
   // (maxProperties above + PropertyLicenseAllowance) restrict, they don't price.
   monthlyPrice  Float?
-  priceCurrency String @default("USD")
+  priceCurrency String    @default("USD")
 
   updatedAt DateTime @updatedAt
 }
@@ -114,22 +114,22 @@ model LicenseInvoice {
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
 
-  invoiceNo   String   @unique
-  periodStart DateTime
-  periodEnd   DateTime
+  invoiceNo      String    @unique
+  periodStart    DateTime
+  periodEnd      DateTime
   // amount is the NET payable after discount; discountAmount is shown on the printed
   // invoice as goodwill (list price = amount + discountAmount). Display-only — no
   // percentage math anywhere.
   amount         Float
-  discountAmount Float  @default(0)
-  currency       String @default("USD")
-  status      String   @default("ISSUED")
-  issuedAt    DateTime @default(now())
-  dueAt       DateTime?
+  discountAmount Float     @default(0)
+  currency       String    @default("USD")
+  status         String    @default("ISSUED")
+  issuedAt       DateTime  @default(now())
+  dueAt          DateTime?
 
   paidAt           DateTime?
   paymentReference String?
-  receiptNo        String? @unique
+  receiptNo        String?   @unique
 
   notes     String?
   createdAt DateTime @default(now())
@@ -158,8 +158,8 @@ model Role {
   isSystem     Boolean    @default(false)
   createdAt    DateTime   @default(now())
 
-  permissions RolePermission[]
-  users       UserRole[]
+  permissions      RolePermission[]
+  users            UserRole[]
   // Dashboard widgets this role may not see — see RoleDashboardWidget.
   dashboardWidgets RoleDashboardWidget[]
 
@@ -207,17 +207,30 @@ model SupportAccessGrant {
   @@index([requestedByUserId])
 }
 
+// A dropdown list option. Guest-profile lists and job functions are the enterprise's
+// (propertyId null); reservation, housekeeping, transport and room-feature lists belong to
+// one property (propertyId set) — see src/lib/system-code-scope.ts, which says which
+// category is which, and .agents/docs/HUB_SETUP_PLAN.md (Phase 3).
+//
+// NOTE: two PARTIAL unique indexes live only in the 20260924110000_lists_per_property
+// migration, because Prisma cannot express a partial index:
+//   SystemCode_enterprise_code_key  UNIQUE (enterpriseId, category, code) WHERE propertyId IS NULL
+//   SystemCode_property_code_key    UNIQUE (propertyId, category, code)   WHERE propertyId IS NOT NULL
+// So a code is unique within its list, whichever level that list lives at.
 model SystemCode {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String?
+  property     Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   category     String // e.g., "GENDER", "TITLE", "DIETARY_REQ"
   code         String // e.g., "M", "F", "VEGAN"
   value        String // The display label
   sortOrder    Int        @default(0)
   isActive     Boolean    @default(true)
 
-  @@unique([enterpriseId, category, code])
+  @@index([enterpriseId, category])
+  @@index([propertyId, category])
 }
 
 model NightAuditLog {
@@ -241,29 +254,29 @@ model NightAuditLog {
 // Scope: ENTERPRISE (sees every Property under the Enterprise) | PROPERTY (a single
 // work-location Property, set via propertyId). roleId replaces the old free-text role.
 model User {
-  id           String     @id @default(uuid())
-  enterpriseId String
-  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  email        String     @unique
-  passwordHash String
-  firstName    String
-  lastName     String
+  id                 String     @id @default(uuid())
+  enterpriseId       String
+  enterprise         Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  email              String     @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
   // Roles are MANY per user since 2026-08-04 (owner): access is the union of every role
   // held — see mergeRolePermissions() in src/lib/role-permissions.ts. `roleId` used to
   // live here; the migration moved each user's single role into UserRole before dropping
   // it, so there is exactly one place to ask "what may this person do".
-  roles        UserRole[]
-  scope        String     @default("ENTERPRISE")
-  propertyId   String?
-  property     Property?  @relation("UserWorkLocation", fields: [propertyId], references: [id])
-  isActive     Boolean    @default(true)
+  roles              UserRole[]
+  scope              String     @default("ENTERPRISE")
+  propertyId         String?
+  property           Property?  @relation("UserWorkLocation", fields: [propertyId], references: [id])
+  isActive           Boolean    @default(true)
   // TRUE while the account holds a TEMPORARY password (the platform-generated handover
   // credential from /api/osta/enterprises/[id]/initial-user). Enforced at the door, not
   // in the UI: /api/auth/login refuses to mint a session while this is set — the only
   // path forward is /api/auth/change-password, which verifies the temp password, sets
   // the user's own, and clears this. A temp password therefore can never be used to
   // operate the app, only to replace itself.
-  mustChangePassword Boolean @default(false)
+  mustChangePassword Boolean    @default(false)
 
   // The user's POST at the property — a JOB_FUNCTION system code (see
   // src/lib/job-functions.ts). Distinct from `roleId`, which is what they may SEE and DO.
@@ -286,19 +299,19 @@ model User {
   isSystem Boolean @default(false)
 
   sessions  Session[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   roomAttendant       RoomAttendant?
   assignedRooms       Room[]            @relation("RoomAssignedAttendant")
   assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
 
-  supportGrantsRequested   SupportAccessGrant[] @relation("GrantRequestedBy")
-  supportGrantsApproved    SupportAccessGrant[] @relation("GrantApprovedBy")
-  currencyExchangesCreated CurrencyExchange[]   @relation("CurrencyExchangeCreatedBy")
-  propertiesReviewed       Property[]           @relation("PropertyReviewedBy")
-  spaTherapistProfile      SpaTherapist?        @relation("SpaTherapistUser")
-  websiteApiKeysCreated    WebsiteApiKey[]      @relation("WebsiteApiKeyCreatedBy")
+  supportGrantsRequested   SupportAccessGrant[]  @relation("GrantRequestedBy")
+  supportGrantsApproved    SupportAccessGrant[]  @relation("GrantApprovedBy")
+  currencyExchangesCreated CurrencyExchange[]    @relation("CurrencyExchangeCreatedBy")
+  propertiesReviewed       Property[]            @relation("PropertyReviewedBy")
+  spaTherapistProfile      SpaTherapist?         @relation("SpaTherapistUser")
+  websiteApiKeysCreated    WebsiteApiKey[]       @relation("WebsiteApiKeyCreatedBy")
   // One per property this user has arranged — see UserDashboardLayout.
   dashboardLayouts         UserDashboardLayout[]
 
@@ -310,8 +323,8 @@ model User {
 model UserRole {
   userId String
   roleId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   assignedAt DateTime @default(now())
 
@@ -334,7 +347,7 @@ model Session {
   // Matches the `jti` claim in the token this session issued.
   jti String @unique
 
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
   // Stamped at most once a minute (see touchSession) — a bounded write, not one per
   // request. Drives both "active now" and the idle timeout.
   lastSeenAt DateTime @default(now())
@@ -344,7 +357,7 @@ model Session {
   revokedByUserId String?
   // Why it ended: LOGOUT | ADMIN | IDLE | EXPIRED. Free-text rather than an enum to match
   // the rest of the schema's conventions.
-  revokedReason String?
+  revokedReason   String?
 
   // Captured at login for the "whose session is this" column. Never used for auth —
   // both are client-controlled and trivially spoofed.
@@ -470,12 +483,12 @@ model Property {
   // requireSession against Session.lastSeenAt.
   sessionIdleMinutes Int @default(0)
 
-  eodRuns            EodRun[]
-  guestRegistrations GuestRegistration[]
+  eodRuns             EodRun[]
+  guestRegistrations  GuestRegistration[]
   greenTaxFilings     GreenTaxFiling[]
   greenTaxCorrections GreenTaxCorrection[]
-  eodReports         EodReport[]
-  cashierShifts      CashierShift[]
+  eodReports          EodReport[]
+  cashierShifts       CashierShift[]
 
   buildings                    Building[]
   facilities                   Facility[]
@@ -520,10 +533,20 @@ model Property {
   // Website API (brand site per property) — see .agents/docs/WEBSITE_API_PLAN.md.
   websiteSettings              WebsitePropertySettings?
   activityOnlineSettings       ActivityOnlineSettings[]
-  websiteApiKeys               WebsiteApiKeyProperty[]
+  websiteApiKeys               WebsiteApiKey[]
   websiteBookings              WebsiteBooking[]
   apiActivityBookings          ApiActivityBooking[]
   dashboardLayouts             UserDashboardLayout[]
+  settings                     PropertySettings?
+  chargeGroups                 ChargeGroup[]
+  chargeSubgroups              ChargeSubgroup[]
+  chargeCodes                  ChargeCode[]
+  chargeCodeGenerates          ChargeCodeGenerate[]
+  taxProfiles                  TaxProfile[]
+  paymentMethods               PaymentMethod[]
+  systemCodes                  SystemCode[]
+  channelConnection            ChannelConnection?            @relation("PropertyChannelConnection")
+  channelSyncLogs              ChannelSyncLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -587,7 +610,7 @@ model RoomType {
   // unrelated reason beforehand.
   isActive Boolean @default(true)
 
-  channelMap ChannelRoomTypeMap?
+  channelMap      ChannelRoomTypeMap?
   inboundBookings ChannelInboundBooking[]
 
   // Pseudo room types represent a dummy/virtual category (e.g. day-use, overbooking
@@ -601,12 +624,12 @@ model RoomType {
   // case where an admin would turn it off.
   housekeepingEnabled Boolean @default(true)
 
-  rooms             Room[]
-  calendars         PriceCalendar[]
-  RoomAssignment    RoomAssignment[]  @relation("AssignmentPhysicalRoomType")
+  rooms                    Room[]
+  calendars                PriceCalendar[]
+  RoomAssignment           RoomAssignment[]          @relation("AssignmentPhysicalRoomType")
   // Assignments physically in another room type but billed AS this type (kept rate on a room move).
-  chargeAssignments RoomAssignment[]  @relation("AssignmentChargeRoomType")
-  blockHolds        GroupBlockRoom[]
+  chargeAssignments        RoomAssignment[]          @relation("AssignmentChargeRoomType")
+  blockHolds               GroupBlockRoom[]
   // Per-room-type Stop-Sale rows (roomTypeId set) — property-level closures have a null
   // roomTypeId and don't appear here.
   availabilityRestrictions AvailabilityRestriction[]
@@ -614,7 +637,7 @@ model RoomType {
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
   // since all three are "pick any number of codes from a category" in the same shape.
-  features          RoomTypeFeature[]
+  features                 RoomTypeFeature[]
 
   @@index([propertyId])
 }
@@ -689,7 +712,6 @@ model Room {
   features          RoomFeature[]
 
   @@unique([propertyId, roomNumber])
-
   @@index([assignedAttendantId])
   @@index([floorId])
   @@index([roomTypeId])
@@ -705,10 +727,15 @@ model RoomFeature {
   @@unique([roomId, category, code])
 }
 
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model TaxProfile {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name         String
   description  String?
 
@@ -717,6 +744,7 @@ model TaxProfile {
   outlets     Outlet[]
 
   @@index([enterpriseId])
+  @@index([propertyId])
 }
 
 model TaxRate {
@@ -745,10 +773,15 @@ model TaxRate {
 // (via ChargeCode.chargeSubgroup.chargeGroup) instead of the old free-text
 // ChargeCode.category string. See src/lib/posting/charge-tree.ts for the canonical set
 // seeded at onboarding.
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model ChargeGroup {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   code         String // ACCOMMODATION | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM
   name         String
   // ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM — the one
@@ -763,7 +796,7 @@ model ChargeGroup {
 
   subgroups ChargeSubgroup[]
 
-  @@unique([enterpriseId, code])
+  @@unique([propertyId, code])
 }
 
 // Level 2 — the reporting sub-classification inside a group (e.g. 10RV Room Revenue
@@ -772,6 +805,8 @@ model ChargeSubgroup {
   id            String      @id @default(uuid())
   enterpriseId  String
   enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId    String
+  property      Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   chargeGroupId String
   chargeGroup   ChargeGroup @relation(fields: [chargeGroupId], references: [id], onDelete: Cascade)
   code          String
@@ -782,23 +817,24 @@ model ChargeSubgroup {
   // its own nnRV subgroup, provisioned with the outlet from its group's numeric band —
   // see src/lib/posting/outlet-subgroup.ts. Null = a general (non-outlet) subgroup.
   // SetNull so deleting an outlet keeps the subgroup and its posted history intact.
-  outletId String?
-  outlet   Outlet? @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  outletId      String?
+  outlet        Outlet?     @relation(fields: [outletId], references: [id], onDelete: SetNull)
 
   chargeCodes ChargeCode[]
 
-  @@unique([enterpriseId, code])
-
+  @@unique([propertyId, code])
   @@index([chargeGroupId])
   @@index([outletId])
 }
 
 model ChargeCode {
-  id            String      @id @default(uuid())
-  enterpriseId  String
-  enterprise    Enterprise  @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  code          String
-  description   String
+  id               String         @id @default(uuid())
+  enterpriseId     String
+  enterprise       Enterprise     @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId       String
+  property         Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code             String
+  description      String
   // Level 3 of the hierarchy — and the ONLY classification: the deprecated free-text
   // `category` column it replaced was dropped once every reader was migrated
   // (CHARGE_CODE_PLAN.md phase 4). REQUIRED — every code is properly linked
@@ -809,16 +845,16 @@ model ChargeCode {
   // Posting semantics that used to be implied by the magic code string:
   // CHARGE (ordinary revenue) | TAX (a levy — excluded from the GST base, e.g. GTX) |
   // CREDIT (posts negative, e.g. TA commission) | NON_REVENUE (never earned revenue).
-  postingType   String      @default("CHARGE")
+  postingType      String         @default("CHARGE")
   // System-provisioned (accommodation, green tax, commission...): cannot be deleted.
-  isSystem      Boolean     @default(false)
-  isActive      Boolean     @default(true)
+  isSystem         Boolean        @default(false)
+  isActive         Boolean        @default(true)
   // Whether this charge code applies the enterprise's own Maldives Tax config (Green
   // Tax/GST/Service Charge — see EnterpriseSettings) or a specific Custom Tax profile.
   // taxProfileId is only ever set when useDefaultTax is false.
-  useDefaultTax Boolean     @default(true)
-  taxProfileId  String?
-  taxProfile    TaxProfile? @relation(fields: [taxProfileId], references: [id])
+  useDefaultTax    Boolean        @default(true)
+  taxProfileId     String?
+  taxProfile       TaxProfile?    @relation(fields: [taxProfileId], references: [id])
 
   // Opera's "generates" mechanism — posting this code automatically posts the derived
   // codes on the other side of these rows (see ChargeCodeGenerate).
@@ -845,8 +881,7 @@ model ChargeCode {
   excursionTypes ExcursionType[]
   spaTreatments  SpaTreatment[]
 
-  @@unique([enterpriseId, code])
-
+  @@unique([propertyId, code])
   @@index([chargeSubgroupId])
   @@index([taxProfileId])
 }
@@ -858,6 +893,8 @@ model ChargeCodeGenerate {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   generatorCodeId String
   generatorCode   ChargeCode @relation("GeneratorCode", fields: [generatorCodeId], references: [id], onDelete: Cascade)
@@ -866,8 +903,8 @@ model ChargeCodeGenerate {
 
   // PERCENT (of the basis) | FLAT (per posting) | PER_PERSON_PER_NIGHT (the Green-Tax
   // shape — value × persons × nights, supplied by the caller's postingContext).
-  method String
-  value  Float
+  method          String
+  value           Float
   // What a PERCENT applies to: NET (the parent's pre-tax base), GROSS (base + tax +
   // service charge), or ANOTHER_GENERATE (basisGenerateId's own output — cascading).
   calculateOn     String  @default("NET")
@@ -876,16 +913,20 @@ model ChargeCodeGenerate {
   isActive        Boolean @default(true)
 
   @@unique([generatorCodeId, generatedCodeId])
-  @@index([enterpriseId, generatorCodeId])
-
+  @@index([propertyId, generatorCodeId])
   @@index([generatedCodeId])
 }
 
 // PaymentType: CASH, CARD, TRANSFER
+// Per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps
+// its own chart of accounts, tax profiles and payment methods. `enterpriseId` stays for tenant
+// scoping; `propertyId` is the owner. Set up in the Hub under the property.
 model PaymentMethod {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name         String
   type         String // Replaces PaymentType
   isActive     Boolean    @default(true)
@@ -900,14 +941,15 @@ model PaymentMethod {
   chargeCodeId String?
   chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
-  payments Payment[]
+  payments               Payment[]
   // Folios that pre-select this method on their Post Payment form.
-  defaultForFolios Folio[]
+  defaultForFolios       Folio[]
   // Settles PAID Booking API bookings (ActivityOnlineSettings.onlinePaymentMethodId).
   activityOnlineSettings ActivityOnlineSettings[]
 
   @@index([chargeCodeId])
   @@index([enterpriseId])
+  @@index([propertyId])
 }
 
 // ProfileType: GUEST, COMPANY, TRAVEL_AGENT, STAFF (GUEST/STAFF are "individual
@@ -1053,24 +1095,24 @@ model ProfilePreference {
 }
 
 model ProfileDocument {
-  id               String    @id @default(uuid())
-  upid             String
-  profile          Profile   @relation(fields: [upid], references: [upid], onDelete: Cascade)
-  documentType     String // PASSPORT, NATIONAL_ID
-  documentNumber   String
-  issuingCountry   String?
-  issueDate        DateTime?
-  expiryDate       DateTime?
-  documentImageUrl String?
+  id                       String    @id @default(uuid())
+  upid                     String
+  profile                  Profile   @relation(fields: [upid], references: [upid], onDelete: Cascade)
+  documentType             String // PASSPORT, NATIONAL_ID
+  documentNumber           String
+  issuingCountry           String?
+  issueDate                DateTime?
+  expiryDate               DateTime?
+  documentImageUrl         String?
   // Relative path under the private, gitignored upload storage directory (see
   // src/lib/eregistration/storage.ts) — distinct from documentImageUrl above, which
   // stays a plain external-URL field. Set when an eRegistration submission's ID photo
   // is applied here; the same file is never copied, just pointed at from both places.
   documentImageStoragePath String?
-  isPrimary        Boolean   @default(true)
+  isPrimary                Boolean   @default(true)
   // The guest holds a Maldives work permit (Green Tax sheet category 3). Ticked on the
   // identification it applies to; any flagged document makes the profile a permit holder.
-  isWorkPermit     Boolean   @default(false)
+  isWorkPermit             Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1091,21 +1133,21 @@ model ProfileNote {
 }
 
 model RatePlan {
-  id              String   @id @default(uuid())
+  id              String              @id @default(uuid())
   propertyId      String
-  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property        Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   channelMap      ChannelRatePlanMap?
   code            String
   name            String
   description     String?
-  priority        Int      @default(0)
-  isNegotiated    Boolean  @default(false)
+  priority        Int                 @default(0)
+  isNegotiated    Boolean             @default(false)
   // Classification flags for zero/nominal-rate stays — comp'd rooms (VIPs, media,
   // familiarization trips) and internal staff/owner use. Pure labels for now, same
   // starting point isNegotiated had before its Negotiated Rates follow-up; no posting
   // or reporting behavior is tied to them yet.
-  isComplimentary Boolean  @default(false)
-  isHouseUse      Boolean  @default(false)
+  isComplimentary Boolean             @default(false)
+  isHouseUse      Boolean             @default(false)
 
   // The charge code this plan's nightly room charge posts against at Night Audit —
   // usually the property's main Accommodation code. Null means "use the enterprise
@@ -1145,24 +1187,23 @@ model RatePlan {
   // For FLAT: e.g. 20 means parent price + $20, -20 means parent price - $20.
   derivedAdjustmentValue Float?
 
-  calendars       PriceCalendar[]
-  RoomAssignment  RoomAssignment[]
+  calendars              PriceCalendar[]
+  RoomAssignment         RoomAssignment[]
   channelBookingDefaults ChannelBookingDefaults[]
   // Which Allocations this plan carries as a package (see Allocation.mode for whether
   // each is carved out of or added on top of the room rate). A derived plan with no
   // links of its own inherits its parent's — see src/lib/allocations.ts.
-  allocationLinks RatePlanAllocation[]
+  allocationLinks        RatePlanAllocation[]
   // Only meaningful when isNegotiated is true — restricts this plan to the linked
   // Company/Travel Agent profiles' bookings (see RatePlanAgentAccess). Empty means
   // "negotiated but not yet restricted to anyone," which the reservation form treats
   // as unselectable until at least one profile is linked, same as any other negotiated
   // plan with a non-matching travel agent.
-  agentAccess     RatePlanAgentAccess[]
+  agentAccess            RatePlanAgentAccess[]
   // Which properties' brand websites sell THIS plan (see WebsitePropertySettings).
-  websiteSettings WebsitePropertySettings[]
+  websiteSettings        WebsitePropertySettings[]
 
   @@unique([propertyId, code])
-
   @@index([chargeCodeId])
   @@index([parentRatePlanId])
 }
@@ -1183,7 +1224,6 @@ model PriceCalendar {
   extraChildPrice Float?
 
   @@unique([ratePlanId, roomTypeId, date])
-
   @@index([roomTypeId])
 }
 
@@ -1212,7 +1252,6 @@ model AvailabilityRestriction {
 
   @@unique([propertyId, roomTypeId, date])
   @@index([propertyId, date])
-
   @@index([roomTypeId])
 }
 
@@ -1236,12 +1275,12 @@ model Reservation {
   travelAgentId String?
   travelAgent   Profile? @relation("TravelAgent", fields: [travelAgentId], references: [upid])
 
-  groupBlockId String?
-  groupBlock   GroupBlock? @relation(fields: [groupBlockId], references: [id])
+  groupBlockId      String?
+  groupBlock        GroupBlock? @relation(fields: [groupBlockId], references: [id])
   // Group pickups default to billing the block's master folio; staff can flip this
   // off per pickup so the guest settles their own folio. Only meaningful when
   // groupBlockId is set and the block has an open master folio (Night Audit routing).
-  groupBillToMaster Boolean @default(true)
+  groupBillToMaster Boolean     @default(true)
 
   checkInDate           DateTime
   checkOutDate          DateTime
@@ -1445,7 +1484,6 @@ model Folio {
   outletChecks       OutletCheck[]
 
   @@index([propertyId])
-
   @@index([groupBlockId])
   @@index([payeeProfileId])
   @@index([reservationId])
@@ -1453,48 +1491,48 @@ model Folio {
 }
 
 model FolioLineItem {
-  id                  String          @id @default(uuid())
-  folioId             String
-  folio               Folio           @relation(fields: [folioId], references: [id], onDelete: Cascade)
-  chargeCodeId        String
-  chargeCode          ChargeCode      @relation(fields: [chargeCodeId], references: [id])
+  id                      String          @id @default(uuid())
+  folioId                 String
+  folio                   Folio           @relation(fields: [folioId], references: [id], onDelete: Cascade)
+  chargeCodeId            String
+  chargeCode              ChargeCode      @relation(fields: [chargeCodeId], references: [id])
   // Which Outlet this charge was posted through, if any — null for ordinary front-desk/
   // room charges. Lets revenue be attributed per outlet without changing how tax or the
   // charge code itself works.
-  outletId            String?
-  outlet              Outlet?         @relation(fields: [outletId], references: [id])
+  outletId                String?
+  outlet                  Outlet?         @relation(fields: [outletId], references: [id])
   // The outlet sales check this line belongs to, if it was posted through an outlet.
   // Groups the line items sold in one Fast Post session (or one walk-in bill) under a
   // single human-readable check number (SPA-00001). Null for non-outlet charges.
   // SetNull on delete — losing the grouping never deletes billing history.
-  outletCheckId       String?
-  outletCheck         OutletCheck?    @relation(fields: [outletCheckId], references: [id], onDelete: SetNull)
+  outletCheckId           String?
+  outletCheck             OutletCheck?    @relation(fields: [outletCheckId], references: [id], onDelete: SetNull)
   // Which RoomAssignment (segment) this line came from — set on the Nightly Room
   // Charge and Extra Occupancy Charge lines posted by Night Audit, null for every
   // other charge type. Lets checkout attribute room revenue back to the specific rate
   // plan that earned it for Travel Agent commission calculation (a split-stay
   // reservation can span more than one rate plan). onDelete SetNull — losing the
   // attribution on room reassignment doesn't need to delete billing history.
-  roomAssignmentId    String?
-  roomAssignment      RoomAssignment? @relation(fields: [roomAssignmentId], references: [id], onDelete: SetNull)
+  roomAssignmentId        String?
+  roomAssignment          RoomAssignment? @relation(fields: [roomAssignmentId], references: [id], onDelete: SetNull)
   // The cashier shift this charge was posted during, if a front-desk user posted it
   // while holding an open shift on the folio's property. Null for Night Audit and
   // other system postings. SetNull on delete — losing the attribution never deletes
   // billing history. Drives the per-shift "postings by charge code" summary.
-  shiftId             String?
-  shift               CashierShift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
-  date                DateTime
+  shiftId                 String?
+  shift                   CashierShift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  date                    DateTime
   // The line's own descriptive text — auto-filled from the charge code's
   // description at posting time, editable by the operator.
-  description         String
+  description             String
   // Free-text reference printed in the invoice's Reference column (folio/PMS
   // ref, external doc number, "per agreement 2026-04", etc.). Distinct from
   // description; null falls back to the charge code on the printed document.
-  reference           String?
-  amount              Float
-  taxAmount           Float           @default(0.0)
-  serviceChargeAmount Float           @default(0.0)
-  isVoid              Boolean         @default(false)
+  reference               String?
+  amount                  Float
+  taxAmount               Float           @default(0.0)
+  serviceChargeAmount     Float           @default(0.0)
+  isVoid                  Boolean         @default(false)
   // Set on a line that a ChargeCodeGenerate produced (Service Charge, GST, Green Tax,
   // any declared levy), pointing at the revenue line that generated it. Two things need
   // it: a tax line must report under the bucket of the revenue that earned it — a GST
@@ -1542,7 +1580,6 @@ model FolioRoutingRule {
   createdAt       DateTime    @default(now())
 
   @@unique([reservationId, chargeCodeId])
-
   @@index([chargeCodeId])
   @@index([targetFolioId])
 }
@@ -1583,7 +1620,6 @@ model CashierShift {
 
   @@index([propertyId])
   @@index([userId])
-
   @@index([enterpriseId])
 }
 
@@ -1614,8 +1650,8 @@ model Payment {
   // Stamped from the payment method at posting time rather than read through the
   // method later, so a method being re-pointed never rewrites settled history — the
   // same reason a folio line carries its own charge code.
-  chargeCodeId    String?
-  chargeCode      ChargeCode? @relation(fields: [chargeCodeId], references: [id])
+  chargeCodeId String?
+  chargeCode   ChargeCode? @relation(fields: [chargeCodeId], references: [id])
 
   amount          Float
   referenceNumber String?
@@ -1677,7 +1713,6 @@ model PropertyFeeRule {
   updatedAt    DateTime    @updatedAt
 
   @@index([propertyId, ruleType])
-
   @@index([chargeCodeId])
 }
 
@@ -1751,22 +1786,21 @@ model Outlet {
   taxProfileId    String?
   taxProfile      TaxProfile? @relation(fields: [taxProfileId], references: [id])
 
-  chargeCodes       OutletChargeCode[]
-  folioLineItems    FolioLineItem[]
-  checks            OutletCheck[]
+  chargeCodes          OutletChargeCode[]
+  folioLineItems       FolioLineItem[]
+  checks               OutletCheck[]
   // The outlet's own nnRV charge subgroup(s) — see ChargeSubgroup.outletId.
-  chargeSubgroups   ChargeSubgroup[]
+  chargeSubgroups      ChargeSubgroup[]
   // Hub-wide module links (see EnterpriseSettings.spaOutlet / excursionOutlet) —
   // array-typed back-relations though each enterprise links at most one per module.
-  spaModuleLinks       EnterpriseSettings[] @relation("EnterpriseSpaOutlet")
-  excursionModuleLinks EnterpriseSettings[] @relation("EnterpriseExcursionOutlet")
+  spaModuleLinks       PropertySettings[] @relation("PropertySpaOutlet")
+  excursionModuleLinks PropertySettings[] @relation("PropertyExcursionOutlet")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, name])
   @@unique([propertyId, code])
-
   @@index([taxProfileId])
 }
 
@@ -1784,7 +1818,6 @@ model OutletChargeCode {
   createdAt DateTime @default(now())
 
   @@unique([outletId, chargeCodeId])
-
   @@index([chargeCodeId])
 }
 
@@ -1822,35 +1855,11 @@ model EnterpriseSettings {
   enterpriseId String     @unique
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
 
-  resConfirmPrefix String @default("")
-  resConfirmLength Int    @default(6)
-
-  // Cashiering defaults (Controls > General) — previously hardcoded in the
-  // cashiering page ($300 float, USD→MVR exchange). Defaults match those
-  // hardcodes so existing enterprises see no behavior change.
-  cashierDefaultFloat  Float  @default(300)
-  exchangeFromCurrency String @default("USD")
-  exchangeToCurrency   String @default("MVR")
+  // Moved to PropertySettings 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md): booking-number
+  // format (Phase 1); posting defaults, City Ledger settlement method, Spa/Excursion outlet
+  // links, Maldives tax switches and rates, cashier defaults (Phase 2).
 
   systemDate DateTime @default(now())
-
-  // Posting & settlement defaults (see Controls > Finance). Plain nullable id pointers
-  // (not FK relations) validated in the API — a dangling id is tolerated by falling
-  // back at posting time. defaultAccommodationChargeCodeId: the ChargeCode a rate
-  // plan's nightly room charge posts against when the plan itself doesn't specify one
-  // (RatePlan.chargeCodeId). cityLedgerPaymentMethodId: the PaymentMethod (a
-  // CITY_LEDGER-type method) used to record a settlement payment when a City Ledger
-  // folio transfers to a debtor account at checkout.
-  defaultAccommodationChargeCodeId String?
-  // The ChargeCode the nightly Green Tax levy posts against, resolved by role instead of
-  // the old literal `code: "GTX"` lookup (see resolveChargeCode in
-  // src/lib/posting/resolve-charge-code.ts). Falls back to the system-seeded GTX code.
-  defaultGreenTaxChargeCodeId      String?
-  cityLedgerPaymentMethodId        String?
-  // The (typically NON_REVENUE-categorized) ChargeCode a Travel Agent commission posts
-  // against as a credit line at checkout — see RatePlanAgentAccess.commissionRate.
-  // Null disables commission posting entirely, even if a rate plan has a rate set.
-  commissionChargeCodeId           String?
 
   // DEPRECATED branding identity (name/logo/colour/font/tax/contact/address). Stationery
   // branding now comes from the property's own General profile + Appearance (Property.name,
@@ -1858,30 +1867,26 @@ model EnterpriseSettings {
   // resolveStationeryBrand() in src/lib/stationery-brand.ts. These columns are retained only
   // so existing rows aren't dropped; nothing reads them for rendering and the Stationaries
   // UI no longer writes them. Remove in a later cleanup migration once confirmed unused.
-  invoiceBrandName    String?
-  invoiceLogoUrl      String?
-  invoiceBrandColor   String? @default("#4f46e5")
-  invoiceFontFamily   String? @default("Geist")
-  invoiceTaxId        String?
-  invoicePhone        String?
-  invoiceEmail        String?
-  invoiceAddress      String?
+  invoiceBrandName  String?
+  invoiceLogoUrl    String?
+  invoiceBrandColor String? @default("#4f46e5")
+  invoiceFontFamily String? @default("Geist")
+  invoiceTaxId      String?
+  invoicePhone      String?
+  invoiceEmail      String?
+  invoiceAddress    String?
 
+  // ── Document content (header/footer/terms/bank/letters/eRegistration) ──────────────
+  // Since 2026-09-23 a CUSTOMER property's documents read PropertySettings, never these
+  // columns (each property has its own stationery — .agents/docs/HUB_SETUP_PLAN.md). They
+  // remain for the INTERNAL (Osta) enterprise only: it has no properties, and its license
+  // invoices and receipts to customers are printed from them (/osta/controls).
   // Invoice document content (Proforma + Tax share everything but the header line).
   // The folio layout a Proforma / Tax Invoice / Interim Bill opens on — one of
   // src/lib/folio-presentation.ts's FOLIO_STYLES. The operator can still pick a
   // different one for an individual document; this is only what the picker defaults to.
-  defaultFolioStyle   String  @default("detailed")
+  defaultFolioStyle String @default("detailed")
 
-  // Hub-wide module outlet links (owner ruling 2026-07-30): Spa and Excursions each
-  // post through ONE outlet shared across every property in the enterprise — a spa
-  // appointment at property A may bill through an outlet homed at property B. While a
-  // module's link is null, folio posting FROM that module is refused (bookings can
-  // still be created); the pickers live first in Controls > Spa / Excursions.
-  spaOutletId       String?
-  spaOutlet         Outlet? @relation("EnterpriseSpaOutlet", fields: [spaOutletId], references: [id])
-  excursionOutletId String?
-  excursionOutlet   Outlet? @relation("EnterpriseExcursionOutlet", fields: [excursionOutletId], references: [id])
   invoiceHeaderText   String?
   invoiceFooterText   String?
   invoicePaymentTerms String?
@@ -1926,30 +1931,9 @@ model EnterpriseSettings {
   // in their own registration-card data; front desk still reviews/applies it and runs
   // the actual check-in unchanged. `eRegistrationExpiryHours` is the validity window
   // applied to every newly generated/regenerated link.
-  eRegistrationEnabled      Boolean @default(true)
-  eRegistrationExpiryHours  Int     @default(72)
-  eRegistrationMessage      String?
-
-  // Maldives Green Tax Settings — charged per person per night, split by age band;
-  // below greenTaxExemptAge is fully exempt (MIRA: under 2 years).
-  greenTaxEnabled     Boolean @default(true)
-  greenTaxAdultAmount Float   @default(12.00)
-  greenTaxChildAmount Float   @default(6.00)
-  // How a stay's length is measured for the Green Tax registration rule (a stay under
-  // 12 hours gets no Reg No): ACTUAL = from the actual check-in time; STANDARD = from
-  // the property's standard check-in time to its standard check-out time on the stay's
-  // dates. See src/lib/green-tax-sheet.ts (stayHours).
-  greenTaxStayBasis   String  @default("ACTUAL")
-  greenTaxExemptAge   Int     @default(2)
-
-  // Maldives GST (formerly "TGST") and Service Charge Settings. Calculation order is
-  // fixed: Service Charge is a percentage of the base amount, then GST is a percentage
-  // of (base + Service Charge) — e.g. on a $100 base: SVC 10% = $10, GST 17% of $110 =
-  // $18.70. Not yet wired into any actual charge-posting logic (Night Audit/Folios).
-  tgstEnabled          Boolean @default(true)
-  tgstRate             Float   @default(17.00)
-  serviceChargeEnabled Boolean @default(true)
-  serviceChargeRate    Float   @default(10.00)
+  eRegistrationEnabled     Boolean @default(true)
+  eRegistrationExpiryHours Int     @default(72)
+  eRegistrationMessage     String?
 
   // SMTP/SFTP scaffold — fields only, not yet wired to any actual sending capability.
   // NOTE: stored as plain text; do not build real email/file-transfer sending on top of
@@ -1968,9 +1952,114 @@ model EnterpriseSettings {
   sftpRemotePath String?
 
   updatedAt DateTime @updatedAt
+}
 
-  @@index([excursionOutletId])
+// One property's own document content and booking-number format (2026-09-23, owner: "each
+// property to have their own stationary"). Brand IDENTITY on documents (name, logo, tax id,
+// contact, address, accent colour, font) already comes from Property itself — see
+// resolveStationeryBrand() in src/lib/stationery-brand.ts; this holds the CONTENT: header,
+// footer, terms, bank details, letters, the registration card and eRegistration.
+// Read through src/lib/property-settings.ts, which supplies defaults when no row exists.
+// Edited in the Hub: /hub/p/{propertyId}/stationery and /reservations.
+model PropertySettings {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Booking (confirmation) number: prefix + zero-padded counter. An empty prefix falls
+  // back to "{property code}-" where numbers are minted.
+  resConfirmPrefix String @default("")
+  resConfirmLength Int    @default(6)
+
+  // The folio layout a Proforma / Tax Invoice / Interim Bill opens on (FOLIO_STYLES in
+  // src/lib/folio-presentation.ts); the operator can still pick another per document.
+  defaultFolioStyle String @default("detailed")
+
+  invoiceHeaderText   String?
+  invoiceFooterText   String?
+  invoicePaymentTerms String?
+
+  // Payment Information block on printed invoices — plain text, never a gateway.
+  invoicePaymentAccountName   String?
+  invoicePaymentAccountNumber String?
+  invoicePaymentIban          String?
+  invoicePaymentBankInfo      String?
+
+  receiptFooterText   String?
+  receiptTerms        String?
+  statementFooterText String?
+  statementTerms      String?
+
+  confirmationLetterMessage String?
+
+  registrationCardEnabled Boolean @default(true)
+  registrationCardMessage String?
+  registrationCardTerms   String?
+
+  eRegistrationEnabled     Boolean @default(true)
+  eRegistrationExpiryHours Int     @default(72)
+  eRegistrationMessage     String?
+
+  // ── Phase 2 (2026-09-23): posting, tax and cashiering, per property ─────────────────
+  // Which charge code plays each system role (resolveChargeCode in
+  // src/lib/posting/resolve-charge-code.ts). Plain ids validated in the API; a dangling one
+  // falls back to the property's system-seeded code.
+  defaultAccommodationChargeCodeId String?
+  defaultGreenTaxChargeCodeId      String?
+  commissionChargeCodeId           String?
+  // The CITY_LEDGER payment method that settles a debtor folio at checkout.
+  cityLedgerPaymentMethodId        String?
+
+  // The outlet this property's Spa / Excursion charges post through (one of its OWN
+  // outlets). While null, posting from that module is refused.
+  spaOutletId       String?
+  spaOutlet         Outlet? @relation("PropertySpaOutlet", fields: [spaOutletId], references: [id], onDelete: SetNull)
+  excursionOutletId String?
+  excursionOutlet   Outlet? @relation("PropertyExcursionOutlet", fields: [excursionOutletId], references: [id], onDelete: SetNull)
+
+  // Cashiering page defaults.
+  cashierDefaultFloat  Float  @default(300)
+  exchangeFromCurrency String @default("USD")
+  exchangeToCurrency   String @default("MVR")
+
+  // Maldives Green Tax — per person per night by age band; below greenTaxExemptAge exempt.
+  // greenTaxStayBasis: ACTUAL (from actual check-in) | STANDARD (standard times) — see
+  // src/lib/green-tax-sheet.ts (stayHours).
+  greenTaxEnabled     Boolean @default(true)
+  greenTaxAdultAmount Float   @default(12.00)
+  greenTaxChildAmount Float   @default(6.00)
+  greenTaxStayBasis   String  @default("ACTUAL")
+  greenTaxExemptAge   Int     @default(2)
+
+  // Maldives GST and Service Charge — SVC % of base, then GST % of (base + SVC).
+  tgstEnabled          Boolean @default(true)
+  tgstRate             Float   @default(17.00)
+  serviceChargeEnabled Boolean @default(true)
+  serviceChargeRate    Float   @default(10.00)
+
+  // Night Audit — no-shows (Hub > the property > Night Audit). When a reservation that
+  // never arrived becomes a No-Show: FIRST_AUDIT = at the audit of its arrival night (the
+  // original behaviour); SECOND_AUDIT = held one night so a late arrival can still check
+  // in, then marked at the next audit; MANUAL = never automatically — the desk marks it.
+  noShowTiming  String  @default("FIRST_AUDIT")
+  // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
+  noShowPostFee Boolean @default(true)
+
+  // Night Audit — departures. When on, the departures step first checks out every guest
+  // due out whose folios all net to zero (through the desk's own check-out), and stops only
+  // for those who still owe or are owed money, or settle by City Ledger.
+  autoCheckOutZeroBalance Boolean @default(false)
+
+  // Night Audit — scheduled run. When on, the background jobs run the whole End-of-Day for
+  // this property at autoAuditTime (HH:MM, the property's own time zone); it stops at the
+  // first step that needs a person and reports it. See src/lib/night-audit/scheduled.ts.
+  autoAuditEnabled Boolean @default(false)
+  autoAuditTime    String  @default("02:00")
+
+  updatedAt DateTime @updatedAt
+
   @@index([spaOutletId])
+  @@index([excursionOutletId])
 }
 
 // TraceType: GUEST_MESSAGE, WAKE_UP_CALL, MAINTENANCE, FRONT_DESK
@@ -2027,7 +2116,6 @@ model AccompanyingGuest {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, profileId])
-
   @@index([profileId])
 }
 
@@ -2067,7 +2155,6 @@ model ERegistrationLink {
 
   @@index([reservationId])
   @@index([groupBlockId])
-
   @@index([enterpriseId])
   @@index([propertyId])
 }
@@ -2133,7 +2220,6 @@ model ERegistrationGuestSlot {
   childrenInfo String?
 
   @@unique([reservationId, slotIndex])
-
   @@index([existingProfileId])
   @@index([linkId])
 }
@@ -2233,10 +2319,10 @@ model GroupBlock {
   payeeProfileId String?
   payeeProfile   Profile? @relation("GroupBlockPayee", fields: [payeeProfileId], references: [upid])
 
-  reservations Reservation[]
-  masterFolios Folio[]
+  reservations       Reservation[]
+  masterFolios       Folio[]
   // Per-room-type rooms held for the block. totalRoomsHeld is kept in sync as the sum.
-  roomHolds    GroupBlockRoom[]
+  roomHolds          GroupBlockRoom[]
   // A group-scoped eRegistration link: sent to the block's organizer (payeeProfile),
   // fanning out to every current pickup's own reservation-level slots.
   eRegistrationLinks ERegistrationLink[]
@@ -2245,7 +2331,6 @@ model GroupBlock {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
-
   @@index([payeeProfileId])
 }
 
@@ -2261,7 +2346,6 @@ model GroupBlockRoom {
   quantity     Int        @default(0)
 
   @@unique([groupBlockId, roomTypeId])
-
   @@index([roomTypeId])
 }
 
@@ -2359,7 +2443,6 @@ model GuestRegistration {
 
   @@unique([propertyId, year, registrationNo])
   @@unique([reservationId, profileId])
-
   @@index([profileId])
 }
 
@@ -2501,7 +2584,6 @@ model Allocation {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
-
   @@index([chargeCodeId])
 }
 
@@ -2535,7 +2617,6 @@ model RatePlanAllocation {
   createdAt DateTime @default(now())
 
   @@unique([ratePlanId, allocationId])
-
   @@index([allocationId])
 }
 
@@ -2561,7 +2642,6 @@ model RatePlanAgentAccess {
   createdAt DateTime @default(now())
 
   @@unique([ratePlanId, upid])
-
   @@index([upid])
 }
 
@@ -2576,7 +2656,6 @@ model MealPlanAllocation {
   createdAt DateTime @default(now())
 
   @@unique([mealPlanId, allocationId])
-
   @@index([allocationId])
 }
 
@@ -2601,7 +2680,6 @@ model ReservationAllocation {
   createdAt DateTime @default(now())
 
   @@unique([reservationId, allocationId])
-
   @@index([allocationId])
 }
 
@@ -2659,7 +2737,7 @@ model EmailLog {
   // Coarse message type, e.g. "confirmation-letter", "eregistration-link", "statement",
   // "enterprise-welcome", "channel-alert", "smtp-test". Lets a bill be itemised by what
   // was actually sent rather than one undifferentiated total.
-  kind String
+  kind   String
 
   toAddress   String
   fromAddress String
@@ -2725,7 +2803,6 @@ model ExcursionType {
   updatedAt DateTime @updatedAt
 
   @@unique([propertyId, code])
-
   @@index([chargeCodeId])
 }
 
@@ -2794,18 +2871,17 @@ model ExcursionDeparture {
   status String  @default("SCHEDULED") // SCHEDULED | CANCELLED | COMPLETED
   notes  String?
 
-  bookings          ExcursionBooking[] @relation("DepartureBookings")
+  bookings          ExcursionBooking[]   @relation("DepartureBookings")
   // Booking API holds on this departure (seats kept while a website takes payment).
-  apiHolds ApiActivityBooking[] @relation("ApiExcursionHolds")
+  apiHolds          ApiActivityBooking[] @relation("ApiExcursionHolds")
   // Bookings that exist because THIS departure was cancelled (e.g. weather) and the
   // guest was moved to a replacement — see ExcursionBooking.movedFromDepartureId.
-  movedBookingsAway ExcursionBooking[] @relation("MovedFromDeparture")
+  movedBookingsAway ExcursionBooking[]   @relation("MovedFromDeparture")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([excursionTypeId, departureDate, departureTime])
-
   @@index([scheduleId])
 }
 
@@ -2835,10 +2911,10 @@ model ExcursionBooking {
   // flatPrice) — never recomputed later even if the rate changes afterward.
   totalAmount Float
 
-  status String @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
+  status     String              @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
   // DESK | API — an API booking was made by a brand website through the Booking API
   // (ApiActivityBooking holds its guest, payment and public reference).
-  source String @default("DESK")
+  source     String              @default("DESK")
   apiBooking ApiActivityBooking? @relation("ApiExcursionBooking")
 
   // folioId is always set — either the guest's existing open room folio (in-house) or
@@ -2872,7 +2948,6 @@ model ExcursionBooking {
   updatedAt DateTime @updatedAt
 
   @@index([departureId])
-
   @@index([folioId])
   @@index([movedFromDepartureId])
   @@index([propertyId])
@@ -3019,7 +3094,6 @@ model SpaTherapistTreatment {
   notes                 String?
 
   @@unique([therapistId, treatmentId])
-
   @@index([treatmentId])
 }
 
@@ -3055,7 +3129,6 @@ model SpaTreatmentRoom {
   preferred   Boolean      @default(false)
 
   @@unique([treatmentId, roomId])
-
   @@index([roomId])
 }
 
@@ -3167,13 +3240,13 @@ model SpaAppointment {
   roomId String?
   room   SpaRoom? @relation(fields: [roomId], references: [id])
 
-  appointmentStatus String @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
-  paymentStatus     String @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
-  source            String @default("FRONT_DESK")
-  apiBooking ApiActivityBooking? @relation("ApiSpaAppointment")
+  appointmentStatus String              @default("TENTATIVE") // TENTATIVE|CONFIRMED|CHECKED_IN|IN_TREATMENT|COMPLETED|NO_SHOW|CANCELLED
+  paymentStatus     String              @default("NOT_POSTED") // NOT_POSTED|POSTED_TO_FOLIO|PARTIALLY_PAID|PAID|VOID_PENDING|VOIDED|REFUND_REQUIRED|REFUNDED
+  source            String              @default("FRONT_DESK")
+  apiBooking        ApiActivityBooking? @relation("ApiSpaAppointment")
   // A Booking API hold (TENTATIVE, source WEBSITE_API) blocks its therapist(s) and room
   // until this time; null = the older createdAt + SpaSettings.tentativeHoldMinutes rule.
-  holdExpiresAt DateTime?
+  holdExpiresAt     DateTime?
 
   // Billing is single-folio — resolved from the participantIndex: 1 participant's
   // guest identity, regardless of partySize.
@@ -3205,7 +3278,6 @@ model SpaAppointment {
 
   @@index([propertyId, appointmentDate])
   @@index([roomId, appointmentDate])
-
   @@index([folioId])
   @@index([refundPaymentId])
   @@index([treatmentId])
@@ -3256,7 +3328,6 @@ model SpaAppointmentParticipant {
 
   @@index([therapistId])
   @@index([appointmentId])
-
   @@index([requestedTherapistId])
   @@index([reservationId])
 }
@@ -3278,26 +3349,26 @@ model SpaGuestTherapistPreference {
   updatedAt   DateTime     @updatedAt
 
   @@unique([profileId, propertyId])
-
   @@index([propertyId])
   @@index([therapistId])
 }
 
 // A connection to an external channel manager (Beds24 today) — the exchange interface
-// between this enterprise and the booking channels. Lives at the ENTERPRISE level, which
-// is why it is administered from the Hub and not the property dashboard. See
-// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
+// between ONE PROPERTY and the booking channels. See .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md
+// and .agents/docs/HUB_SETUP_PLAN.md (Phase 4).
 //
-// Deliberately NOT unique per enterprise. Beds24's own account model puts many properties
-// under one account, but some operators keep a separate account per property — allowing
-// several connections per enterprise supports both without a schema change, so the
-// "one account per enterprise or per property?" question (plan decision D-6) never has to
-// be answered up front. Which ostastay properties a connection covers is a separate
-// mapping concern (ChannelPropertyLink), landing with the Sharing screen.
+// One connection per property (owner, 2026-09-23 — supersedes the per-enterprise invite
+// code). Uppsolut creates it from the Osta console for a chosen property, linking that
+// property's Beds24 property id in the same step (its ChannelPropertyLink); the property's
+// own Hub area then does mapping, availability/rate checks, inbound bookings and logs, but
+// never connects, disconnects or re-authorizes. enterpriseId is kept denormalised for the
+// cross-tenant Osta views and the per-enterprise jobs.
 model ChannelConnection {
   id           String     @id @default(uuid())
   enterpriseId String
   enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  propertyId   String     @unique
+  property     Property   @relation("PropertyChannelConnection", fields: [propertyId], references: [id], onDelete: Cascade)
   // Only "BEDS24" today. A plain string rather than an enum to match the rest of this
   // schema (see Property.status, ChargeCode.category) and to keep adding a provider a
   // code-only change.
@@ -3332,7 +3403,7 @@ model ChannelConnection {
   // a DB dump alone must never yield a working one. The plaintext is returned once, by
   // the generate endpoint, and nowhere else afterwards; if it is lost, regenerate and
   // re-paste it into the channel manager. See src/lib/channels/webhook-token.ts.
-  webhookTokenHash  String?   @unique
+  webhookTokenHash String? @unique
 
   status            String    @default("NOT_CONNECTED")
   lastHealthCheckAt DateTime?
@@ -3343,10 +3414,10 @@ model ChannelConnection {
   // -Remaining, -ResetsIn — confirmed present on every response by the official OpenAPI
   // spec). Captured passively on every real call rather than polled separately, so the
   // number shown is always whatever the most recent call actually saw.
-  rateLimitTotal      Int?
-  rateLimitRemaining  Int?
-  rateLimitResetsAt   DateTime?
-  rateLimitObservedAt DateTime?
+  rateLimitTotal          Int?
+  rateLimitRemaining      Int?
+  rateLimitResetsAt       DateTime?
+  rateLimitObservedAt     DateTime?
   // Operator-configured safety margin: push/poll SKIP rather than call Beds24 once
   // rateLimitRemaining is at or below this and the reset window hasn't passed yet. Null
   // means no self-throttling — only Beds24's own limit applies, and a call is only ever
@@ -3363,9 +3434,9 @@ model ChannelConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  syncLogs         ChannelSyncLog[]
-  propertyLinks    ChannelPropertyLink[]
-  inboundBookings  ChannelInboundBooking[]
+  syncLogs        ChannelSyncLog[]
+  propertyLinks   ChannelPropertyLink[]
+  inboundBookings ChannelInboundBooking[]
 
   @@unique([enterpriseId, name])
 }
@@ -3385,7 +3456,9 @@ model ChannelConnection {
 // connected.
 model ChannelPropertyLink {
   id           String            @id @default(uuid())
-  connectionId String
+  // One link per connection — the connection's own property (a connection is per property
+  // since 2026-09-23), created with the connection by the Osta console.
+  connectionId String            @unique
   connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   propertyId String   @unique
@@ -3399,8 +3472,8 @@ model ChannelPropertyLink {
   // to be completed and reviewed first. Enabling is an explicit act.
   syncEnabled Boolean @default(false)
 
-  roomTypeMaps ChannelRoomTypeMap[]
-  ratePlanMaps ChannelRatePlanMap[]
+  roomTypeMaps    ChannelRoomTypeMap[]
+  ratePlanMaps    ChannelRatePlanMap[]
   bookingDefaults ChannelBookingDefaults?
 
   createdAt DateTime @default(now())
@@ -3455,7 +3528,7 @@ model ChannelRatePlanMap {
 // through redactForLog() in src/lib/channels/redact.ts first — see the tests, which
 // assert that a known secret never survives into a row.
 model ChannelSyncLog {
-  id String @id @default(uuid())
+  id           String     @id @default(uuid())
   // Denormalised so the Logs screen can scope and page without a join, and so entries
   // survive their connection being deleted (see connectionId below).
   enterpriseId String
@@ -3467,6 +3540,13 @@ model ChannelSyncLog {
   connectionId   String?
   connection     ChannelConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
   connectionName String
+
+  // The property whose exchange this was (a connection is per property) — denormalised
+  // like enterpriseId, so a property's Logs screen scopes without a join and keeps its
+  // entries after the connection is removed. Null only for an Osta setup attempt that
+  // named no valid property.
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   // OUTBOUND (we called the channel manager) | INBOUND (it called us, e.g. a webhook).
   direction String
@@ -3487,6 +3567,7 @@ model ChannelSyncLog {
 
   @@index([enterpriseId, createdAt])
   @@index([connectionId, createdAt])
+  @@index([propertyId, createdAt])
 }
 
 // One execution of a background job for one enterprise — see src/lib/jobs/.
@@ -3609,7 +3690,6 @@ model ChannelInboundBooking {
   @@unique([connectionId, externalBookingId])
   @@index([enterpriseId, receivedAt])
   @@index([enterpriseId, isOverbooking])
-
   @@index([propertyId])
   @@index([reservationId])
   @@index([roomTypeId])
@@ -3650,10 +3730,11 @@ model ChannelBookingDefaults {
 // authenticated by an API key minted in the Hub. See .agents/docs/WEBSITE_API_PLAN.md and
 // docs/WEBSITE_API.md.
 //
-// Keys are ENTERPRISE-level objects (the Hub is the only place they are managed) and each
-// grants access to ONE OR MORE of that enterprise's properties via WebsiteApiKeyProperty —
-// a group with one site per hotel mints one key per property; a group with a single
-// portal mints one key covering all of them.
+// Keys are ENTERPRISE-level objects (the Hub's enterprise area is the only place they are
+// managed) and each covers ONE property or ALL of the enterprise's properties — never a
+// subset (owner, 2026-09-23; the same rule as a user's work location). A group with one site
+// per hotel mints one key per property; a group with a single portal mints one ALL key,
+// which also covers properties added later (HUB_SETUP_PLAN.md A-3).
 //
 // Same storage rule as the channel webhook token and the eRegistration link: only the
 // SHA-256 hash is kept. Possession of a key is authority to READ availability and prices
@@ -3673,24 +3754,30 @@ model ApiRateLimitCounter {
 }
 
 model WebsiteApiKey {
-  id           String     @id @default(uuid())
-  enterpriseId String
-  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  name         String
-  keyPrefix    String
-  keyHash      String     @unique
-  status       String     @default("ACTIVE") // ACTIVE | REVOKED
+  id             String     @id @default(uuid())
+  enterpriseId   String
+  enterprise     Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  name           String
+  keyPrefix      String
+  keyHash        String     @unique
+  status         String     @default("ACTIVE") // ACTIVE | REVOKED
   // Browser origins (scheme + host [+ port], e.g. https://www.hotel.com) allowed to call
   // the API directly from a page. Empty = server-to-server only, which is the recommended
   // topology (the key never reaches a browser). Matched exactly against the Origin header.
-  allowedOrigins String[] @default([])
+  allowedOrigins String[]   @default([])
+  // The one property this key covers; null = ALL the enterprise's ACTIVE properties,
+  // resolved live on every request (src/lib/website-api/resolve-key.ts). A property id
+  // outside the key's coverage reads as "not found", never "forbidden", so a key cannot be
+  // used to enumerate a group's other hotels.
+  propertyId     String?
+  property       Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   // What the key may use: ROOMS | EXCURSIONS | SPA (src/lib/website-api/scopes.ts). One
   // key serves a site's rooms, excursions and spa (BOOKING_API_ADDONS_PLAN.md B-1). An
   // add-on scope is checked again LIVE on every request against EnterpriseAddonAccess, so
   // switching the add-on off stops the API even though the key still lists the scope.
-  scopes       String[]   @default(["ROOMS"])
-  expiresAt    DateTime?
-  lastUsedAt   DateTime?
+  scopes         String[]   @default(["ROOMS"])
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
 
   createdByUserId String
   createdBy       User      @relation("WebsiteApiKeyCreatedBy", fields: [createdByUserId], references: [id])
@@ -3699,27 +3786,13 @@ model WebsiteApiKey {
   revokedAt       DateTime?
   revokedByUserId String?
 
-  properties WebsiteApiKeyProperty[]
-  bookings   WebsiteBooking[]
+  bookings         WebsiteBooking[]
   activityBookings ApiActivityBooking[]
   webhookEndpoints ApiWebhookEndpoint[]
 
   @@index([enterpriseId])
-  @@index([createdByUserId])
-}
-
-// Which properties a key may act on. Enforced on every Website API request: a property id
-// in the URL that is not on the key's list reads as "not found", never "forbidden", so a
-// key cannot be used to enumerate a group's other hotels.
-model WebsiteApiKeyProperty {
-  keyId      String
-  key        WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  propertyId String
-  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  addedAt    DateTime      @default(now())
-
-  @@id([keyId, propertyId])
   @@index([propertyId])
+  @@index([createdByUserId])
 }
 
 // What a property's brand website is allowed to show and sell — configured in the Hub
@@ -3738,21 +3811,21 @@ model WebsitePropertySettings {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   // Marketing copy and imagery for the site's property page.
-  headline         String?
-  description      String?
-  imageUrls        String[] @default([])
+  headline    String?
+  description String?
+  imageUrls   String[] @default([])
   // Free-text lines shown as "House rules / policies" (cancellation terms, deposit
   // policy, child policy). The PMS does not enforce these — the property writes what it
   // honours at the desk.
-  policies         String?
+  policies    String?
 
   // Booking configuration.
-  bookingEnabled   Boolean   @default(true)
-  ratePlanId       String?
-  ratePlan         RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+  bookingEnabled Boolean   @default(true)
+  ratePlanId     String?
+  ratePlan       RatePlan? @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
   /// The meal plan every website booking is made on, and the default the guest sees when
   /// they are allowed to choose (offerMealPlans below).
-  mealPlanCode     String    @default("NONE")
+  mealPlanCode   String    @default("NONE")
   /// Whether the website may let a guest CHOOSE their meal plan, from this property's
   /// active MealPlan list, instead of silently taking mealPlanCode above.
   ///
@@ -3763,7 +3836,7 @@ model WebsitePropertySettings {
   /// per person per night, under RATE_PLAN the meal plan is a label and the rate plan
   /// carries the price. The quote endpoint reports the real total either way, and the
   /// property payload says which mode is in force so a site can word it honestly.
-  offerMealPlans   Boolean   @default(false)
+  offerMealPlans Boolean   @default(false)
   /// Whether the website may offer paid extras — Transportation, a spa treatment, an
   /// airport transfer — as optional add-ons the guest ticks at booking.
   ///
@@ -3771,14 +3844,14 @@ model WebsitePropertySettings {
   /// marked `sellSeparate`, which is already the owner-set flag meaning "can be attached
   /// to a reservation on its own", and is what the desk's own Add-ons picker offers. This
   /// switch only decides whether that same list is exposed to the public site.
-  offerAddOns      Boolean   @default(false)
+  offerAddOns    Boolean   @default(false)
   // How far ahead the site may look/book, and the shortest stay it may sell. Both are
   // website-only limits — the desk is never bound by them.
-  maxNightsAhead   Int       @default(365)
-  minNights        Int       @default(1)
+  maxNightsAhead Int       @default(365)
+  minNights      Int       @default(1)
   // Optional per-booking remark stamped on every website reservation (e.g. "Prepaid via
   // website — collect balance at check-in"), so the desk sees the site's own terms.
-  deskRemark       String?
+  deskRemark     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3805,16 +3878,16 @@ model ActivityOnlineSettings {
   module     String // EXCURSIONS | SPA
 
   // Master switch. Off: the catalogue may still be read, nothing can be held or booked.
-  enabled               Boolean @default(false)
+  enabled               Boolean        @default(false)
   // How long a hold keeps seats / a slot while the website takes payment (B-4).
-  holdMinutes           Int     @default(10)
+  holdMinutes           Int            @default(10)
   // Earliest a departure / treatment may be booked online, in hours before its start.
-  leadHours             Int     @default(2)
+  leadHours             Int            @default(2)
   // Excursions: the largest party one online booking may carry. Spa uses each treatment's
   // own maxParticipants instead, so this stays null there.
   maxPartySize          Int?
   // Spa: whether the site may pass a therapist gender preference (B-9).
-  offerGenderPreference Boolean @default(true)
+  offerGenderPreference Boolean        @default(true)
   // The payment method a PAID online booking is settled with, so the folio closes at 0
   // and the money reports under its own line (B-6). Required before PAID is accepted.
   onlinePaymentMethodId String?
@@ -3905,22 +3978,22 @@ model ApiActivityBooking {
 // moved a guest, marked a no-show, completed a treatment. Owned by one API key; only
 // bookings made with that key are ever sent to it. src/lib/website-api/webhooks.ts.
 model ApiWebhookEndpoint {
-  id           String        @id @default(uuid())
-  enterpriseId String
-  keyId        String
-  key          WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  url          String
+  id              String        @id @default(uuid())
+  enterpriseId    String
+  keyId           String
+  key             WebsiteApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  url             String
   // Signing secret (whsec_…), encrypted at rest (secret-crypto.ts). Shown once.
   secretEncrypted String
   secretPrefix    String
   // booking.confirmed | booking.cancelled | booking.moved | booking.completed | booking.no_show
-  events       String[]
-  status       String    @default("ACTIVE") // ACTIVE | DISABLED
+  events          String[]
+  status          String        @default("ACTIVE") // ACTIVE | DISABLED
   // Consecutive failed deliveries — reset by any success. Shown in the Hub.
-  failureCount Int       @default(0)
-  lastDeliveryAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  failureCount    Int           @default(0)
+  lastDeliveryAt  DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   deliveries ApiWebhookDelivery[]
 
@@ -3931,19 +4004,19 @@ model ApiWebhookEndpoint {
 // One event sent (or to be sent) to one endpoint. Retried with backoff by the
 // "booking-api-webhooks" job until delivered or given up (FAILED).
 model ApiWebhookDelivery {
-  id            String             @id @default(uuid())
-  enterpriseId  String
-  endpointId    String
-  endpoint      ApiWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  event         String
-  payload       Json
-  status        String             @default("PENDING") // PENDING | DELIVERED | FAILED
-  attempts      Int                @default(0)
-  nextAttemptAt DateTime           @default(now())
+  id             String             @id @default(uuid())
+  enterpriseId   String
+  endpointId     String
+  endpoint       ApiWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event          String
+  payload        Json
+  status         String             @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts       Int                @default(0)
+  nextAttemptAt  DateTime           @default(now())
   lastStatusCode Int?
-  lastError     String?
-  deliveredAt   DateTime?
-  createdAt     DateTime           @default(now())
+  lastError      String?
+  deliveredAt    DateTime?
+  createdAt      DateTime           @default(now())
 
   @@index([status, nextAttemptAt])
   @@index([endpointId, createdAt])

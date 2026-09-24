@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { RoomTypeManager } from "@/components/inventory/room-type-manager"
 import { RoomManager } from "@/components/inventory/room-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -20,33 +20,14 @@ const TABS = [
   { id: "rooms", label: "Rooms", addLabel: "Room", icon: BedDouble },
 ] as const
 
-export function FacilitiesManager() {
-  const [propertyId, setPropertyId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+// The property comes from the page (Hub › property › Rooms & Inventory). This used to
+// fetch the property list and silently open on the FIRST property, whichever one the user
+// was actually working in.
+export function FacilitiesManager({ propertyId }: { propertyId: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("room-types")
   // Monotonic counter — bumped on each Add click. Children skip its initial value on
   // mount (see their firstRun guard) so switching tabs never auto-opens a dialog.
   const [addSignal, setAddSignal] = useState(0)
-
-  useEffect(() => {
-    fetch('/api/properties')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setPropertyId(data[0].id)
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading configurations...</div>
-  }
-
-  if (!propertyId) {
-    return <div className="py-12 text-center text-destructive">Please create a property first.</div>
-  }
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]
 

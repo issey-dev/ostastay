@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       prisma.paymentMethod.findUnique({ where: { id: body.paymentMethodId } }),
       prisma.cashierShift.findUnique({ where: { id: body.shiftId } }),
     ]);
-    if (!paymentMethod || paymentMethod.enterpriseId !== ctx.enterpriseId) {
+    if (!paymentMethod || paymentMethod.propertyId !== folio.propertyId) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
     if (!shift || shift.enterpriseId !== ctx.enterpriseId) {

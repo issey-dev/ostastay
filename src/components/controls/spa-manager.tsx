@@ -1,6 +1,6 @@
 "use client"
 
-// Thin composition wrapper for the Controls > Spa tab. Holds just enough shared state
+// Thin composition wrapper for a property's Spa catalogue (Hub › property › Spa). Holds just enough shared state
 // to let SpaTreatmentsManager's category dropdown refresh immediately after a category
 // is added/edited in SpaCategoriesManager, without the two managers needing to share a
 // full store — same "lift only what's shared" approach the rest of Controls uses.
@@ -8,11 +8,8 @@
 import { useEffect, useState } from "react"
 import { SpaCategoriesManager, type SpaTreatmentCategoryDto } from "@/components/controls/spa-categories-manager"
 import { SpaTreatmentsManager } from "@/components/controls/spa-treatments-manager"
-import { useProperty } from "@/components/providers/property-provider"
 
-export function SpaCatalogManager() {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function SpaCatalogManager({ propertyId }: { propertyId: string }) {
   const [categories, setCategories] = useState<SpaTreatmentCategoryDto[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -30,9 +27,9 @@ export function SpaCatalogManager() {
 
   return (
     <div className="space-y-6">
-      <SpaCategoriesManager onChanged={() => { fetchCategories(); setRefreshKey((k) => k + 1) }} />
+      <SpaCategoriesManager propertyId={propertyId} onChanged={() => { fetchCategories(); setRefreshKey((k) => k + 1) }} />
       <div className="border-t pt-6">
-        <SpaTreatmentsManager categories={categories} refreshKey={refreshKey} />
+        <SpaTreatmentsManager propertyId={propertyId} categories={categories} refreshKey={refreshKey} />
       </div>
     </div>
   )

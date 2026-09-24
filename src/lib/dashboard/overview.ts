@@ -17,7 +17,7 @@
 import { prisma } from "@/lib/db";
 import { WIDGET_IDS } from "@/lib/dashboard/widgets";
 import { ReservationStatus } from "@/lib/enums";
-import { hasPermission, hasHubAccess, type AuthContext, type Module } from "@/lib/scope";
+import { hasPermission, hasEnterpriseHubAccess, type AuthContext, type Module } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { CHARGE_BUCKET_SELECT, lineReportBucket, reportBucketLabel } from "@/lib/posting/report-bucket";
 import { computeFolioBalance } from "@/lib/debtor-accounts";
@@ -869,7 +869,7 @@ export async function buildDashboardOverview(
   }
 
   // ── Channel connectivity (Hub module — enterprise-scoped users only) ────────────
-  if (hasHubAccess(ctx) && can("INTEGRATIONS")) {
+  if (hasEnterpriseHubAccess(ctx) && can("INTEGRATIONS")) {
     out.visibleSections.push("integrations");
     const dayAgo = new Date(Date.now() - DAY_MS);
     const [connections, activeConnections, pendingInbound, failedInbound, syncErrors24h, lastOk] = await Promise.all([
@@ -933,7 +933,8 @@ export async function buildDashboardOverview(
 
     const [arrivalRows, departureRows, alertRows] = await Promise.all([
       prisma.reservation.findMany({
-        where: { propertyId, status: ReservationStatus.RESERVED, checkInDate: { gte: businessDate, lte: todayEnd } },
+        // Held late arrivals (earlier arrival day, still RESERVED) are still due in.
+        where: { propertyId, status: ReservationStatus.RESERVED, checkInDate: { lte: todayEnd } },
         select: rowSelect,
         orderBy: { confirmationNo: "asc" },
         take: 6,

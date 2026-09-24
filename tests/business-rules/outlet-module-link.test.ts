@@ -24,36 +24,39 @@ async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   try { return await fn(); } finally { await destroySession(); }
 }
 
-// Hub-wide module outlet links (owner ruling 2026-07-30): one Spa outlet and one
-// Excursion outlet per ENTERPRISE, shared by every property, selectable from any
-// property's outlets — a cross-property link is a feature, not a scoping bug. The old
-// per-property SpaSettings/ExcursionSettings links are gone.
-describe("Hub-wide Spa/Excursion outlet links (/api/module-outlets)", () => {
-  let enterpriseId: string;
+// Module outlet links, per PROPERTY since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md,
+// Phase 2): each property's Spa and Excursion charges post through one of its OWN
+// outlets. Until then one outlet served the whole enterprise, so a spa appointment at one
+// property billed through an outlet belonging to another — that cross-property link is
+// exactly what these tests now refuse.
+describe("Per-property Spa/Excursion outlet links (/api/module-outlets)", () => {
   let adminId: string;
+  let lagoonAdminId: string;
+  let propAId: string;
+  let propBId: string;
   let outletAId: string; // property A
   let outletBId: string; // property B, same enterprise
   let foreignOutletId: string; // another enterprise entirely
 
-  const put = (body: object) =>
-    asUser(adminId, () => moduleOutletsRoute.PUT(new Request("http://localhost/api/module-outlets", {
+  const put = (userId: string, body: object) =>
+    asUser(userId, () => moduleOutletsRoute.PUT(new Request("http://localhost/api/module-outlets", {
       method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     })));
-  const get = () => asUser(adminId, () => moduleOutletsRoute.GET());
+  const get = (userId: string, propertyId: string) =>
+    asUser(userId, () => moduleOutletsRoute.GET(new Request(`http://localhost/api/module-outlets?propertyId=${propertyId}`)));
 
   beforeAll(async () => {
     const osta = await prisma.enterprise.upsert({ where: { slug: "test-osta" }, update: {}, create: { name: "Osta", slug: "test-osta", type: "INTERNAL" } });
     const roleIds = await ensureRoles(prisma, osta.id, SYSTEM_ROLE_DEFS, true);
 
     const enterprise = await prisma.enterprise.create({ data: { name: "ModOut", slug: `test-modout-${uniq()}`, type: "STANDARD" } });
-    enterpriseId = enterprise.id;
     const mkProp = (label: string) => prisma.property.create({
-      data: { enterpriseId, name: label, code: `MO${label}-${uniq()}`, legalName: "L", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" },
+      data: { enterpriseId: enterprise.id, name: label, code: `MO${label}-${uniq()}`, legalName: "L", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" },
     });
-    const propA = await mkProp("A");
-    const propB = await mkProp("B");
-    outletAId = (await prisma.outlet.create({ data: { propertyId: propA.id, name: "Spa A", code: "SPAA", outletType: "SPA" } })).id;
-    outletBId = (await prisma.outlet.create({ data: { propertyId: propB.id, name: "Dive B", code: "DIVB", outletType: "RECREATION" } })).id;
+    propAId = (await mkProp("A")).id;
+    propBId = (await mkProp("B")).id;
+    outletAId = (await prisma.outlet.create({ data: { propertyId: propAId, name: "Spa A", code: "SPAA", outletType: "SPA" } })).id;
+    outletBId = (await prisma.outlet.create({ data: { propertyId: propBId, name: "Dive B", code: "DIVB", outletType: "RECREATION" } })).id;
 
     const other = await prisma.enterprise.create({ data: { name: "Other", slug: `test-modout-other-${uniq()}`, type: "STANDARD" } });
     const otherProp = await prisma.property.create({
@@ -62,53 +65,58 @@ describe("Hub-wide Spa/Excursion outlet links (/api/module-outlets)", () => {
     foreignOutletId = (await prisma.outlet.create({ data: { propertyId: otherProp.id, name: "Foreign", code: "FRGN", outletType: "SPA" } })).id;
 
     const passwordHash = await bcrypt.hash("password123", 10);
-    adminId = (await prisma.user.create({ data: { enterpriseId, email: `modout-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } })).id;
+    adminId = (await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `modout-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } })).id;
+    lagoonAdminId = (await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `modout-b-${uniq()}@test.local`, passwordHash, firstName: "B", lastName: "Admin", roles: { create: { roleId: roleIds["Admin"] } }, scope: "PROPERTY", propertyId: propBId } })).id;
   });
 
-  it("links, persists, and unlinks the Spa outlet enterprise-wide", async () => {
-    const linked = await put({ module: "SPA", outletId: outletAId });
+  it("links, persists and unlinks a property's own Spa outlet", async () => {
+    const linked = await put(adminId, { propertyId: propAId, module: "SPA", outletId: outletAId });
     expect(linked.status).toBe(200);
     expect((await linked.json()).spaOutletId).toBe(outletAId);
 
-    const read = await (await get()).json();
+    const read = await (await get(adminId, propAId)).json();
     expect(read.spaOutletId).toBe(outletAId);
     expect(read.spaOutlet.name).toBe("Spa A");
 
-    const unlinked = await put({ module: "SPA", outletId: null });
+    const unlinked = await put(adminId, { propertyId: propAId, module: "SPA", outletId: null });
     expect((await unlinked.json()).spaOutletId).toBeNull();
   });
 
-  it("accepts an outlet from ANY property of the enterprise — cross-property is the point", async () => {
-    // An outlet homed at property B is a legitimate hub-wide Excursion outlet.
-    const res = await put({ module: "EXCURSIONS", outletId: outletBId });
-    expect(res.status).toBe(200);
-    expect((await res.json()).excursionOutletId).toBe(outletBId);
-  });
-
-  it("Spa and Excursions link independently", async () => {
-    await put({ module: "SPA", outletId: outletAId });
-    await put({ module: "EXCURSIONS", outletId: outletBId });
-    const read = await (await get()).json();
-    expect(read.spaOutletId).toBe(outletAId);
-    expect(read.excursionOutletId).toBe(outletBId);
-  });
-
-  it("rejects an outlet belonging to another enterprise", async () => {
-    const res = await put({ module: "SPA", outletId: foreignOutletId });
+  it("refuses an outlet of ANOTHER property of the same enterprise", async () => {
+    const res = await put(adminId, { propertyId: propAId, module: "EXCURSIONS", outletId: outletBId });
     expect(res.status).toBe(404);
   });
 
-  it("rejects an unknown module", async () => {
-    const res = await put({ module: "GYM", outletId: outletAId });
-    expect(res.status).toBe(400);
+  it("keeps each property's links apart", async () => {
+    await put(adminId, { propertyId: propAId, module: "SPA", outletId: outletAId });
+    await put(adminId, { propertyId: propBId, module: "EXCURSIONS", outletId: outletBId });
+    const a = await (await get(adminId, propAId)).json();
+    const b = await (await get(adminId, propBId)).json();
+    expect(a.spaOutletId).toBe(outletAId);
+    expect(a.excursionOutletId).toBeNull();
+    expect(b.excursionOutletId).toBe(outletBId);
+    expect(b.spaOutletId).toBeNull();
   });
 
-  it("GET lists outlets across every property of the enterprise, with their home property", async () => {
-    const read = await (await get()).json();
+  it("rejects an outlet belonging to another enterprise", async () => {
+    const res = await put(adminId, { propertyId: propAId, module: "SPA", outletId: foreignOutletId });
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects an unknown module and a missing property", async () => {
+    expect((await put(adminId, { propertyId: propAId, module: "GYM", outletId: outletAId })).status).toBe(400);
+    expect((await put(adminId, { module: "SPA", outletId: outletAId })).status).toBe(400);
+  });
+
+  it("GET lists only that property's outlets", async () => {
+    const read = await (await get(adminId, propAId)).json();
     const names = read.outlets.map((o: { name: string }) => o.name);
-    expect(names).toEqual(expect.arrayContaining(["Spa A", "Dive B"]));
-    expect(names).not.toContain("Foreign");
-    const diveB = read.outlets.find((o: { name: string }) => o.name === "Dive B");
-    expect(diveB.property.name).toBe("B");
+    expect(names).toEqual(["Spa A"]);
+  });
+
+  it("a single-property admin can link their own property's outlet, never another's", async () => {
+    expect((await put(lagoonAdminId, { propertyId: propBId, module: "EXCURSIONS", outletId: outletBId })).status).toBe(200);
+    expect((await put(lagoonAdminId, { propertyId: propAId, module: "SPA", outletId: outletAId })).status).toBe(403);
+    expect((await get(lagoonAdminId, propAId)).status).toBe(403);
   });
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -60,10 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // The Commission charge code identifies the credit line check-out posted to a debtor
     // folio (a negative amount). We VOID it on reversal rather than delete it.
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: reservation.property.enterpriseId },
-      select: { commissionChargeCodeId: true },
-    });
+    const settings = await getPropertySettings(reservation.propertyId);
     const commissionChargeCodeId = settings?.commissionChargeCodeId ?? null;
 
     let voidedCommissions = 0;

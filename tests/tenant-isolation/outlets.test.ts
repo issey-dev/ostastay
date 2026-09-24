@@ -90,9 +90,9 @@ describe("Outlets: tenant isolation", () => {
     });
     propertyBId = propertyB.id;
 
-    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "SPA-A", description: "Spa Treatment A" });
+    const chargeCodeA = await customChargeCode({ propertyId: propertyAId }, { code: "SPA-A", description: "Spa Treatment A" });
     chargeCodeAId = chargeCodeA.id;
-    const chargeCodeB = await customChargeCode(enterpriseB.id, { code: "SPA-B", description: "Spa Treatment B" });
+    const chargeCodeB = await customChargeCode({ propertyId: propertyBId }, { code: "SPA-B", description: "Spa Treatment B" });
     chargeCodeBId = chargeCodeB.id;
 
     const passwordHash = await bcrypt.hash("password123", 10);

@@ -47,7 +47,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   ok: "Successes only",
 }
 
-export function SyncLogViewer() {
+export function SyncLogViewer({ propertyId }: { propertyId: string }) {
   const [logs, setLogs] = useState<SyncLog[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -59,13 +59,14 @@ export function SyncLogViewer() {
 
   const buildQuery = useCallback(
     (cursor?: string) => {
-      const p = new URLSearchParams()
+      // This property's exchanges only (a connection is per property).
+      const p = new URLSearchParams({ propertyId })
       if (direction !== ALL) p.set("direction", direction)
       if (outcome !== ALL) p.set("outcome", outcome)
       if (cursor) p.set("cursor", cursor)
       return p.toString()
     },
-    [direction, outcome]
+    [propertyId, direction, outcome]
   )
 
   const load = useCallback(async () => {

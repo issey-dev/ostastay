@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { buildNationalities, nationalityLabel } from "@/lib/nationalities";
 import { rangeBounds } from "@/lib/reports/params";
 import { guestName, propertyOrThrow } from "@/lib/reports/defs/_shared";
 import type { ReportDef, ReportResult, ReportGroup } from "@/lib/reports/types";
@@ -105,8 +106,9 @@ const nationality: ReportDef = {
       where: { propertyId, status: { in: ["RESERVED", "IN_HOUSE", "CHECKED_OUT"] }, checkInDate: { lt }, checkOutDate: { gt: gte } },
       select: { checkInDate: true, checkOutDate: true, adults: true, children: true, primaryGuest: { select: { nationality: true } } },
     });
-    const codes = await prisma.systemCode.findMany({ where: { enterpriseId: rc.ctx.enterpriseId, category: "NATIONALITY" }, select: { code: true, value: true } });
-    const label = new Map(codes.map((c) => [c.code, c.value]));
+    const overrides = await prisma.systemCode.findMany({ where: { enterpriseId: rc.ctx.enterpriseId, propertyId: null, category: "NATIONALITY" }, select: { code: true, value: true, isActive: true } });
+    const nationalities = buildNationalities(overrides);
+    const label = { get: (code: string) => nationalityLabel(code, nationalities) ?? undefined };
 
     const byNat = new Map<string, { nationality: string; reservations: number; guests: number; roomNights: number }>();
     for (const r of reservations) {
@@ -148,7 +150,7 @@ const production: ReportDef = {
     const propertyId = await propertyOrThrow(rc);
     const range = rc.params.range as { from: Date; to: Date };
     const { gte, lt } = rangeBounds(range.from, range.to);
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: rc.ctx.enterpriseId }, select: { commissionChargeCodeId: true } });
+    const settings = await prisma.propertySettings.findUnique({ where: { propertyId }, select: { commissionChargeCodeId: true } });
 
     const reservations = await prisma.reservation.findMany({
       where: { propertyId, travelAgentId: { not: null }, checkInDate: { gte, lt } },

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJobFunction } from "@/lib/job-functions";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, getOstaEnterpriseId, type AuthContext } from "@/lib/scope";
@@ -115,6 +116,10 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { email, password, firstName, lastName, role, scope, propertyId, jobFunction } = body;
+    // A post from the fixed list (src/lib/job-functions.ts), or none.
+    if (jobFunction && !isJobFunction(jobFunction)) {
+      return NextResponse.json({ error: "Unknown job function" }, { status: 400 });
+    }
     const enterpriseId = ctx.enterpriseId; // never client-supplied
 
     if (!email || !password || !firstName || !lastName || !role) {
@@ -156,9 +161,6 @@ export async function POST(request: Request) {
         roles: { create: roleIds.map((roleId) => ({ roleId })) },
         scope: userScope,
         propertyId: targetPropertyId,
-        // Free-form against the tenant's JOB_FUNCTION list — not validated against it on
-        // purpose: the list is editable, and refusing a code a tenant just renamed would
-        // be worse than storing one that no longer resolves to a label.
         jobFunction: jobFunction || null,
       },
       select: USER_SELECT,
@@ -187,6 +189,10 @@ export async function PATCH(request: Request) {
 
     const body = await request.json();
     const { id, email, password, firstName, lastName, role, isActive, scope, propertyId, jobFunction } = body;
+    // A post from the fixed list (src/lib/job-functions.ts), or none.
+    if (jobFunction && !isJobFunction(jobFunction)) {
+      return NextResponse.json({ error: "Unknown job function" }, { status: 400 });
+    }
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });

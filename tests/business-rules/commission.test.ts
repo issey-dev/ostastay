@@ -52,6 +52,7 @@ const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const checkOutRoute = await import("@/app/api/reservations/[id]/check-out/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -83,8 +84,8 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `R${Math.floor(Math.random() * 9000 + 1000)}` } });
-  const roomCode = await customChargeCode(enterprise.id, { code: "1000", description: "Room Charge" });
-  const commissionCode = await customChargeCode(enterprise.id, { code: "9100", description: "TA Commission", subgroupCode: "90NR" });
+  const roomCode = await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room Charge" });
+  const commissionCode = await customChargeCode({ propertyId: property.id }, { code: "9100", description: "TA Commission", subgroupCode: "90NR" });
   const passwordHash = await bcrypt.hash("password123", 10);
   const admin = await prisma.user.create({
     data: {
@@ -137,7 +138,7 @@ describe("Travel Agent commission credit at checkout", () => {
   it("posts a negative commission credit line when the reservation's rate plan has a commission rate linked for the agent", async () => {
     const ctx = await setup();
     await prisma.ratePlanAgentAccess.create({ data: { ratePlanId: ctx.ratePlanId, upid: ctx.agentUpid, commissionRate: 10 } });
-    await prisma.enterpriseSettings.create({ data: { enterpriseId: ctx.enterpriseId, commissionChargeCodeId: ctx.commissionCodeId } });
+    await setPropertySettings(ctx.propertyId, { commissionChargeCodeId: ctx.commissionCodeId });
 
     const reservation = await createInHouseCityLedgerReservation(ctx);
     await prisma.folioLineItem.create({
@@ -168,7 +169,9 @@ describe("Travel Agent commission credit at checkout", () => {
   it("posts nothing when no Commission charge code is configured, even with a commission rate linked", async () => {
     const ctx = await setup();
     await prisma.ratePlanAgentAccess.create({ data: { ratePlanId: ctx.ratePlanId, upid: ctx.agentUpid, commissionRate: 10 } });
-    // No EnterpriseSettings row at all — commissionChargeCodeId is unset/disabled.
+    // No Commission charge code configured for this property — seeding its chart points
+    // the role at the seeded code, so clear it: an unset pointer disables commission.
+    await setPropertySettings(ctx.propertyId, { commissionChargeCodeId: null });
 
     const reservation = await createInHouseCityLedgerReservation(ctx);
     await prisma.folioLineItem.create({
@@ -193,7 +196,7 @@ describe("Travel Agent commission credit at checkout", () => {
 
   it("posts nothing when the rate plan has no commission rate linked for this agent", async () => {
     const ctx = await setup();
-    await prisma.enterpriseSettings.create({ data: { enterpriseId: ctx.enterpriseId, commissionChargeCodeId: ctx.commissionCodeId } });
+    await setPropertySettings(ctx.propertyId, { commissionChargeCodeId: ctx.commissionCodeId });
     // No RatePlanAgentAccess row at all for this rate plan/agent pair.
 
     const reservation = await createInHouseCityLedgerReservation(ctx);

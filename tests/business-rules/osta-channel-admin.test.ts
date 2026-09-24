@@ -19,6 +19,7 @@ vi.mock("next/headers", () => ({
 process.env.SECRETS_ENCRYPTION_KEY = "test-osta-channel-key";
 
 const { prisma } = await import("@/lib/db");
+const { makeChannelProperty } = await import("../helpers/channel");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { ensureRoles, SYSTEM_ROLE_DEFS } = await import("../../prisma/rbac-seed-data");
 const { isEncryptedSecret } = await import("@/lib/secret-crypto");
@@ -119,9 +120,12 @@ describe("Osta platform channel administration", () => {
           scope: "ENTERPRISE",
         },
       });
+      // One connection per property — each tenant's is its first property's.
+      const property = await makeChannelProperty(ent.id, `Tenant ${label}`);
       const connection = await prisma.channelConnection.create({
         data: {
           enterpriseId: ent.id,
+          propertyId: property.id,
           provider: "BEDS24",
           name: `Conn ${label}`,
           refreshToken: "x",
@@ -157,7 +161,7 @@ describe("Osta platform channel administration", () => {
       new Request("http://localhost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enterpriseId: tenantAId, name: "X", inviteCode: "code" }),
+        body: JSON.stringify({ propertyId: "any", externalPropertyId: "1", name: "X", inviteCode: "code" }),
       })
     );
     expect(create.status).toBe(403);
@@ -191,15 +195,16 @@ describe("Osta platform channel administration", () => {
     expect(serialized).not.toContain("webhookTokenHash");
   });
 
-  it("creates a connection FOR a tenant from an invite code", async () => {
+  it("creates a connection FOR a tenant property from an invite code, linking its Beds24 property", async () => {
     await createSession(ostaAdminId);
     stubBeds24({ refreshToken: "beds-refresh", token: "beds-access", expiresIn: 86400 });
+    const property = await makeChannelProperty(tenantAId, "Second hotel");
 
     const res = await connectionsRoute.POST(
       new Request("http://localhost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enterpriseId: tenantAId, name: "Master-set", inviteCode: "invite-1" }),
+        body: JSON.stringify({ propertyId: property.id, externalPropertyId: "778899", name: "Master-set", inviteCode: "invite-1" }),
       })
     );
     expect(res.status).toBe(201);
@@ -208,7 +213,12 @@ describe("Osta platform channel administration", () => {
     // The row landed in the TENANT's enterprise, with encrypted credentials.
     const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connection.id } });
     expect(row.enterpriseId).toBe(tenantAId);
+    expect(row.propertyId).toBe(property.id);
     expect(isEncryptedSecret(row.refreshToken)).toBe(true);
+    // The property's link is made in the same step — the Hub never links anything itself.
+    const link = await prisma.channelPropertyLink.findUniqueOrThrow({ where: { propertyId: property.id } });
+    expect(link.connectionId).toBe(row.id);
+    expect(link.externalPropertyId).toBe("778899");
 
     // The tenant's own trail shows what the platform did — not just Osta's.
     const trail = await prisma.userActivityLog.findFirst({
@@ -221,12 +231,13 @@ describe("Osta platform channel administration", () => {
   it("refuses to create a connection on the INTERNAL enterprise itself", async () => {
     await createSession(ostaAdminId);
     const osta = await prisma.enterprise.findFirstOrThrow({ where: { type: "INTERNAL" } });
+    const ostaProperty = await makeChannelProperty(osta.id, "Osta itself");
 
     const res = await connectionsRoute.POST(
       new Request("http://localhost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enterpriseId: osta.id, name: "Nope", inviteCode: "invite-x" }),
+        body: JSON.stringify({ propertyId: ostaProperty.id, externalPropertyId: "1", name: "Nope", inviteCode: "invite-x" }),
       })
     );
     // Osta has no operational properties — a connection there can only be a mistake.
@@ -373,8 +384,9 @@ describe("Osta platform channel administration", () => {
   it("removes a tenant connection cross-tenant, and the removal lands in the tenant's trail", async () => {
     await createSession(ostaAdminId);
 
+    const doomedProperty = await makeChannelProperty(tenantBId, "Doomed hotel");
     const doomed = await prisma.channelConnection.create({
-      data: { enterpriseId: tenantBId, provider: "BEDS24", name: "Doomed", refreshToken: "x" },
+      data: { enterpriseId: tenantBId, propertyId: doomedProperty.id, provider: "BEDS24", name: "Doomed", refreshToken: "x" },
     });
 
     const res = await connectionByIdRoute.DELETE(new Request("http://localhost", { method: "DELETE" }), {

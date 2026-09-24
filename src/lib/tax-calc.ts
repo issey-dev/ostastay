@@ -1,4 +1,4 @@
-import type { EnterpriseSettings, TaxRate } from "@prisma/client"
+import type { PropertySettings, TaxRate } from "@prisma/client"
 
 // The tax/service-charge engine shared by every route that posts a charge (pos/charge,
 // folios/[id]/line-items, night-audit/run's room charge). One charge code is taxed
@@ -84,7 +84,7 @@ function computeTaxLines(
 // just expressed as the BASE/COMPOUND special case of computeTaxLines.
 export function computeDefaultEngineTax(
   inputAmount: number,
-  settings: Pick<EnterpriseSettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null,
+  settings: Pick<PropertySettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null,
   pricesIncludeTaxes: boolean
 ): ChargeTaxResult {
   const serviceChargeRate = settings?.serviceChargeEnabled ? settings.serviceChargeRate : 0
@@ -131,7 +131,7 @@ export function resolveChargeTax(params: {
     } | null
   }
   inputAmount: number
-  settings: Pick<EnterpriseSettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null
+  settings: Pick<PropertySettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null
   pricesIncludeTaxes: boolean
   asOf?: Date
 }): ChargeTaxResult {
@@ -168,7 +168,7 @@ export function resolveOutletChargeTax(params: {
     } | null
   } | null
   inputAmount: number
-  settings: Pick<EnterpriseSettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null
+  settings: Pick<PropertySettings, "serviceChargeEnabled" | "serviceChargeRate" | "tgstEnabled" | "tgstRate"> | null
   pricesIncludeTaxes: boolean
   asOf?: Date
 }): ChargeTaxResult {

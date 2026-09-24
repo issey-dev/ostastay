@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 export async function PUT(
@@ -22,6 +22,8 @@ export async function PUT(
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "update");
 
     if (body.rates !== undefined) {
       if (!Array.isArray(body.rates) || body.rates.length === 0) {
@@ -94,6 +96,8 @@ export async function DELETE(
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "delete");
 
     await prisma.taxProfile.delete({
       where: { id },

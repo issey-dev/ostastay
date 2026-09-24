@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { CalendarCheck, UtensilsCrossed } from "@/components/icons"
-import { useProperty } from "@/components/providers/property-provider"
+import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 
 // Per-property, top-level switch for which side drives automatic Allocation
 // attachment on a reservation (see src/lib/allocations.ts resolveLinkedAllocationIds
@@ -10,8 +10,8 @@ import { useProperty } from "@/components/providers/property-provider"
 // both. Changing this is NOT retroactive: it only affects reservations created or
 // edited after the change, not ones already booked (a "refresh rate" tool to re-apply
 // the current mode to an existing reservation is planned but not built yet).
-export function AllocationCalculationManager() {
-  const { currentProperty, refreshProperties } = useProperty()
+export function AllocationCalculationManager({ property }: { property: HubPropertyDetail }) {
+  const [currentProperty, applySaved] = usePropertyValue(property)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
 
@@ -28,7 +28,7 @@ export function AllocationCalculationManager() {
         body: JSON.stringify({ allocationCalculationMode: next }),
       })
       if (res.ok) {
-        refreshProperties()
+        applySaved({ allocationCalculationMode: next })
         setMessage({ text: "Allocation Calculation mode saved. Applies to reservations created or edited from now on — existing bookings are unaffected." })
       } else {
         const body = await res.json().catch(() => null)

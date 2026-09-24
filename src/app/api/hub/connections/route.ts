@@ -1,27 +1,22 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
-import { listConnections } from "@/lib/channels/connection";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizePropertyParam } from "@/lib/channels/hub-access";
+import { getPropertyConnection } from "@/lib/channels/connection";
 
-// Channel-manager connections for the session's own enterprise — see
-// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md.
-//
-// Every handler in the Hub calls requireHubAccess(ctx) IN ADDITION to requirePermission().
-// The two are not redundant: requireHubAccess enforces the enterprise-level rule (a
-// PROPERTY-scoped user is refused outright, whatever their role bits say), while
-// requirePermission enforces the per-action CRUD bit. The Hub layout's own check guards
-// the UI shell only and is no substitute for either.
+// A property's channel-manager connection (one per property) — see
+// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md and src/lib/channels/hub-access.ts. ?propertyId=
+// is required; the caller needs Property Setup (INTEGRATIONS) there.
 
 // A stored channel-manager credential can move real inventory and accept real bookings.
 // It is therefore WRITE-ONLY from the browser's point of view: nothing here ever returns a
 // token, and there is deliberately no endpoint that reveals one.
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "view");
+    const propertyId = await authorizePropertyParam(ctx, request, "view");
 
-    return NextResponse.json({ connections: await listConnections(ctx.enterpriseId) });
+    return NextResponse.json({ connection: await getPropertyConnection(propertyId) });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -37,7 +32,7 @@ export async function GET() {
 //
 // The platform-side equivalents live under /api/osta/channels/connections.
 const OSTA_MANAGED =
-  "Channel-manager connections are set up by Osta. Contact Osta to connect or change this enterprise's channel manager.";
+  "Channel-manager connections are set up by Uppsolut. Contact Uppsolut to connect a property's channel manager.";
 
 export async function POST() {
   return NextResponse.json({ error: OSTA_MANAGED }, { status: 403 });

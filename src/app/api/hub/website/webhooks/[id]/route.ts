@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { deleteWebhookEndpoint, updateWebhookEndpoint } from "@/lib/website-api/webhooks";
 
@@ -15,7 +15,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
     const data = patchSchema.parse(await request.json());
     const row = await updateWebhookEndpoint({ enterpriseId: ctx.enterpriseId, id, ...data });
@@ -39,7 +39,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "delete");
     await deleteWebhookEndpoint(ctx.enterpriseId, id);
     await logActivity({ ctx, module: "INTEGRATIONS", action: "DELETE", description: "Removed a Booking API webhook", entityType: "ApiWebhookEndpoint", entityId: id });

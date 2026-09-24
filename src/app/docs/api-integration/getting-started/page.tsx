@@ -12,7 +12,7 @@ export default function GettingStarted() {
       <H2>1. Get a key from the property</H2>
       <p>
         The property&apos;s administrator creates your key in their administration area and ticks what it may use — Rooms,
-        Excursions, Spa — and which properties it covers. They send you three values; keep them as <strong>server-side secrets</strong>{" "}
+        Excursions, Spa — and whether it covers one property or all of the group&apos;s properties. They send you three values; keep them as <strong>server-side secrets</strong>{" "}
         (environment variables or a secrets manager), never in page source or a public repository:
       </p>
       <CodeBlock

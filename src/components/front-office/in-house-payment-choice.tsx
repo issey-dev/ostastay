@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useProperty } from "@/components/providers/property-provider"
 
 export type InHousePayment = { settleNow: boolean; paymentMethodId: string }
 type PaymentMethod = { id: string; name: string; isActive?: boolean }
@@ -23,13 +24,17 @@ export function InHousePaymentChoice({
   currency?: string
 }) {
   const [methods, setMethods] = useState<PaymentMethod[]>([])
+  // Payment methods are per property — this property's own.
+  const { currentProperty } = useProperty()
+  const propertyId = currentProperty?.id ?? ""
 
   useEffect(() => {
-    fetch(`/api/payment-methods`)
+    if (!propertyId) return
+    fetch(`/api/payment-methods?propertyId=${propertyId}`)
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setMethods(d.filter((m: PaymentMethod) => m.isActive !== false)) })
       .catch(() => {})
-  }, [])
+  }, [propertyId])
 
   const money = amount != null ? `${currency ? `${currency} ` : ""}${amount.toFixed(2)}` : null
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours } from "@/lib/channels/connection";
+import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours, listAllConnections } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
 // Osta-console per-connection management — see ../route.ts for why this reaches across
@@ -61,6 +61,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // The setter's own bounds message (1..MAX_STORED_LOOKBACK_HOURS) is the useful one.
         return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid value" }, { status: 400 });
       }
+    }
+
+    // Correct the property's Beds24 property id (typed when the connection was created).
+    if (body && typeof body === "object" && "externalPropertyId" in body) {
+      const externalPropertyId = typeof body.externalPropertyId === "string" ? body.externalPropertyId.trim() : "";
+      if (!externalPropertyId) {
+        return NextResponse.json({ error: "The channel manager's property ID is required" }, { status: 400 });
+      }
+      await prisma.channelPropertyLink.update({ where: { propertyId: existing.propertyId }, data: { externalPropertyId } });
+      await logActivity({
+        ctx,
+        module: "INTEGRATIONS",
+        action: "UPDATE",
+        description: `Set the Beds24 property id of channel manager "${existing.name}" to ${externalPropertyId} — by Osta platform admin`,
+        entityType: "ChannelConnection",
+        entityId: id,
+        targetEnterpriseId: existing.enterpriseId,
+      });
+      const [connection] = (await listAllConnections()).filter((c) => c.id === id);
+      return NextResponse.json({ connection });
     }
 
     const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";

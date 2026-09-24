@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Level 2 of the charge hierarchy. A subgroup is purely a reporting sub-classification
@@ -10,7 +10,6 @@ import { logActivity } from "@/lib/activity-log";
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
 
     const body = await request.json();
     const code = typeof body.code === "string" ? body.code.trim().toUpperCase().replace(/\s+/g, "_") : "";
@@ -24,9 +23,11 @@ export async function POST(request: Request) {
     if (!group || group.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge group not found" }, { status: 404 });
     }
+    // A subgroup joins its group's property's chart — Property Setup for that property.
+    await requirePropertySetup(ctx, group.propertyId, "CONTROLS", "create");
 
     const clash = await prisma.chargeSubgroup.findUnique({
-      where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code } },
+      where: { propertyId_code: { propertyId: group.propertyId, code } },
     });
     if (clash) {
       return NextResponse.json({ error: `A subgroup with the code ${code} already exists` }, { status: 400 });
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     const subgroup = await prisma.chargeSubgroup.create({
       data: {
         enterpriseId: ctx.enterpriseId,
+        propertyId: group.propertyId,
         chargeGroupId: group.id,
         code,
         name,

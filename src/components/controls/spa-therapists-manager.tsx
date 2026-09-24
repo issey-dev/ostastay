@@ -19,7 +19,6 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { useProperty } from "@/components/providers/property-provider"
 
 type TreatmentOption = { id: string; name: string }
 
@@ -63,9 +62,7 @@ const emptyValues: TherapistFormValues = {
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const EXCEPTION_TYPES = ["DAY_OFF", "LEAVE", "TRAINING", "SICK", "EXTENDED_HOURS", "UNAVAILABLE"] as const
 
-export function SpaTherapistsManager() {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
 
   const [therapists, setTherapists] = useState<SpaTherapistDto[]>([])
   const [treatments, setTreatments] = useState<TreatmentOption[]>([])

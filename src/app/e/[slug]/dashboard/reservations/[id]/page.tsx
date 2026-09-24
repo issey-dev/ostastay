@@ -28,6 +28,7 @@ import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { CountryLabel } from "@/components/ui/country-flag"
+import { useNationalities } from "@/components/ui/nationality-select"
 import { useProperty } from "@/components/providers/property-provider"
 import {
   deriveReservationState,
@@ -71,7 +72,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const { currentProperty } = useProperty()
   const [reservation, setReservation] = useState<any>(null)
   const [breakdown, setBreakdown] = useState<any>(null)
-  const [nationalityMap, setNationalityMap] = useState<Record<string, string>>({})
+  const nationalities = useNationalities()
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -143,13 +144,6 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   useEffect(() => {
     fetchReservation()
     fetchBreakdown()
-    // Resolve nationality codes → display names once (for the guest flag + name).
-    fetch(`/api/settings/system-codes?category=NATIONALITY`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: any[]) => {
-        if (Array.isArray(rows)) setNationalityMap(Object.fromEntries(rows.map((c) => [c.code, c.value])))
-      })
-      .catch(() => {})
   }, [id])
 
   const confirm = useConfirm()
@@ -412,7 +406,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   )
   const depositsHeld = depositRows.reduce((s: number, p: any) => s + (p.isRefund ? -p.amount : p.amount), 0)
 
-  const nationalityLabel = guest?.nationality ? nationalityMap[guest.nationality] ?? guest.nationality : null
+  const nationalityLabel = nationalities.nationality(guest?.nationality)
 
   return (
     <div className="space-y-6">

@@ -49,7 +49,7 @@ describe("Channel rates", () => {
     propertyId = property.id;
 
     const connection = await prisma.channelConnection.create({
-      data: { enterpriseId, provider: "BEDS24", name: `Rates Conn ${Date.now()}`, refreshToken: "x" },
+      data: { enterpriseId, propertyId, provider: "BEDS24", name: `Rates Conn ${Date.now()}`, refreshToken: "x" },
     });
     linkId = (
       await prisma.channelPropertyLink.create({

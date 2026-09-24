@@ -43,6 +43,13 @@ read `.agents/docs/`:
   `/docs` portal). Phase status and decisions B-1…B-11. Read before touching
   `src/lib/excursion-booking.ts`, `spa-booking.ts`, `spa-lifecycle.ts` or `db-lock.ts`.
 
+- [`.agents/docs/HUB_SETUP_PLAN.md`](.agents/docs/HUB_SETUP_PLAN.md) — all setup lives in
+  the Hub, split into an ENTERPRISE area (`/hub/enterprise/…`: people, sessions, Email/SFTP,
+  API keys, support access) and a PROPERTY area (`/hub/p/{propertyId}/…`: everything else,
+  one property at a time, property always in the URL). Read before adding any setting:
+  decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
+  `requirePropertySetup()` from `src/lib/scope.ts`.
+
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
 it plus a status correction (its own header is stale — treat it as partially-to-mostly

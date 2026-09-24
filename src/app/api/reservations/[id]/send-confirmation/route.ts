@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { loadEmailBranding } from "@/lib/document-settings";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
 import { MAIL_KINDS } from "@/lib/mail-sender";
 import { generateStationeryPdf } from "@/lib/stationery-pdf";
@@ -104,19 +104,9 @@ export async function POST(
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: reservation.property.enterpriseId },
-    });
-
-    const brandColor = resolveInvoiceBrandColor(settings?.invoiceBrandColor ?? null);
-    const html = buildConfirmationEmailHtml({
-      reservation,
-      settings: settings ?? {
-        invoiceBrandName: null, invoiceLogoUrl: null, invoiceAddress: null,
-        invoicePhone: null, invoiceEmail: null, confirmationLetterMessage: null,
-      },
-      brandColor,
-    });
+    // The property's own identity and letter wording (per property since 2026-09-23).
+    const { settings, brandColor } = await loadEmailBranding(reservation.property);
+    const html = buildConfirmationEmailHtml({ reservation, settings, brandColor });
 
     const result = await sendStationeryEmail({
       enterpriseId: reservation.property.enterpriseId,

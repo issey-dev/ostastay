@@ -257,7 +257,7 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
   });
   if (!p) return null;
 
-  // Feature codes resolve to display labels through the enterprise's own SystemCode LOV
+  // Feature codes resolve to display labels through the property's own SystemCode lists
   // (BED_TYPE / ROOM_VIEW / ROOM_AMENITY). One query for every code the property uses.
   const codes = new Set<string>();
   for (const rt of p.roomTypes) for (const f of rt.features) codes.add(`${f.category}|${f.code}`);
@@ -265,7 +265,7 @@ export async function getPublicProperty(propertyId: string): Promise<PublicPrope
   if (codes.size > 0) {
     const rows = await prisma.systemCode.findMany({
       where: {
-        enterpriseId: p.enterpriseId,
+        propertyId: p.id,
         category: { in: ["BED_TYPE", "ROOM_VIEW", "ROOM_AMENITY"] },
       },
       select: { category: true, code: true, value: true },

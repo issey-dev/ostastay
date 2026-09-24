@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { NationalitySelect } from "@/components/ui/nationality-select"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -375,7 +376,7 @@ function SlotFormView({
                   <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><DatePicker value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="nationality" render={({ field }) => (
-                  <FormItem><FormLabel>Nationality</FormLabel><FormControl><Input {...field} placeholder="e.g. British" /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Nationality</FormLabel><FormControl><NationalitySelect standardOnly value={field.value} onValueChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="gender" render={({ field }) => (
                   <FormItem>
@@ -439,7 +440,7 @@ function SlotFormView({
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <FormField control={form.control} name="issuingCountry" render={({ field }) => (
-                  <FormItem><FormLabel>Issuing Country</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Issuing Country</FormLabel><FormControl><NationalitySelect standardOnly mode="country" value={field.value ?? ""} onValueChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="documentIssueDate" render={({ field }) => (
                   <FormItem><FormLabel>Issue Date</FormLabel><FormControl><DatePicker value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>

@@ -212,12 +212,13 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
   }
 
   const settings = await prisma.spaSettings.findUnique({ where: { propertyId } });
-  // The hub-wide Spa Outlet — REQUIRED for any folio posting from this module.
-  const enterpriseSettings = await prisma.enterpriseSettings.findUnique({
-    where: { enterpriseId: treatment.property.enterpriseId },
+  // The property's own Spa Outlet — REQUIRED for any folio posting from this module.
+  // The property's own Spa Outlet (per property since 2026-09-23).
+  const propertySettings = await prisma.propertySettings.findUnique({
+    where: { propertyId: treatment.propertyId },
     include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
-  const spaOutlet = enterpriseSettings?.spaOutlet ?? null;
+  const spaOutlet = propertySettings?.spaOutlet ?? null;
   const allowAutoAssignment = settings?.allowAutoAssignment ?? true;
   const requireRoomAtBooking = settings?.requireRoomAtBooking ?? true;
   const requireTherapistAtBooking = settings?.requireTherapistAtBooking ?? true;
@@ -230,7 +231,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
     throw new BookingError(
       400,
       "NO_OUTLET",
-      "No Spa Outlet is linked — link one under Controls > Spa (it applies to every property) before posting spa charges."
+      "No Spa Outlet is linked — link one in the Hub (Charge Codes › Spa Outlet) before posting spa charges."
     );
   }
 
@@ -243,7 +244,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
       throw new BookingError(400, "SETTLEMENT_NOT_ALLOWED", "Pay-now settlement isn't available when charges are deferred to completion.");
     }
     const method = await prisma.paymentMethod.findUnique({ where: { id: input.settlement.paymentMethodId } });
-    if (!method || method.enterpriseId !== ctx.enterpriseId) {
+    if (!method || method.propertyId !== propertyId) {
       throw new BookingError(404, "PAYMENT_METHOD_NOT_FOUND", "Payment method not found");
     }
     settlement = { paymentMethodId: method.id, referenceNumber: input.settlement.referenceNumber };
@@ -363,7 +364,7 @@ export async function createSpaAppointment(ctx: AuthContext, input: CreateSpaApp
         folioId: folioId!,
         chargeCode: postableCode,
         inputAmount: priceSnapshot,
-        settings: enterpriseSettings,
+        settings: propertySettings,
         pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
         date: resolveBusinessDate(treatment.property),
         description: `${treatment.name} — ${appointmentDate} ${startTime}${partySize > 1 ? ` (${partySize} guests)` : ""}`,
@@ -477,18 +478,19 @@ export async function quoteSpaTreatment(treatmentId: string, date: Date, partySi
   }
   const rate = rateForDate(treatment.rates, date);
   if (!rate) throw new BookingError(400, "NO_RATE", "No price is configured for this treatment on this date");
-  const enterpriseSettings = await prisma.enterpriseSettings.findUnique({
-    where: { enterpriseId: treatment.property.enterpriseId },
+  // The property's own Spa Outlet (per property since 2026-09-23).
+  const propertySettings = await prisma.propertySettings.findUnique({
+    where: { propertyId: treatment.propertyId },
     include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
-  const spaOutlet = enterpriseSettings?.spaOutlet ?? null;
+  const spaOutlet = propertySettings?.spaOutlet ?? null;
   if (!spaOutlet) throw new BookingError(400, "NO_OUTLET", "No Spa Outlet is linked.");
   const priceBeforeTax = computeAppointmentTotal(rate, treatment.pricingMode, partySize);
   const chargeCode = await prisma.chargeCode.findUniqueOrThrow({ where: { id: treatment.chargeCodeId }, include: chargeCodeInclude() });
   const charge = await previewCharge(treatment.propertyId, {
     chargeCode,
     inputAmount: priceBeforeTax,
-    settings: enterpriseSettings,
+    settings: propertySettings,
     pricesIncludeTaxes: treatment.property.pricesIncludeTaxes,
     date: resolveBusinessDate(treatment.property),
     description: treatment.name,
@@ -531,15 +533,16 @@ export async function confirmSpaHold(
   if (!hold) throw new BookingError(404, "HOLD_NOT_FOUND", "Hold not found.");
   await assertPropertyModuleAccess(ctx, hold.propertyId, "SPA");
 
-  const enterpriseSettings = await prisma.enterpriseSettings.findUnique({
-    where: { enterpriseId: hold.property.enterpriseId },
+  // The property's own Spa Outlet (per property since 2026-09-23).
+  const propertySettings = await prisma.propertySettings.findUnique({
+    where: { propertyId: hold.propertyId },
     include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
-  const spaOutlet = enterpriseSettings?.spaOutlet ?? null;
+  const spaOutlet = propertySettings?.spaOutlet ?? null;
   if (!spaOutlet) throw new BookingError(400, "NO_OUTLET", "No Spa Outlet is linked.");
   if (input.settlement) {
     const method = await prisma.paymentMethod.findUnique({ where: { id: input.settlement.paymentMethodId } });
-    if (!method || method.enterpriseId !== ctx.enterpriseId) throw new BookingError(404, "PAYMENT_METHOD_NOT_FOUND", "Payment method not found");
+    if (!method || method.propertyId !== hold.propertyId) throw new BookingError(404, "PAYMENT_METHOD_NOT_FOUND", "Payment method not found");
   }
   const chargeCode = await prisma.chargeCode.findUniqueOrThrow({ where: { id: hold.treatment.chargeCodeId }, include: chargeCodeInclude() });
   const shift = await ensureOpenShift(ctx, hold.propertyId);
@@ -565,7 +568,7 @@ export async function confirmSpaHold(
       folioId: folio.id,
       chargeCode,
       inputAmount: hold.priceSnapshot,
-      settings: enterpriseSettings,
+      settings: propertySettings,
       pricesIncludeTaxes: hold.property.pricesIncludeTaxes,
       date: resolveBusinessDate(hold.property),
       description: `${hold.treatmentNameSnapshot} — ${hold.appointmentDate.toISOString().slice(0, 10)} ${hold.startTime}${hold.partySize > 1 ? ` (${hold.partySize} guests)` : ""}`,

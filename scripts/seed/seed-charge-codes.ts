@@ -1,7 +1,7 @@
 // Clean-slate chart of accounts.
 //
-// Wipes an enterprise's charge groups, subgroups, charge codes and generates, then
-// rebuilds the canonical chart from src/lib/posting/charge-tree.ts — the same definition
+// Wipes each property's charge groups, subgroups, charge codes and generates (every
+// property keeps its own chart since 2026-09-23), then rebuilds the canonical chart from src/lib/posting/charge-tree.ts — the same definition
 // property onboarding uses, so a seeded database and a freshly onboarded one are
 // identical. Also wires the Deposit / Cancellation / No-Show fee rules to their codes.
 //
@@ -43,13 +43,12 @@ const ALLOCATION_CODE_BY_TYPE: Record<string, string> = {
  * name. Runs AFTER the chart is built and BEFORE the retired codes are dropped, so no
  * required FK is ever left dangling.
  */
-async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[]) {
-  const codes = await tx.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
+async function repointConfig(tx: Tx, propertyId: string, retiredIds: string[]) {
+  const codes = await tx.chargeCode.findMany({ where: { propertyId }, select: { id: true, code: true } })
   const id = (code: string) => codes.find((c) => c.code === code)?.id ?? null
   const retired = { chargeCodeId: { in: retiredIds } }
 
-  const properties = await tx.property.findMany({ where: { enterpriseId }, select: { id: true } })
-  const propertyIds = properties.map((p) => p.id)
+  const propertyIds = [propertyId]
 
   const counts = { ratePlans: 0, allocations: 0, spa: 0, excursions: 0, transport: 0, outletPool: 0, routing: 0 }
   if (propertyIds.length === 0) return counts
@@ -124,7 +123,7 @@ async function repointConfig(tx: Tx, enterpriseId: string, retiredIds: string[])
 }
 
 /** Drop retired codes plus any subgroup/group left outside the canonical chart. */
-async function dropRetired(tx: Tx, enterpriseId: string, retiredIds: string[], force: boolean) {
+async function dropRetired(tx: Tx, propertyId: string, retiredIds: string[], force: boolean) {
   let postingsDeleted = 0
   if (retiredIds.length > 0) {
     const inRetired = { chargeCodeId: { in: retiredIds } }
@@ -151,10 +150,10 @@ async function dropRetired(tx: Tx, enterpriseId: string, retiredIds: string[], f
   // Outlet-owned nnRV subgroups (ChargeSubgroup.outletId) are legitimate chart members
   // outside the canonical seed — provisioned per outlet, never dropped here.
   const subgroupsDropped = (await tx.chargeSubgroup.deleteMany({
-    where: { enterpriseId, code: { notIn: [...canonicalSubgroups] }, outletId: null, chargeCodes: { none: {} } },
+    where: { propertyId, code: { notIn: [...canonicalSubgroups] }, outletId: null, chargeCodes: { none: {} } },
   })).count
   const groupsDropped = (await tx.chargeGroup.deleteMany({
-    where: { enterpriseId, code: { notIn: [...canonicalGroups] }, subgroups: { none: {} } },
+    where: { propertyId, code: { notIn: [...canonicalGroups] }, subgroups: { none: {} } },
   })).count
 
   return { postingsDeleted, subgroupsDropped, groupsDropped }
@@ -181,8 +180,10 @@ async function main() {
   console.log(`${APPLY ? "Applying to" : "Dry run over"} ${enterprises.length} enterprise(s):\n`)
 
   for (const ent of enterprises) {
+   const entProperties = await prisma.property.findMany({ where: { enterpriseId: ent.id }, select: { id: true, name: true } })
+   for (const prop of entProperties) {
     const existing = await prisma.chargeCode.findMany({
-      where: { enterpriseId: ent.id },
+      where: { propertyId: prop.id },
       select: { id: true, code: true, chargeSubgroup: { select: { outletId: true } } },
     })
     // A code living in an outlet-owned nnRV subgroup is part of the standard by
@@ -192,7 +193,7 @@ async function main() {
       ? await prisma.folioLineItem.count({ where: { chargeCodeId: { in: retired.map((c) => c.id) } } })
       : 0
 
-    console.log(`  ${ent.name} (${ent.slug})`)
+    console.log(`  ${ent.name} (${ent.slug}) › ${prop.name}`)
     console.log(`    existing: ${existing.length} charge code(s) — ${retired.length} not in the chart, holding ${retiredPostings} posted line(s)`)
     if (retired.length) console.log(`    retiring: ${retired.map((c) => c.code).join(", ")}`)
 
@@ -210,10 +211,10 @@ async function main() {
     // over. Allocation / SpaTreatment / ExcursionType carry a required chargeCodeId, so
     // a wipe-then-rebuild would strand them — this order never leaves a dangling FK.
     const summary = await prisma.$transaction(async (tx) => {
-      const tree = await ensureChargeTree(tx, ent.id)
-      const feeRules = await ensureFeeRules(tx, ent.id)
-      const repointed = await repointConfig(tx, ent.id, retired.map((c) => c.id))
-      const dropped = await dropRetired(tx, ent.id, retired.map((c) => c.id), FORCE)
+      const tree = await ensureChargeTree(tx, { propertyId: prop.id })
+      const feeRules = await ensureFeeRules(tx, { propertyId: prop.id })
+      const repointed = await repointConfig(tx, prop.id, retired.map((c) => c.id))
+      const dropped = await dropRetired(tx, prop.id, retired.map((c) => c.id), FORCE)
       return { tree, feeRules, repointed, dropped }
     }, { timeout: 120_000 })
 
@@ -232,12 +233,13 @@ async function main() {
       `${summary.dropped.groupsDropped} group(s)` +
       (summary.dropped.postingsDeleted > 0 ? `, ${summary.dropped.postingsDeleted} posted line(s)` : "")
     )
+   }
   }
 
   if (!APPLY) {
     console.log("\nNo changes written. Re-run with --apply to persist.")
   } else {
-    console.log("\nDone. Review Controls > Cashiering, and set fee-rule amounts in Controls > Finance.")
+    console.log("\nDone. Review each property's Charge Codes in the Hub, and set fee-rule amounts on its Finance page.")
   }
 }
 

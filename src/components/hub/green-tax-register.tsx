@@ -8,12 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InfoHint } from "@/components/ui/info-hint"
@@ -68,9 +66,8 @@ const fmtStamp = (d: string) => new Date(d).toLocaleString("en-GB", { day: "2-di
 const actionSchema = z.object({ reason: z.string(), note: z.string().max(500) })
 type ActionValues = z.infer<typeof actionSchema>
 
-export function GreenTaxRegister({ properties, canManage }: { properties: { id: string; name: string }[]; canManage: boolean }) {
+export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string; canManage: boolean }) {
   const thisYear = new Date().getFullYear()
-  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? "")
   const [year, setYear] = useState(thisYear)
   const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -138,8 +135,6 @@ export function GreenTaxRegister({ properties, canManage }: { properties: { id: 
     }
   }
 
-  if (!properties.length) return <EmptyState title="No active properties" />
-
   // What the pending correction will do to the numbers after it.
   const shiftPreview = (from: number) => {
     if (!data || data.lastNo <= from) return "No other numbers change."
@@ -153,9 +148,6 @@ export function GreenTaxRegister({ properties, canManage }: { properties: { id: 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="w-full sm:w-72">
-          <SearchableSelect value={propertyId} onChange={setPropertyId} placeholder="Select property" options={properties.map((p) => ({ label: p.name, value: p.id }))} />
-        </div>
         <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
           <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
           <SelectContent>

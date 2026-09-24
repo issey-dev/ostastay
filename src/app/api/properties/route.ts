@@ -3,16 +3,17 @@ import { prisma } from "@/lib/db";
 import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
-import { ensureJobFunctions } from "@/lib/job-functions";
+import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
 
 export async function GET() {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CONTROLS", "view");
 
+    // A single-property user sees their own property only — never another property's
+    // details (HUB_SETUP_PLAN.md: other properties are not visible from a property's setup).
     const properties = await prisma.property.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { enterpriseId: ctx.enterpriseId, ...(ctx.scope === "PROPERTY" && ctx.propertyId ? { id: ctx.propertyId } : {}) },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(properties);
@@ -73,19 +74,15 @@ export async function POST(request: Request) {
       data: { propertyId: newProperty.id, code: "BASE", name: "Base Rate", priority: 999, isLocked: true },
     });
 
-    // ...and the enterprise gets the canonical Charge Group/Subgroup/Code tree, incl.
-    // the system ROOM/GTX/COMM codes and the ROOM -> Green Tax generate. Charge codes
-    // are enterprise-scoped, so this is idempotent and a no-op for the second property
-    // onboarded — but without it a freshly onboarded enterprise couldn't run Night
-    // Audit at all (CHARGE_CODE_PLAN.md §1.3).
-    await ensureChargeTree(prisma, enterpriseId);
-    // ...and this property's Deposit / Cancellation / No-Show rules, each already linked
-    // to its own charge code. Seeded inactive at zero — the wiring is provisioned, the
-    // policy stays the owner's (Controls > Finance > Deposit & Fee Rules).
-    await ensureFeeRules(prisma, enterpriseId);
-    // ...and the JOB_FUNCTION list, so the housekeeping and maintenance boards have posts
-    // to filter on from day one. Enterprise-scoped and idempotent, like the tree above.
-    await ensureJobFunctions(prisma, enterpriseId);
+    // ...and the property gets its OWN chart of accounts (per property since 2026-09-23):
+    // the canonical groups, subgroups and codes incl. the system ROOM/GTX/COMM codes and
+    // the ROOM -> Green Tax generate — without Spa / Excursions codes when this property
+    // doesn't offer them. Without a chart it couldn't run Night Audit at all.
+    await ensureChargeTree(prisma, { propertyId: newProperty.id }, await chartModulesFor(prisma, enterpriseId, body));
+    // ...and its Deposit / Cancellation / No-Show rules, each already linked to its own
+    // charge code. Seeded inactive at zero — the wiring is provisioned, the policy stays
+    // the owner's (Hub › the property › Finance).
+    await ensureFeeRules(prisma, { propertyId: newProperty.id });
 
     await logActivity({
       ctx,

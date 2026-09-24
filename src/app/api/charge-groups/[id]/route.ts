@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { REPORT_BUCKETS } from "@/lib/posting/charge-tree";
 
@@ -16,6 +16,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge group not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "update");
 
     const name = typeof body.name === "string" ? body.name.trim() : existing.name;
     if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -37,7 +39,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     if (wantsCode !== existing.code) {
       const clash = await prisma.chargeGroup.findUnique({
-        where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code: wantsCode } },
+        where: { propertyId_code: { propertyId: existing.propertyId, code: wantsCode } },
       });
       if (clash) return NextResponse.json({ error: `A charge group with the code ${wantsCode} already exists` }, { status: 400 });
     }
@@ -83,6 +85,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge group not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "delete");
     if (existing.isSystem) {
       return NextResponse.json({ error: "System charge groups can't be deleted." }, { status: 400 });
     }

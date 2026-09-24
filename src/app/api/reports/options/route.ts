@@ -32,16 +32,19 @@ export async function GET(request: Request) {
         options = (await prisma.profile.findMany({ where: { enterpriseId: ctx.enterpriseId, profileType: { in: ["TRAVEL_AGENT", "COMPANY"] } }, select: { upid: true, companyName: true, firstName: true }, orderBy: { companyName: "asc" }, take: 500 })).map((p) => ({ label: p.companyName ?? p.firstName, value: p.upid }));
         break;
       case "chargeCategories":
-        // Driven by the enterprise's own ChargeGroups (deduped by reporting bucket) —
-        // not a literal array that drifts from the schema and the write validation, as
-        // the three contradictory lists in CHARGE_CODE_PLAN.md §1.4 did. Falls back to
-        // the canonical set for an enterprise whose tree hasn't been seeded yet.
+        // Driven by the report's property's own ChargeGroups (deduped by reporting
+        // bucket; each property keeps its own chart since 2026-09-23) — not a literal
+        // array that drifts from the schema and the write validation, as the three
+        // contradictory lists in CHARGE_CODE_PLAN.md §1.4 did. Falls back to the canonical
+        // set when no property is chosen or its chart hasn't been seeded yet.
         {
-          const groups = await prisma.chargeGroup.findMany({
-            where: { enterpriseId: ctx.enterpriseId },
+          const groups = propertyId
+            ? await prisma.chargeGroup.findMany({
+            where: { propertyId },
             select: { reportBucket: true },
             orderBy: { sortOrder: "asc" },
-          });
+          })
+            : [];
           const buckets = groups.length > 0
             ? [...new Set(groups.map((g) => g.reportBucket))]
             : [...REPORT_BUCKETS];

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { NationalitySelect } from "@/components/ui/nationality-select"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -37,7 +38,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const { label } = useSystemCodeLabels()
+  const { label, country } = useSystemCodeLabels()
 
   const fetchRows = () => {
     setLoading(true)
@@ -124,7 +125,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
                 {r.documentNumber}
                 {r.issuingCountry && (
                   <span className="inline-flex items-center gap-1 text-muted-foreground">
-                    {" "}· <CountryFlag value={r.issuingCountry} /> {label("NATIONALITY", r.issuingCountry)}
+                    {" "}· <CountryFlag value={r.issuingCountry} /> {country(r.issuingCountry)}
                   </span>
                 )}
                 {r.expiryDate && <span className="text-muted-foreground"> · exp. {new Date(r.expiryDate).toLocaleDateString()}</span>}
@@ -164,7 +165,7 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">Issued Country</Label>
-              <SystemCodeSelect category="NATIONALITY" value={form.issuingCountry} onValueChange={(v) => setForm((p) => ({ ...p, issuingCountry: v }))} placeholder="Select country" />
+              <NationalitySelect mode="country" value={form.issuingCountry} onValueChange={(v) => setForm((p) => ({ ...p, issuingCountry: v }))} />
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs">Expiry Date</Label>

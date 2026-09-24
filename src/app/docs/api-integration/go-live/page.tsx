@@ -10,7 +10,7 @@ export default function GoLive() {
 
       <H2>The property</H2>
       <ul>
-        <li>The key covers exactly the properties needed, and is ticked for exactly the modules the site sells.</li>
+        <li>The key covers the site&apos;s property — or all of the group&apos;s properties, for a group portal — and is ticked for exactly the modules the site sells.</li>
         <li>The key has no browser origins (server-to-server), unless the site is static and books rooms only.</li>
         <li>Rooms: a rate plan chosen, meal plan, minimum stay, booking window and desk note set; the price calendar is filled across the booking window.</li>
         <li>Excursions: selling online switched on; the excursions to sell published with a description and photos; departures scheduled; prices set for the dates.</li>

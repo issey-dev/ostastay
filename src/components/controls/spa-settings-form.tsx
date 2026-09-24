@@ -10,7 +10,6 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { useProperty } from "@/components/providers/property-provider"
 
 const intString = z.string().refine((v) => !isNaN(parseInt(v)) && parseInt(v) >= 0, "Must be a non-negative number")
 const optionalNumString = z.string().refine((v) => v === "" || !isNaN(parseFloat(v)), "Must be a number")
@@ -63,9 +62,7 @@ const defaults: SettingsFormValues = {
 
 const CHARGE_TYPE_LABELS: Record<string, string> = { NONE: "No charge", FULL: "Full charge", PERCENTAGE: "Percentage", FIXED: "Fixed amount" };
 
-export function SpaSettingsForm() {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)

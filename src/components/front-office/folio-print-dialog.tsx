@@ -52,21 +52,6 @@ export function FolioPrintDialog({
   const [header, setHeader] = useState<string>("property")
   const [headerOptions, setHeaderOptions] = useState<HeaderOptions | null>(null)
 
-  // Open on the property's configured default (Stationaries > Invoices > Default Folio
-  // Style). Re-read each time the dialog opens so a change in Controls takes effect
-  // without a reload; the operator can still pick something else for this one document.
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    fetch("/api/tenant-settings")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => {
-        if (!cancelled && isFolioStyle(s?.defaultFolioStyle)) setStyle(s.defaultFolioStyle)
-      })
-      .catch(() => { /* the hardcoded default stands */ })
-    return () => { cancelled = true }
-  }, [open])
-
   // Which outlets have activity on this folio, and which header the API would pick on
   // its own — a walk-in bill defaults to the outlet that raised it, everything else to
   // the property.
@@ -76,13 +61,20 @@ export function FolioPrintDialog({
   // type would burn a sequence number just for opening this dialog — even on cancel.
   // Interim is the informational variant that never numbers, and the outlets on a folio
   // are the same whichever document is being raised.
+  //
+  // The same response carries the folio's OWN property's document settings, so the
+  // layout opens on that property's default (Hub › property › Stationery) — re-read each
+  // time the dialog opens, so a change takes effect without a reload. The operator can
+  // still pick something else for this one document.
   useEffect(() => {
     if (!open) return
     let cancelled = false
     fetch(`/api/folios/${folioId}/invoice-data?type=interim`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (cancelled || !d?.headerOptions) return
+        if (cancelled) return
+        if (isFolioStyle(d?.settings?.defaultFolioStyle)) setStyle(d.settings.defaultFolioStyle)
+        if (!d?.headerOptions) return
         setHeaderOptions(d.headerOptions)
         setHeader(d.headerOptions.selected ?? "property")
       })
@@ -129,7 +121,7 @@ export function FolioPrintDialog({
             </Select>
             <p className="text-xs text-muted-foreground">
               Whose name, address, contact details and tax number head the document. An
-              outlet&apos;s own details come from Controls &gt; Outlets; the accent colour and
+              outlet&apos;s own details come from this property&apos;s Outlets page in the Hub; the accent colour and
               font always stay the property&apos;s.
             </p>
           </div>

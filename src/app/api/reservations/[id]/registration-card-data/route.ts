@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { DEFAULT_INVOICE_BRAND_COLOR } from "@/lib/invoice-branding";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 // Data for the printable Registration Card (one card per guest). A registration card needs
@@ -54,75 +54,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
-    let settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: reservation.property.enterpriseId },
-    });
-    if (!settings) {
-      settings = {
-        id: "default",
-        enterpriseId: reservation.property.enterpriseId,
-        resConfirmPrefix: "",
-        resConfirmLength: 6,
-        cashierDefaultFloat: 300,
-        exchangeFromCurrency: "USD",
-        exchangeToCurrency: "MVR",
-        systemDate: new Date(),
-        defaultAccommodationChargeCodeId: null,
-        defaultGreenTaxChargeCodeId: null,
-        cityLedgerPaymentMethodId: null,
-        commissionChargeCodeId: null,
-        invoiceBrandName: "Cozy Guest House",
-        invoiceLogoUrl: "",
-        invoiceBrandColor: DEFAULT_INVOICE_BRAND_COLOR,
-        invoiceFontFamily: "Geist",
-        invoiceTaxId: "",
-        invoicePhone: "",
-        invoiceEmail: "",
-        invoiceAddress: "",
-        defaultFolioStyle: "detailed",
-        invoiceHeaderText: "",
-        invoiceFooterText: "",
-        invoicePaymentTerms: "",
-        invoicePaymentAccountName: null,
-        invoicePaymentAccountNumber: null,
-        invoicePaymentIban: null,
-        invoicePaymentBankInfo: null,
-        receiptFooterText: null,
-        receiptTerms: null,
-        statementFooterText: null,
-        statementTerms: null,
-        confirmationLetterMessage: null,
-        registrationCardEnabled: true,
-        eRegistrationEnabled: true,
-        spaOutletId: null,
-        excursionOutletId: null,
-        eRegistrationExpiryHours: 72,
-        eRegistrationMessage: null,
-        registrationCardMessage: null,
-        registrationCardTerms: null,
-        greenTaxEnabled: true,
-        greenTaxAdultAmount: 12.0,
-        greenTaxChildAmount: 6.0,
-        greenTaxExemptAge: 2,
-        greenTaxStayBasis: "ACTUAL",
-        tgstEnabled: true,
-        tgstRate: 17.0,
-        serviceChargeEnabled: true,
-        serviceChargeRate: 10.0,
-        smtpHost: null,
-        smtpPort: null,
-        smtpUsername: null,
-        smtpPassword: null,
-        smtpFromAddress: null,
-        smtpUseTls: true,
-        sftpHost: null,
-        sftpPort: null,
-        sftpUsername: null,
-        sftpPassword: null,
-        sftpRemotePath: null,
-        updatedAt: new Date(),
-      };
-    }
+    const settings = await loadDocumentSettings(reservation.propertyId);
 
     return NextResponse.json({ reservation, settings, eregistrationSignatures });
   } catch (error) {

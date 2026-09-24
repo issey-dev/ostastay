@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { updateWebsiteApiKey, revokeWebsiteApiKey } from "@/lib/website-api/keys";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
-  propertyIds: z.array(z.string().min(1)).min(1).optional(),
+  // One property, or null for ALL — never a subset.
+  propertyId: z.string().min(1).nullable().optional(),
   allowedOrigins: z.array(z.string()).optional(),
   scopes: z.array(z.string()).min(1).optional(),
   expiresAt: z.string().datetime().nullable().optional(),
@@ -17,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "update");
 
     const data = patchSchema.parse(await request.json());
@@ -25,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       enterpriseId: ctx.enterpriseId,
       id,
       name: data.name,
-      propertyIds: data.propertyIds,
+      propertyId: data.propertyId,
       allowedOrigins: data.allowedOrigins,
       scopes: data.scopes,
       expiresAt: data.expiresAt === undefined ? undefined : data.expiresAt ? new Date(data.expiresAt) : null,
@@ -54,7 +55,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "delete");
 
     const row = await revokeWebsiteApiKey({ enterpriseId: ctx.enterpriseId, id, userId: ctx.userId });

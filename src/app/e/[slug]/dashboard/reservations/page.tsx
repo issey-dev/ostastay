@@ -288,7 +288,7 @@ export default function ReservationsDashboard() {
 
   useEffect(() => {
     if (!currentProperty) return
-    fetch(`/api/settings/system-codes?enterpriseId=${enterpriseId}&category=HOUSEKEEPING_REQUEST`)
+    fetch(`/api/settings/system-codes?propertyId=${propertyId}&category=HOUSEKEEPING_REQUEST`)
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setHousekeepingCodes(d) })
       .catch(console.error)
@@ -943,6 +943,7 @@ export default function ReservationsDashboard() {
               <Label>New Request</Label>
               <SystemCodeSelect 
                 category="HOUSEKEEPING_REQUEST" 
+                propertyId={propertyId}
                 value={requestCategory} 
                 onValueChange={setRequestCategory} 
                 placeholder="Select standard request..." 

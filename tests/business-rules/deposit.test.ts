@@ -123,7 +123,7 @@ describe("Pre-arrival deposits", () => {
     ratePlanId = ratePlan.id;
 
     const paymentMethod = await prisma.paymentMethod.create({
-      data: { enterpriseId, name: "Cash", type: "CASH" },
+      data: { enterpriseId, propertyId, name: "Cash", type: "CASH" },
     });
     paymentMethodId = paymentMethod.id;
 

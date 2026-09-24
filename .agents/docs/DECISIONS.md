@@ -3049,3 +3049,111 @@ inclusive 215.00 on SC 10% + GST 17% came out 167.06 + 16.71 + 31.24 = 215.01.
 - **Exclusive postings unchanged:** the entered amount is the base, taxes ride on top.
 - Applies everywhere `postCharge` resolves tax (desk excursions, spa, outlets, Night
   Audit, Booking API quotes). Tests: `tests/business-rules/tax-calc.test.ts`.
+
+## 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
+
+Owner, on the Controls and Stationaries pages: move them to the Hub "as there is we will be
+doing the actual setup of the properties", and make it clear "for which property the
+settings are shown", keeping "anything that is common — belongs to enterprise — separated
+from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
+
+- **Enterprise (shared):** users, roles & permissions, integrations, support access,
+  Email/SFTP. **Everything else is per property**, explicitly including tax definitions,
+  charge codes *including groups and subgroups*, payment methods, dropdowns and stationery
+  ("each property to have their own stationary").
+- **No live sharing between properties.** What the owner meant by "shared configs" is a
+  **copy** option — copy selected settings from one property to another, to ease
+  onboarding. If an item already exists at the target: **warn and skip; no overwrite option**.
+- **Work location is one property or ALL — never a subset** ("no option to give 2 of 3").
+  Single-property users reach one property; enterprise users reach all. Same rule for
+  Booking API keys.
+- **Single-property admins may enter the Hub**, but see only their own property's settings;
+  everything enterprise is restricted from them entirely.
+- **Controls leaves the property dashboard outright** — "no need for additional things"
+  (no redirect or stub).
+- **Beds24: one connection per property** — supersedes the per-enterprise invite code in
+  "Beds24 topology" (2026-08-02). The single master account stays. **Uppsolut creates the
+  invite code and connects each property** from its own side; a property requests it.
+  Property admins can map rooms/rates, check rates and availability, and view bookings and
+  logs — not connect, disconnect or re-authorize. Logs are seen per property.
+- **Booking API**: per-property website and Excursions/Spa online settings move to the
+  property's setup.
+- **Green Tax** stays in the Hub (highly sensitive: Hub admins, or property admins with Hub
+  access), separated by property like everything else.
+- **Existing data** gets one copy per property when split (fine for now). **Charge codes
+  should vary by property** — a property without Spa/Excursions needs no such codes, and
+  descriptions should be the property's own ("Veyo Garden Restaurant", "Maaveyo Pool Bar").
+- **Hub Overview is for "Maintenance and Config"**: banners only when important setup is
+  missing (hidden when complete, one click to the fix), Green Tax only when there are
+  issues, channel manager active/inactive; background jobs only when something critical
+  fails. The current link cards are not wanted.
+- **Supersedes:** "Stationaries page" (2026-07-19) placement in the dashboard sidebar and its
+  enterprise-wide storage; "Beds24 topology" (2026-08-02) invite code per enterprise.
+- **Release:** shipped as **7.0.0** (owner: "make sure this is marked as version 7.0.0").
+  The owner then asked for all phases to be completed without further questions — the calls
+  made on their behalf are listed in HUB_SETUP_PLAN.md, "Decisions taken without asking".
+- **Beds24 is administered by Uppsolut from the Osta console** (owner, same day: "there is an
+  enterprise called 'osta' … the bed24 connection to be managed from there by us"). A
+  property's connection is created there, for that property, with its Beds24 property id.
+
+## 2026-09-23 — Night Audit controls page; moving the business date by hand (owner)
+
+- Each property gets a **Night Audit** page in its Hub Controls: the business date, which
+  Maldives levies are posted each night (Green Tax, GST, Service Charge — as switches), and
+  what Night Audit does to vacant rooms' status. The levies' **values** (rates, amounts,
+  Green Tax rules) stay under **Finance**. "Prices Include Taxes" moved to Finance and
+  "Require Inspected Room at Check-In" to Rooms & Inventory (Housekeeping).
+- **Business date may be changed by hand** from that page:
+  - **to any date** while the property has **no data at all** (freshly provisioned: no
+    reservations, folios, cashier shifts, audits, spa appointments or excursion bookings);
+  - otherwise **only forward**, and only when there are **no in-house guests**, **no
+    reservations due to arrive before the new date**, and **no financial records** for the
+    days skipped (folio postings on or after the current business date). Also required: no
+    open cashier shift, Night Audit not running, and no spa appointments or excursion
+    bookings on the skipped days (added so nothing is silently skipped).
+  - Checks run before the change is offered and again, under a lock, when it is made
+    (`src/lib/business-date-change.ts`). Property staff are signed out afterwards, as after
+    Night Audit. Needs Property Setup (CONTROLS) plus NIGHT_AUDIT update.
+- Released as **7.1.0**, with the Hub navigation review of the same day (sidebar "Controls" +
+  "Channel Manager", breadcrumbs, the Hub Account dialog).
+- **No-show handling and the scheduled audit** (owner, same round — added on request):
+  - *No-Shows* — when Night Audit marks a never-arrived reservation: at its arrival night's
+    audit (default, the original behaviour), **held one night** for a late arrival and marked
+    at the next audit, or **never automatically** (the front desk marks them). A switch says
+    whether the audit posts the reservation's No-Show fee. Held arrivals stay on the arrivals
+    list as Due In and can be checked in; the audit summary lists them.
+  - *Scheduled Night Audit* — on/off and a time in the property's own time zone. The
+    background jobs (`night-audit-scheduled`) run every End-of-Day step through the same code
+    as the screen; a time before noon runs after midnight (02:00 closes the previous day), from
+    noon on the day itself. It stops at the first step that needs a person (e.g. guests still
+    due out) and never catches up more than one day by itself — both fail the job and show on
+    the Hub Overview (plus a property banner when a scheduled audit is an hour overdue).
+- **Check out settled departures automatically** (owner, same round): a Night Audit setting,
+  off by default. When on, the departures step — from the Night Audit screen or on schedule —
+  first checks out every guest due out whose folios ALL net to zero, through the desk's own
+  check-out (`src/lib/reservations/check-out.ts`), and stops only for guests who owe money,
+  are owed a refund, or settle by City Ledger (that raises an invoice the desk should see).
+
+## 2026-09-25 — Nationalities from an international master list; Job Functions fixed (owner)
+
+- **Nationality is a master list, not something to set up.** Every enterprise and property
+  gets every country ready-made: **ISO 3166-1** codes (alpha-2 is what every nationality /
+  country field stores; alpha-3 is the passport / ICAO 9303 code), **Unicode CLDR** English
+  country names, an English nationality ("Maldivian"), and the **country-flag-icons** SVG
+  flag (`src/lib/countries.ts`). An enterprise may **rename** an entry or **add its own**
+  (e.g. XXA "Stateless") — its NATIONALITY rows, layered on top
+  (`src/lib/nationalities.ts`); Hub > Enterprise > Guest Lists > Nationalities. One picker
+  (`NationalitySelect`) serves every nationality and country field: flag, search by
+  nationality, country or either code; nationality fields list "Maldivian", country fields
+  (address, document issuing country) list "Maldives". The guest's eRegistration form uses the
+  standard list; a scanned passport's alpha-3 and any older free-text answer ("British") are
+  stored as the alpha-2 code.
+- **Job Functions are a fixed list** picked on the People form (src/lib/job-functions.ts) —
+  the Hub's editable Job Functions list is removed as redundant (owner: "seems like a
+  redundant feature — remove if so"). The field itself stays: Housekeeping and Maintenance
+  decide who appears in the housekeeping and maintenance assignment pickers. Custom posts are
+  no longer possible; the API accepts only a listed post.
+- The Hub's enterprise lists page is now **Guest Lists**. The list editor's example
+  placeholders ("e.g. M, F, VEG") were removed at the owner's request.
+- Released as **7.3.0** (owner), with the Night Audit additions of 2026-09-24/25 (no-show
+  handling, scheduled audit, automatic check-out of settled departures).

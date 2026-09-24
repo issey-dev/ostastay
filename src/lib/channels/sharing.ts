@@ -74,9 +74,9 @@ export async function assertLinkInEnterprise(linkId: string, enterpriseId: strin
   return link;
 }
 
-export async function listPropertyLinks(enterpriseId: string): Promise<PublicPropertyLink[]> {
+export async function listPropertyLinks(enterpriseId: string, onlyPropertyId?: string): Promise<PublicPropertyLink[]> {
   const links = await prisma.channelPropertyLink.findMany({
-    where: { connection: { enterpriseId } },
+    where: { connection: { enterpriseId }, ...(onlyPropertyId ? { propertyId: onlyPropertyId } : {}) },
     include: {
       connection: { select: { id: true, name: true } },
       property: { select: { id: true, name: true } },
@@ -140,7 +140,9 @@ export async function listPropertyLinks(enterpriseId: string): Promise<PublicPro
 }
 
 /**
- * Link a property to a connection.
+ * Link a property to a connection. The app links a property when the Osta console creates
+ * its connection (createConnection); this remains for seeding and tests, and holds the same
+ * rule — a connection serves only its own property.
  *
  * The property must belong to the caller's enterprise — checked here rather than trusted
  * from the request, since a link is what decides whose inventory gets published.
@@ -156,6 +158,9 @@ export async function createPropertyLink(params: {
   const connection = await prisma.channelConnection.findUnique({ where: { id: connectionId } });
   if (!connection || connection.enterpriseId !== enterpriseId) {
     throw new ForbiddenError("Connection not found");
+  }
+  if (connection.propertyId !== propertyId) {
+    throw new ForbiddenError("A channel-manager connection serves only its own property");
   }
 
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
@@ -268,7 +273,8 @@ export async function setSyncEnabled(params: { enterpriseId: string; linkId: str
   await assertLinkInEnterprise(linkId, enterpriseId);
 
   if (enabled) {
-    const links = await listPropertyLinks(enterpriseId);
+    const current = await assertLinkInEnterprise(linkId, enterpriseId);
+    const links = await listPropertyLinks(enterpriseId, current.propertyId);
     const link = links.find((l) => l.id === linkId);
     if (!link?.ready) {
       throw new ForbiddenError(
@@ -280,10 +286,4 @@ export async function setSyncEnabled(params: { enterpriseId: string; linkId: str
   }
 
   return prisma.channelPropertyLink.update({ where: { id: linkId }, data: { syncEnabled: enabled } });
-}
-
-export async function deletePropertyLink(enterpriseId: string, linkId: string) {
-  await assertLinkInEnterprise(linkId, enterpriseId);
-  // Mappings cascade with the link — they are meaningless without it.
-  await prisma.channelPropertyLink.delete({ where: { id: linkId } });
 }

@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, assertPropertyAccess, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
-export async function GET() {
+// Per property since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): each property keeps its own Custom Tax profiles.
+// GET takes ?propertyId= and is readable by anyone working at that property; POST takes a
+// body propertyId and is Property Setup for it.
+export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    const propertyId = new URL(request.url).searchParams.get("propertyId");
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await assertPropertyAccess(ctx, propertyId);
 
     const taxProfiles = await prisma.taxProfile.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { propertyId },
       include: {
         rates: {
           orderBy: { order: 'asc' }
@@ -28,9 +34,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
-
     const body = await request.json();
+    const propertyId: string | undefined = body.propertyId;
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await requirePropertySetup(ctx, propertyId, "CONTROLS", "create");
 
     if (!body.name || !Array.isArray(body.rates) || body.rates.length === 0) {
       return NextResponse.json({ error: "A name and at least one tax line are required" }, { status: 400 });
@@ -43,6 +50,7 @@ export async function POST(request: Request) {
     const newTaxProfile = await prisma.taxProfile.create({
       data: {
         enterpriseId: ctx.enterpriseId,
+        propertyId,
         name: body.name,
         description: body.description,
         rates: {

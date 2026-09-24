@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { GENERATE_METHODS, CALCULATE_ON, isTaxRoutingMethod } from "@/lib/posting/run-generates";
 import { canGenerateTax, POSTING_TYPE_LABELS, type PostingType } from "@/lib/posting/charge-tree";
@@ -43,6 +43,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { id, generateId } = await params;
     const row = await loadOwnRow(ctx.enterpriseId, id, generateId);
     if (!row) return NextResponse.json({ error: "Generate rule not found" }, { status: 404 });
+    await requirePropertySetup(ctx, row.propertyId, "CONTROLS", "update");
 
     const body = await request.json();
     const method = typeof body.method === "string" ? body.method : row.method;
@@ -112,6 +113,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { id, generateId } = await params;
     const row = await loadOwnRow(ctx.enterpriseId, id, generateId);
     if (!row) return NextResponse.json({ error: "Generate rule not found" }, { status: 404 });
+    await requirePropertySetup(ctx, row.propertyId, "CONTROLS", "delete");
 
     // Anything compounding on this row would silently fall back to a zero basis, so the
     // dependants are cleared with it rather than left pointing at nothing.

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { buildInvoiceSummary } from "@/lib/debtor-accounts";
@@ -53,7 +54,8 @@ export async function GET(
       openInvoices.map((inv) => ({ balance: inv.balance, referenceDate: inv.checkOutDate ?? new Date() }))
     );
 
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
+    // The issuing property's own statement wording — never the raw settings row.
+    const settings = await loadDocumentSettings(propertyId);
 
     return NextResponse.json({ profile, property, invoices, balance, aging, settings });
   } catch (error) {

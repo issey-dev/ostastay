@@ -25,9 +25,9 @@ const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const { customChargeCode } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 const hubKeysRoute = await import("@/app/api/hub/website/keys/route");
 const hubKeyRoute = await import("@/app/api/hub/website/keys/[id]/route");
-const hubActivitiesRoute = await import("@/app/api/hub/website/activities/route");
 const hubActivityRoute = await import("@/app/api/hub/website/activities/[propertyId]/route");
 const hubItemRoute = await import("@/app/api/hub/website/activity-items/[id]/route");
 const propertyRoute = await import("@/app/api/website/v1/properties/[propertyId]/route");
@@ -66,7 +66,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
     });
 
   const createKey = (body: Record<string, unknown>) =>
-    asUser(adminId, () => hubKeysRoute.POST(json("POST", { name: `site-${uniq()}`, propertyIds: [propertyId], ...body })));
+    asUser(adminId, () => hubKeysRoute.POST(json("POST", { name: `site-${uniq()}`, propertyId: propertyId, ...body })));
 
   const modulesFor = async (key: string) => {
     const res = await propertyRoute.GET(api(`/properties/${propertyId}`, key), params({ propertyId }));
@@ -110,7 +110,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
         },
       })
     ).id;
-    chargeCodeId = (await customChargeCode(enterpriseId, { code: "SCPEXC", description: "Scope Excursion" })).id;
+    chargeCodeId = (await customChargeCode({ propertyId }, { code: "SCPEXC", description: "Scope Excursion" })).id;
   });
 
   // ---------------------------------------------------------------------------------
@@ -188,11 +188,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
       expect((await modulesFor(key)).excursions.code).toBe("NO_OUTLET");
 
       const outlet = await prisma.outlet.create({ data: { propertyId, name: "Tours", code: `T${uniq().slice(-4)}`, outletType: "EXCURSION" } });
-      await prisma.enterpriseSettings.upsert({
-        where: { enterpriseId },
-        update: { excursionOutletId: outlet.id },
-        create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, excursionOutletId: outlet.id },
-      });
+      await setPropertySettings(propertyId, { excursionOutletId: outlet.id });
       expect((await modulesFor(key)).excursions.code).toBe("NOTHING_PUBLISHED");
 
       const type = await prisma.excursionType.create({
@@ -216,7 +212,7 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
     it("lists only the modules the enterprise has, with defaults for unconfigured properties", async () => {
       await setAddon("EXCURSIONS", true);
       await setAddon("SPA", false);
-      const data = await (await asUser(adminId, () => hubActivitiesRoute.GET())).json();
+      const data = await (await asUser(adminId, () => hubActivityRoute.GET(new Request("http://localhost"), params({ propertyId })))).json();
       expect(data.modules).toEqual(["EXCURSIONS"]);
       const row = data.properties.find((p: { property: { id: string } }) => p.property.id === propertyId);
       expect(row.modules.map((m: { module: string }) => m.module)).toEqual(["EXCURSIONS"]);
@@ -229,13 +225,17 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
       );
       expect(badHold.status).toBe(403);
 
-      const foreign = await prisma.paymentMethod.create({ data: { enterpriseId: otherEnterpriseId, name: "Foreign card", type: "CARD" } });
+      // Payment methods are per property — this one belongs to a property of another enterprise.
+      const foreignProperty = await prisma.property.create({
+        data: { enterpriseId: otherEnterpriseId, name: "Foreign", code: `FPM-${uniq()}`, legalName: "Foreign LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" },
+      });
+      const foreign = await prisma.paymentMethod.create({ data: { enterpriseId: otherEnterpriseId, propertyId: foreignProperty.id, name: "Foreign card", type: "CARD" } });
       const badMethod = await asUser(adminId, () =>
         hubActivityRoute.PATCH(json("PATCH", { module: "EXCURSIONS", onlinePaymentMethodId: foreign.id }), params({ propertyId }))
       );
       expect(badMethod.status).toBe(403);
 
-      const own = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Online card", type: "CARD" } });
+      const own = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Online card", type: "CARD" } });
       const ok = await asUser(adminId, () =>
         hubActivityRoute.PATCH(
           json("PATCH", { module: "EXCURSIONS", onlinePaymentMethodId: own.id, holdMinutes: 15, leadHours: 4, maxPartySize: 8, policies: "  Bring a towel  " }),
@@ -282,12 +282,12 @@ describe("Booking API scopes and online settings (Phase 1)", () => {
           defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
         },
       });
-      const otherCode = await customChargeCode(otherEnterpriseId, { code: "OTHEXC" });
+      const otherCode = await customChargeCode({ propertyId: otherProperty.id }, { code: "OTHEXC" });
       const foreignType = await prisma.excursionType.create({ data: { propertyId: otherProperty.id, code: "FOR", name: "Foreign", chargeCodeId: otherCode.id } });
       const foreign = await asUser(adminId, () =>
         hubItemRoute.PATCH(json("PATCH", { module: "EXCURSIONS", publishOnline: true }), params({ id: foreignType.id }))
       );
-      expect(foreign.status).toBe(403);
+      expect(foreign.status).toBe(404);
       expect((await prisma.excursionType.findUniqueOrThrow({ where: { id: foreignType.id } })).publishOnline).toBe(false);
 
       const desk = await asUser(deskId, () =>

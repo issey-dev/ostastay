@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info, Send } from "@/components/icons"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
-import { useProperty } from "@/components/providers/property-provider"
 import { resolveStationeryBrand, type PropertyBrandInput } from "@/lib/stationery-brand"
 import {
   FOLIO_STYLES,
@@ -61,8 +60,11 @@ const EMPTY_FORM: FormData = {
   eRegistrationMessage: "",
 }
 
-export function StationariesManager() {
-  const { currentProperty } = useProperty()
+// ONE property's documents (Hub › property › Stationery). Each property has its own
+// wording, terms and bank details (owner, 2026-09-23) — this used to save to the
+// enterprise while previewing one property, so editing "one" property's footer changed
+// them all.
+export function StationariesManager({ propertyId }: { propertyId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<StationeryTab>("invoices")
@@ -78,7 +80,7 @@ export function StationariesManager() {
   const fetchSettings = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/tenant-settings`)
+      const res = await fetch(`/api/properties/${propertyId}/settings`)
       if (res.ok) {
         const data = await res.json()
         setFormData({
@@ -117,9 +119,7 @@ export function StationariesManager() {
       const res = await fetch(`/api/properties`)
       if (res.ok) {
         const list: PropertyBrandInput[] = await res.json()
-        const match =
-          (currentProperty && list.find((p: any) => p.id === currentProperty.id)) || list[0] || null
-        setPropertyBrand(match)
+        setPropertyBrand(list.find((p: any) => p.id === propertyId) ?? null)
       }
     } catch (e) {
       console.error(e)
@@ -128,27 +128,24 @@ export function StationariesManager() {
 
   useEffect(() => {
     fetchSettings()
-
-  }, [])
-
-  useEffect(() => {
     fetchPropertyBrand()
-
-  }, [currentProperty?.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch(`/api/tenant-settings`, {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       })
       if (res.ok) {
-        toast.success("Stationary settings saved successfully!")
+        toast.success("Stationery saved for this property.")
       } else {
-        toast.error("Failed to save stationary settings.")
+        const body = await res.json().catch(() => null)
+        toast.error(body?.error || "Failed to save stationery.")
       }
     } catch (e) {
       console.error(e)
@@ -165,11 +162,7 @@ export function StationariesManager() {
   // Branding for the preview: the current property (name/logo/colour/font/contact/address),
   // with a neutral placeholder before it loads so the preview never renders blank.
   const brand = resolveStationeryBrand(
-    propertyBrand ?? {
-      name: currentProperty?.name || "Your Property",
-      bannerColor: currentProperty?.bannerColor ?? null,
-      stationeryFont: currentProperty?.stationeryFont ?? null,
-    }
+    propertyBrand ?? { name: "Your Property" }
   )
 
   return (
@@ -182,8 +175,9 @@ export function StationariesManager() {
           <p>
             Logo, name, tax ID, contact details, <strong className="text-foreground">accent colour</strong> and{" "}
             <strong className="text-foreground">font</strong> come from{" "}
-            <strong className="text-foreground">Controls › General</strong> (Property Information &amp; Appearance) and
-            are inherited by every document. This page sets each document&apos;s wording.
+            <strong className="text-foreground">this property&apos;s General page</strong> (Property Information &amp;
+            Appearance) and are inherited by every document. This page sets each document&apos;s wording — for this
+            property only.
           </p>
         </div>
 

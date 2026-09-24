@@ -13,7 +13,7 @@ type PaymentMethod = { id: string; name: string; type: string; isActive: boolean
 // configuration moved to its own Cashiering section: this half selects a Payment Method,
 // so it belongs with Payment Methods under Finance. The charge-code half is
 // PostingDefaultsManager (Controls > Cashiering).
-export function SettlementDefaultsManager() {
+export function SettlementDefaultsManager({ propertyId }: { propertyId: string }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [cityLedgerId, setCityLedgerId] = useState("")
   const [loading, setLoading] = useState(true)
@@ -22,21 +22,21 @@ export function SettlementDefaultsManager() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/payment-methods").then(r => r.json()),
-      fetch("/api/tenant-settings").then(r => r.json()),
+      fetch(`/api/payment-methods?propertyId=${propertyId}`).then(r => r.json()),
+      fetch(`/api/properties/${propertyId}/settings`).then(r => r.json()),
     ])
       .then(([pm, settings]) => {
         if (Array.isArray(pm)) setPaymentMethods(pm)
         setCityLedgerId(settings?.cityLedgerPaymentMethodId || "")
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [propertyId])
 
   const handleSave = async () => {
     setSaving(true)
     setMessage(null)
     try {
-      const res = await fetch("/api/tenant-settings", {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cityLedgerPaymentMethodId: cityLedgerId || "" }),

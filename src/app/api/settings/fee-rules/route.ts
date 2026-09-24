@@ -11,7 +11,7 @@ import { logActivity } from "@/lib/activity-log";
 // Shared validation for create/update payloads.
 async function validateRulePayload(
   body: { name?: unknown; ruleType?: unknown; basis?: unknown; value?: unknown; chargeCodeId?: unknown; isActive?: unknown },
-  enterpriseId: string
+  propertyId: string
 ): Promise<{ error: string; status: number } | { ok: true; name: string; value: number; chargeCodeId: string | null }> {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return { error: "A rule name is required", status: 400 };
@@ -28,7 +28,7 @@ async function validateRulePayload(
   }
   if (chargeCodeId) {
     const code = await prisma.chargeCode.findUnique({ where: { id: chargeCodeId } });
-    if (!code || code.enterpriseId !== enterpriseId) return { error: "Charge code not found", status: 404 };
+    if (!code || code.propertyId !== propertyId) return { error: "Charge code not found", status: 404 };
   }
   return { ok: true, name, value, chargeCodeId };
 }
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     if (!propertyId) return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     await assertPropertyAccess(ctx, propertyId);
 
-    const v = await validateRulePayload(body, ctx.enterpriseId);
+    const v = await validateRulePayload(body, String(body.propertyId ?? ""));
     if ("error" in v) return NextResponse.json({ error: v.error }, { status: v.status });
 
     const rule = await prisma.propertyFeeRule.create({
@@ -103,7 +103,7 @@ export async function PUT(request: Request) {
     if (!existing) return NextResponse.json({ error: "Rule not found" }, { status: 404 });
     await assertPropertyAccess(ctx, existing.propertyId);
 
-    const v = await validateRulePayload({ ...body, ruleType: existing.ruleType }, ctx.enterpriseId);
+    const v = await validateRulePayload({ ...body, ruleType: existing.ruleType }, existing.propertyId);
     if ("error" in v) return NextResponse.json({ error: v.error }, { status: v.status });
 
     const rule = await prisma.propertyFeeRule.update({

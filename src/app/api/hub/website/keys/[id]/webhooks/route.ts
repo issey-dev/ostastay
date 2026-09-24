@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireEnterpriseHub, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { createWebhookEndpoint, listWebhookEndpoints, WEBHOOK_EVENTS } from "@/lib/website-api/webhooks";
 
@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "view");
     return NextResponse.json({ webhooks: await listWebhookEndpoints(ctx.enterpriseId, id), events: WEBHOOK_EVENTS });
   } catch (error) {
@@ -26,7 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "INTEGRATIONS", "create");
     const data = createSchema.parse(await request.json());
     const { secret, row } = await createWebhookEndpoint({ enterpriseId: ctx.enterpriseId, keyId: id, url: data.url, events: data.events });

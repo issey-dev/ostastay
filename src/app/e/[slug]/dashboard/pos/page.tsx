@@ -89,7 +89,7 @@ export default function POSDashboard() {
         })
         .catch(console.error)
     } else if (currentProperty) {
-      fetch(`/api/charge-codes?enterpriseId=${currentProperty.enterpriseId}`)
+      fetch(`/api/charge-codes?propertyId=${currentProperty.id}`)
         .then(res => res.json())
         .then(data => setChargeCodes(data))
         .catch(console.error)

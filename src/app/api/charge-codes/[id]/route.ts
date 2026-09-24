@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { POSTING_TYPES, type PostingType } from "@/lib/posting/charge-tree";
 import { CHARGE_CODE_INCLUDE } from "@/app/api/charge-codes/route";
@@ -24,6 +24,8 @@ export async function PUT(
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
     }
+    // The code's own property — a single-property admin may only edit their own chart.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "update");
 
     const code = String(body.code).trim().toUpperCase();
     // A system code's identity is what resolveChargeCode falls back to, and what the
@@ -36,7 +38,7 @@ export async function PUT(
     }
     if (code !== existing.code) {
       const clash = await prisma.chargeCode.findUnique({
-        where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code } },
+        where: { propertyId_code: { propertyId: existing.propertyId, code } },
       });
       if (clash) return NextResponse.json({ error: `A charge code ${code} already exists` }, { status: 400 });
     }
@@ -44,7 +46,7 @@ export async function PUT(
     let chargeSubgroupId = existing.chargeSubgroupId;
     if (body.chargeSubgroupId && body.chargeSubgroupId !== existing.chargeSubgroupId) {
       const subgroup = await prisma.chargeSubgroup.findUnique({ where: { id: body.chargeSubgroupId } });
-      if (!subgroup || subgroup.enterpriseId !== ctx.enterpriseId) {
+      if (!subgroup || subgroup.propertyId !== existing.propertyId) {
         return NextResponse.json({ error: "Charge subgroup not found" }, { status: 404 });
       }
       chargeSubgroupId = subgroup.id;
@@ -61,7 +63,7 @@ export async function PUT(
         return NextResponse.json({ error: "A Custom Tax profile is required when not using the default tax" }, { status: 400 });
       }
       const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
-      if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+      if (!taxProfile || taxProfile.propertyId !== existing.propertyId) {
         return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
       }
       taxProfileId = body.taxProfileId;
@@ -110,6 +112,7 @@ export async function DELETE(
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
     }
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "delete");
 
     // System codes back the role lookups Night Audit and billing depend on. Deactivate
     // rather than delete when one is genuinely unwanted.

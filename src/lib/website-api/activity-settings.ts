@@ -38,19 +38,23 @@ export type ActivityModuleSettingsDto = {
   onlinePaymentMethodId: string | null;
   deskRemark: string | null;
   policies: string | null;
-  /** The hub-wide outlet this module posts through is linked (Controls). */
+  /** This property's own outlet for the module is linked (Hub › the property › Charge Codes). */
   outletLinked: boolean;
   items: ActivityItemDto[];
 };
 
 export type ActivityPropertyDto = {
   property: { id: string; code: string; name: string; currency: string };
+  // This property's own active payment methods — the only ones its online sales may use.
+  paymentMethods: { id: string; name: string; type: string }[];
   modules: ActivityModuleSettingsDto[];
 };
 
 export type ActivitySettingsList = {
   modules: ActivityModule[];
   properties: ActivityPropertyDto[];
+  // Per property since 2026-09-23 — each property's online payment method is one of its
+  // own; see properties[].paymentMethods. Kept (empty) for older clients.
   paymentMethods: { id: string; name: string; type: string }[];
 };
 
@@ -65,9 +69,11 @@ const DEFAULTS = {
 };
 const DEFAULT_MAX_PARTY: Record<ActivityModule, number | null> = { EXCURSIONS: 10, SPA: null };
 
-export async function listActivitySettings(enterpriseId: string): Promise<ActivitySettingsList> {
+// onlyPropertyId narrows the list to one property — the Hub's property area reads its own
+// property's settings and never another's (HUB_SETUP_PLAN.md, Phase 4).
+export async function listActivitySettings(enterpriseId: string, onlyPropertyId?: string): Promise<ActivitySettingsList> {
   const modules = [...(await enabledActivityModules(enterpriseId))].sort() as ActivityModule[];
-  const propertyScope = { enterpriseId, status: "ACTIVE" };
+  const propertyScope = { enterpriseId, status: "ACTIVE", ...(onlyPropertyId ? { id: onlyPropertyId } : {}) };
   const [properties, excursionTypes, spaTreatments, paymentMethods, links] = await Promise.all([
     prisma.property.findMany({
       where: propertyScope,
@@ -87,16 +93,24 @@ export async function listActivitySettings(enterpriseId: string): Promise<Activi
     prisma.paymentMethod.findMany({
       where: { enterpriseId, isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, propertyId: true },
     }),
-    prisma.enterpriseSettings.findUnique({ where: { enterpriseId }, select: { excursionOutletId: true, spaOutletId: true } }),
+    // Each property's own module outlet links (per property since 2026-09-23).
+    prisma.propertySettings.findMany({
+      where: { property: propertyScope },
+      select: { propertyId: true, excursionOutletId: true, spaOutletId: true },
+    }),
   ]);
+  const linksByProperty = new Map(links.map((l) => [l.propertyId, l]));
 
   return {
     modules,
-    paymentMethods,
+    paymentMethods: [],
     properties: properties.map((p) => ({
       property: { id: p.id, code: p.code, name: p.name, currency: p.defaultCurrency },
+      paymentMethods: paymentMethods
+        .filter((m) => m.propertyId === p.id)
+        .map(({ id, name, type }) => ({ id, name, type })),
       modules: modules.map((module) => {
         const s = p.activityOnlineSettings.find((r) => r.module === module);
         const items: ActivityItemDto[] =
@@ -138,7 +152,7 @@ export async function listActivitySettings(enterpriseId: string): Promise<Activi
           onlinePaymentMethodId: s?.onlinePaymentMethodId ?? DEFAULTS.onlinePaymentMethodId,
           deskRemark: s?.deskRemark ?? DEFAULTS.deskRemark,
           policies: s?.policies ?? DEFAULTS.policies,
-          outletLinked: !!(module === "EXCURSIONS" ? links?.excursionOutletId : links?.spaOutletId),
+          outletLinked: !!(module === "EXCURSIONS" ? linksByProperty.get(p.id)?.excursionOutletId : linksByProperty.get(p.id)?.spaOutletId),
           items,
         };
       }),
@@ -209,7 +223,8 @@ export async function updateActivityModuleSettings(params: {
 
   if (input.onlinePaymentMethodId) {
     const method = await prisma.paymentMethod.findFirst({
-      where: { id: input.onlinePaymentMethodId, enterpriseId, isActive: true },
+      // One of THIS property's own payment methods.
+      where: { id: input.onlinePaymentMethodId, propertyId, isActive: true },
       select: { id: true },
     });
     if (!method) throw new ForbiddenError("Payment method not found");
@@ -294,7 +309,7 @@ export async function updateActivityItem(params: {
     if (!item) throw new ForbiddenError("Treatment not found");
     if (input.publishOnline && !item.isActive) throw new ForbiddenError("An inactive treatment cannot be sold online");
     if (input.publishOnline && !item.allowWalkIn) {
-      throw new ForbiddenError("Online guests book as walk-ins — allow walk-in guests on this treatment first (Controls → Spa)");
+      throw new ForbiddenError("Online guests book as walk-ins — allow walk-in guests on this treatment first (Hub › property › Spa)");
     }
     await prisma.spaTreatment.update({ where: { id: itemId }, data });
     propertyId = item.propertyId;
@@ -306,8 +321,19 @@ export async function updateActivityItem(params: {
   return { propertyId, item };
 }
 
+/** Which property an excursion type / spa treatment belongs to — so the route can check the
+ * caller may set that property up before changing it. Null when it is not this enterprise's. */
+export async function activityItemPropertyId(enterpriseId: string, module: string, itemId: string): Promise<string | null> {
+  const where = { id: itemId, property: { enterpriseId } };
+  const row =
+    module === "SPA"
+      ? await prisma.spaTreatment.findFirst({ where, select: { propertyId: true } })
+      : await prisma.excursionType.findFirst({ where, select: { propertyId: true } });
+  return row?.propertyId ?? null;
+}
+
 async function findModuleDto(enterpriseId: string, propertyId: string, module: ActivityModule): Promise<ActivityModuleSettingsDto> {
-  const all = await listActivitySettings(enterpriseId);
+  const all = await listActivitySettings(enterpriseId, propertyId);
   const dto = all.properties.find((p) => p.property.id === propertyId)?.modules.find((m) => m.module === module);
   if (!dto) throw new ForbiddenError("Property not found");
   return dto;

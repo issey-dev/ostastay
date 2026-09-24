@@ -270,7 +270,7 @@ export function RoomManager({
   const allFloors = buildings.flatMap(b => b.floors || [])
   // The Floor select is dependent on which Building is selected — only that building's own floors
   const floorsForSelectedBuilding: any[] = buildings.find(b => b.id === roomData.buildingId)?.floors || []
-  const { options: featureOptions } = useRoomFeatureOptions()
+  const { options: featureOptions } = useRoomFeatureOptions(propertyId)
   const featureLabel = (f: RoomFeature) => featureOptions.find(o => o.category === f.category && o.code === f.code)?.value || f.code
 
   // Open this view's Add dialog when FacilitiesManager's shared Add button fires. Compare
@@ -653,6 +653,7 @@ export function RoomManager({
                         )}
                         <p className="text-xs text-muted-foreground mb-2">Additional features specific to this room:</p>
                         <RoomFeaturePicker
+                          propertyId={propertyId}
                           selected={roomData.features}
                           onChange={(next) => setRoomData({ ...roomData, features: next })}
                           excluded={inheritedFeatures}

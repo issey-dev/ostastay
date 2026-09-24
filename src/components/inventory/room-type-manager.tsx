@@ -306,6 +306,7 @@ export function RoomTypeManager({
                 <div className="border-t border-border pt-4 mt-2">
                   <h4 className="text-sm font-semibold text-foreground mb-3">Room Features</h4>
                   <RoomFeaturePicker
+                    propertyId={propertyId}
                     selected={formData.features}
                     onChange={(next) => setFormData({ ...formData, features: next })}
                   />

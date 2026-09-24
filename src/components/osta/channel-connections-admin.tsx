@@ -25,23 +25,27 @@ import {
   formatDateTime,
 } from "@/components/hub/connection-shared"
 
-// The Osta console's cross-tenant channel-manager screen — the platform-admin
-// counterpart of the tenant Hub's ChannelConnectionManager, for the master-account
-// topology (.agents/docs/DECISIONS.md, 2026-08-02): one Beds24 account owned by the app
-// owner, one connection per customer enterprise, all draining a single shared API credit
-// pool. From here the platform admin does initial setup (invite code → enterprise),
-// health checks / keep-alives, webhook URL generation (the admin is the one pasting them
-// into Beds24 anyway), self-throttle floors, and removal. Room-type and rate MAPPING is
-// deliberately absent — that stays in each enterprise's own Hub, per the owner's call.
+// The Osta console's cross-tenant channel-manager screen, for the master-account topology
+// (.agents/docs/DECISIONS.md, 2026-08-02): one Beds24 account owned by the app owner, all
+// connections draining a single shared API credit pool. ONE CONNECTION PER PROPERTY since
+// 2026-09-23 (HUB_SETUP_PLAN.md, Phase 4): a customer requests each property's connection
+// and Uppsolut makes it here — invite code → property, with that property's Beds24
+// property id linked in the same step. Also here: health checks / keep-alives, webhook URL
+// generation (the admin is the one pasting them into Beds24 anyway), self-throttle floors,
+// re-authorizing and removal. Room-type and rate MAPPING is deliberately absent — that is
+// the property's own, in its Hub area.
 
 type PlatformConnection = Connection & {
   enterprise: { id: string; name: string; slug: string }
+  property: { id: string; name: string; code: string }
+  externalPropertyId: string | null
 }
 
-type EnterpriseOption = { id: string; name: string }
+type PropertyOption = { id: string; name: string; code: string; enterpriseName: string }
 
 const connectSchema = z.object({
-  enterpriseId: z.string().min(1, "Pick the customer enterprise"),
+  propertyId: z.string().min(1, "Pick the customer property"),
+  externalPropertyId: z.string().trim().min(1, "Enter the property's id in Beds24"),
   name: z.string().trim().min(1, "Give this connection a name").max(60, "Keep the name under 60 characters"),
   inviteCode: z.string().trim().min(1, "Paste the invite code from the master Beds24 account"),
 })
@@ -55,7 +59,7 @@ type ReauthFormValues = z.infer<typeof reauthSchema>
 export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
   const confirm = useConfirm()
   const [connections, setConnections] = useState<PlatformConnection[]>([])
-  const [enterprises, setEnterprises] = useState<EnterpriseOption[]>([])
+  const [properties, setProperties] = useState<PropertyOption[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [connectOpen, setConnectOpen] = useState(false)
@@ -71,7 +75,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
   const connectForm = useForm<ConnectFormValues>({
     resolver: zodResolver(connectSchema),
     mode: "onChange",
-    defaultValues: { enterpriseId: "", name: "", inviteCode: "" },
+    defaultValues: { propertyId: "", externalPropertyId: "", name: "", inviteCode: "" },
   })
   const reauthForm = useForm<ReauthFormValues>({
     resolver: zodResolver(reauthSchema),
@@ -85,13 +89,24 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
     try {
       const [connRes, entRes] = await Promise.all([
         fetch("/api/osta/channels/connections"),
-        fetch("/api/enterprises"),
+        fetch("/api/osta/properties?status=ACTIVE"),
       ])
       if (!connRes.ok || !entRes.ok) throw new Error("failed")
       const connData = await connRes.json()
       const entData = await entRes.json()
       setConnections(connData.connections ?? [])
-      setEnterprises((entData ?? []).map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })))
+      // Every customer property, across enterprises — the connect form offers the ones not
+      // yet connected.
+      setProperties(
+        (Array.isArray(entData) ? entData : entData.properties ?? [])
+          .filter((p: { enterprise?: { slug: string } }) => p.enterprise)
+          .map((p: { id: string; name: string; code: string; enterprise: { name: string } }) => ({
+            id: p.id,
+            name: p.name,
+            code: p.code,
+            enterpriseName: p.enterprise.name,
+          }))
+      )
     } catch {
       setLoadError(true)
     } finally {
@@ -264,7 +279,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
 
   const handleDelete = async (c: PlatformConnection) => {
     const ok = await confirm({
-      title: `Remove "${c.name}" from ${c.enterprise.name}?`,
+      title: `Remove "${c.name}" from ${c.property.name} (${c.enterprise.name})?`,
       description:
         "The stored credentials are deleted. Reconnecting needs a new invite code from the master Beds24 account.",
       confirmLabel: "Remove",
@@ -331,13 +346,13 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
 
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          One connection per customer enterprise, each from an invite code generated in the master Beds24 account.
+          One connection per customer property, each from an invite code generated in the master Beds24 account.
           Credentials are encrypted at rest and never shown again after saving.
         </p>
         {canManage && (
           <Button onClick={() => setConnectOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Connect enterprise
+            Connect a property
           </Button>
         )}
       </div>
@@ -346,7 +361,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
         <EmptyState
           icon={ArrowLeftRight}
           title="No channel-manager connections yet"
-          description="Generate an invite code in the master Beds24 account (scoped to the customer's properties) and connect their enterprise here."
+          description="When a customer requests a property's connection, generate an invite code in the master Beds24 account and connect that property here."
         />
       ) : (
         <div className="space-y-3">
@@ -366,7 +381,9 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                     </CardTitle>
                     <CardDescription className="flex items-center gap-1.5">
                       <Building2 className="h-3.5 w-3.5" />
-                      {c.enterprise.name}
+                      {c.property.name} · {c.enterprise.name}
+                      <span aria-hidden>·</span>
+                      Beds24 property {c.externalPropertyId ?? "—"}
                       <span aria-hidden>·</span>
                       {c.provider === "BEDS24" ? "Beds24" : c.provider}
                     </CardDescription>
@@ -464,33 +481,49 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
         </div>
       )}
 
-      {/* Connect a customer enterprise */}
+      {/* Connect a customer property */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connect a customer enterprise</DialogTitle>
+            <DialogTitle>Connect a customer property</DialogTitle>
             <DialogDescription>
               In the master Beds24 account: Settings &rarr; Apps &amp; Integrations &rarr; API, restrict the invite
-              code to this customer&rsquo;s properties, and generate it. Invite codes can only be used once.
+              code to this property, and generate it. Invite codes can only be used once.
             </DialogDescription>
           </DialogHeader>
           <Form {...connectForm}>
             <form onSubmit={connectForm.handleSubmit(handleConnect)} className="space-y-4">
               <FormField
                 control={connectForm.control}
-                name="enterpriseId"
+                name="propertyId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Enterprise</FormLabel>
+                    <FormLabel>Property</FormLabel>
                     <FormControl>
                       <SearchableSelect
                         value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Select enterprise..."
-                        options={enterprises.map((e) => ({ label: e.name, value: e.id }))}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="Select property..."
+                        options={properties
+                          .filter((p) => !connections.some((c) => c.property.id === p.id))
+                          .map((p) => ({ label: `${p.name} (${p.code}) — ${p.enterpriseName}`, value: p.id }))}
                       />
                     </FormControl>
-                    <FormDescription>The customer this connection belongs to.</FormDescription>
+                    <FormDescription>The customer property this connection serves. A property has one connection.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={connectForm.control}
+                name="externalPropertyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Beds24 property ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. 123456" autoComplete="off" {...field} />
+                    </FormControl>
+                    <FormDescription>The property&rsquo;s id in the master Beds24 account.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -502,7 +535,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                   <FormItem>
                     <FormLabel>Connection name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Beds24 — Veyo" {...field} />
+                      <Input placeholder="e.g. Beds24 — Veyo Beach Resort" {...field} />
                     </FormControl>
                     <FormDescription>Only used to tell connections apart.</FormDescription>
                     <FormMessage />

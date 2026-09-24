@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { loadEmailBranding } from "@/lib/document-settings";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { buildInvoiceSummary, type DebtorInvoiceSummary } from "@/lib/debtor-accounts";
 import { computeFolioAgingBuckets, totalOutstanding } from "@/lib/debtor-aging";
@@ -167,8 +167,8 @@ export async function POST(
     const invoices = folios.map(buildInvoiceSummary);
     const balance = invoices.filter((inv) => inv.isOpen).reduce((sum, inv) => sum + inv.balance, 0);
 
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
-    const brandColor = resolveInvoiceBrandColor(settings?.invoiceBrandColor ?? null);
+    // The statement is issued by THIS property — its identity and payment terms.
+    const { settings, brandColor } = await loadEmailBranding(property);
     const accountName = profile.companyName || `${profile.firstName} ${profile.lastName || ""}`.trim();
 
     const html = buildStatementEmailHtml({

@@ -4,12 +4,12 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { setRequestTenantContext } from "@/lib/request-context";
 import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
-import { MODULES, MODULE_LABELS, HUB_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
+import { MODULES, MODULE_LABELS, HUB_MODULES, PROPERTY_SETUP_MODULES, ENTERPRISE_ONLY_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
 import { mergeRolePermissions } from "@/lib/role-permissions";
 import { findLiveSession, touchSession, revokeSession, isIdleExpired } from "@/lib/session-store";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
-export { MODULES, HUB_MODULES, type Module, type Action };
+export { MODULES, HUB_MODULES, PROPERTY_SETUP_MODULES, ENTERPRISE_ONLY_MODULES, type Module, type Action };
 
 import { JWT_SECRET as SUPPORT_JWT_SECRET } from "@/lib/jwt-secret";
 
@@ -536,28 +536,63 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
 // enterprise-wide configuration — and contains NO PMS functionality. Adding a module
 // here is what puts it in the Hub; MODULES itself stays a flat list.
 
-// Non-throwing probe — use for navigation/visibility decisions (e.g. whether to show
-// the "Hub" link in the property sidebar). requireHubAccess() is the actual gate.
+// The Hub has two areas (2026-09-23, .agents/docs/HUB_SETUP_PLAN.md):
+//   ENTERPRISE  /e/{slug}/hub/enterprise/…         — shared by every property
+//   PROPERTY    /e/{slug}/hub/p/{propertyId}/…     — one property's setup
+// and three gates, one per rule, so a rule change is a one-line edit here rather than a
+// sweep across every endpoint (the same reasoning that made requireEnterpriseHub a single
+// helper — audit finding S2 was a local guard that silently skipped a step).
+
+// Entry to the Hub shell at all. Non-throwing — used for navigation and by the layout.
+// An All-Properties user needs any Hub module; a single-property user needs a module
+// that has a per-property half (they only ever reach their own property's pages).
 export function hasHubAccess(ctx: AuthContext): boolean {
-  // A PROPERTY-scoped user is pinned to a single work location and has no business
-  // holding enterprise-wide OTA credentials — blocked outright, regardless of role
-  // bits, so granting INTEGRATIONS to a property-scoped user can never open the Hub.
+  const modules: readonly Module[] = ctx.scope === "PROPERTY" ? PROPERTY_SETUP_MODULES : HUB_MODULES;
+  return modules.some((m) => hasPermission(ctx, m, "view"));
+}
+
+// The enterprise area. A single-property user is refused outright, regardless of role —
+// the owner's rule is that enterprise settings are restricted from them entirely.
+export function hasEnterpriseHubAccess(ctx: AuthContext): boolean {
   if (ctx.scope === "PROPERTY") return false;
   return HUB_MODULES.some((m) => hasPermission(ctx, m, "view"));
 }
 
-// The single gate every Hub route handler and the Hub layout must call — deliberately
-// ONE helper rather than the inline `if (!ctx.isInternal) return 403` pattern the
-// /api/osta/** routes repeat file-by-file. That duplication is exactly the shape of
-// audit finding S2 (a local guard that silently skipped a step); a Hub-wide rule change
-// must be a one-line edit here, not a sweep across every endpoint.
-export function requireHubAccess(ctx: AuthContext): void {
+// Every enterprise-area route handler (and the enterprise layout) calls this IN ADDITION
+// to requirePermission(): this says "may reach the enterprise area", the permission says
+// "may do this particular thing".
+export function requireEnterpriseHub(ctx: AuthContext): void {
   if (ctx.scope === "PROPERTY") {
-    throw new ForbiddenError("The Hub is enterprise-level and not available to property-scoped users");
+    throw new ForbiddenError("Enterprise settings are not available to single-property users");
   }
   if (!HUB_MODULES.some((m) => hasPermission(ctx, m, "view"))) {
     throw new ForbiddenError("Not authorized for the Hub");
   }
+}
+
+// Every property-area route handler calls this: the property must belong to the
+// caller's enterprise (and, for a single-property user, be their own — see
+// assertPropertyAccess), AND the caller must hold the section's module permission.
+export async function requirePropertySetup(
+  ctx: AuthContext,
+  propertyId: string,
+  module: Module,
+  action: Action
+): Promise<void> {
+  await assertPropertyAccess(ctx, propertyId);
+  requirePermission(ctx, module, action);
+}
+
+// Non-throwing twin for pages and navigation: may this user open this property's Hub
+// pages at all? Never touches the database — the caller supplies the property's
+// enterprise, so a sidebar can evaluate many properties without a query each.
+export function canSetUpProperty(
+  ctx: AuthContext,
+  property: { id: string; enterpriseId: string }
+): boolean {
+  if (property.enterpriseId !== ctx.enterpriseId) return false;
+  if (ctx.scope === "PROPERTY" && ctx.propertyId !== property.id) return false;
+  return PROPERTY_SETUP_MODULES.some((m) => hasPermission(ctx, m, "view"));
 }
 
 // True when the user has no property-operational access at all — i.e. a Hub-only

@@ -111,8 +111,9 @@ export async function activityModuleStatus(
   const [addon, settings, enterpriseSettings, published] = await Promise.all([
     prisma.enterpriseAddonAccess.findUnique({ where: { enterpriseId_module: { enterpriseId: key.enterpriseId, module } } }),
     prisma.activityOnlineSettings.findUnique({ where: { propertyId_module: { propertyId, module } } }),
-    prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: key.enterpriseId },
+    // The property's own module outlet links (per property since 2026-09-23).
+    prisma.propertySettings.findUnique({
+      where: { propertyId },
       select: { excursionOutletId: true, spaOutletId: true },
     }),
     module === "EXCURSIONS"

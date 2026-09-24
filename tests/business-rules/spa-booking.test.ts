@@ -65,6 +65,7 @@ const therapistsForTreatmentRoute = await import("@/app/api/spa/treatments/[id]/
 const posSearchRoute = await import("@/app/api/pos/search/route");
 const walkInFolioRoute = await import("@/app/api/folios/walk-in/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -174,17 +175,13 @@ describe("Spa booking: business rules", () => {
       )
     );
 
-    const chargeCode = await customChargeCode(enterpriseId, { code: "SPA", description: "Spa Charge" });
+    const chargeCode = await customChargeCode({ propertyId }, { code: "SPA", description: "Spa Charge" });
     chargeCodeId = chargeCode.id;
 
     // Hub-wide Spa Outlet link — AT_BOOKING posting is refused without one (owner rule
     // 2026-07-30), so every appointment test needs it wired.
     const spaOutlet = await prisma.outlet.create({ data: { propertyId, name: "BR Spa", code: "BRSP", outletType: "SPA" } });
-    await prisma.enterpriseSettings.upsert({
-      where: { enterpriseId },
-      update: { spaOutletId: spaOutlet.id },
-      create: { enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id },
-    });
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id });
 
     const admin = await prisma.user.create({
       data: {

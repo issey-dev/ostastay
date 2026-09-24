@@ -19,8 +19,19 @@ vi.mock("next/headers", () => ({
 
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
-const { requireSession, requireHubAccess, hasHubAccess, hasAnyPropertyModule, HUB_MODULES, ForbiddenError } =
-  await import("@/lib/scope");
+const {
+  requireSession,
+  requireEnterpriseHub,
+  requirePropertySetup,
+  hasHubAccess,
+  hasEnterpriseHubAccess,
+  canSetUpProperty,
+  hasAnyPropertyModule,
+  HUB_MODULES,
+  PROPERTY_SETUP_MODULES,
+  ENTERPRISE_ONLY_MODULES,
+  ForbiddenError,
+} = await import("@/lib/scope");
 const { MODULES: SRC_MODULES } = await import("@/lib/modules");
 const {
   MODULES: SEED_MODULES,
@@ -28,15 +39,75 @@ const {
   ensureRoles,
 } = await import("../../prisma/rbac-seed-data");
 
-// The Hub is the enterprise-level shell (src/app/e/[slug]/hub) — see
-// .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md. It holds channel-manager connectivity and
-// enterprise-wide configuration, and deliberately contains NO PMS functionality.
-describe("Hub access (enterprise level)", () => {
+// The Hub (src/app/e/[slug]/hub) holds all setup and administration, and deliberately
+// contains NO PMS functionality. Since 2026-09-23 it has two areas — see
+// .agents/docs/HUB_SETUP_PLAN.md:
+//   ENTERPRISE  shared settings — never reachable by a single-property user
+//   PROPERTY    one property's setup — a single-property user reaches their own only
+describe("Hub access (enterprise and property areas)", () => {
   let enterpriseId: string;
   let propertyId: string;
+  let otherPropertyId: string;
   let adminUserId: string;
   let hubOnlyUserId: string;
   let propertyScopedHubUserId: string;
+  let controlsOnlyUserId: string;
+  let propertyUsersOnlyUserId: string;
+  let passwordHash: string;
+
+  async function roleWith(name: string, module: string) {
+    return prisma.role.create({
+      data: {
+        enterpriseId,
+        name: `${name} ${Date.now()}-${Math.random()}`,
+        isSystem: false,
+        permissions: {
+          create: { module, canView: true, canCreate: true, canUpdate: true, canDelete: true },
+        },
+      },
+    });
+  }
+
+  async function userWith(
+    label: string,
+    roleId: string,
+    scope: "ENTERPRISE" | "PROPERTY",
+    pinnedPropertyId: string | null = null
+  ) {
+    return prisma.user.create({
+      data: {
+        enterpriseId,
+        email: `${label}-${Date.now()}-${Math.random()}@test.local`,
+        passwordHash,
+        firstName: label,
+        lastName: "Test",
+        roles: { create: { roleId } },
+        scope,
+        propertyId: pinnedPropertyId,
+      },
+    });
+  }
+
+  async function makeProperty(name: string) {
+    return prisma.property.create({
+      data: {
+        enterpriseId,
+        name,
+        code: `HP-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        legalName: `${name} LLC`,
+        defaultCurrency: "USD",
+        timeZone: "UTC",
+        checkInTime: "14:00",
+        checkOutTime: "11:00",
+      },
+    });
+  }
+
+  async function sessionFor(userId: string) {
+    cookieJar.clear();
+    await createSession(userId);
+    return requireSession();
+  }
 
   beforeAll(async () => {
     const osta = await prisma.enterprise.upsert({
@@ -50,121 +121,92 @@ describe("Hub access (enterprise level)", () => {
     });
     enterpriseId = enterprise.id;
     await prisma.enterpriseLicense.create({
-      data: { enterpriseId, tier: "STANDARD", maxProperties: 1 },
+      data: { enterpriseId, tier: "STANDARD", maxProperties: 2 },
     });
 
     const roleIds = await ensureRoles(prisma, osta.id, SYSTEM_ROLE_DEFS, true);
+    propertyId = (await makeProperty("Hub Property")).id;
+    otherPropertyId = (await makeProperty("Hub Property Two")).id;
+    passwordHash = await bcrypt.hash("password123", 10);
 
-    const property = await prisma.property.create({
-      data: {
-        enterpriseId,
-        name: "Hub Property",
-        code: `HP-${Date.now()}`,
-        legalName: "Hub Property LLC",
-        defaultCurrency: "USD",
-        timeZone: "UTC",
-        checkInTime: "14:00",
-        checkOutTime: "11:00",
-      },
-    });
-    propertyId = property.id;
+    // A normal Admin: holds every module — the enterprise area and every property.
+    adminUserId = (await userWith("admin", roleIds["Admin"], "ENTERPRISE")).id;
 
-    const passwordHash = await bcrypt.hash("password123", 10);
+    // The Hub-only administrator shape (decision D-3): an ENTERPRISE-scoped user whose
+    // role grants ONLY a Hub module and nothing operational.
+    hubOnlyUserId = (await userWith("hub-only", (await roleWith("Hub Only", "INTEGRATIONS")).id, "ENTERPRISE")).id;
 
-    // A normal Admin: holds every module, so both Hub AND property access.
-    const admin = await prisma.user.create({
-      data: {
-        enterpriseId,
-        email: `hub-admin-${Date.now()}@test.local`,
-        passwordHash,
-        firstName: "Hub",
-        lastName: "Admin",
-        roles: { create: { roleId: roleIds["Admin"] } },
-        scope: "ENTERPRISE",
-      },
-    });
-    adminUserId = admin.id;
+    // A single-property user granted INTEGRATIONS: may enter the Hub, but only for their
+    // own property — never the enterprise area (that block is on scope, not on the
+    // permission bit).
+    propertyScopedHubUserId = (
+      await userWith("property-hub", (await roleWith("Property Hub", "INTEGRATIONS")).id, "PROPERTY", propertyId)
+    ).id;
 
-    // The Hub-only administrator shape from the plan (decision D-3): no new User.scope
-    // value and no schema change — just an ENTERPRISE-scoped user whose role grants
-    // ONLY a Hub module and nothing operational.
-    const hubOnlyRole = await prisma.role.create({
-      data: {
-        enterpriseId,
-        name: `Hub Only ${Date.now()}`,
-        isSystem: false,
-        permissions: {
-          create: { module: "INTEGRATIONS", canView: true, canCreate: true, canUpdate: true, canDelete: false },
-        },
-      },
-    });
-    const hubOnly = await prisma.user.create({
-      data: {
-        enterpriseId,
-        email: `hub-only-${Date.now()}@test.local`,
-        passwordHash,
-        firstName: "Hub",
-        lastName: "Only",
-        roles: { create: { roleId: hubOnlyRole.id } },
-        scope: "ENTERPRISE",
-      },
-    });
-    hubOnlyUserId = hubOnly.id;
+    // An All-Properties user holding ONLY Property Setup — the Controls page is gone
+    // from the dashboard, so this user belongs in the Hub.
+    controlsOnlyUserId = (await userWith("setup-only", (await roleWith("Setup Only", "CONTROLS")).id, "ENTERPRISE")).id;
 
-    // The dangerous case: a PROPERTY-scoped user who HAS been granted INTEGRATIONS.
-    // Must still be refused — the block is on scope, not on the permission bit.
-    const propertyHubRole = await prisma.role.create({
-      data: {
-        enterpriseId,
-        name: `Property Hub ${Date.now()}`,
-        isSystem: false,
-        permissions: {
-          create: { module: "INTEGRATIONS", canView: true, canCreate: true, canUpdate: true, canDelete: true },
-        },
-      },
-    });
-    const propertyScopedHubUser = await prisma.user.create({
-      data: {
-        enterpriseId,
-        email: `hub-property-${Date.now()}@test.local`,
-        passwordHash,
-        firstName: "Property",
-        lastName: "Hub",
-        roles: { create: { roleId: propertyHubRole.id } },
-        scope: "PROPERTY",
-        propertyId,
-      },
-    });
-    propertyScopedHubUserId = propertyScopedHubUser.id;
+    // A single-property user whose role grants ONLY Users & Access — enterprise-only, so
+    // it opens nothing for them.
+    propertyUsersOnlyUserId = (
+      await userWith("property-users", (await roleWith("Users Only", "USERS")).id, "PROPERTY", propertyId)
+    ).id;
   });
 
-  it("an Admin has Hub access and property access", async () => {
-    cookieJar.clear();
-    await createSession(adminUserId);
-    const ctx = await requireSession();
+  it("an Admin reaches the enterprise area and every property's setup", async () => {
+    const ctx = await sessionFor(adminUserId);
     expect(hasHubAccess(ctx)).toBe(true);
+    expect(hasEnterpriseHubAccess(ctx)).toBe(true);
     expect(hasAnyPropertyModule(ctx)).toBe(true);
-    expect(() => requireHubAccess(ctx)).not.toThrow();
+    expect(() => requireEnterpriseHub(ctx)).not.toThrow();
+    expect(canSetUpProperty(ctx, { id: propertyId, enterpriseId })).toBe(true);
+    expect(canSetUpProperty(ctx, { id: otherPropertyId, enterpriseId })).toBe(true);
+    await expect(requirePropertySetup(ctx, otherPropertyId, "CONTROLS", "update")).resolves.toBeUndefined();
     await destroySession();
   });
 
-  it("a PROPERTY-scoped user is refused the Hub even when their role grants INTEGRATIONS", async () => {
-    cookieJar.clear();
-    await createSession(propertyScopedHubUserId);
-    const ctx = await requireSession();
-    // The permission bit really is granted — proving the refusal comes from scope.
+  it("a single-property user with INTEGRATIONS enters the Hub for their own property only", async () => {
+    const ctx = await sessionFor(propertyScopedHubUserId);
+    // The permission bit really is granted — proving the refusals below come from scope.
     expect(ctx.permissions.get("INTEGRATIONS")?.canView).toBe(true);
     expect(ctx.scope).toBe("PROPERTY");
 
+    expect(hasHubAccess(ctx)).toBe(true);
+    // The enterprise area is refused outright, whatever the role grants.
+    expect(hasEnterpriseHubAccess(ctx)).toBe(false);
+    expect(() => requireEnterpriseHub(ctx)).toThrow(ForbiddenError);
+
+    // Own property: yes. Another property of the same enterprise: no.
+    expect(canSetUpProperty(ctx, { id: propertyId, enterpriseId })).toBe(true);
+    expect(canSetUpProperty(ctx, { id: otherPropertyId, enterpriseId })).toBe(false);
+    await expect(requirePropertySetup(ctx, propertyId, "INTEGRATIONS", "view")).resolves.toBeUndefined();
+    await expect(requirePropertySetup(ctx, otherPropertyId, "INTEGRATIONS", "view")).rejects.toThrow(ForbiddenError);
+    // Holding INTEGRATIONS is not holding Property Setup.
+    await expect(requirePropertySetup(ctx, propertyId, "CONTROLS", "view")).rejects.toThrow(ForbiddenError);
+    await destroySession();
+  });
+
+  it("a single-property user holding only an enterprise-only module is refused the Hub", async () => {
+    const ctx = await sessionFor(propertyUsersOnlyUserId);
+    expect(ctx.permissions.get("USERS")?.canView).toBe(true);
     expect(hasHubAccess(ctx)).toBe(false);
-    expect(() => requireHubAccess(ctx)).toThrow(ForbiddenError);
+    expect(hasEnterpriseHubAccess(ctx)).toBe(false);
+    await destroySession();
+  });
+
+  it("an All-Properties user with only Property Setup lands in the Hub", async () => {
+    const ctx = await sessionFor(controlsOnlyUserId);
+    expect(hasHubAccess(ctx)).toBe(true);
+    // Property Setup is a Hub module now — this is what sends the user to /hub instead
+    // of a dashboard with nothing on it (src/app/e/[slug]/dashboard/page.tsx).
+    expect(hasAnyPropertyModule(ctx)).toBe(false);
+    expect(canSetUpProperty(ctx, { id: otherPropertyId, enterpriseId })).toBe(true);
     await destroySession();
   });
 
   it("a Hub-only administrator has Hub access but no property-operational module", async () => {
-    cookieJar.clear();
-    await createSession(hubOnlyUserId);
-    const ctx = await requireSession();
+    const ctx = await sessionFor(hubOnlyUserId);
     expect(hasHubAccess(ctx)).toBe(true);
     // This is what routes the user to /hub instead of a dead property page — see
     // src/app/e/[slug]/dashboard/page.tsx.
@@ -172,46 +214,28 @@ describe("Hub access (enterprise level)", () => {
     await destroySession();
   });
 
-  it("a role with no Hub module is refused the Hub", async () => {
-    const passwordHash = await bcrypt.hash("password123", 10);
-    const noHubRole = await prisma.role.create({
-      data: {
-        enterpriseId,
-        name: `No Hub ${Date.now()}`,
-        isSystem: false,
-        permissions: {
-          create: { module: "FRONT_DESK", canView: true, canCreate: false, canUpdate: false, canDelete: false },
-        },
-      },
-    });
-    const user = await prisma.user.create({
-      data: {
-        enterpriseId,
-        email: `no-hub-${Date.now()}@test.local`,
-        passwordHash,
-        firstName: "No",
-        lastName: "Hub",
-        roles: { create: { roleId: noHubRole.id } },
-        scope: "ENTERPRISE",
-      },
-    });
-
-    cookieJar.clear();
-    await createSession(user.id);
-    const ctx = await requireSession();
-    expect(hasHubAccess(ctx)).toBe(false);
-    expect(hasAnyPropertyModule(ctx)).toBe(true);
-    expect(() => requireHubAccess(ctx)).toThrow(ForbiddenError);
+  it("never lets a property of another enterprise be set up", async () => {
+    const ctx = await sessionFor(adminUserId);
+    expect(canSetUpProperty(ctx, { id: propertyId, enterpriseId: "some-other-enterprise" })).toBe(false);
     await destroySession();
   });
 
-  it("every HUB_MODULES entry is a real module, and Hub modules are excluded from the property-module check", () => {
+  it("a role with no Hub module is refused the Hub", async () => {
+    const user = await userWith("no-hub", (await roleWith("No Hub", "FRONT_DESK")).id, "ENTERPRISE");
+    const ctx = await sessionFor(user.id);
+    expect(hasHubAccess(ctx)).toBe(false);
+    expect(hasAnyPropertyModule(ctx)).toBe(true);
+    expect(() => requireEnterpriseHub(ctx)).toThrow(ForbiddenError);
+    await destroySession();
+  });
+
+  it("every HUB_MODULES entry is a real module, split exactly into property-setup and enterprise-only", () => {
     for (const m of HUB_MODULES) {
       expect(SRC_MODULES).toContain(m);
     }
-    // hasAnyPropertyModule must never count a Hub module as property-operational —
-    // otherwise a Hub-only admin would be sent to a dashboard they cannot use.
-    expect(HUB_MODULES.length).toBeGreaterThan(0);
+    // Every Hub module is either reachable per property or enterprise-only — never both,
+    // never neither — so no permission can fall between the two areas.
+    expect([...PROPERTY_SETUP_MODULES, ...ENTERPRISE_ONLY_MODULES].sort()).toEqual([...HUB_MODULES].sort());
   });
 
   // Guards the standing hand-sync hazard called out in both files: prisma/ scripts

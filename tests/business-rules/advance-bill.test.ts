@@ -18,6 +18,7 @@ const advanceBillRoute = await import("@/app/api/reservations/[id]/advance-bill/
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 const DAY = 86400000;
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -40,10 +41,10 @@ async function setup() {
   });
   const roomType = await prisma.roomType.create({ data: { propertyId: property.id, name: "Standard", code: "STD", maxOccupancy: 2 } });
   const room = await prisma.room.create({ data: { propertyId: property.id, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}` } });
-  await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
-  const accom = await customChargeCode(enterprise.id, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
+  await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room" });
+  const accom = await customChargeCode({ propertyId: property.id }, { code: "ACCOM", description: "Accommodation", subgroupCode: "10RV" });
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "Best Available", chargeCodeId: accom.id } });
-  await prisma.enterpriseSettings.create({ data: { enterpriseId: enterprise.id, greenTaxEnabled: false, defaultAccommodationChargeCodeId: accom.id } });
+  await setPropertySettings(property.id, { greenTaxEnabled: false, defaultAccommodationChargeCodeId: accom.id });
   const guest = await prisma.profile.create({ data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "G", lastName: "T" } });
   const reservation = await prisma.reservation.create({
     data: {
@@ -143,15 +144,11 @@ describe("Advance Bill", () => {
 describe("Advance Bill: generates post all defined taxes", () => {
   async function setupWithChart(greenTax: boolean) {
     const base = await setup();
-    const property = await prisma.property.findUniqueOrThrow({ where: { id: base.propertyId } });
-    await ensureChargeTree(prisma, property.enterpriseId);
-    await prisma.enterpriseSettings.update({
-      where: { enterpriseId: property.enterpriseId },
-      data: { greenTaxEnabled: greenTax, greenTaxAdultAmount: 12, greenTaxChildAmount: 6 },
-    });
+    await ensureChargeTree(prisma, { propertyId: base.propertyId });
+    await setPropertySettings(base.propertyId, { greenTaxEnabled: greenTax, greenTaxAdultAmount: 12, greenTaxChildAmount: 6 });
     // Bill against the charted accommodation code so the group's tax codes apply.
     const room = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: property.enterpriseId, code: "1000" } },
+      where: { propertyId_code: { propertyId: base.propertyId, code: "1000" } },
     });
     await prisma.ratePlan.updateMany({ where: { propertyId: base.propertyId }, data: { chargeCodeId: room.id } });
     return base;

@@ -1,16 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useProperty } from "@/components/providers/property-provider"
+import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 
-// The one user-related control that stays in Controls: how long a terminal at THIS
-// property may sit idle before its session ends.
+// How long a terminal at THIS property may sit idle before its session ends — set in the
+// Hub under the property's General page.
 //
-// It belongs here rather than in the Hub because it is genuinely per-property — a busy
+// It is a property setting, not an enterprise one, because it is genuinely per-property — a busy
 // front desk in a shared lobby wants a short timeout, a back-office machine doesn't.
 // Everything else about users (who exists, what they may do, who is signed in) moved to
 // the Hub on 2026-08-04, because identity is enterprise-wide.
@@ -27,15 +27,11 @@ const PRESETS = [
   { minutes: 240, label: "4 hours" },
 ]
 
-export function SessionTimeoutManager() {
-  const { currentProperty, refreshProperties } = useProperty()
-  const [minutes, setMinutes] = useState<number | null>(null)
+export function SessionTimeoutManager({ property }: { property: HubPropertyDetail }) {
+  const [currentProperty, applySaved] = usePropertyValue(property)
+  const [minutes, setMinutes] = useState<number | null>(property.sessionIdleMinutes ?? 0)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (currentProperty) setMinutes(currentProperty.sessionIdleMinutes ?? 0)
-  }, [currentProperty])
 
   const save = async (next: number) => {
     if (!currentProperty) return
@@ -56,7 +52,7 @@ export function SessionTimeoutManager() {
             ? "Idle timeout is off — sessions last until sign-out, End of Day, or 24 hours."
             : `Sessions at this property now end after ${saved.sessionIdleMinutes} minutes of inactivity.`
         )
-        refreshProperties()
+        applySaved({ sessionIdleMinutes: saved.sessionIdleMinutes ?? next })
       } else {
         setMessage("Couldn't save the timeout.")
       }

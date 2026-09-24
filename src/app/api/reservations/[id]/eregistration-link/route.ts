@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { generateEregistrationToken, hashEregistrationToken } from "@/lib/eregistration/token";
@@ -70,11 +71,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: reservation.property.enterpriseId } });
-    if (settings && settings.eRegistrationEnabled === false) {
-      return NextResponse.json({ error: "eRegistration is disabled for this enterprise — enable it under Controls → Stationaries first." }, { status: 400 });
+    const settings = await getPropertySettings(reservation.propertyId);
+    if (!settings.eRegistrationEnabled) {
+      return NextResponse.json({ error: "eRegistration is turned off for this property — turn it on in the Hub under this property's Stationery first." }, { status: 400 });
     }
-    const expiryHours = settings?.eRegistrationExpiryHours ?? 72;
+    const expiryHours = settings.eRegistrationExpiryHours;
 
     const existingSlots = await prisma.eRegistrationGuestSlot.findMany({
       where: { reservationId: id },

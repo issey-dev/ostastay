@@ -82,7 +82,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   DEBTORS: "Debtors",
   REVENUE: "Revenue",
   REPORTS: "Daily Reports",
-  CONTROLS: "Controls",
+  CONTROLS: "Property Setup",
   ACTIVITY_LOG: "Activity Log",
   EXCURSIONS: "Excursions",
   SPA: "Spa",
@@ -135,15 +135,28 @@ export function addonLabel(key: string): string {
 
 // ── Scope level ───────────────────────────────────────────────────────────────────
 //
-// Which shell a module belongs to. This lives here, not in scope.ts, because the
-// Controls permission matrix has to render the distinction and scope.ts is server-only
-// (it imports prisma). scope.ts re-exports HUB_MODULES so there is still one list.
+// Which shell a module belongs to. This lives here, not in scope.ts, because the role
+// permission matrix has to render the distinction and scope.ts is server-only (it imports
+// prisma). scope.ts re-exports these lists so there is still one source of truth.
 //
-// It matters for more than layout: a PROPERTY-scoped user is pinned to a single work
-// location and can never hold Hub access, whatever their role says (see hasHubAccess in
-// src/lib/scope.ts). Without the grouping an admin can tick Integrations for a
-// property-scoped user, save successfully, and have nothing happen.
-export const HUB_MODULES = ["INTEGRATIONS", "USERS", "GREEN_TAX"] as const satisfies readonly Module[];
+// 2026-09-23 (owner, .agents/docs/HUB_SETUP_PLAN.md): setup moved out of the property
+// dashboard into the Hub, and the Hub is now split into an ENTERPRISE area and a
+// per-PROPERTY area. So:
+//   - CONTROLS ("Property Setup") joins the Hub — there is no Controls page in the
+//     dashboard any more.
+//   - A single-property user may enter the Hub, but only reaches their own property's
+//     pages, and only through PROPERTY_SETUP_MODULES.
+//   - ENTERPRISE_ONLY_MODULES can never take effect for a single-property user —
+//     identity is enterprise-wide.
+export const HUB_MODULES = ["CONTROLS", "INTEGRATIONS", "USERS", "GREEN_TAX"] as const satisfies readonly Module[];
+
+// Hub modules with a per-property half. Holding one of these (view) is what lets a
+// single-property user into the Hub — to their own property's pages only.
+export const PROPERTY_SETUP_MODULES = ["CONTROLS", "INTEGRATIONS", "GREEN_TAX"] as const satisfies readonly Module[];
+
+// Hub modules that exist only at enterprise level. Granting one to a single-property
+// user saves, but does nothing — the role editor warns about exactly this.
+export const ENTERPRISE_ONLY_MODULES = ["USERS"] as const satisfies readonly Module[];
 
 export type ModuleScope = "PROPERTY" | "HUB";
 
@@ -153,10 +166,10 @@ export function moduleScope(module: Module): ModuleScope {
 
 export const MODULE_SCOPE_LABELS: Record<ModuleScope, string> = {
   PROPERTY: "Property modules",
-  HUB: "Hub modules (enterprise-wide)",
+  HUB: "Hub modules (setup & administration)",
 };
 
 export const MODULE_SCOPE_DESCRIPTIONS: Record<ModuleScope, string> = {
   PROPERTY: "Day-to-day operation of a property. Available to every user who has a work location.",
-  HUB: "Enterprise-wide connectivity, credentials and compliance. Only an All-Properties user can hold these — a user pinned to a single property is blocked from the Hub regardless of their role.",
+  HUB: "Setup, integrations, compliance and people — managed in the Hub. An All-Properties user reaches every property and the enterprise settings; a single-property user reaches only their own property's setup, and never Users & Access.",
 };

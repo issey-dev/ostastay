@@ -52,7 +52,7 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString()
 }
 
-export function InboundBookingsManager({ canManage }: { canManage: boolean }) {
+export function InboundBookingsManager({ propertyId, canManage }: { propertyId: string; canManage: boolean }) {
   const [bookings, setBookings] = useState<InboundBooking[]>([])
   const [overbookings, setOverbookings] = useState(0)
   const [problems, setProblems] = useState(0)
@@ -65,8 +65,9 @@ export function InboundBookingsManager({ canManage }: { canManage: boolean }) {
     setLoading(true)
     setFailed(false)
     try {
-      const q = filter === ALL ? "" : `?filter=${filter}`
-      const res = await fetch(`/api/hub/inbound-bookings${q}`)
+      const q = new URLSearchParams({ propertyId })
+      if (filter !== ALL) q.set("filter", filter)
+      const res = await fetch(`/api/hub/inbound-bookings?${q}`)
       if (!res.ok) throw new Error("failed")
       const data = await res.json()
       setBookings(data.bookings ?? [])
@@ -77,7 +78,7 @@ export function InboundBookingsManager({ canManage }: { canManage: boolean }) {
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [propertyId, filter])
 
   useEffect(() => {
     void load()

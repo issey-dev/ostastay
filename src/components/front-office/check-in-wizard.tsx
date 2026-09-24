@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { NationalitySelect } from "@/components/ui/nationality-select"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -13,7 +14,6 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
 import { EregistrationReviewDialog } from "@/components/front-office/eregistration-review-dialog"
@@ -165,7 +165,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
       })
       .catch(() => setError("Failed to load the reservation."))
       .finally(() => setLoading(false))
-    fetch(`/api/payment-methods`).then((r) => r.json()).then((d) => {
+    fetch(`/api/payment-methods?propertyId=${propertyId}`).then((r) => r.json()).then((d) => {
       if (Array.isArray(d)) setPaymentMethods(d.filter((m: any) => m.isActive !== false))
     }).catch(() => {})
     // Pre-fill the optional payment amount with the balance due (C-2 — don't make staff
@@ -375,7 +375,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Nationality</Label>
-                      <SystemCodeSelect category="NATIONALITY" value={e?.nationality ?? ""} onValueChange={(v) => updateGuestBasics(upid, { nationality: v })} placeholder="Select nationality" />
+                      <NationalitySelect value={e?.nationality ?? ""} onValueChange={(v) => updateGuestBasics(upid, { nationality: v })} />
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">{savingId ? "Saving…" : "Date of birth & nationality save automatically."}</p>

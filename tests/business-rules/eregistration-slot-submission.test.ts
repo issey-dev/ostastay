@@ -156,7 +156,8 @@ describe("eRegistration staff review — reopen and apply", () => {
     expect(res.status).toBe(200);
 
     const profile = await prisma.profile.findUniqueOrThrow({ where: { upid: primaryGuestId }, include: { documents: true } });
-    expect(profile.nationality).toBe("British");
+    // A free-text answer is stored as its ISO 3166-1 code, like every nationality field.
+    expect(profile.nationality).toBe("GB");
     expect(profile.documents.some((d) => d.documentNumber === "P1000001")).toBe(true);
 
     const slot = await prisma.eRegistrationGuestSlot.findUniqueOrThrow({ where: { id: slots[0].id } });

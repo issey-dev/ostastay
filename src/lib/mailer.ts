@@ -47,7 +47,7 @@ export type ResolvedSmtp = {
 
 export class SmtpNotConfiguredError extends Error {
   constructor() {
-    super("SMTP is not configured for this enterprise — set it up under Controls → Reports → SMTP / SFTP first.")
+    super("SMTP is not configured for this enterprise — set it up in the Hub under Email & SFTP first.")
   }
 }
 

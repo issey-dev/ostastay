@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { postCharge } from "@/lib/posting/post-charge";
@@ -55,15 +56,12 @@ export async function POST(
       where: { id: body.chargeCodeId },
       include: { taxProfile: { include: { rates: true } } }
     });
-    if (!chargeCode || chargeCode.enterpriseId !== ctx.enterpriseId) {
+    if (!chargeCode || chargeCode.propertyId !== folio.propertyId) {
       return NextResponse.json({ error: "Charge code not found" }, { status: 404 });
     }
 
-    // Fetch Enterprise Settings for Tax calculation, derived from the folio's own
-    // property → enterprise (not a hardcoded constant).
-    const settings = await prisma.enterpriseSettings.findUnique({
-      where: { enterpriseId: folio.property.enterpriseId }
-    });
+    // The folio's own property's tax configuration (per property since 2026-09-23).
+    const settings = await getPropertySettings(folio.propertyId);
 
     // Description defaults to the charge code's own description; Reference is
     // separate free text printed on the invoice.

@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "A Custom Tax profile is required when the tax override mode is Custom" }, { status: 400 });
       }
       const taxProfile = await prisma.taxProfile.findUnique({ where: { id: body.taxProfileId } });
-      if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+      if (!taxProfile || taxProfile.propertyId !== body.propertyId) {
         return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
       }
       taxProfileId = body.taxProfileId;
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     const chargeCodeIds: string[] = Array.isArray(body.chargeCodeIds) ? body.chargeCodeIds : [];
     if (chargeCodeIds.length > 0) {
       const chargeCodes = await prisma.chargeCode.findMany({ where: { id: { in: chargeCodeIds } } });
-      if (chargeCodes.length !== chargeCodeIds.length || chargeCodes.some((cc) => cc.enterpriseId !== ctx.enterpriseId)) {
+      if (chargeCodes.length !== chargeCodeIds.length || chargeCodes.some((cc) => cc.propertyId !== body.propertyId)) {
         return NextResponse.json({ error: "One or more charge codes were not found" }, { status: 404 });
       }
     }
@@ -112,6 +112,7 @@ export async function POST(request: Request) {
       // posting codes from its group's numeric band (owner ruling 2026-07-30).
       const provisioned = await provisionOutletSubgroup(tx, {
         enterpriseId: ctx.enterpriseId,
+        propertyId: created.propertyId,
         outletId: created.id,
         outletName: created.name,
         outletType,

@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { alpha2For } from "@/lib/countries";
+
+// Profiles store the ISO 3166-1 alpha-2 code (src/lib/countries.ts). A slot filled with the
+// picker already holds one; an older free-text answer ("British", "Maldives") is matched
+// to its code, and anything unrecognised is kept as typed rather than dropped.
+const toCountryCode = (value: string) => alpha2For(value) ?? value;
 
 // Which field groups from a submitted slot to copy into the live Profile — staff choose
 // via the Check-in Wizard's diff dialog rather than an all-or-nothing bulk overwrite,
@@ -97,7 +103,7 @@ export async function POST(
               ...(slot.middleName && { middleName: slot.middleName }),
               ...(slot.lastName && { lastName: slot.lastName }),
               ...(slot.dateOfBirth && { dateOfBirth: slot.dateOfBirth }),
-              ...(slot.nationality && { nationality: slot.nationality }),
+              ...(slot.nationality && { nationality: toCountryCode(slot.nationality) }),
               ...(slot.gender && { gender: slot.gender }),
             },
           });
@@ -124,7 +130,7 @@ export async function POST(
             // a second pass (e.g. after reopen) must never null out a value already on the
             // document record.
             update: {
-              ...(slot.issuingCountry && { issuingCountry: slot.issuingCountry }),
+              ...(slot.issuingCountry && { issuingCountry: toCountryCode(slot.issuingCountry) }),
               ...(slot.documentIssueDate && { issueDate: slot.documentIssueDate }),
               ...(slot.documentExpiryDate && { expiryDate: slot.documentExpiryDate }),
               ...(slot.idPhotoPath && { documentImageStoragePath: slot.idPhotoPath }),
@@ -133,7 +139,7 @@ export async function POST(
               upid: profileUpid,
               documentType: slot.documentType,
               documentNumber: slot.documentNumber,
-              issuingCountry: slot.issuingCountry,
+              issuingCountry: slot.issuingCountry ? toCountryCode(slot.issuingCountry) : slot.issuingCountry,
               issueDate: slot.documentIssueDate,
               expiryDate: slot.documentExpiryDate,
               documentImageStoragePath: slot.idPhotoPath,

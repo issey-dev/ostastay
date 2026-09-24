@@ -24,6 +24,7 @@ const { materializeReservationAllocations } = await import("@/lib/allocations-se
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -89,8 +90,10 @@ async function setupWithAllocation(opts: {
     data: { propertyId: property.id, code: "STD", name: "Standard Rate" },
   });
 
-  const roomCode = await customChargeCode(enterprise.id, { code: "1000", description: "Room" });
-  const allocCode = await customChargeCode(enterprise.id, { code: "BFC", description: "Breakfast Revenue", subgroupCode: "20RV" });
+  const roomCode = await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room" });
+  const allocCode = await customChargeCode({ propertyId: property.id }, { code: "BFC", description: "Breakfast Revenue", subgroupCode: "20RV" });
+  // The allocation maths, untaxed — a charted property starts on the Maldives tax defaults.
+  await setPropertySettings(property.id, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false });
 
   const today = new Date();
   const allocation = await prisma.allocation.create({
@@ -520,7 +523,7 @@ describe("Allocations: reservation materialization", () => {
     expect(property!.allocationCalculationMode).toBe("RATE_PLAN");
 
     // A second allocation linked to the rate plan, and a third linked to a meal plan.
-    const cc = await customChargeCode(enterpriseId, { code: "TRF", description: "Transfers" });
+    const cc = await customChargeCode({ propertyId }, { code: "TRF", description: "Transfers" });
     const transfer = await prisma.allocation.create({
       data: {
         propertyId, code: "TRF-SB", name: "Speedboat Transfer", type: "TRANSFER",
@@ -576,7 +579,7 @@ describe("Allocations: reservation materialization", () => {
     });
     await prisma.property.update({ where: { id: propertyId }, data: { allocationCalculationMode: "MEAL_PLAN" } });
 
-    const cc = await customChargeCode(enterpriseId, { code: "TRF2", description: "Transfers" });
+    const cc = await customChargeCode({ propertyId }, { code: "TRF2", description: "Transfers" });
     const transfer = await prisma.allocation.create({
       data: {
         propertyId, code: "TRF-SB2", name: "Speedboat Transfer", type: "TRANSFER",

@@ -52,7 +52,7 @@ export async function resolveWebsiteApiKey(request: Request): Promise<WebsiteKey
       lastUsedAt: true,
       allowedOrigins: true,
       scopes: true,
-      properties: { select: { property: { select: { id: true, status: true } } } },
+      propertyId: true,
     },
   });
 
@@ -74,13 +74,20 @@ export async function resolveWebsiteApiKey(request: Request): Promise<WebsiteKey
       .catch(() => undefined);
   }
 
+  // One property, or ALL of the enterprise's — resolved live, so an ALL key covers a
+  // property added (or approved) after the key was minted.
+  const covered = await prisma.property.findMany({
+    where: { enterpriseId: row.enterpriseId, status: "ACTIVE", ...(row.propertyId ? { id: row.propertyId } : {}) },
+    select: { id: true },
+  });
+
   return {
     ok: true,
     key: {
       id: row.id,
       enterpriseId: row.enterpriseId,
       name: row.name,
-      propertyIds: row.properties.filter((p) => p.property.status === "ACTIVE").map((p) => p.property.id),
+      propertyIds: covered.map((p) => p.id),
       allowedOrigins: row.allowedOrigins,
       scopes: row.scopes,
     },

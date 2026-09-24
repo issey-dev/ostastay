@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, requireHubAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requireEnterpriseHub, toErrorResponse } from "@/lib/scope";
 import { revokeSessionById, TOUCH_INTERVAL_MS } from "@/lib/session-store";
 import { logActivity } from "@/lib/activity-log";
 
@@ -33,7 +33,7 @@ const SESSION_SELECT = {
 export async function GET() {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "USERS", "view");
 
     const now = Date.now();
@@ -88,7 +88,7 @@ export async function GET() {
 export async function DELETE(request: Request) {
   try {
     const ctx = await requireSession();
-    requireHubAccess(ctx);
+    requireEnterpriseHub(ctx);
     requirePermission(ctx, "USERS", "update");
 
     const { searchParams } = new URL(request.url);

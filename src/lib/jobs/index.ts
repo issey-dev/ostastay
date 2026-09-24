@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { runScheduledAudits } from "@/lib/night-audit/scheduled";
 import { getProvider } from "@/lib/channels/providers/registry";
 import { testConnection, CONNECTION_STATUS } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
@@ -344,6 +345,17 @@ const bookingApiHoldSweepJob: Job = {
   },
 };
 
+/**
+ * Run each property's scheduled Night Audit when it is due (Hub > Night Audit). Cheap when
+ * nothing is due; the cron should run at least every 15 minutes for the audit to start
+ * close to its set time. See src/lib/night-audit/scheduled.ts.
+ */
+const nightAuditScheduleJob: Job = {
+  name: "night-audit-scheduled",
+  description: "Run each property's scheduled Night Audit when it is due",
+  run: (enterpriseId) => runScheduledAudits(enterpriseId),
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -353,6 +365,7 @@ export const JOBS: readonly Job[] = [
   sessionIdleSweepJob,
   bookingApiWebhooksJob,
   bookingApiHoldSweepJob,
+  nightAuditScheduleJob,
 ];
 
 export function findJob(name: string): Job | undefined {

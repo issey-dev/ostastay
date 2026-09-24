@@ -23,7 +23,8 @@ export type WebsiteApiKeyRow = {
   createdAt: string;
   revokedAt: string | null;
   createdBy: string | null;
-  properties: { id: string; name: string }[];
+  /** The one property the key covers; null = ALL the enterprise's properties. */
+  property: { id: string; name: string } | null;
   bookingCount: number;
 };
 
@@ -39,7 +40,7 @@ const ROW_SELECT = {
   createdAt: true,
   revokedAt: true,
   createdBy: { select: { firstName: true, lastName: true } },
-  properties: { select: { property: { select: { id: true, name: true } } } },
+  property: { select: { id: true, name: true } },
   _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
 } as const;
 
@@ -63,7 +64,7 @@ function shape(r: RawRow): WebsiteApiKeyRow {
     createdAt: r.createdAt.toISOString(),
     revokedAt: r.revokedAt?.toISOString() ?? null,
     createdBy: r.createdBy ? `${r.createdBy.firstName} ${r.createdBy.lastName}`.trim() : null,
-    properties: r.properties.map((p) => p.property).sort((a, b) => a.name.localeCompare(b.name)),
+    property: r.property,
     bookingCount: r._count.bookings,
   };
 }
@@ -92,11 +93,17 @@ export function normalizeOrigins(input: string[]): string[] {
   return [...out];
 }
 
-async function assertPropertiesInEnterprise(enterpriseId: string, propertyIds: string[]): Promise<void> {
-  const unique = [...new Set(propertyIds)];
-  if (unique.length === 0) throw new ForbiddenError("Choose at least one property");
-  const count = await prisma.property.count({ where: { id: { in: unique }, enterpriseId, status: "ACTIVE" } });
-  if (count !== unique.length) throw new ForbiddenError("Property not found");
+// A key covers one property or ALL (null) — never a subset. A named property must be one
+// of this enterprise's ACTIVE properties.
+async function assertPropertyInEnterprise(enterpriseId: string, propertyId: string | null): Promise<void> {
+  if (propertyId === null) return;
+  const count = await prisma.property.count({ where: { id: propertyId, enterpriseId, status: "ACTIVE" } });
+  if (count !== 1) throw new ForbiddenError("Property not found");
+}
+
+/** "Veyo Beach Resort" / "all properties" — for activity-log lines. */
+export function keyCoverage(row: Pick<WebsiteApiKeyRow, "property">): string {
+  return row.property?.name ?? "all properties";
 }
 
 export async function listWebsiteApiKeys(enterpriseId: string): Promise<WebsiteApiKeyRow[]> {
@@ -112,7 +119,8 @@ export async function createWebsiteApiKey(params: {
   enterpriseId: string;
   userId: string;
   name: string;
-  propertyIds: string[];
+  /** One property, or null for ALL the enterprise's properties. */
+  propertyId: string | null;
   allowedOrigins: string[];
   /** Defaults to ROOMS — a key minted without a choice is a rooms key, as before scopes. */
   scopes?: string[];
@@ -120,7 +128,7 @@ export async function createWebsiteApiKey(params: {
 }): Promise<{ key: string; row: WebsiteApiKeyRow }> {
   const name = params.name.trim();
   if (!name) throw new ForbiddenError("A name is required");
-  await assertPropertiesInEnterprise(params.enterpriseId, params.propertyIds);
+  await assertPropertyInEnterprise(params.enterpriseId, params.propertyId);
   const origins = normalizeOrigins(params.allowedOrigins);
   const scopes = await normalizeScopes(params.enterpriseId, params.scopes ?? ["ROOMS"]);
 
@@ -135,7 +143,7 @@ export async function createWebsiteApiKey(params: {
       scopes,
       expiresAt: params.expiresAt,
       createdByUserId: params.userId,
-      properties: { create: [...new Set(params.propertyIds)].map((propertyId) => ({ propertyId })) },
+      propertyId: params.propertyId,
     },
     select: ROW_SELECT,
   });
@@ -146,7 +154,8 @@ export async function updateWebsiteApiKey(params: {
   enterpriseId: string;
   id: string;
   name?: string;
-  propertyIds?: string[];
+  /** One property, or null for ALL; undefined leaves it as it is. */
+  propertyId?: string | null;
   allowedOrigins?: string[];
   scopes?: string[];
   expiresAt?: Date | null;
@@ -160,7 +169,7 @@ export async function updateWebsiteApiKey(params: {
     allowedOrigins?: string[];
     scopes?: ApiScope[];
     expiresAt?: Date | null;
-    properties?: { deleteMany: Record<string, never>; create: { propertyId: string }[] };
+    propertyId?: string | null;
   } = {};
   if (params.name !== undefined) {
     const name = params.name.trim();
@@ -179,9 +188,9 @@ export async function updateWebsiteApiKey(params: {
     if (all.length === 0) throw new ForbiddenError("Choose at least one thing this key may use");
     data.scopes = (["ROOMS", "EXCURSIONS", "SPA"] as ApiScope[]).filter((s) => all.includes(s));
   }
-  if (params.propertyIds !== undefined) {
-    await assertPropertiesInEnterprise(params.enterpriseId, params.propertyIds);
-    data.properties = { deleteMany: {}, create: [...new Set(params.propertyIds)].map((propertyId) => ({ propertyId })) };
+  if (params.propertyId !== undefined) {
+    await assertPropertyInEnterprise(params.enterpriseId, params.propertyId);
+    data.propertyId = params.propertyId;
   }
 
   const updated = await prisma.websiteApiKey.update({ where: { id: params.id }, data, select: ROW_SELECT });
