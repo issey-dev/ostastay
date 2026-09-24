@@ -3206,3 +3206,20 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   enterprise (`npm run docs:demo`, `npm run docs:shots`), never from a customer's data.
 - **One PDF per area** (`npm run docs:pdf [area]`). The Booking API PDF keeps its address.
 
+## 2026-09-24 — Property logo is uploaded, 3:2 (owner)
+
+- The Hub's **Logo URL** field is replaced by an **upload** (Hub › the property › General).
+  The browser crops to a fixed **3:2 landscape** frame (drag, zoom in to trim white space,
+  zoom out to fit a wide logo whole; outside the frame is dimmed; live previews of the app
+  header and a document header) and exports a **900 × 600 PNG** — transparency kept, PNG
+  rather than WebP because Outlook can't show WebP in emails. A large upload (up to 10 MB;
+  PNG/JPG/WebP/SVG) is compressed by that re-export; typical logos land at 30–150 KB.
+- Stored on the VPS under `storage/logos` (the persisted `/app/storage` volume — not
+  `public/`, which the standalone build doesn't serve for files added at runtime), served
+  publicly by `GET /api/logos/[file]` with a fresh name per upload, cached immutably.
+  `Property.logoUrl` holds that path; it is set only by the upload route
+  (`/api/properties/[id]/logo`). Existing external Logo URLs keep working until replaced.
+- Shown on: the portal header (on a **white tile**, so a dark or transparent logo reads on the
+  dark header), every stationery document and its emailed PDF, every report (preview and PDF
+  — reports had no logo before), emails and the Booking API (as an **absolute** URL built
+  from `APP_URL`), and the guest eRegistration page.

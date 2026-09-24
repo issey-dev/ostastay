@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Save } from "@/components/icons"
 import { useRouter } from "next/navigation"
+import { PropertyLogoUploader } from "@/components/controls/property-logo-uploader"
 
 type PropertyDetail = {
   id: string
@@ -65,7 +66,7 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
         body: JSON.stringify({
           name: detail.name, code: detail.code, legalName: detail.legalName,
           checkInTime: detail.checkInTime, checkOutTime: detail.checkOutTime,
-          logoUrl: detail.logoUrl, taxId: detail.taxId, contactPhone: detail.contactPhone,
+          taxId: detail.taxId, contactPhone: detail.contactPhone,
           contactEmail: detail.contactEmail, address: detail.address, starRating: detail.starRating,
         }),
       })
@@ -85,6 +86,16 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      {/* Saved on its own the moment it's uploaded — not by "Save Property". */}
+      <PropertyLogoUploader
+        propertyId={detail.id}
+        logoUrl={detail.logoUrl}
+        onChange={(logoUrl) => {
+          setDetail({ ...detail, logoUrl })
+          // The header and band show the logo — refresh them.
+          router.refresh()
+        }}
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Property Name</Label>
@@ -109,10 +120,6 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
         <div className="space-y-2">
           <Label>Check-out Time</Label>
           <Input value={detail.checkOutTime} onChange={(e) => setDetail({ ...detail, checkOutTime: e.target.value })} />
-        </div>
-        <div className="space-y-2">
-          <Label>Logo URL</Label>
-          <Input placeholder="https://…" value={detail.logoUrl ?? ""} onChange={(e) => setDetail({ ...detail, logoUrl: e.target.value })} />
         </div>
         <div className="space-y-2">
           <Label>Tax ID</Label>

@@ -50,13 +50,20 @@ export function ReportDocument({ result, branding }: { result: ReportResult; bra
           under it: the same restraint as the app chrome (one brand accent, no fills). */}
       <header className="mb-4 border-b-2 border-[var(--print-accent)] pb-3">
         <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--print-muted)]">
-              {branding.propertyName}
-              {branding.enterpriseName ? <span className="font-normal"> · {branding.enterpriseName}</span> : null}
-            </p>
-            <h1 className="mt-1 text-[20px] font-bold tracking-tight text-[var(--print-ink)]">{result.title}</h1>
-            {result.subtitle && <p className="mt-0.5 text-[12px] text-[var(--print-ink-secondary)]">{result.subtitle}</p>}
+          <div className="flex min-w-0 items-start gap-4">
+            {branding.logoUrl && (
+              // The property's 3:2 logo (Hub › General), shown whole.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logoUrl} alt="" className="h-14 w-[84px] shrink-0 object-contain object-left" />
+            )}
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--print-muted)]">
+                {branding.propertyName}
+                {branding.enterpriseName ? <span className="font-normal"> · {branding.enterpriseName}</span> : null}
+              </p>
+              <h1 className="mt-1 text-[20px] font-bold tracking-tight text-[var(--print-ink)]">{result.title}</h1>
+              {result.subtitle && <p className="mt-0.5 text-[12px] text-[var(--print-ink-secondary)]">{result.subtitle}</p>}
+            </div>
           </div>
           <div className="shrink-0 text-right text-[10px] text-[var(--print-muted)]">
             <p className="font-semibold uppercase tracking-[0.14em] text-[var(--print-accent)]">{PRODUCT_NAME}</p>

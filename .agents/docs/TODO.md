@@ -61,6 +61,15 @@ Open:
     and shows an internal `.agents/docs/…` path to customers.
   - Online Booking: "Rate plan to sell *" isn't enforced; the key's Expires is a plain date
     input.
+## Property logo upload (2026-09-24) — DONE
+
+See DECISIONS.md (2026-09-24, "Property logo is uploaded"). Open:
+- [ ] The pdf-lib report FALLBACK (used only when headless Chrome fails) draws no logo —
+  it would need the PNG bytes embedded (`ReportBranding.logoDataUrl` exists, unused).
+- [ ] Osta's own licence invoices still use `EnterpriseSettings.invoiceLogoUrl` (a URL
+  field) — move to the same upload if the owner wants it there too.
+- [ ] Backups: `storage/logos` lives on the `osta-uploads` volume with the eRegistration
+  photos — include that volume in VPS backups.
 
 ## Review of 7.3.0 (#53) + tax fix (#54) — 2026-09-24
 
@@ -152,7 +161,8 @@ becomes setup/health banners.
   jobs only); link cards and job card removed; single-property users see their own
 
 - [ ] **Deployment:** run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
-  a property's scheduled Night Audit starts at the first run after its set time.
+  a property's scheduled Night Audit starts at the first run after its set time. DEPLOY.md
+  §7 now says so; the VPS crontab itself still has to be changed by hand.
 
 **Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
 - `GET /api/properties` returned every property of the enterprise to a single-property
