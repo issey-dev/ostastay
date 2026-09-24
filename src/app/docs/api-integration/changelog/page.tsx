@@ -9,6 +9,15 @@ export default function Changelog() {
     <>
       <DocTitle title="Changelog" lead="Everything here is additive: nothing is removed or renamed within v1." />
 
+      <H2 id="2026-09-24">September 2026 — documentation: dates for Excursions and Spa</H2>
+      <ul>
+        <li>
+          Clarified what &quot;today&quot; means. Rooms keep using the property&apos;s <code>businessDate</code>; Excursions and Spa run on
+          the actual date in the property&apos;s time zone, so activity date pickers should start at whichever of the two is later. See{" "}
+          <a href="/docs/api-integration/authentication#conventions">Conventions</a>. No change to the API itself.
+        </li>
+      </ul>
+
       <H2 id="2026-09-23">September 2026 — Excursions, Spa, webhooks</H2>
       <ul>
         <li><strong>Excursions</strong>: catalogue, departures with live seats, quotes, holds, instant bookings.</li>

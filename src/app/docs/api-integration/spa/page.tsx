@@ -91,6 +91,11 @@ export default function Spa() {
       <CodeBlock lang="json" code={`{ "treatmentId": "t19a…", "partySize": 2, "days": [{ "date": "2026-10-01", "available": true }, { "date": "2026-10-02", "available": false }] }`} />
       <ul>
         <li>At most 31 days per range call. Use the range to grey out full days in a date picker, then the day call for times.</li>
+        <li>
+          Start the picker at today in the property&apos;s time zone, not at <code>businessDate</code> — free times run on the clock, and{" "}
+          <code>businessDate</code> can lag until the desk closes the day. See{" "}
+          <a href="/docs/api-integration/authentication#conventions">Conventions</a>.
+        </li>
         <li>A slot is available when there is a free therapist for <strong>every</strong> guest and a free room for the party, and it is not inside the property&apos;s &quot;book at least … hours ahead&quot; window.</li>
         <li><code>gender</code> (<code>MALE</code> or <code>FEMALE</code>) filters to therapists of that gender for every guest. Only when <code>genderPreferenceOffered</code> is true; otherwise it is refused.</li>
         <li>Holds by other websites are taken into account — a held time shows as not available.</li>
