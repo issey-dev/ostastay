@@ -102,7 +102,8 @@ becomes setup/health banners.
   jobs only); link cards and job card removed; single-property users see their own
 
 - [ ] **Deployment:** run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
-  a property's scheduled Night Audit starts at the first run after its set time.
+  a property's scheduled Night Audit starts at the first run after its set time. DEPLOY.md
+  §7 now says so; the VPS crontab itself still has to be changed by hand.
 
 **Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
 - `GET /api/properties` returned every property of the enterprise to a single-property

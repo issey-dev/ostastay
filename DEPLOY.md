@@ -131,20 +131,24 @@ From there, create your hotel's own enterprise and its properties through the ap
 
 ## 7. Schedule the background jobs
 
-The job runner keeps channel-manager credentials alive (Beds24 refresh tokens expire
-after 30 days idle) and prunes the exchange log. Nothing calls it automatically — add a
-host cron entry, using the same `CRON_SECRET` you put in `.env`:
+The job runner runs each property's **scheduled Night Audit** (Hub › the property › Night
+Audit), keeps channel-manager credentials alive (Beds24 refresh tokens expire after 30
+days idle) and prunes the exchange log. Nothing calls it automatically — add a host cron
+entry, using the same `CRON_SECRET` you put in `.env`. Run it **every 15 minutes**: a
+scheduled audit starts at the first run after its set time, so an hourly cron can start
+it up to an hour late.
 
 ```bash
 crontab -e
 ```
 
 ```cron
-# Uppsolut PMS background jobs — hourly
-0 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://stay.uppsolut.com/api/jobs/run > /dev/null 2>&1
+# Uppsolut PMS background jobs — every 15 minutes
+*/15 * * * * curl -fsS -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://stay.uppsolut.com/api/jobs/run > /dev/null 2>&1
 ```
 
-If you skip this, the app still works; channel-manager tokens will eventually expire.
+If you skip this, the app still works, but no scheduled Night Audit ever runs and
+channel-manager tokens will eventually expire.
 
 ---
 
@@ -251,6 +255,8 @@ Automate it daily with `crontab -e`:
 
 ```cron
 30 3 * * * cd ~/ostastay && docker compose exec -T db pg_dump -U osta -d ostastay --clean --if-exists | gzip > ~/backups/osta-$(date +\%F).sql.gz
+# The uploads volume too — guest ID photos and every property's logo (storage/logos).
+45 3 * * * docker run --rm -v ostastay_osta-uploads:/src -v ~/backups:/out alpine tar czf /out/uploads-$(date +\%F).tar.gz -C /src .
 ```
 
 To restore into a running stack:
