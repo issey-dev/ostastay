@@ -67,7 +67,16 @@ function computeTaxLines(
     runningTotalRaw += amountRaw
   }
 
-  return { baseAmount: round2(baseAmountRaw), breakdown }
+  if (!pricesIncludeTaxes) return { baseAmount: round2(baseAmountRaw), breakdown }
+
+  // Inclusive: rounding the base and every line independently can leave the parts a cent
+  // off the gross the user entered (215.00 → 167.06 + 16.71 + 31.24 = 215.01). Each tax
+  // line keeps its own rounded amount and the base absorbs the residual cent, so
+  // base + lines == round2(input) exactly (DECISIONS.md, 2026-09-23). Done in integer
+  // cents so the subtraction itself can't reintroduce float drift.
+  const grossCents = Math.round(inputAmount * 100)
+  const taxCents = breakdown.reduce((sum, l) => sum + Math.round(l.amount * 100), 0)
+  return { baseAmount: (grossCents - taxCents) / 100, breakdown }
 }
 
 // The enterprise-wide default: Service Charge (BASE) then GST (COMPOUND, on

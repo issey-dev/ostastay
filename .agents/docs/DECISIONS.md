@@ -3032,6 +3032,24 @@ Room Type to the sheet's own columns.
   one reported (else the earliest added) — on both this report and the MIRA sheet.
   Nationality is a single profile field, so there is nothing to choose between.
 
+## 2026-09-23 — Tax-inclusive rounding: the base takes the residual cent
+
+A tax-inclusive posting (`Property.pricesIncludeTaxes = true`) must split into parts that
+add back to exactly the gross entered. `computeTaxLines` (`src/lib/tax-calc.ts`) used to
+round the backed-out base and each tax line independently, which could drift a cent:
+inclusive 215.00 on SC 10% + GST 17% came out 167.06 + 16.71 + 31.24 = 215.01.
+
+- **Rule:** each tax line (Service Charge, GST, every Custom Tax line) keeps its own
+  `round2` of its true amount; the **base** is `round2(gross) − Σ rounded lines`,
+  computed in integer cents. So base + lines == round2(input) always. 215.00 now posts
+  167.05 + 16.71 + 31.24.
+- **Why the base, not the last tax line:** tax lines stay the exact rounded percentage of
+  the true base, which is what gets declared; the base (our revenue) absorbs the cent. The
+  base moves by at most one cent against its own rounding on the default engine.
+- **Exclusive postings unchanged:** the entered amount is the base, taxes ride on top.
+- Applies everywhere `postCharge` resolves tax (desk excursions, spa, outlets, Night
+  Audit, Booking API quotes). Tests: `tests/business-rules/tax-calc.test.ts`.
+
 ## 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
 
 Owner, on the Controls and Stationaries pages: move them to the Hub "as there is we will be
