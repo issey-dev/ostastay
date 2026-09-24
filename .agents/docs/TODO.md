@@ -2,6 +2,16 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Mobile polish (2026-09-25) — PLAN awaiting approval
+
+See [MOBILE_PLAN.md](MOBILE_PLAN.md). Found by the audit, affect desktop too (fix in Phase 1):
+- [ ] Tape chart and availability grid start at the device date, not the business date
+  (`tape-chart-grid.tsx:47`, `availability-grid.tsx:53/226`).
+- [ ] Activity Log module filter shows the raw `__all__` value (`activity-log/page.tsx:99`).
+- [ ] Permission-matrix page auto-prints ~800ms after load.
+- [ ] `DateRangePicker` hard-codes `id="date"` (duplicate ids).
+- [ ] Group pickup dialog is not Zod + RHF (APP STANDARD 001).
+
 ## Configuration guide + docs portal split (2026-09-24) — DONE, follow-ups open
 
 Done: `/docs` split into `/docs/api` · `/docs/configuration` · `/docs/operations` (old
