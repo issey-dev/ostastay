@@ -163,10 +163,26 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
       .then((data) => { if (Array.isArray(data)) setRooms(data.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))) })
   }, [propertyId])
 
+  // A new treatment starts with the property's default buffers (Spa settings).
+  const [bufferDefaults, setBufferDefaults] = useState<{ prep: string; cleanup: string } | null>(null)
+  useEffect(() => {
+    if (!propertyId) return
+    fetch(`/api/spa/settings?propertyId=${propertyId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s) setBufferDefaults({ prep: String(s.defaultPreparationBufferMinutes), cleanup: String(s.defaultCleanupBufferMinutes) })
+      })
+      .catch(() => {})
+  }, [propertyId, refreshKey])
+
   const openCreate = () => {
     setEditing(null)
     setServerError(null)
-    form.reset(emptyValues)
+    form.reset({
+      ...emptyValues,
+      preparationBufferMinutes: bufferDefaults?.prep ?? emptyValues.preparationBufferMinutes,
+      cleanupBufferMinutes: bufferDefaults?.cleanup ?? emptyValues.cleanupBufferMinutes,
+    })
     setIsDialogOpen(true)
   }
 
@@ -624,7 +640,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
           <DialogHeader>
             <DialogTitle>Compatible Rooms — {roomsFor?.name}</DialogTitle>
             <DialogDescription>
-              The booking engine only offers a room here. With none checked, any room compatible by type is offered instead.
+              The booking engine only offers the rooms ticked here. With none ticked, every active, bookable room with enough capacity for the party is offered.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto space-y-2 py-2">

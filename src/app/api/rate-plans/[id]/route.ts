@@ -3,6 +3,14 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { countRatePlanUsage, isUniqueViolation, usageMessages } from "@/lib/revenue-usage";
+
+/** A Zod failure as one readable sentence for the toast, not the raw issue array. */
+function zodMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  const field = issue?.path.join(".");
+  return field ? `${field}: ${issue.message}` : issue?.message ?? "Invalid rate plan";
+}
 
 const updateSchema = z.object({
   name: z.string().min(2),
@@ -42,7 +50,10 @@ export async function PUT(
     // Parse and validate the body
     const data = updateSchema.parse({
       ...body,
-      priority: parseInt(body.priority) || 0,
+      priority: (() => {
+        const n = typeof body.priority === "number" ? body.priority : parseInt(String(body.priority ?? ""), 10);
+        return Number.isFinite(n) ? n : existing.priority;
+      })(),
       isNegotiated: !!body.isNegotiated,
       isComplimentary: !!body.isComplimentary,
       isHouseUse: !!body.isHouseUse,
@@ -54,6 +65,23 @@ export async function PUT(
           : parseFloat(body.derivedAdjustmentValue),
       chargeCodeId: body.chargeCodeId || null,
     });
+
+    // The code is frozen once reservations are priced on this plan (see
+    // src/lib/revenue-usage.ts), and must stay unique within the property.
+    const nextCode = data.code.trim().toUpperCase();
+    if (!existing.isLocked && nextCode !== existing.code) {
+      const used = await countRatePlanUsage(id);
+      if (used > 0) {
+        return NextResponse.json({ error: usageMessages.ratePlanCode(existing.code, used) }, { status: 409 });
+      }
+      const duplicate = await prisma.ratePlan.findUnique({
+        where: { propertyId_code: { propertyId: existing.propertyId, code: nextCode } },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return NextResponse.json({ error: `A rate plan with code ${nextCode} already exists at this property` }, { status: 409 });
+      }
+    }
 
     // Accommodation charge code the room charge posts against — a posting setting, so
     // it stays editable even on a locked Base plan (unlike the identity fields). null
@@ -137,7 +165,7 @@ export async function PUT(
                 : undefined,
           }
         : {
-            code: data.code.toUpperCase(),
+            code: nextCode,
             name: data.name,
             description: data.description,
             priority: data.priority,
@@ -172,7 +200,10 @@ export async function PUT(
     return NextResponse.json(updatedRatePlan);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
+      return NextResponse.json({ error: zodMessage(error) }, { status: 400 });
+    }
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "A rate plan with this code already exists at this property" }, { status: 409 });
     }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -198,6 +229,13 @@ export async function DELETE(
       return NextResponse.json({ error: "The Base Rate plan cannot be deleted" }, { status: 400 });
     }
 
+    // RoomAssignment.ratePlanId is RESTRICT — say so plainly instead of letting the
+    // delete fail on the foreign key.
+    const used = await countRatePlanUsage(id);
+    if (used > 0) {
+      return NextResponse.json({ error: usageMessages.ratePlanDelete(existing.code, used) }, { status: 409 });
+    }
+
     await prisma.ratePlan.delete({
       where: { id },
     });
@@ -213,6 +251,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "P2003") {
+      return NextResponse.json({ error: "This rate plan is used by reservations and can't be deleted" }, { status: 409 });
+    }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
   }

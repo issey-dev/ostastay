@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/lib/toast"
+import { MIN_SERVICE_CHARGE_RATE } from "@/lib/tax-calc"
 
 type TaxLineForm = { name: string; ratePercent: string; calculateOn: "BASE" | "COMPOUND" }
 const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculateOn: "BASE" })
@@ -30,7 +31,10 @@ const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculat
 // switched on the property's Night Audit page; this form holds only the values (rates,
 // amounts, the Green Tax rules) and never sends those switches, so saving here can never
 // undo a change made there.
-export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string; nightAuditHref?: string }) {
+// `currency` is the property's own currency. Green Tax is posted in it with NO conversion
+// (src/lib/posting/run-generates.ts GREEN_TAX reads these amounts straight onto the folio),
+// so the rates are labelled — and must be entered — in that currency, not a fixed "USD".
+export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { propertyId: string; nightAuditHref?: string; currency?: string }) {
   const [taxProfiles, setTaxProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -55,6 +59,8 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null)
   const [isTaxDeleteDialogOpen, setIsTaxDeleteDialogOpen] = useState(false)
   const [deletingTaxId, setDeletingTaxId] = useState<string | null>(null)
+  // Shown inside the delete dialog — e.g. the 409 "used by 3 charge codes" refusal.
+  const [deleteTaxError, setDeleteTaxError] = useState<string | null>(null)
 
   const [taxForm, setTaxForm] = useState({ name: "", description: "", rates: [BLANK_TAX_LINE()] })
 
@@ -95,6 +101,7 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (serviceChargeTooLow) return
     setSavingSettings(true)
     try {
       const res = await fetch(`/api/properties/${propertyId}/settings`, {
@@ -105,7 +112,8 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
       if (res.ok) {
         toast.success("Maldives Tax settings saved successfully!")
       } else {
-        toast.error("Failed to save settings.")
+        const data = await res.json().catch(() => ({}))
+        toast.error(data?.error || "Failed to save settings.")
       }
     } catch (e) {
       console.error(e)
@@ -114,6 +122,8 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
       setSavingSettings(false)
     }
   }
+
+  const serviceChargeTooLow = !(settingsForm.serviceChargeRate >= MIN_SERVICE_CHARGE_RATE)
 
   const resetTaxForm = () => {
     setTaxForm({ name: "", description: "", rates: [BLANK_TAX_LINE()] })
@@ -172,6 +182,7 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
 
   const handleDeleteTax = async () => {
     if (!deletingTaxId) return
+    setDeleteTaxError(null)
     try {
       const res = await fetch(`/api/taxes/${deletingTaxId}`, { method: "DELETE" })
       if (res.ok) {
@@ -179,11 +190,12 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
         setDeletingTaxId(null)
         fetchData()
       } else {
-        const error = await res.json()
-        toast.error(error.error || "Failed to delete Custom Tax profile")
+        const error = await res.json().catch(() => ({}))
+        setDeleteTaxError(error.error || "Failed to delete Custom Tax profile")
       }
     } catch (e) {
       console.error(e)
+      setDeleteTaxError("Failed to delete Custom Tax profile")
     }
   }
 
@@ -296,7 +308,7 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
         </div>
 
         {/* Delete Custom Tax Modal */}
-        <Dialog open={isTaxDeleteDialogOpen} onOpenChange={setIsTaxDeleteDialogOpen}>
+        <Dialog open={isTaxDeleteDialogOpen} onOpenChange={(open) => { setIsTaxDeleteDialogOpen(open); if (!open) setDeleteTaxError(null) }}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Delete Custom Tax</DialogTitle>
@@ -304,9 +316,14 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
                 Are you sure you want to delete this tax profile? This action will permanently remove it and its historical rates.
               </DialogDescription>
             </DialogHeader>
+            {deleteTaxError && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                {deleteTaxError}
+              </p>
+            )}
             <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsTaxDeleteDialogOpen(false)}>Cancel</Button>
-              <Button type="button" variant="destructive" onClick={handleDeleteTax}>Delete Permanently</Button>
+              <Button type="button" variant="outline" onClick={() => { setIsTaxDeleteDialogOpen(false); setDeleteTaxError(null) }}>Cancel</Button>
+              <Button type="button" variant="destructive" onClick={handleDeleteTax} disabled={!!deleteTaxError}>Delete Permanently</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -331,14 +348,14 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
 
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
-                      <Label>Adult Rate (per adult/night) in USD</Label>
+                      <Label>Adult Rate (per adult/night) in {currency}</Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-muted-foreground">$</span>
+                        <span className="absolute left-3 top-2 text-xs leading-5 text-muted-foreground">{currency}</span>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
-                          className="pl-7"
+                          className="pl-12"
                           required
                           value={settingsForm.greenTaxAdultAmount}
                           onChange={e => setSettingsForm(p => ({ ...p, greenTaxAdultAmount: parseFloat(e.target.value) || 0 }))}
@@ -347,14 +364,14 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Child Rate (per child/night) in USD</Label>
+                      <Label>Child Rate (per child/night) in {currency}</Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-muted-foreground">$</span>
+                        <span className="absolute left-3 top-2 text-xs leading-5 text-muted-foreground">{currency}</span>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
-                          className="pl-7"
+                          className="pl-12"
                           required
                           value={settingsForm.greenTaxChildAmount}
                           onChange={e => setSettingsForm(p => ({ ...p, greenTaxChildAmount: parseFloat(e.target.value) || 0 }))}
@@ -375,6 +392,11 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
                         Guests below this age are completely exempt. (MIRA regulations exempt infants under <strong>2</strong> years of age).
                       </p>
                     </div>
+
+                    <p className="text-[11px] text-muted-foreground md:col-span-2 lg:col-span-3">
+                      Posted in this property&apos;s currency ({currency}) exactly as entered — no exchange conversion is applied.
+                      MIRA sets Green Tax in USD, so a property whose currency is not USD enters the equivalent amount.
+                    </p>
 
                     <div className="space-y-2 md:col-span-2">
                       <div className="flex items-start gap-3">
@@ -432,23 +454,31 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
                         <Input
                           type="number"
                           step="0.01"
-                          min="10"
+                          min={MIN_SERVICE_CHARGE_RATE}
+                          max="100"
                           required
+                          aria-invalid={serviceChargeTooLow || undefined}
                           value={settingsForm.serviceChargeRate}
                           onChange={e => setSettingsForm(p => ({ ...p, serviceChargeRate: parseFloat(e.target.value) || 0 }))}
                         />
                         <span className="absolute right-3 top-2 text-muted-foreground">%</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Maldives Law requires a minimum of <strong>10%</strong> Service Charge.
-                      </p>
+                      {serviceChargeTooLow ? (
+                        <p className="text-[11px] font-medium text-destructive" role="alert">
+                          Must be at least {MIN_SERVICE_CHARGE_RATE}%. To not charge Service Charge at all, switch its posting off on the Night Audit page.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          Maldives Law requires a minimum of <strong>{MIN_SERVICE_CHARGE_RATE}%</strong> Service Charge. Not charging it? Switch its posting off on the Night Audit page.
+                        </p>
+                      )}
                     </div>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t">
-              <Button type="submit" disabled={savingSettings}>
+              <Button type="submit" disabled={savingSettings || serviceChargeTooLow}>
                 <Save className="w-4 h-4 mr-2" />
                 {savingSettings ? "Saving..." : "Save Configuration"}
               </Button>
@@ -492,7 +522,7 @@ export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string;
                           variant="outline" size="icon"
                           className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
                           aria-label="Delete"
-                          onClick={() => { setDeletingTaxId(tp.id); setIsTaxDeleteDialogOpen(true) }}
+                          onClick={() => { setDeletingTaxId(tp.id); setDeleteTaxError(null); setIsTaxDeleteDialogOpen(true) }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

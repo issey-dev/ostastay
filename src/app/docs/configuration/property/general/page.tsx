@@ -33,15 +33,13 @@ export default function General() {
         choose <strong>Save logo</strong>. For a crisp result, upload a logo with little empty space around it; zoom in on the crop
         to trim what is left.
       </p>
-      <Callout title="Check before you save" tone="warn">
-        <p>
-          This form does not check your entries: type times as <code>14:00</code>, and double-check the email and phone number. They
-          go straight onto guest documents.
-        </p>
-      </Callout>
       <p>
-        Currency and time zone are set by Uppsolut and can&apos;t be changed here. If either is wrong, contact Uppsolut before you
-        take any bookings.
+        The form checks each field as you type: times as <code>14:00</code>, a valid email, a star rating of 0–5, and a short code
+        no other property uses.
+      </p>
+      <p>
+        Currency and time zone are fixed once the property is active and can&apos;t be changed here. If either is wrong, contact
+        Uppsolut before you take any bookings.
       </p>
 
       <H2>Appearance</H2>

@@ -29,12 +29,12 @@ export default function Finance() {
       <Table
         head={["Field", "Default", "Notes"]}
         rows={[
-          ["Adult Rate (per adult/night)", "12.00", "Green Tax per adult per night."],
-          ["Child Rate (per child/night)", "6.00", "Green Tax per child per night."],
+          ["Adult Rate (per adult/night)", "12.00", "Green Tax per adult per night, in the property's currency. MIRA sets Green Tax in USD: if your currency isn't USD, enter the equivalent."],
+          ["Child Rate (per child/night)", "6.00", "Green Tax per child per night, as above."],
           ["Age Exemption Threshold", "2", "Guests under this age pay no Green Tax."],
           ["Measure the 12-hour stay on standard check-in/check-out times", "Off", "Off: the stay is measured from the actual check-in time. On: from your standard times (General page)."],
           ["GST Rate (%)", "17", "Charged on the price plus the service charge."],
-          ["Service Charge Rate (%)", "10", "Charged on the price. The legal minimum is 10%."],
+          ["Service Charge Rate (%)", "10", "Charged on the price. At least 10%, the legal minimum. A property that doesn't charge it switches its posting off on Night Audit."],
         ]}
       />
       <p>
@@ -49,7 +49,10 @@ export default function Finance() {
         (name, rate %, and whether it is calculated on the subtotal or on the subtotal plus the lines before it). A charge code or
         an outlet can then use the profile instead of the Maldives defaults.
       </p>
-      <p>Create custom profiles now: charge codes (next step) pick from them. Don&apos;t delete a profile that a charge code still uses.</p>
+      <p>
+        Create custom profiles now: charge codes (next step) pick from them. A profile that a charge code or outlet still uses
+        can&apos;t be deleted; the message says how many use it.
+      </p>
 
       <H2>Payment Methods</H2>
       <Callout title="Required" tone="warn">

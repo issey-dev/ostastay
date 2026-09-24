@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { taxProfileInUseMessage } from "@/lib/tax-profile-usage";
 
 export async function PUT(
   request: Request,
@@ -98,6 +99,19 @@ export async function DELETE(
     }
     // The row's own property — a single-property admin may only change their own.
     await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "delete");
+
+    // In use? ChargeCode.taxProfileId and Outlet.taxProfileId have no onDelete rule, so
+    // deleting a referenced profile would fail on the foreign key (a raw 500) — and even
+    // if it didn't, those codes/outlets would silently lose their tax. Refuse with a
+    // readable 409 naming what still points at it.
+    const [chargeCodes, outlets] = await Promise.all([
+      prisma.chargeCode.count({ where: { taxProfileId: id } }),
+      prisma.outlet.count({ where: { taxProfileId: id } }),
+    ]);
+    const inUse = taxProfileInUseMessage(existing.name, { chargeCodes, outlets });
+    if (inUse) {
+      return NextResponse.json({ error: inUse, chargeCodes, outlets }, { status: 409 });
+    }
 
     await prisma.taxProfile.delete({
       where: { id },

@@ -6,7 +6,7 @@ import { logActivity } from '@/lib/activity-log'
 
 const createSchema = z.object({
   propertyId: z.string().uuid(),
-  name: z.string().min(2),
+  name: z.string().trim().min(2, 'Building name must be at least 2 characters'),
 })
 
 export async function GET(request: Request) {

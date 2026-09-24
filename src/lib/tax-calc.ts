@@ -9,6 +9,13 @@ import type { PropertySettings, TaxRate } from "@prisma/client"
 // is exactly how Service Charge/GST already relate to each other; a Custom Tax profile
 // just generalizes that to any number of lines instead of a fixed two.
 
+// Maldives law sets Service Charge at a MINIMUM of 10%. The rate field enforces that floor
+// in both the Finance › Tax form and PATCH /api/properties/[id]/settings, so the two can
+// never disagree. A property that genuinely does not levy Service Charge switches posting
+// OFF on its Night Audit page (PropertySettings.serviceChargeEnabled) — that switch, not a
+// 0% rate, is the supported way to not charge it, so the floor never blocks anyone.
+export const MIN_SERVICE_CHARGE_RATE = 10
+
 export type TaxCalcMode = "BASE" | "COMPOUND"
 
 export type TaxBreakdownLine = {

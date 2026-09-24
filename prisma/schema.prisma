@@ -605,9 +605,11 @@ model RoomType {
 
   // Deactivating a room type blocks any *new* reservation from being assigned to it and
   // cascades every one of its Room rows to status OUT_OF_SERVICE — but never deletes
-  // anything, so existing reservation and folio history stays intact. Re-activating does
-  // NOT auto-restore room status, since some rooms may have been OUT_OF_SERVICE for an
-  // unrelated reason beforehand.
+  // anything, so existing reservation and folio history stays intact. Since 2026-09-24
+  // re-activating brings back ONLY the rooms the deactivation itself took out of service
+  // (marked by Room.statusBeforeTypeDeactivation) — a room that was already
+  // OUT_OF_SERVICE for an unrelated reason stays as it is. See
+  // src/app/api/room-types/[id]/route.ts.
   isActive Boolean @default(true)
 
   channelMap      ChannelRoomTypeMap?
@@ -639,6 +641,9 @@ model RoomType {
   // since all three are "pick any number of codes from a category" in the same shape.
   features                 RoomTypeFeature[]
 
+  // A room type code is unique within its property (2026-09-24). The API also refuses a
+  // case-only variant (DLX vs dlx) — Postgres can't express that in a Prisma @@unique.
+  @@unique([propertyId, code])
   @@index([propertyId])
 }
 
@@ -699,6 +704,14 @@ model Room {
   // room back on that date; a human (or a maintenance-ticket resolution) does.
   oooReason         String?
   oooExpectedReturn DateTime?
+
+  // Set only while this room is OUT_OF_SERVICE *because its room type was deactivated*:
+  // holds the status it had just before (CLEAN / DIRTY / INSPECTED / OUT_OF_ORDER).
+  // Re-activating the room type uses it to bring exactly these rooms back (to DIRTY — or
+  // OUT_OF_ORDER if they were — never straight to CLEAN, since nobody has checked the room
+  // since) and then clears it. Any manual status change clears it too, so a room someone
+  // has since taken OOS for another reason is left alone.
+  statusBeforeTypeDeactivation String?
 
   assignedAttendantId String?
   assignedAttendant   User?   @relation("RoomAssignedAttendant", fields: [assignedAttendantId], references: [id])

@@ -358,7 +358,7 @@ const stationery: SectionDef = {
 // ─── Revenue: allocations and meal plans ─────────────────────────────────────────────
 
 async function ensureAllocation(tx: Tx, ctx: CopyCtx, sourceId: string, pulled: boolean): Promise<{ id: string; created: boolean }> {
-  const a = await tx.allocation.findUniqueOrThrow({ where: { id: sourceId } })
+  const a = await tx.allocation.findUniqueOrThrow({ where: { id: sourceId }, include: { rates: { orderBy: { effectiveFrom: "asc" } } } })
   const existing = await tx.allocation.findUnique({ where: { propertyId_code: { propertyId: ctx.to, code: a.code } }, select: { id: true } })
   if (existing) return { id: existing.id, created: false }
   const chargeCodeId = (await ensureChargeCode(tx, ctx, a.chargeCodeId, true)).id
@@ -366,6 +366,15 @@ async function ensureAllocation(tx: Tx, ctx: CopyCtx, sourceId: string, pulled: 
     data: {
       propertyId: ctx.to, code: a.code, name: a.name, type: a.type, chargeCodeId, postingRhythm: a.postingRhythm,
       mode: a.mode, sellSeparate: a.sellSeparate, publishToApi: a.publishToApi, isActive: a.isActive,
+      // Its dated price rows come with it — an allocation with no rate covering the
+      // audit night posts nothing, so copying it bare would silently price at zero.
+      rates: a.rates.length
+        ? {
+            create: a.rates.map((r) => ({
+              adultPrice: r.adultPrice, childPrice: r.childPrice, effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo,
+            })),
+          }
+        : undefined,
     },
   })
   ;(pulled ? ctx.report.pulled : ctx.report.copied).push({ key: a.code, label: `Allocation ${a.code} ${a.name}` })

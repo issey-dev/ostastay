@@ -5,8 +5,8 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { logActivity } from '@/lib/activity-log'
 
 const createSchema = z.object({
-  buildingId: z.string().uuid(),
-  name: z.string().min(1),
+  buildingId: z.string({ error: 'Building is required' }).uuid('Building is required'),
+  name: z.string().trim().min(1, 'Floor name is required'),
 })
 
 export async function POST(request: Request) {

@@ -30,7 +30,7 @@ export default function Spa() {
         rows={[
           ["Name / Category / Description", "What guests see."],
           ["Duration (min)", "The treatment itself, default 60."],
-          ["Prep Buffer / Cleanup Buffer (min)", "Room time before and after, default 0 and 15. The room is blocked for the whole time."],
+          ["Prep Buffer / Cleanup Buffer (min)", "Room time before and after, pre-filled from Spa Settings. The room is blocked for the whole time."],
           ["Charge Code", "Where the revenue posts."],
           ["Max Participants", "1 for individual treatments; 2 or more for couples or group sessions."],
           ["Pricing Mode", "Per person (times party size), or Flat package price."],
@@ -51,7 +51,7 @@ export default function Spa() {
         rows={[
           ["Skills", "Tick each treatment they are Qualified for, and Preferred where they are your first choice. Only qualified therapists are offered."],
           ["Schedule", "Their working hours per weekday, from an Effective From date. Saving replaces the whole week."],
-          ["Exceptions", "Whole days off: day off, leave, training, sick, unavailable."],
+          ["Exceptions", "Day off, leave, training, sick or unavailable, for the whole day or between two times. Extended Hours adds working time on a date (within the spa's opening hours)."],
         ]}
       />
 
@@ -68,15 +68,16 @@ export default function Spa() {
         rows={[
           ["Opening / Closing Time", "09:00 / 18:00", "No treatment is offered outside these hours."],
           ["Slot Interval (min)", "15", "How often start times are offered."],
-          ["Tentative Hold (min)", "20", "How long a tentative booking holds its slot."],
           ["Require therapist / room at booking, Allow auto-assignment", "On", "Whether staff must pick, or the system may pick for them."],
           ["Charge Timing", "At booking", "Post the charge when booked, or At treatment completion."],
           ["Cancellation Cutoff (hours)", "4", "Cancelling after it needs a manager and applies the late-cancellation charge."],
-          ["Late Cancellation / No-Show Charge", "No charge", "None, full price, a percentage or a fixed amount."],
+          ["Default Prep / Cleanup Buffer (min)", "0 / 15", "Pre-filled on new treatments."],
+          ["Late Cancellation / No-Show Charge", "No charge", "None, full price, a percentage (up to 100) or a fixed amount."],
+          ["Require cancellation reason", "On", "Staff must give a reason when cancelling an appointment."],
           ["No-Show Grace Period (min)", "15", "A booking can be marked no-show only this long after its start time."],
         ]}
       />
-      <p>Choose <strong>Save Settings</strong>. Until you save, the defaults apply.</p>
+      <p>Choose <strong>Save Settings</strong>. Opening time must be before closing time. Until you save, the defaults apply.</p>
       <Callout>
         <p>
           To sell treatments on your own website, see <a href="/docs/configuration/property/online-booking">Online booking</a>.

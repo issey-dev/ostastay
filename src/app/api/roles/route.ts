@@ -20,7 +20,15 @@ export async function GET() {
 
     const roles = await prisma.role.findMany({
       where: { OR: [{ enterpriseId: ctx.enterpriseId }, { enterpriseId: ostaEnterpriseId, isSystem: true }] },
-      include: { permissions: true, dashboardWidgets: { select: { widgetId: true } }, _count: { select: { users: true } } },
+      include: {
+        permissions: true,
+        dashboardWidgets: { select: { widgetId: true } },
+        // "N users assigned" counts THIS enterprise's staff only. The system roles are
+        // shared rows owned by Osta, so an unfiltered count summed every tenant's users —
+        // leaking other customers' head-count and overstating this one's. System accounts
+        // (the Booking API's "Online Bookings" user) are left out, matching the People list.
+        _count: { select: { users: { where: { user: { enterpriseId: ctx.enterpriseId, isSystem: false } } } } },
+      },
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     });
 

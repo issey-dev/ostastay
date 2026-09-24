@@ -1,15 +1,25 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Pencil, Trash2, BedDouble } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { RoomFeaturePicker, type RoomFeature } from "@/components/inventory/room-feature-picker"
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { toast } from "@/lib/toast"
+import {
+  emptyRoomTypeForm,
+  readApiError,
+  roomTypeFormSchema,
+  roomTypePayload,
+  type RoomTypeFormValues,
+} from "@/lib/inventory-form-schemas"
 import {
   Table,
   TableBody,
@@ -44,6 +54,10 @@ type RoomType = {
 // addSignal/hideAddButton: when embedded in FacilitiesManager, the Add button lives in
 // the shared tab row (see facilities-manager.tsx). This manager then hides its own
 // header button and opens its Add dialog when the parent bumps addSignal.
+//
+// Form: APP STANDARD 001 (Zod + React Hook Form, inline validation) — schema in
+// src/lib/inventory-form-schemas.ts. A server refusal (duplicate code, licence cap, ...)
+// is shown inside the dialog; a refused delete (history exists) as a toast.
 export function RoomTypeManager({
   propertyId,
   addSignal,
@@ -57,22 +71,17 @@ export function RoomTypeManager({
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const isEditMode = editingId !== null
+  const [serverError, setServerError] = useState<string | null>(null)
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
-    name: "",
-    code: "",
-    maxOccupancy: "2",
-    baseOccupancy: "2",
-    description: "",
-    isInactive: false,
-    isPseudo: false,
-    housekeepingEnabled: true,
-    features: [] as RoomFeature[],
+  const form = useForm<RoomTypeFormValues>({
+    resolver: zodResolver(roomTypeFormSchema),
+    mode: "onChange",
+    defaultValues: emptyRoomTypeForm,
   })
 
   const fetchRoomTypes = () => {
@@ -82,47 +91,47 @@ export function RoomTypeManager({
       .then((data) => {
         if (Array.isArray(data)) setRoomTypes(data)
       })
+      .catch(() => toast.error("Could not load room types"))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     fetchRoomTypes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const onSubmit = async (values: RoomTypeFormValues) => {
     setIsSubmitting(true)
-
+    setServerError(null)
     try {
-      const url = isEditMode ? `/api/room-types/${editingId}` : "/api/room-types"
-      const method = isEditMode ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(isEditMode ? `/api/room-types/${editingId}` : "/api/room-types", {
+        method: isEditMode ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId,
-          name: formData.name,
-          code: formData.code,
-          maxOccupancy: parseInt(formData.maxOccupancy),
-          baseOccupancy: parseInt(formData.baseOccupancy),
-          description: formData.description || undefined,
-          isActive: !formData.isInactive,
-          isPseudo: formData.isPseudo,
-          housekeepingEnabled: formData.housekeepingEnabled,
-          features: formData.features,
-        }),
+        body: JSON.stringify(roomTypePayload(values, propertyId)),
       })
 
       if (response.ok) {
+        const saved = await response.json().catch(() => null)
         setIsDialogOpen(false)
         resetForm()
         fetchRoomTypes()
+        if (saved?.restoredRooms > 0) {
+          toast.success(`Room type re-activated — ${saved.restoredRooms} room(s) set to Dirty for inspection`)
+        } else {
+          toast.success(isEditMode ? "Room type saved" : "Room type created")
+        }
       } else {
-        console.error("Failed to save room type")
+        const message = await readApiError(response, "Could not save the room type")
+        // A duplicate code belongs next to the Code field; anything else (licence cap,
+        // permission, ...) is shown above the buttons.
+        if (response.status === 409 && /code/i.test(message)) {
+          form.setError("code", { type: "server", message })
+        } else {
+          setServerError(message)
+        }
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
+      setServerError("Could not reach the server — please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -136,28 +145,28 @@ export function RoomTypeManager({
         method: "DELETE",
       })
       if (response.ok) {
-        setIsDeleteDialogOpen(false)
-        setDeletingId(null)
+        toast.success("Room type deleted")
         fetchRoomTypes()
+      } else {
+        toast.error(await readApiError(response, "Could not delete the room type"))
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
+      toast.error("Could not reach the server — please try again.")
     } finally {
+      setIsDeleteDialogOpen(false)
+      setDeletingId(null)
       setIsSubmitting(false)
     }
   }
 
   const resetForm = () => {
-    setFormData({
-      name: "", code: "", maxOccupancy: "2", baseOccupancy: "2", description: "",
-      isInactive: false, isPseudo: false, housekeepingEnabled: true, features: [],
-    })
-    setIsEditMode(false)
+    form.reset(emptyRoomTypeForm)
     setEditingId(null)
+    setServerError(null)
   }
 
   const openEdit = (rt: RoomType) => {
-    setFormData({
+    form.reset({
       name: rt.name,
       code: rt.code,
       maxOccupancy: rt.maxOccupancy.toString(),
@@ -168,7 +177,7 @@ export function RoomTypeManager({
       housekeepingEnabled: rt.housekeepingEnabled,
       features: (rt.features || []).map((f) => ({ category: f.category, code: f.code })),
     })
-    setIsEditMode(true)
+    setServerError(null)
     setEditingId(rt.id)
     setIsDialogOpen(true)
   }
@@ -190,18 +199,19 @@ export function RoomTypeManager({
     lastAddSignal.current = addSignal
     resetForm()
     setIsDialogOpen(true)
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addSignal])
 
   // First-column (Code) sorting, asc<->desc.
   const { sorted: sortedRoomTypes, sort } = useTableSort(roomTypes, { code: (rt) => rt.code }, "code")
+  const deletingRoomType = roomTypes.find((rt) => rt.id === deletingId)
 
   return (
     <div className="mt-6">
       {!hideAddButton && (
         <ControlsSectionHeader
           action={
-            <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true) }} className="shadow-sm">
               <Plus className="mr-2 h-4 w-4" /> Add Room Type
             </Button>
           }
@@ -213,7 +223,8 @@ export function RoomTypeManager({
         if (!open) resetForm()
       }}>
           <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
-            <form onSubmit={handleSubmit}>
+            <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Edit Room Type" : "Create Room Type"}</DialogTitle>
                 <DialogDescription>
@@ -221,96 +232,107 @@ export function RoomTypeManager({
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Type Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g. Deluxe Ocean View"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required
-                  />
-                </div>
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type Name *</FormLabel>
+                    <FormControl><Input placeholder="e.g. Deluxe Ocean View" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="code">Code</Label>
-                    <Input
-                      id="code"
-                      placeholder="e.g. DLX"
-                      value={formData.code}
-                      onChange={(e) => setFormData({...formData, code: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="maxOccupancy">Max Occupancy</Label>
-                    <Input
-                      id="maxOccupancy"
-                      type="number"
-                      min="1"
-                      value={formData.maxOccupancy}
-                      onChange={(e) => setFormData({...formData, maxOccupancy: e.target.value})}
-                      required
-                    />
-                  </div>
+                  <FormField control={form.control} name="code" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code *</FormLabel>
+                      <FormControl><Input placeholder="e.g. DLX" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="maxOccupancy" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max Occupancy *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e)
+                            // Base ≤ max is a cross-field rule — re-check Base when Max moves.
+                            if (form.getFieldState("baseOccupancy").isDirty || form.formState.errors.baseOccupancy) {
+                              void form.trigger("baseOccupancy")
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="baseOccupancy">Base Occupancy (Adults)</Label>
-                  <Input
-                    id="baseOccupancy"
-                    type="number"
-                    min="1"
-                    value={formData.baseOccupancy}
-                    onChange={(e) => setFormData({...formData, baseOccupancy: e.target.value})}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">Adults included before Extra Adult Price (set on Revenue &gt; Rate Seasons) applies.</p>
-                </div>
+                <FormField control={form.control} name="baseOccupancy" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Base Occupancy (Adults) *</FormLabel>
+                    <FormControl><Input type="number" min="1" {...field} /></FormControl>
+                    <FormDescription>Adults included before Extra Adult Price (set on Revenue &gt; Rate Seasons) applies. Cannot exceed Max Occupancy.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
                 <p className="text-xs text-muted-foreground -mt-2">
                   Default nightly price is set per room type on the locked <span className="font-medium">Base Rate</span> plan (Revenue &gt; Rate Plans &gt; Calendar) — it applies whenever no other rate plan has a price for the date.
                 </p>
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Input
-                    id="description"
-                    placeholder="Brief description of the room amenities"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  />
-                </div>
+                <FormField control={form.control} name="description" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl><Input placeholder="Brief description of the room amenities" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
-                <div className="flex items-center justify-between rounded-md border border-border p-3">
-                  <div>
-                    <Label htmlFor="isInactive">Inactive</Label>
-                    <p className="text-xs text-muted-foreground">No new reservations can be made for this room type. All of its rooms are taken out of service (history is preserved).</p>
-                  </div>
-                  <Switch id="isInactive" checked={formData.isInactive} onCheckedChange={(checked) => setFormData({ ...formData, isInactive: !!checked })} />
-                </div>
+                <FormField control={form.control} name="isInactive" render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div>
+                      <FormLabel>Inactive</FormLabel>
+                      <FormDescription>
+                        No new reservations can be made for this room type. All of its rooms are taken out of service (history is preserved); making it active again sets those rooms to Dirty for inspection.
+                      </FormDescription>
+                    </div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} /></FormControl>
+                  </FormItem>
+                )} />
 
-                <div className="flex items-center justify-between rounded-md border border-border p-3">
-                  <div>
-                    <Label htmlFor="isPseudo">Pseudo Room Type</Label>
-                    <p className="text-xs text-muted-foreground">Dummy category with no physical room attached (e.g. day-use, overbooking buffer).</p>
-                  </div>
-                  <Switch id="isPseudo" checked={formData.isPseudo} onCheckedChange={(checked) => setFormData({ ...formData, isPseudo: !!checked })} />
-                </div>
+                <FormField control={form.control} name="isPseudo" render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div>
+                      <FormLabel>Pseudo Room Type</FormLabel>
+                      <FormDescription>Dummy category with no physical room attached (e.g. day-use, overbooking buffer).</FormDescription>
+                    </div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} /></FormControl>
+                  </FormItem>
+                )} />
 
-                <div className="flex items-center justify-between rounded-md border border-border p-3">
-                  <div>
-                    <Label htmlFor="housekeepingEnabled">Housekeeping Enabled</Label>
-                    <p className="text-xs text-muted-foreground">Off hides Housekeeping/Maintenance options for rooms of this type.</p>
-                  </div>
-                  <Switch id="housekeepingEnabled" checked={formData.housekeepingEnabled} onCheckedChange={(checked) => setFormData({ ...formData, housekeepingEnabled: !!checked })} />
-                </div>
+                <FormField control={form.control} name="housekeepingEnabled" render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div>
+                      <FormLabel>Housekeeping Enabled</FormLabel>
+                      <FormDescription>Off hides Housekeeping/Maintenance options for rooms of this type.</FormDescription>
+                    </div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} /></FormControl>
+                  </FormItem>
+                )} />
 
                 <div className="border-t border-border pt-4 mt-2">
                   <h4 className="text-sm font-semibold text-foreground mb-3">Room Features</h4>
-                  <RoomFeaturePicker
-                    propertyId={propertyId}
-                    selected={formData.features}
-                    onChange={(next) => setFormData({ ...formData, features: next })}
-                  />
+                  <FormField control={form.control} name="features" render={({ field }) => (
+                    <RoomFeaturePicker
+                      propertyId={propertyId}
+                      selected={field.value}
+                      onChange={(next) => field.onChange(next)}
+                    />
+                  )} />
                 </div>
+
+                {serverError && (
+                  <p role="alert" className="rounded-md bg-destructive-muted p-3 text-sm text-destructive">{serverError}</p>
+                )}
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -319,6 +341,7 @@ export function RoomTypeManager({
                 </Button>
               </DialogFooter>
             </form>
+            </Form>
           </DialogContent>
         </Dialog>
 
@@ -328,7 +351,7 @@ export function RoomTypeManager({
           <DialogHeader>
             <DialogTitle>Delete Room Type</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this room type? This action cannot be undone and will cascade delete all rooms associated with it.
+              Delete {deletingRoomType ? <>&quot;{deletingRoomType.name}&quot;</> : "this room type"} and all of its rooms? This cannot be undone. If it or any of its rooms has reservations, group blocks or maintenance history, the delete is refused — make it inactive instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">

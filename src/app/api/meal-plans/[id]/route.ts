@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { countMealPlanUsage, isUniqueViolation, usageMessages } from "@/lib/revenue-usage";
 
 export async function PUT(
   request: Request,
@@ -19,6 +20,16 @@ export async function PUT(
       return NextResponse.json({ error: "Meal plan not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, existing.propertyId);
+
+    // Reservation.mealPlan stores the CODE as text — renaming a used plan would orphan
+    // every booking on it, so the code is frozen once any reservation carries it.
+    const nextCode = body.code ? String(body.code).trim().toUpperCase() : existing.code;
+    if (nextCode !== existing.code) {
+      const used = await countMealPlanUsage(existing.propertyId, existing.code);
+      if (used > 0) {
+        return NextResponse.json({ error: usageMessages.mealPlanCode(existing.code, used) }, { status: 409 });
+      }
+    }
 
     // Linked allocations (full replacement when provided) — what selecting this meal
     // plan brings onto a reservation (BB → {BF}). Any allocation belonging to this
@@ -45,7 +56,7 @@ export async function PUT(
     const mealPlan = await prisma.mealPlan.update({
       where: { id },
       data: {
-        code: body.code ? body.code.toUpperCase() : existing.code,
+        code: nextCode,
         name: body.name ?? existing.name,
         isActive: body.isActive !== undefined ? !!body.isActive : existing.isActive,
         allocationLinks:
@@ -70,9 +81,9 @@ export async function PUT(
     });
 
     return NextResponse.json(mealPlan);
-  } catch (error: any) {
-    if (error.code === "P2002") {
-      return NextResponse.json({ error: "A meal plan with this code already exists for this property" }, { status: 400 });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "A meal plan with this code already exists for this property" }, { status: 409 });
     }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -94,9 +105,13 @@ export async function DELETE(
     }
     await assertPropertyAccess(ctx, existing.propertyId);
 
-    // Cascades to RoomTypeMealPlanRate rows (schema onDelete: Cascade). Reservations
-    // referencing this plan's code keep their string value — it simply stops
-    // resolving to anything at Night Audit, same as an unconfigured meal plan.
+    // Reservations store the plan's code as text, so deleting a used plan would leave
+    // them pointing at nothing — deactivating hides it from new bookings instead.
+    const used = await countMealPlanUsage(existing.propertyId, existing.code);
+    if (used > 0) {
+      return NextResponse.json({ error: usageMessages.mealPlanDelete(existing.code, used) }, { status: 409 });
+    }
+
     await prisma.mealPlan.delete({ where: { id } });
 
     await logActivity({

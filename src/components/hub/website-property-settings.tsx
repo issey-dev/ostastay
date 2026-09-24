@@ -58,6 +58,11 @@ const settingsSchema = z.object({
   minNights: z.string().refine((v) => /^\d+$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 30, "1 to 30 nights"),
   deskRemark: z.string().max(500),
 })
+  // Same rule as the API (updateWebsitePropertySettings): booking on needs a plan to sell.
+  .refine((v) => !v.bookingEnabled || v.ratePlanId !== "", {
+    message: "Choose the rate plan to sell, or turn online booking off",
+    path: ["ratePlanId"],
+  })
 type SettingsFormValues = z.infer<typeof settingsSchema>
 
 function toForm(row: PropertyRow): SettingsFormValues {
@@ -228,7 +233,15 @@ export function WebsitePropertySettings({ propertyId, canManage }: { propertyId:
                   <div className="grid gap-4">
                     <FormField control={form.control} name="bookingEnabled" render={({ field }) => (
                       <FormItem className="flex items-center gap-3">
-                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={(v) => {
+                              field.onChange(v)
+                              void form.trigger("ratePlanId")
+                            }}
+                          />
+                        </FormControl>
                         <FormLabel className="!mt-0 cursor-pointer font-normal">Accept bookings from the website</FormLabel>
                       </FormItem>
                     )} />
@@ -238,7 +251,7 @@ export function WebsitePropertySettings({ propertyId, canManage }: { propertyId:
                           <FormLabel>Rate plan to sell {bookingEnabled ? "*" : ""}</FormLabel>
                           <SearchableSelect
                             value={field.value}
-                            onChange={field.onChange}
+                            onChange={(v) => field.onChange(v ?? "")}
                             placeholder="Choose a rate plan..."
                             options={(editing?.ratePlans ?? []).map((p) => ({
                               label: `${p.name} (${p.code})${p.isLocked ? " — base" : ""}`,

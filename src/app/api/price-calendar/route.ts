@@ -4,7 +4,7 @@ import { z } from "zod";
 import { toUtcMidnight } from "@/lib/business-date";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { applyRateAdjustment } from "@/lib/derived-rate";
+import { resolveEffectivePrices } from "@/lib/effective-price-calendar";
 import { MAX_PRICE_CALENDAR_RANGE_DAYS, MAX_PRICE_CALENDAR_RANGE_YEARS } from "@/lib/price-calendar";
 
 const bulkUpsertSchema = z.object({
@@ -39,37 +39,11 @@ export async function GET(request: Request) {
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
 
-    // Derived Rate Plans have no PriceCalendar rows of their own — their price is
-    // always computed live from the parent's entry + adjustment, so it can never go
-    // stale relative to the parent. extraAdultPrice/extraChildPrice are inherited
-    // unadjusted (occupancy surcharges aren't a meal-plan/rate-variant concern).
-    if (ratePlan.parentRatePlanId) {
-      const parentPrices = await prisma.priceCalendar.findMany({
-        where: {
-          ratePlanId: ratePlan.parentRatePlanId,
-          roomTypeId,
-          date: { gte: startDate, lte: endDate },
-        },
-        orderBy: { date: "asc" },
-      });
-      const derived = parentPrices.map((p) => ({
-        ...p,
-        price: applyRateAdjustment(p.price, ratePlan.derivedAdjustmentType!, ratePlan.derivedAdjustmentValue!),
-      }));
-      return NextResponse.json(derived);
-    }
-
-    const prices = await prisma.priceCalendar.findMany({
-      where: {
-        ratePlanId,
-        roomTypeId,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      orderBy: { date: "asc" },
-    });
+    // The price Night Audit would post each night — the plan's own entry (a Derived
+    // plan's parent's), else the Base Rate plan's, plus a Derived plan's adjustment —
+    // each marked with where it came from so the grid can say so. Derived plans have
+    // no rows of their own; their price is always computed live, never stale.
+    const prices = await resolveEffectivePrices(ratePlan, roomTypeId, startDate, endDate);
     return NextResponse.json(prices);
   } catch (error) {
     const { status, body } = toErrorResponse(error);

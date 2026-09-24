@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast"
 
 type Appointment = {
   id: string
+  propertyId: string
   appointmentDate: string
   startTime: string
   treatmentEndTime: string
@@ -77,10 +78,14 @@ const PAYMENT_LABEL: Record<string, string> = {
   REFUNDED: "Refunded",
 }
 
-const cancelSchema = z
-  .object({ reasonCode: z.string().min(1, "Choose a reason"), notes: z.string().max(500), waiveFee: z.boolean() })
-  .refine((v) => v.reasonCode !== "OTHER" || v.notes.trim().length > 0, { message: "Describe the reason", path: ["notes"] })
-type CancelValues = z.infer<typeof cancelSchema>
+// The reason is required unless the property's Spa settings switch off "Require
+// cancellation reason" (the API enforces the same rule — cancelSpaAppointment).
+const cancelSchemaFor = (reasonRequired: boolean) =>
+  z
+    .object({ reasonCode: z.string(), notes: z.string().max(500), waiveFee: z.boolean() })
+    .refine((v) => !reasonRequired || v.reasonCode.length > 0, { message: "Choose a reason", path: ["reasonCode"] })
+    .refine((v) => v.reasonCode !== "OTHER" || v.notes.trim().length > 0, { message: "Describe the reason", path: ["notes"] })
+type CancelValues = z.infer<ReturnType<typeof cancelSchemaFor>>
 
 const noShowSchema = z
   .object({ waiveFee: z.boolean(), notes: z.string().max(500) })
@@ -107,7 +112,9 @@ export function SpaAppointmentSheet({
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<"view" | "cancel" | "noshow">("view")
 
-  const cancelForm = useForm<CancelValues>({ resolver: zodResolver(cancelSchema), mode: "onChange", defaultValues: { reasonCode: "", notes: "", waiveFee: false } })
+  // SpaSettings.requireCancellationReason for this appointment's property (default on).
+  const [reasonRequired, setReasonRequired] = useState(true)
+  const cancelForm = useForm<CancelValues>({ resolver: zodResolver(cancelSchemaFor(reasonRequired)), mode: "onChange", defaultValues: { reasonCode: "", notes: "", waiveFee: false } })
   const noShowForm = useForm<NoShowValues>({ resolver: zodResolver(noShowSchema), mode: "onChange", defaultValues: { waiveFee: false, notes: "" } })
 
   const load = useCallback(async (id: string) => {
@@ -151,6 +158,21 @@ export function SpaAppointmentSheet({
       setBusy(false)
     }
   }
+
+  const propertyIdForSettings = appt?.propertyId
+  useEffect(() => {
+    if (!propertyIdForSettings) return
+    let alive = true
+    fetch(`/api/spa/settings?propertyId=${propertyIdForSettings}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (alive) setReasonRequired(s?.requireCancellationReason ?? true)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [propertyIdForSettings])
 
   const status = appt?.appointmentStatus
   const heldOnline = status === "TENTATIVE" && appt?.source === "WEBSITE_API"
@@ -274,11 +296,11 @@ export function SpaAppointmentSheet({
               <Form {...cancelForm}>
                 <form
                   className="space-y-3 border-t border-border pt-4"
-                  onSubmit={cancelForm.handleSubmit((v) => act("cancel", { reasonCode: v.reasonCode, notes: v.notes || null, waiveFee: v.waiveFee }, "Cancelled"))}
+                  onSubmit={cancelForm.handleSubmit((v) => act("cancel", { reasonCode: v.reasonCode || null, notes: v.notes || null, waiveFee: v.waiveFee }, "Cancelled"))}
                 >
                   <FormField control={cancelForm.control} name="reasonCode" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Reason *</FormLabel>
+                      <FormLabel>Reason{reasonRequired ? " *" : " (optional)"}</FormLabel>
                       <Select value={field.value} onValueChange={(v) => field.onChange(v ?? "")}>
                         <FormControl>
                           <SelectTrigger>

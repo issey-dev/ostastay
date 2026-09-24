@@ -8,7 +8,7 @@ export default async function HubPropertySequencesPage({ params }: { params: Pro
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
-      <ControlsCard title="Sequence Manager" description="This property's current Registration No, Proforma Folio, Tax Invoice and Receipt No. This manages the plain number only — not prefixes or formatting.">
+      <ControlsCard title="Sequence Manager" description="This property's current Reservation No, Proforma Folio, Tax Invoice, Receipt No and Guest Registration No (Green Tax). Each is the last number issued — the next document gets the number after it. This manages the plain number only — not prefixes or formatting.">
         <SequenceManager propertyId={property.id} />
       </ControlsCard>
     </div>

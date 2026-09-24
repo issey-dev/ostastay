@@ -36,11 +36,11 @@ export default function Rooms() {
         head={["Field", "Notes"]}
         rows={[
           ["Type Name", "What guests and staff see, e.g. Beach Villa."],
-          ["Code", "Short and unique, e.g. BCH. Used on the tape chart, reports and channel mapping."],
+          ["Code", "Short and unique at the property, e.g. BCH. Used on the tape chart, reports and channel mapping."],
           ["Max Occupancy", "The most guests the room takes. The desk is warned above it; your website can't book above it."],
-          ["Base Occupancy (Adults)", "Adults included in the room price. Each adult above it pays the extra-adult price; every child pays the extra-child price."],
+          ["Base Occupancy (Adults)", "Adults included in the room price, no more than Max Occupancy. Each adult above it pays the extra-adult price; every child pays the extra-child price."],
           ["Description", "Optional."],
-          ["Inactive", "Stops new bookings, and takes all rooms of the type out of service."],
+          ["Inactive", "Stops new bookings, and takes all rooms of the type out of service. Switching it back on returns those rooms as Dirty, for housekeeping to prepare."],
           ["Pseudo Room Type", "For things that are not real rooms, like a day-use or 'no room' type. Never in availability, the website or channels."],
           ["Housekeeping Enabled", "On for normal rooms. Off leaves the rooms off the housekeeping board."],
           ["Room Features", "Tick the features every room of this type has."],
@@ -51,11 +51,11 @@ export default function Rooms() {
         <a href="/docs/configuration/property/rates">step 6</a>.
       </p>
       <Shot name="prop-room-types" alt="The Room Types list: Beach Villa, Garden Villa and Water Villa with Pool with their occupancy." />
-      <Callout title="Don't delete a room type that has been used" tone="warn">
+      <Callout title="Deleting" tone="warn">
         <p>
-          Deleting a room type also deletes all its rooms. Once a type has had a booking, switch it to <strong>Inactive</strong> instead.
-          Switching it back on does not bring its rooms back into service: set each room&apos;s status again. Your licence also limits
-          the number of room types and rooms; if a save is refused, contact Uppsolut.
+          A room type, building, floor or room that has ever been booked can&apos;t be deleted: the message says why. Make a room type{" "}
+          <strong>Inactive</strong> instead. Deleting an unused room type also deletes its rooms. Your licence limits the number of
+          room types and rooms; if you reach it, the form says so, so contact Uppsolut.
         </p>
       </Callout>
 
@@ -79,7 +79,7 @@ export default function Rooms() {
         ]}
       />
       <Shot name="prop-rooms" alt="The Rooms list: room numbers with their floor, room type and status." />
-      <p>New rooms start as <strong>Clean</strong>. Deleting a room removes it from past reservations too, so for a room closing for good, set it out of service instead.</p>
+      <p>New rooms start as <strong>Clean</strong>. A room can&apos;t be put on an inactive room type. For a room closing for good, set it out of service.</p>
 
       <H2>Housekeeping</H2>
       <p>

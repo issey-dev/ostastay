@@ -47,6 +47,11 @@ export default function Excursions() {
         ]}
       />
 
+      <p>
+        Each schedule has an on/off switch: an inactive schedule is skipped when departures are generated, for example out of
+        season. Deleting a schedule asks for confirmation and leaves departures already generated in place.
+      </p>
+
       <H2>3. Generate departures</H2>
       <p>
         A schedule is a template. Bookings are made on <strong>departures</strong>, the actual trips on actual dates. Choose a{" "}

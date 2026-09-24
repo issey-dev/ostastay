@@ -114,9 +114,10 @@ export const PROPERTY_NAV: HubNavItem[] = [
     description: "Tax, payment methods, settlement, cashier defaults and fee rules.",
   },
   {
-    key: "cashiering",
+    key: "charge-codes",
     title: "Charge Codes",
-    path: "cashiering",
+    // Was "cashiering" until 2026-09-24 — next.config.ts redirects the old URL here.
+    path: "charge-codes",
     icon: Receipt,
     modules: ["CONTROLS"],
     description: "This property's chart of accounts, posting defaults and module outlets.",

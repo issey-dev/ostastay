@@ -13,7 +13,7 @@ import { prisma } from "@/lib/db"
 export default async function HubPropertyFinancePage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
   const { slug, property, item, canEdit } = await propertyPage(params, "finance")
   const canCopy = canEdit("create")
-  const { pricesIncludeTaxes } = await prisma.property.findUniqueOrThrow({ where: { id: property.id }, select: { pricesIncludeTaxes: true } })
+  const { pricesIncludeTaxes, defaultCurrency } = await prisma.property.findUniqueOrThrow({ where: { id: property.id }, select: { pricesIncludeTaxes: true, defaultCurrency: true } })
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
@@ -32,7 +32,7 @@ export default async function HubPropertyFinancePage({ params }: { params: Promi
             description="Applies to anything charged at this property. On: Green Tax, GST and Service Charge are backed out of the posted amount. Off: they are added on top."
           />
         </div>
-        <TaxManager propertyId={property.id} nightAuditHref={`/e/${slug}/hub/p/${property.id}/night-audit`} />
+        <TaxManager propertyId={property.id} currency={defaultCurrency} nightAuditHref={`/e/${slug}/hub/p/${property.id}/night-audit`} />
       </ControlsCard>
       <PaymentMethodsManager
         propertyId={property.id}
