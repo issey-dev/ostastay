@@ -71,6 +71,7 @@ export default async function HubPropertyNightAuditPage({ params }: { params: Pr
           timeZone={row.timeZone || "UTC"}
           canEdit={editable}
           lastAudit={lastAudit}
+          noShowTiming={settings.noShowTiming}
           initial={{ autoAuditEnabled: settings.autoAuditEnabled, autoAuditTime: settings.autoAuditTime }}
         />
       </ControlsCard>

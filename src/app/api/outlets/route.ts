@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
-import { provisionOutletSubgroup } from "@/lib/posting/outlet-subgroup";
 
 export const OUTLET_TYPES = ["SPA", "RESTAURANT", "BAR", "RETAIL", "TRANSPORT", "RECREATION", "OTHER"];
 export const TAX_OVERRIDE_MODES = ["NONE", "DEFAULT_ENGINE", "CUSTOM"];
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { newOutlet, provisioned } = await prisma.$transaction(async (tx) => {
+    const newOutlet = await prisma.$transaction(async (tx) => {
       const created = await tx.outlet.create({
         data: {
           propertyId: body.propertyId,
@@ -108,18 +107,9 @@ export async function POST(request: Request) {
         },
       });
 
-      // Outlet-wise subgroups: the outlet gets its own nnRV charge subgroup + template
-      // posting codes from its group's numeric band (owner ruling 2026-07-30).
-      const provisioned = await provisionOutletSubgroup(tx, {
-        enterpriseId: ctx.enterpriseId,
-        propertyId: created.propertyId,
-        outletId: created.id,
-        outletName: created.name,
-        outletType,
-      });
-
-      const newOutlet = await tx.outlet.findUniqueOrThrow({ where: { id: created.id }, include: OUTLET_INCLUDE });
-      return { newOutlet, provisioned };
+      // No charge codes are created for it (owner, 2026-09-24): the outlet posts to the
+      // codes picked above, which the property created and numbered itself.
+      return tx.outlet.findUniqueOrThrow({ where: { id: created.id }, include: OUTLET_INCLUDE });
     });
 
     await logActivity({
@@ -128,11 +118,10 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "Outlet",
       entityId: newOutlet.id,
-      description: `Created outlet "${newOutlet.name}" (${outletType})` +
-        (provisioned ? ` — charge subgroup ${provisioned.subgroupCode}` : ""),
+      description: `Created outlet "${newOutlet.name}" (${outletType})`,
     });
 
-    return NextResponse.json({ ...newOutlet, provisionedSubgroup: provisioned?.subgroupCode ?? null }, { status: 201 });
+    return NextResponse.json(newOutlet, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

@@ -205,13 +205,17 @@ describe("Copy from another property", () => {
     await provisionOutletSubgroup(prisma, { enterpriseId, propertyId: a.id, outletId: beachBar.id, outletName: "Beach Bar", outletType: "RESTAURANT" });
     await provisionOutletSubgroup(prisma, { enterpriseId, propertyId: b.id, outletId: main.id, outletName: "Main Restaurant", outletType: "RESTAURANT" });
 
-    await runCopy("outlets", a.id, b.id, ["Beach Bar"]);
+    const report = await runCopy("outlets", a.id, b.id, ["Beach Bar"]);
     const copied = await prisma.outlet.findFirstOrThrow({
       where: { propertyId: b.id, name: "Beach Bar" },
       include: { chargeCodes: { include: { chargeCode: { include: { chargeSubgroup: true } } } } },
     });
-    expect(copied.chargeCodes.length).toBeGreaterThan(0);
-    for (const l of copied.chargeCodes) expect(l.chargeCode.chargeSubgroup.outletId).toBe(copied.id);
+    // A plain copy: B already uses the numbers, so nothing is linked, renumbered or invented
+    // — each code is reported as skipped, and Main Restaurant's codes stay its own.
+    expect(copied.chargeCodes).toHaveLength(0);
+    expect(await prisma.chargeSubgroup.count({ where: { outletId: copied.id } })).toBe(0);
+    expect(report.skipped.length).toBeGreaterThan(0);
+    expect(report.skipped.every((i) => i.label.includes("already used at this property"))).toBe(true);
     const mainSub = await prisma.chargeSubgroup.findFirstOrThrow({ where: { outletId: main.id } });
     expect(mainSub.propertyId).toBe(b.id);
   });

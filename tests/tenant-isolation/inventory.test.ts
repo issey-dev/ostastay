@@ -163,7 +163,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
       [propertyAId, (v: string) => { subgroupAId = v; }],
       [propertyBId, (v: string) => { subgroupBId = v; }],
     ] as const) {
-      await ensureChargeTree(prisma, { propertyId });
+      await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
       const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
         where: { propertyId_code: { propertyId, code: "85GT" } },
       });

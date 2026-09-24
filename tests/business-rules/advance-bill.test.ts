@@ -144,7 +144,7 @@ describe("Advance Bill", () => {
 describe("Advance Bill: generates post all defined taxes", () => {
   async function setupWithChart(greenTax: boolean) {
     const base = await setup();
-    await ensureChargeTree(prisma, { propertyId: base.propertyId });
+    await ensureChargeTree(prisma, { propertyId: base.propertyId }, undefined, { demo: true });
     await setPropertySettings(base.propertyId, { greenTaxEnabled: greenTax, greenTaxAdultAmount: 12, greenTaxChildAmount: 6 });
     // Bill against the charted accommodation code so the group's tax codes apply.
     const room = await prisma.chargeCode.findUniqueOrThrow({

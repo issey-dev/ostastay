@@ -8,13 +8,16 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { auditTimeSchema, isAuditBeforeMidnight } from "@/lib/night-audit/audit-window"
 
 // The scheduled Night Audit — see src/lib/night-audit/scheduled.ts. On, the background
-// jobs run this property's whole End-of-Day at the set time in its own time zone.
+// jobs run this property's whole End-of-Day at the set time in its own time zone. The time
+// must fall between 22:00 and 06:00 (owner, 2026-09-24) — the same rule the settings API
+// enforces (src/lib/night-audit/audit-window.ts).
 
 const schema = z.object({
   autoAuditEnabled: z.boolean(),
-  autoAuditTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a 24-hour time, e.g. 02:00"),
+  autoAuditTime: auditTimeSchema,
 })
 type Values = z.infer<typeof schema>
 
@@ -23,6 +26,7 @@ export function ScheduledAuditManager({
   timeZone,
   initial,
   lastAudit,
+  noShowTiming,
   canEdit,
 }: {
   propertyId: string
@@ -30,10 +34,16 @@ export function ScheduledAuditManager({
   initial: Values
   /** The last completed audit, for context. Null when there has been none yet. */
   lastAudit: string | null
+  /** The property's No-Show timing (PropertySettings.noShowTiming) — for the warning below. */
+  noShowTiming: string
   canEdit: boolean
 }) {
   const form = useForm<Values>({ resolver: zodResolver(schema), mode: "onChange", defaultValues: initial })
   const enabled = form.watch("autoAuditEnabled")
+  const time = form.watch("autoAuditTime")
+  // Not an error, just a warning: an audit before midnight that marks no-shows at the
+  // arrival night's audit catches guests who are still on their way that night.
+  const lateArrivalWarning = enabled && noShowTiming === "FIRST_AUDIT" && isAuditBeforeMidnight(time)
 
   const onSubmit = async (values: Values) => {
     const res = await fetch(`/api/properties/${propertyId}/settings`, {
@@ -76,10 +86,17 @@ export function ScheduledAuditManager({
               <Input type="time" step={60} disabled={!canEdit || !enabled} {...field} />
             </FormControl>
             <FormDescription>
-              In the property&apos;s time zone ({timeZone}). Before noon it runs in the small hours after the business day
-              (02:00 closes the day before); from noon it runs on the day itself.
+              In the property&apos;s time zone ({timeZone}), between 22:00 and 06:00. From 22:00 it runs on the business
+              day itself; from midnight to 06:00 in the small hours after it (02:00 closes the day before).
             </FormDescription>
             <FormMessage />
+            {lateArrivalWarning && (
+              <p role="status" className="rounded-md border border-warning/40 bg-warning-muted p-2 text-xs text-warning">
+                No-shows are marked at the arrival night&apos;s audit, so a guest arriving after {time} but before the night is
+                over would be marked No-Show. Choose a time after midnight, or set No-Shows to &ldquo;Hold one night for late
+                arrivals&rdquo;.
+              </p>
+            )}
           </FormItem>
         )} />
 

@@ -1,8 +1,37 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
+import { heldNights, chargeHeldNights, formatNight } from "@/lib/reservations/held-nights";
+
+// What the check-in wizard needs to know before checking in: a late arrival's held
+// nights to charge or waive, and whether this user may waive them.
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requireSession();
+    requirePermission(ctx, "RESERVATIONS", "view");
+    const { id } = await params;
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      select: { propertyId: true, status: true, checkInDate: true, checkOutDate: true, advanceBilledThrough: true },
+    });
+    if (!reservation) return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    await assertPropertyAccess(ctx, reservation.propertyId);
+    const property = await prisma.property.findUnique({ where: { id: reservation.propertyId }, select: { businessDate: true } });
+    const held = reservation.status === "RESERVED" && property ? heldNights(reservation, resolveBusinessDate(property)) : [];
+    return NextResponse.json({
+      heldNights: held.map((d) => d.toISOString().slice(0, 10)),
+      canWaiveHeldNights: hasPermission(ctx, "CASHIERING", "delete"),
+    });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
 
 export async function POST(
   request: Request,
@@ -13,6 +42,11 @@ export async function POST(
     requirePermission(ctx, "RESERVATIONS", "update");
 
     const { id } = await params;
+    // A late arrival's held nights (see src/lib/reservations/held-nights.ts): the desk
+    // decides CHARGE (the default the wizard offers) or WAIVE (with a reason).
+    const body = (await request.json().catch(() => ({}))) as { heldNights?: unknown; waiveReason?: unknown };
+    const heldDecision = body.heldNights === "CHARGE" || body.heldNights === "WAIVE" ? body.heldNights : null;
+    const waiveReason = typeof body.waiveReason === "string" ? body.waiveReason.trim() : "";
 
     // 1. Fetch reservation
     const reservation = await prisma.reservation.findUnique({
@@ -51,6 +85,30 @@ export async function POST(
         { error: "This reservation's arrival date is in the future — a guest can't be checked in before their check-in date. Update the check-in date first if they've arrived early." },
         { status: 400 }
       );
+    }
+
+    // Nights already audited before the guest arrived — never checked in silently.
+    const held = businessDate ? heldNights(reservation, businessDate) : [];
+    if (held.length > 0) {
+      const dates = held.map(formatNight).join(", ");
+      if (!heldDecision) {
+        return NextResponse.json(
+          {
+            error: `This guest is arriving after ${held.length} held night${held.length > 1 ? "s" : ""} (${dates}) — charge or waive ${held.length > 1 ? "them" : "it"} in the check-in wizard.`,
+            code: "HELD_NIGHTS",
+            heldNights: held.map((d) => d.toISOString().slice(0, 10)),
+          },
+          { status: 409 }
+        );
+      }
+      if (heldDecision === "WAIVE") {
+        if (!hasPermission(ctx, "CASHIERING", "delete")) {
+          return NextResponse.json({ error: "Waiving held nights needs Cashiering delete permission (as for a void)." }, { status: 403 });
+        }
+        if (!waiveReason) {
+          return NextResponse.json({ error: "A reason is required to waive held nights." }, { status: 400 });
+        }
+      }
     }
 
     const activeAssignment = reservation.assignments[0];
@@ -97,18 +155,25 @@ export async function POST(
       // Create Folio if it doesn't exist — a pre-arrival deposit may already have
       // opened one, in which case the deposit is already on the billing window.
       const existingFolio = reservation.folios.find((f) => !f.isClosed) ?? reservation.folios[0];
-      if (!existingFolio) {
-        const folio = await tx.folio.create({
-          data: {
-            reservationId: id,
-            propertyId: reservation.propertyId,
-            folioNumber: 1,
-            isClosed: false
-          }
-        });
-        return folio.id;
+      const billingFolioId = existingFolio
+        ? existingFolio.id
+        : (
+            await tx.folio.create({
+              data: {
+                reservationId: id,
+                propertyId: reservation.propertyId,
+                folioNumber: 1,
+                isClosed: false
+              }
+            })
+          ).id;
+
+      // Held nights are charged in the same transaction — a failed posting leaves the
+      // guest not checked in rather than checked in with the night unbilled.
+      if (held.length > 0 && heldDecision === "CHARGE" && businessDate) {
+        await chargeHeldNights(tx, { reservationId: id, folioId: billingFolioId, businessDate });
       }
-      return existingFolio.id;
+      return billingFolioId;
 
       // Physical room status stays as-is (CLEAN/DIRTY) — occupancy is derived
       // from the reservation, not stored on the room.
@@ -122,6 +187,20 @@ export async function POST(
       entityId: id,
       description: `Checked in ${reservation.confirmationNo}${assignedRoom ? ` to Room ${assignedRoom.roomNumber}` : ""}`,
     });
+    if (held.length > 0) {
+      const dates = held.map(formatNight).join(", ");
+      await logActivity({
+        ctx,
+        module: "RESERVATIONS",
+        action: heldDecision === "WAIVE" ? "HELD_NIGHTS_WAIVED" : "HELD_NIGHTS_CHARGED",
+        entityType: "Reservation",
+        entityId: id,
+        description:
+          heldDecision === "WAIVE"
+            ? `Waived ${held.length} held night${held.length > 1 ? "s" : ""} (${dates}) on ${reservation.confirmationNo} — reason: "${waiveReason}"`
+            : `Charged ${held.length} held night${held.length > 1 ? "s" : ""} (${dates}) on ${reservation.confirmationNo} at check-in`,
+      });
+    }
 
     return NextResponse.json({ success: true, folioId, ...(roomWarning && { roomWarning }) });
   } catch (error) {

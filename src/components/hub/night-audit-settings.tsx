@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { OptionSelect } from "@/components/ui/option-select"
@@ -210,6 +211,7 @@ export function NoShowManager({
   initialPostFee: boolean
   canEdit: boolean
 }) {
+  const router = useRouter()
   const [timing, setTiming] = useState(initialTiming)
   const [postFee, setPostFee] = useState(initialPostFee)
   const [saving, setSaving] = useState(false)
@@ -224,6 +226,8 @@ export function NoShowManager({
       })
       if (!res.ok) throw new Error()
       toast.success("No-show handling saved")
+      // The Scheduled Night Audit card warns about the timing — let it see the change.
+      router.refresh()
     } catch {
       undo()
       toast.error("Couldn't save — nothing was changed")

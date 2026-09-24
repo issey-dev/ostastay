@@ -2,6 +2,7 @@ import { z } from "zod"
 import type { Prisma, PropertySettings } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { FOLIO_STYLES } from "@/lib/folio-presentation"
+import { auditTimeSchema } from "@/lib/night-audit/audit-window"
 
 // One property's document content and booking-number format (PropertySettings). Every
 // reader goes through getPropertySettings() so a property that has never saved anything
@@ -146,7 +147,8 @@ export const propertySettingsPatchSchema = z
     noShowPostFee: z.boolean(),
     autoCheckOutZeroBalance: z.boolean(),
     autoAuditEnabled: z.boolean(),
-    autoAuditTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a 24-hour time, e.g. 02:00"),
+    // 22:00–06:00 only (owner, 2026-09-24) — see src/lib/night-audit/audit-window.ts.
+    autoAuditTime: auditTimeSchema,
   })
   .partial()
   .strict()

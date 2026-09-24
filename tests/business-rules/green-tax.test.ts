@@ -114,7 +114,7 @@ async function setupCheckedInReservation(opts: {
   });
 
   if (opts.seedTree) {
-    await ensureChargeTree(prisma, { propertyId: property.id });
+    await ensureChargeTree(prisma, { propertyId: property.id }, undefined, { demo: true });
   } else {
     for (const cc of opts.chargeCodes) {
       await customChargeCode({ propertyId: property.id }, { code: cc.code, description: cc.code });
