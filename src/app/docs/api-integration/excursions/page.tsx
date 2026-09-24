@@ -85,6 +85,10 @@ export default function Excursions() {
         <li><code>guaranteed: false</code> — the departure has fewer guests than its minimum and the property may still call it off. Say so on your page.</li>
         <li><code>bookingClosesAt</code> — online booking closes this long before departure (the property&apos;s &quot;book at least … hours ahead&quot;).</li>
         <li><code>bookable</code> — seats left, still open, priced, and the property is taking online bookings.</li>
+        <li>
+          Departures run on the clock: ask from today in the property&apos;s time zone, not from <code>businessDate</code>, which can lag
+          until the desk closes the day. See <a href="/docs/api-integration/authentication#conventions">Conventions</a>.
+        </li>
       </ul>
 
       <H2>Quote</H2>

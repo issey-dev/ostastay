@@ -65,7 +65,22 @@ export default function Authentication() {
         <li><strong>JSON in, JSON out</strong>, UTF-8.</li>
         <li><strong>Dates</strong> are <code>YYYY-MM-DD</code> calendar days in the property&apos;s time zone; times are <code>HH:MM</code>, 24-hour, property local.</li>
         <li><strong>Money</strong> is a plain number in the property&apos;s currency.</li>
-        <li><strong>Today</strong> is the property&apos;s <code>businessDate</code> (from <code>GET /properties/&#123;id&#125;</code>), which only moves when the desk closes the day. Build date pickers off it, not the visitor&apos;s clock.</li>
+        <li>
+          <strong>Today</strong> depends on what you sell:
+          <ul>
+            <li>
+              <strong>Rooms</strong> — the property&apos;s <code>businessDate</code> (from <code>GET /properties/&#123;id&#125;</code>), which
+              only moves when the desk closes the day. Build the stay picker off it, not the visitor&apos;s clock.
+            </li>
+            <li>
+              <strong>Excursions and Spa</strong> — the actual date in the property&apos;s <code>timeZone</code>. Departures, free times and
+              booking cutoffs run on the clock, not on the desk&apos;s day, and <code>businessDate</code> can be a day or more behind
+              until the day is closed. Start activity pickers at whichever is later, today in the property&apos;s time zone or{" "}
+              <code>businessDate</code>, and rely on <code>bookable</code> / <code>available</code> in the response rather than your own
+              date arithmetic.
+            </li>
+          </ul>
+        </li>
         <li><strong>No caching:</strong> every response is <code>Cache-Control: no-store</code>. Availability is live.</li>
         <li><strong>Versioning:</strong> the <code>v1</code> path segment. Fields may be added to responses at any time; nothing is removed or renamed within v1. Ignore fields you do not know.</li>
         <li><strong>Errors</strong> are JSON with a stable <code>code</code> to switch on, a human <code>error</code>, and, for validation, <code>details</code> keyed by field. See <a href="/docs/api-integration/errors">Error codes</a>.</li>
