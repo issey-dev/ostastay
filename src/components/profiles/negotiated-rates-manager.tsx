@@ -125,7 +125,7 @@ export function NegotiatedRatesManager({ upid }: { upid: string }) {
         </div>
       ))}
       <p className="text-xs text-muted-foreground">
-        Optional. A rate plan with a commission % set posts a credit against the enterprise&apos;s Commission charge code (Controls &gt; Finance) once a booking through this agent settles to their City Ledger account at checkout.
+        Optional. A rate plan with a commission % set posts a credit against the enterprise&apos;s Commission charge code (Hub › Charge Codes › Posting Defaults) once a booking through this agent settles to their City Ledger account at checkout.
       </p>
     </div>
   )

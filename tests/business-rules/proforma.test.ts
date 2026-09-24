@@ -16,6 +16,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const invoiceDataRoute = await import("@/app/api/folios/[id]/invoice-data/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -44,14 +45,14 @@ describe("Proforma = full projected stay", () => {
     const roleIds = await ensureRoles(prisma, osta.id, SYSTEM_ROLE_DEFS, true);
     const enterprise = await prisma.enterprise.create({ data: { name: "Proforma", slug: `test-proforma-${uniq()}`, type: "STANDARD" } });
     enterpriseId = enterprise.id;
-    await prisma.enterpriseSettings.create({ data: { enterpriseId, greenTaxEnabled: true, greenTaxAdultAmount: 12, greenTaxChildAmount: 6 } });
     const property = await prisma.property.create({ data: { enterpriseId, name: "PF", code: `PF-${uniq()}`, legalName: "PF LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" } });
     propertyId = property.id;
+    await setPropertySettings(property.id, { greenTaxEnabled: true, greenTaxAdultAmount: 12, greenTaxChildAmount: 6 });
     const roomType = await prisma.roomType.create({ data: { propertyId, name: "Deluxe", code: "DLX", maxOccupancy: 3, baseOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: roomType.id, roomNumber: `${Math.floor(Math.random() * 900 + 100)}`, status: "CLEAN" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    await customChargeCode(enterpriseId, { code: "1000", description: "Room" });
-    await customChargeCode(enterpriseId, { code: "8500", description: "Green Tax" });
+    await customChargeCode({ propertyId }, { code: "1000", description: "Room" });
+    await customChargeCode({ propertyId }, { code: "8500", description: "Green Tax" });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `pf-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "PF", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;

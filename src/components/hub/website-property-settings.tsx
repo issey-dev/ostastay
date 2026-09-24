@@ -78,7 +78,7 @@ function toForm(row: PropertyRow): SettingsFormValues {
   }
 }
 
-export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
+export function WebsitePropertySettings({ propertyId, canManage }: { propertyId: string; canManage: boolean }) {
   const [rows, setRows] = useState<PropertyRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -91,16 +91,16 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
   const load = useCallback(async () => {
     setError(false)
     try {
-      const res = await fetch("/api/hub/website/properties")
+      // This property only — the Hub's property area never lists another property.
+      const res = await fetch(`/api/hub/website/properties/${propertyId}`)
       if (!res.ok) throw new Error()
-      const data = await res.json()
-      setRows(data.properties ?? [])
+      setRows([await res.json()])
     } catch {
       setError(true)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propertyId])
 
   useEffect(() => {
     load()
@@ -163,10 +163,10 @@ export function WebsitePropertySettings({ canManage }: { canManage: boolean }) {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Properties</CardTitle>
+          <CardTitle>Website</CardTitle>
           <CardDescription>
-            What each property&apos;s website shows (headline, description, photos, policies) and sells (the rate plan and
-            meal plan every online booking is made on). A property with no rate plan chosen is listed but cannot be
+            What this property&apos;s website shows (headline, description, photos, policies) and sells (the rate plan and
+            meal plan every online booking is made on). With no rate plan chosen the property is listed but cannot be
             booked online.
           </CardDescription>
         </CardHeader>

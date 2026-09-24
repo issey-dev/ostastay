@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { encryptSecret, decryptSecret } from "@/lib/secret-crypto";
 import type { ChannelLogSink, RateLimitInfo } from "@/lib/channels/beds24";
 import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/channels/providers/registry";
+import { assertChannelCapacity } from "@/lib/license";
+import { ForbiddenError } from "@/lib/scope";
 
 /**
  * Build the sink that turns a Beds24 exchange into a ChannelSyncLog row.
@@ -17,6 +19,9 @@ import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/channels/providers/regis
  */
 export function makeLogSink(params: {
   enterpriseId: string;
+  /** The connection's property — every exchange is one property's (a connection is per
+   *  property), and each property's Logs screen scopes on it. */
+  propertyId?: string | null;
   connectionName: string;
   connectionId?: string | null;
   /** Receives each written row id, so a caller can link entries afterwards. */
@@ -31,6 +36,7 @@ export function makeLogSink(params: {
     const row = await prisma.channelSyncLog.create({
       data: {
         enterpriseId: params.enterpriseId,
+        propertyId: params.propertyId ?? null,
         connectionId: params.connectionId ?? null,
         connectionName: params.connectionName,
         direction: entry.direction,
@@ -92,6 +98,8 @@ export type ConnectionStatus = (typeof CONNECTION_STATUS)[keyof typeof CONNECTIO
 // future careless spread.
 export type PublicConnection = {
   id: string;
+  /** The one property this connection serves. */
+  propertyId: string;
   provider: string;
   name: string;
   status: string;
@@ -122,6 +130,7 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
   const provider = getProvider(c.provider);
   return {
     id: c.id,
+    propertyId: c.propertyId,
     provider: c.provider,
     name: c.name,
     status: c.status,
@@ -143,36 +152,46 @@ export function toPublicConnection(c: ChannelConnection): PublicConnection {
   };
 }
 
-export async function listConnections(enterpriseId: string): Promise<PublicConnection[]> {
-  const rows = await prisma.channelConnection.findMany({
-    where: { enterpriseId },
-    orderBy: { createdAt: "asc" },
-  });
-  return rows.map(toPublicConnection);
+/** The property's own connection, or null when Uppsolut has not connected it yet. */
+export async function getPropertyConnection(propertyId: string): Promise<PublicConnection | null> {
+  const row = await prisma.channelConnection.findUnique({ where: { propertyId } });
+  return row ? toPublicConnection(row) : null;
 }
 
 // The Osta console's cross-tenant shape: a PublicConnection plus which enterprise owns
 // it. Same no-token-fields guarantee — going through toPublicConnection is the point.
 export type PlatformConnection = PublicConnection & {
   enterprise: { id: string; name: string; slug: string };
+  property: { id: string; name: string; code: string };
+  /** The Beds24 property id linked when the connection was created. */
+  externalPropertyId: string | null;
 };
 
 /**
  * Every connection on the platform, across all enterprises — DELIBERATELY unscoped.
  *
  * Exists for the master-account topology (.agents/docs/DECISIONS.md, 2026-08-02): the
- * app owner runs one Beds24 account whose per-enterprise connections all drain a single
+ * app owner runs one Beds24 account whose per-property connections all drain a single
  * shared API credit pool, so the platform side needs to see and manage them in one
  * place. Only the Osta console may call this — every route in front of it must have
  * already verified ctx.isInternal, exactly like the cross-tenant property list in
- * /api/osta/properties. Tenant-facing code uses listConnections() and never this.
+ * /api/osta/properties. Tenant-facing code uses getPropertyConnection() and never this.
  */
 export async function listAllConnections(): Promise<PlatformConnection[]> {
   const rows = await prisma.channelConnection.findMany({
-    include: { enterprise: { select: { id: true, name: true, slug: true } } },
-    orderBy: [{ enterprise: { name: "asc" } }, { createdAt: "asc" }],
+    include: {
+      enterprise: { select: { id: true, name: true, slug: true } },
+      property: { select: { id: true, name: true, code: true } },
+      propertyLinks: { select: { externalPropertyId: true } },
+    },
+    orderBy: [{ enterprise: { name: "asc" } }, { property: { name: "asc" } }],
   });
-  return rows.map((r) => ({ ...toPublicConnection(r), enterprise: r.enterprise }));
+  return rows.map((r) => ({
+    ...toPublicConnection(r),
+    enterprise: r.enterprise,
+    property: r.property,
+    externalPropertyId: r.propertyLinks[0]?.externalPropertyId ?? null,
+  }));
 }
 
 /**
@@ -187,15 +206,38 @@ export async function listAllConnections(): Promise<PlatformConnection[]> {
  * operator — the write therefore immediately follows the exchange with nothing in between.
  */
 export async function createConnection(params: {
-  enterpriseId: string;
+  /** The one property this connection serves — its enterprise is taken from it. */
+  propertyId: string;
+  /** That property's id in the channel manager (Beds24 propertyId), linked in the same step. */
+  externalPropertyId: string;
   name: string;
   inviteCode: string;
   /** Which channel manager this connection talks to. Defaults to Beds24 — the only
    *  provider registered today — but every caller is free to name another once one exists. */
   provider?: string;
 }): Promise<PublicConnection> {
-  const { enterpriseId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID } = params;
+  const { propertyId, externalPropertyId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID } = params;
   const provider = getProvider(providerId);
+
+  // Everything that could refuse the connection is checked BEFORE the invite code is
+  // exchanged — invite codes are single-use, so refusing afterwards would strand it.
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { id: true, enterpriseId: true, enterprise: { select: { type: true } } },
+  });
+  // STANDARD only — a connection on the INTERNAL (Osta) enterprise could only be a mistake.
+  if (!property || property.enterprise.type !== "STANDARD") throw new ForbiddenError("Property not found");
+  const enterpriseId = property.enterpriseId;
+  if (await prisma.channelConnection.findUnique({ where: { propertyId }, select: { id: true } })) {
+    throw new ForbiddenError("This property already has a channel-manager connection");
+  }
+  // One property, one channel manager — two links selling one property's rooms is a
+  // double-sell that surfaces as an overbooked guest, never as an error in software.
+  if (await prisma.channelPropertyLink.findUnique({ where: { propertyId }, select: { id: true } })) {
+    throw new ForbiddenError("This property is already linked to a channel manager");
+  }
+  // License cap — the per-property channel allowance gates connecting a property.
+  await assertChannelCapacity(propertyId);
 
   // Logged with no connectionId — the row does not exist yet, and a REJECTED invite code
   // never creates one. Without this, the most common setup failure would leave no trace.
@@ -210,6 +252,7 @@ export async function createConnection(params: {
     inviteCode,
     makeLogSink({
       enterpriseId,
+      propertyId,
       connectionName: name,
       onWrite: (id) => setupLogIds.push(id),
       onRateLimit: (info) => {
@@ -219,9 +262,13 @@ export async function createConnection(params: {
   );
   const now = new Date();
 
+  // The connection and its property link land together: a connection is always its
+  // property's, and the property's Hub mapping starts from this link.
   const created = await prisma.channelConnection.create({
     data: {
       enterpriseId,
+      propertyId,
+      propertyLinks: { create: { propertyId, externalPropertyId, syncEnabled: false } },
       provider: provider.id,
       name,
       refreshToken: encryptSecret(tokens.refreshToken),
@@ -284,7 +331,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   try {
     const fresh = await provider.refreshAccessToken(
       refreshToken,
-      makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
+      makeLogSink({ enterpriseId: conn.enterpriseId, propertyId: conn.propertyId, connectionName: conn.name, connectionId: conn.id })
     );
     await prisma.channelConnection.update({
       where: { id: connectionId },
@@ -338,7 +385,7 @@ export async function testConnection(connectionId: string): Promise<PublicConnec
   try {
     const fresh = await provider.refreshAccessToken(
       refreshToken!,
-      makeLogSink({ enterpriseId: conn.enterpriseId, connectionName: conn.name, connectionId: conn.id })
+      makeLogSink({ enterpriseId: conn.enterpriseId, propertyId: conn.propertyId, connectionName: conn.name, connectionId: conn.id })
     );
     const updated = await prisma.channelConnection.update({
       where: { id: connectionId },
@@ -375,6 +422,7 @@ export async function reauthorizeConnection(connectionId: string, inviteCode: st
     inviteCode,
     makeLogSink({
       enterpriseId: existing.enterpriseId,
+      propertyId: existing.propertyId,
       connectionName: existing.name,
       connectionId: existing.id,
     })

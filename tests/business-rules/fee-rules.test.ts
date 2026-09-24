@@ -18,6 +18,7 @@ const depositRoute = await import("@/app/api/reservations/[id]/deposit/route");
 const statusRoute = await import("@/app/api/reservations/[id]/status/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -63,11 +64,13 @@ describe("Deposit / Cancellation / No-Show fee rules", () => {
     enterpriseId = enterprise.id;
     const property = await prisma.property.create({ data: { enterpriseId, name: "FR Prop", code: `FR-${uniq()}`, legalName: "FR LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: new Date(Date.UTC(2026, 8, 1)) } });
     propertyId = property.id;
-    const pm = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
+    const pm = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Cash", type: "CASH" } });
     paymentMethodId = pm.id;
-    cxlCodeId = (await customChargeCode(enterpriseId, { code: "1050", description: "Cancellation Fee" })).id;
-    nsfCodeId = (await customChargeCode(enterpriseId, { code: "NSF", description: "No-Show Fee" })).id;
-    roomCodeId = (await customChargeCode(enterpriseId, { code: "1000", description: "Room Revenue" })).id;
+    cxlCodeId = (await customChargeCode({ propertyId }, { code: "1050", description: "Cancellation Fee" })).id;
+    nsfCodeId = (await customChargeCode({ propertyId }, { code: "NSF", description: "No-Show Fee" })).id;
+    roomCodeId = (await customChargeCode({ propertyId }, { code: "1000", description: "Room Revenue" })).id;
+    // Untaxed on purpose — a charted property starts on the Maldives tax defaults.
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false });
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `fr-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "FR", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
     adminId = admin.id;

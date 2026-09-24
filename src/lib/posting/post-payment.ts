@@ -62,15 +62,16 @@ export async function resolvePaymentChargeCodeId(
 ): Promise<string | null> {
   const method = await client.paymentMethod.findUnique({
     where: { id: paymentMethodId },
-    select: { chargeCodeId: true, type: true, enterpriseId: true },
+    select: { chargeCodeId: true, type: true, propertyId: true },
   });
   if (!method) return null;
   if (method.chargeCodeId) return method.chargeCodeId;
 
   const fallback = await client.chargeCode.findUnique({
     where: {
-      enterpriseId_code: {
-        enterpriseId: method.enterpriseId,
+      // The method's own property's chart — methods and codes are per property.
+      propertyId_code: {
+        propertyId: method.propertyId,
         code: PAYMENT_METHOD_CODES[method.type] ?? PAYMENT_METHOD_FALLBACK_CODE,
       },
     },

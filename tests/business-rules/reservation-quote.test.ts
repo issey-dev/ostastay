@@ -13,6 +13,7 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { computeReservationQuote } = await import("@/lib/reservation-quote-server");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -34,11 +35,11 @@ async function setup(opts?: { pricesIncludeTaxes?: boolean }) {
   const roomType = await prisma.roomType.create({
     data: { propertyId: property.id, name: "Standard", code: "STD", baseOccupancy: 2, maxOccupancy: 4 },
   });
-  const roomCode = await customChargeCode(enterprise.id, { code: "1000", description: "Room", useDefaultTax: true, subgroupCode: "10RV" });
+  const roomCode = await customChargeCode({ propertyId: property.id }, { code: "1000", description: "Room", useDefaultTax: true, subgroupCode: "10RV" });
   const customProfile = await prisma.taxProfile.create({
-    data: { enterpriseId: enterprise.id, name: "Flat 5%", rates: { create: [{ name: "Handling Fee", ratePercent: 5, calculateOn: "BASE", order: 0, effectiveFrom: new Date("2020-01-01") }] } },
+    data: { enterpriseId: enterprise.id, propertyId: property.id, name: "Flat 5%", rates: { create: [{ name: "Handling Fee", ratePercent: 5, calculateOn: "BASE", order: 0, effectiveFrom: new Date("2020-01-01") }] } },
   });
-  const allocCode = await customChargeCode(enterprise.id, { code: "TRF", description: "Transfer", useDefaultTax: false, taxProfileId: customProfile.id, subgroupCode: "50RV" });
+  const allocCode = await customChargeCode({ propertyId: property.id }, { code: "TRF", description: "Transfer", useDefaultTax: false, taxProfileId: customProfile.id, subgroupCode: "50RV" });
   const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "BAR", chargeCodeId: roomCode.id } });
   const allocation = await prisma.allocation.create({
     data: {
@@ -47,14 +48,11 @@ async function setup(opts?: { pricesIncludeTaxes?: boolean }) {
       rates: { create: [{ adultPrice: 20, childPrice: 10, effectiveFrom: new Date("2020-01-01") }] },
     },
   });
-  await prisma.enterpriseSettings.create({
-    data: {
-      enterpriseId: enterprise.id,
+  await setPropertySettings(property.id, {
       serviceChargeEnabled: true, serviceChargeRate: 10,
       tgstEnabled: true, tgstRate: 17,
       greenTaxEnabled: true, greenTaxAdultAmount: 12, greenTaxChildAmount: 6,
       defaultAccommodationChargeCodeId: roomCode.id,
-    },
   });
   await prisma.priceCalendar.createMany({
     data: [1, 2].map((d) => ({ ratePlanId: ratePlan.id, roomTypeId: roomType.id, date: new Date(Date.UTC(2026, 7, d)), price: 100 })),

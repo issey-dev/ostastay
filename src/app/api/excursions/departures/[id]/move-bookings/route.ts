@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyModuleAccess, toErrorResponse } from "@/lib/scope";
 import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
@@ -57,8 +58,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!rate) {
       return NextResponse.json({ error: "No price is configured for the replacement departure's date" }, { status: 400 });
     }
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: excursionType.property.enterpriseId } });
-    // The hub-wide Excursion Outlet — a moved booking re-posts its charge, and the same
+    const settings = await getPropertySettings(excursionType.propertyId);
+    // The property's own Excursion Outlet — a moved booking re-posts its charge, and the same
     // no-outlet-no-posting rule applies (this route previously didn't attribute the
     // outlet at all, so a moved booking silently lost its outlet attribution — fixed).
     const excursionOutlet = settings?.excursionOutletId
@@ -69,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : null;
     if (!excursionOutlet) {
       return NextResponse.json(
-        { error: "No Excursion Outlet is linked — link one under Controls > Excursions before moving bookings (the move re-posts their charges)." },
+        { error: "No Excursion Outlet is linked — link one in the Hub (Charge Codes › Excursion Outlet) before moving bookings (the move re-posts their charges)." },
         { status: 400 }
       );
     }

@@ -2,6 +2,52 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Hub Setup — Enterprise vs Property separation (2026-09-23) — DONE (7.0.0), follow-ups open
+
+Plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md). Owner decisions in DECISIONS.md (2026-09-23).
+Controls + Stationaries move from the property dashboard into the Hub, split into an
+Enterprise area and a per-property area (property in the URL); tax, charge codes, payment
+methods, dropdowns and stationery become per property; copy-between-properties; Overview
+becomes setup/health banners.
+
+- [x] Phase 0 — Hub shell, route groups, property band, access helpers (property admins in)
+- [x] Phase 1 — move per-property Controls sections; stationery + booking format per
+  property (`PropertySettings`); delete dashboard Controls/Stationaries
+- [x] Phase 2 — finance per property (charge hierarchy, tax, payment methods, posting
+  defaults, Spa/Excursion outlet link) + migration; onboarding chart varies by property
+- [x] Phase 3 — dropdowns per property (reservation, housekeeping, transport, room-feature
+  lists; guest-profile lists + Job Functions stay enterprise)
+- [ ] Phase 3b — richer dropdown entries (**blocked on O-1**: which fields — ask the owner)
+- [x] Phase 4 — Beds24 connection per property (Osta-created), Booking API keys one-or-ALL,
+  website/online settings + Green Tax into the property area
+- [x] Phase 5 — copy from another property (warn + skip, never overwrite): lists, tax,
+  charge codes, payment methods, stationery, meal plans, room types, outlets
+- [ ] Phase 5b — copy the Spa and Excursion catalogues (treatments/categories/rooms,
+  excursion types/schedules) and stand-alone Allocations (these live on the dashboard's
+  Revenue page, not in the Hub)
+- [x] Phase 6 — Overview banners (missing setup, Green Tax issues, channel status, failed
+  jobs only); link cards and job card removed; single-property users see their own
+
+- [ ] **Deployment:** run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
+  a property's scheduled Night Audit starts at the first run after its set time.
+
+**Found while scoping (fixed by this plan, noted so nobody fixes them twice):**
+- `GET /api/properties` returned every property of the enterprise to a single-property
+  user — fixed in Phase 5 (their own property only).
+- Stationaries saves every text field to `EnterpriseSettings` while previewing one
+  property — edits leak to every property.
+- Outlets / Sequences / Facilities / Amenities managers open on the *first* property,
+  ignoring the property the user has switched to.
+- ~~The enterprise-wide Spa/Excursion outlet link points at an outlet owned by one property~~
+  — fixed in Phase 2 (each property links one of its own outlets).
+- Cashiering page read its float/exchange defaults from `/api/tenant-settings`, which needs
+  CONTROLS — so a cashier without Controls silently got the hard-coded defaults. Fixed in
+  Phase 2 (reads the property's own settings, readable by anyone working there).
+- ~~Print-data routes returned the whole `EnterpriseSettings` row, SMTP/SFTP password
+  columns included~~ — fixed in Phase 1 (`loadDocumentSettings`).
+- The Stationery editor is not yet on Zod + React Hook Form (APP STANDARD 001) — it was
+  moved as-is; server-side validation is Zod. Convert when next touched.
+
 ## Booking API for Excursions & Spa — ALL PHASES DONE (2026-09-23)
 
 Branch `feat/booking-api-addons`. Full record — decisions, file map, deviations — in

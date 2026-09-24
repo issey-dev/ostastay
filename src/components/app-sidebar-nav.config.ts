@@ -7,12 +7,10 @@ import {
   Contact,
   ConciergeBell,
   FileBarChart,
-  FileStack,
   History,
   Landmark,
   LayoutDashboard,
   LayoutGrid,
-  Settings,
   Sparkles,
   Store,
   TrendingUp,
@@ -91,17 +89,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Activity Log", url: "/dashboard/activity-log", icon: History, module: "ACTIVITY_LOG" },
     ],
   },
-  {
-    label: "Setup",
-    items: [
-      { title: "Stationaries", url: "/dashboard/stationaries", icon: FileStack, module: "CONTROLS" },
-      { title: "Controls", url: "/dashboard/controls", icon: Settings, module: "CONTROLS" },
-    ],
-  },
+  // No "Setup" group: Controls and Stationaries moved out of the property dashboard into
+  // the Hub (2026-09-23, .agents/docs/HUB_SETUP_PLAN.md) — the dashboard is operations only.
 ]
 
-// Every module referenced by the nav, de-duplicated (Stationaries and Controls share
-// CONTROLS). app-sidebar.tsx filters this server-side and passes back the allowed set.
+// Every module referenced by the nav, de-duplicated. app-sidebar.tsx filters this server-side and passes back the allowed set.
 // Items with no `module` are absent here by construction — they are always visible, so
 // there is nothing for the server to decide about them.
 export const NAV_MODULES: Module[] = [

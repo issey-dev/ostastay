@@ -16,7 +16,6 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { useProperty } from "@/components/providers/property-provider"
 
 type RoomExceptionRow = { id: string; date: string; startTime: string | null; endTime: string | null; exceptionType: string; reason: string | null }
 
@@ -53,9 +52,7 @@ const emptyValues: RoomFormValues = {
 
 const EXCEPTION_TYPES = ["MAINTENANCE", "CLEANING", "RENOVATION", "PRIVATE_EVENT", "UNAVAILABLE"] as const
 
-export function SpaRoomsManager() {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
 
   const [rooms, setRooms] = useState<SpaRoomDto[]>([])
   const [loading, setLoading] = useState(true)

@@ -8,6 +8,7 @@ const { prisma } = await import("@/lib/db");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
 const { getReport } = await import("@/lib/reports/registry");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const D = (y: number, m: number, d: number, h = 0, mi = 0) => new Date(Date.UTC(y, m, d, h, mi));
@@ -27,16 +28,16 @@ describe("Reporting engine — Revenue / Financial / Housekeeping", () => {
     enterpriseId = ent.id;
     ctx.enterpriseId = ent.id;
     const roleIds = await ensureRoles(prisma, enterpriseId, SYSTEM_ROLE_DEFS, true);
-    const commissionCode = await customChargeCode(enterpriseId, { code: `COMM-${uniq()}`, description: "Commission", subgroupCode: "99SY" });
-    await prisma.enterpriseSettings.create({ data: { enterpriseId, greenTaxAdultAmount: 12, greenTaxChildAmount: 6, commissionChargeCodeId: commissionCode.id } });
     const property = await prisma.property.create({ data: { enterpriseId, name: "X Prop", code: `X-${uniq()}`, legalName: "X LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: BIZ } });
     propertyId = property.id;
+    const commissionCode = await customChargeCode({ propertyId }, { code: `COMM-${uniq()}`, description: "Commission", subgroupCode: "99SY" });
+    await setPropertySettings(property.id, { greenTaxAdultAmount: 12, greenTaxChildAmount: 6, commissionChargeCodeId: commissionCode.id });
     const rt = await prisma.roomType.create({ data: { propertyId, name: "Std", code: "STD", maxOccupancy: 2 } });
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rt.id, roomNumber: "401", status: "DIRTY" } });
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
-    const roomCode = await customChargeCode(enterpriseId, { code: `ROOM-${uniq()}`, description: "Room", subgroupCode: "10RV" });
-    const gtxCode = await customChargeCode(enterpriseId, { code: "8500", description: "Green Tax", subgroupCode: "85GT" });
-    const method = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
+    const roomCode = await customChargeCode({ propertyId }, { code: `ROOM-${uniq()}`, description: "Room", subgroupCode: "10RV" });
+    const gtxCode = await customChargeCode({ propertyId }, { code: "8500", description: "Green Tax", subgroupCode: "85GT" });
+    const method = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Cash", type: "CASH" } });
     const guest = await prisma.profile.create({
       data: {
         enterpriseId, profileType: "GUEST", firstName: "Nat", lastName: "Ional", nationality: "GB", dateOfBirth: D(1990, 3, 4),

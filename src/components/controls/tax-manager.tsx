@@ -25,21 +25,24 @@ const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculat
 // ControlsCard (src/components/controls/charge-codes-manager.tsx), since they're
 // grouped by category for reporting and only ever reference a Tax profile, not the
 // other way around.
-export function TaxManager() {
+//
+// Whether each Maldives levy is POSTED at Night Audit (Green Tax, GST, Service Charge) is
+// switched on the property's Night Audit page; this form holds only the values (rates,
+// amounts, the Green Tax rules) and never sends those switches, so saving here can never
+// undo a change made there.
+export function TaxManager({ propertyId, nightAuditHref }: { propertyId: string; nightAuditHref?: string }) {
   const [taxProfiles, setTaxProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Maldives Tax State
   const [savingSettings, setSavingSettings] = useState(false)
+  const [postedNightly, setPostedNightly] = useState({ greenTax: true, tgst: true, serviceCharge: true })
   const [settingsForm, setSettingsForm] = useState({
-    greenTaxEnabled: true,
     greenTaxAdultAmount: 12.00,
     greenTaxChildAmount: 6.00,
     greenTaxExemptAge: 2,
     greenTaxStayBasis: "ACTUAL",
-    tgstEnabled: true,
     tgstRate: 17.00,
-    serviceChargeEnabled: true,
     serviceChargeRate: 10.00,
   })
 
@@ -57,27 +60,29 @@ export function TaxManager() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [propertyId])
 
   const fetchData = async () => {
     setLoading(true)
     try {
       const [taxRes, settingsRes] = await Promise.all([
-        fetch(`/api/taxes`),
-        fetch(`/api/tenant-settings`)
+        fetch(`/api/taxes?propertyId=${propertyId}`),
+        fetch(`/api/properties/${propertyId}/settings`)
       ])
       if (taxRes.ok) setTaxProfiles(await taxRes.json())
       if (settingsRes.ok) {
         const data = await settingsRes.json()
+        setPostedNightly({
+          greenTax: data.greenTaxEnabled !== false,
+          tgst: data.tgstEnabled !== false,
+          serviceCharge: data.serviceChargeEnabled !== false,
+        })
         setSettingsForm({
-          greenTaxEnabled: data.greenTaxEnabled !== undefined ? data.greenTaxEnabled : true,
           greenTaxAdultAmount: data.greenTaxAdultAmount !== undefined ? data.greenTaxAdultAmount : 12.00,
           greenTaxChildAmount: data.greenTaxChildAmount !== undefined ? data.greenTaxChildAmount : 6.00,
           greenTaxExemptAge: data.greenTaxExemptAge !== undefined ? data.greenTaxExemptAge : 2,
           greenTaxStayBasis: data.greenTaxStayBasis === "STANDARD" ? "STANDARD" : "ACTUAL",
-          tgstEnabled: data.tgstEnabled !== undefined ? data.tgstEnabled : true,
           tgstRate: data.tgstRate !== undefined ? data.tgstRate : 17.00,
-          serviceChargeEnabled: data.serviceChargeEnabled !== undefined ? data.serviceChargeEnabled : true,
           serviceChargeRate: data.serviceChargeRate !== undefined ? data.serviceChargeRate : 10.00,
         })
       }
@@ -92,7 +97,7 @@ export function TaxManager() {
     e.preventDefault()
     setSavingSettings(true)
     try {
-      const res = await fetch(`/api/tenant-settings`, {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsForm)
@@ -148,7 +153,7 @@ export function TaxManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taxForm)
+        body: JSON.stringify(isTaxEditMode ? taxForm : { ...taxForm, propertyId })
       })
       if (res.ok) {
         setIsTaxModalOpen(false)
@@ -311,8 +316,8 @@ export function TaxManager() {
             <p className="text-xs text-muted-foreground bg-muted rounded-md p-3 border border-border">
               Calculation order is fixed: Service Charge is a percentage of the base amount, then GST is a percentage
               of (base + Service Charge). Example on a $100 base: SVC 10% = $10.00, GST 17% of $110.00 = $18.70.
-              Whether these are added on top of your rates or backed out of them is controlled per-property under
-              Controls &gt; General &gt; Property Information (&quot;Prices Include Taxes&quot;).
+              Whether these are added on top of your rates or backed out of them is set by &quot;Prices Include
+              Taxes&quot; on this page; whether each is posted at Night Audit is switched on the Night Audit page.
             </p>
 
             {/* Maldives Green Tax Settings */}
@@ -322,21 +327,9 @@ export function TaxManager() {
               </h3>
 
               <div className="grid gap-6">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="greenTaxEnabled"
-                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
-                    checked={settingsForm.greenTaxEnabled}
-                    onChange={e => setSettingsForm(p => ({ ...p, greenTaxEnabled: e.target.checked }))}
-                  />
-                  <Label htmlFor="greenTaxEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
-                    Enable Automatic Nightly Green Tax Calculation & Posting
-                  </Label>
-                </div>
+                <PostedNightly on={postedNightly.greenTax} levy="Green Tax" href={nightAuditHref} />
 
-                {settingsForm.greenTaxEnabled && (
-                  <div className="grid grid-cols-1 gap-6 border-t pt-4 mt-2 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Adult Rate (per adult/night) in USD</Label>
                       <div className="relative">
@@ -399,7 +392,6 @@ export function TaxManager() {
                       </div>
                     </div>
                   </div>
-                )}
               </div>
             </div>
 
@@ -410,34 +402,12 @@ export function TaxManager() {
               </h3>
 
               <div className="grid gap-6">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="tgstEnabled"
-                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
-                    checked={settingsForm.tgstEnabled}
-                    onChange={e => setSettingsForm(p => ({ ...p, tgstEnabled: e.target.checked }))}
-                  />
-                  <Label htmlFor="tgstEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
-                    Enable Automatic Nightly GST Calculation
-                  </Label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <PostedNightly on={postedNightly.tgst} levy="GST" href={nightAuditHref} />
+                  <PostedNightly on={postedNightly.serviceCharge} levy="Service Charge" href={nightAuditHref} />
                 </div>
 
-                <div className="flex items-center gap-3 mt-2">
-                  <input
-                    type="checkbox"
-                    id="serviceChargeEnabled"
-                    className="h-4 w-4 text-primary border-border rounded focus:ring-ring cursor-pointer"
-                    checked={settingsForm.serviceChargeEnabled}
-                    onChange={e => setSettingsForm(p => ({ ...p, serviceChargeEnabled: e.target.checked }))}
-                  />
-                  <Label htmlFor="serviceChargeEnabled" className="font-semibold text-foreground text-sm cursor-pointer select-none">
-                    Enable Automatic Nightly Service Charge (SC) Calculation
-                  </Label>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 border-t pt-4 mt-2 md:grid-cols-2">
-                  {settingsForm.tgstEnabled && (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>GST Rate (%)</Label>
                       <div className="relative">
@@ -455,9 +425,7 @@ export function TaxManager() {
                         Standard GST rate for the Tourism Sector is <strong>17%</strong>. Calculated on Base + Service Charge.
                       </p>
                     </div>
-                  )}
 
-                  {settingsForm.serviceChargeEnabled && (
                     <div className="space-y-2">
                       <Label>Service Charge Rate (%)</Label>
                       <div className="relative">
@@ -475,7 +443,6 @@ export function TaxManager() {
                         Maldives Law requires a minimum of <strong>10%</strong> Service Charge.
                       </p>
                     </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -597,5 +564,18 @@ export function TaxManager() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+// Read-only here: whether this levy is posted nightly is switched on the Night Audit page.
+function PostedNightly({ on, levy, href }: { on: boolean; levy: string; href?: string }) {
+  return (
+    <p className="flex flex-wrap items-center gap-2 text-sm">
+      <Badge variant={on ? "default" : "secondary"}>{on ? "Posted nightly" : "Not posted"}</Badge>
+      <span className="text-muted-foreground">
+        {levy} is {on ? "posted" : "not posted"} at Night Audit —{" "}
+        {href ? <a href={href} className="text-primary hover:underline">change under Night Audit</a> : "changed under Night Audit"}.
+      </span>
+    </p>
   )
 }

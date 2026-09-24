@@ -24,7 +24,7 @@ type ChargeCode = {
 //
 // City Ledger settlement is deliberately NOT here — it selects a Payment Method, which
 // stays with Payment Methods under Finance (see SettlementDefaultsManager).
-export function PostingDefaultsManager() {
+export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
   const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([])
   const [accommodationId, setAccommodationId] = useState("")
   const [greenTaxId, setGreenTaxId] = useState("")
@@ -35,8 +35,8 @@ export function PostingDefaultsManager() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/charge-codes").then(r => r.json()),
-      fetch("/api/tenant-settings").then(r => r.json()),
+      fetch(`/api/charge-codes?propertyId=${propertyId}`).then(r => r.json()),
+      fetch(`/api/properties/${propertyId}/settings`).then(r => r.json()),
     ])
       .then(([cc, settings]) => {
         if (Array.isArray(cc)) setChargeCodes(cc)
@@ -45,13 +45,13 @@ export function PostingDefaultsManager() {
         setCommissionId(settings?.commissionChargeCodeId || "")
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [propertyId])
 
   const handleSave = async () => {
     setSaving(true)
     setMessage(null)
     try {
-      const res = await fetch("/api/tenant-settings", {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

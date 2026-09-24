@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { generateEregistrationToken, hashEregistrationToken } from "@/lib/eregistration/token";
@@ -48,12 +49,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!group) return NextResponse.json({ error: "Group block not found" }, { status: 404 });
     await assertPropertyAccess(ctx, group.propertyId);
 
-    const property = await prisma.property.findUniqueOrThrow({ where: { id: group.propertyId }, select: { enterpriseId: true } });
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: property.enterpriseId } });
-    if (settings && settings.eRegistrationEnabled === false) {
-      return NextResponse.json({ error: "eRegistration is disabled for this enterprise — enable it under Controls → Stationaries first." }, { status: 400 });
+    const settings = await getPropertySettings(group.propertyId);
+    if (!settings.eRegistrationEnabled) {
+      return NextResponse.json({ error: "eRegistration is turned off for this property — turn it on in the Hub under this property's Stationery first." }, { status: 400 });
     }
-    const expiryHours = settings?.eRegistrationExpiryHours ?? 72;
+    const expiryHours = settings.eRegistrationExpiryHours;
 
     const pickups = await prisma.reservation.findMany({
       where: { groupBlockId: id, status: { notIn: EXCLUDED_PICKUP_STATUSES } },
@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
 
       const newLink = await tx.eRegistrationLink.create({
-        data: { groupBlockId: id, propertyId: group.propertyId, enterpriseId: property.enterpriseId, tokenHash, status: "ACTIVE", expiresAt, createdByUserId: ctx.userId },
+        data: { groupBlockId: id, propertyId: group.propertyId, enterpriseId: ctx.enterpriseId, tokenHash, status: "ACTIVE", expiresAt, createdByUserId: ctx.userId },
       });
 
       for (const pickup of pickups) {

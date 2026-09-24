@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Printer, CheckCircle2, Ban, RotateCcw } from "@/components/icons"
+import { useProperty } from "@/components/providers/property-provider"
 
 type WalkInFolioPanelProps = {
   folioId: string | null
@@ -25,6 +26,8 @@ type WalkInFolioPanelProps = {
 // out. A closed bill is read-only but can be REOPENED while it's still the same business
 // day (the server enforces that).
 export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInFolioPanelProps) {
+  // Payment methods are per property — the property this walk-in bill belongs to.
+  const { currentProperty } = useProperty()
   const { slug } = useParams<{ slug: string }>()
   const [folio, setFolio] = useState<any>(null)
   const [paymentMethods, setPaymentMethods] = useState<any[]>([])
@@ -49,12 +52,12 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
       setFolio(null)
       setFeedback(null)
       fetchFolio()
-      fetch(`/api/payment-methods`)
+      if (currentProperty) fetch(`/api/payment-methods?propertyId=${currentProperty.id}`)
         .then((res) => res.json())
         .then((data) => { if (Array.isArray(data)) setPaymentMethods(data.filter((m: any) => m.isActive !== false)) })
         .catch(console.error)
     }
-  }, [isOpen, folioId, fetchFolio])
+  }, [isOpen, folioId, fetchFolio, currentProperty])
 
   const activeCharges = folio ? folio.lineItems.filter((i: any) => !i.isVoid) : []
   const balance = folio

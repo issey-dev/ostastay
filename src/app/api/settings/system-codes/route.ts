@@ -1,20 +1,66 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from '@/lib/scope'
+import {
+  requireSession,
+  requirePermission,
+  requireEnterpriseHub,
+  requirePropertySetup,
+  assertPropertyAccess,
+  toErrorResponse,
+  ForbiddenError,
+  type AuthContext,
+} from '@/lib/scope'
 import { logActivity } from '@/lib/activity-log'
+import { isPropertyListCategory } from '@/lib/system-code-scope'
+
+// Dropdown list options. A category is either a PROPERTY list (each property its own —
+// needs ?propertyId= / body propertyId, and is Property Setup for that property) or an
+// ENTERPRISE list (guest-profile lists, Job Functions — the Hub's enterprise area only).
+// Which is which: src/lib/system-code-scope.ts.
+
+// May this caller change a list at this level? Property lists are that property's
+// Property Setup; enterprise lists need the enterprise area, which a single-property user
+// never has.
+async function authorizeWrite(ctx: AuthContext, propertyId: string | null, action: 'create' | 'update') {
+  if (propertyId) {
+    await requirePropertySetup(ctx, propertyId, 'CONTROLS', action)
+  } else {
+    requireEnterpriseHub(ctx)
+    requirePermission(ctx, 'CONTROLS', action)
+  }
+}
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession()
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
+    const propertyId = searchParams.get('propertyId')
+    // Managers need the switched-off rows too (to bring one back rather than collide with
+    // it); every picker reads active rows only.
+    const includeInactive = searchParams.get('includeInactive') === '1'
+
+    if (propertyId) await assertPropertyAccess(ctx, propertyId)
+
+    let where
+    if (category && isPropertyListCategory(category)) {
+      // One property's own list — never another property's.
+      if (!propertyId) {
+        return NextResponse.json({ error: `propertyId is required for ${category}` }, { status: 400 })
+      }
+      where = { propertyId, category }
+    } else if (category) {
+      where = { enterpriseId: ctx.enterpriseId, propertyId: null, category }
+    } else {
+      // Every list the caller can see here: the enterprise's, plus the given property's.
+      where = {
+        enterpriseId: ctx.enterpriseId,
+        OR: [{ propertyId: null }, ...(propertyId ? [{ propertyId }] : [])],
+      }
+    }
 
     const codes = await prisma.systemCode.findMany({
-      where: {
-        enterpriseId: ctx.enterpriseId,
-        ...(category && { category }),
-        isActive: true
-      },
+      where: { ...where, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: {
         sortOrder: 'asc'
       }
@@ -29,7 +75,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession()
-    requirePermission(ctx, 'CONTROLS', 'create')
 
     const body = await request.json()
     const { category, code, value, sortOrder } = body
@@ -38,9 +83,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // A property list is always one property's; an enterprise list never is.
+    const propertyId: string | null = isPropertyListCategory(category) ? body.propertyId ?? null : null
+    if (isPropertyListCategory(category) && !propertyId) {
+      return NextResponse.json({ error: `propertyId is required for ${category}` }, { status: 400 })
+    }
+    await authorizeWrite(ctx, propertyId, 'create')
+
     const newCode = await prisma.systemCode.create({
       data: {
         enterpriseId: ctx.enterpriseId,
+        propertyId,
         category,
         code,
         value,
@@ -70,16 +123,19 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const ctx = await requireSession()
-    requirePermission(ctx, 'CONTROLS', 'update')
 
     const body = await request.json()
     // Support bulk reordering or single update
     if (Array.isArray(body)) {
       // Bulk update (e.g., for reordering) — confirm every targeted row is this
-      // enterprise's own before updating any of them.
+      // enterprise's own, and that the caller may change each list it touches, before
+      // updating any of them.
       const existing = await prisma.systemCode.findMany({ where: { id: { in: body.map((item) => item.id) } } })
-      if (existing.some((row) => row.enterpriseId !== ctx.enterpriseId)) {
+      if (existing.length !== body.length || existing.some((row) => row.enterpriseId !== ctx.enterpriseId)) {
         throw new ForbiddenError('System code not found')
+      }
+      for (const level of new Set(existing.map((row) => row.propertyId))) {
+        await authorizeWrite(ctx, level, 'update')
       }
 
       const updates = body.map((item) =>
@@ -108,6 +164,7 @@ export async function PUT(request: Request) {
       if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: 'System code not found' }, { status: 404 })
       }
+      await authorizeWrite(ctx, existing.propertyId, 'update')
 
       const updatedCode = await prisma.systemCode.update({
         where: { id },

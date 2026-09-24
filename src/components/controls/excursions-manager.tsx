@@ -21,7 +21,6 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { useProperty } from "@/components/providers/property-provider"
 import { ExcursionScheduleManager } from "@/components/controls/excursion-schedule-manager"
 
 export type ExcursionRateDto = {
@@ -131,9 +130,7 @@ const emptyValues: ExcursionTypeFormValues = {
   rates: [{ adultPrice: "0", childPrice: "0", infantPrice: "0", flatPrice: "", effectiveFrom: "", effectiveTo: "" }],
 }
 
-export function ExcursionsManager({ title, description }: { title: string; description?: string }) {
-  const { currentProperty } = useProperty()
-  const propertyId = currentProperty?.id ?? ""
+export function ExcursionsManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
 
   const [types, setTypes] = useState<ExcursionTypeDto[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
@@ -164,7 +161,7 @@ export function ExcursionsManager({ title, description }: { title: string; descr
 
   useEffect(() => {
     fetchTypes()
-    fetch("/api/charge-codes")
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps

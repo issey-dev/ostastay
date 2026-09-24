@@ -11,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Loader2 } from "@/components/icons"
 import { toast } from "@/lib/toast"
+import { useProperty } from "@/components/providers/property-provider"
 
 type DepositDialogProps = {
   reservationId: string | null
@@ -51,6 +52,8 @@ type DepositFormValues = z.infer<typeof depositSchema>
 // the folio if the stay hasn't opened one yet, so the money is already on the
 // billing window at check-in. Fees are collected here, never through billing.
 export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen, onClose, onSaved, defaultPurpose, defaultAmount }: DepositDialogProps) {
+  // Payment methods are per property — the property this reservation is being worked at.
+  const { currentProperty } = useProperty()
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([])
 
   const form = useForm<DepositFormValues>({
@@ -67,7 +70,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
       amount: defaultAmount != null ? String(defaultAmount) : "",
       referenceNumber: "",
     })
-    fetch(`/api/payment-methods`)
+    if (currentProperty) fetch(`/api/payment-methods?propertyId=${currentProperty.id}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setPaymentMethods(data.filter((m: { isActive?: boolean }) => m.isActive !== false)) })
       .catch(console.error)

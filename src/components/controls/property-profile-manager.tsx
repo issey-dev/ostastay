@@ -4,10 +4,8 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { OptionSelect } from "@/components/ui/option-select"
 import { Save } from "@/components/icons"
-import { Switch } from "@/components/ui/switch"
-import { useProperty } from "@/components/providers/property-provider"
+import { useRouter } from "next/navigation"
 
 type PropertyDetail = {
   id: string
@@ -25,35 +23,30 @@ type PropertyDetail = {
   address: string | null
   starRating: number | null
   stationeryFont: string | null
-  pricesIncludeTaxes: boolean
-  requireInspectionOnCheckIn: boolean
-  eodHousekeepingMode: string
-  eodHousekeepingTargetStatus: string | null
 }
 
-// Edits the CURRENT property's own profile directly (name, code, times, logo, contact
-// info) — deliberately never shows or accepts an enterprise selector, so a property can
-// never be reassigned to a different enterprise from here.
-export function PropertyProfileManager() {
-  const { currentProperty } = useProperty()
+// Edits ONE property's own profile (name, code, times, logo, contact info) — the property
+// named by the Hub page it sits on. Deliberately never shows or accepts an enterprise
+// selector, so a property can never be reassigned to a different enterprise from here.
+export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
+  const router = useRouter()
   const [detail, setDetail] = useState<PropertyDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
 
   const fetchDetail = useCallback(async () => {
-    if (!currentProperty) return
     setLoading(true)
     try {
       const res = await fetch("/api/properties")
       if (res.ok) {
         const list: PropertyDetail[] = await res.json()
-        setDetail(list.find((p) => p.id === currentProperty.id) ?? null)
+        setDetail(list.find((p) => p.id === propertyId) ?? null)
       }
     } finally {
       setLoading(false)
     }
-  }, [currentProperty])
+  }, [propertyId])
 
   useEffect(() => { fetchDetail() }, [fetchDetail])
 
@@ -66,18 +59,28 @@ export function PropertyProfileManager() {
       const res = await fetch(`/api/properties/${detail.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(detail),
+        // Only the fields this form edits — the property's tax basis (Finance), check-in rule
+        // (Rooms & Inventory) and Night Audit settings are saved on their own pages, and
+        // sending the stale copies loaded here would overwrite a change made there.
+        body: JSON.stringify({
+          name: detail.name, code: detail.code, legalName: detail.legalName,
+          checkInTime: detail.checkInTime, checkOutTime: detail.checkOutTime,
+          logoUrl: detail.logoUrl, taxId: detail.taxId, contactPhone: detail.contactPhone,
+          contactEmail: detail.contactEmail, address: detail.address, starRating: detail.starRating,
+        }),
       })
       if (res.ok) {
         setSavedMsg(true)
         setTimeout(() => setSavedMsg(false), 3000)
+        // The band and sidebar name this property — refresh them if the name changed.
+        router.refresh()
       }
     } finally {
       setSaving(false)
     }
   }
 
-  if (!currentProperty || loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
+  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
   if (!detail) return <div className="py-8 text-center text-muted-foreground">No property found. Create one under Inventory first.</div>
 
   return (
@@ -136,84 +139,6 @@ export function PropertyProfileManager() {
         </div>
       </div>
       <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>
-
-      <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <Label htmlFor="pricesIncludeTaxes">Prices Include Taxes</Label>
-          <p className="text-xs text-muted-foreground">
-            Top-level default for this property, applied to anything charged. On: Green Tax/GST/Service Charge are
-            reverse-calculated out of the posted amount. Off: taxes are added on top. (A future transaction-level
-            override is not available yet.)
-          </p>
-        </div>
-        <Switch
-          id="pricesIncludeTaxes"
-          className="shrink-0"
-          checked={detail.pricesIncludeTaxes}
-          onCheckedChange={(checked) => setDetail({ ...detail, pricesIncludeTaxes: !!checked })}
-        />
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <Label htmlFor="requireInspectionOnCheckIn">Require Inspected Room at Check-In</Label>
-          <p className="text-xs text-muted-foreground">
-            On: guests can only be checked into rooms housekeeping has marked Inspected — a supervisor must sign off
-            each room before an arrival. Off: a dirty room warns but doesn&apos;t block.
-          </p>
-        </div>
-        <Switch
-          id="requireInspectionOnCheckIn"
-          className="shrink-0"
-          checked={detail.requireInspectionOnCheckIn}
-          onCheckedChange={(checked) => setDetail({ ...detail, requireInspectionOnCheckIn: !!checked })}
-        />
-      </div>
-
-      <div className="rounded-md border border-border p-3 space-y-3">
-        <div>
-          <Label htmlFor="eodHousekeepingMode">Night Audit — Auto Room Status</Label>
-          <p className="text-xs text-muted-foreground">
-            When End-of-Day runs, automatically downgrade housekeeping statuses. Occupied rooms always become Dirty for
-            daily service; the rule below applies to <strong>vacant rooms only</strong>. Out-of-Order / Out-of-Service
-            rooms are never changed.
-          </p>
-        </div>
-        <OptionSelect
-          id="eodHousekeepingMode"
-          value={detail.eodHousekeepingMode}
-          options={[
-            { label: "Off — don't change statuses", value: "OFF" },
-            { label: "Move one status down (Inspected → Clean, Clean → Dirty, Dirty stays)", value: "STEP_DOWN" },
-            { label: "Set all vacant rooms to a specific status…", value: "SET_STATUS" },
-          ]}
-          onChange={(mode) => {
-            setDetail({
-              ...detail,
-              eodHousekeepingMode: mode,
-              // Default a target the moment SET_STATUS is chosen so the form is never
-              // in an invalid (SET_STATUS + no target) state; clear it otherwise.
-              eodHousekeepingTargetStatus:
-                mode === "SET_STATUS" ? (detail.eodHousekeepingTargetStatus ?? "DIRTY") : null,
-            })
-          }}
-        />
-        {detail.eodHousekeepingMode === "SET_STATUS" && (
-          <div className="space-y-1">
-            <Label htmlFor="eodHousekeepingTargetStatus" className="text-xs">Target status for vacant rooms</Label>
-            <OptionSelect
-              id="eodHousekeepingTargetStatus"
-              value={detail.eodHousekeepingTargetStatus ?? "DIRTY"}
-              onChange={(v) => setDetail({ ...detail, eodHousekeepingTargetStatus: v })}
-              options={[
-                { label: "Clean", value: "CLEAN" },
-                { label: "Dirty", value: "DIRTY" },
-                { label: "Inspected", value: "INSPECTED" },
-              ]}
-            />
-          </div>
-        )}
-      </div>
 
       <div className="flex items-center gap-3 justify-end pt-4 border-t">
         {savedMsg && <span className="text-sm text-success">Saved</span>}

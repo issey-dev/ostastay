@@ -141,11 +141,11 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
     });
     ratePlanId = ratePlan.id;
 
-    const roomCode = await customChargeCode(enterpriseId, { code: "1000", description: "Room Revenue" });
+    const roomCode = await customChargeCode({ propertyId }, { code: "1000", description: "Room Revenue" });
     roomCodeId = roomCode.id;
 
     const paymentMethod = await prisma.paymentMethod.create({
-      data: { enterpriseId, name: "Cash", type: "CASH" },
+      data: { enterpriseId, propertyId, name: "Cash", type: "CASH" },
     });
     paymentMethodId = paymentMethod.id;
 
@@ -584,7 +584,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
       );
 
     // greenTaxEnabled: false keeps this suite's night-audit test independent of a GTX code.
-    const set = await patch({ smtpPassword: "s3cret-smtp", greenTaxEnabled: false });
+    const set = await patch({ smtpPassword: "s3cret-smtp", smtpHost: "mail.test.local" });
     expect(set.status).toBe(200);
     const setBody = await set.json();
     expect(setBody.smtpPassword).toBe("********");

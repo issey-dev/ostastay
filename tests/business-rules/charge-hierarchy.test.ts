@@ -6,6 +6,7 @@ const { resolveChargeCode } = await import("@/lib/posting/resolve-charge-code");
 const { postCharge, chargeCodeInclude } = await import("@/lib/posting/post-charge");
 const { CANONICAL_GROUPS, STANDARD_CHARGE_CODES } = await import("@/lib/posting/charge-tree");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+const { setPropertySettings } = await import("../helpers/property-settings");
 
 // The seeder + the role resolver: the two pieces that closed the provisioning gap
 // (CHARGE_CODE_PLAN.md §1.3) and killed the `findFirst({ code: "1000" })` lookups.
@@ -16,17 +17,28 @@ async function freshEnterprise(name: string) {
   return prisma.enterprise.create({ data: { name, slug: slug(name), type: "STANDARD" } });
 }
 
+// The chart is per PROPERTY since 2026-09-23 — every case gets its own property.
+async function freshProperty(name: string, enterpriseId?: string) {
+  const ent = enterpriseId ? { id: enterpriseId } : await freshEnterprise(name);
+  const property = await prisma.property.create({
+    data: {
+      enterpriseId: ent.id, name, code: slug(name).toUpperCase(), legalName: `${name} LLC`,
+      defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
+    },
+  });
+  return { ent, propertyId: property.id };
+}
+
 describe("ensureChargeTree", () => {
-  let enterpriseId: string;
+  let propertyId: string;
 
   beforeAll(async () => {
-    const ent = await freshEnterprise("seed");
-    enterpriseId = ent.id;
-    await ensureChargeTree(prisma, enterpriseId);
+    ({ propertyId } = await freshProperty("seed"));
+    await ensureChargeTree(prisma, { propertyId });
   });
 
   it("creates the whole canonical group/subgroup tree", async () => {
-    const groups = await prisma.chargeGroup.findMany({ where: { enterpriseId }, include: { subgroups: true } });
+    const groups = await prisma.chargeGroup.findMany({ where: { propertyId }, include: { subgroups: true } });
     expect(groups).toHaveLength(CANONICAL_GROUPS.length);
     for (const canonical of CANONICAL_GROUPS) {
       const actual = groups.find((g) => g.code === canonical.code);
@@ -38,7 +50,7 @@ describe("ensureChargeTree", () => {
   });
 
   it("creates the whole standard chart of charge codes", async () => {
-    const codes = await prisma.chargeCode.findMany({ where: { enterpriseId } });
+    const codes = await prisma.chargeCode.findMany({ where: { propertyId } });
     expect(codes).toHaveLength(STANDARD_CHARGE_CODES.length);
     for (const expected of STANDARD_CHARGE_CODES) {
       const actual = codes.find((c) => c.code === expected.code);
@@ -53,7 +65,7 @@ describe("ensureChargeTree", () => {
 
   it("gives every revenue group its OWN tax codes, all on the same default rule", async () => {
     const codes = await prisma.chargeCode.findMany({
-      where: { enterpriseId },
+      where: { propertyId },
       include: { generatesFrom: { include: { generatedCode: true } } },
     });
     const byCode = new Map(codes.map((c) => [c.code, c]));
@@ -88,17 +100,17 @@ describe("ensureChargeTree", () => {
 
   it("levies Green Tax off accommodation only, and reads its rate from the Tax config", async () => {
     const room = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "1000" } },
+      where: { propertyId_code: { propertyId, code: "1000" } },
       include: { generatesFrom: { include: { generatedCode: true } } },
     });
     const greenTax = room.generatesFrom.find((g) => g.method === "GREEN_TAX");
     expect(greenTax?.generatedCode.code).toBe("8500");
-    // The rates deliberately live in EnterpriseSettings, not on the generate row.
+    // The rates deliberately live in the property's settings, not on the generate row.
     expect(greenTax!.value).toBe(0);
 
     // An F&B sale is not a stay night — no levy.
     const fb = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "2001" } },
+      where: { propertyId_code: { propertyId, code: "2001" } },
       include: { generatesFrom: true },
     });
     expect(fb.generatesFrom.some((g) => g.method === "GREEN_TAX")).toBe(false);
@@ -109,14 +121,14 @@ describe("ensureChargeTree", () => {
     // that disagrees deletes the Service Charge row in the Generates editor.
     for (const code of ["1050", "1060"]) {
       const row = await prisma.chargeCode.findUniqueOrThrow({
-        where: { enterpriseId_code: { enterpriseId, code } },
+        where: { propertyId_code: { propertyId, code } },
         include: { generatesFrom: true },
       });
       expect(row.generatesFrom.map((g) => g.method).sort(), code).toEqual(["GST", "SERVICE_CHARGE"]);
     }
     // A deposit is a liability, not revenue — taxed nowhere.
     const dep = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "9200" } },
+      where: { propertyId_code: { propertyId, code: "9200" } },
       include: { generatesFrom: true },
     });
     expect(dep.generatesFrom).toHaveLength(0);
@@ -124,44 +136,44 @@ describe("ensureChargeTree", () => {
   });
 
   it("is idempotent — a second run creates nothing and duplicates nothing", async () => {
-    const before = await prisma.chargeGroup.count({ where: { enterpriseId } });
-    const result = await ensureChargeTree(prisma, enterpriseId);
+    const before = await prisma.chargeGroup.count({ where: { propertyId } });
+    const result = await ensureChargeTree(prisma, { propertyId });
     expect(result.groupsCreated).toBe(0);
     expect(result.subgroupsCreated).toBe(0);
     expect(result.codesCreated).toBe(0);
     expect(result.generatesCreated).toBe(0);
-    expect(await prisma.chargeGroup.count({ where: { enterpriseId } })).toBe(before);
+    expect(await prisma.chargeGroup.count({ where: { propertyId } })).toBe(before);
   });
 });
 
 describe("ensureChargeTree alongside a property's own codes", () => {
   it("leaves a property's own codes alone while creating the chart around them", async () => {
-    const ent = await freshEnterprise("coexist");
-    await ensureChargeTree(prisma, ent.id);
+    const { ent, propertyId } = await freshProperty("coexist");
+    await ensureChargeTree(prisma, { propertyId });
 
     // A code the property added itself, properly classified — chargeSubgroupId is
     // required, so an unclassified code can no longer exist at all.
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "60RV" } },
+      where: { propertyId_code: { propertyId, code: "60RV" } },
     });
     await prisma.chargeCode.create({
-      data: { enterpriseId: ent.id, code: "HOUSE", description: "House Special", chargeSubgroupId: sub.id },
+      data: { enterpriseId: ent.id, propertyId, code: "HOUSE", description: "House Special", chargeSubgroupId: sub.id },
     });
 
     // Re-running the seeder creates nothing and leaves the property's code untouched.
-    const result = await ensureChargeTree(prisma, ent.id);
+    const result = await ensureChargeTree(prisma, { propertyId });
     expect(result.codesCreated).toBe(0);
 
     const row = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "HOUSE" } },
+      where: { propertyId_code: { propertyId, code: "HOUSE" } },
     });
     expect(row.chargeSubgroupId).toBe(sub.id);
     expect(row.isSystem).toBe(false);
   });
 
   it("adopts an existing ROOM/GTX code instead of colliding with it, keeping its tax config", async () => {
-    const ent = await freshEnterprise("adopt");
-    const profile = await prisma.taxProfile.create({ data: { enterpriseId: ent.id, name: "Legacy VAT" } });
+    const { ent, propertyId } = await freshProperty("adopt");
+    const profile = await prisma.taxProfile.create({ data: { enterpriseId: ent.id, propertyId, name: "Legacy VAT" } });
     // A raw create, deliberately NOT the test helper: the helper seeds the whole chart,
     // and this test is specifically about what ensureChargeTree does when it meets a
     // property's own pre-existing ROOM code for the first time.
@@ -169,13 +181,13 @@ describe("ensureChargeTree alongside a property's own codes", () => {
     // profile — the shape an enterprise that has customised its accommodation code
     // arrives in. (chargeSubgroupId is required, so a bare unclassified ROOM can no
     // longer exist to begin with.)
-    await customChargeCode(ent.id, { code: "1000", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id });
+    await customChargeCode({ propertyId }, { code: "1000", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id });
 
     // A re-run adopts it rather than colliding, and creates nothing new.
-    const result = await ensureChargeTree(prisma, ent.id);
+    const result = await ensureChargeTree(prisma, { propertyId });
     expect(result.codesCreated).toBe(0);
 
-    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId: ent.id, code: "1000" } } });
+    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "1000" } } });
     expect(room.isSystem).toBe(true);
     expect(room.chargeSubgroupId).not.toBeNull();
     // The seeder classifies; it never rewrites how a property already taxes a code.
@@ -187,63 +199,66 @@ describe("ensureChargeTree alongside a property's own codes", () => {
 
 describe("resolveChargeCode: roles, not magic strings", () => {
   it("falls back to the system-seeded code when no pointer is set", async () => {
-    const ent = await freshEnterprise("role-fallback");
-    await ensureChargeTree(prisma, ent.id);
+    const { ent, propertyId } = await freshProperty("role-fallback");
+    await ensureChargeTree(prisma, { propertyId });
 
-    expect((await resolveChargeCode(ent.id, "ACCOMMODATION"))?.code).toBe("1000");
-    expect((await resolveChargeCode(ent.id, "GREEN_TAX"))?.code).toBe("8500");
-    expect((await resolveChargeCode(ent.id, "COMMISSION"))?.code).toBe("9100");
+    expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
+    expect((await resolveChargeCode({ propertyId }, "GREEN_TAX"))?.code).toBe("8500");
+    expect((await resolveChargeCode({ propertyId }, "COMMISSION"))?.code).toBe("9100");
   });
 
-  it("prefers the enterprise's own pointer over the seeded code", async () => {
-    const ent = await freshEnterprise("role-pointer");
-    await ensureChargeTree(prisma, ent.id);
+  it("prefers the property's own pointer over the seeded code", async () => {
+    const { ent, propertyId } = await freshProperty("role-pointer");
+    await ensureChargeTree(prisma, { propertyId });
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "10RV" } },
+      where: { propertyId_code: { propertyId, code: "10RV" } },
     });
-    const custom = await customChargeCode(ent.id, { code: "ACCOM", description: "Accommodation", chargeSubgroupId: sub.id, subgroupCode: "10RV" });
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId: ent.id, defaultAccommodationChargeCodeId: custom.id },
-    });
+    const custom = await customChargeCode({ propertyId }, { code: "ACCOM", description: "Accommodation", chargeSubgroupId: sub.id, subgroupCode: "10RV" });
+    await setPropertySettings(propertyId, { defaultAccommodationChargeCodeId: custom.id });
 
-    expect((await resolveChargeCode(ent.id, "ACCOMMODATION"))?.code).toBe("ACCOM");
+    expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("ACCOM");
   });
 
   it("falls through a dangling pointer rather than failing the posting", async () => {
-    const ent = await freshEnterprise("role-dangling");
-    await ensureChargeTree(prisma, ent.id);
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId: ent.id, defaultAccommodationChargeCodeId: "no-such-charge-code" },
-    });
+    const { ent, propertyId } = await freshProperty("role-dangling");
+    await ensureChargeTree(prisma, { propertyId });
+    await setPropertySettings(propertyId, { defaultAccommodationChargeCodeId: "no-such-charge-code" });
 
-    expect((await resolveChargeCode(ent.id, "ACCOMMODATION"))?.code).toBe("1000");
+    expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
   });
 
   it("ignores a deactivated pointer target", async () => {
-    const ent = await freshEnterprise("role-inactive");
-    await ensureChargeTree(prisma, ent.id);
+    const { ent, propertyId } = await freshProperty("role-inactive");
+    await ensureChargeTree(prisma, { propertyId });
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "10RV" } },
+      where: { propertyId_code: { propertyId, code: "10RV" } },
     });
-    const retired = await customChargeCode(ent.id, { code: "OLDRM", description: "Retired", chargeSubgroupId: sub.id, isActive: false });
-    await prisma.enterpriseSettings.create({
-      data: { enterpriseId: ent.id, defaultAccommodationChargeCodeId: retired.id },
-    });
+    const retired = await customChargeCode({ propertyId }, { code: "OLDRM", description: "Retired", chargeSubgroupId: sub.id, isActive: false });
+    await setPropertySettings(propertyId, { defaultAccommodationChargeCodeId: retired.id });
 
-    expect((await resolveChargeCode(ent.id, "ACCOMMODATION"))?.code).toBe("1000");
+    expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
   });
 
-  it("returns null for an enterprise with no charge codes at all", async () => {
-    const ent = await freshEnterprise("role-empty");
-    expect(await resolveChargeCode(ent.id, "ACCOMMODATION")).toBeNull();
+  it("returns null for a property with no charge codes at all", async () => {
+    const { propertyId } = await freshProperty("role-empty");
+    expect(await resolveChargeCode({ propertyId }, "ACCOMMODATION")).toBeNull();
   });
 
   it("never resolves a code belonging to another enterprise", async () => {
-    const mine = await freshEnterprise("role-mine");
-    const theirs = await freshEnterprise("role-theirs");
-    await ensureChargeTree(prisma, theirs.id);
+    const mine = await freshProperty("role-mine");
+    const theirs = await freshProperty("role-theirs");
+    await ensureChargeTree(prisma, { propertyId: theirs.propertyId });
 
-    expect(await resolveChargeCode(mine.id, "ACCOMMODATION")).toBeNull();
+    expect(await resolveChargeCode({ propertyId: mine.propertyId }, "ACCOMMODATION")).toBeNull();
+  });
+
+  it("never resolves a code of ANOTHER PROPERTY of the same enterprise", async () => {
+    const charted = await freshProperty("role-sibling-charted");
+    const sibling = await freshProperty("role-sibling", charted.ent.id);
+    await ensureChargeTree(prisma, { propertyId: charted.propertyId });
+
+    expect((await resolveChargeCode({ propertyId: charted.propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
+    expect(await resolveChargeCode({ propertyId: sibling.propertyId }, "ACCOMMODATION")).toBeNull();
   });
 });
 
@@ -252,38 +267,30 @@ describe("resolveChargeCode: roles, not magic strings", () => {
 // the database still cannot make a payment produce tax.
 describe("tax never generates on a payment — enforced at posting time", () => {
   it("ignores a rogue tax generate stored against a payment code", async () => {
-    const ent = await freshEnterprise("no-vat-on-payments");
-    await ensureChargeTree(prisma, ent.id);
+    const { ent, propertyId } = await freshProperty("no-vat-on-payments");
+    await ensureChargeTree(prisma, { propertyId });
 
-    const property = await prisma.property.create({
-      data: {
-        enterpriseId: ent.id, name: "P", code: `NV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        legalName: "P LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00",
-      },
-    });
-    const folio = await prisma.folio.create({ data: { propertyId: property.id, folioNumber: 1 } });
+    const folio = await prisma.folio.create({ data: { propertyId, folioNumber: 1 } });
 
     const payment = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "9500" } },
+      where: { propertyId_code: { propertyId, code: "9500" } },
     });
     const gst = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "8000" } },
+      where: { propertyId_code: { propertyId, code: "8000" } },
     });
     const svc = await prisma.chargeCode.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId: ent.id, code: "7000" } },
+      where: { propertyId_code: { propertyId, code: "7000" } },
     });
 
     // Written straight to the database, bypassing the API's refusal.
     await prisma.chargeCodeGenerate.createMany({
       data: [
-        { enterpriseId: ent.id, generatorCodeId: payment.id, generatedCodeId: gst.id, method: "GST", value: 0, calculateOn: "NET", sortOrder: 10 },
-        { enterpriseId: ent.id, generatorCodeId: payment.id, generatedCodeId: svc.id, method: "SERVICE_CHARGE", value: 0, calculateOn: "NET", sortOrder: 20 },
+        { enterpriseId: ent.id, propertyId, generatorCodeId: payment.id, generatedCodeId: gst.id, method: "GST", value: 0, calculateOn: "NET", sortOrder: 10 },
+        { enterpriseId: ent.id, propertyId, generatorCodeId: payment.id, generatedCodeId: svc.id, method: "SERVICE_CHARGE", value: 0, calculateOn: "NET", sortOrder: 20 },
       ],
     });
 
-    const settings = await prisma.enterpriseSettings.create({
-      data: { enterpriseId: ent.id, tgstEnabled: true, tgstRate: 17, serviceChargeEnabled: true, serviceChargeRate: 10 },
-    });
+    const settings = await setPropertySettings(propertyId, { tgstEnabled: true, tgstRate: 17, serviceChargeEnabled: true, serviceChargeRate: 10 });
 
     const postable = await prisma.chargeCode.findUniqueOrThrow({
       where: { id: payment.id },

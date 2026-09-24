@@ -77,7 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     // Validate charge codes belong to the enterprise.
-    const codes = await prisma.chargeCode.findMany({ where: { id: { in: chargeCodeIds }, enterpriseId: ctx.enterpriseId } });
+    const codes = await prisma.chargeCode.findMany({ where: { id: { in: chargeCodeIds }, propertyId: reservation.propertyId } });
     if (codes.length !== chargeCodeIds.length) {
       return NextResponse.json({ error: "One or more charge codes were not found" }, { status: 404 });
     }

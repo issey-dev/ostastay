@@ -177,6 +177,7 @@ async function seedOutlets(prisma: Tx, enterpriseId: string, propertyId: string,
     // creating the outlet from Controls would.
     await provisionOutletSubgroup(prisma, {
       enterpriseId,
+      propertyId,
       outletId: outlet.id,
       outletName: outlet.name,
       outletType: def.type,
@@ -315,19 +316,22 @@ export async function seedDemoData(
     })
   }
 
-  // Charge codes and fee rules are enterprise-level, so this picks up the new property's
-  // fee rules without touching the first property's.
-  await ensureChargeTree(prisma, enterpriseId)
-  await ensureFeeRules(prisma, enterpriseId)
-
   const properties = await prisma.property.findMany({ where: { enterpriseId }, orderBy: { code: "asc" } })
+  // Every property keeps its OWN chart, payment methods and fee rules (per property since
+  // 2026-09-23). Idempotent — the first property's were already seeded by seed-veyo.
+  for (const p of properties) {
+    await ensureSeedPaymentMethods(prisma, enterpriseId, p.id)
+    await ensureChargeTree(prisma, { propertyId: p.id })
+    await ensureFeeRules(prisma, { propertyId: p.id })
+  }
   for (const p of properties) await seedOutlets(prisma, enterpriseId, p.id, p.code)
 
   const guests = await prisma.profile.findMany({ where: { enterpriseId, profileType: "GUEST" }, orderBy: { createdAt: "asc" } })
   if (guests.length === 0) throw new Error("seedDemoData: no guest profiles — run the profile seed first")
 
-  const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
-  const codeId = (c: string) => codes.find((x) => x.code === c)!.id
+  // Charge codes are per property — a folio only ever posts against its own property's.
+  const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true, propertyId: true } })
+  const codeIdFor = (propertyId: string) => (c: string) => codes.find((x) => x.code === c && x.propertyId === propertyId)!.id
   // Each outlet's own nnRV subgroup was just provisioned — resolve a property's outlet
   // code by type + template suffix (21RV restaurant -> dinner 2103), falling back to the
   // band default when the property has no outlet of that kind.
@@ -340,12 +344,14 @@ export async function seedDemoData(
     return sg ? `${sg.code.slice(0, 2)}${suffix}` : fallback
   }
   const methods = await prisma.paymentMethod.findMany({ where: { enterpriseId } })
-  const cardMethod = methods.find((m) => m.type === "CARD") ?? methods[0]
 
   let guestCursor = 0
   const nextGuest = () => guests[guestCursor++ % guests.length]
 
   for (const property of properties) {
+    const codeId = codeIdFor(property.id)
+    const propertyMethods = methods.filter((m) => m.propertyId === property.id)
+    const cardMethod = propertyMethods.find((m) => m.type === "CARD") ?? propertyMethods[0]
     // Skip a property that already has reservations — this seed is re-runnable and must
     // not stack a second set of arrivals on top of the first.
     if ((await prisma.reservation.count({ where: { propertyId: property.id } })) > 0) continue
@@ -615,7 +621,7 @@ export async function seedSpaAndExcursionBookings(
 ) {
   const { enterpriseId, propertyId, bookedByUserId } = opts
 
-  const codes = await prisma.chargeCode.findMany({ where: { enterpriseId }, select: { id: true, code: true } })
+  const codes = await prisma.chargeCode.findMany({ where: { propertyId }, select: { id: true, code: true } })
   const codeId = (c: string) => codes.find((x) => x.code === c)!.id
   // Each outlet's own nnRV subgroup was just provisioned — resolve a property's outlet
   // code by type + template suffix (21RV restaurant -> dinner 2103), falling back to the
@@ -774,4 +780,22 @@ export async function seedSpaAndExcursionBookings(
   }
 
   return { spa: spaCount, excursions: excCount }
+}
+
+/**
+ * The four standard payment methods for ONE property (payment methods are per property
+ * since 2026-09-23). Idempotent by type. Run BEFORE ensureChargeTree, which links each
+ * method to the charge code its money posts against.
+ */
+export async function ensureSeedPaymentMethods(prisma: Tx, enterpriseId: string, propertyId: string) {
+  const wanted: Array<{ name: string; type: string }> = [
+    { name: "Credit Card", type: "CARD" },
+    { name: "Cash", type: "CASH" },
+    { name: "Bank Transfer", type: "TRANSFER" },
+    { name: "City Ledger", type: "CITY_LEDGER" },
+  ]
+  for (const m of wanted) {
+    const existing = await prisma.paymentMethod.findFirst({ where: { propertyId, type: m.type } })
+    if (!existing) await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: m.name, type: m.type } })
+  }
 }

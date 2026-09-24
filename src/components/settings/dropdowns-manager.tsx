@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { invalidateSystemCodeCache } from "@/components/ui/system-code-select"
+import { invalidateSystemCodeCache, systemCodesUrl } from "@/components/ui/system-code-select"
 
 type SystemCode = {
   id: string
@@ -41,14 +41,16 @@ type SystemCode = {
 
 export type DropdownCategory = { code: string; label: string }
 
-// Split by which Controls tab manages them — Client Relations gets the profile-related
-// lists, Inventory gets the operational ones. Both instantiate the same reusable
-// DropdownsManager below with a different `categories` prop rather than forking the
-// component.
+// Split by where they are managed. The profile lists are ENTERPRISE lists (Hub >
+// Enterprise > Guest Lists — nationalities have their own manager there, over the ISO
+// master list); the reservation, housekeeping and
+// room-feature lists are each PROPERTY's own (Hub > the property > Reservations /
+// Inventory) — see src/lib/system-code-scope.ts. Every page instantiates the same
+// DropdownsManager with a different `categories` prop (and a `propertyId` for a property
+// list) rather than forking the component.
 export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "GENDER",      label: "Gender" },
   { code: "TITLE",       label: "Title (Mr, Mrs)" },
-  { code: "NATIONALITY", label: "Nationality" },
   { code: "ID_TYPE",     label: "ID / Document Type" },
   { code: "CLASSIFICATION", label: "Profile Classification" },
   { code: "VIP_LEVEL",   label: "VIP Level" },
@@ -56,16 +58,11 @@ export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "PREFERENCE",  label: "Preferences" },
 ]
 
-export const OPERATIONS_LOV_CATEGORIES: DropdownCategory[] = [
-  { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
-  // A user's POST, as opposed to their role. HOUSEKEEPING and MAINTENANCE drive the
-  // assignment pickers — see src/lib/job-functions.ts before renaming or removing them.
-  { code: "JOB_FUNCTION", label: "Job Functions (staff posts)" },
-]
-
+// Property lists.
 export const RESERVATION_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "SPECIAL_REQUEST", label: "Special Requests" },
   { code: "TRANSPORT_TYPE", label: "Transport Type (Pickup / Dropoff)" },
+  { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
 ]
 
 // Room-specific feature lists, assigned per Room Type (all multi-select) via the Room
@@ -76,7 +73,14 @@ export const ROOM_FEATURE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "ROOM_AMENITY", label: "Amenities" },
 ]
 
-export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { categories?: DropdownCategory[] }) {
+export function DropdownsManager({
+  categories = PROFILE_LOV_CATEGORIES,
+  propertyId,
+}: {
+  categories?: DropdownCategory[]
+  /** Set for a property's own lists; omitted for the enterprise lists. */
+  propertyId?: string
+}) {
   const [codes, setCodes] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -88,13 +92,13 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
 
   const fetchCodes = useCallback(() => {
     setLoading(true)
-    fetch(`/api/settings/system-codes?category=${category}`)
+    fetch(systemCodesUrl(category, propertyId))
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCodes(data)
       })
       .finally(() => setLoading(false))
-  }, [category])
+  }, [category, propertyId])
 
   useEffect(() => {
     fetchCodes()
@@ -109,7 +113,7 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
       const res = await fetch("/api/settings/system-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, category, sortOrder: codes.length + 1 })
+        body: JSON.stringify({ ...form, category, propertyId, sortOrder: codes.length + 1 })
       })
 
       if (res.ok) {
@@ -224,7 +228,6 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
             <Input
-              placeholder="e.g. M, F, VEG"
               value={form.code}
               onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
             />
@@ -232,7 +235,6 @@ export function DropdownsManager({ categories = PROFILE_LOV_CATEGORIES }: { cate
           <div className="grid gap-2 md:flex-1">
             <Label className="text-xs text-muted-foreground">Display Value</Label>
             <Input
-              placeholder="e.g. Male, Female, Vegan"
               value={form.value}
               onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
             />

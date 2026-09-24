@@ -113,11 +113,11 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
     reservationBId = reservationB.id;
     folioBId = reservationB.folios[0].id;
 
-    const chargeCodeA = await customChargeCode(enterpriseA.id, { code: "1000", description: "Room Rate", subgroupCode: "10RV" });
+    const chargeCodeA = await customChargeCode({ propertyId: propertyAId }, { code: "1000", description: "Room Rate", subgroupCode: "10RV" });
     chargeCodeAId = chargeCodeA.id;
 
     const paymentMethodA = await prisma.paymentMethod.create({
-      data: { enterpriseId: enterpriseA.id, name: "Cash", type: "CASH" },
+      data: { enterpriseId: enterpriseA.id, propertyId: propertyAId, name: "Cash", type: "CASH" },
     });
     paymentMethodAId = paymentMethodA.id;
 
@@ -199,7 +199,7 @@ describe("Phase 4 tenant isolation: folios, payments, POS, night audit", () => {
 
   it("POST /api/pos/charge 404s when the charge code belongs to a different enterprise", async () => {
     const propertyB = await prisma.property.findUniqueOrThrow({ where: { id: propertyBId } });
-    const otherChargeCode = await customChargeCode(propertyB.enterpriseId, { code: "MB", description: "Minibar" });
+    const otherChargeCode = await customChargeCode({ propertyId: propertyB.id }, { code: "MB", description: "Minibar" });
     const res = await asUser(adminAId, () =>
       posChargeRoute.POST(
         new Request("http://localhost/api/pos/charge", {

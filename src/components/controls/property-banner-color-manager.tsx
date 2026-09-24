@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Check, Ban, Loader2 } from "@/components/icons"
-import { useProperty } from "@/components/providers/property-provider"
+import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 import { THEME_COLOR_NAMES, THEME_COLOR_PRESETS } from "@/lib/themePresets"
 import { cn } from "@/lib/utils"
 
@@ -46,8 +46,8 @@ const SWATCHES: Swatch[] = [
   })),
 ]
 
-export function PropertyBannerColorManager() {
-  const { currentProperty, setCurrentProperty } = useProperty()
+export function PropertyBannerColorManager({ property }: { property: HubPropertyDetail }) {
+  const [currentProperty, applySaved] = usePropertyValue(property)
   const [saving, setSaving] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
 
@@ -70,7 +70,7 @@ export function PropertyBannerColorManager() {
         body: JSON.stringify({ bannerColor: swatch.hex }),
       })
       if (res.ok) {
-        setCurrentProperty({ ...currentProperty, bannerColor: swatch.hex })
+        applySaved({ bannerColor: swatch.hex })
       }
     } finally {
       setSaving(null)
@@ -80,9 +80,9 @@ export function PropertyBannerColorManager() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground max-w-[60ch]">
-        Sets the accent line shown at the top of every page while{" "}
-        <strong className="text-foreground">{currentProperty.name}</strong> is the active property. Each
-        property has its own — switching properties switches the banner too.
+        The accent for <strong className="text-foreground">{currentProperty.name}</strong> only — the line
+        across the top of its dashboard, its band here in the Hub, and every document it prints. Every
+        property has its own.
       </p>
 
       {/* Live preview: a miniature of the page chrome, so the choice is judged in situ

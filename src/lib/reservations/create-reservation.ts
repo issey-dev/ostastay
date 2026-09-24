@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { assertPropertyAccess, type AuthContext } from "@/lib/scope";
@@ -178,7 +179,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     }
   }
 
-  const specialRequests = await validateSpecialRequestCodes(ctx.enterpriseId, body.specialRequestCodes);
+  const specialRequests = await validateSpecialRequestCodes(body.propertyId, body.specialRequestCodes);
   if (!specialRequests.ok) {
     return fail(400, specialRequests.error);
   }
@@ -319,20 +320,21 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     }
   }
 
-  // Fetch EnterpriseSettings to determine confirmation number format.
-  const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: ctx.enterpriseId } });
+  // The booked property's own booking-number format (PropertySettings — per property
+  // since 2026-09-23, .agents/docs/HUB_SETUP_PLAN.md).
+  const settings = await getPropertySettings(body.propertyId);
 
   // Sequential confirmation number via the Sequence Manager's REGISTRATION_NO
   // counter (Controls > Reservations) — the app owner's explicit "sequential
   // numbers only" rule; replaces the old Math.random() string, which could collide
   // (raw 500) and gave staff no usable reference ordering. Prefix and zero-pad
-  // length come from EnterpriseSettings; when no prefix is configured, the
+  // length come from the property's settings; when no prefix is configured, the
   // property's own (globally unique) code is used — confirmationNo is globally
   // unique while sequences are per-property, so a bare "000001" from two different
   // properties would otherwise collide.
   const bookedProperty = await prisma.property.findUnique({ where: { id: body.propertyId } });
-  const prefix = settings?.resConfirmPrefix || `${bookedProperty?.code ?? "RES"}-`;
-  const length = settings?.resConfirmLength || 6;
+  const prefix = settings.resConfirmPrefix || `${bookedProperty?.code ?? "RES"}-`;
+  const length = settings.resConfirmLength || 6;
   let seq = await allocateSequenceNumber(body.propertyId, "REGISTRATION_NO");
   let confirmationNo = `${prefix}${String(seq).padStart(length, "0")}`;
   // confirmationNo is globally unique; pre-sequence reservations used random strings

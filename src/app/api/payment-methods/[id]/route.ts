@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -15,6 +15,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "update");
 
     const updatedPaymentMethod = await prisma.paymentMethod.update({
       where: { id },
@@ -51,6 +53,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!existing || existing.enterpriseId !== ctx.enterpriseId) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
+    // The row's own property — a single-property admin may only change their own.
+    await requirePropertySetup(ctx, existing.propertyId, "CONTROLS", "delete");
 
     await prisma.paymentMethod.delete({
       where: { id }

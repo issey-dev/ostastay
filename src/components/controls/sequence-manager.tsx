@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -15,7 +13,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type PropertyOption = { id: string; name: string }
 type Sequence = { sequenceType: string; currentValue: number; updatedAt: string | null }
 
 const SEQUENCE_LABELS: Record<string, string> = {
@@ -27,26 +24,12 @@ const SEQUENCE_LABELS: Record<string, string> = {
 }
 const SEQUENCE_TYPES = Object.keys(SEQUENCE_LABELS)
 
-export function SequenceManager() {
-  const [properties, setProperties] = useState<PropertyOption[]>([])
-  const [propertyId, setPropertyId] = useState("")
+export function SequenceManager({ propertyId }: { propertyId: string }) {
   const [sequences, setSequences] = useState<Sequence[]>([])
   const [loading, setLoading] = useState(true)
   const [editingType, setEditingType] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    fetch("/api/properties")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setProperties(data)
-          if (data.length > 0) setPropertyId(data[0].id)
-        }
-      })
-      .catch(console.error)
-  }, [])
 
   const fetchSequences = useCallback(() => {
     if (!propertyId) return
@@ -88,17 +71,6 @@ export function SequenceManager() {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2 max-w-xs">
-        <Label className="text-sm font-medium">Property</Label>
-        <SearchableSelect
-          value={propertyId}
-          onChange={(v) => setPropertyId(v ?? "")}
-          placeholder="Select property"
-          options={properties.map((p) => ({ label: p.name, value: p.id }))}
-        />
-        {properties.length === 0 && <p className="text-xs text-muted-foreground">Create a property first.</p>}
-      </div>
-
       {propertyId && (
         <>
           {/* Phone view — one card per document type: label, current value (or its edit

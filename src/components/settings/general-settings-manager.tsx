@@ -8,23 +8,21 @@ import { cn } from "@/lib/utils"
 import { Save } from "@/components/icons"
 import { InfoHint } from "@/components/ui/info-hint"
 
+// Cashiering defaults only. The booking-number format that used to share this form is
+// per property now (BookingNumberFormatForm, Hub › property › Reservations).
 type SettingsForm = {
-  resConfirmPrefix: string
-  resConfirmLength: number
   cashierDefaultFloat: number
   exchangeFromCurrency: string
   exchangeToCurrency: string
 }
 
 const DEFAULT_FORM: SettingsForm = {
-  resConfirmPrefix: "",
-  resConfirmLength: 6,
   cashierDefaultFloat: 300,
   exchangeFromCurrency: "USD",
   exchangeToCurrency: "MVR",
 }
 
-export function GeneralSettingsManager() {
+export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState<SettingsForm>(DEFAULT_FORM)
@@ -41,17 +39,15 @@ export function GeneralSettingsManager() {
 
   useEffect(() => {
     fetchSettings()
-  }, [])
+  }, [propertyId])
 
   const fetchSettings = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/tenant-settings`)
+      const res = await fetch(`/api/properties/${propertyId}/settings`)
       if (res.ok) {
         const data = await res.json()
         setFormData({
-          resConfirmPrefix: data.resConfirmPrefix || "",
-          resConfirmLength: data.resConfirmLength || 6,
           cashierDefaultFloat: data.cashierDefaultFloat ?? 300,
           exchangeFromCurrency: data.exchangeFromCurrency || "USD",
           exchangeToCurrency: data.exchangeToCurrency || "MVR",
@@ -69,7 +65,7 @@ export function GeneralSettingsManager() {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch(`/api/tenant-settings`, {
+      const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -93,40 +89,8 @@ export function GeneralSettingsManager() {
 
   return (
     <form onSubmit={handleSave} className="space-y-8">
-      {/* Reservation Code Rules */}
-      <div className="space-y-4">
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Reservation Prefix</Label>
-            <Input
-              placeholder="e.g. GH- or RES-"
-              value={formData.resConfirmPrefix}
-              onChange={e => update("resConfirmPrefix", e.target.value.toUpperCase())}
-            />
-            <p className="text-xs text-muted-foreground">
-              A custom string attached to the front of every confirmation number.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Random Code Length</Label>
-            <Input 
-              type="number" 
-              min="4" 
-              max="12" 
-              required 
-              value={formData.resConfirmLength}
-              onChange={e => update("resConfirmLength", parseInt(e.target.value) || 6)}
-            />
-            <p className="text-xs text-muted-foreground">
-              The number of random alphanumeric characters to generate (4 to 12).
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Cashiering Defaults — separated from the section above by a line, not a box. */}
-      <div className="space-y-4 border-t border-border pt-8">
+      <div className="space-y-4">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             Cashiering Defaults

@@ -45,13 +45,13 @@ export async function GET(request: Request) {
     const startOfToday = resolveBusinessDate(property);
     const endOfToday = new Date(nextBusinessDate(startOfToday).getTime() - 1);
 
-    // 1. Arrivals Today
+    // 1. Arrivals Today — plus late arrivals from earlier days that Night Audit is still
+    // holding (the property's no-show timing), so the desk can still check them in.
     const arrivals = await prisma.reservation.findMany({
       where: {
         propertyId,
         status: ReservationStatus.RESERVED,
         checkInDate: {
-          gte: startOfToday,
           lte: endOfToday,
         }
       },

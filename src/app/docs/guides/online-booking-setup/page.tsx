@@ -56,7 +56,7 @@ export default function OnlineBookingSetup() {
           ["Therapist gender preference", "Spa — whether guests may ask for a male or female therapist. Names are never shown."],
           ["Payment method for paid bookings", "If the website takes payment, a paid booking is settled on the bill with this method, so the bill closes at zero. Without one, the website can only send bookings to be paid at the property."],
           ["Note for the desk", "Added to every online booking."],
-          ["Policies", "Shown on the website. Write what you actually honour — the cancellation deadline itself comes from the excursion's cutoff or the spa's cancellation window in Controls."],
+          ["Policies", "Shown on the website. Write what you actually honour — the cancellation deadline itself comes from the excursion's cutoff or the spa's cancellation window in the property's setup in the Hub."],
         ]}
       />
       <H3>What&apos;s sold</H3>
@@ -68,7 +68,7 @@ export default function OnlineBookingSetup() {
       </p>
       <p>
         The row&apos;s badge says <strong>Selling online</strong> when everything is in place, or what is missing: the module&apos;s
-        outlet in Controls, or nothing published yet.
+        outlet in the Hub, or nothing published yet.
       </p>
 
       <H2>4. Webhooks (optional)</H2>

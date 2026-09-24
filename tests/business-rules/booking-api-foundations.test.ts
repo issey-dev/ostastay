@@ -44,6 +44,7 @@ const { postCharge, chargeCodeInclude } = await import("@/lib/posting/post-charg
 const { computeSpaPolicyFee } = await import("@/lib/spa-lifecycle");
 const { consumeRateLimit, RATE_LIMITS, _resetWebsiteRateLimiter } = await import("@/lib/website-api/rate-limit");
 const { customChargeCode } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -148,23 +149,16 @@ describe("Booking API foundations (Phase 0)", () => {
 
     // A charge code that GENERATES a 10% service line, so every void below also proves
     // the generated line is reversed with its parent.
-    const generator = await customChargeCode(enterpriseId, { code: "FNDSPA", description: "Foundations Spa" });
-    const generated = await customChargeCode(enterpriseId, { code: "FNDSVC", description: "Foundations Service" });
+    const generator = await customChargeCode({ propertyId }, { code: "FNDSPA", description: "Foundations Spa" });
+    const generated = await customChargeCode({ propertyId }, { code: "FNDSVC", description: "Foundations Service" });
     await prisma.chargeCodeGenerate.create({
-      data: { enterpriseId, generatorCodeId: generator.id, generatedCodeId: generated.id, method: "PERCENT", value: 10 },
+      data: { enterpriseId, propertyId, generatorCodeId: generator.id, generatedCodeId: generated.id, method: "PERCENT", value: 10 },
     });
     chargeCodeId = generator.id;
 
     const spaOutlet = await prisma.outlet.create({ data: { propertyId, name: "Fnd Spa", code: "FNSP", outletType: "SPA" } });
     const excOutlet = await prisma.outlet.create({ data: { propertyId, name: "Fnd Tours", code: "FNEX", outletType: "EXCURSION" } });
-    await prisma.enterpriseSettings.upsert({
-      where: { enterpriseId },
-      update: { spaOutletId: spaOutlet.id, excursionOutletId: excOutlet.id },
-      create: {
-        enterpriseId, resConfirmPrefix: "", resConfirmLength: 6, tgstEnabled: false, serviceChargeEnabled: false,
-        greenTaxEnabled: false, spaOutletId: spaOutlet.id, excursionOutletId: excOutlet.id,
-      },
-    });
+    await setPropertySettings(propertyId, { tgstEnabled: false, serviceChargeEnabled: false, greenTaxEnabled: false, spaOutletId: spaOutlet.id, excursionOutletId: excOutlet.id });
 
     adminId = (
       await prisma.user.create({

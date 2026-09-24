@@ -1,5 +1,16 @@
 # Hub Level + Channel Manager (Beds24) — Plan
 
+> **2026-09-23 — one connection per PROPERTY** (owner; HUB_SETUP_PLAN.md Phase 4). Supersedes
+> the per-enterprise connection throughout this plan. `ChannelConnection.propertyId` is
+> required and unique; Uppsolut creates a property's connection from the Osta console and
+> links its Beds24 property id in the same step (its `ChannelPropertyLink`, one per
+> connection). The customer Hub's channel pages live under the property
+> (`/hub/p/{propertyId}/channel-manager/…`: status + health check, mapping incl. sharing
+> switch and defaults, inbound bookings, exchange log) and every route authorises against
+> the property (`src/lib/channels/hub-access.ts`). Property admins cannot connect, link,
+> unlink, disconnect or re-authorize — those are Osta-only. Exchange-log rows carry
+> `propertyId`.
+
 > **2026-09-06:** the Hub gained a **Website API** section (`/e/[slug]/hub/website`) —
 > API keys for each property's own brand website and what that site shows and sells.
 > Same INTEGRATIONS gate, same requireHubAccess() rule on every route. See

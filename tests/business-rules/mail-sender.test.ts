@@ -81,8 +81,6 @@ describe("mail sender: which SMTP an enterprise sends through, and the billing l
       update: { ...TENANT_SMTP, smtpPassword: encryptSecret("hotel-pw") },
       create: {
         enterpriseId: withOwnSmtpId,
-        resConfirmPrefix: "",
-        resConfirmLength: 6,
         ...TENANT_SMTP,
         smtpPassword: encryptSecret("hotel-pw"),
       },

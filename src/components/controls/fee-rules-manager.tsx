@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
-import { useProperty } from "@/components/providers/property-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,8 +40,7 @@ const BASIS_OPTIONS = [
   { value: "FULL_STAY", label: "Full stay" },
 ]
 
-export function FeeRulesManager() {
-  const { currentProperty } = useProperty()
+export function FeeRulesManager({ propertyId }: { propertyId: string }) {
   const confirm = useConfirm()
   const [rules, setRules] = useState<FeeRule[]>([])
   const [chargeCodes, setChargeCodes] = useState<{ id: string; code: string; description: string }[]>([])
@@ -52,11 +50,11 @@ export function FeeRulesManager() {
   const tmpCounter = useRef(0)
 
   useEffect(() => {
-    if (!currentProperty) return
+    if (!propertyId) return
     setLoading(true)
     Promise.all([
-      fetch(`/api/settings/fee-rules?propertyId=${currentProperty.id}`).then((r) => r.json()),
-      fetch(`/api/charge-codes?enterpriseId=${currentProperty.enterpriseId}`).then((r) => r.json()),
+      fetch(`/api/settings/fee-rules?propertyId=${propertyId}`).then((r) => r.json()),
+      fetch(`/api/charge-codes?propertyId=${propertyId}`).then((r) => r.json()),
     ])
       .then(([ruleData, codeData]) => {
         if (Array.isArray(ruleData)) {
@@ -66,7 +64,7 @@ export function FeeRulesManager() {
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [currentProperty])
+  }, [propertyId])
 
   const patch = (key: string, changes: Partial<FeeRule>) =>
     setRules((prev) => prev.map((r) => (r._key === key ? { ...r, ...changes } : r)))
@@ -77,7 +75,7 @@ export function FeeRulesManager() {
   }
 
   const save = async (rule: FeeRule) => {
-    if (!currentProperty) return
+    if (!propertyId) return
     if (!rule.name.trim()) { toast.error("Give the rule a name first."); return }
     setSavingKey(rule._key)
     setSavedKey(null)
@@ -85,7 +83,7 @@ export function FeeRulesManager() {
       const res = await fetch(`/api/settings/fee-rules`, {
         method: rule.id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: currentProperty.id, ...rule }),
+        body: JSON.stringify({ propertyId: propertyId, ...rule }),
       })
       if (res.ok) {
         const saved = await res.json()

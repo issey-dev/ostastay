@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     // the property this treatment is scoped to — same rule as Excursions/Allocations.
     const property = await prisma.property.findUnique({ where: { id: body.propertyId } });
     const chargeCode = await prisma.chargeCode.findUnique({ where: { id: body.chargeCodeId } });
-    if (!property || !chargeCode || chargeCode.enterpriseId !== property.enterpriseId) {
+    if (!property || !chargeCode || chargeCode.propertyId !== property.id) {
       return NextResponse.json({ error: "Charge code does not belong to this enterprise" }, { status: 400 });
     }
 

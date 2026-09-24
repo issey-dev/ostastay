@@ -81,7 +81,7 @@ export async function PATCH(
         return NextResponse.json({ error: "A Custom Tax profile is required when the tax override mode is Custom" }, { status: 400 });
       }
       const taxProfile = await prisma.taxProfile.findUnique({ where: { id: requestedTaxProfileId } });
-      if (!taxProfile || taxProfile.enterpriseId !== ctx.enterpriseId) {
+      if (!taxProfile || taxProfile.propertyId !== existing.propertyId) {
         return NextResponse.json({ error: "Tax profile not found" }, { status: 404 });
       }
       taxProfileId = requestedTaxProfileId;
@@ -94,7 +94,7 @@ export async function PATCH(
       chargeCodeIds = body.chargeCodeIds;
       if (chargeCodeIds!.length > 0) {
         const chargeCodes = await prisma.chargeCode.findMany({ where: { id: { in: chargeCodeIds } } });
-        if (chargeCodes.length !== chargeCodeIds!.length || chargeCodes.some((cc) => cc.enterpriseId !== ctx.enterpriseId)) {
+        if (chargeCodes.length !== chargeCodeIds!.length || chargeCodes.some((cc) => cc.propertyId !== existing.propertyId)) {
           return NextResponse.json({ error: "One or more charge codes were not found" }, { status: 404 });
         }
       }

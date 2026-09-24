@@ -77,10 +77,10 @@ describe("Allocations: tenant isolation", () => {
     propertyBId = propertyB.id;
 
     chargeCodeAId = (
-      await customChargeCode(enterpriseA.id, { code: "AL-A", description: "Allocation Revenue A" })
+      await customChargeCode({ propertyId: propertyAId }, { code: "AL-A", description: "Allocation Revenue A" })
     ).id;
     chargeCodeBId = (
-      await customChargeCode(enterpriseB.id, { code: "AL-B", description: "Allocation Revenue B" })
+      await customChargeCode({ propertyId: propertyBId }, { code: "AL-B", description: "Allocation Revenue B" })
     ).id;
 
     allocationAId = (

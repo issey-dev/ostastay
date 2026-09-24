@@ -15,9 +15,10 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
-import { SystemCodeSelect } from "@/components/ui/system-code-select"
+import { OptionSelect } from "@/components/ui/option-select"
+import { JOB_FUNCTIONS, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
-import { RolePermissionMatrix, emptyPermissionMatrix, grantsHubAccess, type PermissionMatrix } from "./role-permission-matrix"
+import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
 
 type Role = {
@@ -107,29 +108,16 @@ export function UsersRolesManager({
     roleIds: [] as string[], scope: "ENTERPRISE" as "ENTERPRISE" | "PROPERTY", propertyId: "",
     jobFunction: "",
   })
-  // Whether ANY role currently chosen in the user dialog carries a Hub module — access is
-  // the union, so one Hub-granting role among several is enough.
-  const hubGrantingRoles = roles.filter(
-    (r) => userForm.roleIds.includes(r.id) && grantsHubAccess(matrixFromRole(r))
+  // Whether ANY role currently chosen in the user dialog carries an enterprise-only
+  // module — access is the union, so one such role among several is enough.
+  const enterpriseOnlyRoles = roles.filter(
+    (r) => userForm.roleIds.includes(r.id) && grantsEnterpriseOnlyAccess(matrixFromRole(r))
   )
-  const selectedRoleGrantsHub = hubGrantingRoles.length > 0
+  const selectedRoleGrantsEnterpriseOnly = enterpriseOnlyRoles.length > 0
   const [userErrorMsg, setUserErrorMsg] = useState<string | null>(null)
   const [savingUser, setSavingUser] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
   const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null)
-  // code -> label for the Post column. The dialog uses SystemCodeSelect, which fetches
-  // and caches this itself; the table only needs to resolve labels it already has.
-  const [jobFunctionLabels, setJobFunctionLabels] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    fetch("/api/settings/system-codes?category=JOB_FUNCTION")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: { code: string; value: string }[]) => {
-        if (Array.isArray(rows)) setJobFunctionLabels(Object.fromEntries(rows.map((r) => [r.code, r.value])))
-      })
-      .catch(() => {})
-  }, [])
-
   const openNewUserDialog = () => {
     setEditingUser(null)
     setUserForm({
@@ -351,7 +339,7 @@ export function UsersRolesManager({
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>Post: {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}</span>
+                      <span>Post: {jobFunctionLabel(user.jobFunction) ?? "—"}</span>
                       <span>
                         {user.scope === "ENTERPRISE"
                           ? "All properties"
@@ -402,7 +390,7 @@ export function UsersRolesManager({
                     {/* Post, not role — an unset one reads as a dash rather than being
                         guessed from the role, which is exactly the conflation being undone. */}
                     <TableCell className="text-sm text-muted-foreground">
-                      {jobFunctionLabels[user.jobFunction ?? ""] ?? user.jobFunction ?? "—"}
+                      {jobFunctionLabel(user.jobFunction) ?? "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {user.scope === "ENTERPRISE"
@@ -571,11 +559,10 @@ export function UsersRolesManager({
                 lets them see; this decides where they show up as assignable staff. */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-1"><Briefcase className="w-4 h-4 text-primary" /> Job Function</label>
-              <SystemCodeSelect
-                category="JOB_FUNCTION"
+              <OptionSelect
                 value={userForm.jobFunction}
-                onValueChange={(v) => setUserForm({ ...userForm, jobFunction: v ?? "" })}
-                placeholder="No post assigned"
+                onChange={(v) => setUserForm({ ...userForm, jobFunction: v })}
+                options={[{ label: "No post assigned", value: "" }, ...JOB_FUNCTIONS.map((j) => ({ label: j.label, value: j.code }))]}
               />
               <p className="text-xs text-muted-foreground">
                 Their post at the property. Housekeeping and Maintenance decide who appears in
@@ -617,22 +604,23 @@ export function UsersRolesManager({
               )}
             </div>
 
-            {/* A property-pinned user is blocked from the Hub whatever their role grants
-                (hasHubAccess in src/lib/scope.ts). Saying so here is the difference
-                between a permission that quietly does nothing and one the admin
+            {/* A single-property user reaches only their own property's setup in the Hub,
+                never the enterprise area (hasEnterpriseHubAccess in src/lib/scope.ts), so
+                Users & Access can never take effect for them. Saying so here is the
+                difference between a permission that quietly does nothing and one the admin
                 understands — the save still succeeds, this is guidance, not a block. */}
-            {selectedRoleGrantsHub && userForm.scope === "PROPERTY" && (
+            {selectedRoleGrantsEnterpriseOnly && userForm.scope === "PROPERTY" && (
               <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-muted/40 p-3 text-xs">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p className="text-muted-foreground">
                   <strong className="text-foreground">
-                    {hubGrantingRoles.map((r) => r.name).join(", ")}
+                    {enterpriseOnlyRoles.map((r) => r.name).join(", ")}
                   </strong>{" "}
-                  grants Hub modules, but a user assigned to a single property can never reach
-                  the Hub — enterprise-wide credentials aren&apos;t held from one work location.
-                  Those permissions will have no effect. Set Access to{" "}
+                  grants Users &amp; Access, but a user assigned to a single property only reaches
+                  their own property&apos;s setup — never the enterprise settings. That permission
+                  will have no effect. Set Access to{" "}
                   <strong className="text-foreground">All Properties</strong> if this user needs
-                  the Hub.
+                  to manage people.
                 </p>
               </div>
             )}

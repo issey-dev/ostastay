@@ -22,6 +22,7 @@ const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -113,10 +114,10 @@ async function setupCheckedInReservation(opts: {
   });
 
   if (opts.seedTree) {
-    await ensureChargeTree(prisma, enterprise.id);
+    await ensureChargeTree(prisma, { propertyId: property.id });
   } else {
     for (const cc of opts.chargeCodes) {
-      await customChargeCode(enterprise.id, { code: cc.code, description: cc.code });
+      await customChargeCode({ propertyId: property.id }, { code: cc.code, description: cc.code });
     }
   }
 
@@ -131,19 +132,10 @@ async function setupCheckedInReservation(opts: {
   }
 
   if (opts.settings) {
-    await prisma.enterpriseSettings.upsert({
-      where: { enterpriseId: enterprise.id },
-      update: {
-        greenTaxEnabled: opts.settings.greenTaxEnabled,
-        ...(opts.settings.greenTaxAdultAmount !== undefined && { greenTaxAdultAmount: opts.settings.greenTaxAdultAmount }),
-        ...(opts.settings.greenTaxChildAmount !== undefined && { greenTaxChildAmount: opts.settings.greenTaxChildAmount }),
-      },
-      create: {
-        enterpriseId: enterprise.id,
-        greenTaxEnabled: opts.settings.greenTaxEnabled,
-        greenTaxAdultAmount: opts.settings.greenTaxAdultAmount ?? 12.0,
-        greenTaxChildAmount: opts.settings.greenTaxChildAmount ?? 6.0,
-      },
+    await setPropertySettings(property.id, {
+      greenTaxEnabled: opts.settings.greenTaxEnabled,
+      greenTaxAdultAmount: opts.settings.greenTaxAdultAmount ?? 12.0,
+      greenTaxChildAmount: opts.settings.greenTaxChildAmount ?? 6.0,
     });
   }
 
@@ -235,13 +227,10 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
     // Green Tax code was deleted while the levy is still switched on.
     const prop = await prisma.property.findUniqueOrThrow({ where: { id: propertyId } });
     await prisma.chargeCodeGenerate.deleteMany({
-      where: { generatedCode: { enterpriseId: prop.enterpriseId, code: "8500" } },
+      where: { generatedCode: { propertyId: prop.id, code: "8500" } },
     });
-    await prisma.chargeCode.deleteMany({ where: { enterpriseId: prop.enterpriseId, code: "8500" } });
-    await prisma.enterpriseSettings.updateMany({
-      where: { enterpriseId: prop.enterpriseId },
-      data: { defaultGreenTaxChargeCodeId: null },
-    });
+    await prisma.chargeCode.deleteMany({ where: { propertyId: prop.id, code: "8500" } });
+    await setPropertySettings(prop.id, { defaultGreenTaxChargeCodeId: null });
 
     const res = await asUser(adminId, () =>
       nightAuditRunRoute.POST(
@@ -300,13 +289,13 @@ describe("Green Tax as a ChargeCodeGenerate (the seeded tree)", () => {
     const property = await prisma.property.findFirstOrThrow({ where: { id: propertyId } });
     const enterpriseId = property.enterpriseId;
     const levySubgroup = await prisma.chargeSubgroup.findUniqueOrThrow({
-      where: { enterpriseId_code: { enterpriseId, code: "85GT" } },
+      where: { propertyId_code: { propertyId, code: "85GT" } },
     });
-    const bedTax = await customChargeCode(enterpriseId, { code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" });
-    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { enterpriseId_code: { enterpriseId, code: "1000" } } });
+    const bedTax = await customChargeCode({ propertyId }, { code: "BEDTAX", description: "Municipal Bed Tax", chargeSubgroupId: levySubgroup.id, postingType: "TAX" });
+    const room = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "1000" } } });
     await prisma.chargeCodeGenerate.create({
       data: {
-        enterpriseId, generatorCodeId: room.id, generatedCodeId: bedTax.id,
+        enterpriseId, propertyId, generatorCodeId: room.id, generatedCodeId: bedTax.id,
         method: "PER_PERSON_PER_NIGHT", value: 3, calculateOn: "NET", sortOrder: 20,
       },
     });

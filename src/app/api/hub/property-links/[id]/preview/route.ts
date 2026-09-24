@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizeLink } from "@/lib/channels/hub-access";
 import { computeChannelAvailability, resolveWindow } from "@/lib/channels/sync";
 
 // What WOULD be published for this link — computed, never sent.
@@ -11,8 +12,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
-    requirePermission(ctx, "INTEGRATIONS", "view");
+    await authorizeLink(ctx, id, "view");
 
     const { searchParams } = new URL(request.url);
     const days = Number.parseInt(searchParams.get("days") ?? "14", 10);

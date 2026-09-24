@@ -127,7 +127,7 @@ export default function RevenueDashboard() {
   useEffect(() => {
     fetchRatePlans()
     fetchAllocations()
-    fetch(`/api/charge-codes`)
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setChargeCodes(data) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,7 +336,7 @@ export default function RevenueDashboard() {
                   />
                   <p className="text-xs text-muted-foreground">
                     The code Night Audit posts this plan&apos;s nightly room charge against. Leave as
-                    default to use the enterprise-wide accommodation code (Controls &gt; Cashiering).
+                    default to use the enterprise-wide accommodation code (Hub › Charge Codes).
                   </p>
                 </div>
 

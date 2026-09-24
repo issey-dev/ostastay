@@ -42,10 +42,10 @@ async function propertyRules(propertyId: string): Promise<PropertyTimes & { basi
     where: { id: propertyId },
     select: {
       timeZone: true, checkInTime: true, checkOutTime: true, businessDate: true,
-      enterprise: { select: { settings: { select: { greenTaxStayBasis: true } } } },
+      settings: { select: { greenTaxStayBasis: true } },
     },
   });
-  const b = p.enterprise.settings?.greenTaxStayBasis;
+  const b = p.settings?.greenTaxStayBasis;
   return { timeZone: p.timeZone, checkInTime: p.checkInTime, checkOutTime: p.checkOutTime, businessDate: p.businessDate, basis: isStayBasis(b) ? b : "ACTUAL" };
 }
 

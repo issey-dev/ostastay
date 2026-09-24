@@ -26,6 +26,7 @@ const departureIdRoute = await import("@/app/api/excursions/departures/[id]/rout
 const bookingsRoute = await import("@/app/api/excursions/bookings/route");
 const enterpriseAddonsRoute = await import("@/app/api/licenses/enterprise-addons/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -119,20 +120,16 @@ describe("Excursions: tenant isolation", () => {
       )
     );
 
-    const chargeCodeA = await customChargeCode(enterpriseAId, { code: "XC-A", description: "Excursion Charge A" });
+    const chargeCodeA = await customChargeCode({ propertyId: propertyAId }, { code: "XC-A", description: "Excursion Charge A" });
     chargeCodeAId = chargeCodeA.id;
-    const chargeCodeB = await customChargeCode(enterpriseB.id, { code: "XC-B", description: "Excursion Charge B" });
+    const chargeCodeB = await customChargeCode({ propertyId: propertyBId }, { code: "XC-B", description: "Excursion Charge B" });
     chargeCodeBId = chargeCodeB.id;
 
     // Hub-wide Excursion Outlet per enterprise — posting is refused without one
     // (owner rule 2026-07-30).
     for (const [entId, propId, code] of [[enterpriseAId, propertyAId, "XOA"], [enterpriseB.id, propertyBId, "XOB"]] as const) {
       const outlet = await prisma.outlet.create({ data: { propertyId: propId, name: `Dive ${code}`, code, outletType: "RECREATION" } });
-      await prisma.enterpriseSettings.upsert({
-        where: { enterpriseId: entId },
-        update: { excursionOutletId: outlet.id },
-        create: { enterpriseId: entId, resConfirmPrefix: "", resConfirmLength: 6, excursionOutletId: outlet.id },
-      });
+      await setPropertySettings(propId, { excursionOutletId: outlet.id });
     }
 
     const adminA = await prisma.user.create({

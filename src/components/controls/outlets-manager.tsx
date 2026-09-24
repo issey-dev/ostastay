@@ -28,7 +28,6 @@ const OUTLET_TYPES = [
 ]
 const OUTLET_TYPE_LABELS: Record<string, string> = Object.fromEntries(OUTLET_TYPES.map((t) => [t.value, t.label]))
 
-type PropertyOption = { id: string; name: string }
 type TaxProfileOption = { id: string; name: string }
 
 const BLANK_FORM = () => ({
@@ -49,9 +48,7 @@ const BLANK_FORM = () => ({
 // Controls > Outlets — Spa/Restaurant/Bar/etc, each with an optional top-level tax
 // override and a curated pool of the enterprise's existing charge codes. Sits next to
 // FacilityAmenitiesManager (relocated here from Inventory) per the app owner's request.
-export function OutletsManager() {
-  const [properties, setProperties] = useState<PropertyOption[]>([])
-  const [propertyId, setPropertyId] = useState("")
+export function OutletsManager({ propertyId }: { propertyId: string }) {
   const [outlets, setOutlets] = useState<any[]>([])
   const [taxProfiles, setTaxProfiles] = useState<TaxProfileOption[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
@@ -68,21 +65,13 @@ export function OutletsManager() {
   const [form, setForm] = useState(BLANK_FORM())
 
   useEffect(() => {
-    fetch("/api/properties")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setProperties(data)
-          if (data.length > 0) setPropertyId(data[0].id)
-        }
-      })
-    fetch("/api/taxes")
+    fetch(`/api/taxes?propertyId=${propertyId}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setTaxProfiles(data) })
-    fetch("/api/charge-codes")
+    fetch(`/api/charge-codes?propertyId=${propertyId}`)
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data)) setChargeCodes(data) })
-  }, [])
+  }, [propertyId])
 
   const fetchOutlets = useCallback(() => {
     if (!propertyId) return
@@ -170,16 +159,9 @@ export function OutletsManager() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="space-y-2 max-w-xs w-full">
-          <Label className="text-xs text-muted-foreground">Property</Label>
-          <SearchableSelect
-            value={propertyId}
-            onChange={(v) => setPropertyId(v ?? "")}
-            placeholder="Select property"
-            options={properties.map((p) => ({ label: p.name, value: p.id }))}
-          />
-        </div>
+      {/* The property comes from the page (Hub › property › Outlets) — no picker here,
+          so there is never a second, disagreeing answer to "which property?". */}
+      <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4">
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>

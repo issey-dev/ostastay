@@ -21,6 +21,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const posChargeRoute = await import("@/app/api/pos/charge/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
+import { setPropertySettings } from "../helpers/property-settings";
 
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
@@ -52,12 +53,6 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
       create: { name: "Custom Tax Enterprise", slug: "test-custom-tax-enterprise", type: "STANDARD" },
     });
 
-    await prisma.enterpriseSettings.upsert({
-      where: { enterpriseId: enterprise.id },
-      update: { serviceChargeEnabled: true, serviceChargeRate: 10, tgstEnabled: true, tgstRate: 17 },
-      create: { enterpriseId: enterprise.id, serviceChargeEnabled: true, serviceChargeRate: 10, tgstEnabled: true, tgstRate: 17 },
-    });
-
     const property = await prisma.property.create({
       data: {
         enterpriseId: enterprise.id, name: "Custom Tax Property", code: `CT-${Date.now()}`,
@@ -65,6 +60,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
         checkInTime: "14:00", checkOutTime: "11:00", pricesIncludeTaxes: false,
       },
     });
+    await setPropertySettings(property.id, { serviceChargeEnabled: true, serviceChargeRate: 10, tgstEnabled: true, tgstRate: 17 });
 
     const guest = await prisma.profile.create({
       data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "Custom", lastName: "Tax" },
@@ -81,14 +77,14 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
 
     // A charge code left on the default engine — proves it's unaffected by the
     // presence of custom profiles elsewhere in the enterprise.
-    const defaultCode = await customChargeCode(enterprise.id, { code: "MB", description: "Minibar", useDefaultTax: true, subgroupCode: "20RV" });
+    const defaultCode = await customChargeCode({ propertyId: property.id }, { code: "MB", description: "Minibar", useDefaultTax: true, subgroupCode: "20RV" });
     defaultChargeCodeId = defaultCode.id;
 
     // A multi-line Custom Tax profile (State Tax flat on subtotal, Local Fee compound
     // on subtotal + State Tax) linked to its own charge code.
     const taxProfile = await prisma.taxProfile.create({
       data: {
-        enterpriseId: enterprise.id,
+        enterpriseId: enterprise.id, propertyId: property.id,
         name: "State + Local",
         rates: {
           create: [
@@ -98,7 +94,7 @@ describe("Custom Tax profiles actually affect posted charges (pos/charge)", () =
         },
       },
     });
-    const customCode = await customChargeCode(enterprise.id, { code: "SPA", description: "Spa Treatment", useDefaultTax: false, taxProfileId: taxProfile.id, subgroupCode: "60RV" });
+    const customCode = await customChargeCode({ propertyId: property.id }, { code: "SPA", description: "Spa Treatment", useDefaultTax: false, taxProfileId: taxProfile.id, subgroupCode: "60RV" });
     customChargeCodeId = customCode.id;
 
     const passwordHash = await bcrypt.hash("password123", 10);

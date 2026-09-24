@@ -143,7 +143,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
 
     const taxProfileA = await prisma.taxProfile.create({
       data: {
-        enterpriseId: enterpriseA.id,
+        enterpriseId: enterpriseA.id, propertyId: propertyAId,
         name: "P2 VAT A",
         rates: { create: { ratePercent: 10, effectiveFrom: new Date() } },
       },
@@ -152,20 +152,20 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
 
     const taxProfileB = await prisma.taxProfile.create({
       data: {
-        enterpriseId: enterpriseB.id,
+        enterpriseId: enterpriseB.id, propertyId: propertyBId,
         name: "P2 VAT B",
         rates: { create: { ratePercent: 20, effectiveFrom: new Date() } },
       },
     });
     taxProfileBId = taxProfileB.id;
 
-    for (const [entId, assign] of [
-      [enterpriseA.id, (v: string) => { subgroupAId = v; }],
-      [enterpriseB.id, (v: string) => { subgroupBId = v; }],
+    for (const [propertyId, assign] of [
+      [propertyAId, (v: string) => { subgroupAId = v; }],
+      [propertyBId, (v: string) => { subgroupBId = v; }],
     ] as const) {
-      await ensureChargeTree(prisma, entId);
+      await ensureChargeTree(prisma, { propertyId });
       const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
-        where: { enterpriseId_code: { enterpriseId: entId, code: "85GT" } },
+        where: { propertyId_code: { propertyId, code: "85GT" } },
       });
       assign(sub.id);
     }
@@ -225,7 +225,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat", description: "VAT", chargeSubgroupId: subgroupAId, useDefaultTax: false, taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ propertyId: propertyAId, code: "vat", description: "VAT", chargeSubgroupId: subgroupAId, useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );
@@ -239,6 +239,7 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            propertyId: propertyAId,
             code: "vat-a",
             description: "VAT A",
             chargeSubgroupId: subgroupAId,
@@ -261,12 +262,12 @@ describe("Phase 2 tenant isolation: buildings, rate-plans, charge-codes", () => 
         new Request("http://localhost/api/charge-codes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: "vat-b", description: "VAT B", chargeSubgroupId: subgroupBId, useDefaultTax: false, taxProfileId: taxProfileBId }),
+          body: JSON.stringify({ propertyId: propertyBId, code: "vat-b", description: "VAT B", chargeSubgroupId: subgroupBId, useDefaultTax: false, taxProfileId: taxProfileBId }),
         })
       )
     );
 
-    const res = await asUser(adminAId, () => chargeCodesRoute.GET());
+    const res = await asUser(adminAId, () => chargeCodesRoute.GET(new Request(`http://localhost/api/charge-codes?propertyId=${propertyAId}`)));
     const body = await res.json();
     expect(body.every((c: { code: string }) => c.code !== "VAT-B")).toBe(true);
   });

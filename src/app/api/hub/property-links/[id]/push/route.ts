@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireHubAccess, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, toErrorResponse } from "@/lib/scope";
+import { authorizeLink } from "@/lib/channels/hub-access";
 import { logActivity } from "@/lib/activity-log";
 import { pushAvailabilityForLink } from "@/lib/channels/push";
 
@@ -18,13 +19,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const ctx = await requireSession();
-    requireHubAccess(ctx);
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get("dryRun") === "1";
     const days = Number.parseInt(searchParams.get("days") ?? "", 10);
 
-    requirePermission(ctx, "INTEGRATIONS", dryRun ? "view" : "update");
+    await authorizeLink(ctx, id, dryRun ? "view" : "update");
 
     const result = await pushAvailabilityForLink({
       enterpriseId: ctx.enterpriseId,

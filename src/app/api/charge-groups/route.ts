@@ -1,32 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { REPORT_BUCKETS } from "@/lib/posting/charge-tree";
 import { ensureChargeTree } from "@/lib/posting/ensure-charge-tree";
 
-// Level 1 of the charge hierarchy (Controls > Cashiering > Charge Groups). A group owns
+// Level 1 of the charge hierarchy (Hub › property › Charge Codes). Per property since
+// 2026-09-23: GET takes ?propertyId=, POST a body propertyId. A group owns
 // the reporting bucket every revenue report sums into, so the canonical seven are
 // system-managed: their bucket and code can't be edited away and they can't be deleted.
 // A property may still add its own group on top when it needs a bucket-level split the
 // canonical tree doesn't give it.
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "view");
+    const propertyId = new URL(request.url).searchParams.get("propertyId");
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await requirePropertySetup(ctx, propertyId, "CONTROLS", "view");
 
-    // Lazy seed: an enterprise onboarded before the hierarchy existed has no groups at
-    // all, and every picker in the Cashiering panel would be empty. Idempotent and
-    // enterprise-scoped — the same call property onboarding makes. (Mirrors the
-    // auto-create in api/tenant-settings' GET.)
-    const count = await prisma.chargeGroup.count({ where: { enterpriseId: ctx.enterpriseId } });
+    // Lazy seed: a property with no chart at all would leave every picker on the Charge
+    // Codes page empty. Idempotent and property-scoped — the same call onboarding makes.
+    const count = await prisma.chargeGroup.count({ where: { propertyId } });
     if (count === 0) {
-      await prisma.$transaction((tx) => ensureChargeTree(tx, ctx.enterpriseId), { timeout: 30_000 });
+      await prisma.$transaction((tx) => ensureChargeTree(tx, { propertyId }), { timeout: 30_000 });
     }
 
     const groups = await prisma.chargeGroup.findMany({
-      where: { enterpriseId: ctx.enterpriseId },
+      where: { propertyId },
       include: {
         subgroups: {
           orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -46,9 +47,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "CONTROLS", "create");
-
     const body = await request.json();
+    const propertyId: string | undefined = body.propertyId;
+    if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    await requirePropertySetup(ctx, propertyId, "CONTROLS", "create");
+
     const code = typeof body.code === "string" ? body.code.trim().toUpperCase().replace(/\s+/g, "_") : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const reportBucket = typeof body.reportBucket === "string" ? body.reportBucket : "";
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     const clash = await prisma.chargeGroup.findUnique({
-      where: { enterpriseId_code: { enterpriseId: ctx.enterpriseId, code } },
+      where: { propertyId_code: { propertyId, code } },
     });
     if (clash) {
       return NextResponse.json({ error: `A charge group with the code ${code} already exists` }, { status: 400 });
@@ -70,6 +73,7 @@ export async function POST(request: Request) {
     const group = await prisma.chargeGroup.create({
       data: {
         enterpriseId: ctx.enterpriseId,
+        propertyId,
         code,
         name,
         reportBucket,

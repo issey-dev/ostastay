@@ -22,16 +22,29 @@ type SystemCode = {
   sortOrder: number
 }
 
-// Simple in-memory cache to avoid re-fetching the same category. Scoped by category
-// only — the API itself scopes by the caller's session enterprise, and this cache is
-// already session-local (one browser tab is always one logged-in enterprise), so no
-// enterprise key is needed here.
+// Simple in-memory cache to avoid re-fetching the same list. Keyed by category AND
+// property — a property list (src/lib/system-code-scope.ts) differs per property, so two
+// properties' lists must never share an entry. No enterprise key: the API scopes by the
+// caller's session enterprise, and one browser tab is always one logged-in enterprise.
 const cache: Record<string, { data: SystemCode[]; ts: number }> = {}
 const CACHE_TTL = 60_000 // 1 minute
+
+export function systemCodeCacheKey(category: string, propertyId?: string | null) {
+  return `${category}|${propertyId ?? ""}`
+}
+
+export function systemCodesUrl(category: string, propertyId?: string | null) {
+  const params = new URLSearchParams({ category })
+  if (propertyId) params.set("propertyId", propertyId)
+  return `/api/settings/system-codes?${params}`
+}
 
 interface SystemCodeSelectProps {
   /** The system-code category to fetch, e.g. "GENDER", "TITLE", "ID_TYPE" */
   category: string
+  /** The property whose list to use — required for a property list (SPECIAL_REQUEST,
+   *  TRANSPORT_TYPE, ...; see src/lib/system-code-scope.ts), ignored for an enterprise one. */
+  propertyId?: string | null
   /** Current value (code) */
   value: string
   /** Callback when the user selects a value */
@@ -46,6 +59,7 @@ interface SystemCodeSelectProps {
 
 export function SystemCodeSelect({
   category,
+  propertyId,
   value,
   onValueChange,
   placeholder = "Select...",
@@ -54,14 +68,15 @@ export function SystemCodeSelect({
 }: SystemCodeSelectProps) {
   const [options, setOptions] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
-  const fetchedRef = useRef(false)
+  const fetchedRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // Prevent double-fetch in strict mode
-    if (fetchedRef.current) return
-    fetchedRef.current = true
+    const key = systemCodeCacheKey(category, propertyId)
+    // Prevent double-fetch in strict mode (but refetch when the list changes)
+    if (fetchedRef.current === key) return
+    fetchedRef.current = key
 
-    const cached = cache[category]
+    const cached = cache[key]
 
     // Return cached data if still fresh
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -70,19 +85,20 @@ export function SystemCodeSelect({
       return
     }
 
-    fetch(`/api/settings/system-codes?category=${category}`)
+    setLoading(true)
+    fetch(systemCodesUrl(category, propertyId))
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
           setOptions(data)
-          cache[category] = { data, ts: Date.now() }
+          cache[key] = { data, ts: Date.now() }
         }
       })
       .catch((err) => {
         console.error(`Failed to fetch system codes for ${category}:`, err)
       })
       .finally(() => setLoading(false))
-  }, [category])
+  }, [category, propertyId])
 
   if (loading) {
     return (
@@ -144,12 +160,14 @@ export function SystemCodeSelect({
 }
 
 /**
- * Utility: Invalidate the cache for a specific category so the next
+ * Utility: Invalidate the cache for a specific category (at every property) so the next
  * render re-fetches. Call this after adding/editing/deleting system codes.
  */
 export function invalidateSystemCodeCache(category?: string) {
   if (category) {
-    delete cache[category]
+    for (const key of Object.keys(cache)) {
+      if (key.startsWith(`${category}|`)) delete cache[key]
+    }
   } else {
     // Clear everything
     for (const key of Object.keys(cache)) {

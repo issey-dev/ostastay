@@ -25,7 +25,7 @@ const specialRequests: ReportDef = {
       },
       orderBy: { confirmationNo: "asc" },
     });
-    const codes = await prisma.systemCode.findMany({ where: { enterpriseId: rc.ctx.enterpriseId, category: "SPECIAL_REQUEST" }, select: { code: true, value: true } });
+    const codes = await prisma.systemCode.findMany({ where: { propertyId, category: "SPECIAL_REQUEST" }, select: { code: true, value: true } });
     const label = new Map(codes.map((c) => [c.code, c.value]));
 
     const rows = reservations.flatMap((r) =>

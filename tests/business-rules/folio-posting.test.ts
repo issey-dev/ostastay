@@ -79,9 +79,9 @@ describe("Folio posting rules: check-in gate, negatives, description/reference",
     roomTypeId = roomType.id;
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "BAR" } });
     ratePlanId = ratePlan.id;
-    const chargeCode = await customChargeCode(enterpriseId, { code: "MINI", description: "Minibar" });
+    const chargeCode = await customChargeCode({ propertyId }, { code: "MINI", description: "Minibar" });
     chargeCodeId = chargeCode.id;
-    const pm = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Cash", type: "CASH" } });
+    const pm = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId, name: "Cash", type: "CASH" } });
     paymentMethodId = pm.id;
     const passwordHash = await bcrypt.hash("password123", 10);
     const admin = await prisma.user.create({ data: { enterpriseId, email: `fp-admin-${uniq()}@test.local`, passwordHash, firstName: "Admin", lastName: "FP", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });

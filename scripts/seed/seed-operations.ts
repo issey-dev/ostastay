@@ -32,11 +32,13 @@ async function main() {
   }
 
   // 3. Setup Charge Codes and Tax Profiles
-  let taxProfile = await prisma.taxProfile.findFirst({ where: { enterpriseId } })
+  // Per property since 2026-09-23 — tax profiles, the chart and payment methods.
+  let taxProfile = await prisma.taxProfile.findFirst({ where: { propertyId: property.id } })
   if (!taxProfile) {
     taxProfile = await prisma.taxProfile.create({
       data: {
         enterpriseId,
+        propertyId: property.id,
         name: "Standard Taxes",
         rates: {
           create: [{ ratePercent: 16, effectiveFrom: new Date("2020-01-01") }]
@@ -47,16 +49,16 @@ async function main() {
 
   // The canonical charge tree first, so these codes land in a real subgroup rather than
   // the unclassified state that used to make a seeded database fail Night Audit.
-  await ensureChargeTree(prisma, enterpriseId)
-  const subgroups = await prisma.chargeSubgroup.findMany({ where: { enterpriseId } })
+  await ensureChargeTree(prisma, { propertyId: property.id })
+  const subgroups = await prisma.chargeSubgroup.findMany({ where: { propertyId: property.id } })
   const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id
 
   const upsertCode = async (code: string, description: string, subgroup: string) =>
     prisma.chargeCode.upsert({
-      where: { enterpriseId_code: { enterpriseId, code } },
+      where: { propertyId_code: { propertyId: property.id, code } },
       update: { chargeSubgroupId: subgroupId(subgroup) },
       create: {
-        enterpriseId, code, description,
+        enterpriseId, propertyId: property.id, code, description,
         chargeSubgroupId: subgroupId(subgroup),
         taxProfileId: taxProfile.id,
       },
@@ -66,8 +68,8 @@ async function main() {
   const fbCode = await upsertCode("FB", "Food & Beverage", "20RV")
 
   // Ensure Cash/Card Payment Methods exist
-  let pmCard = await prisma.paymentMethod.findFirst({ where: { enterpriseId, type: "CARD" } })
-  if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId, name: "Credit Card", type: "CARD" } })
+  let pmCard = await prisma.paymentMethod.findFirst({ where: { propertyId: property.id, type: "CARD" } })
+  if (!pmCard) pmCard = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId: property.id, name: "Credit Card", type: "CARD" } })
 
   // 4. Get 5 Profiles
   const profiles = await prisma.profile.findMany({ where: { enterpriseId, profileType: "GUEST" }, take: 5 })

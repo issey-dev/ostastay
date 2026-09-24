@@ -49,7 +49,7 @@ describe("Channel availability (outbound sync)", () => {
     propertyId = property.id;
 
     const connection = await prisma.channelConnection.create({
-      data: { enterpriseId, provider: "BEDS24", name: `Avail Conn ${Date.now()}`, refreshToken: "x" },
+      data: { enterpriseId, propertyId, provider: "BEDS24", name: `Avail Conn ${Date.now()}`, refreshToken: "x" },
     });
     const link = await prisma.channelPropertyLink.create({
       data: { connectionId: connection.id, propertyId, externalPropertyId: "ext-avail", syncEnabled: false },

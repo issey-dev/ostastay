@@ -161,8 +161,9 @@ async function postSpaCharge(
   appointment: LoadedAppointment,
   input: { folioId: string; amount: number; description: string; shiftId: string }
 ) {
-  const settings = await tx.enterpriseSettings.findUnique({
-    where: { enterpriseId: appointment.property.enterpriseId },
+  // The property's own Spa Outlet (per property since 2026-09-23).
+  const settings = await tx.propertySettings.findUnique({
+    where: { propertyId: appointment.propertyId },
     include: { spaOutlet: { include: { taxProfile: { include: { rates: true } } } } },
   });
   const spaOutlet = settings?.spaOutlet ?? null;
@@ -171,7 +172,7 @@ async function postSpaCharge(
     throw new BookingError(
       400,
       "NO_OUTLET",
-      "No Spa Outlet is linked — link one under Controls > Spa (it applies to every property) before posting spa charges."
+      "No Spa Outlet is linked — link one in the Hub (Charge Codes › Spa Outlet) before posting spa charges."
     );
   }
   const chargeCode = await tx.chargeCode.findUniqueOrThrow({

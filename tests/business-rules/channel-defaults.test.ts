@@ -7,16 +7,12 @@ vi.mock("next/headers", () => ({
 }));
 
 const { prisma } = await import("@/lib/db");
-const { createConnection } = await import("@/lib/channels/connection");
-const { createPropertyLink } = await import("@/lib/channels/sharing");
+const { connectProperty } = await import("../helpers/channel");
 const { getBookingDefaults, setBookingDefaults, resolveBookingDefaults } = await import(
   "@/lib/channels/defaults"
 );
 const { ForbiddenError } = await import("@/lib/scope");
 
-function stubBeds24(response: unknown, ok = true, status = 200) {
-  vi.stubGlobal("fetch", vi.fn(async () => ({ ok, status, json: async () => response }) as unknown as Response));
-}
 
 async function makeProperty(enterpriseId: string, name: string) {
   return prisma.property.create({
@@ -35,7 +31,6 @@ async function makeProperty(enterpriseId: string, name: string) {
 
 describe("Channel booking defaults", () => {
   let enterpriseId: string;
-  let connectionId: string;
 
   beforeAll(async () => {
     const ent = await prisma.enterprise.create({
@@ -43,10 +38,6 @@ describe("Channel booking defaults", () => {
     });
     enterpriseId = ent.id;
     await prisma.enterpriseLicense.create({ data: { enterpriseId, tier: "STANDARD", maxProperties: 5 } });
-
-    stubBeds24({ refreshToken: "r", token: "a", expiresIn: 86400 });
-    connectionId = (await createConnection({ enterpriseId, name: `Defaults Conn ${Date.now()}`, inviteCode: "x" })).id;
-    vi.unstubAllGlobals();
   });
 
   afterEach(() => {
@@ -55,12 +46,7 @@ describe("Channel booking defaults", () => {
 
   it("reports no defaults configured until an operator sets one", async () => {
     const property = await makeProperty(enterpriseId, "Fresh");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-fresh-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-fresh-${Date.now()}` })).link;
 
     const defaults = await getBookingDefaults(enterpriseId, link.id);
     expect(defaults).toEqual({ linkId: link.id, ratePlanId: null, ratePlanName: null, mealPlanCode: "NONE" });
@@ -72,12 +58,7 @@ describe("Channel booking defaults", () => {
 
   it("configures a rate plan and meal plan, and resolves them for the property", async () => {
     const property = await makeProperty(enterpriseId, "Configured");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-cfg-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-cfg-${Date.now()}` })).link;
     const ratePlan = await prisma.ratePlan.create({
       data: { propertyId: property.id, code: "BAR", name: "Best Available" },
     });
@@ -101,12 +82,7 @@ describe("Channel booking defaults", () => {
   it("refuses a rate plan from another property", async () => {
     const a = await makeProperty(enterpriseId, "DefA");
     const b = await makeProperty(enterpriseId, "DefB");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: a.id,
-      externalPropertyId: `ext-defa-${Date.now()}`,
-    });
+    const link = (await connectProperty(a.id, { externalPropertyId: `ext-defa-${Date.now()}` })).link;
     const strayPlan = await prisma.ratePlan.create({ data: { propertyId: b.id, code: "X", name: "Stray" } });
 
     await expect(
@@ -116,12 +92,7 @@ describe("Channel booking defaults", () => {
 
   it("clearing the rate plan puts conversion back into the unresolved state", async () => {
     const property = await makeProperty(enterpriseId, "Clear");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-clr-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-clr-${Date.now()}` })).link;
     const ratePlan = await prisma.ratePlan.create({ data: { propertyId: property.id, code: "BAR", name: "BAR" } });
     await setBookingDefaults({ enterpriseId, linkId: link.id, ratePlanId: ratePlan.id, mealPlanCode: "HB" });
 
@@ -138,12 +109,7 @@ describe("Channel booking defaults", () => {
       data: { name: `Defaults Other ${Date.now()}`, slug: `test-defaultso-${Date.now()}`, type: "STANDARD" },
     });
     const property = await makeProperty(enterpriseId, "Isolated");
-    const link = await createPropertyLink({
-      enterpriseId,
-      connectionId,
-      propertyId: property.id,
-      externalPropertyId: `ext-iso-${Date.now()}`,
-    });
+    const link = (await connectProperty(property.id, { externalPropertyId: `ext-iso-${Date.now()}` })).link;
 
     await expect(getBookingDefaults(other.id, link.id)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(

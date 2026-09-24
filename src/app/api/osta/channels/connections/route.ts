@@ -35,9 +35,11 @@ export async function GET() {
   }
 }
 
-// Create a connection FOR a customer enterprise. The invite code comes from the app
-// owner's own master Beds24 account (scoped there to just this customer's properties),
-// so the operator holding it is the Osta admin, not the tenant.
+// Create a connection FOR one customer property (one connection per property — owner,
+// 2026-09-23). The invite code comes from the app owner's own master Beds24 account, so the
+// operator holding it is the Osta admin, never the tenant; the property's Beds24 property id
+// is linked in the same step, and the property's own Hub area takes it from there (mapping,
+// checks, bookings, logs).
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
@@ -47,12 +49,16 @@ export async function POST(request: Request) {
     requirePermission(ctx, "INTEGRATIONS", "create");
 
     const body = await request.json().catch(() => null);
-    const enterpriseId = typeof body?.enterpriseId === "string" ? body.enterpriseId : "";
+    const propertyId = typeof body?.propertyId === "string" ? body.propertyId : "";
+    const externalPropertyId = typeof body?.externalPropertyId === "string" ? body.externalPropertyId.trim() : "";
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const inviteCode = typeof body?.inviteCode === "string" ? body.inviteCode.trim() : "";
 
-    if (!enterpriseId) {
-      return NextResponse.json({ error: "An enterprise is required" }, { status: 400 });
+    if (!propertyId) {
+      return NextResponse.json({ error: "A property is required" }, { status: 400 });
+    }
+    if (!externalPropertyId) {
+      return NextResponse.json({ error: "The channel manager's property ID is required" }, { status: 400 });
     }
     if (!name) {
       return NextResponse.json({ error: "A connection name is required" }, { status: 400 });
@@ -61,15 +67,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "An invite code is required" }, { status: 400 });
     }
 
-    // STANDARD only — a connection on the INTERNAL (Osta) enterprise would be a channel
-    // manager wired to an enterprise with no operational properties, which can only be a
-    // mistake. Same rule as support-access grants.
-    const enterprise = await prisma.enterprise.findUnique({ where: { id: enterpriseId } });
-    if (!enterprise || enterprise.type !== "STANDARD") {
-      return NextResponse.json({ error: "Enterprise not found" }, { status: 404 });
+    // STANDARD only — a connection on the INTERNAL (Osta) enterprise could only be a
+    // mistake. Same rule as support-access grants; createConnection re-checks it.
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { name: true, enterpriseId: true, enterprise: { select: { type: true } } },
+    });
+    if (!property || property.enterprise.type !== "STANDARD") {
+      return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
+    const enterpriseId = property.enterpriseId;
 
-    const connection = await createConnection({ enterpriseId, name, inviteCode });
+    const connection = await createConnection({ propertyId, externalPropertyId, name, inviteCode });
 
     // Logged into the TENANT's trail — the enterprise whose channel manager was just
     // wired up is the one whose auditors need to see it. logActivity snapshots the Osta
@@ -78,7 +87,7 @@ export async function POST(request: Request) {
       ctx,
       module: "INTEGRATIONS",
       action: "CREATE",
-      description: `Connected channel manager "${name}" (Beds24) — set up by Osta platform admin`,
+      description: `Connected channel manager "${name}" (Beds24) for ${property.name} — set up by Osta platform admin`,
       entityType: "ChannelConnection",
       entityId: connection.id,
       targetEnterpriseId: enterpriseId,

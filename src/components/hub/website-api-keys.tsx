@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -34,9 +35,15 @@ type KeyRow = {
   createdAt: string
   revokedAt: string | null
   createdBy: string | null
-  properties: { id: string; name: string }[]
+  /** The one property the key covers; null = all properties. */
+  property: { id: string; name: string } | null
   bookingCount: number
 }
+
+// A key covers ONE property or ALL of them — never a subset (the same rule as a user's work
+// location). In the form, "ALL" stands for "every property, including ones added later".
+const ALL_PROPERTIES = "ALL"
+const coverageLabel = (r: Pick<KeyRow, "property">) => r.property?.name ?? "All properties"
 
 type PropertyOption = { id: string; name: string; code: string }
 
@@ -50,7 +57,7 @@ const scopeLabel = (s: Scope) => SCOPES.find((x) => x.value === s)?.label ?? s
 
 const keySchema = z.object({
   name: z.string().trim().min(1, "Give the key a name — usually the website it belongs to"),
-  propertyIds: z.array(z.string()).min(1, "Choose at least one property"),
+  coverage: z.string().min(1, "Choose the property this key is for, or all properties"),
   scopes: z.array(z.enum(["ROOMS", "EXCURSIONS", "SPA"])).min(1, "Choose at least one thing this key may use"),
   // One origin per line; validated properly server-side (normalizeOrigins).
   allowedOrigins: z.string(),
@@ -58,7 +65,7 @@ const keySchema = z.object({
 })
 type KeyFormValues = z.infer<typeof keySchema>
 
-const emptyValues: KeyFormValues = { name: "", propertyIds: [], scopes: ["ROOMS"], allowedOrigins: "", expiresAt: "" }
+const emptyValues: KeyFormValues = { name: "", coverage: "", scopes: ["ROOMS"], allowedOrigins: "", expiresAt: "" }
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "Never"
@@ -150,7 +157,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
   const openCreate = () => {
     setEditing(null)
     setServerError(null)
-    form.reset({ ...emptyValues, propertyIds: properties.length === 1 ? [properties[0].id] : [] })
+    form.reset({ ...emptyValues, coverage: properties.length === 1 ? properties[0].id : "" })
     setDialogOpen(true)
   }
 
@@ -159,7 +166,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
     setServerError(null)
     form.reset({
       name: row.name,
-      propertyIds: row.properties.map((p) => p.id),
+      coverage: row.property?.id ?? ALL_PROPERTIES,
       scopes: row.scopes,
       allowedOrigins: row.allowedOrigins.join("\n"),
       expiresAt: row.expiresAt ? row.expiresAt.slice(0, 10) : "",
@@ -173,7 +180,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
     try {
       const payload = {
         name: values.name,
-        propertyIds: values.propertyIds,
+        propertyId: values.coverage === ALL_PROPERTIES ? null : values.coverage,
         scopes: values.scopes,
         allowedOrigins: values.allowedOrigins.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean),
         expiresAt: values.expiresAt ? new Date(`${values.expiresAt}T23:59:59.000Z`).toISOString() : null,
@@ -257,8 +264,8 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
           <div>
             <CardTitle>API keys</CardTitle>
             <CardDescription>
-              One key per website. A key may cover one property or several, and rooms, excursions and spa — the site can
-              only see and book what is ticked on its key. Only the first characters are kept here; the full key is shown
+              One key per website. A key covers one property or all of them, and rooms, excursions and spa — the site can
+              only see and book what its key allows. Only the first characters are kept here; the full key is shown
               once, when created.
             </CardDescription>
           </div>
@@ -281,7 +288,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
             <EmptyState
               icon={Key}
               title="No API keys yet"
-              description="Create a key for each brand website, then configure what each property sells under the Properties tab."
+              description="Create a key for each brand website, then set what each property sells under that property's Online Booking."
             />
           ) : (
             <>
@@ -295,7 +302,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                       </div>
                       {statusBadge(r)}
                     </div>
-                    <div className="text-sm text-muted-foreground">{r.properties.map((p) => p.name).join(", ")}</div>
+                    <div className="text-sm text-muted-foreground">{coverageLabel(r)}</div>
                     <div className="flex flex-wrap gap-1">
                       {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
                     </div>
@@ -353,7 +360,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                             {r.createdBy ? ` by ${r.createdBy}` : ""}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{r.properties.map((p) => p.name).join(", ")}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{coverageLabel(r)}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
@@ -425,29 +432,23 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                   </FormItem>
                 )} />
 
-                <FormField control={form.control} name="propertyIds" render={({ field }) => (
+                <FormField control={form.control} name="coverage" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Properties *</FormLabel>
-                    <div className="space-y-2 rounded-md border border-border p-3">
-                      {properties.length === 0 && <p className="text-sm text-muted-foreground">No active properties.</p>}
-                      {properties.map((p) => {
-                        const checked = field.value.includes(p.id)
-                        return (
-                          <label key={p.id} className="flex cursor-pointer items-center gap-3 text-sm">
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(v) => {
-                                const next = v ? [...field.value, p.id] : field.value.filter((id) => id !== p.id)
-                                field.onChange(next)
-                              }}
-                            />
-                            <span>{p.name}</span>
-                            <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">The website can only see and book the properties ticked here.</p>
+                    <FormLabel>Property *</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="Choose a property…"
+                        options={[
+                          { label: "All properties", value: ALL_PROPERTIES },
+                          ...properties.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })),
+                        ]}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      One property&apos;s website, or a group portal for all of them — including properties added later.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )} />

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { loadEmailBranding } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hashEregistrationToken } from "@/lib/eregistration/token";
-import { resolveInvoiceBrandColor } from "@/lib/invoice-branding";
 import { OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 import { SmtpNotConfiguredError, PlatformSmtpNotConfiguredError } from "@/lib/mailer";
 import { sendEnterpriseMail, MAIL_KINDS } from "@/lib/mail-sender";
@@ -68,12 +68,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const pickupCount = await prisma.reservation.count({ where: { groupBlockId: id, status: { notIn: ["CANCELLED", "NO_SHOW", "CHECKED_OUT"] } } });
-    const settings = await prisma.enterpriseSettings.findUnique({ where: { enterpriseId: group.property.enterpriseId } });
-    const brandColor = resolveInvoiceBrandColor(settings?.invoiceBrandColor ?? null);
+    const { settings, brandColor } = await loadEmailBranding(group.property);
     const url = `${process.env.APP_URL ?? "http://localhost:3000"}/eregistration/${body.token}`;
     const html = buildGroupEregistrationEmailHtml({
       group,
-      settings: settings ?? { invoiceBrandName: null, invoiceLogoUrl: null, eRegistrationMessage: null },
+      settings,
       brandColor,
       url,
       expiresAt: link.expiresAt,

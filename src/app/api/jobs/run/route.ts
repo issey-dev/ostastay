@@ -8,8 +8,9 @@ import { verifyCronSecret, CRON_SECRET_HEADER } from "@/lib/jobs/auth";
 //   curl -X POST https://<host>/api/jobs/run -H "x-cron-secret: $CRON_SECRET"
 //
 // Optional ?job=<name> runs a single job; with no parameter every registered job runs.
-// Hourly is a sensible default — both current jobs are cheap when nothing is due, and the
-// keep-alive wants plenty of slack against Beds24's 30-day window.
+// Every 15 minutes is the recommended cadence: every job is cheap when nothing is due, and
+// a property's scheduled Night Audit (night-audit-scheduled) starts at the first run after
+// its set time — hourly would let it start up to an hour late.
 //
 // Not a session route: there is no user here, so it is guarded by a shared secret that
 // fails closed (see src/lib/jobs/auth.ts). Force-dynamic because it must never be

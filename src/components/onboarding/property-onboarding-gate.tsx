@@ -184,7 +184,7 @@ export function PropertyOnboardingGate({
             <DialogHeader>
               <DialogTitle>Create your property</DialogTitle>
               <DialogDescription>
-                Submitted to Osta for approval. You can change these details later in Controls.
+                Submitted to Osta for approval. You can change these details later in the Hub.
               </DialogDescription>
             </DialogHeader>
             <PropertyForm
