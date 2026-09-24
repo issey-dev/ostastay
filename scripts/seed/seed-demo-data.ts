@@ -321,7 +321,7 @@ export async function seedDemoData(
   // 2026-09-23). Idempotent — the first property's were already seeded by seed-veyo.
   for (const p of properties) {
     await ensureSeedPaymentMethods(prisma, enterpriseId, p.id)
-    await ensureChargeTree(prisma, { propertyId: p.id })
+    await ensureChargeTree(prisma, { propertyId: p.id }, undefined, { demo: true })
     await ensureFeeRules(prisma, { propertyId: p.id })
   }
   for (const p of properties) await seedOutlets(prisma, enterpriseId, p.id, p.code)

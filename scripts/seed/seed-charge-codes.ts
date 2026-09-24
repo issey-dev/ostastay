@@ -211,7 +211,7 @@ async function main() {
     // over. Allocation / SpaTreatment / ExcursionType carry a required chargeCodeId, so
     // a wipe-then-rebuild would strand them — this order never leaves a dangling FK.
     const summary = await prisma.$transaction(async (tx) => {
-      const tree = await ensureChargeTree(tx, { propertyId: prop.id })
+      const tree = await ensureChargeTree(tx, { propertyId: prop.id }, undefined, { demo: true })
       const feeRules = await ensureFeeRules(tx, { propertyId: prop.id })
       const repointed = await repointConfig(tx, prop.id, retired.map((c) => c.id))
       const dropped = await dropRetired(tx, prop.id, retired.map((c) => c.id), FORCE)

@@ -400,7 +400,9 @@ export const STANDARD_CHARGE_CODES: SeedCode[] = [
   //
   //    NON_REVENUE, so canGenerateTax() refuses them: money being settled has already
   //    been taxed on the charge it settles, and taxing it again would double-count. ──
-  { code: "9500", description: "Payment Adjustment", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
+  // System: the settlement route for a payment method of any other type
+  // (PAYMENT_METHOD_FALLBACK_CODE) — every payment must post against a code.
+  { code: "9500", description: "Payment Adjustment", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
   { code: "9501", description: "Payment — Cash", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
   { code: "9502", description: "Payment — Credit Card", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
   { code: "9503", description: "Payment — Bank Transfer", subgroupCode: "95PY", postingType: "NON_REVENUE", taxTreatment: "NONE", isSystem: true },
@@ -412,6 +414,12 @@ export const STANDARD_CHARGE_CODES: SeedCode[] = [
   { code: "9902", description: "Balance Brought Forward", subgroupCode: "99SY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
   { code: "9903", description: "Folio Transfer", subgroupCode: "99SY", postingType: "NON_REVENUE", taxTreatment: "NONE" },
 ];
+
+// What a NEW property gets (owner, 2026-09-24): only the codes the app itself depends on
+// (roles, fee rules, tax, payments, system movements). Every revenue code — and its
+// numbering — is the property owner's to create. The rest of STANDARD_CHARGE_CODES is a
+// demo chart, seeded only by the demo seed scripts and tests (ensureChargeTree `demo`).
+export const SYSTEM_SEED_CODES = STANDARD_CHARGE_CODES.filter((c) => c.isSystem);
 
 // The role -> seeded code mapping the resolver falls back to.
 export const SYSTEM_CHARGE_CODES = STANDARD_CHARGE_CODES.filter(

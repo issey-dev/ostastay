@@ -4,6 +4,7 @@ import { getPropertySettings } from "@/lib/property-settings"
 import { systemContext } from "@/lib/reservations/system-context"
 import { EOD_STEPS, getActiveEodRun } from "@/lib/eod"
 import { runEodStep } from "@/lib/night-audit/eod-step"
+import { isAuditTimeInWindow } from "@/lib/night-audit/audit-window"
 import type { JobResult } from "@/lib/jobs/runner"
 
 // The scheduled Night Audit (Hub > the property > Night Audit > Scheduled Night Audit):
@@ -18,6 +19,11 @@ import type { JobResult } from "@/lib/jobs/runner"
 // (23:30 on D closes D). It only runs once it is due and never more than a day late — a
 // property whose business date is further behind is reported, not caught up night after
 // night by the scheduler.
+//
+// The audit time must fall between 22:00 and 06:00 (owner, 2026-09-24 — audit-window.ts);
+// a time stored before that rule is reported and never run, rather than rolling the date
+// in the middle of the day. The scheduled run also never force-closes a cashier's open
+// drawer (a person running Night Audit does) — it stops at that step instead.
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -103,6 +109,14 @@ async function auditProperty(
     return runAllSteps(ctx, property, active.businessDate)
   }
 
+  if (!isAuditTimeInWindow(settings.autoAuditTime)) {
+    return {
+      propertyName: property.name,
+      status: "STOPPED",
+      detail: `scheduled time ${settings.autoAuditTime} is outside 22:00–06:00 — set a new time`,
+    }
+  }
+
   const businessDate = resolveBusinessDate(property)
   const late = minutesPastAuditTime(businessDate, settings.autoAuditTime, propertyLocalNow(property.timeZone || "UTC", now))
   if (late < 0) return null
@@ -122,7 +136,7 @@ async function runAllSteps(
   auditedDate: Date
 ): Promise<ScheduledAuditOutcome> {
   for (const step of EOD_STEPS) {
-    const res = await runEodStep(ctx, { propertyId: property.id, step: step.key })
+    const res = await runEodStep(ctx, { propertyId: property.id, step: step.key }, { scheduled: true })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       return { propertyName: property.name, status: "STOPPED", detail: `stopped at "${step.label}": ${body.error ?? `HTTP ${res.status}`}` }

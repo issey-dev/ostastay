@@ -156,10 +156,11 @@ describe("Inspection gate, out-of-order lifecycle, paid-outs", () => {
       )
     );
     const idA = (await resA.json()).id;
-    // Early check-in is blocked now, so advance the business date to the arrival window
-    // (covers both 2026-11-01 and 2026-11-05 check-ins in this test).
-    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 10, 5)) } });
+    // Early check-in is blocked, so the business date is each arrival's own day (a later
+    // one would make it a late arrival with a held night to charge or waive).
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 10, 1)) } });
     expect((await checkIn(idA)).status).toBe(200);
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 10, 5)) } });
 
     // Gate on — a CLEAN room now blocks; an INSPECTED one passes.
     await prisma.property.update({ where: { id: propertyId }, data: { requireInspectionOnCheckIn: true } });

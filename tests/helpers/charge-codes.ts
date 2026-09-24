@@ -23,7 +23,7 @@ const seeded = new Set<string>();
 /** Idempotent per property, and cheap after the first call in a test file. */
 export async function ensureChart({ propertyId }: Scope): Promise<void> {
   if (seeded.has(propertyId)) return;
-  await ensureChargeTree(prisma, { propertyId });
+  await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
   seeded.add(propertyId);
 }
 

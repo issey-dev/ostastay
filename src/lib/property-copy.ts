@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db"
 import { ForbiddenError } from "@/lib/scope"
 import { getPropertySettings, type PropertySettingsValues } from "@/lib/property-settings"
 import { PROPERTY_LIST_CATEGORIES } from "@/lib/system-code-scope"
-import { provisionOutletSubgroup } from "@/lib/posting/outlet-subgroup"
 
 // "Copy from another property" — onboarding help, not sharing (owner, 2026-09-23;
 // .agents/docs/HUB_SETUP_PLAN.md Phase 5). Each property keeps its own copy of everything;
@@ -500,33 +499,36 @@ const outlets: SectionDef = {
       })
       ctx.outletMap.set(o.id, outlet.id)
       ctx.report.copied.push({ key: o.name, label: o.name })
-      // Its own subgroup comes with it, pointing at the new outlet (ensureChargeSubgroup) —
-      // but only when that subgroup's number is free at the target. Every property's first
-      // restaurant is 20RV / 2001-2004, so matching by number would hand the copy ANOTHER
-      // outlet's codes and its sales would post under that outlet: those are reported as
-      // skipped, and the outlet gets a fresh subgroup of its own, as creating it would.
+      // A plain copy (owner, 2026-09-24): its codes keep their own numbers — numbering is
+      // the property owner's, never renumbered or invented here. Its own subgroup comes
+      // with it, pointing at the new outlet (ensureChargeSubgroup), when that subgroup's
+      // number is free at the target. A number the target already uses is someone else's
+      // code: skipped and reported, never linked — linking it would post this outlet's
+      // sales under another outlet.
       const ownSubgroupCode = o.chargeCodes.find((l) => l.chargeCode.chargeSubgroup.outletId === o.id)?.chargeCode.chargeSubgroup.code
-      const ownTaken =
+      const ownSubgroupTaken =
         !!ownSubgroupCode &&
         !!(await tx.chargeSubgroup.findUnique({ where: { propertyId_code: { propertyId: ctx.to, code: ownSubgroupCode } }, select: { id: true } }))
       for (const link of o.chargeCodes) {
-        const own = link.chargeCode.chargeSubgroup.outletId === o.id
-        const numberTaken =
-          own && !!(await tx.chargeCode.findUnique({ where: { propertyId_code: { propertyId: ctx.to, code: link.chargeCode.code } }, select: { id: true } }))
-        if (own && (ownTaken || numberTaken)) {
-          ctx.report.skipped.push({ key: link.chargeCode.code, label: `${link.chargeCode.code} ${link.chargeCode.description} (number already used at this property)` })
-          continue
+        if (link.chargeCode.chargeSubgroup.outletId === o.id) {
+          const numberTaken = !!(await tx.chargeCode.findUnique({
+            where: { propertyId_code: { propertyId: ctx.to, code: link.chargeCode.code } },
+            select: { id: true },
+          }))
+          if (ownSubgroupTaken || numberTaken) {
+            const why = numberTaken ? `code ${link.chargeCode.code}` : `subgroup ${ownSubgroupCode}`
+            ctx.report.skipped.push({
+              key: link.chargeCode.code,
+              label: `${link.chargeCode.code} ${link.chargeCode.description} (${o.name}) — ${why} is already used at this property`,
+            })
+            continue
+          }
         }
         const code = await ensureChargeCode(tx, ctx, link.chargeCodeId, true)
         await tx.outletChargeCode.upsert({
           where: { outletId_chargeCodeId: { outletId: outlet.id, chargeCodeId: code.id } },
           update: {},
           create: { outletId: outlet.id, chargeCodeId: code.id },
-        })
-      }
-      if (!(await tx.chargeSubgroup.findFirst({ where: { outletId: outlet.id }, select: { id: true } }))) {
-        await provisionOutletSubgroup(tx, {
-          enterpriseId: ctx.enterpriseId, propertyId: ctx.to, outletId: outlet.id, outletName: outlet.name, outletType: outlet.outletType,
         })
       }
     }

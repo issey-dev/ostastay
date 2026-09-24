@@ -48,6 +48,20 @@ const paymentSchema = z.object({
 })
 type PaymentFormValues = z.infer<typeof paymentSchema>
 
+// A late arrival's held nights (src/lib/reservations/held-nights.ts): charged by default;
+// waiving them needs a reason (and Cashiering delete, checked by the API).
+const heldNightsSchema = z.object({
+  waive: z.boolean(),
+  reason: z.string(),
+}).superRefine((v, ctx) => {
+  if (v.waive && !v.reason.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Give a reason for waiving the held nights." })
+  }
+})
+type HeldNightsFormValues = z.infer<typeof heldNightsSchema>
+const formatHeldNight = (ymd: string) =>
+  new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
+
 const profName = (p: any) => p?.companyName || [p?.title, p?.firstName, p?.middleName, p?.lastName].filter(Boolean).join(" ")
 const isExpired = (d?: string | null) => !!d && new Date(d).getTime() < Date.now()
 
@@ -72,6 +86,28 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   // guest" card for slots not yet linked to any Profile.
   const [eregSlots, setEregSlots] = useState<any[]>([])
   const [reviewSlot, setReviewSlot] = useState<any | null>(null)
+  const [held, setHeld] = useState<{ nights: string[]; canWaive: boolean }>({ nights: [], canWaive: false })
+  const heldForm = useForm<HeldNightsFormValues>({
+    resolver: zodResolver(heldNightsSchema),
+    mode: "onChange",
+    defaultValues: { waive: false, reason: "" },
+  })
+  useEffect(() => {
+    if (!isOpen || !reservationId) return
+    let cancelled = false
+    heldForm.reset({ waive: false, reason: "" })
+    fetch(`/api/reservations/${reservationId}/check-in`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setHeld({ nights: d?.heldNights ?? [], canWaive: !!d?.canWaiveHeldNights })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, reservationId, heldForm])
+  const waiveHeld = heldForm.watch("waive")
+
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     mode: "onChange",
@@ -237,7 +273,9 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     if (!reservationId) return
     // Validate the optional payment sub-form inline before doing anything irreversible.
     if (!(await paymentForm.trigger())) return
+    if (held.nights.length > 0 && !(await heldForm.trigger())) return
     const payment = paymentForm.getValues()
+    const heldValues = heldForm.getValues()
     setSubmitting(true); setError(null)
     try {
       // 1. Assign the arrival room if it changed.
@@ -248,7 +286,15 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
         if (!res.ok) { setError((await res.json()).error || "Failed to assign the room."); setSubmitting(false); return }
       }
       // 2. Check in.
-      const res = await fetch(`/api/reservations/${reservationId}/check-in`, { method: "POST" })
+      const res = await fetch(`/api/reservations/${reservationId}/check-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          held.nights.length > 0
+            ? { heldNights: heldValues.waive ? "WAIVE" : "CHARGE", waiveReason: heldValues.reason }
+            : {}
+        ),
+      })
       const checkInData = await res.json()
       if (!res.ok) { setError(checkInData.error || "Check-in failed."); setSubmitting(false); return }
       // 3. Optional payment.
@@ -434,6 +480,39 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   {anyIdIncomplete && <p className="text-warning flex items-center gap-1.5 pt-1"><AlertTriangle className="w-4 h-4" /> Some guests have incomplete identification (not enforced).</p>}
                   {anyExpired && <p className="text-destructive flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> A guest has an expired ID on file.</p>}
                 </div>
+                {held.nights.length > 0 && (
+                  <Form {...heldForm}>
+                    <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 space-y-2 text-sm">
+                      <p className="flex items-start gap-1.5 font-medium">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
+                        {held.nights.length === 1 ? "1 held night" : `${held.nights.length} held nights`} ({held.nights.map(formatHeldNight).join(", ")})
+                      </p>
+                      <p className="text-muted-foreground">
+                        The room was held for this late arrival. {waiveHeld ? "The held nights will not be charged." : "Checking in charges the held nights at the booked rate, with Service Charge and GST (no Green Tax)."}
+                      </p>
+                      {held.canWaive && (
+                        <FormField control={heldForm.control} name="waive" render={({ field }) => (
+                          <FormItem className="flex items-center gap-2 space-y-0">
+                            <FormControl>
+                              <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                            </FormControl>
+                            <Label className="font-normal">Waive the held nights</Label>
+                          </FormItem>
+                        )} />
+                      )}
+                      {waiveHeld && (
+                        <FormField control={heldForm.control} name="reason" render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Reason for waiving" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      )}
+                    </div>
+                  </Form>
+                )}
                 <Form {...paymentForm}>
                   <div className="space-y-2">
                     <Label className="text-xs">Collect a payment now (optional)</Label>

@@ -34,7 +34,7 @@ describe("ensureChargeTree", () => {
 
   beforeAll(async () => {
     ({ propertyId } = await freshProperty("seed"));
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
   });
 
   it("creates the whole canonical group/subgroup tree", async () => {
@@ -137,7 +137,7 @@ describe("ensureChargeTree", () => {
 
   it("is idempotent — a second run creates nothing and duplicates nothing", async () => {
     const before = await prisma.chargeGroup.count({ where: { propertyId } });
-    const result = await ensureChargeTree(prisma, { propertyId });
+    const result = await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     expect(result.groupsCreated).toBe(0);
     expect(result.subgroupsCreated).toBe(0);
     expect(result.codesCreated).toBe(0);
@@ -146,10 +146,29 @@ describe("ensureChargeTree", () => {
   });
 });
 
+describe("a new property's chart (owner, 2026-09-24)", () => {
+  it("gets only the system codes — every revenue code is the owner's to create and number", async () => {
+    const { propertyId } = await freshProperty("system-only");
+    await ensureChargeTree(prisma, { propertyId });
+    const codes = await prisma.chargeCode.findMany({ where: { propertyId }, select: { code: true, isSystem: true } });
+    const expected = STANDARD_CHARGE_CODES.filter((c) => c.isSystem).map((c) => c.code).sort();
+    expect(codes.map((c) => c.code).sort()).toEqual(expected);
+    expect(codes.every((c) => c.isSystem)).toBe(true);
+    // No demo outlet subgroups (20RV Restaurant...), but every reporting group is there.
+    expect(await prisma.chargeSubgroup.count({ where: { propertyId, code: "20RV" } })).toBe(0);
+    expect(await prisma.chargeGroup.count({ where: { propertyId } })).toBe(CANONICAL_GROUPS.length);
+    // The roles still resolve.
+    const settings = await prisma.propertySettings.findUniqueOrThrow({ where: { propertyId } });
+    expect(settings.defaultAccommodationChargeCodeId).not.toBeNull();
+    expect(settings.defaultGreenTaxChargeCodeId).not.toBeNull();
+    expect(settings.commissionChargeCodeId).not.toBeNull();
+  });
+});
+
 describe("ensureChargeTree alongside a property's own codes", () => {
   it("leaves a property's own codes alone while creating the chart around them", async () => {
     const { ent, propertyId } = await freshProperty("coexist");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
 
     // A code the property added itself, properly classified — chargeSubgroupId is
     // required, so an unclassified code can no longer exist at all.
@@ -161,7 +180,7 @@ describe("ensureChargeTree alongside a property's own codes", () => {
     });
 
     // Re-running the seeder creates nothing and leaves the property's code untouched.
-    const result = await ensureChargeTree(prisma, { propertyId });
+    const result = await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     expect(result.codesCreated).toBe(0);
 
     const row = await prisma.chargeCode.findUniqueOrThrow({
@@ -184,7 +203,7 @@ describe("ensureChargeTree alongside a property's own codes", () => {
     await customChargeCode({ propertyId }, { code: "1000", description: "Our Own Room Code", useDefaultTax: false, taxProfileId: profile.id });
 
     // A re-run adopts it rather than colliding, and creates nothing new.
-    const result = await ensureChargeTree(prisma, { propertyId });
+    const result = await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     expect(result.codesCreated).toBe(0);
 
     const room = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "1000" } } });
@@ -200,7 +219,7 @@ describe("ensureChargeTree alongside a property's own codes", () => {
 describe("resolveChargeCode: roles, not magic strings", () => {
   it("falls back to the system-seeded code when no pointer is set", async () => {
     const { ent, propertyId } = await freshProperty("role-fallback");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
 
     expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
     expect((await resolveChargeCode({ propertyId }, "GREEN_TAX"))?.code).toBe("8500");
@@ -209,7 +228,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
 
   it("prefers the property's own pointer over the seeded code", async () => {
     const { ent, propertyId } = await freshProperty("role-pointer");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
       where: { propertyId_code: { propertyId, code: "10RV" } },
     });
@@ -221,7 +240,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
 
   it("falls through a dangling pointer rather than failing the posting", async () => {
     const { ent, propertyId } = await freshProperty("role-dangling");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     await setPropertySettings(propertyId, { defaultAccommodationChargeCodeId: "no-such-charge-code" });
 
     expect((await resolveChargeCode({ propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
@@ -229,7 +248,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
 
   it("ignores a deactivated pointer target", async () => {
     const { ent, propertyId } = await freshProperty("role-inactive");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     const sub = await prisma.chargeSubgroup.findUniqueOrThrow({
       where: { propertyId_code: { propertyId, code: "10RV" } },
     });
@@ -247,7 +266,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
   it("never resolves a code belonging to another enterprise", async () => {
     const mine = await freshProperty("role-mine");
     const theirs = await freshProperty("role-theirs");
-    await ensureChargeTree(prisma, { propertyId: theirs.propertyId });
+    await ensureChargeTree(prisma, { propertyId: theirs.propertyId }, undefined, { demo: true });
 
     expect(await resolveChargeCode({ propertyId: mine.propertyId }, "ACCOMMODATION")).toBeNull();
   });
@@ -255,7 +274,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
   it("never resolves a code of ANOTHER PROPERTY of the same enterprise", async () => {
     const charted = await freshProperty("role-sibling-charted");
     const sibling = await freshProperty("role-sibling", charted.ent.id);
-    await ensureChargeTree(prisma, { propertyId: charted.propertyId });
+    await ensureChargeTree(prisma, { propertyId: charted.propertyId }, undefined, { demo: true });
 
     expect((await resolveChargeCode({ propertyId: charted.propertyId }, "ACCOMMODATION"))?.code).toBe("1000");
     expect(await resolveChargeCode({ propertyId: sibling.propertyId }, "ACCOMMODATION")).toBeNull();
@@ -268,7 +287,7 @@ describe("resolveChargeCode: roles, not magic strings", () => {
 describe("tax never generates on a payment — enforced at posting time", () => {
   it("ignores a rogue tax generate stored against a payment code", async () => {
     const { ent, propertyId } = await freshProperty("no-vat-on-payments");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
 
     const folio = await prisma.folio.create({ data: { propertyId, folioNumber: 1 } });
 
@@ -326,7 +345,7 @@ describe("postCharge: a GROSS-based generate sees the exact gross", () => {
     // 50.25 inclusive splits 39.05 + 3.90 + 7.30. Summed as floats that is
     // 50.24999999999999, whose 10% rounds DOWN to 5.02 — the gross must be summed in cents.
     const { ent, propertyId } = await freshProperty("gross-generate");
-    await ensureChargeTree(prisma, { propertyId });
+    await ensureChargeTree(prisma, { propertyId }, undefined, { demo: true });
     const folio = await prisma.folio.create({ data: { propertyId, folioNumber: 1 } });
 
     const excursion = await chargeCode({ propertyId }, "4001");

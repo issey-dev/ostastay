@@ -20,8 +20,10 @@ import { getPropertySettings } from "@/lib/property-settings";
 // so the scheduled audit can run the steps without a signed-in user. The caller checks the
 // permission; this checks that the property is the caller's.
 export type EodStepInput = { propertyId?: string; step?: string };
+/** `scheduled`: run by the scheduled audit (no one at the desk) — see the cashier step. */
+export type EodStepOptions = { scheduled?: boolean };
 
-export async function runEodStep(ctx: AuthContext, body: EodStepInput): Promise<NextResponse> {
+export async function runEodStep(ctx: AuthContext, body: EodStepInput, options: EodStepOptions = {}): Promise<NextResponse> {
   const propertyId = body.propertyId;
   const step = body.step as EodStepKey | "start";
   if (!propertyId) return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
@@ -74,6 +76,16 @@ export async function runEodStep(ctx: AuthContext, body: EodStepInput): Promise<
         where: { propertyId, closedAt: null },
         include: { payments: { include: { paymentMethod: { select: { name: true, type: true } } } }, paidOuts: true, currencyExchanges: true, property: { select: { defaultCurrency: true } } },
       });
+
+      // The scheduled audit never closes a drawer on a cashier's behalf (owner,
+      // 2026-09-24) — with no one at the desk it stops here, and a person closes the
+      // shift or runs Night Audit from the property (which force-closes, as below).
+      if (options.scheduled && openShifts.length > 0) {
+        return NextResponse.json(
+          { error: `${openShifts.length} cashier shift${openShifts.length > 1 ? "s" : ""} still open — close them, or run Night Audit from the property` },
+          { status: 400 }
+        );
+      }
 
       for (const shift of openShifts) {
         const expected = expectedCashForShift(shift.openingFloat, shift.payments, shift.paidOuts, shift.currencyExchanges, shift.property?.defaultCurrency ?? null);

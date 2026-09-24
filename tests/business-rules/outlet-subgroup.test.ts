@@ -33,7 +33,7 @@ async function setup() {
   const property = await prisma.property.create({
     data: { enterpriseId: enterprise.id, name: "P", code: `OSB-${uniq()}`, legalName: "P LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00" },
   });
-  await ensureChargeTree(prisma, { propertyId: property.id });
+  await ensureChargeTree(prisma, { propertyId: property.id }, undefined, { demo: true });
   const passwordHash = await bcrypt.hash("password123", 10);
   const admin = await prisma.user.create({ data: { enterpriseId: enterprise.id, email: `osb-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: "B", roles: { create: { roleId: roleIds["Admin"] } }, scope: "ENTERPRISE" } });
   return { enterpriseId: enterprise.id, propertyId: property.id, adminId: admin.id };
@@ -106,8 +106,9 @@ describe("outlet subgroup provisioning (DB)", () => {
     expect(await prisma.chargeSubgroup.count({ where: { outletId: outlet.id } })).toBe(1);
   });
 
-  it("POST /api/outlets provisions the subgroup as part of outlet creation", async () => {
-    const { enterpriseId, propertyId, adminId } = await setup();
+  it("POST /api/outlets creates no subgroup or charge codes — the property's own codes are picked", async () => {
+    const { propertyId, adminId } = await setup();
+    const codesBefore = await prisma.chargeCode.count({ where: { propertyId } });
     const res = await asUser(adminId, () => outletsRoute.POST(
       new Request("http://localhost/api/outlets", {
         method: "POST",
@@ -117,9 +118,7 @@ describe("outlet subgroup provisioning (DB)", () => {
     ));
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.provisionedSubgroup).toBe("40RV");
-
-    const sub = await prisma.chargeSubgroup.findUniqueOrThrow({ where: { propertyId_code: { propertyId, code: "40RV" } } });
-    expect(sub.outletId).toBe(body.id);
+    expect(await prisma.chargeSubgroup.count({ where: { outletId: body.id } })).toBe(0);
+    expect(await prisma.chargeCode.count({ where: { propertyId } })).toBe(codesBefore);
   });
 });

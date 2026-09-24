@@ -218,7 +218,7 @@ async function main() {
   // property keeps its own chart, tax profiles and payment methods). This block sets up
   // the Beach Resort; the Lagoon Retreat gets its own in seedDemoData + section 10c.
   await ensureSeedPaymentMethods(prisma, veyo.id, property.id);
-  await ensureChargeTree(prisma, { propertyId: property.id });
+  await ensureChargeTree(prisma, { propertyId: property.id }, undefined, { demo: true });
   let taxProfile = await prisma.taxProfile.findFirst({ where: { propertyId: property.id } });
   if (!taxProfile) {
     taxProfile = await prisma.taxProfile.create({

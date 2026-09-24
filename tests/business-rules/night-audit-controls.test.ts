@@ -21,6 +21,8 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 const { customChargeCode } = await import("../helpers/charge-codes");
 const { setPropertySettings } = await import("../helpers/property-settings");
 const runRoute = await import("@/app/api/night-audit/run/route");
+const stepRoute = await import("@/app/api/eod/step/route");
+const settingsRoute = await import("@/app/api/properties/[id]/settings/route");
 const { minutesPastAuditTime, propertyLocalNow, runScheduledAudits } = await import("@/lib/night-audit/scheduled");
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -229,6 +231,61 @@ describe("Night Audit controls", () => {
       await expect(runScheduledAudits(enterpriseId, new Date("2026-09-11T02:30:00Z"))).rejects.toThrow(/Blocked: stopped at "Resolve departures"/);
       expect((await prisma.property.findUniqueOrThrow({ where: { id: p.id } })).businessDate?.toISOString().slice(0, 10)).toBe("2026-09-10");
       await setPropertySettings(p.id, { autoAuditEnabled: false });
+    });
+
+    it("only accepts an audit time between 22:00 and 06:00", async () => {
+      const p = await makeProperty("Window");
+      const save = (autoAuditTime: string) =>
+        asUser(adminId, () =>
+          settingsRoute.PATCH(
+            new Request(`http://localhost/api/properties/${p.id}/settings`, {
+              method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ autoAuditTime }),
+            }),
+            { params: Promise.resolve({ id: p.id }) }
+          )
+        );
+      for (const ok of ["22:00", "23:59", "00:00", "02:00", "06:00"]) expect((await save(ok)).status).toBe(200);
+      for (const bad of ["06:01", "12:00", "18:30", "21:59"]) {
+        const res = await save(bad);
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toContain("between 22:00 and 06:00");
+      }
+    });
+
+    it("refuses a stored time outside 22:00–06:00 instead of rolling the date mid-day", async () => {
+      const p = await makeProperty("OutOfWindow");
+      // Saved before the rule existed — written straight to the table.
+      await setPropertySettings(p.id, { autoAuditEnabled: true, autoAuditTime: "14:00" });
+      await expect(runScheduledAudits(enterpriseId, new Date("2026-09-10T15:00:00Z"))).rejects.toThrow(
+        /OutOfWindow: scheduled time 14:00 is outside 22:00–06:00 — set a new time/
+      );
+      expect((await prisma.property.findUniqueOrThrow({ where: { id: p.id } })).businessDate?.toISOString().slice(0, 10)).toBe("2026-09-10");
+      await setPropertySettings(p.id, { autoAuditEnabled: false });
+    });
+
+    it("stops at an open cashier shift — only a person's Night Audit force-closes it", async () => {
+      const p = await makeProperty("OpenDrawer");
+      await setPropertySettings(p.id, { autoAuditEnabled: true, autoAuditTime: "02:00" });
+      const shift = await prisma.cashierShift.create({ data: { enterpriseId, userId: adminId, propertyId: p.id, businessDate: D("2026-09-10"), openingFloat: 200 } });
+
+      await expect(runScheduledAudits(enterpriseId, new Date("2026-09-11T02:30:00Z"))).rejects.toThrow(
+        /OpenDrawer: stopped at "Close cashiers": 1 cashier shift still open — close them, or run Night Audit from the property/
+      );
+      expect((await prisma.cashierShift.findUniqueOrThrow({ where: { id: shift.id } })).closedAt).toBeNull();
+      expect((await prisma.property.findUniqueOrThrow({ where: { id: p.id } })).businessDate?.toISOString().slice(0, 10)).toBe("2026-09-10");
+      await setPropertySettings(p.id, { autoAuditEnabled: false });
+
+      // The same step run from the Night Audit screen closes the drawer at the expected cash.
+      const res = await asUser(adminId, () =>
+        stepRoute.POST(new Request("http://localhost/api/eod/step", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: p.id, step: "cashier" }),
+        }))
+      );
+      expect(res.status).toBe(200);
+      expect((await res.json()).shiftsClosed).toBe(1);
+      const closed = await prisma.cashierShift.findUniqueOrThrow({ where: { id: shift.id } });
+      expect(closed.closedAt).not.toBeNull();
+      expect(Number(closed.closingDrop)).toBe(200);
     });
 
     it("does not catch up a property more than a day behind — it reports it", async () => {

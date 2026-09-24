@@ -49,7 +49,7 @@ async function main() {
 
   // The canonical charge tree first, so these codes land in a real subgroup rather than
   // the unclassified state that used to make a seeded database fail Night Audit.
-  await ensureChargeTree(prisma, { propertyId: property.id })
+  await ensureChargeTree(prisma, { propertyId: property.id }, undefined, { demo: true })
   const subgroups = await prisma.chargeSubgroup.findMany({ where: { propertyId: property.id } })
   const subgroupId = (code: string) => subgroups.find((s) => s.code === code)!.id
 

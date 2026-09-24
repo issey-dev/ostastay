@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import {
   CANONICAL_GROUPS,
   STANDARD_CHARGE_CODES,
+  SYSTEM_SEED_CODES,
   SYSTEM_CHARGE_CODES,
   FEE_RULE_CODES,
   PAYMENT_METHOD_CODES,
@@ -39,11 +40,18 @@ const MODULE_GROUPS: Record<string, keyof ChartModules> = { SPA: "spa", EXC: "ex
 
 // Idempotent: safe to re-run on a property that already has some or all of the chart.
 // Never touches a code's tax configuration or description — only classification.
+//
+// By default only the SYSTEM codes (and the subgroups holding them) are seeded, under the
+// canonical groups — a new property's revenue codes and their numbering are the owner's
+// (2026-09-24). `demo: true` seeds the full demo chart (seed scripts, tests).
 export async function ensureChargeTree(
   client: Client,
   { propertyId }: { propertyId: string },
-  modules: ChartModules = { spa: true, excursions: true }
+  modules: ChartModules = { spa: true, excursions: true },
+  { demo = false }: { demo?: boolean } = {}
 ): Promise<EnsureChargeTreeResult> {
+  const seedCodes = demo ? STANDARD_CHARGE_CODES : SYSTEM_SEED_CODES;
+  const seedSubgroups = new Set(seedCodes.map((c) => c.subgroupCode));
   const result: EnsureChargeTreeResult = {
     groupsCreated: 0,
     subgroupsCreated: 0,
@@ -86,6 +94,13 @@ export async function ensureChargeTree(
     if (!existingGroup) result.groupsCreated += 1;
 
     for (const s of g.subgroups) {
+      // Outside the demo chart a subgroup comes only with a system code to hold — the
+      // default outlet subgroups (20RV Restaurant...) are the owner's to create. One the
+      // property already has is still classified.
+      if (!seedSubgroups.has(s.code)) {
+        const own = await client.chargeSubgroup.findUnique({ where: { propertyId_code: { propertyId, code: s.code } }, select: { id: true } });
+        if (!own) continue;
+      }
       const existingSub = await client.chargeSubgroup.findUnique({
         where: { propertyId_code: { propertyId, code: s.code } },
       });
@@ -114,7 +129,7 @@ export async function ensureChargeTree(
   // same name keeps it — with its own tax config and description untouched — and is only
   // adopted into the hierarchy and flagged isSystem where the chart says so.
   const codeIdByCode = new Map<string, string>();
-  for (const c of STANDARD_CHARGE_CODES) {
+  for (const c of seedCodes) {
     const subgroupId = subgroupIdByCode.get(c.subgroupCode);
     if (!subgroupId) continue; // its group was left out (a module this property doesn't offer)
     const existing = await client.chargeCode.findUnique({

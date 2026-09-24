@@ -2359,7 +2359,7 @@ is, structurally: every generated line carries FolioLineItem.generatedFromLineIt
 pointing at the main code's line, and lineReportBucket() attributes it to the parent's
 bucket in every report.
 
-**Outlet-wise subgroups:** each F&B/Spa/Excursion/Transport/Retail outlet owns its own
+**Outlet-wise subgroups** (⚠️ superseded 2026-09-24 — new outlets no longer get a subgroup or codes; see that entry): each F&B/Spa/Excursion/Transport/Retail outlet owns its own
 nnRV subgroup (ChargeSubgroup.outletId), auto-provisioned from its group's band on
 outlet creation with template codes (nn01, nn02…) wired to the global tax generates.
 The band's first number (20RV/30RV/40RV…) is seeded as an unowned default; the first
@@ -3158,3 +3158,32 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
 - Released as **7.3.0** (owner), with the Night Audit additions of 2026-09-24/25 (no-show
   handling, scheduled audit, automatic check-out of settled departures).
 
+
+## 2026-09-24 — Held nights, scheduled audit window, charge codes are the property's (owner)
+
+- **A late arrival's held night is charged at check-in.** Under no-show "hold one night" /
+  "front desk decides", a guest checking in after their arrival night's audit already ran is
+  charged each held night at the booked rate, through the audit's own posting
+  (`src/lib/night-audit/stay-night.ts`, `src/lib/reservations/held-nights.ts`), dated today's
+  business date — with Service Charge / GST but **no Green Tax** (a levy on nights stayed).
+  The arrival date is not changed. The check-in wizard shows the held nights; the desk may
+  **waive** them with a reason, which needs **Cashiering delete** (the void permission) and is
+  logged. Check-in without a decision is refused (the tape chart's quick check-in sends the
+  desk to the wizard).
+- **Scheduled Night Audit runs between 22:00 and 06:00** only (form and API). A stored time
+  outside the window is reported, never run. With no-shows marked at the first audit and a
+  time before midnight, the form warns that later arrivals that night become No-Shows. A
+  **scheduled** audit never closes an open cashier drawer — it stops at "Close cashiers" for a
+  person; Night Audit run from the screen still force-closes as before.
+- **Charge codes are the property's own.** A new property gets the canonical charge groups
+  (the report buckets) and **only the system codes** — accommodation 1000, cancellation and
+  no-show fees 1050/1060, the tax codes 7000/8000/8500, commission 9100, deposit 9200,
+  payments 9500–9504, internal adjustment 9901 — with the subgroups that hold them. Every
+  revenue code, and its numbering, is created by the property. The fuller chart (2001–2004,
+  meal plans, spa, transport...) was demo data: it is seeded only by the demo seed scripts
+  (`ensureChargeTree(..., { demo: true })`). **Creating an outlet no longer creates a subgroup
+  or codes** — it posts to the codes picked on its form (supersedes the 2026-07-30
+  "outlet-wise subgroups" provisioning for new outlets).
+- **Copy from another property is a plain copy.** Codes keep their numbers; nothing is
+  renumbered or invented. A number (or an outlet's own subgroup number) the target already
+  uses is skipped and reported, never linked to the target's existing code.

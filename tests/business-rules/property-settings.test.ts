@@ -131,7 +131,7 @@ describe("Per-property settings (stationery + booking number format)", () => {
 
   it("refuses posting defaults, payment methods and outlets that belong to another property", async () => {
     const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
-    await ensureChargeTree(prisma, { propertyId: lagoonId });
+    await ensureChargeTree(prisma, { propertyId: lagoonId }, undefined, { demo: true });
     const lagoonRoom = await prisma.chargeCode.findUniqueOrThrow({ where: { propertyId_code: { propertyId: lagoonId, code: "1000" } } });
     const lagoonLedger = await prisma.paymentMethod.create({ data: { enterpriseId, propertyId: lagoonId, name: "CL", type: "CITY_LEDGER" } });
     const lagoonOutlet = await prisma.outlet.create({ data: { propertyId: lagoonId, name: "Lagoon Spa", code: `LS${uniq().slice(-4)}`, outletType: "SPA" } });

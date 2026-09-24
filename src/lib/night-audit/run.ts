@@ -4,10 +4,9 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { assertPropertyAccess, type AuthContext } from "@/lib/scope"
 import { postCharge } from "@/lib/posting/post-charge"
+import { postStayNight, STAY_NIGHT_INCLUDE, type StayNightContext } from "@/lib/night-audit/stay-night"
 import { resolveChargeCode, MissingChargeCodeError } from "@/lib/posting/resolve-charge-code"
 import type { GenerateRow } from "@/lib/posting/run-generates"
-import { applyRateAdjustment } from "@/lib/derived-rate"
-import { allocationAmountForNight } from "@/lib/allocations"
 import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
 import { applyEodHousekeepingShift } from "@/lib/eod-housekeeping"
@@ -168,32 +167,7 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
       propertyId,
       status: "IN_HOUSE"
     },
-    include: {
-      folios: {
-        where: { isClosed: false }
-      },
-      assignments: {
-        orderBy: { startDate: 'desc' },
-        include: {
-          roomType: true,
-          // "Charge as" room type (kept-rate room move) — pricing resolves off this when set.
-          chargeRoomType: true,
-          ratePlan: { include: { chargeCode: { include: taxInclude } } },
-        }
-      },
-      // The materialized allocation set (see ReservationAllocation) — each with its
-      // allocation's rates and charge code (incl. tax profile) for posting.
-      allocations: {
-        include: {
-          allocation: {
-            include: {
-              rates: true,
-              chargeCode: { include: { taxProfile: { include: { rates: true } } } },
-            },
-          },
-        },
-      },
-    }
+    include: STAY_NIGHT_INCLUDE,
   })
 
   const pricesIncludeTaxes = property.pricesIncludeTaxes
@@ -377,6 +351,15 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     return NextResponse.json({ error: "Could not claim the night-audit run." }, { status: 500 })
   }
 
+  const stayNightCtx: StayNightContext = {
+    settings,
+    pricesIncludeTaxes,
+    fallbackRoomCode,
+    baseRatePlan,
+    impliedGreenTaxGenerate,
+    routeTo,
+  }
+
   // 2. Post every reservation's nightly charges and write the audit log in ONE
   // transaction — a failure anywhere rolls back every posting, so the ledger can
   // never be left half-audited. (Reads stay outside for speed; writes are cheap.)
@@ -393,9 +376,6 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
         // chargedLineItemId, so it's already double-post-safe.
         if (res.advanceBilledThrough && dayMsUTC(res.advanceBilledThrough) >= dayMsUTC(auditDate)) continue
 
-        const activeAssignment = res.assignments[0]
-        if (!activeAssignment) continue
-
         // Always posts to the reservation's own folio, regardless of settlement method —
         // City Ledger reservations accumulate charges on their own folio exactly like
         // any other stay; the transfer to a debtor account only happens at checkout
@@ -406,176 +386,14 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
         const groupMasterFolioId = res.groupBlockId && res.groupBillToMaster ? masterFolioByBlock.get(res.groupBlockId) : undefined
         const targetFolioId = groupMasterFolioId ?? res.folios[0].id
 
-        // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
-        // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is
-        // applied below to whatever price results, including the Base Rate plan
-        // fallback, so a derived plan is always "parent price + adjustment" no matter
-        // where the parent's price actually came from.
-        const activeRatePlan = activeAssignment.ratePlan
-        const isDerivedRatePlan = !!activeRatePlan.parentRatePlanId
-        const calendarRatePlanId = isDerivedRatePlan ? activeRatePlan.parentRatePlanId! : activeAssignment.ratePlanId
-        // Price against the "charge as" room type when set (kept-rate move), else the
-        // physical room type. Governs the PriceCalendar lookup AND base occupancy below.
-        const chargeRoomTypeId = activeAssignment.chargeRoomTypeId ?? activeAssignment.roomTypeId
-        const chargeRoomType = activeAssignment.chargeRoomType ?? activeAssignment.roomType
-
-        // Room charge posts against the rate plan's own accommodation code when set,
-        // else the enterprise fallback resolved above.
-        const roomCode = activeRatePlan.chargeCode ?? fallbackRoomCode
-
-        const todayRange = { gte: auditDate, lt: nextDay }
-
-        // Fetched unconditionally (not just when overrideRate is unset) since extra-
-        // occupancy surcharges are a separate additive charge tied to today's calendar
-        // entry — a manual base-rate override shouldn't silently suppress them.
-        const calendarEntry = await tx.priceCalendar.findFirst({
-          where: { ratePlanId: calendarRatePlanId, roomTypeId: chargeRoomTypeId, date: todayRange }
-        })
-
-        let inputAmount = activeAssignment.overrideRate
-        if (inputAmount == null) {
-          let baseRoomPrice = calendarEntry?.price
-          // No entry under the assigned (or derived-from) plan — fall back to the
-          // property's locked Base Rate plan's own Price Calendar entry for tonight
-          // (skip the extra lookup if that's already what we just checked above).
-          if (baseRoomPrice == null && baseRatePlan && calendarRatePlanId !== baseRatePlan.id) {
-            const baseCalendarEntry = await tx.priceCalendar.findFirst({
-              where: { ratePlanId: baseRatePlan.id, roomTypeId: chargeRoomTypeId, date: todayRange }
-            })
-            baseRoomPrice = baseCalendarEntry?.price
-          }
-          if (baseRoomPrice == null) {
-            zeroRateConfirmationNos.push(res.confirmationNo)
-          }
-          baseRoomPrice = baseRoomPrice ?? 0
-          if (isDerivedRatePlan) {
-            baseRoomPrice = applyRateAdjustment(baseRoomPrice, activeRatePlan.derivedAdjustmentType!, activeRatePlan.derivedAdjustmentValue!)
-          }
-          inputAmount = baseRoomPrice
-        }
-
-        // Resolve tonight's allocation postings (see src/lib/allocations.ts — the same
-        // rhythm/date-range/pax math the reservation form previews with). Attached rows
-        // post regardless of the allocation's current isActive — deactivation only stops
-        // NEW attachments; a guest who booked breakfast still gets billed for it.
-        const allocationsTonight: Array<{
-          reservationAllocation: (typeof res.allocations)[number]
-          grossInput: number
-        }> = []
-        for (const ra of res.allocations) {
-          const amount = allocationAmountForNight({
-            allocation: ra.allocation,
-            adults: res.adults,
-            children: res.children,
-            checkInDate: res.checkInDate,
-            checkOutDate: res.checkOutDate,
-            auditDate: today,
-            overrideAdultPrice: ra.overrideAdultPrice,
-            overrideChildPrice: ra.overrideChildPrice,
-          })
-          if (amount != null && amount > 0) {
-            allocationsTonight.push({ reservationAllocation: ra, grossInput: amount })
-          }
-        }
-
-        // INCLUDE_IN_RATE allocations are carved OUT of the room line before it is
-        // tax-resolved — folio total unchanged, revenue attribution moves to the
-        // allocation's charge code. Clamped at zero: allocations can never push the
-        // room line negative (the allocation lines still post in full).
-        const includeInRateGross = allocationsTonight
-          .filter((a) => a.reservationAllocation.allocation.mode === "INCLUDE_IN_RATE")
-          .reduce((sum, a) => sum + a.grossInput, 0)
-        const roomInputAfterCarveOut = Math.max(0, inputAmount - includeInRateGross)
-
-        // The nightly room charge — and, through its generate rows, tonight's Green Tax
-        // and any other levy the property has declared on this code.
-        const roomPosting = await postCharge(tx, {
-          folioId: routeTo(res.id, roomCode.id, targetFolioId),
-          chargeCode: roomCode,
-          inputAmount: roomInputAfterCarveOut,
-          settings,
-          pricesIncludeTaxes,
-          date: today,
-          description: "Nightly Room Charge",
-          roomAssignmentId: activeAssignment.id,
-          // One stay-night. Infants are deliberately absent — exempt, and not counted.
-          postingContext: { adults: res.adults, children: res.children, nights: 1 },
-          extraGenerates: impliedGreenTaxGenerate,
-          routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
-        })
-
-        totalRoomRevenue += roomPosting.baseAmount
-        // taxTotal already covers this charge's Service Charge and GST wherever they
-        // landed — in the parent's columns, or on their own routed tax lines. Levies
-        // (Green Tax and friends) are additional tax collected, never room revenue.
-        totalTaxPosted += roomPosting.taxTotal + roomPosting.leviesTotal
-        totalPostings += 1 + roomPosting.generated.length
-
-        // 2a. Post an extra-occupancy surcharge — adults beyond RoomType.baseOccupancy
-        // at today's calendar extraAdultPrice, plus every child at extraChildPrice (no
-        // "included children" baseline, same convention as Green Tax). Both rates are
-        // optional per PriceCalendar day (no RoomType-level fallback), so this is a
-        // no-op unless the property has actually configured them for today.
-        const extraAdults = Math.max(0, res.adults - chargeRoomType.baseOccupancy)
-        const extraOccupancyInput =
-          extraAdults * (calendarEntry?.extraAdultPrice ?? 0) + res.children * (calendarEntry?.extraChildPrice ?? 0)
-
-        if (extraOccupancyInput > 0) {
-          const parts = []
-          if (extraAdults > 0) parts.push(`${extraAdults} extra adult${extraAdults > 1 ? "s" : ""}`)
-          if (res.children > 0) parts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
-
-          // Generates run here too — this line must carry its own Service Charge and
-          // GST like any other accommodation revenue. What it deliberately does NOT
-          // pass is a postingContext: the nightly per-person levies (Green Tax) were
-          // already levied on the room line for this same night, and a levy needs a
-          // headcount basis to produce an amount, so it correctly contributes nothing
-          // here rather than double-charging the night.
-          const extraOccupancy = await postCharge(tx, {
-            folioId: routeTo(res.id, roomCode.id, targetFolioId),
-            chargeCode: roomCode,
-            inputAmount: extraOccupancyInput,
-            settings,
-            pricesIncludeTaxes,
-            date: today,
-            description: `Extra Occupancy Charge (${parts.join(", ")})`,
-            roomAssignmentId: activeAssignment.id,
-            routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
-          })
-
-          totalRoomRevenue += extraOccupancy.baseAmount
-          totalTaxPosted += extraOccupancy.taxTotal + extraOccupancy.leviesTotal
-          totalPostings += 1 + extraOccupancy.generated.length
-        }
-
-        // 2a-bis. Post tonight's allocations (Breakfast, Transfers, Spa... — see
-        // .agents/docs/ALLOCATIONS_PLAN.md). Each posts against its own charge code
-        // through the same tax engine; INCLUDE_IN_RATE ones were already carved out of
-        // the room line above, ADD_TO_RATE/SELL_SEPARATE ones are purely additive.
-        // (A meal plan's per-person pricing arrives here via its linked allocations —
-        // materialized on the reservation at booking time, not re-resolved live.)
-        for (const { reservationAllocation: ra, grossInput } of allocationsTonight) {
-          const alloc = ra.allocation
-
-          const paxParts = []
-          if (res.adults > 0) paxParts.push(`${res.adults} adult${res.adults > 1 ? "s" : ""}`)
-          if (res.children > 0) paxParts.push(`${res.children} child${res.children > 1 ? "ren" : ""}`)
-
-          const allocPosting = await postCharge(tx, {
-            folioId: routeTo(res.id, alloc.chargeCodeId, targetFolioId),
-            chargeCode: alloc.chargeCode,
-            inputAmount: grossInput,
-            settings,
-            pricesIncludeTaxes,
-            date: today,
-            description: `${alloc.name} (${paxParts.join(", ")})`,
-            postingContext: { adults: res.adults, children: res.children, nights: 1 },
-            routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, targetFolioId),
-          })
-
-          totalTaxPosted += allocPosting.taxTotal + allocPosting.leviesTotal
-          totalPostings += 1 + allocPosting.generated.length
-        }
+        // Room, extra occupancy and tonight's allocations — the same code a held night
+        // is charged through at a late check-in (src/lib/night-audit/stay-night.ts).
+        const night = await postStayNight(tx, res, { night: auditDate, postDate: today, folioId: targetFolioId }, stayNightCtx)
+        if (!night) continue
+        if (night.zeroRate) zeroRateConfirmationNos.push(res.confirmationNo)
+        totalRoomRevenue += night.roomRevenue
+        totalTaxPosted += night.taxPosted
+        totalPostings += night.postings
 
         // (2b. Green Tax was posted above as a generate off the room charge — see
         // impliedGreenTaxGenerate. No hardcoded GTX branch remains.)

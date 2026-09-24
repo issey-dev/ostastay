@@ -75,9 +75,10 @@ export async function POST(request: Request) {
     });
 
     // ...and the property gets its OWN chart of accounts (per property since 2026-09-23):
-    // the canonical groups, subgroups and codes incl. the system ROOM/GTX/COMM codes and
-    // the ROOM -> Green Tax generate — without Spa / Excursions codes when this property
-    // doesn't offer them. Without a chart it couldn't run Night Audit at all.
+    // the canonical groups and ONLY the system codes (accommodation, fees, tax, payments,
+    // commission, system — owner, 2026-09-24) with the ROOM -> Green Tax generate. Its
+    // revenue codes and their numbering are the owner's to create. Without the system
+    // codes it couldn't run Night Audit at all.
     await ensureChargeTree(prisma, { propertyId: newProperty.id }, await chartModulesFor(prisma, enterpriseId, body));
     // ...and its Deposit / Cancellation / No-Show rules, each already linked to its own
     // charge code. Seeded inactive at zero — the wiring is provisioned, the policy stays

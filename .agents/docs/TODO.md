@@ -33,17 +33,20 @@ Fixed:
 - `reports-extended` Nationality Statistics test expected the code "GB"; the report now
   shows the master-list label ("British") — test updated.
 
-Open (need an owner decision — not changed):
-- [ ] **Held late arrival's missed night is never billed.** Under no-show SECOND_AUDIT /
-  MANUAL, a guest checked in a day late keeps their original `checkInDate`; the night that
-  was already audited posted no room charge, and a one-night booking is due out the moment
-  they check in. Options: move `checkInDate` to the business date on a late check-in, or post
-  the missed night at check-in. Ask the owner which.
-- [ ] **Scheduled audit time is not range-checked.** Any time from 12:00 runs on the same day
-  (13:00 would roll the date at 1pm and, under FIRST_AUDIT, no-show that day's arrivals).
-  Consider limiting it to e.g. 20:00–06:00 or warning in the form.
-- [ ] Copy from property: codes an outlet added to its own subgroup beyond the standard set
-  aren't carried when its subgroup number is taken at the target (reported as skipped).
+Owner decisions (2026-09-24, DECISIONS.md) — DONE:
+- ~~Held late arrival's missed night is never billed~~ — charged at check-in (no Green Tax),
+  or waived with a reason (Cashiering delete). Night Audit's per-night posting moved to
+  `night-audit/stay-night.ts` so both paths post identically.
+- ~~Scheduled audit time is not range-checked~~ — 22:00–06:00 only; FIRST_AUDIT + before-
+  midnight warning; the scheduled run stops (never force-closes) at an open cashier drawer.
+- ~~Copy from property: outlet codes~~ — plain copy by number; collisions skipped + reported.
+- ~~New properties / outlets got demo charge codes~~ — system codes only; no outlet
+  provisioning. Existing properties keep whatever codes they already have.
+
+Still open:
+- [ ] Existing properties created before 2026-09-24 still carry the demo codes (2001–2004,
+  2901–2904, 3001…, and outlet subgroups). Deleting them is the owner's call per property —
+  a code with postings can only be deactivated.
 - [ ] Stale `.next/dev/types` breaks `tsc` after the route moves — delete `.next` locally.
 
 ## Tax-inclusive rounding — FIXED (2026-09-23)
