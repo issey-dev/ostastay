@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Edit2, Trash2, UtensilsCrossed } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -173,61 +174,65 @@ export function MealPlansManager({
       <div className="-mx-6 -mb-6 border-t border-border">
           {/* Phone view — one card per meal plan: code/name/status up top, included
               allocations as chips, then edit/delete as full-width/icon actions. */}
-          <div className="md:hidden">
-            {loading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
-              </div>
-            ) : mealPlans.length === 0 ? (
-              <div className="p-4">
-                <EmptyState icon={UtensilsCrossed} title="No meal plans configured" description="Add one (e.g. Bed & Breakfast) so it can be selected on a reservation." />
-              </div>
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedMealPlans.map(mp => (
-                  <div key={mp.id} className="rounded-lg border border-border bg-card p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-mono font-semibold">{mp.code}</p>
-                        <p className="font-medium">{mp.name}</p>
-                      </div>
-                      <Badge variant="outline" className={`shrink-0 ${mp.isActive ? "bg-success-muted text-success border-success/30" : "bg-muted text-muted-foreground"}`}>
+          <MobileCardList
+            className="p-4"
+            empty={<EmptyState icon={UtensilsCrossed} title="No meal plans configured" description="Add one (e.g. Bed & Breakfast) so it can be selected on a reservation." />}
+          >
+            {loading
+              ? Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+              : sortedMealPlans.map(mp => (
+                  <MobileCard
+                    key={mp.id}
+                    tone={mp.isActive ? undefined : "muted"}
+                    title={mp.name}
+                    subtitle={<span className="font-mono">{mp.code}</span>}
+                    badge={
+                      <Badge variant="outline" className={mp.isActive ? "bg-success-muted text-success border-success/30" : "bg-muted text-muted-foreground"}>
                         {mp.isActive ? "Active" : "Inactive"}
                       </Badge>
-                    </div>
-                    {(mp.allocationLinks ?? []).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {(mp.allocationLinks ?? []).map(l => (
-                          <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
-                            {l.allocation.code}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    {hasActions && (
-                      <div className="flex gap-2 pt-1">
-                        {permissions.update && (
-                          <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openDialog(mp)}>
-                            <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Edit
-                          </Button>
-                        )}
-                        {permissions.delete && (
-                          <Button
-                            variant="outline" size="icon"
-                            className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
-                            aria-label="Delete meal plan"
-                            onClick={() => handleDelete(mp.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    }
+                    meta={
+                      (mp.allocationLinks ?? []).length > 0
+                        ? [{
+                            label: "Allocations",
+                            wide: true,
+                            value: (
+                              <span className="flex flex-wrap gap-1">
+                                {(mp.allocationLinks ?? []).map(l => (
+                                  <Badge key={l.allocation.id} variant="outline" className="font-mono text-xs">
+                                    {l.allocation.code}
+                                  </Badge>
+                                ))}
+                              </span>
+                            ),
+                          }]
+                        : undefined
+                    }
+                    onClick={permissions.update ? () => openDialog(mp) : undefined}
+                    actions={
+                      hasActions ? (
+                        <>
+                          {permissions.update && (
+                            <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openDialog(mp)}>
+                              <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Edit
+                            </Button>
+                          )}
+                          {permissions.delete && (
+                            <Button
+                              variant="outline" size="icon"
+                              className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                              aria-label="Delete meal plan"
+                              onClick={() => handleDelete(mp.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </>
+                      ) : undefined
+                    }
+                  />
                 ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

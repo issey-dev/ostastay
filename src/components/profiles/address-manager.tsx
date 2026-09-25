@@ -116,7 +116,7 @@ export function AddressManager({ upid }: { upid: string }) {
                 type="button"
                 title={r.isPrimary ? "Primary" : "Set as primary"}
                 onClick={() => !r.isPrimary && handleSetPrimary(r.id)}
-                className={cn("shrink-0 mt-0.5", r.isPrimary ? "text-warning" : "text-muted-foreground hover:text-foreground")}
+                className={cn("shrink-0 mt-0.5 pointer-coarse:grid pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:place-items-center pointer-coarse:mt-0", r.isPrimary ? "text-warning" : "text-muted-foreground hover:text-foreground")}
               >
                 <Star className={cn("h-4 w-4", r.isPrimary && "fill-current")} />
               </button>

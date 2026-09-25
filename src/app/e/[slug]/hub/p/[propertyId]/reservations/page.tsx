@@ -2,6 +2,7 @@ import { propertyPage } from "@/lib/hub-page"
 import { prisma } from "@/lib/db"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { BookingNumberFormatForm } from "@/components/hub/booking-number-format-form"
 import { DropdownsManager, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
@@ -18,6 +19,7 @@ export default async function HubPropertyReservationsPage({ params }: { params: 
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard title="Booking Number Format" description="How this property's confirmation numbers look. The running number itself is this property's Registration No sequence (Sequences).">
         <BookingNumberFormatForm propertyId={property.id} propertyCode={property.code} nextNumber={nextNumber} />
       </ControlsCard>

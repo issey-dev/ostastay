@@ -1,6 +1,7 @@
 import { propertyPage } from "@/lib/hub-page"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { OutletsManager } from "@/components/controls/outlets-manager"
 import { FacilityAmenitiesManager } from "@/components/settings/facility-amenities-manager"
@@ -10,6 +11,7 @@ export default async function HubPropertyOutletsPage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard
         title="Outlets"
         description="This property's restaurants, bars, spa and other points of sale — each curates its own set of charge codes and can override tax handling."

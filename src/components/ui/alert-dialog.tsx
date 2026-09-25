@@ -64,6 +64,8 @@ function AlertDialogContent({
         data-size={size}
         className={cn(
           "group/alert-dialog-content fixed top-1/2 left-1/2 z-[var(--z-portal)] grid w-[90vw] max-w-[500px] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 shadow-elevation-4",
+          // Phones: a long message scrolls instead of running off the screen.
+          "max-sm:max-h-[90dvh] max-sm:overflow-y-auto max-sm:p-5",
           className
         )}
         {...props}
@@ -95,14 +97,12 @@ function AlertDialogFooter({
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={cn(className)}
-      style={{
-        display: 'flex',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: '0.75rem',
-        marginTop: '1.5rem'
-      }}
+      // The same layout the inline style used to set (0.75rem gap, 1.5rem top margin) — as
+      // classes, so phones can stack the buttons full width, primary on top.
+      className={cn(
+        "mt-6 flex items-center justify-end gap-3 max-sm:flex-col-reverse max-sm:items-stretch",
+        className
+      )}
       {...props}
     />
   )

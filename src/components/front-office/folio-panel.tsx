@@ -37,6 +37,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   const [postType, setPostType] = useState<"charge" | "payment">("charge")
   const [chargeForm, setChargeForm] = useState({ chargeCodeId: "", amount: "", description: "", reference: "" })
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
+  // Until the cashier types an amount, the payment amount IS the folio balance (see
+  // paymentAmount below) — settling in full is the common case, and a stale copy of the
+  // balance would be wrong after every posting. Typing takes over; posting hands it back.
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false)
   
   // Multi-Folio State
   const [selectedLineItemIds, setSelectedLineItemIds] = useState<string[]>([])
@@ -225,10 +229,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       const res = await fetch(`/api/folios/${activeFolioId}/payments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentForm)
+        body: JSON.stringify({ ...paymentForm, amount: paymentAmount })
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
+        setPaymentAmountTouched(false)
         // Reset back to the folio's default rather than blank — taking a second payment
         // shouldn't mean re-picking the method the folio is configured to settle with.
         setPaymentForm({ paymentMethodId: activeFolio?.defaultPaymentMethodId || "", amount: "", referenceNumber: "" })
@@ -448,6 +453,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   }
 
   const balance = (totalBaseCharges + totalServiceCharges + totalTaxes) - totalPayments
+  // What the Amount field shows: the outstanding balance until the cashier edits it. A
+  // folio in credit or settled suggests nothing.
+  const paymentAmount = paymentAmountTouched ? paymentForm.amount : balance > 0.005 ? balance.toFixed(2) : ""
 
   // A reservation folio that hasn't opened yet: the guest hasn't arrived, so nothing can
   // be posted and no fiscal document exists to raise. A walk-in/outlet folio (no
@@ -456,11 +464,13 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto">
+      {/* Already a full-screen layout of its own on phones (h-[100dvh]) — opt out of the
+          shared bottom-sheet treatment. */}
+      <DialogContent mobile="none" className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto max-sm:px-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <DialogHeader className="border-b pb-4 mb-4 shrink-0">
           <div className="flex justify-between items-center w-full">
             <div>
-              <DialogTitle className="text-2xl flex items-center">
+              <DialogTitle className="text-2xl flex items-center max-sm:text-xl">
                 <Receipt className="mr-2" /> Guest Folio
               </DialogTitle>
               <DialogDescription>
@@ -473,7 +483,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         {loading && folios.length === 0 ? (
           <div className="flex-1 flex justify-center items-center text-muted-foreground">Loading Folio...</div>
         ) : (
-          <div className="flex flex-col flex-1 h-full">
+          // Below lg the columns stack, so nothing here may be height-constrained: with
+          // h-full/flex-1 the left column was squeezed to the viewport and the Post card
+          // was drawn over the balance card. Natural height, and the dialog scrolls.
+          <div className="flex flex-col flex-1 h-full max-lg:h-auto max-lg:flex-none">
             {/* Folio Tabs */}
             <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0 border-b border-border">
               {folios.map((f: any) => {
@@ -488,6 +501,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     onClick={() => {
                       setActiveFolioId(f.id)
                       setSelectedLineItemIds([])
+                      setPaymentAmountTouched(false)
                     }}
                     className={`px-4 py-2 rounded-t-md text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                       activeFolioId === f.id
@@ -507,12 +521,12 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             {!activeFolio ? (
               <div className="flex-1 flex justify-center items-center text-muted-foreground">No folio found for this reservation.</div>
             ) : (
-              <div className="grid lg:grid-cols-3 gap-6 flex-1 items-start min-h-0">
+              <div className="grid lg:grid-cols-3 gap-6 flex-1 items-start min-h-0 max-lg:flex-none max-lg:grid-cols-1 max-sm:gap-4">
                 
                 {/* Left Column: Balance & Ledger */}
-                <div className="lg:col-span-2 flex flex-col gap-6 h-full min-h-0">
+                <div className="lg:col-span-2 flex flex-col gap-6 h-full min-h-0 max-sm:gap-4 max-lg:h-auto">
                   {/* Balance Card */}
-                  <div className="bg-card p-6 rounded-xl border shadow-sm flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 shrink-0">
+                  <div className="bg-card p-6 rounded-xl border shadow-sm flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4 shrink-0 max-sm:p-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-muted-foreground">Folio {activeFolio.folioNumber} Balance</p>
 
@@ -563,8 +577,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-1">
-                        <p className={`text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
+                      {/* Phone: the balance on its own line, the document buttons in an even
+                          two-column grid under it. From sm up: one wrapping row, as before. */}
+                      <div className="mt-1 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                        <p className={`col-span-2 text-3xl font-bold tabular-nums ${balance > 0 ? 'text-destructive' : balance < 0 ? 'text-success' : 'text-foreground'}`}>
                           ${balance.toFixed(2)}
                         </p>
                         {/* Before arrival the only document that exists is a quote. A tax
@@ -577,7 +593,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("tax")}
-                            className="h-9 shadow-sm border-border"
+                            className="h-9 w-full shadow-sm sm:w-auto border-border"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                           </Button>
@@ -586,7 +602,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={() => setPrintDocType("proforma")}
-                          className="h-9 shadow-sm border-border"
+                          className="h-9 w-full shadow-sm sm:w-auto border-border"
                           title={preArrival ? "Quoted charges for the stay — not a tax invoice" : undefined}
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
@@ -596,7 +612,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="outline"
                             onClick={() => setPrintDocType("interim")}
-                            className="h-9 shadow-sm border-border"
+                            className="h-9 w-full shadow-sm sm:w-auto border-border"
                             title="Information statement of charges posted so far — not a tax invoice"
                           >
                             <Printer className="w-4 h-4 mr-2" /> Interim Bill
@@ -606,7 +622,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={openRouting}
-                          className="h-9 shadow-sm border-border"
+                          className="h-9 w-full shadow-sm sm:w-auto border-border"
                         >
                           <ArrowRightLeft className="w-4 h-4 mr-2" /> Routing
                         </Button>
@@ -615,7 +631,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             size="sm"
                             variant="destructive"
                             onClick={handleDeleteFolio}
-                            className="h-9 shadow-sm"
+                            className="h-9 w-full shadow-sm sm:w-auto"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </Button>
@@ -643,75 +659,79 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                   )}
 
                   {/* Ledger List */}
-                  <div className="bg-card rounded-xl border shadow-sm flex-1 overflow-hidden flex flex-col">
+                  <div className="bg-card rounded-xl border shadow-sm flex-1 overflow-hidden flex flex-col max-lg:flex-none">
                     <div className="overflow-y-auto flex-1">
-                      {/* Phone view — the 9-column table below takes over at md. */}
+                      {/* Phone view — the 9-column table below takes over at md. One compact row
+                          per posting: date · description · amount. Tapping a charge selects it
+                          (for "Move to Folio"); the base/SC/tax split sits in a small second line. */}
                       <div className="md:hidden divide-y divide-border">
                         {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 ? (
                           <EmptyState icon={Receipt} title="No transactions posted yet" />
                         ) : (
                           <>
-                            {activeFolio.lineItems.map((item: any) => (
-                              <div key={item.id} className={`p-4 space-y-2 ${item.isVoid ? "opacity-50" : selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}`}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex items-start gap-2 min-w-0">
-                                    {!item.isVoid && (
-                                      <Checkbox
-                                        className="mt-0.5 shrink-0"
-                                        checked={selectedLineItemIds.includes(item.id)}
-                                        onCheckedChange={() => toggleLineItemSelection(item.id)}
-                                      />
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className={`text-sm font-medium ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
-                                        {item.description}
-                                        {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">{new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
-                                    </div>
+                            {activeFolio.lineItems.map((item: any) => {
+                              const selected = selectedLineItemIds.includes(item.id)
+                              const total = item.amount + (item.serviceChargeAmount || 0) + item.taxAmount
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`flex items-center gap-2 px-3 py-2.5 ${item.isVoid ? "opacity-50" : selected ? "bg-primary/5" : ""} ${item.isVoid ? "" : "cursor-pointer active:bg-muted/50"}`}
+                                  onClick={() => { if (!item.isVoid) toggleLineItemSelection(item.id) }}
+                                >
+                                  {!item.isVoid && (
+                                    <Checkbox
+                                      className="shrink-0"
+                                      aria-label={`Select ${item.description}`}
+                                      checked={selected}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onCheckedChange={() => toggleLineItemSelection(item.id)}
+                                    />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`truncate text-sm font-medium ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
+                                      {item.description}
+                                      {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
+                                    </p>
+                                    <p className="truncate text-[11px] text-muted-foreground">
+                                      {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(/ /g, '-')}
+                                      {" · "}${item.amount.toFixed(2)} + SC ${(item.serviceChargeAmount || 0).toFixed(2)} + tax ${item.taxAmount.toFixed(2)}
+                                    </p>
                                   </div>
+                                  <span className={`shrink-0 text-sm font-semibold tabular-nums ${item.isVoid ? "line-through text-muted-foreground" : "text-destructive"}`}>
+                                    ${total.toFixed(2)}
+                                  </span>
                                   {!item.isVoid && !activeFolio.isClosed && (
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                                       title="Void Charge"
                                       aria-label="Void Charge"
-                                      onClick={() => { setVoidTarget(item); setVoidReason("") }}
+                                      onClick={(e) => { e.stopPropagation(); setVoidTarget(item); setVoidReason("") }}
                                     >
-                                      <Ban className="w-3.5 h-3.5" />
+                                      <Ban className="w-4 h-4" />
                                     </Button>
                                   )}
                                 </div>
-                                <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>
-                                  <span>Base: ${item.amount.toFixed(2)}</span>
-                                  <span>SC: ${(item.serviceChargeAmount || 0).toFixed(2)}</span>
-                                  <span>Tax: ${item.taxAmount.toFixed(2)}</span>
-                                  <span className={`font-medium ${item.isVoid ? "" : "text-destructive"}`}>
-                                    Total: ${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                             {activeFolio.payments.map((payment: any) => (
-                              <div key={payment.id} className="p-4 flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium">Payment - {payment.paymentMethod?.name}</p>
-                                  <p className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</p>
+                              <div key={payment.id} className="flex items-center gap-2 px-3 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium">Payment - {payment.paymentMethod?.name}</p>
+                                  <p className="text-[11px] text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(/ /g, '-')}</p>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-sm font-medium text-success">${payment.amount.toFixed(2)}</span>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    title="Print Payment Receipt"
-                                    aria-label="Print Payment Receipt"
-                                    onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
-                                  >
-                                    <Printer className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
+                                <span className="shrink-0 text-sm font-semibold tabular-nums text-success">${payment.amount.toFixed(2)}</span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Print Payment Receipt"
+                                  aria-label="Print Payment Receipt"
+                                  onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </Button>
                               </div>
                             ))}
                           </>
@@ -820,7 +840,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 </div>
 
                 {/* Right Column: Actions */}
-                <div className="lg:col-span-1 flex flex-col gap-6 sticky top-0 shrink-0">
+                <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-0 shrink-0">
                   <Tabs value={postType} onValueChange={(v: any) => setPostType(v)} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="charge"><Plus className="w-4 h-4 mr-2"/> Post Charge</TabsTrigger>
@@ -905,7 +925,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <Label>Amount <span className="text-destructive">*</span></Label>
                           <div className="relative">
                             <span className="absolute left-3 top-2 text-muted-foreground">$</span>
-                            <Input className="pl-7" required type="number" step="0.01" min="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(p => ({...p, amount: e.target.value}))} />
+                            <Input className="pl-7" required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={e => { setPaymentAmountTouched(true); setPaymentForm(p => ({...p, amount: e.target.value})) }} />
                           </div>
                         </div>
                         <div className="space-y-2">

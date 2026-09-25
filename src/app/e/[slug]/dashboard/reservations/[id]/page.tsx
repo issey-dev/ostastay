@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState, useRef, use } from "react"
-import { useSearchParams } from "next/navigation"
+import { useEffect, useState, useRef, use, type ReactNode } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useSmartBack } from "@/lib/use-smart-back"
 import { format } from "date-fns"
 import {
   ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
   Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info, Bell, RotateCcw,
+  ChevronDown,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +31,10 @@ import { ERegistrationPanel } from "@/components/front-office/eregistration-pane
 import { CountryLabel } from "@/components/ui/country-flag"
 import { useNationalities } from "@/components/ui/nationality-select"
 import { useProperty } from "@/components/providers/property-provider"
+import { MobileActions, type MobileAction } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { GuestContactMenu } from "@/components/reservations/guest-contact-menu"
+import { INPUT_INTEGER } from "@/lib/input-presets"
 import {
   deriveReservationState,
   reservationStateLabel,
@@ -69,6 +74,7 @@ const isVip = (g: any) => g?.classification === "VIP" || !!g?.vipLevel
 export default function ReservationDetailPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params)
   const goBack = useSmartBack(`/e/${slug}/dashboard/reservations`)
+  const router = useRouter()
   const { currentProperty } = useProperty()
   const [reservation, setReservation] = useState<any>(null)
   const [breakdown, setBreakdown] = useState<any>(null)
@@ -83,6 +89,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isDepositOpen, setIsDepositOpen] = useState(false)
   const [isDailyOpen, setIsDailyOpen] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  // Phone only: transport / eRegistration / deposits / traces start collapsed.
+  const [showMoreSections, setShowMoreSections] = useState(false)
   // "Alert on open" traces pop once each time the reservation is opened, until resolved.
   const [showAlerts, setShowAlerts] = useState(false)
   const alertShownRef = useRef(false)
@@ -408,6 +416,78 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
 
   const nationalityLabel = nationalities.nationality(guest?.nationality)
 
+  // ── Phone header: ONE primary action + "More" (same guards as the desktop button row;
+  // risky actions are destructive → last, and still confirm through their own handlers).
+  const bdMs = dayMs(currentProperty?.businessDate)
+  const coMs = dayMs(reservation.checkOutDate)
+  const dueOutToday = !Number.isNaN(bdMs) && !Number.isNaN(coMs) ? bdMs >= coMs : true
+  const reinstateAvailable = canReinstate(reservation.status, reservation.checkInDate, reservation.checkOutDate, currentProperty?.businessDate)
+  const reverseCheckOutAvailable = canReverseCheckOut(reservation.status, reservation.checkOutDate, currentProperty?.businessDate, reservation.checkedOutAt)
+  const editable = canEditReservation(reservation.status)
+  const liveBooking = reservation.status === "RESERVED" || reservation.status === "IN_HOUSE"
+  const editUrl = `/e/${slug}/dashboard/reservations/${id}/edit`
+  let phonePrimary: ReactNode = null
+  let primaryIsEdit = false
+  if (reservation.status === "RESERVED" && checkInAvailable) {
+    phonePrimary = (
+      <Button onClick={() => setIsCheckInOpen(true)}>
+        <Key className="w-4 h-4 mr-2" /> Check In
+      </Button>
+    )
+  } else if (reservation.status === "IN_HOUSE") {
+    phonePrimary = dueOutToday ? (
+      <Button onClick={() => handleCheckOut(false)} disabled={checkingOut}>
+        <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out..." : "Check Out"}
+      </Button>
+    ) : (
+      <Button
+        variant="outline"
+        className="text-warning border-warning/40 hover:bg-warning-muted hover:text-warning"
+        onClick={() => handleCheckOut(true)}
+        disabled={checkingOut}
+      >
+        <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out..." : "Early Check-Out"}
+      </Button>
+    )
+  } else if (reinstateAvailable) {
+    phonePrimary = (
+      <Button variant="outline" onClick={handleReinstate} disabled={reversing}>
+        <RotateCcw className="w-4 h-4 mr-2" /> {reversing ? "Reinstating..." : "Reinstate"}
+      </Button>
+    )
+  } else if (editable) {
+    primaryIsEdit = true
+    phonePrimary = (
+      <Link href={editUrl} className="flex">
+        <Button variant="outline" className="flex-1">
+          <Pencil className="w-4 h-4 mr-2" /> Edit
+        </Button>
+      </Link>
+    )
+  }
+  const phoneMore: MobileAction[] = []
+  if (reservation.status === "IN_HOUSE") {
+    phoneMore.push({ label: "Move room", icon: ArrowLeftRight, onSelect: () => setIsRoomMoveOpen(true) })
+    phoneMore.push({ label: advancing ? "Posting advance bill..." : "Advance bill", icon: Wallet, disabled: advancing, onSelect: () => setAdvanceBillDialogOpen(true) })
+  }
+  if ((reservation.folios?.length ?? 0) > 0) phoneMore.push({ label: "Folio", icon: ReceiptText, onSelect: () => setIsFolioOpen(true) })
+  if (reservation.status === "RESERVED") phoneMore.push({ label: "Collect deposit", icon: Wallet, onSelect: () => setIsDepositOpen(true) })
+  if (liveBooking) {
+    phoneMore.push({ label: "Confirmation letter", icon: FileText, onSelect: () => window.open(`/e/${slug}/dashboard/reservations/${id}/confirmation-letter`, "_blank") })
+    phoneMore.push({ label: "Registration card", icon: ReceiptText, onSelect: () => window.open(`/e/${slug}/dashboard/reservations/${id}/registration-card`, "_blank") })
+  }
+  phoneMore.push({ label: "Daily details", icon: CalendarDays, onSelect: () => setIsDailyOpen(true) })
+  phoneMore.push({ label: openTraces.length > 0 ? `Traces (${openTraces.length} open)` : "Traces", icon: MessageSquare, onSelect: () => setIsTraceOpen(true) })
+  if (editable && !primaryIsEdit) phoneMore.push({ label: "Edit reservation", icon: Pencil, onSelect: () => router.push(editUrl) })
+  if (reservation.status === "IN_HOUSE")
+    phoneMore.push({ label: reversing ? "Reversing..." : "Reverse check-in", icon: RotateCcw, destructive: true, disabled: reversing, onSelect: handleReverseCheckIn })
+  if (reverseCheckOutAvailable)
+    phoneMore.push({ label: reversing ? "Reversing..." : "Reverse check-out", icon: RotateCcw, destructive: true, disabled: reversing, onSelect: handleReverseCheckOut })
+  if (reservation.status === "RESERVED")
+    phoneMore.push({ label: "Cancel reservation", icon: XCircle, destructive: true, onSelect: handleCancel })
+  const roomNumbers = [...new Set((reservation.assignments ?? []).map((a: any) => a.room?.roomNumber).filter(Boolean))] as string[]
+  const hasFolios = (reservation.folios?.length ?? 0) > 0
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -418,7 +498,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </Button>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">{guestName}</h1>
+              <h1 className="text-2xl font-bold tracking-tight max-md:text-xl">{guestName}</h1>
               <StatusBadge label={reservationStateLabel(derivedState)} status={derivedState} />
             </div>
             <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
@@ -436,7 +516,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* Phone: one primary action + "More" instead of up to 7 wrapping buttons. */}
+        <MobileActions className="md:hidden" primary={phonePrimary} more={phoneMore} />
+
+        <div className="flex flex-wrap gap-2 max-md:hidden">
           {reservation.status === "RESERVED" && (
             <>
               {/* Check-in only on the arrival day (Due In). A future-dated Reserved
@@ -537,6 +620,43 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </div>
       </div>
 
+      {/* Phone: the stay at a glance — dates, room, pax and the balance (tap → folio),
+          which otherwise sits ~1,300px down in the Billing card. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm md:hidden">
+        <div className="bg-card px-3 py-2">
+          <p className="text-[11px] text-muted-foreground">Stay · {nights} night{nights === 1 ? "" : "s"}</p>
+          <p className="font-semibold">
+            {format(new Date(reservation.checkInDate), "dd MMM")} → {format(new Date(reservation.checkOutDate), "dd MMM")}
+          </p>
+        </div>
+        <div className="bg-card px-3 py-2">
+          <p className="text-[11px] text-muted-foreground">Room</p>
+          <p className="truncate font-semibold">
+            {roomNumbers.length > 0 ? roomNumbers.join(", ") : <span className="text-warning">Unassigned</span>}
+            {roomTypeNames.length > 0 && <span className="font-normal text-muted-foreground"> · {String(roomTypeNames[0])}</span>}
+          </p>
+        </div>
+        <div className="bg-card px-3 py-2">
+          <p className="text-[11px] text-muted-foreground">Guests</p>
+          <p className="font-semibold">
+            {reservation.adults}A{reservation.children > 0 ? ` ${reservation.children}C` : ""}{reservation.infants > 0 ? ` ${reservation.infants}I` : ""}
+          </p>
+        </div>
+        {hasFolios ? (
+          <button type="button" className="bg-card px-3 py-2 text-left active:bg-muted" onClick={() => setIsFolioOpen(true)}>
+            <p className="text-[11px] text-muted-foreground">Balance · open folio</p>
+            <p className={`font-mono font-bold ${Math.abs(totals.balance) < 0.005 ? "text-success" : "text-foreground"}`}>
+              {money(totals.balance)}
+            </p>
+          </button>
+        ) : (
+          <div className="bg-card px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">Balance</p>
+            <p className="text-muted-foreground">No folio yet</p>
+          </div>
+        )}
+      </div>
+
       {/* 1. Guest — the first thing shown */}
       <Card className="shadow-elevation-1">
         <CardHeader className="pb-3">
@@ -570,6 +690,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 {regLabel(guest?.upid)}
               </span>
             )}
+            {/* Phone: tap to call / email the guest. */}
+            <div className="ml-auto md:hidden">
+              <GuestContactMenu upid={guest?.upid} />
+            </div>
           </div>
 
           {/* Accompanying guests — smaller */}
@@ -710,32 +834,28 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardHeader>
           <CardContent className="p-0">
             {/* Mobile: stacked cards — a 5-column table is unreadable at phone width. */}
-            <div className="md:hidden divide-y divide-border">
+            <MobileCardList className="px-4 pb-4">
               {(reservation.assignments ?? []).map((a: any) => (
-                <div key={a.id} className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">
-                      {format(new Date(a.startDate), "dd-MMM")} – {format(new Date(a.endDate), "dd-MMM-yy")}
-                    </span>
-                    {a.room ? (
+                <MobileCard
+                  key={a.id}
+                  title={`${format(new Date(a.startDate), "dd-MMM")} – ${format(new Date(a.endDate), "dd-MMM-yy")}`}
+                  badge={
+                    a.room ? (
                       <Badge variant="outline">{a.room.roomNumber}</Badge>
                     ) : (
                       <span className="text-warning text-xs font-medium">Unassigned</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                    <span>{a.roomType?.name}</span>
-                    <span className="text-right">{a.ratePlan?.code} — {a.ratePlan?.name}</span>
-                  </div>
-                  {a.overrideRate != null && (
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
-                      <span className="text-muted-foreground">Override Rate</span>
-                      <span className="font-mono">{money(a.overrideRate)}</span>
-                    </div>
-                  )}
-                </div>
+                    )
+                  }
+                  meta={[
+                    { label: "Room Type", value: a.roomType?.name ?? "—" },
+                    ...(a.overrideRate != null
+                      ? [{ label: "Override Rate", value: <span className="font-mono">{money(a.overrideRate)}</span> }]
+                      : []),
+                    { label: "Rate Plan", value: `${a.ratePlan?.code ?? ""} — ${a.ratePlan?.name ?? ""}`, wide: true },
+                  ]}
+                />
               ))}
-            </div>
+            </MobileCardList>
 
             {/* Tablet/desktop: real table. */}
             <div className="hidden md:block">
@@ -775,6 +895,27 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardContent>
         </Card>
 
+        {/* Phone: transport, eRegistration, deposits and traces are secondary — collapsed
+            behind one toggle (Billing is moved above it with `order`). The wrappers are
+            `md:contents`, so on desktop the cards stay direct grid items exactly as before. */}
+        <Button
+          variant="outline"
+          className="w-full justify-between max-md:order-2 md:hidden"
+          aria-expanded={showMoreSections}
+          onClick={() => setShowMoreSections((s) => !s)}
+        >
+          <span className="flex items-center gap-2">
+            <span>{`${showMoreSections ? "Hide" : "Show"} transport, eReg, deposits & traces`}</span>
+            {openTraces.length > 0 && (
+              <Badge variant="outline" className="bg-destructive-muted text-destructive border-destructive/30 text-[10px]">
+                {openTraces.length}
+              </Badge>
+            )}
+          </span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${showMoreSections ? "rotate-180" : ""}`} />
+        </Button>
+
+        <div className={`max-md:order-2 max-md:space-y-6 md:contents ${showMoreSections ? "" : "max-md:hidden"}`}>
         {/* 3. Transport */}
         <ReservationTransport
           reservationId={id}
@@ -790,9 +931,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         />
 
         <ERegistrationPanel reservationId={id} />
+        </div>
 
         {/* 4. Billing */}
-        <Card className="shadow-elevation-1">
+        <Card className="shadow-elevation-1 max-md:order-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <ReceiptText className="w-5 h-5 text-muted-foreground" /> Billing
@@ -840,7 +982,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </Card>
 
         {/* Deposits & Fees + Traces */}
-        <div className="space-y-6">
+        <div className={`space-y-6 max-md:order-2 ${showMoreSections ? "" : "max-md:hidden"}`}>
           {/* Deposits & Fees at a glance */}
           <Card className="shadow-elevation-1">
             <CardHeader className="pb-3 flex-row items-center justify-between">
@@ -982,7 +1124,29 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           ) : (breakdown.days?.length ?? 0) === 0 ? (
             <p className="py-8 text-center text-muted-foreground">No priced nights on this reservation.</p>
           ) : (
-            <div className="max-h-[60vh] overflow-auto -mx-6">
+            <>
+            {/* Phone: one compact row per night instead of the 10-column table. */}
+            <div className="divide-y divide-border rounded-lg border border-border md:hidden">
+              {breakdown.days.map((d: any) => (
+                <div key={d.date} className="px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {format(new Date(d.date + "T00:00:00"), "EEE dd-MMM")}
+                      <span className="font-normal text-muted-foreground">
+                        {" "}· {d.roomNumber ?? d.roomTypeName ?? "—"} · {d.adults}A{d.children > 0 ? ` ${d.children}C` : ""}
+                      </span>
+                    </span>
+                    <span className="font-mono font-semibold">{money(d.total)}</span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Rate {money(d.rate)} · Room {money(d.roomCharge)}
+                    {d.allocationCharge > 0 ? ` · Alloc ${money(d.allocationCharge)}` : ""}
+                    {d.otherCharge > 0 ? ` · Other ${money(d.otherCharge)}` : ""} · Tax {money(d.taxes)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="max-h-[60vh] overflow-auto -mx-6 max-md:hidden">
               <Table>
                 <TableHeader className="sticky top-0 bg-card">
                   <TableRow>
@@ -1018,6 +1182,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
           {breakdown?.totals && !showSummary && (
             <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 border-t border-border pt-3 text-sm">
@@ -1145,6 +1310,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             <Label htmlFor="advance-bill-nights">Nights to bill</Label>
             <Input
               id="advance-bill-nights"
+              {...INPUT_INTEGER}
               type="number"
               min={1}
               placeholder="Leave blank to bill all remaining nights"

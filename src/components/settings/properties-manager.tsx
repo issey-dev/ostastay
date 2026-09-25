@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { Plus, Pencil, Trash2, Building2, RotateCcw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { MobileActions } from "@/components/ui/mobile"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -171,14 +173,9 @@ export function PropertiesManager({ title, description, addons }: { title: strin
 
       <div className="-mx-6 -mb-6 border-t border-border">
           {/* Phone — card stack. Table below takes over at md. */}
-          <div className="md:hidden">
-            {loading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-28 w-full rounded-lg" />
-                ))}
-              </div>
-            ) : properties.length === 0 ? (
+          <MobileCardList
+            className="p-4"
+            empty={
               <EmptyState
                 icon={Building2}
                 title="No Properties Yet"
@@ -189,71 +186,62 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                   </Button>
                 }
               />
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedProperties.map((property) => (
-                  <div key={property.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">{property.code}</p>
-                        <p className="font-semibold text-foreground truncate">{property.name}</p>
-                        <p className="text-xs text-muted-foreground">{property.defaultCurrency} · {property.timeZone}</p>
-                      </div>
-                      <div className="shrink-0 flex flex-col items-end gap-1">
-                        <StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />
-                        {property.status === "PENDING" && (
-                          <span className="text-xs text-muted-foreground">Awaiting approval</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {property.status === "REJECTED" && property.rejectionReason && (
+            }
+          >
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)
+              : sortedProperties.map((property) => (
+                  <MobileCard
+                    key={property.id}
+                    title={property.name}
+                    subtitle={<>{property.code} · {property.defaultCurrency} · {property.timeZone}</>}
+                    badge={<StatusBadge label={property.status} status={property.status} dot className="shadow-sm w-max" />}
+                    meta={[
+                      { label: "Check-in", value: property.checkInTime },
+                      { label: "Check-out", value: property.checkOutTime },
+                      ...(property.status === "PENDING" ? [{ label: "Status", value: "Awaiting approval", wide: true }] : []),
+                    ]}
+                    tone={property.status === "REJECTED" ? "danger" : undefined}
+                    onClick={() => {
+                      setSelectedProperty(property)
+                      setIsDialogOpen(true)
+                    }}
+                    actions={
+                      // Edit is the action; Resubmit and Delete sit behind More (Delete last, red).
+                      <MobileActions
+                        className="w-full"
+                        primary={
+                          <Button
+                            variant="outline"
+                            className="min-h-11"
+                            onClick={() => {
+                              setSelectedProperty(property)
+                              setIsDialogOpen(true)
+                            }}
+                          >
+                            <Pencil className="mr-1.5 h-4 w-4" /> Edit
+                          </Button>
+                        }
+                        more={[
+                          ...(property.status === "REJECTED"
+                            ? [{
+                                label: resubmitting === property.id ? "Resubmitting..." : "Resubmit for approval",
+                                icon: RotateCcw,
+                                disabled: resubmitting === property.id,
+                                onSelect: () => handleResubmit(property.id),
+                              }]
+                            : []),
+                          { label: "Delete property", icon: Trash2, destructive: true, onSelect: () => setPropertyToDelete(property) },
+                        ]}
+                      />
+                    }
+                  >
+                    {property.status === "REJECTED" && property.rejectionReason ? (
                       <p className="text-xs text-destructive">{property.rejectionReason}</p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>Check-in <span className="font-medium text-foreground">{property.checkInTime}</span></span>
-                      <span>Check-out <span className="font-medium text-foreground">{property.checkOutTime}</span></span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {property.status === "REJECTED" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-9 flex-1 text-info"
-                          disabled={resubmitting === property.id}
-                          onClick={() => handleResubmit(property.id)}
-                        >
-                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                          {resubmitting === property.id ? "Resubmitting..." : "Resubmit"}
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 flex-1"
-                        onClick={() => {
-                          setSelectedProperty(property)
-                          setIsDialogOpen(true)
-                        }}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 flex-1 text-destructive"
-                        onClick={() => setPropertyToDelete(property)}
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-                      </Button>
-                    </div>
-                  </div>
+                    ) : null}
+                  </MobileCard>
                 ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

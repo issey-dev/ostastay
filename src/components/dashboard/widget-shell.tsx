@@ -73,6 +73,9 @@ export function WidgetShell({
         className={cn(
           "absolute -top-1.5 -right-1.5 z-10 grid h-7 w-7 cursor-grab place-items-center rounded-full bg-card text-muted-foreground shadow-elevation-2 ring-1 ring-foreground/10 transition-opacity active:cursor-grabbing",
           "opacity-0 group-hover/widget:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          // Touch screens can't drag it (HTML5 drag-and-drop is mouse-only) — reordering
+          // lives in Customise dashboard there.
+          "pointer-coarse:hidden",
           dragging && "opacity-100"
         )}
         onDragStart={(e) => {

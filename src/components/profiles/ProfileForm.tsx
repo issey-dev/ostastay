@@ -29,6 +29,8 @@ import { PreferencesEditor } from "@/components/profiles/preferences-editor"
 import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-manager"
 import { InfoHint } from "@/components/ui/info-hint"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
+import { MobileActionBar } from "@/components/ui/mobile"
+import { INPUT_EMAIL, INPUT_MONEY, INPUT_PHONE } from "@/lib/input-presets"
 
 const profileFormSchema = z.object({
   profileType: z.string(),
@@ -233,13 +235,13 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-7xl w-full mx-auto pb-12 p-4">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
           <div className="flex items-start gap-4">
             <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back" className="shrink-0">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold tracking-tight">
+              <h2 className="text-2xl font-bold tracking-tight max-sm:text-xl">
                 {isDebtorContext ? "New Credit Account" : isEditMode ? "Edit Profile" : "New Profile"}
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -249,7 +251,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 max-md:hidden">
             <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => router.back()}>Cancel</Button>
             <Button type="submit" className="flex-1 sm:flex-none" disabled={submitting || !form.formState.isValid}>
               <Save className="mr-2 h-4 w-4" /> {submitting ? "Saving..." : "Save Profile"}
@@ -390,7 +392,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="email@example.com" {...field} value={field.value || ""} />
+                            <Input {...INPUT_EMAIL} placeholder="email@example.com" {...field} value={field.value || ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -403,7 +405,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Mobile / Phone</FormLabel>
                           <FormControl>
-                            <Input placeholder="+1 234 567 8900" {...field} value={field.value || ""} />
+                            <Input {...INPUT_PHONE} placeholder="+1 234 567 8900" {...field} value={field.value || ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -781,7 +783,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                     <FormItem>
                       <FormLabel>Credit Limit</FormLabel>
                       <FormControl>
-                        <Input type="number" step="100" placeholder="e.g. 5000" {...field} value={field.value || ""} />
+                        <Input {...INPUT_MONEY} type="number" step="100" placeholder="e.g. 5000" {...field} value={field.value || ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -916,6 +918,14 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
           </div>
 
         </div>
+
+        {/* Phones: Save stays in reach however far down the form the user is. */}
+        <MobileActionBar>
+          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+          <Button type="submit" className="flex-1" disabled={submitting || !form.formState.isValid}>
+            <Save className="mr-2 h-4 w-4" /> {submitting ? "Saving..." : "Save Profile"}
+          </Button>
+        </MobileActionBar>
       </form>
     </Form>
   )

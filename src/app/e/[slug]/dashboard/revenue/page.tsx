@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -26,6 +27,7 @@ import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import {
   emptyRatePlanForm,
   ratePlanFormSchema,
@@ -103,6 +105,14 @@ export default function RevenueDashboard() {
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
+
+  // Desktop opens on Rate Plans, as it always has. A phone opens on Manager Flash — the
+  // one tab that is read on the go — chosen after mount, so the server render (and every
+  // desktop) keeps the Rate Plans default.
+  const [tab, setTab] = useState("rate-plans")
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setTab("flash-report")
+  }, [])
 
   const fetchRatePlans = () => {
     if (!propertyId) return
@@ -235,7 +245,7 @@ export default function RevenueDashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="rate-plans" className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full">
         {/* 2x2 on a phone, one row from md up — four triggers at whitespace-nowrap width
             overflow a 375px screen if forced into a single row (see the same fix on
             front-office's operations tabs). */}
@@ -261,7 +271,7 @@ export default function RevenueDashboard() {
               if (!open) resetForm()
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
+                <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm max-md:hidden">
                   <Plus className="mr-2 h-4 w-4" /> New Rate Plan
                 </Button>
               </DialogTrigger>
@@ -596,6 +606,11 @@ export default function RevenueDashboard() {
             </Form>
           </DialogContent>
         </Dialog>
+        <DesktopOnlyNotice
+          className="w-full"
+          feature="Rate plan editing"
+          description="The list below is read-only on a phone. Open this page on a computer to create, edit or delete rate plans."
+        />
       </div>
 
       <Card>
@@ -659,38 +674,31 @@ export default function RevenueDashboard() {
             return (
               <>
                 {/* Mobile: card-per-row — a 5-column table is unreadable under ~500px. */}
-                <div className="space-y-3 p-4 md:hidden">
+                <MobileCardList className="p-4">
                   {ratePlans.map((plan) => (
-                    <div key={plan.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 font-mono font-bold text-info">
-                            {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
-                            {plan.code}
-                          </div>
-                          <div className="truncate font-medium text-foreground">{plan.name}</div>
-                        </div>
-                        <span className="shrink-0 font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
-                      </div>
-                      {typeBadges(plan)}
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="flex-1">
-                          <Button variant="outline" size="sm" className="h-9 w-full">
-                            <CalendarDays className="mr-2 h-3.5 w-3.5" /> Calendar
+                    <MobileCard
+                      key={plan.id}
+                      title={plan.name}
+                      subtitle={
+                        <span className="inline-flex items-center gap-1.5 font-mono font-bold text-info">
+                          {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {plan.code}
+                        </span>
+                      }
+                      badge={<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">Priority {plan.priority}</span>}
+                      actions={
+                        // Phones: read-only — editing is desktop-only (see the notice above).
+                        <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="block w-full">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <CalendarDays className="mr-2 h-3.5 w-3.5" /> Price calendar
                           </Button>
                         </Link>
-                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => handleEdit(plan)}>
-                          <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
-                        </Button>
-                        {!plan.isLocked && (
-                          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                      }
+                    >
+                      {typeBadges(plan)}
+                    </MobileCard>
                   ))}
-                </div>
+                </MobileCardList>
 
                 {/* Tablet/desktop: real table. */}
                 <div className="hidden md:block overflow-x-auto">

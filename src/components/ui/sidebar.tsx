@@ -5,6 +5,7 @@ import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import { usePathname } from "next/navigation"
 import { useIsMobile, useDeviceTier } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -69,6 +70,15 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const deviceTier = useDeviceTier()
   const [openMobile, setOpenMobile] = React.useState(false)
+  // The phone menu is a sheet over the page; tapping a link in it navigates without
+  // remounting the shell, so close it when the route changes (render-time state adjustment,
+  // not an effect, so there is no frame where the old sheet shows over the new page).
+  const pathname = usePathname()
+  const [menuPath, setMenuPath] = React.useState(pathname)
+  if (menuPath !== pathname) {
+    setMenuPath(pathname)
+    if (openMobile) setOpenMobile(false)
+  }
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.

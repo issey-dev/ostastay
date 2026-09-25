@@ -12,6 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { ReportDocument } from "@/components/reports/report-document"
 import type { ReportPreview } from "@/lib/reports/types"
 
@@ -315,8 +316,14 @@ export default function ReportsPage() {
               </div>
             )}
 
+            {/* Phones: the preview is an A4 page — download instead. */}
+            <DesktopOnlyNotice
+              feature="Preview"
+              description="Download the PDF, Excel or CSV below to read this report on your phone."
+            />
+
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-              <Button onClick={runPreview} disabled={!!busy}>
+              <Button onClick={runPreview} disabled={!!busy} className="max-md:hidden">
                 {busy === "preview" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />} Preview
               </Button>
               <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
@@ -336,7 +343,7 @@ export default function ReportsPage() {
       </section>
 
       {preview && selected && (
-        <section id="report-preview" aria-label="Report preview" className="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card">
+        <section id="report-preview" aria-label="Report preview" className="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card max-md:hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <div className="mr-auto min-w-0">
               <h3 className="truncate text-sm font-semibold">Preview · {preview.result.title}</h3>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useBusinessToday } from "@/hooks/use-business-today";
 import { toDateKey } from "@/lib/date-only"
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -45,6 +46,15 @@ export function TapeChartGrid() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [startDate, setStartDate] = useState(startOfDay(new Date()));
+  // Start at the property's business date, not the device's: before the night audit runs
+  // (or on a property whose date isn't the calendar's) the device date showed the wrong
+  // window. Seeded once per property when it loads — render-time, not an effect.
+  const business = useBusinessToday();
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (business.ready && seededFor !== business.propertyId) {
+    setSeededFor(business.propertyId);
+    setStartDate(business.today);
+  }
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [draggedAssignmentId, setDraggedAssignmentId] = useState<string | null>(null);
@@ -291,6 +301,8 @@ export function TapeChartGrid() {
           isLoading={isLoading}
           onSelectReservation={setSelectedReservation}
           onNavigate={(direction) => setStartDate(d => addDays(d, direction * 7))}
+          today={business.ready ? business.today : undefined}
+          onJumpTo={(d) => setStartDate(startOfDay(d))}
         />
         {detailsModal}
       </>
@@ -342,7 +354,7 @@ export function TapeChartGrid() {
           {columns.map(date => (
             <div key={date.toISOString()} className="border-r border-border p-1 text-center">
               <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{format(date, "EEE")}</div>
-              <div className={`text-base font-bold ${isEqual(date, startOfDay(new Date())) ? 'text-primary' : 'text-foreground'}`}>
+              <div className={`text-base font-bold ${isEqual(date, business.today) ? 'text-primary' : 'text-foreground'}`}>
                 {format(date, "d")}
               </div>
               <div className="text-[10px] text-muted-foreground/70 font-medium">{format(date, "MMM")}</div>

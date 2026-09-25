@@ -363,6 +363,45 @@ export async function isSlotFeasible(params: {
 // will re-validate at save time (never trust a cached slot list, same rule as
 // Excursions). `requirements.length` IS the party size; a mismatch with the `partySize`
 // query param is rejected by the caller before this runs.
+/**
+ * The day's bookable window: the spa's opening hours, WIDENED by any "Extended hours"
+ * exception on that date for a therapist qualified for this treatment. Without this an
+ * extension past closing (or before opening) could never produce a slot, because the loops
+ * below only walked opening → closing. Whether a start time in the widened part is really
+ * free is still decided per slot by getAvailableTherapists (only a therapist whose extension
+ * covers the whole blocked window is available there) and the room checks.
+ */
+async function bookableWindow(params: {
+  propertyId: string;
+  treatmentId: string;
+  date: Date;
+  openingTime: string;
+  closingTime: string;
+}): Promise<{ openingTime: string; closingTime: string }> {
+  const { propertyId, treatmentId, date } = params;
+  let { openingTime, closingTime } = params;
+  const extensions = await prisma.spaTherapistAvailabilityException.findMany({
+    where: {
+      date: dayStart(date),
+      exceptionType: "EXTENDED_HOURS",
+      startTime: { not: null },
+      therapist: {
+        propertyId,
+        isActive: true,
+        bookable: true,
+        skills: { some: { treatmentId, qualified: true } },
+      },
+    },
+    select: { startTime: true, endTime: true },
+  });
+  for (const e of extensions) {
+    if (e.startTime && e.startTime < openingTime) openingTime = e.startTime;
+    const end = e.endTime ?? "23:59";
+    if (end > closingTime) closingTime = end;
+  }
+  return { openingTime, closingTime };
+}
+
 export async function computeSlotsForDay(params: {
   propertyId: string;
   treatmentId: string;
@@ -373,8 +412,13 @@ export async function computeSlotsForDay(params: {
   requirements?: TherapistRequirement[];
 }): Promise<{ startTime: string; available: boolean }[]> {
   const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
-  const openingTime = settings?.defaultOpeningTime ?? "09:00";
-  const closingTime = settings?.defaultClosingTime ?? "18:00";
+  const { openingTime, closingTime } = await bookableWindow({
+    propertyId,
+    treatmentId,
+    date,
+    openingTime: settings?.defaultOpeningTime ?? "09:00",
+    closingTime: settings?.defaultClosingTime ?? "18:00",
+  });
   const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
 
   const slots: { startTime: string; available: boolean }[] = [];
@@ -417,8 +461,13 @@ export async function isDayFeasible(params: {
   requirements?: TherapistRequirement[];
 }): Promise<boolean> {
   const { propertyId, treatmentId, date, treatment, settings, partySize, requirements } = params;
-  const openingTime = settings?.defaultOpeningTime ?? "09:00";
-  const closingTime = settings?.defaultClosingTime ?? "18:00";
+  const { openingTime, closingTime } = await bookableWindow({
+    propertyId,
+    treatmentId,
+    date,
+    openingTime: settings?.defaultOpeningTime ?? "09:00",
+    closingTime: settings?.defaultClosingTime ?? "18:00",
+  });
   const slotIntervalMinutes = settings?.slotIntervalMinutes ?? 15;
 
   let cursor = openingTime;

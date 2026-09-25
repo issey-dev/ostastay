@@ -80,7 +80,7 @@ export function PropertyApprovalQueue() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Select value={filter} onValueChange={(v) => setFilter(v ?? "PENDING")}>
-          <SelectTrigger className="w-40"><SelectValue>{FILTERS.find((f) => f.value === filter)?.label}</SelectValue></SelectTrigger>
+          <SelectTrigger className="w-40 max-sm:w-full"><SelectValue>{FILTERS.find((f) => f.value === filter)?.label}</SelectValue></SelectTrigger>
           <SelectContent>
             {FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
           </SelectContent>
@@ -98,8 +98,8 @@ export function PropertyApprovalQueue() {
           {properties.map((p) => (
             <Card key={p.id}>
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div className="flex items-start justify-between gap-4 max-sm:flex-col max-sm:gap-2">
+                  <div className="max-sm:min-w-0">
                     <CardTitle className="text-base">{p.name} <span className="text-muted-foreground font-mono text-sm">({p.code})</span></CardTitle>
                     <CardDescription>
                       {p.enterprise.name} · submitted {new Date(p.createdAt).toLocaleDateString()}
@@ -108,7 +108,7 @@ export function PropertyApprovalQueue() {
                   </div>
                   <div className="flex items-center gap-3">
                     <StatusBadge label={p.status} status={p.status} dot />
-                    <Link href={`/osta/properties/${p.id}`} className="text-sm text-muted-foreground hover:underline">
+                    <Link href={`/osta/properties/${p.id}`} className="text-sm text-muted-foreground hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-1">
                       Manage
                     </Link>
                   </div>
@@ -128,7 +128,7 @@ export function PropertyApprovalQueue() {
                         value={rejectionReason}
                         onChange={(e) => setRejectionReason(e.target.value)}
                       />
-                      <div className="flex gap-2 justify-end">
+                      <div className="flex gap-2 justify-end max-sm:[&>*]:flex-1">
                         <Button variant="ghost" size="sm" onClick={() => { setRejectingId(null); setRejectionReason("") }}>Cancel</Button>
                         <Button variant="destructive" size="sm" disabled={busyId === p.id || !rejectionReason.trim()} onClick={() => reject(p.id)}>
                           {busyId === p.id ? "Rejecting..." : "Confirm Reject"}
@@ -136,7 +136,7 @@ export function PropertyApprovalQueue() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex gap-2 justify-end max-sm:[&>*]:flex-1">
                       <Button variant="outline" size="sm" onClick={() => setRejectingId(p.id)}>
                         <X className="h-4 w-4 mr-1.5" /> Reject
                       </Button>

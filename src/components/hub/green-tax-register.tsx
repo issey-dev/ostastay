@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
 import { CheckCircle, Lock } from "@/components/icons"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 
 type Overview = {
   year: number
@@ -183,7 +184,19 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
               {openExceptions.length === 0 && openGaps.length === 0 ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle className="h-4 w-4 text-success" /> Nothing to correct.</p>
               ) : (
-                <Table>
+                <>
+                <div className="space-y-3 md:hidden">
+                  <p className="text-sm">
+                    <span className="font-medium">{openExceptions.length + openGaps.length}</span>{" "}
+                    Reg No{openExceptions.length + openGaps.length === 1 ? "" : "s"} to correct
+                    {openGaps.length > 0 && ` (${openGaps.length} gap${openGaps.length === 1 ? "" : "s"})`}.
+                  </p>
+                  <DesktopOnlyNotice
+                    feature="Correcting Reg Nos"
+                    description="Removing a Reg No renumbers the rest of the year — review and correct them on a tablet or computer."
+                  />
+                </div>
+                <Table className="max-md:hidden">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-20">Reg No</TableHead>
@@ -227,6 +240,7 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
               {(lockedExceptions.length > 0 || data.gaps.some((g) => g.locked)) && (
                 <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
@@ -252,7 +266,32 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
+              <ul className="divide-y divide-border md:hidden">
+                {data.months.map((m) => (
+                  <li key={m.month} className="space-y-2 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-medium">{MONTHS[m.month - 1]}</span>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        {m.guests || "No"} guest{m.guests === 1 ? "" : "s"}
+                        {m.firstNo ? ` · Nos ${m.firstNo}–${m.lastNo}` : ""}
+                      </span>
+                    </div>
+                    {m.filedAt ? (
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm">
+                        <Lock className="h-3.5 w-3.5" /> Filed {fmtStamp(m.filedAt)}
+                        {m.filedById && data.userNames[m.filedById] && <span className="text-muted-foreground">by {data.userNames[m.filedById]}</span>}
+                      </p>
+                    ) : canManage && m.guests > 0 ? (
+                      <Button variant="outline" className="min-h-11 w-full" onClick={() => open({ kind: "file", month: m.month })}>
+                        Mark {MONTHS[m.month - 1]} as filed
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Open</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <Table className="max-md:hidden">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Month</TableHead>
@@ -298,7 +337,19 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
               {data.corrections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No corrections in {year}.</p>
               ) : (
-                <Table>
+                <>
+                <ul className="divide-y divide-border md:hidden">
+                  {data.corrections.map((c) => (
+                    <li key={c.id} className="space-y-0.5 py-3 text-sm">
+                      <p className="font-medium">
+                        {c.action === "REMOVE" ? `Removed Reg No ${c.registrationNo} — ${c.guestName ?? "guest"}` : `Closed gap at Reg No ${c.registrationNo}`}
+                      </p>
+                      <p className="text-muted-foreground">{c.reason}</p>
+                      <p className="text-xs text-muted-foreground">{fmtStamp(c.createdAt)} · {data.userNames[c.userId] ?? "—"}</p>
+                    </li>
+                  ))}
+                </ul>
+                <Table className="max-md:hidden">
                   <TableHeader>
                     <TableRow>
                       <TableHead>When</TableHead>
@@ -321,6 +372,7 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>

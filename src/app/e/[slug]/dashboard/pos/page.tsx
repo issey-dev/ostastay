@@ -17,9 +17,15 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
 import { InfoHint } from "@/components/ui/info-hint"
+import { MobileActionBar } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { INPUT_MONEY } from "@/lib/input-presets"
 
 export default function POSDashboard() {
   const { currentProperty } = useProperty()
+  // Text-only switch: the full search placeholder is cut off on a phone.
+  const isMobile = useIsMobile()
   const [pageTab, setPageTab] = useState<"charges" | "history">("charges")
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
@@ -234,6 +240,26 @@ export default function POSDashboard() {
     </>
   )
 
+  // Phones (the Recent Postings bottom sheet): the same list in the shared MobileCard look.
+  const recentPostingsPhone = (
+    <MobileCardList empty={<EmptyState icon={Coffee} title="No charges posted from this terminal yet today" className="py-10" />}>
+      {recentPostings.map((item, i) => (
+        <MobileCard
+          key={i}
+          title={`Room ${item.roomNumber}`}
+          subtitle={item.chargeCode?.description || "Charge"}
+          badge={<span className="font-bold text-success tabular-nums">${parseFloat(item.amount).toFixed(2)}</span>}
+          meta={[
+            { label: "Time", value: new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+            ...(item.outletCheck?.checkNumber
+              ? [{ label: "Check #", value: <span className="font-mono text-primary">{item.outletCheck.checkNumber}</span> }]
+              : []),
+          ]}
+        />
+      ))}
+    </MobileCardList>
+  )
+
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <div>
@@ -283,10 +309,10 @@ export default function POSDashboard() {
               {mode === "guest" ? "Find Guest" : "Walk-in Guest"}
             </h2>
             <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-              <button type="button" className={`px-3 py-1.5 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`} onClick={() => { setMode("guest"); setSelectedGuest(null); setWalkInFolioId(null) }}>
+              <button type="button" className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`} onClick={() => { setMode("guest"); setSelectedGuest(null); setWalkInFolioId(null) }}>
                 Guest
               </button>
-              <button type="button" className={`px-3 py-1.5 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`} onClick={() => { setMode("walkin"); setSelectedGuest(null) }}>
+              <button type="button" className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`} onClick={() => { setMode("walkin"); setSelectedGuest(null) }}>
                 Walk-in
               </button>
             </div>
@@ -296,7 +322,8 @@ export default function POSDashboard() {
             <>
               <form onSubmit={handleSearch} className="flex gap-3">
                 <Input
-                  placeholder="Search by Room Number or Last Name..."
+                  placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                  enterKeyHint="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="flex-1"
@@ -359,6 +386,12 @@ export default function POSDashboard() {
           )}
         </div>
 
+        {!selectedGuest && (
+          <p className="md:hidden -mt-3 text-sm text-muted-foreground">
+            {mode === "walkin" ? "Start a walk-in bill above to post charges." : "Find and tap a guest above to post a charge."}
+          </p>
+        )}
+
         {/* 2. Post Charge */}
         <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!selectedGuest ? 'opacity-50 pointer-events-none border-border' : 'border-border shadow-md ring-1 ring-border'}`}>
           <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -366,7 +399,7 @@ export default function POSDashboard() {
             {mode === "walkin" ? "Post Charge to Walk-in Bill" : `Route Charge to Room ${selectedGuest ? selectedGuest.roomNumber : ""}`}
           </h2>
 
-          <form onSubmit={handlePostCharge} className="space-y-5">
+          <form id="pos-charge-form" onSubmit={handlePostCharge} className="space-y-5">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Charge Code{selectedOutletId ? "" : " (Outlet)"}</Label>
@@ -380,6 +413,7 @@ export default function POSDashboard() {
               <div className="space-y-2">
                 <Label>Amount ($)</Label>
                 <Input
+                  {...INPUT_MONEY}
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -416,7 +450,7 @@ export default function POSDashboard() {
               </div>
             )}
 
-            <Button type="submit" className="w-full h-12 text-lg" disabled={posting || !form.amount || !form.chargeCodeId}>
+            <Button type="submit" className="w-full h-12 text-lg max-md:hidden" disabled={posting || !form.amount || !form.chargeCodeId}>
               <Send className="w-5 h-5 mr-2" />
               {posting ? "Posting..." : "Post to Folio"}
             </Button>
@@ -435,17 +469,38 @@ export default function POSDashboard() {
         </div>
       </div>
 
-      {/* Mobile: Recent Postings collapses into a bottom sheet instead of stacking
-          below the primary search/post workflow — keeps the main task above the fold. */}
+      {/* Mobile: the Post button is pinned at the bottom with the Recent Postings trigger
+          beside it (a bottom sheet) — the post never scrolls away, nothing covers the form. */}
       <Sheet>
-        <SheetTrigger
-          render={
-            <Button className="md:hidden fixed bottom-4 left-4 right-4 z-[var(--z-sticky)] h-12 shadow-elevation-3" variant="outline">
-              <ReceiptText className="w-4 h-4 mr-2" />
-              Recent Postings {recentPostings.length > 0 && `(${recentPostings.length})`}
-            </Button>
-          }
-        />
+        <MobileActionBar>
+          <SheetTrigger
+            render={
+              <Button variant="outline" size="icon-lg" className="relative shrink-0" aria-label={`Recent postings${recentPostings.length > 0 ? ` (${recentPostings.length})` : ""}`}>
+                <ReceiptText className="w-4 h-4" />
+                {recentPostings.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-4 rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-primary-foreground">
+                    {recentPostings.length}
+                  </span>
+                )}
+              </Button>
+            }
+          />
+          <Button
+            type="submit"
+            form="pos-charge-form"
+            className="h-11 flex-1 min-w-0 text-base"
+            disabled={posting || !selectedGuest || !form.amount || !form.chargeCodeId}
+          >
+            <Send className="w-4 h-4 mr-2 shrink-0" />
+            <span className="truncate">
+              {posting
+                ? "Posting..."
+                : !selectedGuest
+                  ? "Post"
+                  : `Post${form.amount && Number(form.amount) > 0 ? ` $${Number(form.amount).toFixed(2)}` : ""} ${mode === "walkin" ? "to bill" : `to Room ${selectedGuest.roomNumber}`}`}
+            </span>
+          </Button>
+        </MobileActionBar>
         <SheetContent side="bottom" className="max-h-[75vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -453,7 +508,7 @@ export default function POSDashboard() {
               Recent Postings
             </SheetTitle>
           </SheetHeader>
-          <div className="px-4 pb-4">{recentPostingsBody}</div>
+          <div className="px-4 pb-4">{recentPostingsPhone}</div>
         </SheetContent>
       </Sheet>
     </div>

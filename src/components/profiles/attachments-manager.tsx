@@ -91,7 +91,7 @@ export function AttachmentsManager({ upid }: { upid: string }) {
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input placeholder="Label (e.g. Passport scan)" value={label} onChange={(e) => setLabel(e.target.value)} className="w-full sm:w-48" />
-        <Input placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
+        <Input inputMode="url" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
         <Button type="button" variant="outline" onClick={handleAdd} disabled={saving} className="sm:shrink-0">
           <Plus className="h-4 w-4" />
         </Button>

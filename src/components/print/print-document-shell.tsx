@@ -1,6 +1,6 @@
 "use client"
 
-import { Printer } from "@/components/icons"
+import { Monitor, Printer } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
 // Shared chrome for every printable document (Invoice, Receipt, Confirmation Letter,
@@ -44,6 +44,19 @@ export function PrintDocumentShell({
   const maxW = isLandscape ? "max-w-[1150px]" : "max-w-[800px]"
   return (
     <div className={`bg-white min-h-screen text-[var(--print-ink)] p-4 sm:p-12 print:p-0 ${fontClassName}`}>
+      {/* Phones only (never printed): an A4 document is for a printer — say so, and point
+          at the Email action when this document has one. */}
+      <div className="mb-4 flex items-start gap-3 rounded-xl border border-dashed border-border bg-muted/40 p-3 text-sm text-foreground md:hidden print:hidden">
+        <Monitor className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+        <div>
+          <p className="font-medium">Print from a computer</p>
+          <p className="mt-0.5 text-muted-foreground">
+            {extraActions
+              ? "This page is laid out for A4 paper. To get it to the guest from your phone, use Email."
+              : "This page is laid out for A4 paper. Open it on a computer to print it."}
+          </p>
+        </div>
+      </div>
       <div className={`print:hidden ${maxW} mx-auto mb-6 flex justify-end items-center gap-2 sticky top-0 z-[var(--z-sticky)]`}>
         <span className="sr-only">{previewLabel}</span>
         {extraActions}

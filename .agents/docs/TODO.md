@@ -2,6 +2,22 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Mobile polish (2026-09-25) — ALL PHASES DONE
+
+See [MOBILE_PLAN.md](MOBILE_PLAN.md) §7 (what shipped, follow-ups under "Left open"). Verify changes with `npm run mobile:audit`. Found by the audit, affect desktop too (fixed in Phase 1):
+- [x] Tape chart and availability grid start at the device date, not the business date
+  (`tape-chart-grid.tsx:47`, `availability-grid.tsx:53/226`).
+- [x] Activity Log module filter shows the raw `__all__` value (`activity-log/page.tsx:99`).
+- [x] Permission-matrix page auto-prints ~800ms after load.
+- [x] `DateRangePicker` hard-codes `id="date"` (duplicate ids).
+- [x] Group pickup dialog is Zod + RHF (APP STANDARD 001).
+- [x] `tests/business-rules/group-block-edit.test.ts` hard-coded a group cutoff of 2026-09-25 and
+  started failing on that day (pickups refuse a past-cutoff block) — now a year from today.
+  [x] Swept the suite (clock shifted to 2031 and to a year boundary): debtors and
+  inspection-ooo-paidout booked fixed dates on a property whose business date falls back to
+  today — now relative (`tests/helpers/dates.ts`). Flaky excursion departure times fixed; webhook
+  first attempt fixed (nextAttemptAt from the app clock).
+
 ## Configuration guide + docs portal split (2026-09-24) — DONE, follow-ups open
 
 Done: `/docs` split into `/docs/api` · `/docs/configuration` · `/docs/operations` (old
@@ -36,7 +52,8 @@ Open:
     night audit and the quote carve out EVERY include-in-rate allocation (meal plan, manual).
     Decide, and how a meal-plan include-in-rate allocation should post in Meal Plan mode.
 - Still open:
-  - Spa extended hours can't go past the spa's closing time (slots stay within opening hours).
+  - ~~Spa extended hours can't go past the spa's closing time~~ — FIXED (8.2.0): the day's slot
+    window widens by that day's EXTENDED_HOURS exceptions (`bookableWindow` in `spa-availability.ts`).
   - Housekeeping status changes don't clear `Room.statusBeforeTypeDeactivation`.
   - Renaming/deleting a meal plan isn't checked against channel defaults / website settings.
   - Deleting a parent rate plan silently turns its derived plans independent.

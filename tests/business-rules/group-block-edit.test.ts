@@ -34,6 +34,7 @@ async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
 }
 
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const FUTURE_CUTOFF = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
 
 describe("Group block editing & pickup rate choice", () => {
   let enterpriseId: string;
@@ -154,12 +155,15 @@ describe("Group block editing & pickup rate choice", () => {
   });
 
   it("edits status, cutoff, and rooms held", async () => {
-    const res = await putGroup(groupId, { status: "DEFINITE", cutoffDate: "2026-09-25", totalRoomsHeld: 4 });
+    // A cutoff a year out — the later pickup tests run against this block, and the pickup
+    // route refuses a block whose cutoff has passed (this was a fixed "2026-09-25", which
+    // started failing on that very day).
+    const res = await putGroup(groupId, { status: "DEFINITE", cutoffDate: FUTURE_CUTOFF, totalRoomsHeld: 4 });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("DEFINITE");
     expect(body.totalRoomsHeld).toBe(4);
-    expect(new Date(body.cutoffDate).toISOString().slice(0, 10)).toBe("2026-09-25");
+    expect(new Date(body.cutoffDate).toISOString().slice(0, 10)).toBe(FUTURE_CUTOFF);
   });
 
   it("pickup honours a requested rate plan and meal plan", async () => {

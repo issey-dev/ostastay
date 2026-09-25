@@ -1,8 +1,11 @@
 "use client"
 
-import { format, parseISO, addDays } from "date-fns"
-import { DoorOpen, User } from "@/components/icons"
+import { format, parseISO, addDays, isSameDay } from "date-fns"
+import { DoorOpen, User, ChevronLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/date-picker"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
+import { toDateKey, parseDateKey } from "@/lib/date-only"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -20,6 +23,8 @@ export function TapeChartMobileList({
   isLoading,
   onSelectReservation,
   onNavigate,
+  today,
+  onJumpTo,
 }: {
   rooms: Room[]
   reservations: Reservation[]
@@ -28,6 +33,10 @@ export function TapeChartMobileList({
   isLoading: boolean
   onSelectReservation: (res: Reservation) => void
   onNavigate: (direction: -1 | 1) => void
+  /** The property's business date — "Today" jumps back to it. */
+  today?: Date
+  /** Start the window on a chosen day (Today button / date picker). */
+  onJumpTo?: (date: Date) => void
 }) {
   const roomNumber = (roomId: string | null) => rooms.find(r => r.id === roomId)?.roomNumber ?? "Unassigned"
 
@@ -37,13 +46,48 @@ export function TapeChartMobileList({
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between p-3 border-b border-border bg-muted">
-        <Button variant="outline" size="sm" onClick={() => onNavigate(-1)}>&lt;</Button>
-        <span className="text-sm font-semibold text-foreground">
-          {format(startDate, "MMM d")} – {format(addDays(startDate, daysToShow - 1), "MMM d, yyyy")}
-        </span>
-        <Button variant="outline" size="sm" onClick={() => onNavigate(1)}>&gt;</Button>
+      <div className="flex flex-col gap-2 p-3 border-b border-border bg-muted">
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="outline" size="icon" onClick={() => onNavigate(-1)} aria-label="Previous week">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold text-foreground text-center">
+            {format(startDate, "MMM d")} – {format(addDays(startDate, daysToShow - 1), "MMM d, yyyy")}
+          </span>
+          <Button variant="outline" size="icon" onClick={() => onNavigate(1)} aria-label="Next week">
+            <ChevronLeft className="h-4 w-4 rotate-180" />
+          </Button>
+        </div>
+        {onJumpTo && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="shrink-0"
+              disabled={!today || isSameDay(startDate, today)}
+              onClick={() => today && onJumpTo(today)}
+            >
+              Today
+            </Button>
+            <div className="min-w-0 flex-1">
+              <DatePicker
+                value={toDateKey(startDate)}
+                onChange={(v) => {
+                  const d = parseDateKey(v)
+                  if (d) onJumpTo(d)
+                }}
+                placeholder="Jump to date"
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Moving a booking is a drag across the room grid — not something a phone does well. */}
+      <DesktopOnlyNotice
+        feature="Moving bookings"
+        description="Open the tape chart on a tablet or computer to drag bookings between rooms or book straight from an empty cell."
+        className="m-3 mb-0"
+      />
 
       {isLoading ? (
         <div className="p-3 space-y-3">

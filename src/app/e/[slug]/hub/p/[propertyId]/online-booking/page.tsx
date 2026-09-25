@@ -1,5 +1,6 @@
 import { propertyPage } from "@/lib/hub-page"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WebsitePropertySettings } from "@/components/hub/website-property-settings"
 import { WebsiteActivitySettings } from "@/components/hub/website-activity-settings"
@@ -24,6 +25,7 @@ export default async function HubPropertyOnlineBookingPage({ params }: { params:
         scope="property"
         hint="What this property's own website shows and sells through the Booking API, and the bookings it has made. The website's API key is created by an enterprise administrator."
       />
+      <HubSetupNotice title={item.title} />
       <Tabs defaultValue="website" className="space-y-4">
         <TabsList>
           <TabsTrigger value="website">Website</TabsTrigger>

@@ -166,9 +166,12 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
   )
 
   return (
-    <div className="grid items-start gap-8 lg:grid-cols-5">
+    // Below lg: an explicit single (minmax(0,1fr)) column, and a min-w-0 form. The implicit
+    // column used to size to its widest content (the tabs and the document preview), which
+    // pushed the form ~800px wide and off a phone or tablet screen. lg and up are unchanged.
+    <div className="grid items-start gap-8 max-lg:grid-cols-1 lg:grid-cols-5">
       {/* Editor Form */}
-      <form onSubmit={handleSave} className="space-y-5 lg:col-span-3">
+      <form onSubmit={handleSave} className="space-y-5 lg:col-span-3 max-lg:min-w-0">
         {/* Branding now lives in General — make that unmistakable so nobody hunts for it here. */}
         <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />

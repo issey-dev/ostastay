@@ -166,3 +166,37 @@
     }
   }
 }
+
+/* ── Touch screens (mobile polish, .agents/docs/MOBILE_PLAN.md) ────────────────────────
+   Deliberately OUTSIDE any @layer: unlayered rules beat Tailwind's layered utilities, so this
+   holds whatever size class a field carries. iOS Safari zooms the page when a focused field's
+   text is under 16px — on every touch screen (iPads included, where `md:text-sm` would
+   otherwise apply) form text is at least 16px. Mouse users are unaffected. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Landscape phones with a notch draw under it (viewportFit: cover) — keep content clear.
+   env() is 0 everywhere else, so this changes nothing on desktop. */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* While the phone bottom nav is on screen (src/components/mobile-bottom-nav.tsx, md:hidden),
+   anything else pinned to the bottom lifts by its height: toasts, the housekeeping bulk bar,
+   the POS recent-postings button. Unset (0) on desktop and in the Hub, which have no nav. */
+@media (max-width: 47.99rem) {
+  body:has([data-mobile-nav]) {
+    --bottom-nav-offset: 4rem;
+  }
+}

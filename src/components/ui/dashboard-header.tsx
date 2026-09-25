@@ -24,13 +24,29 @@ export function HeaderBrand({ enterpriseName }: { enterpriseName: string }) {
         <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight truncate">
           {currentProperty?.name ?? "Uppsolut Stay"}
         </h1>
-        {enterpriseName && <p className="text-xs text-muted-foreground leading-tight truncate">{enterpriseName}</p>}
+        {enterpriseName && <p className="hidden sm:block text-xs text-muted-foreground leading-tight truncate">{enterpriseName}</p>}
+        {/* Phones: the business date (hidden from the header's right side below sm) is
+            the more useful second line than the enterprise name. */}
+        <HeaderBusinessDateLine />
       </div>
     </div>
   )
 }
 
 // The active property's operational business date, shown on the right of the header.
+/** The business date as the brand block's second line — phones only. */
+function HeaderBusinessDateLine() {
+  const { currentProperty } = useProperty()
+  if (!currentProperty?.businessDate) return null
+  const label = new Date(currentProperty.businessDate).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+  return <p className="sm:hidden text-xs text-muted-foreground leading-tight truncate">Business date {label}</p>
+}
+
 export function HeaderBusinessDate() {
   const { currentProperty } = useProperty()
   if (!currentProperty?.businessDate) return null

@@ -19,6 +19,7 @@ import type { DateRange } from "react-day-picker"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toast } from "@/lib/toast"
+import { INPUT_MONEY } from "@/lib/input-presets"
 
 type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
 type RoomType = { id: string; name: string; code: string }
@@ -241,8 +242,9 @@ function PriceCalendarPageContent() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         
-        {/* Left Sidebar: Filters & Bulk Update */}
-        <div className="md:col-span-1 space-y-6">
+        {/* Left Sidebar: Filters & Bulk Update — below the calendar on a phone, where the
+            calendar is what you came to read. */}
+        <div className="md:col-span-1 space-y-6 max-md:order-2">
           <Card>
             <CardHeader>
               <CardTitle>Configuration</CardTitle>
@@ -299,7 +301,7 @@ function PriceCalendarPageContent() {
                       <Label>Room Type(s)</Label>
                       <button
                         type="button"
-                        className="text-xs text-info hover:underline"
+                        className="text-xs text-info hover:underline pointer-coarse:min-h-11"
                         onClick={() => setBulkRoomTypeIds(bulkRoomTypeIds.length === roomTypes.length ? [] : roomTypes.map(r => r.id))}
                       >
                         {bulkRoomTypeIds.length === roomTypes.length ? "Clear all" : "Select all"}
@@ -338,16 +340,16 @@ function PriceCalendarPageContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Daily Price ($)</Label>
-                    <Input type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
+                    <Input {...INPUT_MONEY} type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Extra Adult ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
-                      <Input type="number" min="0" step="0.01" value={bulkExtraAdultPrice} onChange={e => setBulkExtraAdultPrice(e.target.value)} placeholder="0.00" />
+                      <Input {...INPUT_MONEY} type="number" min="0" step="0.01" value={bulkExtraAdultPrice} onChange={e => setBulkExtraAdultPrice(e.target.value)} placeholder="0.00" />
                     </div>
                     <div className="space-y-2">
                       <Label>Extra Child ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
-                      <Input type="number" min="0" step="0.01" value={bulkExtraChildPrice} onChange={e => setBulkExtraChildPrice(e.target.value)} placeholder="0.00" />
+                      <Input {...INPUT_MONEY} type="number" min="0" step="0.01" value={bulkExtraChildPrice} onChange={e => setBulkExtraChildPrice(e.target.value)} placeholder="0.00" />
                     </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || bulkRoomTypeIds.length === 0}>
@@ -361,7 +363,7 @@ function PriceCalendarPageContent() {
         </div>
 
         {/* Right Side: Calendar Grid */}
-        <div className="md:col-span-3">
+        <div className="md:col-span-3 max-md:order-1">
           <Card className="h-full">
             <CardHeader className="flex flex-col gap-4 border-b pb-4 mb-4">
               {/* Room type being previewed — the only place this is chosen now
@@ -444,12 +446,21 @@ function PriceCalendarPageContent() {
                                       : undefined
                                 }
                               >
-                                ${entry.price.toFixed(2)}
+                                {/* Phones: whole numbers — "$250.00" doesn't fit a 1/7 column. */}
+                                <span className="sm:hidden">${Math.round(entry.price)}</span>
+                                <span className="max-sm:hidden">${entry.price.toFixed(2)}</span>
                               </span>
                               {(entry.derived || entry.source === "BASE_FALLBACK") && (
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight max-sm:hidden">
                                   {entry.source === "BASE_FALLBACK" ? (entry.derived ? "Base + adj." : "Base fallback") : "Derived"}
                                 </span>
+                              )}
+                              {/* Phones: the source label becomes a dot (legend under the grid). */}
+                              {(entry.derived || entry.source === "BASE_FALLBACK") && (
+                                <span
+                                  aria-label={entry.source === "BASE_FALLBACK" ? (entry.derived ? "Base + adj." : "Base fallback") : "Derived"}
+                                  className={`h-1.5 w-1.5 rounded-full sm:hidden ${entry.source === "BASE_FALLBACK" ? (entry.derived ? "bg-warning" : "bg-muted-foreground") : "bg-info"}`}
+                                />
                               )}
                               {(entry.extraAdultPrice != null || entry.extraChildPrice != null) && (
                                 <span className="hidden text-[11px] text-muted-foreground leading-tight sm:block">
@@ -468,6 +479,12 @@ function PriceCalendarPageContent() {
                   })}
                 </div>
               )}
+              {/* Phones: legend for the source dots used in place of the cell labels. */}
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:hidden">
+                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-info" /> Derived</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" /> Base Rate fallback</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warning" /> Base + adjustment</span>
+              </div>
             </CardContent>
           </Card>
         </div>

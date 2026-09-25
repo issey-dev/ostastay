@@ -38,7 +38,7 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
       <div className="print:hidden">
         <OstaSidebar />
       </div>
-      <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible outline-none">
+      <main id="main-content" tabIndex={-1} className="w-full min-w-0 bg-background min-h-screen max-md:min-h-dvh flex flex-col overflow-x-clip print:overflow-visible outline-none">
         <header className="print:hidden h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>

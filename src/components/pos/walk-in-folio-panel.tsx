@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { MobileActions, type MobileAction } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Button } from "@/components/ui/button"
 import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Input } from "@/components/ui/input"
@@ -34,6 +36,8 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
+  // Same rule as the guest folio: the amount is the balance until the cashier edits it.
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
   // Folio the print-style picker is open for (null = closed).
   const [printFolioId, setPrintFolioId] = useState<string | null>(null)
@@ -51,6 +55,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     if (isOpen && folioId) {
       setFolio(null)
       setFeedback(null)
+      setPaymentAmountTouched(false)
       fetchFolio()
       if (currentProperty) fetch(`/api/payment-methods?propertyId=${currentProperty.id}`)
         .then((res) => res.json())
@@ -65,6 +70,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
       folio.payments.reduce((sum: number, p: any) => sum + (p.isRefund ? -p.amount : p.amount), 0)
     : 0
   const closed = !!folio?.isClosed
+  const paymentAmount = paymentAmountTouched ? paymentForm.amount : balance > 0.005 ? balance.toFixed(2) : ""
 
   const flash = (message: string, type: "success" | "error") => {
     setFeedback({ message, type })
@@ -77,10 +83,11 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     setSubmitting(true)
     try {
       const res = await fetch(`/api/folios/${folioId}/payments`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(paymentForm),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...paymentForm, amount: paymentAmount }),
       })
       if (res.ok) {
         setPaymentForm({ paymentMethodId: "", amount: "", referenceNumber: "" })
+        setPaymentAmountTouched(false)
         fetchFolio()
         flash("Payment posted.", "success")
       } else {
@@ -138,6 +145,24 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     }
   }
 
+  // Phones: the bill's actions live in a pinned footer — one primary (take payment while
+  // money is owed, otherwise close the bill) and the rest under More. Print is desktop-only.
+  const phoneMore: MobileAction[] = closed
+    ? [{ label: "Reopen bill", icon: RotateCcw, disabled: submitting, onSelect: handleReopen }]
+    : [
+        ...(balance > 0.005 ? [{ label: "Close bill", icon: CheckCircle2, disabled: submitting, onSelect: handleClose }] : []),
+        ...(activeCharges.length > 0 ? [{ label: "Void bill", icon: Ban, disabled: submitting, destructive: true, onSelect: handleVoidBill }] : []),
+      ]
+  const phonePrimary = closed ? undefined : balance > 0.005 ? (
+    <Button type="submit" form="walkin-payment-form" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
+      {submitting ? "Posting…" : `Take payment $${balance.toFixed(2)}`}
+    </Button>
+  ) : (
+    <Button onClick={handleClose} disabled={submitting}>
+      <CheckCircle2 className="w-4 h-4 mr-2" /> Close Bill
+    </Button>
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-lg sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -160,7 +185,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   ${balance.toFixed(2)}
                 </p>
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 max-md:hidden">
                 <Button size="sm" variant="outline" onClick={() => setPrintFolioId(folioId)}>
                   <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                 </Button>
@@ -186,7 +211,23 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {/* Charges */}
             <div>
               <h3 className="mb-2 text-sm font-semibold">Charges</h3>
-              <Table>
+              {/* Phones: one card per charge; the table takes over at md. */}
+              <MobileCardList empty={<p className="py-4 text-center text-sm text-muted-foreground">No charges yet.</p>}>
+                {folio.lineItems.map((item: any) => (
+                  <MobileCard
+                    key={item.id}
+                    tone={item.isVoid ? "muted" : undefined}
+                    title={<span className={item.isVoid ? "line-through text-muted-foreground" : ""}>{item.description}</span>}
+                    badge={
+                      <span className={`font-semibold tabular-nums ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
+                        ${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}
+                      </span>
+                    }
+                    subtitle={item.isVoid ? "Void" : undefined}
+                  />
+                ))}
+              </MobileCardList>
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
                 </TableHeader>
@@ -208,7 +249,16 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {folio.payments.length > 0 && (
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Payments</h3>
-                <Table>
+                <MobileCardList>
+                  {folio.payments.map((p: any) => (
+                    <MobileCard
+                      key={p.id}
+                      title={p.paymentMethod?.name}
+                      badge={<span className="font-semibold tabular-nums text-success">${p.amount.toFixed(2)}</span>}
+                    />
+                  ))}
+                </MobileCardList>
+                <Table className="hidden md:table">
                   <TableHeader>
                     <TableRow><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
                   </TableHeader>
@@ -226,7 +276,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
 
             {/* Take payment (open bills only) */}
             {!closed && (
-              <form onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
+              <form id="walkin-payment-form" onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
                 <h3 className="text-sm font-semibold">Take Payment</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
@@ -240,14 +290,14 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Amount *</Label>
-                    <Input required type="number" step="0.01" min="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))} />
+                    <Input required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={(e) => { setPaymentAmountTouched(true); setPaymentForm((p) => ({ ...p, amount: e.target.value })) }} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Reference No. (optional)</Label>
                   <Input value={paymentForm.referenceNumber} onChange={(e) => setPaymentForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
                 </div>
-                <Button type="submit" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentForm.amount}>
+                <Button type="submit" className="bg-success hover:bg-success/90 max-md:hidden" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
                   {submitting ? "Posting…" : "Post Payment"}
                 </Button>
               </form>
@@ -259,6 +309,11 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
               </div>
             )}
           </div>
+        )}
+        {folio && !loading && (
+          <DialogFooter className="md:hidden">
+            <MobileActions className="w-full" primary={phonePrimary} more={phoneMore} />
+          </DialogFooter>
         )}
       </DialogContent>
 

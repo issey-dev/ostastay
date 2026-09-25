@@ -49,7 +49,9 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
       if (res.ok) {
         const json = await res.json()
         setData(json)
-        setTimeout(() => window.print(), 1000)
+        // Desktop opens the print dialog for you. On a phone that throws the print sheet
+        // over a document you came to read or email, so it is skipped below md.
+        if (window.matchMedia("(min-width: 48rem)").matches) setTimeout(() => window.print(), 1000)
       } else {
         setError("Failed to load invoice data.")
       }

@@ -84,12 +84,13 @@ export function StatTile({ label, value, footnote, icon: Icon, delta, trend, tre
       <div>
         {/* Proportional figures deliberately — tabular-nums makes a display-size number
             look loose. Columns of numbers elsewhere still use tabular. */}
-        <p className="text-2xl leading-none font-semibold text-foreground">{value}</p>
-        <div className="mt-2 flex min-h-4 items-end justify-between gap-2">
+        <p className="text-2xl leading-none font-semibold text-foreground max-sm:text-xl max-sm:break-words">{value}</p>
+        {/* Phones show the tiles two-up (~170px): the sparkline gives way to the figures. */}
+        <div className="mt-2 flex min-h-4 items-end justify-between gap-2 max-sm:[&>svg]:hidden">
           <div className="min-w-0">
             {footnote && <p className="truncate text-xs text-muted-foreground">{footnote}</p>}
             {showDelta && (
-              <p className={cn("mt-0.5 flex items-center gap-0.5 text-xs font-medium", good ? "text-success" : "text-destructive")}>
+              <p className={cn("mt-0.5 flex items-center gap-0.5 text-xs font-medium max-sm:flex-wrap", good ? "text-success" : "text-destructive")}>
                 {delta!.value > 0 ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 {Math.abs(delta!.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}
                 {delta!.suffix ?? ""}

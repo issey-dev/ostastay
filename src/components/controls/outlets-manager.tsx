@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Store } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -326,47 +327,44 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
         <ControlsSectionBody>
           {/* Phone view — one card per outlet: name/status up top, type/tax/codes as a
               small fact grid, then edit/delete as full-width/icon actions. */}
-          <div className="md:hidden">
-            {outlets.length === 0 ? (
-              <div className="p-4"><EmptyState icon={Store} title="No outlets configured for this property" /></div>
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedOutlets.map((o) => (
-                  <div key={o.id} className="rounded-lg border border-border bg-card p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground">{o.name}</p>
-                        {o.code
-                          ? <span className="font-mono text-xs text-muted-foreground">{o.code}</span>
-                          : <span className="text-xs text-warning">Set a code</span>}
-                      </div>
-                      <Badge variant={o.isActive ? "outline" : "secondary"} className={`shrink-0 ${o.isActive ? "bg-success-muted text-success border-success/30" : ""}`}>
-                        {o.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="font-normal">{OUTLET_TYPE_LABELS[o.outletType] || o.outletType}</Badge>
-                      <span>{o.taxOverrideMode === "NONE" ? "Default tax" : o.taxOverrideMode === "DEFAULT_ENGINE" ? "Default engine" : o.taxProfile?.name || "Custom tax"}</span>
-                      <span>{(o.chargeCodes || []).length} charge codes</span>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(o)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                      </Button>
-                      <Button
-                        variant="outline" size="icon"
-                        className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
-                        aria-label="Delete outlet"
-                        onClick={() => { setDeletingId(o.id); setIsDeleteDialogOpen(true) }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <MobileCardList className="p-4" empty={<EmptyState icon={Store} title="No outlets configured for this property" />}>
+            {sortedOutlets.map((o) => (
+              <MobileCard
+                key={o.id}
+                tone={o.isActive ? undefined : "muted"}
+                title={o.name}
+                subtitle={o.code
+                  ? <span className="font-mono">{o.code}</span>
+                  : <span className="text-warning">Set a code</span>}
+                badge={
+                  <Badge variant={o.isActive ? "outline" : "secondary"} className={o.isActive ? "bg-success-muted text-success border-success/30" : ""}>
+                    {o.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                }
+                meta={[
+                  { label: "Type", value: OUTLET_TYPE_LABELS[o.outletType] || o.outletType },
+                  { label: "Tax", value: o.taxOverrideMode === "NONE" ? "Default tax" : o.taxOverrideMode === "DEFAULT_ENGINE" ? "Default engine" : o.taxProfile?.name || "Custom tax" },
+                  { label: "Charge codes", value: (o.chargeCodes || []).length },
+                ]}
+                onClick={() => openEdit(o)}
+                actions={
+                  <>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(o)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline" size="icon"
+                      className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                      aria-label="Delete outlet"
+                      onClick={() => { setDeletingId(o.id); setIsDeleteDialogOpen(true) }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                }
+              />
+            ))}
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

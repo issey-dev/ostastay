@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { OptionSelect } from "@/components/ui/option-select"
 import { toast } from "@/lib/toast"
+import { PhoneHint } from "@/components/hub/phone-hint"
 
 // What this property's Night Audit does when it runs. Each change saves as it is made —
 // there is no form to submit, so a switch can never sit half-saved.
@@ -55,8 +56,8 @@ export function NightlyPostingsManager({
       {LEVIES.map((l) => (
         <div key={l.field} className="flex items-start justify-between gap-4 p-3">
           <div className="min-w-0">
-            <Label htmlFor={l.field}>{l.label}</Label>
-            <p className="text-xs text-muted-foreground">{l.hint}</p>
+            <Label htmlFor={l.field}>{l.label}<PhoneHint label={l.label}>{l.hint}</PhoneHint></Label>
+            <p className="text-xs text-muted-foreground max-sm:hidden">{l.hint}</p>
           </div>
           <Switch
             id={l.field}
@@ -183,8 +184,8 @@ export function PropertySwitchSetting({
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <Label htmlFor={field}>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <Label htmlFor={field}>{label}<PhoneHint label={label}>{description}</PhoneHint></Label>
+        <p className="text-xs text-muted-foreground max-sm:hidden">{description}</p>
       </div>
       <Switch id={field} className="shrink-0" checked={on} disabled={!canEdit || saving} onCheckedChange={(v) => void toggle(!!v)} />
     </div>
@@ -198,6 +199,9 @@ const NO_SHOW_TIMING_OPTIONS = [
   { value: "SECOND_AUDIT", label: "Hold one night for late arrivals, then mark" },
   { value: "MANUAL", label: "Never automatically — the front desk marks no-shows" },
 ]
+
+const NO_SHOW_FEE_HINT =
+  "When Night Audit marks a no-show, post the reservation's selected No-Show fee rule to its folio. Off: the reservation is marked, and any fee is left to the front desk."
 
 /** When Night Audit marks a never-arrived reservation as a No-Show, and whether it posts the fee. */
 export function NoShowManager({
@@ -261,11 +265,11 @@ export function NoShowManager({
       </div>
       <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
         <div className="min-w-0">
-          <Label htmlFor="noShowPostFee">Post the no-show fee</Label>
-          <p className="text-xs text-muted-foreground">
-            When Night Audit marks a no-show, post the reservation&apos;s selected No-Show fee rule to its folio. Off: the
-            reservation is marked, and any fee is left to the front desk.
-          </p>
+          <Label htmlFor="noShowPostFee">
+            Post the no-show fee
+            <PhoneHint label="Post the no-show fee">{NO_SHOW_FEE_HINT}</PhoneHint>
+          </Label>
+          <p className="text-xs text-muted-foreground max-sm:hidden">{NO_SHOW_FEE_HINT}</p>
         </div>
         <Switch
           id="noShowPostFee"
@@ -283,6 +287,9 @@ export function NoShowManager({
 }
 
 // ── Departures ──────────────────────────────────────────────────────────────────────
+
+const DEPARTURES_HINT =
+  "On: when Night Audit resolves departures — run from the Night Audit screen or on schedule — it checks out every guest due out whose folios are fully settled, through the normal check-out. It still stops for guests who owe money, are owed a refund, or settle by City Ledger. Off: every departure is left for the front desk."
 
 /** Whether Night Audit checks out settled (zero-balance) departures by itself. */
 export function DeparturesManager({
@@ -319,12 +326,11 @@ export function DeparturesManager({
   return (
     <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
       <div className="min-w-0">
-        <Label htmlFor="autoCheckOutZeroBalance">Check out settled departures automatically</Label>
-        <p className="text-xs text-muted-foreground">
-          On: when Night Audit resolves departures — run from the Night Audit screen or on schedule — it checks out every
-          guest due out whose folios are fully settled, through the normal check-out. It still stops for guests who owe
-          money, are owed a refund, or settle by City Ledger. Off: every departure is left for the front desk.
-        </p>
+        <Label htmlFor="autoCheckOutZeroBalance">
+          Check out settled departures automatically
+          <PhoneHint label="Check out settled departures automatically">{DEPARTURES_HINT}</PhoneHint>
+        </Label>
+        <p className="text-xs text-muted-foreground max-sm:hidden">{DEPARTURES_HINT}</p>
       </div>
       <Switch
         id="autoCheckOutZeroBalance"

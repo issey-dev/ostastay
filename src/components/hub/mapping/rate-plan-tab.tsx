@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { DollarSign } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AvailabilityPreview } from "@/components/hub/availability-preview"
 import { MappingInput } from "@/components/hub/mapping/mapping-input"
@@ -48,22 +49,22 @@ export function RatePlanTab({
           </p>
           {/* Phone view — the mapping input needs its own row width to be usable with a
               thumb, so each rate plan becomes a small card. */}
-          <div className="space-y-3 md:hidden">
+          <MobileCardList>
             {ratePlans.map((rp) => (
-              <div key={rp.ratePlanId} className="space-y-3 rounded-md border border-border bg-card p-4">
-                <div>
-                  <span className="text-sm font-medium">{rp.ratePlanName}</span>
-                  <span className="ml-2 font-mono text-xs text-muted-foreground">{rp.ratePlanCode}</span>
-                </div>
+              <MobileCard
+                key={rp.ratePlanId}
+                title={rp.ratePlanName}
+                subtitle={<span className="font-mono">{rp.ratePlanCode}</span>}
+              >
                 <MappingInput
                   value={rp.externalRateId ?? ""}
                   disabled={!canManage}
                   placeholder="e.g. 1"
                   onSave={(v) => onPatch({ ratePlanId: rp.ratePlanId, externalRateId: v }, "Mapping saved")}
                 />
-              </div>
+              </MobileCard>
             ))}
-          </div>
+          </MobileCardList>
 
           <div className="hidden overflow-x-auto rounded-md border border-border md:block">
             <Table>

@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { INPUT_MONEY } from "@/lib/input-presets"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 const dateStr = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—")
@@ -113,7 +115,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
   const accountName = profile.companyName || [profile.firstName, profile.lastName].filter(Boolean).join(" ")
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6 max-md:p-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link href={`/e/${slug}/dashboard/debtors`} className="shrink-0">
@@ -135,7 +137,29 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      {/* Phones: balance and aging in one compact card instead of six stacked tiles. */}
+      <Card className="md:hidden">
+        <CardContent className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Outstanding Balance</p>
+            <div className={`text-2xl font-bold flex items-center gap-2 ${overLimit ? "text-destructive" : ""}`}>
+              {overLimit && <AlertTriangle className="w-5 h-5" />}
+              {money(balance)}
+            </div>
+            {overLimit && <p className="text-xs text-destructive mt-1">Over credit limit</p>}
+          </div>
+          <div className="divide-y divide-border border-t border-border">
+            {(["current", "1-30", "31-60", "61-90", "90+"] as const).map((bucket) => (
+              <div key={bucket} className="flex items-center justify-between py-1.5 text-sm">
+                <span className="text-muted-foreground">{bucket === "current" ? "Current" : `${bucket} days`}</span>
+                <span className={`font-mono ${aging[bucket] ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{money(aging[bucket])}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="hidden md:grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="col-span-2 md:col-span-2">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground font-medium">Outstanding Balance</CardTitle></CardHeader>
           <CardContent>
@@ -160,33 +184,28 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             <InfoHint label="Invoices">One row per stay billed to this account — invoices appear here only once the guest has checked out.</InfoHint>
           </h3>
         {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
-        <div className="md:hidden space-y-3">
-          {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No invoices yet.</p>
-          ) : (
-            invoices.map((inv) => (
-              <div key={inv.folioId} className="rounded-md border border-border bg-card p-4 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">{inv.guestName}</p>
-                    <p className="text-xs text-muted-foreground">{inv.confirmationNo || "—"}</p>
-                  </div>
-                  <Badge variant={inv.isOpen ? "destructive" : "outline"} className="shrink-0">{inv.isOpen ? "Open" : "Paid"}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">{dateStr(inv.checkInDate)} – {dateStr(inv.checkOutDate)}</p>
-                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
-                  <span className="text-muted-foreground">Total {money(inv.total)}</span>
-                  <span className={`font-semibold ${inv.isOpen ? "text-destructive" : "text-foreground"}`}>{money(inv.balance)}</span>
-                </div>
-                {inv.isOpen && (
+        <MobileCardList empty={<p className="text-sm text-muted-foreground text-center py-8">No invoices yet.</p>}>
+          {invoices.map((inv) => (
+            <MobileCard
+              key={inv.folioId}
+              title={inv.guestName}
+              subtitle={inv.confirmationNo || "—"}
+              badge={<Badge variant={inv.isOpen ? "destructive" : "outline"}>{inv.isOpen ? "Open" : "Paid"}</Badge>}
+              meta={[
+                { label: "Stay", value: `${dateStr(inv.checkInDate)} – ${dateStr(inv.checkOutDate)}`, wide: true },
+                { label: "Total", value: money(inv.total) },
+                { label: "Balance", value: <span className={inv.isOpen ? "text-destructive" : ""}>{money(inv.balance)}</span> },
+              ]}
+              actions={
+                inv.isOpen ? (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => openPayDialog(inv)}>
                     <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
                   </Button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileCardList>
 
         {/* Tablet/desktop: full table */}
         <div className="hidden md:block overflow-x-auto">
@@ -251,7 +270,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="grid gap-2">
               <Label>Amount</Label>
-              <Input type="number" step="0.01" min="0.01" value={payForm.amount} onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))} />
+              <Input {...INPUT_MONEY} type="number" step="0.01" min="0.01" value={payForm.amount} onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))} />
             </div>
             <div className="grid gap-2">
               <Label>Reference (optional)</Label>

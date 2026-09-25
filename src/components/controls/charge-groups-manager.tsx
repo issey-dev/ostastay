@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Layers } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -159,82 +160,77 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
       <ControlsSectionBody>
         {/* Phone view — a card per group, its subgroups nested inside so the hierarchy
             stays legible without a 4-column table squeezed onto a phone. */}
-        <div className="md:hidden">
-          {groups.length === 0 ? (
-            <div className="p-4"><EmptyState icon={Layers} title="No charge groups configured" /></div>
-          ) : (
-            <div className="space-y-3 p-4">
-              {groups.map((g) => (
-                <div key={g.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-xs text-muted-foreground">{g.code}</span>
-                        <span className="font-medium">{g.name}</span>
-                        {g.isSystem && <Badge variant="secondary" className="font-normal">System</Badge>}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="font-normal">{REPORT_BUCKET_LABELS[g.reportBucket as ReportBucket] ?? g.reportBucket}</Badge>
-                        {!g.isRevenue && <span className="text-xs text-muted-foreground">not revenue</span>}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {g.subgroups.reduce((n, s) => n + (s._count?.chargeCodes ?? 0), 0)} codes
+        <MobileCardList className="p-4" empty={<EmptyState icon={Layers} title="No charge groups configured" />}>
+          {groups.map((g) => (
+            <MobileCard
+              key={g.id}
+              title={g.name}
+              subtitle={<span className="font-mono">{g.code}</span>}
+              badge={g.isSystem ? <Badge variant="secondary" className="font-normal">System</Badge> : undefined}
+              meta={[
+                {
+                  label: "Report bucket",
+                  value: (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="font-normal">{REPORT_BUCKET_LABELS[g.reportBucket as ReportBucket] ?? g.reportBucket}</Badge>
+                      {!g.isRevenue && <span className="text-xs font-normal text-muted-foreground">not revenue</span>}
                     </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openSubCreate(g.id)}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Add subgroup
-                    </Button>
-                    <Button variant="outline" size="icon" className="h-9 w-9 text-primary" aria-label="Edit group" onClick={() => openGroupEdit(g)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline" size="icon"
-                      className="h-9 w-9 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
-                      disabled={g.isSystem}
-                      aria-label={g.isSystem ? "System groups can't be deleted" : "Delete group"}
-                      onClick={() => setDeleting({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {g.subgroups.length > 0 && (
-                    <div className="space-y-2 border-t border-border/60 pt-3">
-                      {g.subgroups.map((s) => (
-                        <div key={s.id} className="rounded-md bg-muted/40 p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 text-sm">
-                              <span className="font-mono text-xs text-muted-foreground mr-1.5">{s.code}</span>
-                              <span className="font-medium">{s.name}</span>
-                            </div>
-                            <span className="shrink-0 text-xs text-muted-foreground">{s._count?.chargeCodes ?? 0} codes</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="h-8 flex-1" onClick={() => openSubEdit(s)}>
-                              <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                            </Button>
-                            <Button
-                              variant="outline" size="icon"
-                              className="h-8 w-8 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
-                              disabled={s.isSystem}
-                              aria-label={s.isSystem ? "System subgroups can't be deleted" : "Delete subgroup"}
-                              onClick={() => setDeleting({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                  ),
+                },
+                { label: "Charge codes", value: g.subgroups.reduce((n, s) => n + (s._count?.chargeCodes ?? 0), 0) },
+              ]}
+              actions={
+                <>
+                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openSubCreate(g.id)}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Add subgroup
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-9 w-9 text-primary" aria-label="Edit group" onClick={() => openGroupEdit(g)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline" size="icon"
+                    className="h-9 w-9 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
+                    disabled={g.isSystem}
+                    aria-label={g.isSystem ? "System groups can't be deleted" : "Delete group"}
+                    onClick={() => setDeleting({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              }
+            >
+              {g.subgroups.length > 0 && (
+                <div className="space-y-2">
+                  {g.subgroups.map((s) => (
+                    <div key={s.id} className="rounded-md bg-muted/40 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 text-sm">
+                          <span className="font-mono text-xs text-muted-foreground mr-1.5">{s.code}</span>
+                          <span className="font-medium">{s.name}</span>
                         </div>
-                      ))}
+                        <span className="shrink-0 text-xs text-muted-foreground">{s._count?.chargeCodes ?? 0} codes</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="h-8 flex-1" onClick={() => openSubEdit(s)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline" size="icon"
+                          className="h-8 w-8 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
+                          disabled={s.isSystem}
+                          aria-label={s.isSystem ? "System subgroups can't be deleted" : "Delete subgroup"}
+                          onClick={() => setDeleting({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )}
+            </MobileCard>
+          ))}
+        </MobileCardList>
 
         <div className="hidden md:block overflow-x-auto">
         <Table>

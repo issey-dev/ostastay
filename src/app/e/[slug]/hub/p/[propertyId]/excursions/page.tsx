@@ -1,5 +1,6 @@
 import { propertyPage } from "@/lib/hub-page"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ExcursionsManager } from "@/components/controls/excursions-manager"
 
 export default async function HubPropertyExcursionsPage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
@@ -7,6 +8,7 @@ export default async function HubPropertyExcursionsPage({ params }: { params: Pr
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ExcursionsManager
         propertyId={property.id}
         title="Excursions"

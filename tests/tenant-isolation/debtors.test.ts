@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import bcrypt from "bcryptjs";
+import { isoDaysFromToday } from "../helpers/dates";
 
 const cookieJar = new Map<string, string>();
 vi.mock("next/headers", () => ({
@@ -277,8 +278,10 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
             propertyId: propertyAId,
             primaryGuestId: guestAId,
             travelAgentId: creditAccountAId,
-            checkInDate: "2026-10-01",
-            checkOutDate: "2026-10-03",
+            // Relative to today: with no business date on the property the arrival floor
+            // is the server date, so a fixed "2026-10-01" would start failing on 2026-10-02.
+            checkInDate: isoDaysFromToday(30),
+            checkOutDate: isoDaysFromToday(32),
             roomTypeId: roomTypeAId,
             ratePlanId: ratePlanAId,
           }),
@@ -302,8 +305,8 @@ describe("Debtors module: checkout-triggered invoice pipeline + tenant isolation
           body: JSON.stringify({
             propertyId: propertyAId,
             primaryGuestId: guestAId,
-            checkInDate: "2026-10-05",
-            checkOutDate: "2026-10-06",
+            checkInDate: isoDaysFromToday(34),
+            checkOutDate: isoDaysFromToday(35),
             roomTypeId: roomTypeAId,
             ratePlanId: ratePlanAId,
           }),

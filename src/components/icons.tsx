@@ -8,6 +8,7 @@ import type { ComponentType, SVGProps } from "react"
 import {
   ActivityOutline,
   AddOutline,
+  MinusOutline,
   ArrowCircleRightOutline,
   ArrowDown2Outline,
   ArrowLeft2Outline,
@@ -62,6 +63,7 @@ import {
   MapOutline,
   Message2Outline,
   MonitorOutline,
+  CallOutline,
   MoonOutline,
   MoreOutline,
   Notification1Outline,
@@ -105,7 +107,7 @@ import {
   UserOutline,
   Wallet2Outline,
 } from "mx-icons"
-import { BedDouble, DoorOpen, Pin, PinOff, Utensils, UtensilsCrossed, Wrench } from "lucide-react"
+import { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench } from "lucide-react"
 
 export type IconProps = Omit<SVGProps<SVGSVGElement>, "color"> & { size?: number | string; color?: string }
 export type IconComponent = ComponentType<IconProps>
@@ -193,6 +195,10 @@ export const Map = outline(MapOutline)
 export const MapPin = outline(LocationOutline)
 export const MessageSquare = outline(Message2Outline)
 export const MonitorPlay = outline(MonitorOutline)
+// "Best on a larger screen" notices on phones.
+export const Monitor = outline(MonitorOutline)
+// Tap-to-call links (ContactLink).
+export const Phone = outline(CallOutline)
 export const Moon = outline(MoonOutline)
 export const MoreHorizontal = outline(MoreOutline)
 // Drag handle on a rearrangeable card (Operations Dashboard widgets). The runtime bundle
@@ -205,6 +211,8 @@ export const PanelLeftIcon = outline(SidebarLeftOutline)
 export const Pencil = outline(Edit2Outline)
 export const Percent = outline(PercentageSquareOutline)
 export const Plus = outline(AddOutline)
+// The − of a NumberStepper.
+export const Minus = outline(MinusOutline)
 export const Printer = outline(PrinterOutline)
 export const Receipt = outline(Receipt1Outline)
 export const ReceiptText = outline(Receipt2Outline)
@@ -242,6 +250,7 @@ export const X = outline(CloseSquareOutline)
 export const XCircle = outline(CloseCircleOutline)
 export const XIcon = outline(CloseSquareOutline)
 
-// No faithful outline equivalent in the runtime bundle — kept as lucide.
-export { BedDouble, DoorOpen, Pin, PinOff, Utensils, UtensilsCrossed, Wrench }
+// No faithful outline equivalent in the runtime bundle — kept as lucide. (Menu: the phone
+// bottom bar's "More"; mx-icons' HamburgerMenuOutline is in its types but not its bundle.)
+export { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench }
 

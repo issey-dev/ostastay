@@ -58,6 +58,18 @@ read `.agents/docs/`:
   docs:demo` (the fictional Coral Bay Hotels enterprise) then `npm run docs:shots -- <name>`
   (shot list in `scripts/docs-shots.config.ts`; main content only, never app chrome).
   Rebuild the PDFs with `npm run docs:pdf` and run `npm run docs:check`.
+  It also has `/docs/release-notes`: **when you bump `package.json` for a release, add that
+  version's entry at the top of `src/app/docs/release-notes/releases.ts`** (New / Improved /
+  Fixed, plain language for hotel staff, no file paths, PR numbers or customer names), then
+  `npm run docs:pdf -- release-notes`.
+
+- [`.agents/docs/MOBILE_PLAN.md`](.agents/docs/MOBILE_PLAN.md) — phones: desktop is the source of
+  truth, mobile changes live behind `max-sm:`/`max-md:`/`md:hidden` or `pointer-coarse:`. Dialogs are
+  bottom sheets on phones (`DialogContent mobile="sheet"|"fullscreen"|"none"`); use the shared
+  `@/components/ui/mobile` (`MobileActions`, `MobileActionBar`, `DesktopOnlyNotice`), `MobileCard`/
+  `MobileCardList` (phone version of a table), `NumberStepper`, `ContactLink`,
+  `@/lib/input-presets` and `PageHeader`. Check a change with `npm run mobile:audit` (captures at
+  phone/tablet/desktop widths + a pixel diff against a baseline — desktop must not change).
 
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to

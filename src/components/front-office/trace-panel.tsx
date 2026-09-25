@@ -109,15 +109,16 @@ export function TracePanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col p-0">
-        <SheetHeader className="p-6 border-b bg-muted/50">
+      {/* Phone: full width (the fixed 400px was wider than the screen), tighter padding. */}
+      <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col p-0 max-sm:w-full">
+        <SheetHeader className="p-6 border-b bg-muted/50 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))]">
           <SheetTitle className="text-xl">Traces & Messages</SheetTitle>
           <SheetDescription>
             {guestName ? `Managing tasks for ${guestName}` : 'Manage operational tasks for this reservation.'}
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-muted/30">
+        <div className="flex-1 overflow-y-auto p-6 bg-muted/30 max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {!isAdding ? (
             <Button onClick={() => setIsAdding(true)} className="w-full mb-6 shadow-sm">
               <Plus className="w-4 h-4 mr-2" /> New Trace / Message

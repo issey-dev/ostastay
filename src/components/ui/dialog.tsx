@@ -50,26 +50,57 @@ function DialogOverlay({
   )
 }
 
+// Phones (below `sm`): a dialog is a BOTTOM SHEET — pinned to the bottom edge, at most 92dvh
+// tall, its content scrolling inside while the header, footer and close button stay put, and
+// clear of the home indicator (safe-area). From `sm` up nothing changes: every class below is
+// `max-sm:`-prefixed, so it can never touch tablet/desktop, and the scroll wrapper around the
+// children is `sm:contents` (no box), so the children lay out in the popup exactly as before.
+// Media-variant utilities are emitted after plain ones, so a caller's unprefixed sizing
+// (`max-w-7xl`, `w-[95vw]`, `max-h-[90vh]`) still wins on desktop and loses on a phone.
+//
+//   mobile="sheet"       (default) bottom sheet, as above
+//   mobile="fullscreen"  the whole screen — long forms and wizards
+//   mobile="none"        opt out: the caller lays the dialog out itself on every size
+const MOBILE_POPUP: Record<"sheet" | "fullscreen", string> = {
+  sheet:
+    "max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-full max-sm:max-w-none max-sm:flex max-sm:flex-col max-sm:max-h-[92dvh] max-sm:overflow-hidden max-sm:rounded-b-none max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] max-sm:data-open:slide-in-from-bottom-8 max-sm:data-closed:slide-out-to-bottom-8",
+  fullscreen:
+    "max-sm:inset-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-full max-sm:max-w-none max-sm:h-dvh max-sm:max-h-none max-sm:flex max-sm:flex-col max-sm:overflow-hidden max-sm:rounded-none max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  mobile = "sheet",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  mobile?: "sheet" | "fullscreen" | "none"
 }) {
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-mobile={mobile}
         className={cn(
           "fixed top-1/2 left-1/2 z-[var(--z-portal)] grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
+          className,
+          mobile !== "none" && MOBILE_POPUP[mobile]
         )}
         {...props}
       >
-        {children}
+        {mobile === "none" ? (
+          children
+        ) : (
+          <div
+            data-slot="dialog-scroll"
+            className="max-sm:-mx-4 max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col max-sm:gap-4 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-4 sm:contents"
+          >
+            {children}
+          </div>
+        )}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
@@ -95,7 +126,12 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      // Phone sheet: the title stays at the top while the body scrolls under it; room on
+      // the right for the close button.
+      className={cn(
+        "flex flex-col gap-2 max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:-mt-px max-sm:bg-popover max-sm:pt-px max-sm:pr-8 max-sm:pb-2",
+        className
+      )}
       {...props}
     />
   )
@@ -114,6 +150,8 @@ function DialogFooter({
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end",
+        // Phone sheet: the primary action never scrolls away.
+        "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:mt-auto max-sm:border-t max-sm:border-border max-sm:bg-popover max-sm:pt-3",
         className
       )}
       {...props}

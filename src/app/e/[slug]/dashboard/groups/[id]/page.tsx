@@ -24,6 +24,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel } from "@/lib/reservation-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DesktopOnlyNotice, MobileActions } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
@@ -179,7 +181,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: on a phone the three actions wrap instead of pushing "Pickup Room"
+            past the right edge. They fit on one line at every desktop width. */}
+        <div className="flex flex-wrap items-center gap-2 max-md:hidden">
           <Button variant="outline" onClick={openEdit}>
             <Pencil className="w-4 h-4 mr-2" /> Edit Block
           </Button>
@@ -204,15 +208,33 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Phones: the block is read here; the master folio opens (it is a phone-ready
+            panel) but editing the block, picking up rooms and setting up the master folio
+            are desktop tasks. */}
+        {openMaster && (
+          <MobileActions
+            className="md:hidden"
+            primary={
+              <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
+                <Wallet className="w-4 h-4 mr-2" /> Master Folio
+              </Button>
+            }
+          />
+        )}
+        <DesktopOnlyNotice
+          feature="Group setup"
+          description="Editing the block, picking up rooms and setting up the master folio are done on a computer. Everything below is up to date."
+        />
+
+      {/* Stats — 2x2 on a phone */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 max-md:grid-cols-2 max-md:gap-3">
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Event Dates</CardTitle>
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">
+            <div className="text-xl font-bold max-md:text-base">
               {format(parseISO(group.startDate), "dd MMM")} – {format(parseISO(group.endDate), "dd MMM yy")}
             </div>
           </CardContent>
@@ -222,21 +244,21 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Held</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{group.totalRoomsHeld}</div></CardContent>
+          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{group.totalRoomsHeld}</div></CardContent>
         </Card>
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Picked Up</CardTitle>
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{pickedUp}</div></CardContent>
+          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{pickedUp}</div></CardContent>
         </Card>
         <Card className="shadow-elevation-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Remaining</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{remaining}</div></CardContent>
+          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{remaining}</div></CardContent>
         </Card>
       </div>
 
@@ -246,7 +268,24 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <CardHeader className="py-4">
             <CardTitle className="text-lg">Room Block</CardTitle>
           </CardHeader>
-          <div className="overflow-x-auto border-t border-border">
+          {/* Phones: one line per room type instead of a sideways-scrolling table. */}
+          <div className="divide-y divide-border border-t border-border md:hidden">
+            {group.roomHolds.map((h: any) => {
+              const picked = pickedByType[h.roomTypeId] ?? 0
+              const rem = Math.max(0, h.quantity - picked)
+              return (
+                <div key={h.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <span className="min-w-0 font-medium">
+                    {h.roomType?.name} <span className="text-xs text-muted-foreground">({h.roomType?.code})</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {picked}/{h.quantity} picked · <span className="font-semibold text-foreground">{rem} left</span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="overflow-x-auto border-t border-border max-md:hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -277,8 +316,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         </Card>
       )}
 
-      {/* Block Schedule */}
-      <Card className="shadow-elevation-1 overflow-hidden">
+      {/* Block Schedule — a wide day grid; phones read the pickups list below instead. */}
+      <Card className="shadow-elevation-1 overflow-hidden max-md:hidden">
         <CardHeader className="py-4">
           <CardTitle className="text-lg">Block Schedule</CardTitle>
         </CardHeader>
@@ -296,7 +335,30 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         </CardHeader>
 
         {group.reservations && group.reservations.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: a card per pickup — name, stay, room, status; tap to open. */}
+          <MobileCardList className="p-4">
+            {group.reservations.map((res: any) => {
+              const st = deriveReservationState(res.status, res.checkInDate, res.checkOutDate, bd)
+              return (
+                <MobileCard
+                  key={res.id}
+                  title={`${res.primaryGuest?.firstName ?? ""} ${res.primaryGuest?.lastName ?? ""}`.trim()}
+                  subtitle={<span className="font-mono">{res.confirmationNo}</span>}
+                  badge={<StatusBadge label={reservationStateLabel(st)} status={st} />}
+                  meta={[
+                    {
+                      label: "Room",
+                      value: res.assignments?.[0]?.room?.roomNumber || <span className="font-normal text-muted-foreground">Unassigned</span>,
+                    },
+                    { label: "Stay", value: `${format(parseISO(res.checkInDate), "dd MMM")} → ${format(parseISO(res.checkOutDate), "dd MMM yy")}`, wide: true },
+                  ]}
+                  onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}`)}
+                />
+              )
+            })}
+          </MobileCardList>
+          <div className="overflow-x-auto max-md:hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -338,6 +400,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
               </TableBody>
             </Table>
           </div>
+          </>
         ) : (
           <EmptyState
             icon={Users}

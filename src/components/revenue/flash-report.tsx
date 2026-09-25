@@ -47,7 +47,7 @@ export function FlashReport() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2 max-md:text-xl">
             <BarChart3 className="w-6 h-6 text-primary" />
             Manager&apos;s Flash Report
           </h1>
@@ -60,63 +60,63 @@ export function FlashReport() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-md:grid-cols-2 max-md:gap-3">
         {/* Occupancy */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
+          <div className="flex justify-between items-start mb-4 max-md:mb-1">
             <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Occupancy</p>
-              <h3 className="text-3xl font-bold text-foreground">{data.occupancyPercentage.toFixed(1)}%</h3>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">Occupancy</p>
+              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{data.occupancyPercentage.toFixed(1)}%</h3>
             </div>
-            <div className="p-3 bg-info-muted rounded-lg">
+            <div className="max-md:hidden p-3 bg-info-muted rounded-lg">
               <Percent className="w-6 h-6 text-info" />
             </div>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground max-md:text-xs">
             <span className="font-semibold text-foreground">{data.occupiedRoomsCount}</span> / {data.totalRooms} Rooms Occupied
           </div>
         </div>
 
         {/* ADR */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
+          <div className="flex justify-between items-start mb-4 max-md:mb-1">
             <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">ADR</p>
-              <h3 className="text-3xl font-bold text-foreground">{formatCurrency(data.adr)}</h3>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">ADR</p>
+              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.adr)}</h3>
             </div>
-            <div className="p-3 bg-success-muted rounded-lg">
+            <div className="max-md:hidden p-3 bg-success-muted rounded-lg">
               <DollarSign className="w-6 h-6 text-success" />
             </div>
           </div>
-          <div className="text-sm text-muted-foreground">Average Daily Rate</div>
+          <div className="text-sm text-muted-foreground max-md:text-xs">Average Daily Rate</div>
         </div>
 
         {/* RevPAR */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
+          <div className="flex justify-between items-start mb-4 max-md:mb-1">
             <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">RevPAR</p>
-              <h3 className="text-3xl font-bold text-foreground">{formatCurrency(data.revpar)}</h3>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">RevPAR</p>
+              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.revpar)}</h3>
             </div>
-            <div className="p-3 bg-muted rounded-lg">
+            <div className="max-md:hidden p-3 bg-muted rounded-lg">
               <TrendingUp className="w-6 h-6 text-primary" />
             </div>
           </div>
-          <div className="text-sm text-muted-foreground">Revenue Per Available Room</div>
+          <div className="text-sm text-muted-foreground max-md:text-xs">Revenue Per Available Room</div>
         </div>
 
         {/* Total Revenue */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
+          <div className="flex justify-between items-start mb-4 max-md:mb-1">
             <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Total Revenue</p>
-              <h3 className="text-3xl font-bold text-foreground">{formatCurrency(data.totalRevenue)}</h3>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">Total Revenue</p>
+              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.totalRevenue)}</h3>
             </div>
-            <div className="p-3 bg-warning-muted rounded-lg">
+            <div className="max-md:hidden p-3 bg-warning-muted rounded-lg">
               <DollarSign className="w-6 h-6 text-warning" />
             </div>
           </div>
-          <div className="text-sm text-muted-foreground flex justify-between">
+          <div className="text-sm text-muted-foreground flex justify-between max-md:flex-col max-md:text-xs">
             <span>Room: {formatCurrency(data.roomRevenue)}</span>
             <span>Other: {formatCurrency(data.otherRevenue)}</span>
           </div>
@@ -127,7 +127,7 @@ export function FlashReport() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Revenue Breakdown */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 lg:col-span-2">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 lg:col-span-2 max-md:p-4">
           <h3 className="text-lg font-bold text-foreground mb-6">Revenue by Category</h3>
           {Object.keys(data.revenueByCategory).length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
@@ -154,7 +154,7 @@ export function FlashReport() {
         </div>
 
         {/* Quick Stats */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
           <h3 className="text-lg font-bold text-foreground mb-6">Daily Snapshot</h3>
           <ul className="space-y-4">
             <li className="flex items-center justify-between pb-4 border-b">

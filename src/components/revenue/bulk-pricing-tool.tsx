@@ -15,6 +15,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { MAX_PRICE_CALENDAR_RANGE_DAYS, MAX_PRICE_CALENDAR_RANGE_YEARS } from "@/lib/price-calendar"
 import { cn } from "@/lib/utils"
 import { toast } from "@/lib/toast"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 
 const currency = (amount: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
@@ -160,7 +161,14 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
     // The form itself is the grid: the fields fill the available width and the review panel
     // rides alongside them from xl up, instead of a narrow column stranded on a wide screen.
     // Below xl the panel drops underneath, which is still read-then-submit order.
-    <form onSubmit={handleSubmit} className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+    <>
+    {/* Phones: a push overwrites days x room types of prices — desktop only. Each plan's
+        price calendar (Rate Plans -> Price calendar) stays readable on a phone. */}
+    <DesktopOnlyNotice
+      feature="Rate seasons"
+      description="Pushing a season's prices overwrites many days at once. Open this page on a computer to do it; each rate plan's price calendar is readable here."
+    />
+    <form onSubmit={handleSubmit} className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] max-md:hidden">
       <Card>
         <CardHeader className="bg-muted/50 border-b border-border pb-4">
           <div className="flex items-center space-x-2">
@@ -344,5 +352,6 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         </CardContent>
       </Card>
     </form>
+    </>
   )
 }

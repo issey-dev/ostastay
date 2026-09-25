@@ -5,12 +5,13 @@
 //   /docs/api            — the Booking API, for web developers
 //   /docs/configuration  — setting up an enterprise and its properties in the Hub
 //   /docs/operations     — day-to-day use by property staff
+//   /docs/release-notes  — what each version added, improved and fixed
 // The old /docs/api-integration and /docs/guides/* addresses redirect (next.config.ts).
 
 export type DocLink = { href: string; title: string; summary: string };
 export type DocSection = { title: string; links: DocLink[] };
 export type DocArea = {
-  key: "api" | "configuration" | "operations";
+  key: "api" | "configuration" | "operations" | "release-notes";
   title: string;
   href: string;
   audience: string;
@@ -120,6 +121,21 @@ export const DOC_AREAS: DocArea[] = [
         links: [
           { href: "/docs/operations", title: "Overview", summary: "Day-to-day guides for property staff." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk", summary: "For front office and spa staff: finding and handling online bookings." },
+        ],
+      },
+    ],
+  },
+  {
+    key: "release-notes",
+    title: "Release notes",
+    href: "/docs/release-notes",
+    audience: "For everyone",
+    pdf: { url: "/docs/uppsolut-stay-release-notes.pdf", title: "Release notes" },
+    sections: [
+      {
+        title: "Release notes",
+        links: [
+          { href: "/docs/release-notes", title: "All releases", summary: "What each version added, improved and fixed." },
         ],
       },
     ],

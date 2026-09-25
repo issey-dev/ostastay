@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/form"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 
 export type AllocationDto = {
   id: string
@@ -271,9 +273,14 @@ export function AllocationsManager() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button onClick={openCreate} className="shadow-sm">
+        <Button onClick={openCreate} className="shadow-sm max-md:hidden">
           <Plus className="mr-2 h-4 w-4" /> New Allocation
         </Button>
+        <DesktopOnlyNotice
+          className="w-full"
+          feature="Allocation editing"
+          description="The list below is read-only on a phone. Open this page on a computer to create, edit or delete allocations."
+        />
       </div>
 
       <Card>
@@ -300,21 +307,27 @@ export function AllocationsManager() {
           ) : (
             <>
               {/* Mobile card view — the table below takes over at md. */}
-              <div className="md:hidden space-y-3">
+              <MobileCardList>
                 {allocations.map((a) => (
-                  <div key={a.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-mono font-bold text-info">{a.code}</p>
-                        <p className="font-medium">{a.name}</p>
-                      </div>
-                      {a.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
+                  <MobileCard
+                    key={a.id}
+                    title={a.name}
+                    subtitle={<span className="font-mono font-bold text-info">{a.code}</span>}
+                    tone={a.isActive ? undefined : "muted"}
+                    badge={
+                      a.isActive ? (
+                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-muted-foreground shrink-0">Inactive</Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                      )
+                    }
+                    meta={[
+                      { label: "Charge Code", value: <span className="font-mono text-xs">{a.chargeCode?.code}</span> },
+                      { label: "Rhythm", value: RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm },
+                      { label: "Current Price", value: currentPriceLabel(a), wide: true },
+                    ]}
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Badge variant="outline">{TYPE_LABELS[a.type] ?? a.type}</Badge>
                       <Badge
                         variant="outline"
@@ -337,22 +350,9 @@ export function AllocationsManager() {
                         </Badge>
                       )}
                     </div>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <div>Charge code: <span className="font-mono text-xs text-foreground">{a.chargeCode?.code}</span></div>
-                      <div>{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</div>
-                      <div>{currentPriceLabel(a)}</div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(a)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => setDeleting(a)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
-                      </Button>
-                    </div>
-                  </div>
+                  </MobileCard>
                 ))}
-              </div>
+              </MobileCardList>
 
               <div className="hidden md:block overflow-x-auto">
                 <Table>

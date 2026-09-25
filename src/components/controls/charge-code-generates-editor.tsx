@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2, ArrowRightCircle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -155,40 +156,38 @@ export function ChargeCodeGeneratesEditor({
     <div className="space-y-4">
       {/* Phone view — one card per generate row: destination code up top, amount and
           order beneath, Disable/Enable + delete as full-width/icon actions. */}
-      <div className="md:hidden">
-        {rows.length === 0 ? (
-          <div className="rounded-lg border p-4"><EmptyState icon={ArrowRightCircle} title="This code generates nothing" /></div>
-        ) : (
-          <div className="space-y-3">
-            {rows.map((r) => (
-              <div key={r.id} className={`rounded-lg border border-border bg-card p-4 space-y-2 ${r.isActive ? "" : "opacity-50"}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="font-mono font-medium">{r.generatedCode.code}</span>
-                    {!r.isActive && <Badge variant="outline" className="ml-2 font-normal">Off</Badge>}
-                    <p className="text-sm text-muted-foreground">{r.generatedCode.description}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">Order {r.sortOrder}</span>
-                </div>
-                <p className="text-sm">{describeAmount(r)}</p>
-                <div className="flex gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => toggleActive(r)}>
-                    {r.isActive ? "Disable" : "Enable"}
-                  </Button>
-                  <Button
-                    variant="outline" size="icon"
-                    className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
-                    aria-label="Delete"
-                    onClick={() => remove(r)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <MobileCardList
+        empty={<div className="rounded-lg border p-4"><EmptyState icon={ArrowRightCircle} title="This code generates nothing" /></div>}
+      >
+        {rows.map((r) => (
+          <MobileCard
+            key={r.id}
+            className={r.isActive ? undefined : "opacity-50"}
+            title={<span className="font-mono">{r.generatedCode.code}</span>}
+            subtitle={r.generatedCode.description}
+            badge={!r.isActive ? <Badge variant="outline" className="font-normal">Off</Badge> : undefined}
+            meta={[
+              { label: "Amount", value: describeAmount(r) },
+              { label: "Order", value: r.sortOrder },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => toggleActive(r)}>
+                  {r.isActive ? "Disable" : "Enable"}
+                </Button>
+                <Button
+                  variant="outline" size="icon"
+                  className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                  aria-label="Delete"
+                  onClick={() => remove(r)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileCardList>
 
       <div className="hidden md:block rounded-lg border overflow-x-auto">
         <Table>

@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Plus, Pencil, Trash2, ListChecks, Clock, CalendarOff, Users } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { MobileActions } from "@/components/ui/mobile"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -217,44 +219,44 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
       ) : (
         <>
           {/* Phone view — the table below takes over at md. */}
-          <div className="md:hidden space-y-3">
+          <MobileCardList>
             {therapists.map((t) => {
               const qualifiedCount = t.skills.filter((s) => s.qualified).length
               return (
-                <div key={t.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{t.displayName}</p>
-                      <p className="text-sm text-muted-foreground truncate">{t.phone || t.email || "—"}</p>
-                    </div>
-                    {t.isActive && t.bookable ? (
-                      <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
+                <MobileCard
+                  key={t.id}
+                  tone={t.isActive ? undefined : "muted"}
+                  title={t.displayName}
+                  subtitle={t.phone || t.email || "—"}
+                  badge={
+                    t.isActive && t.bookable ? (
+                      <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-muted-foreground shrink-0">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
-                    )}
-                  </div>
-                  <Badge variant="outline">{qualifiedCount} treatment{qualifiedCount === 1 ? "" : "s"}</Badge>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openSkills(t)}>
-                      <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Skills
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setScheduleFor(t)}>
-                      <Clock className="h-3.5 w-3.5 mr-1.5" /> Schedule
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setExceptionsFor(t)}>
-                      <CalendarOff className="h-3.5 w-3.5 mr-1.5" /> Exceptions
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
-                    </Button>
-                  </div>
-                </div>
+                      <Badge variant="outline" className="text-muted-foreground">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
+                    )
+                  }
+                  meta={[{ label: "Qualified for", value: `${qualifiedCount} treatment${qualifiedCount === 1 ? "" : "s"}` }]}
+                  onClick={() => openEdit(t)}
+                  actions={
+                    <MobileActions
+                      className="w-full"
+                      primary={
+                        <Button variant="outline" onClick={() => openEdit(t)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                        </Button>
+                      }
+                      more={[
+                        { label: "Skills", icon: ListChecks, onSelect: () => openSkills(t) },
+                        { label: "Schedule", icon: Clock, onSelect: () => setScheduleFor(t) },
+                        { label: "Exceptions", icon: CalendarOff, onSelect: () => setExceptionsFor(t) },
+                        { label: "Delete", icon: Trash2, destructive: true, onSelect: () => setDeleting(t) },
+                      ]}
+                    />
+                  }
+                />
               )
             })}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
             <Table>
@@ -674,7 +676,7 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
             )} />
             <p className="text-xs text-muted-foreground md:col-span-2">
               {isExtended
-                ? "The therapist can be booked between these times on this date, even outside their weekly schedule (within the spa's opening hours)."
+                ? "The therapist can be booked between these times on this date, even outside their weekly schedule or the spa's usual opening hours."
                 : "Leave the times empty to block the whole day, or give both to block only part of it."}
             </p>
             <FormField control={form.control} name="reason" render={({ field }) => (

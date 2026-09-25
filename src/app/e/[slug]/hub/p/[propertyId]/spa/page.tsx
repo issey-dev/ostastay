@@ -1,5 +1,6 @@
 import { propertyPage } from "@/lib/hub-page"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { SpaCatalogManager } from "@/components/controls/spa-manager"
 import { SpaTherapistsManager } from "@/components/controls/spa-therapists-manager"
@@ -11,6 +12,7 @@ export default async function HubPropertySpaPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard title="Treatment Catalog" description="Categories, treatments and pricing this property sells from the Spa scheduler.">
         <SpaCatalogManager propertyId={property.id} />
       </ControlsCard>

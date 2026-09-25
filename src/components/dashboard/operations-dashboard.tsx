@@ -92,6 +92,11 @@ import type { DashboardOverview, OverviewWorklistRow } from "@/lib/dashboard/ove
 const REFRESH_MS = 120_000
 const RANGES = [7, 14, 30] as const
 
+/** Chart/insight widgets that a phone folds behind "Show more insights" — the day's
+ *  essentials (status, key figures, movements, worklists, alerts) stay up top. Phones
+ *  only (`max-md:hidden`); desktop renders every widget exactly as laid out. */
+const PHONE_INSIGHT_IDS = new Set(["trend", "revenue-mix", "booking-pace", "payments", "receivables", "guest-mix", "outlets", "activity"])
+
 /** Revenue buckets keep a FIXED ramp slot, so filtering or a quiet F&B day never repaints
  *  the other segments. Colour follows the entity, never its rank. */
 const BUCKET_SLOT: Record<string, number> = { ROOM: 0, FOOD_BEVERAGE: 1, OTHER: 2, TRANSPORT: 3 }
@@ -136,6 +141,8 @@ export function OperationsDashboard({
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [draggingId, setDraggingId] = React.useState<string | null>(null)
   const [overId, setOverId] = React.useState<string | null>(null)
+  // Phones only: whether the lower chart widgets are unfolded (see PHONE_INSIGHT_IDS).
+  const [insightsOpen, setInsightsOpen] = React.useState(false)
 
   const propertyId = currentProperty?.id ?? null
 
@@ -313,6 +320,7 @@ export function OperationsDashboard({
 
   const onThisPage = layout.widgets.filter((w) => !w.hidden && w.pageId === activePage.id && availableIds.has(w.id))
   const hiddenHere = layout.widgets.filter((w) => w.hidden && availableIds.has(w.id)).length
+  const insightCount = onThisPage.filter((w) => PHONE_INSIGHT_IDS.has(w.id)).length
 
   return (
     <div className={cn("space-y-5 transition-opacity duration-200", refreshing && "opacity-70")}>
@@ -330,7 +338,7 @@ export function OperationsDashboard({
                   onClick={() => setRange(r)}
                   aria-pressed={range === r}
                   className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:min-h-10 pointer-coarse:min-w-11",
                     range === r ? "bg-card text-foreground shadow-elevation-1" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -398,7 +406,7 @@ export function OperationsDashboard({
            resized widget close its own gap instead of leaving a hole — the auto-fit the
            two fixed-width grids this replaced could never do. */
         <div
-          className="grid grid-flow-row-dense auto-rows-min grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12"
+          className="grid grid-flow-row-dense auto-rows-min grid-cols-1 gap-3 max-md:grid-cols-2 md:grid-cols-6 xl:grid-cols-12"
           onDragEnd={onDragEnd}
         >
           {onThisPage.map((w) => {
@@ -409,7 +417,14 @@ export function OperationsDashboard({
                 key={w.id}
                 id={w.id}
                 title={def.title}
-                className={cn(SIZE_CLASS[w.size], def.align === "start" && "self-start")}
+                className={cn(
+                  SIZE_CLASS[w.size],
+                  def.align === "start" && "self-start",
+                  // Phones: small key-figure tiles two to a row, everything else full width;
+                  // chart widgets folded until "Show more insights" is tapped.
+                  w.size !== "sm" && "max-md:col-span-2",
+                  PHONE_INSIGHT_IDS.has(w.id) && !insightsOpen && "max-md:hidden"
+                )}
                 dragging={draggingId === w.id}
                 isDragTarget={overId === w.id && draggingId !== null && draggingId !== w.id}
                 onDragStart={onDragStart}
@@ -421,6 +436,16 @@ export function OperationsDashboard({
               </WidgetShell>
             )
           })}
+          {/* Phones only. Inside the grid (not after it) so the desktop page gains no
+              spacing; a full-row item can never be dense-packed into an earlier gap. */}
+          {insightCount > 0 && (
+            <div className="col-span-full md:hidden">
+              <Button variant="outline" className="w-full" onClick={() => setInsightsOpen((o) => !o)} aria-expanded={insightsOpen}>
+                <TrendingUp className="h-4 w-4" />
+                {insightsOpen ? "Hide insights" : `Show more insights (${insightCount})`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

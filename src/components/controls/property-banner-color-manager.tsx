@@ -110,7 +110,9 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Phones: a compact 5-across swatch grid — names stay for screen readers, and the
+          strip above names the selected / previewed colour. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 max-sm:grid-cols-5 max-sm:gap-1">
         {SWATCHES.map((swatch) => {
           const isSelected = swatch.id === selected.id
           const isSaving = saving === swatch.id
@@ -126,7 +128,7 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
               onFocus={() => setHovered(swatch.id)}
               onBlur={() => setHovered(null)}
               className={cn(
-                "group flex flex-col items-start gap-2.5 rounded-lg border-2 p-3 text-left transition-colors active:translate-y-px",
+                "group flex flex-col items-start gap-2.5 rounded-lg border-2 p-3 text-left transition-colors active:translate-y-px max-sm:items-center max-sm:p-1",
                 "disabled:pointer-events-none disabled:opacity-50",
                 isSelected
                   ? "border-foreground bg-card"
@@ -156,7 +158,7 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
                   <Ban className="h-4 w-4 text-muted-foreground" />
                 ) : null}
               </span>
-              <span className="flex flex-col gap-0.5">
+              <span className="flex flex-col gap-0.5 max-sm:sr-only">
                 <span
                   className={cn(
                     "text-[13px] leading-tight",

@@ -16,7 +16,7 @@ export default async function EnterpriseLoginPage({
 
   if (!enterprise) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4 max-md:min-h-dvh">
         <div className="w-full max-w-md text-center">
           <h1 className="text-2xl font-bold text-foreground">Enterprise not found</h1>
           <p className="text-muted-foreground mt-2">

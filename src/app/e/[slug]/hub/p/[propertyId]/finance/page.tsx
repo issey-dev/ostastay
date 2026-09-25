@@ -1,6 +1,7 @@
 import { propertyPage } from "@/lib/hub-page"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { TaxManager } from "@/components/controls/tax-manager"
 import { PaymentMethodsManager } from "@/components/settings/payment-methods-manager"
@@ -17,6 +18,7 @@ export default async function HubPropertyFinancePage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard
         title="Tax"
         description="This property's Maldives Tax (Green Tax, GST, Service Charge) and its Custom Tax profiles. Which charge code each levy posts against is set under Charge Codes › Posting Defaults."

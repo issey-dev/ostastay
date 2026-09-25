@@ -252,7 +252,7 @@ export default function TaskSheetPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 px-2 shrink-0"
+                          className="h-7 px-2 shrink-0 pointer-coarse:min-w-11"
                           disabled={busy}
                           onClick={() => completeTask(room.id, task.id)}
                         >

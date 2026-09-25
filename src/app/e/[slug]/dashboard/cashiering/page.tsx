@@ -15,7 +15,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { InfoHint } from "@/components/ui/info-hint"
+import { INPUT_MONEY } from "@/lib/input-presets";
 import { useProperty } from "@/components/providers/property-provider";
+
+// Phones: an empty list is one quiet line under its header (the header already carries the
+// "New …" button) instead of a ~350px illustration card per section.
+const COMPACT_EMPTY = "max-md:py-5 max-md:[&>div]:hidden max-md:[&>h3]:text-sm max-md:[&>h3]:font-normal max-md:[&>h3]:text-muted-foreground";
 
 export default function CashieringPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -269,7 +274,7 @@ export default function CashieringPage() {
             <h3 className="text-2xl font-bold">Shift Closed Successfully</h3>
             <p className="text-primary-foreground/80 mt-1">Blind Drop Reconciliation Report</p>
           </div>
-          <CardContent className="p-8">
+          <CardContent className="p-8 max-md:p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
               <div className="p-4 bg-muted rounded-xl border border-border">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Expected System Cash</p>
@@ -304,7 +309,7 @@ export default function CashieringPage() {
             )}
           </CardContent>
           <CardFooter className="bg-muted p-4 border-t justify-center gap-3">
-            <Button variant="outline" onClick={() => window.print()}>
+            <Button variant="outline" className="max-md:hidden" onClick={() => window.print()}>
               <Printer className="w-4 h-4 mr-2" /> Print Report
             </Button>
             <Button variant="outline" onClick={() => setReconciliation(null)}>Dismiss Report</Button>
@@ -332,6 +337,7 @@ export default function CashieringPage() {
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input 
+                  {...INPUT_MONEY}
                   type="number" 
                   step="0.01" 
                   className="pl-9 text-lg font-bold"
@@ -357,6 +363,21 @@ export default function CashieringPage() {
       {/* SHIFT OPEN (Dashboard) */}
       {status?.hasActiveShift && !reconciliation && (
         <div className="space-y-6">
+          {/* Phones: the three numbers a cashier checks, before any card. */}
+          <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card md:hidden">
+            {[
+              { label: "Expected cash", value: status.summary?.expectedCash ?? 0, negative: false },
+              { label: "Payments", value: status.summary?.paymentsNet ?? 0, negative: false },
+              { label: "Paid-outs", value: (status.shift.paidOuts ?? []).reduce((sum: number, po: any) => sum + po.amount, 0), negative: true },
+            ].map((item) => (
+              <div key={item.label} className="min-w-0 px-2 py-3 text-center">
+                <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                <p className={`mt-0.5 truncate font-mono text-base font-bold ${item.negative && item.value > 0 ? "text-destructive" : "text-foreground"}`}>
+                  {item.negative && item.value > 0 ? "−" : ""}${item.value.toFixed(2)}
+                </p>
+              </div>
+            ))}
+          </div>
           <Card className="border-border shadow-md">
             <CardHeader className="bg-muted/50 border-b border-border flex flex-row items-center justify-between pb-4">
               <div>
@@ -380,7 +401,7 @@ export default function CashieringPage() {
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                        <Input type="number" step="0.01" className="pl-9 w-40 font-bold" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} />
+                        <Input {...INPUT_MONEY} type="number" step="0.01" className="pl-9 w-40 font-bold" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} />
                       </div>
                       <Button variant="outline" onClick={handleOpenShift} disabled={isOpening}>
                         {isOpening ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set float"}
@@ -393,9 +414,11 @@ export default function CashieringPage() {
                     <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
                   </div>
                 )}
-                <div className="flex items-end gap-6">
+                {/* Phones: Expected Cash above a full-width Close Shift — side by side they
+                    pushed the button past the right edge. From sm up: one row, as before. */}
+                <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:gap-6">
                   {status.summary && (
-                    <div className="text-right">
+                    <div className="sm:text-right max-md:hidden">
                       <p className="text-sm font-medium text-muted-foreground">Expected Cash</p>
                       <p className="text-2xl font-bold font-mono text-foreground">${status.summary.expectedCash.toFixed(2)}</p>
                     </div>
@@ -414,8 +437,8 @@ export default function CashieringPage() {
           </Card>
 
           <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
+            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
                 <ArrowRightLeft className="w-5 h-5 text-muted-foreground" />
                 Currency Exchange
               </CardTitle>
@@ -425,7 +448,7 @@ export default function CashieringPage() {
             </CardHeader>
             <CardContent className="p-0">
               {(status.shift.currencyExchanges?.length ?? 0) === 0 ? (
-                <EmptyState icon={ArrowRightLeft} title="No currency exchanges recorded yet" />
+                <EmptyState icon={ArrowRightLeft} title="No currency exchanges recorded yet" className={COMPACT_EMPTY} />
               ) : (
                 <div className="divide-y divide-border">
                   {status.shift.currencyExchanges.map((exchange: any) => (
@@ -441,7 +464,7 @@ export default function CashieringPage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8"
+                        className="h-8 w-8 max-md:hidden"
                         title="Print Exchange Receipt"
                         aria-label="Print Exchange Receipt"
                         onClick={() => window.open(`/e/${slug}/dashboard/cashiering/exchange/${exchange.id}/receipt`, '_blank')}
@@ -456,8 +479,8 @@ export default function CashieringPage() {
           </Card>
 
           <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
+            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
                 <HandCoins className="w-5 h-5 text-muted-foreground" />
                 Paid-Outs (Petty Cash)
               </CardTitle>
@@ -467,7 +490,7 @@ export default function CashieringPage() {
             </CardHeader>
             <CardContent className="p-0">
               {(status.shift.paidOuts?.length ?? 0) === 0 ? (
-                <EmptyState icon={HandCoins} title="No paid-outs recorded this shift" />
+                <EmptyState icon={HandCoins} title="No paid-outs recorded this shift" className={COMPACT_EMPTY} />
               ) : (
                 <div className="divide-y divide-border">
                   {status.shift.paidOuts.map((po: any) => (
@@ -486,8 +509,8 @@ export default function CashieringPage() {
 
           {(status.summary?.postingsByChargeCode?.length ?? 0) > 0 && (
             <Card className="border-0 shadow-sm ring-1 ring-border">
-              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
+              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
                   <Wallet className="w-5 h-5 text-muted-foreground" />
                   Postings by Charge Code
                 </CardTitle>
@@ -511,8 +534,8 @@ export default function CashieringPage() {
 
           {activeByMethod.length > 0 && (
             <Card className="border-0 shadow-sm ring-1 ring-border">
-              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
+              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
                   <DollarSign className="w-5 h-5 text-muted-foreground" />
                   Payment Summary
                 </CardTitle>
@@ -536,14 +559,14 @@ export default function CashieringPage() {
 
           <Card className="border-0 shadow-sm ring-1 ring-border">
             <CardHeader className="bg-muted border-b border-border">
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
                 <Wallet className="w-5 h-5 text-muted-foreground" />
                 Payments Posted This Shift
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {status.shift.payments.length === 0 ? (
-                <EmptyState icon={Wallet} title="No payments posted yet" />
+                <EmptyState icon={Wallet} title="No payments posted yet" className={COMPACT_EMPTY} />
               ) : (
                 <div className="divide-y divide-border">
                   {status.shift.payments.map((payment: any) => (
@@ -573,7 +596,7 @@ export default function CashieringPage() {
       {shiftHistory.length > 0 && (
         <Card className="border-0 shadow-sm ring-1 ring-border">
           <CardHeader className="bg-muted border-b border-border">
-            <CardTitle className="text-lg flex items-center gap-2">
+            <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
               <History className="w-5 h-5 text-muted-foreground" />
               Shift History
               <InfoHint>Your past closed shifts with their reconciliation results.</InfoHint>
@@ -638,6 +661,7 @@ export default function CashieringPage() {
             <div className="relative">
               <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6" />
               <Input 
+                {...INPUT_MONEY}
                 type="number" 
                 step="0.01" 
                 autoFocus
@@ -680,6 +704,7 @@ export default function CashieringPage() {
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
+                  {...INPUT_MONEY}
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -751,6 +776,7 @@ export default function CashieringPage() {
             <div className="space-y-2">
               <Label>Exchange Rate</Label>
               <Input
+                {...INPUT_MONEY}
                 type="number"
                 step="0.0001"
                 placeholder="15.42"
@@ -771,6 +797,7 @@ export default function CashieringPage() {
               <div className="space-y-2">
                 <Label>Amount Given ({exchangeForm.fromCurrency || "From"})</Label>
                 <Input
+                  {...INPUT_MONEY}
                   type="number"
                   step="0.01"
                   placeholder="0.00"
@@ -790,6 +817,7 @@ export default function CashieringPage() {
               <div className="space-y-2">
                 <Label>Amount Received ({exchangeForm.toCurrency || "To"})</Label>
                 <Input
+                  {...INPUT_MONEY}
                   type="number"
                   step="0.01"
                   placeholder="0.00"

@@ -87,7 +87,7 @@ function StatCard({ label, value, sub }: { label: string; value: React.ReactNode
     <Card>
       <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold tabular-nums">{value}</div>
+        <div className="text-2xl font-bold tabular-nums max-sm:break-words">{value}</div>
         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       </CardContent>
     </Card>
@@ -199,7 +199,7 @@ export function DbHealthDashboard() {
 
         {/* ============================== STORAGE ============================== */}
         <TabsContent value="storage" className="space-y-6 pt-4">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 max-sm:grid-cols-1">
             {/* Development runs SQLite and production PostgreSQL, so every card below
                 states which engine it is describing rather than implying one. */}
             <StatCard
@@ -308,7 +308,7 @@ export function DbHealthDashboard() {
           </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-4">
+              <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-4 max-sm:grid-cols-2">
                 {Object.entries(data.rowCounts).map(([table, count]) => (
                   <div key={table} className="flex flex-col">
                     <span className="text-xs text-muted-foreground capitalize">{table}</span>
@@ -504,7 +504,7 @@ export function DbHealthDashboard() {
 
         {/* ============================ API & CHANNELS ============================ */}
         <TabsContent value="api" className="space-y-6 pt-4">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 max-sm:grid-cols-1">
             <StatCard label={`Channel Calls (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.calls.toLocaleString()} sub={data.channelApi.truncated ? "Truncated at 5,000 — real total is higher" : undefined} />
             <StatCard label={`Failures (${data.channelApi.windowDays}d)`} value={<span className={data.channelApi.totals.failures > 0 ? "text-destructive" : undefined}>{data.channelApi.totals.failures.toLocaleString()}</span>} />
             <StatCard label="Calls (24h)" value={data.channelApi.totals.calls24h.toLocaleString()} />

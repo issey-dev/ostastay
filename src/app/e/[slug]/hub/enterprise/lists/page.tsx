@@ -1,6 +1,7 @@
 import { enterprisePage } from "@/lib/hub-page"
 import { hasPermission } from "@/lib/scope"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { DropdownsManager, PROFILE_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
 import { NationalitiesManager } from "@/components/settings/nationalities-manager"
@@ -14,6 +15,7 @@ export default async function HubEnterpriseListsPage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="enterprise" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard title="Nationalities" description="Every country's nationality, with its flag, used for guests' nationality, address country and document issuing country at every property.">
         {/* Renaming a standard entry creates the enterprise's row for it, and editing one
             updates it — so both are needed. */}

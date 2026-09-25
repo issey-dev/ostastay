@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { MobileActions } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -222,7 +224,7 @@ export function ExcursionManifestPanel({
                       )}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-col gap-2 shrink-0 max-md:hidden">
                     <Button size="sm" variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
                       <Printer className="w-4 h-4 mr-2" /> Print Manifest
                     </Button>
@@ -274,40 +276,40 @@ export function ExcursionManifestPanel({
                     the same four facts in columns; a passenger manifest checked at a
                     boat ramp on a phone shouldn't need a horizontal scroll to see who's
                     confirmed. */}
-                <div className="md:hidden space-y-2">
-                  {manifest.bookings.length === 0 ? (
-                    <p className="text-center text-muted-foreground text-sm py-6">No bookings yet.</p>
-                  ) : (
-                    manifest.bookings.map((b) => (
-                      <div key={b.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{b.guestName}</p>
-                            <p className="text-xs text-muted-foreground">{b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}</p>
-                            <OnlineTag b={b} />
-                          </div>
-                          <StatusBadge label={b.status} status={b.status} />
-                        </div>
-                        {b.notes && <p className="text-xs text-muted-foreground italic">{b.notes}</p>}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm text-muted-foreground">
-                            {b.adultCount}A{b.childCount ? ` ${b.childCount}C` : ""}{b.infantCount ? ` ${b.infantCount}I` : ""}
-                          </span>
-                          {b.status === "CONFIRMED" && (
-                            <div className="flex gap-1">
-                              <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
-                                <UserX className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
-                                <XCircle className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <MobileCardList empty={<p className="text-center text-muted-foreground text-sm py-6">No bookings yet.</p>}>
+                  {manifest.bookings.map((b) => (
+                    <MobileCard
+                      key={b.id}
+                      title={b.guestName}
+                      subtitle={
+                        <>
+                          {b.isWalkIn ? "Walk-in" : b.roomNumber ? `Room ${b.roomNumber}` : "In-house"}
+                          <OnlineTag b={b} />
+                        </>
+                      }
+                      badge={<StatusBadge label={b.status} status={b.status} />}
+                      meta={[
+                        {
+                          label: "Party",
+                          value: `${b.adultCount}A${b.childCount ? ` ${b.childCount}C` : ""}${b.infantCount ? ` ${b.infantCount}I` : ""}`,
+                        },
+                        ...(b.notes ? [{ label: "Notes", value: <span className="font-normal italic whitespace-pre-line">{b.notes}</span>, wide: true }] : []),
+                      ]}
+                      actions={
+                        b.status === "CONFIRMED" ? (
+                          <>
+                            <Button size="sm" variant="outline" className="flex-1" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
+                              <UserX className="w-4 h-4 mr-1.5" /> No-show
+                            </Button>
+                            <Button size="sm" variant="outline" className="flex-1 text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
+                              <XCircle className="w-4 h-4 mr-1.5" /> Cancel
+                            </Button>
+                          </>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </MobileCardList>
 
                 <div className="hidden md:block">
                   <Table>
@@ -355,6 +357,28 @@ export function ExcursionManifestPanel({
               </>
             )}
           </div>
+
+          {/* Phones: the departure's main action pinned at the bottom of the panel —
+              move guests after a cancellation, otherwise the manifest PDF; cancelling the
+              whole departure sits under More (it still asks for a reason). */}
+          {manifest && !loading && (
+            <div className="sticky bottom-0 mt-auto border-t border-border bg-popover px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+              <MobileActions
+                primary={
+                  cascadeResult?.suggestedReplacement && cascadeResult.movableBookingIds.length > 0 ? (
+                    <Button onClick={handleMoveAll} disabled={moving}>
+                      <ArrowRightCircle className="w-4 h-4 mr-2" /> {moving ? "Moving..." : `Move ${cascadeResult.movableBookingIds.length} guest(s)`}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
+                      <Printer className="w-4 h-4 mr-2" /> Manifest PDF
+                    </Button>
+                  )
+                }
+                more={manifest.status === "SCHEDULED" ? [{ label: "Cancel departure", icon: CloudRain, destructive: true, onSelect: () => setCancellingDeparture(true) }] : []}
+              />
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 

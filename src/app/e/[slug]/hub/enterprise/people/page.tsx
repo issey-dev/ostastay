@@ -36,7 +36,8 @@ export default async function HubPeoplePage({ params }: { params: Promise<{ slug
         </p>
       </div>
 
-      <div>
+      {/* The permission matrix report is a wide landscape print document — desktop only. */}
+      <div className="max-md:hidden">
         <Button variant="outline" nativeButton={false} render={<a href={`/e/${slug}/hub/enterprise/permission-matrix`} target="_blank" rel="noreferrer" />}>
           <FileText className="mr-2 h-4 w-4" /> Permission matrix report
         </Button>

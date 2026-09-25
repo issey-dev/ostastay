@@ -43,6 +43,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import type { MobileAction } from "@/components/ui/mobile"
+import { INPUT_SEARCH } from "@/lib/input-presets"
 
 type Reservation = {
   id: string
@@ -571,6 +573,47 @@ export default function ReservationsDashboard() {
     )
   }
 
+  // Phone card actions: the same actions as renderRowActions, split into ONE inline primary
+  // button and a ⋯ menu that sits in the card header. Built from the same guards so the two
+  // can never offer different things. (Desktop — table and card view — keeps renderRowActions.)
+  const phoneActions = (res: Reservation): { primary?: { label: string; icon: typeof Key; onSelect: () => void; tone?: "success" }; more: MobileAction[] } => {
+    const businessDate = currentProperty?.businessDate
+    const editUrl = `/e/${slug}/dashboard/reservations/${res.id}/edit`
+    if (isClosedReservation(res.status)) {
+      const reinstatable = canReinstate(res.status, res.checkInDate, res.checkOutDate, businessDate)
+      const reversible = canReverseCheckOut(res.status, res.checkOutDate, businessDate, res.checkedOutAt)
+      const departed = res.status === "CHECKED_OUT"
+      const more: MobileAction[] = []
+      if (departed && reversible) more.push({ label: "Folio", icon: ReceiptText, onSelect: () => openFolio(res) })
+      if (canEditReservation(res.status)) more.push({ label: "Edit", icon: Pencil, onSelect: () => router.push(editUrl) })
+      const primary = reinstatable
+        ? { label: "Reinstate", icon: RotateCcw, onSelect: () => handleReinstate(res) }
+        : reversible
+          ? { label: "Reinstate", icon: RotateCcw, onSelect: () => handleReverseCheckOut(res) }
+          : departed
+            ? { label: "Folio", icon: ReceiptText, onSelect: () => openFolio(res) }
+            : undefined
+      return { primary, more }
+    }
+    const hasFolio = res.status === "IN_HOUSE" || (res.folios?.length ?? 0) > 0
+    const canRequest = res.status === "RESERVED" || res.status === "IN_HOUSE"
+    const more: MobileAction[] = []
+    if (res.status === "RESERVED") more.push({ label: "Collect deposit", icon: Wallet, onSelect: () => setDepositRes(res) })
+    if (hasFolio) more.push({ label: "Folio", icon: ReceiptText, onSelect: () => openFolio(res) })
+    if (canRequest) {
+      const n = getActiveTasks(res).length
+      more.push({ label: n > 0 ? `Special request (${n})` : "Special request", icon: Bell, onSelect: () => handleRequestPrompt(res) })
+      more.push({ label: "Confirmation letter", icon: FileText, onSelect: () => window.open(`/e/${slug}/dashboard/reservations/${res.id}/confirmation-letter`, "_blank") })
+    }
+    more.push({ label: "Edit", icon: Pencil, onSelect: () => router.push(editUrl) })
+    const primary = canCheckIn(res.status, res.checkInDate, businessDate)
+      ? { label: "Check In", icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
+      : res.status === "IN_HOUSE"
+        ? { label: "Check Out", icon: LogOut, onSelect: () => handleCheckOut(res) }
+        : undefined
+    return { primary, more }
+  }
+
   const activeFilterCount = [filterSearch.trim(), filterStatus, filterDates?.from ? "d" : ""].filter(Boolean).length
   const clearFilters = () => {
     setFilterSearch("")
@@ -583,7 +626,7 @@ export default function ReservationsDashboard() {
   // definition, so the two can never offer different filters.
   const filterControls = (
     <>
-      <div className="relative md:w-72">
+      <div className="relative max-md:hidden md:w-72">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Guest, conf. #, room, phone, email..."
@@ -659,8 +702,10 @@ export default function ReservationsDashboard() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
+      {/* Phone: no card chrome around the list — the reservation cards sit on the page
+          instead of a card inside a card. */}
+      <Card className="max-md:gap-3 max-md:overflow-visible max-md:rounded-none max-md:bg-transparent max-md:py-0 max-md:shadow-none max-md:ring-0">
+        <CardHeader className="max-md:px-0">
           {/* One set of controls, rendered inline on desktop and inside a drawer on a
               phone — filters that took three stacked rows there left almost no room for
               the results they filter. `filterControls` is defined once so the two can
@@ -730,9 +775,23 @@ export default function ReservationsDashboard() {
 
             {/* Inline on desktop only. */}
             <div className="hidden gap-2 md:flex md:flex-wrap md:items-center">{filterControls}</div>
+
+            {/* Phone: the search box stays in view above the list (status/dates live in
+                the Filters sheet). Same state as the desktop box. */}
+            <div className="relative md:hidden">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                {...INPUT_SEARCH}
+                aria-label="Search reservations"
+                placeholder="Guest, conf. #, room, phone..."
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="max-md:px-0">
           {/* Mobile: stacked cards */}
           {/* Cards: always on a phone, and on desktop when card view is chosen. */}
           <div className={`space-y-3 ${view === "card" ? "" : "md:hidden"}`}>
@@ -750,20 +809,22 @@ export default function ReservationsDashboard() {
                 const nights = Math.max(1, Math.round((new Date(res.checkOutDate).getTime() - new Date(res.checkInDate).getTime()) / (1000 * 3600 * 24)))
                 const first = res.assignments?.[0]
                 const extraRooms = (res.assignments?.length ?? 0) > 1 ? (res.assignments!.length - 1) : 0
+                const phone = phoneActions(res)
+                const hasFlags = getReservationFlags(res).length > 0
 
                 return (
                   <div
                     key={res.id}
                     onClick={() => router.push(viewUrl(res.id))}
                     className={cn(
-                      "bg-card border border-border rounded-lg p-4 shadow-elevation-1 cursor-pointer active:bg-muted/50",
+                      "bg-card border border-border rounded-lg p-4 shadow-elevation-1 cursor-pointer active:bg-muted/50 max-md:rounded-xl max-md:p-3",
                       // Closed bookings read as a tint, not a strikethrough — see
                       // reservationRowToneClass().
                       reservationRowToneClass(res.status)
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                      <div className="min-w-0 max-md:flex-1">
                         <div className="font-medium text-foreground inline-flex items-center gap-1.5">
                           <span className="truncate">{guestName}</span>
                           {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
@@ -778,8 +839,29 @@ export default function ReservationsDashboard() {
                         status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
                         className="shrink-0"
                       />
+                      {/* Phone: the ⋯ menu lives in the header row next to the status. */}
+                      {phone.more.length > 0 && (
+                        <div className="-my-1 -mr-1 shrink-0 md:hidden" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="More actions" />}>
+                              <MoreHorizontal className="h-4 w-4" />
+                              {getActiveTasks(res).length > 0 && (res.status === "RESERVED" || res.status === "IN_HOUSE") && (
+                                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
+                              )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-52">
+                              {phone.more.map((a) => (
+                                <DropdownMenuItem key={a.label} onClick={a.onSelect}>
+                                  {a.icon && <a.icon className="h-4 w-4" />}
+                                  {a.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border max-md:mt-2 max-md:pt-2">
                       <span className="text-foreground">
                         {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
                         <span className="text-muted-foreground"> · {nights}n</span>
@@ -789,10 +871,22 @@ export default function ReservationsDashboard() {
                         {extraRooms > 0 && ` +${extraRooms}`}
                       </span>
                     </div>
-                    <div className="mt-2"><FlagStrip res={res} /></div>
-                    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                    {/* No empty "—" flag row on a phone. */}
+                    <div className={cn("mt-2", !hasFlags && "max-md:hidden")}><FlagStrip res={res} /></div>
+                    <div className="mt-3 max-md:hidden" onClick={(e) => e.stopPropagation()}>
                       {renderRowActions(res)}
                     </div>
+                    {phone.primary && (
+                      <div className="mt-2.5 md:hidden" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          className={cn("h-10 w-full", phone.primary.tone === "success" && "bg-success-muted text-success hover:bg-success-muted/70 border border-success/30")}
+                          onClick={phone.primary.onSelect}
+                        >
+                          <phone.primary.icon className="h-4 w-4 mr-1.5" /> {phone.primary.label}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )
               })

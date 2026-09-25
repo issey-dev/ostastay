@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Receipt, ArrowRightCircle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -201,72 +202,76 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
       <ControlsSectionBody>
         {/* Phone view — each row becomes a card: code/status up top, description and
             classification beneath, the same actions as the table but full-width/thumb-sized. */}
-        <div className="md:hidden">
-          {filtered.length === 0 ? (
-            <div className="p-4"><EmptyState icon={Receipt} title="No charge codes configured" /></div>
-          ) : (
-            <div className="space-y-3 p-4">
-              {sorted.map((cc) => {
-                const tax = taxSummary(cc)
-                return (
-                  <div key={cc.id} className={`rounded-lg border border-border bg-card p-4 space-y-2 ${cc.isActive ? "" : "opacity-60"}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono font-medium text-foreground">{cc.code}</span>
-                          {cc.isSystem && <Badge variant="secondary" className="px-1 text-[10px] font-normal">Sys</Badge>}
-                          {!cc.isActive && <Badge variant="outline" className="px-1 text-[10px] font-normal">Off</Badge>}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{cc.description}</p>
-                      </div>
-                      <Badge variant="outline" className="shrink-0 px-1.5 text-[11px] font-normal whitespace-nowrap">
-                        {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
-                      </Badge>
-                    </div>
-
-                    <div className="text-xs">
-                      {cc.chargeSubgroup ? (
-                        <span>
-                          <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
-                          <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
-                        </span>
-                      ) : (
-                        <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
-                      )}
-                    </div>
-
-                    {(tax.chips.length > 0 || tax.note) && (
-                      <div className="flex flex-wrap items-center gap-1">
-                        {tax.chips.map((code, i) => (
-                          <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
-                        ))}
-                        {tax.note && <span className="text-xs text-muted-foreground">{tax.note}</span>}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setGeneratesFor(cc)}>
-                        <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" /> Generates
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(cc)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                      </Button>
-                      <Button
-                        variant="outline" size="icon"
-                        className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
-                        disabled={cc.isSystem}
-                        aria-label={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
-                        onClick={() => setDeleting(cc)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <MobileCardList className="p-4" empty={<EmptyState icon={Receipt} title="No charge codes configured" />}>
+          {sorted.map((cc) => {
+            const tax = taxSummary(cc)
+            return (
+              <MobileCard
+                key={cc.id}
+                tone={cc.isActive ? undefined : "muted"}
+                title={<span className="font-mono">{cc.code}</span>}
+                subtitle={cc.description}
+                badge={
+                  <>
+                    {cc.isSystem && <Badge variant="secondary" className="font-normal">Sys</Badge>}
+                    {!cc.isActive && <Badge variant="outline" className="font-normal">Off</Badge>}
+                    <Badge variant="outline" className="font-normal whitespace-nowrap">
+                      {POSTING_TYPE_LABELS[cc.postingType as PostingType] ?? cc.postingType}
+                    </Badge>
+                  </>
+                }
+                meta={[
+                  {
+                    label: "Group / subgroup",
+                    wide: true,
+                    value: cc.chargeSubgroup ? (
+                      <span>
+                        <span className="font-mono text-muted-foreground">{cc.chargeSubgroup.chargeGroup.code} / {cc.chargeSubgroup.code}</span>
+                        <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
+                      </span>
+                    ) : (
+                      <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
+                    ),
+                  },
+                  ...(tax.chips.length > 0 || tax.note
+                    ? [{
+                        label: "Taxes",
+                        wide: true,
+                        value: (
+                          <span className="flex flex-wrap items-center gap-1">
+                            {tax.chips.map((code, i) => (
+                              <Badge key={i} variant="outline" className="px-1 font-mono text-[11px] font-normal">{code}</Badge>
+                            ))}
+                            {tax.note && <span className="text-xs font-normal text-muted-foreground">{tax.note}</span>}
+                          </span>
+                        ),
+                      }]
+                    : []),
+                ]}
+                onClick={() => openEdit(cc)}
+                actions={
+                  <>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setGeneratesFor(cc)}>
+                      <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" /> Generates
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(cc)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline" size="icon"
+                      className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
+                      disabled={cc.isSystem}
+                      aria-label={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
+                      onClick={() => setDeleting(cc)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                }
+              />
+            )
+          })}
+        </MobileCardList>
 
         <div className="hidden md:block overflow-x-auto">
           <Table>

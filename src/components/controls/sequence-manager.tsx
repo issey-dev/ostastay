@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form"
@@ -180,32 +181,34 @@ export function SequenceManager({ propertyId }: { propertyId: string }) {
         <>
           {/* Phone view — one card per document type: label, current value (or its edit
               field), and the same actions full-width. */}
-          <div className="md:hidden space-y-3">
+          <MobileCardList>
             {loading ? (
-              Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+              Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
             ) : (
               SEQUENCE_TYPES.map((sequenceType) => {
                 const seq = seqFor(sequenceType)
                 const isEditing = editingType === sequenceType
-                return (
-                  <div key={sequenceType} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <p className="font-medium text-foreground">{SEQUENCE_LABELS[sequenceType]}</p>
-                    {isEditing ? (
-                      <EditSequenceForm propertyId={propertyId} seq={seq} compact onCancel={() => setEditingType(null)} onSaved={onSaved} />
-                    ) : (
-                      <>
-                        <p className="text-lg tabular-nums">{seq.currentValue}</p>
-                        <p className="text-xs text-muted-foreground">{note(seq)}</p>
-                        <Button variant="outline" className="h-9 w-full" disabled={seq.locked} onClick={() => setEditingType(sequenceType)}>
-                          Start from new sequence
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                return isEditing ? (
+                  <MobileCard key={sequenceType} title={SEQUENCE_LABELS[sequenceType]}>
+                    <EditSequenceForm propertyId={propertyId} seq={seq} compact onCancel={() => setEditingType(null)} onSaved={onSaved} />
+                  </MobileCard>
+                ) : (
+                  <MobileCard
+                    key={sequenceType}
+                    title={SEQUENCE_LABELS[sequenceType]}
+                    meta={[{ label: "Current sequence", value: <span className="tabular-nums">{seq.currentValue}</span>, wide: true }]}
+                    actions={
+                      <Button variant="outline" className="h-9 w-full" disabled={seq.locked} onClick={() => setEditingType(sequenceType)}>
+                        Start from new sequence
+                      </Button>
+                    }
+                  >
+                    <p className="text-xs text-muted-foreground">{note(seq)}</p>
+                  </MobileCard>
                 )
               })
             )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

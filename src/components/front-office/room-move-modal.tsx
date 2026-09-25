@@ -137,7 +137,7 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 max-sm:gap-3">
                 <div className="grid gap-2">
                   <Label>Current Room Type</Label>
                   <Input disabled value={currentRoomType || ""} className="bg-muted" />

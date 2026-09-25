@@ -15,7 +15,9 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
-import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase } from "@/components/icons"
+import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase, MoreHorizontal } from "@/components/icons"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { OptionSelect } from "@/components/ui/option-select"
 import { JOB_FUNCTIONS, isJobFunction, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
@@ -337,48 +339,51 @@ export function UsersRolesManager({
             {users.length === 0 ? (
               <EmptyState icon={Users} title="No users found" description="Create your first team member." />
             ) : (
-              <div className="space-y-3 p-4">
+              // Compact rows: tap the person to edit them (deactivate, reset password, roles);
+              // Delete sits behind ⋯ so it can't be hit by accident.
+              <ul className="divide-y divide-border">
                 {sortedUsers.map((user) => (
-                  <Card key={user.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{user.firstName} {user.lastName}</p>
-                        <p className="truncate text-sm text-muted-foreground">{user.email}</p>
-                      </div>
-                      {user.isActive ? (
-                        <span className="flex shrink-0 items-center text-sm font-medium text-success"><CheckCircle2 className="mr-1 h-4 w-4" /> Active</span>
-                      ) : (
-                        <span className="flex shrink-0 items-center text-sm font-medium text-muted-foreground"><XCircle className="mr-1 h-4 w-4" /> Inactive</span>
-                      )}
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {user.roles.map((ur) => (
-                        <StatusBadge key={ur.role.id} label={ur.role.name} tone={getRoleTone(ur.role.name)} />
-                      ))}
-                      {user.roles.length === 0 && <span className="text-sm text-muted-foreground">No role</span>}
-                    </div>
-
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>Post: {jobFunctionLabel(user.jobFunction) ?? "—"}</span>
-                      <span>
+                  <li key={user.id} className="flex items-center gap-1 pr-2">
+                    <button
+                      type="button"
+                      onClick={() => openEditUserDialog(user)}
+                      className="flex min-h-14 min-w-0 flex-1 flex-col items-start justify-center px-4 py-2.5 text-left active:bg-muted"
+                    >
+                      <span className="flex w-full min-w-0 items-center gap-2">
+                        <span className="truncate font-medium">{user.firstName} {user.lastName}</span>
+                        {user.isActive ? (
+                          <span className="flex shrink-0 items-center text-xs font-medium text-success"><CheckCircle2 className="mr-0.5 h-3.5 w-3.5" /> Active</span>
+                        ) : (
+                          <span className="flex shrink-0 items-center text-xs font-medium text-muted-foreground"><XCircle className="mr-0.5 h-3.5 w-3.5" /> Inactive</span>
+                        )}
+                      </span>
+                      <span className="w-full truncate text-sm text-muted-foreground">
+                        {user.roles.length ? user.roles.map((ur) => ur.role.name).join(", ") : "No role"}
+                        {" · "}
                         {user.scope === "ENTERPRISE"
                           ? "All properties"
                           : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
                       </span>
-                    </div>
-
-                    <div className="mt-3 flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEditUserDialog(user)}>
-                        <Edit className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setUserToDelete(user)}>
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" /> Delete
-                      </Button>
-                    </div>
-                  </Card>
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={<Button variant="ghost" size="icon" className="shrink-0" aria-label={`More actions for ${user.firstName} ${user.lastName}`} />}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-44">
+                        <DropdownMenuItem onClick={() => openEditUserDialog(user)}>
+                          <Edit className="h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" onClick={() => setUserToDelete(user)}>
+                          <Trash2 className="h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
 
@@ -453,12 +458,31 @@ export function UsersRolesManager({
         title="Roles & Permissions"
         description="Per-module view / create / update / delete access. System roles are shared and read-only."
         action={
-          <Button onClick={openNewRoleDialog}>
+          <Button onClick={openNewRoleDialog} className="max-md:hidden">
             <Plus className="w-4 h-4 mr-2" /> New Role
           </Button>
         }
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {/* Phones: the role editor is a wide permission matrix — read-only list + notice. */}
+        <DesktopOnlyNotice
+          className="mb-4"
+          feature="Role editing"
+          description="Roles and their permissions are edited on a tablet or computer. You can still give people roles here."
+        />
+        <ul className="divide-y divide-border rounded-lg border border-border md:hidden">
+          {roles.map((role) => (
+            <li key={role.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <span className="truncate">{role.name}</span>
+                {role.isSystem && <Badge variant="secondary" className="bg-muted text-muted-foreground">System</Badge>}
+              </span>
+              <span className="shrink-0 text-muted-foreground">
+                {role._count?.users ?? 0} user{role._count?.users === 1 ? "" : "s"}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="grid grid-cols-1 gap-3 max-md:hidden md:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
             <Card key={role.id}>
               <CardHeader className="pb-2">

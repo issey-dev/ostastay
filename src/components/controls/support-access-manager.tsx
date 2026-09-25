@@ -175,13 +175,15 @@ export function SupportAccessManager({ isInternal }: { isInternal: boolean }) {
       )}
 
       {!isInternal && (
-        <div className="space-y-3">
+        // Phones: a flex column so pending requests (the ones waiting on this admin) sort
+        // above the rest via `order`; desktop keeps the plain stacked list.
+        <div className="space-y-3 max-sm:flex max-sm:flex-col max-sm:gap-3 max-sm:space-y-0">
           <h3 className="flex items-center gap-2 text-lg font-medium">
             Support Access Requests
             <InfoHint label="Support Access Requests">Osta support staff need your explicit, time-boxed approval before viewing this enterprise&apos;s configuration.</InfoHint>
           </h3>
           {grants.map((g) => (
-            <Card key={g.id}>
+            <Card key={g.id} className={g.status === "PENDING" ? undefined : "max-sm:order-1"}>
               <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="font-medium flex flex-wrap items-center gap-2">

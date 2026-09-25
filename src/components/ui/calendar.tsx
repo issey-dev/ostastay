@@ -90,7 +90,7 @@ function Calendar({
   )
   const _weekdaysClassName = cn("flex flex-row", props.weekdaysClassName)
   const _weekdayClassName = cn(
-    "w-8 text-sm font-normal text-muted-foreground",
+    "w-8 text-sm font-normal text-muted-foreground pointer-coarse:w-10",
     props.weekdayClassName
   )
   const _monthClassName = cn("w-full", props.monthClassName)
@@ -121,12 +121,12 @@ function Calendar({
   const _monthGridClassName = cn("mx-auto mt-4", props.monthGridClassName)
   const _weekClassName = cn("mt-2 flex w-max items-start", props.weekClassName)
   const _dayClassName = cn(
-    "flex size-8 flex-1 items-center justify-center p-0 text-sm",
+    "flex size-8 flex-1 items-center justify-center p-0 text-sm pointer-coarse:size-10",
     props.dayClassName
   )
   const _dayButtonClassName = cn(
     buttonVariants({ variant: "ghost" }),
-    "size-8 rounded-md p-0 font-normal transition-none aria-selected:opacity-100",
+    "size-8 rounded-md p-0 font-normal transition-none aria-selected:opacity-100 pointer-coarse:size-10",
     props.dayButtonClassName
   )
   // `!` on the hover colours: the ghost day button's own `dark:hover:bg-muted/50` is more
@@ -168,10 +168,14 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
-      style={{
-        width: 248.8 * (columnsDisplayed ?? 1) + "px",
-      }}
+      // One month is 7 day cells + padding: 248.8px at the 32px (mouse) cell size, 304.8px at
+      // the 40px touch size (`pointer-coarse:size-10` on the days) — a fixed pixel width here
+      // let the touch-size weeks spill out of the box.
+      className={cn(
+        "p-3 w-[calc(248.8px*var(--cal-months))] pointer-coarse:w-[calc(304.8px*var(--cal-months))]",
+        className
+      )}
+      style={{ "--cal-months": columnsDisplayed ?? 1 } as React.CSSProperties}
       classNames={{
         months: _monthsClassName,
         month_caption: _monthCaptionClassName,

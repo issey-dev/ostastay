@@ -3227,3 +3227,34 @@ from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
   dark header), every stationery document and its emailed PDF, every report (preview and PDF
   — reports had no logo before), emails and the Booking API (as an **absolute** URL built
   from `APP_URL`), and the guest eRegistration page.
+
+## 2026-09-25 — Mobile polish: defaults taken for the plan's open questions (owner approved the plan)
+
+The owner approved `.agents/docs/MOBILE_PLAN.md` and asked for all phases to be completed without
+further questions, so the plan's recommended defaults apply (change any of them later):
+- **Desktop is the source of truth.** Every mobile change is phone/tablet-only (breakpoints or
+  `pointer-coarse:`) and each phase is checked with `npm run mobile:audit` (pixel diff at
+  1280/1440px against a baseline).
+- **Bottom navigation on phones** — dashboard only (not Hub/Osta): 4 slots chosen by the person's
+  permissions and job function, plus "More" (the full menu). `src/components/mobile-bottom-nav.tsx`.
+- **Dialogs are bottom sheets on phones** that close by button/backdrop (no swipe); the phone
+  pickers (SearchableSelect, date pickers) use a swipe-down drawer.
+- **Hub on phones:** quick-action pages are adapted (sessions, support access, key revoke, business
+  date, inbound bookings, people status); every other setup page shows a "best on a larger screen"
+  notice but stays readable.
+- **eRegistration date of birth** (guest-facing page): a native date input is allowed there as an
+  exception to the "always use `@/components/ui/date-picker`" rule — a calendar popover is slow
+  for birth dates on a phone. Staff screens keep the DatePicker (which opens in a drawer on phones).
+- **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
+  "More" menu, last and in red, and keep their confirmations.
+- **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.
+- **Housekeeping attendants** are not redirected; the bottom nav puts Housekeeping first for them.
+- One dashboard layout across devices (no separate phone layout for now).
+- The desktop dashboard header is meant to be sticky but isn't (`overflow-x-hidden` on `<main>`);
+  fixed below `md` first; **owner (2026-09-25): fix it on desktop too** — all three shells use
+  `overflow-x-clip`, so the header stays pinned while scrolling on every screen.
+
+**Owner confirmation (2026-09-25):** bottom nav on phones — yes; native date input on the guest
+eRegistration page — yes; risky actions behind "More" — yes. Also asked to fix every item the
+plan left open (MOBILE_PLAN §7 "Left open").
+

@@ -2,6 +2,7 @@ import { propertyPage } from "@/lib/hub-page"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { loadHubAddons } from "@/lib/hub-properties"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { ChargeGroupsManager } from "@/components/controls/charge-groups-manager"
 import { ChargeCodesManager } from "@/components/controls/charge-codes-manager"
@@ -16,6 +17,7 @@ export default async function HubPropertyChargeCodesPage({ params }: { params: P
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard title="Charge Groups & Subgroups" description="The two levels above a charge code. A Group carries the reporting bucket every revenue, tax and EOD report rolls up into; a Subgroup splits it further for detail. The canonical set is system-managed — rename freely, and add your own alongside.">
         <ChargeGroupsManager propertyId={property.id} />
       </ControlsCard>

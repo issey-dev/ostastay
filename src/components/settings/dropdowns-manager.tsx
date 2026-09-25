@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, ListChecks, RotateCcw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Label } from "@/components/ui/label"
@@ -293,61 +294,60 @@ export function DropdownsManager({
         />
         <ControlsSectionBody>
           {/* Phone — reorderable card stack. Table below takes over at md. */}
-          <div className="p-4 md:hidden">
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full rounded-lg" />
-                ))}
-              </div>
-            ) : activeCodes.length === 0 ? (
+          <MobileCardList
+            className="p-4"
+            empty={
               <EmptyState
                 icon={ListChecks}
                 title={`No items found for ${currentCategoryLabel}`}
                 description="Add your first option using the form above."
               />
-            ) : (
-              <div className="space-y-3">
-                {activeCodes.map((c, i) => (
-                  <div key={c.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground">{c.code}</p>
-                        {editingId === c.id ? (
-                          <div className="mt-1 flex items-center gap-2">
-                            <Input
-                              value={editValue}
-                              onChange={e => setEditValue(e.target.value)}
-                              className="h-8"
-                              autoFocus
-                              onKeyDown={e => {
-                                if (e.key === "Enter") handleInlineEdit(c.id)
-                                if (e.key === "Escape") setEditingId(null)
-                              }}
-                            />
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-success" onClick={() => handleInlineEdit(c.id)}>
-                              <Check className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground" onClick={() => setEditingId(null)}>
-                              <X className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="mt-0.5 flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{c.value}</span>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
-                              className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors shrink-0"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+            }
+          >
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+              : activeCodes.map((c, i) => (
+                  <MobileCard
+                    key={c.id}
+                    title={
+                      editingId === c.id ? (
+                        <div className="flex items-center gap-2 font-normal">
+                          <Input
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            className="h-8"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === "Enter") handleInlineEdit(c.id)
+                              if (e.key === "Escape") setEditingId(null)
+                            }}
+                          />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-success" aria-label="Save" onClick={() => handleInlineEdit(c.id)}>
+                            <Check className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground" aria-label="Cancel" onClick={() => setEditingId(null)}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <span className="min-w-0 break-words">{c.value}</span>
+                          <button
+                            type="button"
+                            aria-label={`Rename ${c.value}`}
+                            onClick={() => { setEditingId(c.id); setEditValue(c.value) }}
+                            className="inline-flex shrink-0 items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )
+                    }
+                    subtitle={c.code}
+                    badge={
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-destructive hover:text-destructive hover:bg-destructive-muted">
+                          <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-destructive hover:text-destructive hover:bg-destructive-muted" aria-label={`Delete ${c.value}`}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </AlertDialogTrigger>
@@ -367,20 +367,20 @@ export function DropdownsManager({
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </div>
-                    <div className="flex items-center gap-2 border-t border-border/50 pt-3">
-                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === 0} onClick={() => reorder(i, "up")}>
-                        <ChevronUp className="w-3.5 h-3.5 mr-1.5" /> Move up
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === activeCodes.length - 1} onClick={() => reorder(i, "down")}>
-                        <ChevronDown className="w-3.5 h-3.5 mr-1.5" /> Move down
-                      </Button>
-                    </div>
-                  </div>
+                    }
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === 0} onClick={() => reorder(i, "up")}>
+                          <ChevronUp className="w-3.5 h-3.5 mr-1.5" /> Move up
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 flex-1" disabled={i === activeCodes.length - 1} onClick={() => reorder(i, "down")}>
+                          <ChevronDown className="w-3.5 h-3.5 mr-1.5" /> Move down
+                        </Button>
+                      </>
+                    }
+                  />
                 ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

@@ -7,6 +7,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NumberStepper } from "@/components/ui/number-stepper"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -20,6 +21,9 @@ import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
 import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
 import { InfoHint } from "@/components/ui/info-hint"
+import { MobileActionBar } from "@/components/ui/mobile"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { INPUT_INTEGER } from "@/lib/input-presets"
 
 type GuestResult = {
   reservationId: string
@@ -87,7 +91,12 @@ export default function ExcursionsPage() {
 
   const [manifestDepartureId, setManifestDepartureId] = useState<string | null>(null)
   const { slug } = useParams<{ slug: string }>()
-  const [pageTab, setPageTab] = useState<"book" | "schedule" | "history">("book")
+  // Phones open on the schedule (today's departures); desktop keeps Book.
+  // Derived, not set in an effect: until someone picks a tab, the default follows the
+  // screen — and useIsMobile() is false on the first render, so desktop never changes.
+  const isMobile = useIsMobile()
+  const [pickedTab, setPageTab] = useState<"book" | "schedule" | "history" | null>(null)
+  const pageTab = pickedTab ?? (isMobile ? "schedule" : "book")
   const [historyRefresh, setHistoryRefresh] = useState(0)
 
   const loadHistory = useCallback(async (date: string | null): Promise<SalesRow[]> => {
@@ -288,14 +297,14 @@ export default function ExcursionsPage() {
               <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                 <button
                   type="button"
-                  className={`px-3 py-1.5 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   onClick={() => { setMode("guest"); setWalkInFolioId(null) }}
                 >
                   Guest
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1.5 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   onClick={() => { setMode("walkin"); setSelectedGuest(null) }}
                 >
                   Walk-in
@@ -307,7 +316,8 @@ export default function ExcursionsPage() {
               <>
                 <form onSubmit={handleSearch} className="flex gap-3">
                   <Input
-                    placeholder="Search by Room Number or Last Name..."
+                    placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                    enterKeyHint="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1"
@@ -374,7 +384,7 @@ export default function ExcursionsPage() {
               <CalendarClock className="w-5 h-5 text-primary" />
               {mode === "guest" && selectedGuest ? `Book Excursion for Room ${selectedGuest.roomNumber}` : mode === "walkin" && walkInFolioId ? `Book Excursion for ${walkInForm.name}` : "Book Excursion"}
             </h3>
-            <form onSubmit={handleBook} className="space-y-4">
+            <form id="excursion-book-form" onSubmit={handleBook} className="space-y-4">
               <div className="space-y-3">
                 {loadError ? (
                   <ErrorState title="Couldn't load excursions" onRetry={fetchDepartures} />
@@ -482,18 +492,23 @@ export default function ExcursionsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-2">
+              {/* Phone steppers sit BEFORE the desktop inputs: in these space-y cells the input
+                  must stay the last child, or it picks up a bottom margin on desktop. */}
+              <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Adults</Label>
-                  <Input type="number" min="0" value={counts.adultCount} onChange={(e) => setCounts((p) => ({ ...p, adultCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Adults" min={0} value={parseInt(counts.adultCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, adultCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.adultCount} onChange={(e) => setCounts((p) => ({ ...p, adultCount: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Children</Label>
-                  <Input type="number" min="0" value={counts.childCount} onChange={(e) => setCounts((p) => ({ ...p, childCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Children" min={0} value={parseInt(counts.childCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, childCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.childCount} onChange={(e) => setCounts((p) => ({ ...p, childCount: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Infants</Label>
-                  <Input type="number" min="0" value={counts.infantCount} onChange={(e) => setCounts((p) => ({ ...p, infantCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Infants" min={0} value={parseInt(counts.infantCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, infantCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.infantCount} onChange={(e) => setCounts((p) => ({ ...p, infantCount: e.target.value }))} />
                 </div>
               </div>
 
@@ -512,7 +527,7 @@ export default function ExcursionsPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={booking || !canBook || !selectedDeparture}>
+              <Button type="submit" className="w-full max-md:hidden" disabled={booking || !canBook || !selectedDeparture}>
                 {booking ? "Booking..." : "Book Excursion"}
               </Button>
             </form>
@@ -520,6 +535,11 @@ export default function ExcursionsPage() {
         </div>
 
       </div>
+      <MobileActionBar>
+        <Button type="submit" form="excursion-book-form" className="h-11 flex-1 min-w-0 text-base" disabled={booking || !canBook || !selectedDeparture}>
+          <span className="truncate">{booking ? "Booking..." : "Book Excursion"}</span>
+        </Button>
+      </MobileActionBar>
         </TabsContent>
 
         <TabsContent value="schedule" className="m-0">
@@ -528,6 +548,11 @@ export default function ExcursionsPage() {
               <ExcursionCalendar propertyId={currentProperty.id} onSelectDeparture={(id) => setManifestDepartureId(id)} />
             )}
           </div>
+          <MobileActionBar>
+            <Button className="h-11 flex-1" onClick={() => setPageTab("book")}>
+              <CalendarClock className="w-4 h-4 mr-2" /> Book an excursion
+            </Button>
+          </MobileActionBar>
         </TabsContent>
 
         <TabsContent value="history" className="m-0">

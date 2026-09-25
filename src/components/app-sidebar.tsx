@@ -1,3 +1,4 @@
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
 import { requireSession, hasHubAccess, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
@@ -17,7 +18,7 @@ export async function AppSidebar() {
   const [user, enterprise] = await Promise.all([
     prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { firstName: true, lastName: true, email: true, roles: { select: { role: { select: { name: true } } } } },
+      select: { firstName: true, lastName: true, email: true, jobFunction: true, roles: { select: { role: { select: { name: true } } } } },
     }),
     // ctx.enterpriseId is the EFFECTIVE enterprise (the support-acting-as target when
     // relevant) — links must point there, not the user's own home enterprise.
@@ -63,6 +64,7 @@ export async function AppSidebar() {
   const showHub = hasHubAccess(ctx) && enterprisePrefix !== "";
 
   return (
+    <>
     <Sidebar collapsible="icon">
       {/* Product mark, on the maroon rail the brand guide assigns to sidebar nav. This is
           the one place Uppsolut's own identity appears in the tenant shell — the header
@@ -95,5 +97,8 @@ export async function AppSidebar() {
         </p>
       </div>
     </Sidebar>
+    {/* Phones only: the most-used destinations at the thumb, from the same allow-list. */}
+    <MobileBottomNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} jobFunction={user?.jobFunction} />
+    </>
   )
 }
