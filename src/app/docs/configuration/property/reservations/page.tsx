@@ -63,6 +63,7 @@ export default function Reservations() {
           ["Proforma Folio", "Proforma invoices."],
           ["Tax Invoice", "Final tax invoices."],
           ["Receipt No", "Payment receipts."],
+          ["Check number", "Folio postings. A charge and its Service Charge, GST and Green Tax share one number, as does each Night Audit night's room charge and packages."],
           ["Guest Registration No (Green Tax)", "The Green Tax register number. It restarts at 1 every year."],
         ]}
       />

@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client"
 // Mirrors the SEQUENCE_TYPES tuple in src/app/api/settings/sequences/route.ts — kept
 // as a separate literal here rather than imported, since that file is a route module
 // and this is a shared lib used by other route modules.
-export type SequenceType = "REGISTRATION_NO" | "PROFORMA_FOLIO" | "TAX_INVOICE" | "RECEIPT_NO"
+export type SequenceType = "REGISTRATION_NO" | "PROFORMA_FOLIO" | "TAX_INVOICE" | "RECEIPT_NO" | "CHECK_NO"
 
 // Atomically allocates the next number in a property's named sequence (Sequence
 // Manager, Controls > Reservations) and returns it. Call this exactly once per
@@ -18,6 +18,26 @@ export async function allocateSequenceNumber(propertyId: string, sequenceType: S
     update: { currentValue: { increment: 1 } },
   })
   return sequence.currentValue
+}
+
+// Allocates the next folio CHECK number (FolioLineItem.checkNo) at a property — one
+// property-wide running number, stored as plain digits ("1", "2", ...). A charge and every
+// line it generates share one; a Night Audit stay-night's room + extra occupancy +
+// allocations share one (owner, 2026-09-26). Accepts a transaction client so the number
+// and the lines carrying it commit (or roll back) together — a rolled-back posting gives
+// its number back rather than leaving a gap. The upsert is a single atomic statement, so
+// concurrent postings never draw the same number.
+export async function allocateCheckNo(
+  client: Prisma.TransactionClient | typeof prisma,
+  propertyId: string,
+): Promise<string> {
+  const sequence = await client.propertySequence.upsert({
+    where: { propertyId_sequenceType: { propertyId, sequenceType: "CHECK_NO" } },
+    create: { propertyId, sequenceType: "CHECK_NO", currentValue: 1 },
+    update: { currentValue: { increment: 1 } },
+    select: { currentValue: true },
+  })
+  return String(sequence.currentValue)
 }
 
 // Allocates the next per-outlet sales-check number (e.g. "SPA-00001") by atomically

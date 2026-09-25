@@ -38,7 +38,9 @@ export async function previewCharge(
   try {
     await prisma.$transaction(async (tx) => {
       const folio = await tx.folio.create({ data: { propertyId, folioNumber: 1, walkInGuestName: "Quote" } });
-      const posted = await postCharge(tx, { ...input, folioId: folio.id });
+      // A fixed check number: a quote must not take (and lock, until rollback) the
+      // property's CHECK_NO counter row.
+      const posted = await postCharge(tx, { ...input, folioId: folio.id, checkNo: "PREVIEW" });
       const all = [posted.parent, ...posted.generated];
       // The charge's OWN service charge and tax: the parent's columns plus the lines they
       // were routed onto (routed tax lines carry no base amount). A levy's own tax is

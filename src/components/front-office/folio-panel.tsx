@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { postableChargeCodes } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,15 +16,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, Ban, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
+import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
 import { RoutingInstructionsDialog } from "@/components/front-office/routing-instructions-dialog"
-import { useConfirm } from "@/components/providers/confirm-provider"
+import { useConfirm, useReasonPrompt } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 import { SubmitButton } from "@/components/ui/submit-button"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { FolioLedger } from "@/components/front-office/folio-ledger"
+import { FolioCheckNoDialog, type CheckNoTarget } from "@/components/front-office/folio-check-no-dialog"
 import { InlineLoading } from "@/components/ui/inline-loading"
 
 type FolioPanelProps = {
@@ -100,6 +101,7 @@ type FolioViewProps = {
 export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, renderHeader }: FolioViewProps) {
   const { slug } = useParams<{ slug: string }>()
   const confirm = useConfirm()
+  const askReason = useReasonPrompt()
   const [checkingOut, setCheckingOut] = useState(false)
   const [folios, setFolios] = useState<any[]>([])
   const [activeFolioId, setActiveFolioId] = useState<string>("")
@@ -132,6 +134,8 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   const [voidTarget, setVoidTarget] = useState<any | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voidSaving, setVoidSaving] = useState(false)
+  // Edit check number — one line, or every line of a rolled-up check.
+  const [checkNoTarget, setCheckNoTarget] = useState<CheckNoTarget | null>(null)
   // Which one-shot action is in flight — its button is disabled so it can't be sent twice.
   const [pending, setPending] = useState<null | "charge" | "payment" | "move" | "payee">(null)
 
@@ -249,6 +253,51 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
     } finally {
       setVoidSaving(false)
     }
+  }
+
+  // Void a rolled-up check: one confirm listing every line, then each ROOT line is voided
+  // (the API voids a charge together with the Service Charge / GST / levy lines it
+  // generated, so those are not sent separately).
+  const handleVoidGroup = async (lines: any[]) => {
+    if (!activeFolioId || lines.length === 0) return
+    const total = lines.reduce((s, l) => s + l.amount + (l.serviceChargeAmount || 0) + l.taxAmount, 0)
+    const reason = await askReason({
+      title: `Void ${lines.length} lines?`,
+      description: [
+        ...lines.map((l) => `${l.description} — $${(l.amount + (l.serviceChargeAmount || 0) + l.taxAmount).toFixed(2)}`),
+        "",
+        `Total $${total.toFixed(2)}. The lines stay on the folio marked VOID.`,
+      ].join("\n"),
+      reasonLabel: "Reason",
+      placeholder: "e.g. Posted to wrong folio",
+      confirmLabel: "Void all",
+      destructive: true,
+    })
+    if (reason === null) return
+    const ids = new Set(lines.map((l) => l.id))
+    const roots = lines.filter((l) => !l.generatedFromLineItemId || !ids.has(l.generatedFromLineItemId))
+    let failed: string | null = null
+    for (const l of roots) {
+      try {
+        const res = await fetch(`/api/folios/${activeFolioId}/line-items/${l.id}/void`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          failed = data.error || "Couldn't void the charge. Try again."
+          break
+        }
+      } catch {
+        failed = "Couldn't void the charge. Try again."
+        break
+      }
+    }
+    setSelectedLineItemIds((prev) => prev.filter((id) => !ids.has(id)))
+    fetchFolios()
+    if (failed) toast.error(failed)
+    else toast.success(`${lines.length} lines voided`)
   }
 
   const handleAddFolio = async () => {
@@ -522,12 +571,6 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
     } finally {
       setPending(null)
     }
-  }
-
-  const toggleLineItemSelection = (id: string) => {
-    setSelectedLineItemIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    )
   }
 
   const activeFolio = folios.find(f => f.id === activeFolioId)
@@ -826,183 +869,18 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                     </div>
                   )}
 
-                  {/* Ledger List */}
+                  {/* Ledger List — lines sharing a check number roll up (folio-ledger.tsx) */}
                   <div className="bg-card rounded-xl border shadow-sm flex-1 overflow-hidden flex flex-col max-lg:flex-none">
                     <div className="overflow-y-auto flex-1">
-                      {/* Phone view — the 9-column table below takes over at md. One compact row
-                          per posting: date · description · amount. Tapping a charge selects it
-                          (for "Move to folio"); the base/SC/tax split sits in a small second line. */}
-                      <div className="md:hidden divide-y divide-border">
-                        {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 ? (
-                          <EmptyState icon={Receipt} title="No transactions posted yet" />
-                        ) : (
-                          <>
-                            {activeFolio.lineItems.map((item: any) => {
-                              const selected = selectedLineItemIds.includes(item.id)
-                              const total = item.amount + (item.serviceChargeAmount || 0) + item.taxAmount
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`flex items-center gap-2 px-3 py-2.5 ${item.isVoid ? "opacity-50" : selected ? "bg-primary/5" : ""} ${item.isVoid ? "" : "cursor-pointer active:bg-muted/50"}`}
-                                  onClick={() => { if (!item.isVoid) toggleLineItemSelection(item.id) }}
-                                >
-                                  {!item.isVoid && (
-                                    <Checkbox
-                                      className="shrink-0"
-                                      aria-label={`Select ${item.description}`}
-                                      checked={selected}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onCheckedChange={() => toggleLineItemSelection(item.id)}
-                                    />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`truncate text-sm font-medium ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
-                                      {item.description}
-                                      {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
-                                    </p>
-                                    <p className="truncate text-[11px] text-muted-foreground">
-                                      {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(/ /g, '-')}
-                                      {" · "}${item.amount.toFixed(2)} + SC ${(item.serviceChargeAmount || 0).toFixed(2)} + tax ${item.taxAmount.toFixed(2)}
-                                    </p>
-                                  </div>
-                                  <span className={`shrink-0 text-sm font-semibold tabular-nums ${item.isVoid ? "line-through text-muted-foreground" : "text-destructive"}`}>
-                                    ${total.toFixed(2)}
-                                  </span>
-                                  {!item.isVoid && !activeFolio.isClosed && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                                      title="Void charge"
-                                      aria-label="Void charge"
-                                      onClick={(e) => { e.stopPropagation(); setVoidTarget(item); setVoidReason("") }}
-                                    >
-                                      <Ban className="w-4 h-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              )
-                            })}
-                            {activeFolio.payments.map((payment: any) => (
-                              <div key={payment.id} className="flex items-center gap-2 px-3 py-2.5">
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium">Payment - {payment.paymentMethod?.name}</p>
-                                  <p className="text-[11px] text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(/ /g, '-')}</p>
-                                </div>
-                                <span className="shrink-0 text-sm font-semibold tabular-nums text-success">${payment.amount.toFixed(2)}</span>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 shrink-0"
-                                  title="Print payment receipt"
-                                  aria-label="Print payment receipt"
-                                  onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-
-                      <div className="hidden md:block">
-                      <Table>
-                        <TableHeader className="bg-muted sticky top-0 z-10 shadow-sm">
-                          <TableRow>
-                            <TableHead className="w-12 text-center">
-                              <Checkbox 
-                                checked={activeFolio.lineItems.filter((i: any) => !i.isVoid).length > 0 && selectedLineItemIds.length === activeFolio.lineItems.filter((i: any) => !i.isVoid).length}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedLineItemIds(activeFolio.lineItems.filter((i: any) => !i.isVoid).map((i: any) => i.id))
-                                  } else {
-                                    setSelectedLineItemIds([])
-                                  }
-                                }}
-                              />
-                            </TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Base</TableHead>
-                            <TableHead className="text-right">SC</TableHead>
-                            <TableHead className="text-right">Tax</TableHead>
-                            <TableHead className="text-right">Total charge</TableHead>
-                            <TableHead className="text-right">Payment</TableHead>
-                            <TableHead className="w-10"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {activeFolio.lineItems.map((item: any) => (
-                            <TableRow key={item.id} className={item.isVoid ? "opacity-50" : selectedLineItemIds.includes(item.id) ? "bg-muted/30" : ""}>
-                              <TableCell className="text-center">
-                                {!item.isVoid && (
-                                  <Checkbox
-                                    checked={selectedLineItemIds.includes(item.id)}
-                                    onCheckedChange={() => toggleLineItemSelection(item.id)}
-                                  />
-                                )}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
-                              <TableCell className={item.isVoid ? "line-through text-muted-foreground" : ""}>
-                                {item.description}
-                                {item.isVoid && <Badge variant="outline" className="ml-2 no-underline">VOID</Badge>}
-                              </TableCell>
-                              <TableCell className={`text-right ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>${item.amount.toFixed(2)}</TableCell>
-                              <TableCell className={`text-right text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>${(item.serviceChargeAmount || 0).toFixed(2)}</TableCell>
-                              <TableCell className={`text-right text-muted-foreground ${item.isVoid ? "line-through" : ""}`}>${item.taxAmount.toFixed(2)}</TableCell>
-                              <TableCell className={`text-right font-medium ${item.isVoid ? "line-through text-muted-foreground" : "text-destructive"}`}>${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell>
-                                {!item.isVoid && !activeFolio.isClosed && (
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    title="Void charge"
-                                    aria-label="Void charge"
-                                    onClick={() => { setVoidTarget(item); setVoidReason("") }}
-                                  >
-                                    <Ban className="w-3.5 h-3.5" />
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {activeFolio.payments.map((payment: any) => (
-                            <TableRow key={payment.id}>
-                              <TableCell></TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}</TableCell>
-                              <TableCell>Payment - {payment.paymentMethod?.name}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell className="text-right text-muted-foreground">-</TableCell>
-                              <TableCell className="text-right font-medium text-success">${payment.amount.toFixed(2)}</TableCell>
-                              <TableCell>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7"
-                                  title="Print payment receipt"
-                                  aria-label="Print payment receipt"
-                                  onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
-                                >
-                                  <Printer className="w-3.5 h-3.5" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={9} className="py-0">
-                                <EmptyState icon={Receipt} title="No transactions posted yet" />
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                      </div>
+                      <FolioLedger
+                        folio={activeFolio}
+                        slug={slug}
+                        selectedIds={selectedLineItemIds}
+                        onSelectedIdsChange={setSelectedLineItemIds}
+                        onVoidLine={(item) => { setVoidTarget(item); setVoidReason("") }}
+                        onVoidGroup={handleVoidGroup}
+                        onEditCheckNo={setCheckNoTarget}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1027,25 +905,26 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                       <form onSubmit={handlePostCharge} className="grid gap-5">
                         <div className="space-y-2">
                           <Label>Charge code <span className="text-destructive">*</span></Label>
-                          <Select required value={chargeForm.chargeCodeId} onValueChange={v => {
-                            const c = chargeCodes.find(cc => cc.id === v)
-                            // Auto-fill the description from the code (operator can still edit).
-                            setChargeForm(p => ({ ...p, chargeCodeId: v ?? "", description: c ? c.description : p.description }))
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select code">
-                                {chargeForm.chargeCodeId ? (
-                                  (() => {
-                                    const c = chargeCodes.find(c => c.id === chargeForm.chargeCodeId);
-                                    return c ? `${c.code} - ${c.description}` : "";
-                                  })()
-                                ) : ""}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {postableChargeCodes(chargeCodes).map(c => <SelectItem key={c.id} value={c.id}>{`${c.code} - ${c.description}`}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          {/* Searchable by code or description, as wide as the form
+                              (owner, 2026-09-26). Opens as a drawer on phones. */}
+                          <SearchableSelect
+                            required
+                            disabled={preArrival}
+                            value={chargeForm.chargeCodeId}
+                            onChange={(v) => {
+                              const c = chargeCodes.find((cc) => cc.id === v)
+                              // Auto-fill the description from the code (operator can still edit).
+                              setChargeForm((p) => ({ ...p, chargeCodeId: v, description: c ? c.description : p.description }))
+                            }}
+                            placeholder="Select charge code…"
+                            searchPlaceholder="Type a code or description…"
+                            emptyText="No charge code matches."
+                            searchable
+                            options={postableChargeCodes(chargeCodes).map((c) => ({
+                              value: c.id,
+                              label: `${c.code} · ${c.description}`,
+                            }))}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Amount <span className="text-destructive">*</span></Label>
@@ -1141,6 +1020,15 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
           </form>
         </DialogContent>
       </Dialog>
+
+      {activeFolio && (
+        <FolioCheckNoDialog
+          folioId={activeFolio.id}
+          target={checkNoTarget}
+          onOpenChange={(open) => { if (!open) setCheckNoTarget(null) }}
+          onSaved={fetchFolios}
+        />
+      )}
 
       {/* Move Charges Dialog */}
       <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>

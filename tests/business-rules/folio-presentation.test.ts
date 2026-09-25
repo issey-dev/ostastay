@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFolioRows, FOLIO_STYLES, isFolioStyle, type PresentableLine } from "@/lib/folio-presentation";
+import { buildFolioRows, FOLIO_STYLES, isFolioStyle, pickMainLine, rollUpByCheck, CHECK_NO_PATTERN, type PresentableLine } from "@/lib/folio-presentation";
 
 // Folio styles group the same posted ledger differently. The invariant that matters:
 // grouping NEVER changes what is owed.
@@ -128,16 +128,113 @@ describe("by-date", () => {
 });
 
 describe("by-check", () => {
-  it("rolls outlet charges onto their sales-check number", () => {
+  // 2026-09-26 (owner): by-check uses the posting's check number (FolioLineItem.checkNo),
+  // not the outlet sales check. A charge and its SC/GST/levies share one number; a Night
+  // Audit night's room rate + extra occupancy + allocations + taxes share one number.
+  const numbered: PresentableLine[] = FOLIO.map((l) => ({
+    ...l,
+    checkNo: l.id.startsWith("room1") || l.id === "gtx1" ? "1001" : l.id.startsWith("room2") ? "1002" : l.id.startsWith("fb") ? "1003" : "1004",
+  }));
+
+  it("lines with no check number fall back to one row per charge, taxes folded in", () => {
     const rows = buildFolioRows(FOLIO, "by-check");
-    const check = rows.find((r) => r.reference === "REST-00012")!;
-    expect(check.description).toBe("Outlet check REST-00012");
-    expect(check.total).toBeCloseTo(50, 2);
-    // Room charges have no check, so they fall back to their own description — still
-    // scoped to a single day, so the two nights stay on separate lines.
-    const roomRows = rows.filter((r) => r.description === "Nightly Room Charge");
-    expect(roomRows).toHaveLength(2);
-    expect(roomRows.every((r) => r.count === 1)).toBe(true);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.description)).toEqual(["Nightly Room Charge", "Nightly Room Charge", "Restaurant — Food"]);
+  });
+
+  it("one row per check, named after the main line, generated lines folded in", () => {
+    const rows = buildFolioRows(numbered, "by-check");
+    expect(rows).toHaveLength(3);
+    const first = rows.find((r) => r.reference === "1001")!;
+    expect(first.description).toBe("Nightly Room Charge");
+    expect(first.total).toBeCloseTo(112, 2);
+    expect(first.serviceCharge).toBeCloseTo(7.77, 2);
+    expect(first.tax).toBeCloseTo(14.53, 2);
+    expect(first.count).toBe(4);
+    expect(rows.find((r) => r.reference === "1003")!.description).toBe("Restaurant — Food");
+    expect(rows.find((r) => r.reference === "1003")!.total).toBeCloseTo(50, 2);
+  });
+
+  it("excludes voided lines and totals like every other style", () => {
+    const rows = buildFolioRows(numbered, "by-check");
+    expect(rows.some((r) => r.reference === "1004")).toBe(false);
+    expect(sum(rows)).toBeCloseTo(EXPECTED_TOTAL, 2);
+    for (const style of FOLIO_STYLES) expect(sum(buildFolioRows(numbered, style))).toBeCloseTo(EXPECTED_TOTAL, 2);
+  });
+
+  it("a Night Audit night rolls room, extra occupancy and allocation onto one row named after the room", () => {
+    const night: PresentableLine[] = [
+      line({ id: "alloc", description: "Breakfast", amount: 20, checkNo: "2001", createdAt: "2026-07-01T23:00:02Z" }),
+      line({ id: "xo", description: "Extra Occupancy Charge", amount: 30, checkNo: "2001", roomAssignmentId: "ra1", createdAt: "2026-07-01T23:00:01Z" }),
+      line({ id: "room", description: "Nightly Room Charge", amount: 100, checkNo: "2001", roomAssignmentId: "ra1", createdAt: "2026-07-01T23:00:00Z" }),
+      line({ id: "room-gst", description: "GST", taxAmount: 17, checkNo: "2001", roomAssignmentId: "ra1", generatedFromLineItemId: "room", createdAt: "2026-07-01T22:00:00Z" }),
+    ];
+    const rows = buildFolioRows(night, "by-check");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].description).toBe("Nightly Room Charge");
+    expect(rows[0].total).toBeCloseTo(167, 2);
+  });
+
+  it("the same number on another folio never rolls in", () => {
+    const mixed = [
+      line({ id: "a", amount: 10, checkNo: "3001", folioId: "F1" }),
+      line({ id: "b", amount: 20, checkNo: "3001", folioId: "F2" }),
+    ];
+    expect(buildFolioRows(mixed, "by-check")).toHaveLength(2);
+  });
+});
+
+describe("pickMainLine", () => {
+  it("never picks a generated line while its parent is a member", () => {
+    const members = [
+      line({ id: "gst", description: "GST", taxAmount: 50, generatedFromLineItemId: "spa" }),
+      line({ id: "spa", description: "Spa — Massage", amount: 10 }),
+    ];
+    expect(pickMainLine(members).id).toBe("spa");
+  });
+
+  it("falls back to the earliest-posted root, then the larger amount", () => {
+    const members = [
+      line({ id: "b", amount: 5, createdAt: "2026-07-01T10:00:01Z" }),
+      line({ id: "a", amount: 1, createdAt: "2026-07-01T10:00:00Z" }),
+    ];
+    expect(pickMainLine(members).id).toBe("a");
+    expect(pickMainLine([line({ id: "x", amount: 1 }), line({ id: "y", amount: 9 })]).id).toBe("y");
+  });
+});
+
+describe("rollUpByCheck (the folio screen)", () => {
+  it("rolls lines sharing a number, leaves singles and voids alone", () => {
+    const lines = [
+      line({ id: "r", date: D1, description: "Nightly Room Charge", amount: 100, checkNo: "10", roomAssignmentId: "ra" }),
+      line({ id: "r-sc", date: D1, description: "Service Charge", serviceChargeAmount: 10, checkNo: "10", generatedFromLineItemId: "r" }),
+      line({ id: "solo", date: D1, description: "Laundry", amount: 5, checkNo: "11" }),
+      line({ id: "none", date: D2, description: "Minibar", amount: 7, checkNo: null }),
+      line({ id: "r-void", date: D2, description: "Wrong", amount: 99, checkNo: "10", isVoid: true }),
+    ];
+    const entries = rollUpByCheck(lines);
+    expect(entries.map((e) => e.kind)).toEqual(["check", "line", "line", "line"]);
+    const group = entries[0];
+    if (group.kind !== "check") throw new Error("expected a check");
+    expect(group.main.id).toBe("r");
+    expect(group.lines.map((l) => l.id)).toEqual(["r", "r-sc"]);
+    expect(group.total).toBeCloseTo(110, 2); // the void is not counted
+    expect(entries[3].kind === "line" && entries[3].line.id).toBe("r-void");
+  });
+
+  it("different folios never roll together", () => {
+    const entries = rollUpByCheck([
+      line({ id: "a", amount: 1, checkNo: "5", folioId: "F1" }),
+      line({ id: "b", amount: 2, checkNo: "5", folioId: "F2" }),
+    ]);
+    expect(entries.every((e) => e.kind === "line")).toBe(true);
+  });
+
+  it("check numbers follow the API's rule", () => {
+    expect(CHECK_NO_PATTERN.test("A-1001")).toBe(true);
+    expect(CHECK_NO_PATTERN.test("")).toBe(false);
+    expect(CHECK_NO_PATTERN.test("has space")).toBe(false);
+    expect(CHECK_NO_PATTERN.test("x".repeat(21))).toBe(false);
   });
 });
 

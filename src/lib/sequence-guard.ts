@@ -8,13 +8,14 @@ import { getPropertySettings } from "@/lib/property-settings"
 // number actually issued, from the documents themselves rather than from the counter,
 // so a counter that was already wrong can't hide an issued number.
 
-export type GuardedSequenceType = "REGISTRATION_NO" | "PROFORMA_FOLIO" | "TAX_INVOICE" | "RECEIPT_NO"
+export type GuardedSequenceType = "REGISTRATION_NO" | "PROFORMA_FOLIO" | "TAX_INVOICE" | "RECEIPT_NO" | "CHECK_NO"
 
 export const SEQUENCE_DOCUMENT_LABELS: Record<GuardedSequenceType | "GUEST_REG_NO", string> = {
   REGISTRATION_NO: "reservation (booking) number",
   PROFORMA_FOLIO: "proforma folio number",
   TAX_INVOICE: "tax invoice number",
   RECEIPT_NO: "receipt number",
+  CHECK_NO: "check number",
   GUEST_REG_NO: "guest registration number",
 }
 
@@ -50,6 +51,13 @@ export async function highestIssuedNumber(propertyId: string, sequenceType: Guar
         FROM "CurrencyExchange" WHERE "propertyId" = ${propertyId} AND "receiptNumber" ~ '^RCT-[0-9]{1,15}$'`)
       return Math.max(payments, exchanges)
     }
+    case "CHECK_NO":
+      // Folio check numbers are plain digits when the app issues them; a number staff
+      // edited to something else ("A-12") can't collide with the counter.
+      return toNumber(await prisma.$queryRaw<MaxRow[]>`
+        SELECT MAX(CAST(l."checkNo" AS BIGINT)) AS max
+        FROM "FolioLineItem" l JOIN "Folio" f ON f."id" = l."folioId"
+        WHERE f."propertyId" = ${propertyId} AND l."checkNo" ~ '^[0-9]{1,15}$'`)
     case "REGISTRATION_NO": {
       // Booking numbers are "{prefix}{zero-padded counter}", with the property's code
       // + "-" when no prefix is set (create-reservation.ts). Only the CURRENT prefix is

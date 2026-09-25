@@ -158,6 +158,7 @@ export async function POST(request: Request) {
         outletId: outletId || null,
         outletCheckId,
         shiftId: shift.id,
+        propertyId: folio.propertyId,
       })
 
       return {

@@ -33,6 +33,7 @@ const SEQUENCE_LABELS: Record<string, string> = {
   PROFORMA_FOLIO: "Proforma Folio",
   TAX_INVOICE: "Tax Invoice",
   RECEIPT_NO: "Receipt No",
+  CHECK_NO: "Check number",
   GUEST_REG_NO: "Guest Registration No (Green Tax, resets yearly)",
 }
 const SEQUENCE_TYPES = Object.keys(SEQUENCE_LABELS)

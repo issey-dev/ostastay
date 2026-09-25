@@ -194,6 +194,19 @@ async function seedOutlets(prisma: Tx, enterpriseId: string, propertyId: string,
  * server — but the SHAPE matches exactly, so a seeded folio and a Night-Audit folio read
  * identically in every report and folio style.
  */
+// The property's next folio check number — the same CHECK_NO counter the app's
+// allocateCheckNo (src/lib/document-sequence.ts) draws from, inlined because seeds import
+// relatively (no "@/" alias). A charge and its SC/GST lines share one, as in the app.
+async function seedCheckNo(prisma: Tx, folioId: string): Promise<string> {
+  const { propertyId } = await prisma.folio.findUniqueOrThrow({ where: { id: folioId }, select: { propertyId: true } })
+  const seq = await prisma.propertySequence.upsert({
+    where: { propertyId_sequenceType: { propertyId, sequenceType: "CHECK_NO" } },
+    create: { propertyId, sequenceType: "CHECK_NO", currentValue: 1 },
+    update: { currentValue: { increment: 1 } },
+  })
+  return String(seq.currentValue)
+}
+
 async function postSeedCharge(
   prisma: Tx,
   opts: {
@@ -209,8 +222,9 @@ async function postSeedCharge(
 ) {
   const { folioId, codeId, chargeCode, description, net, date, outletId } = opts
   const taxed = opts.taxed ?? true
+  const checkNo = await seedCheckNo(prisma, folioId)
   const parent = await prisma.folioLineItem.create({
-    data: { folioId, chargeCodeId: codeId(chargeCode), date, description, amount: net, taxAmount: 0, serviceChargeAmount: 0, outletId: outletId ?? null },
+    data: { folioId, chargeCodeId: codeId(chargeCode), date, description, amount: net, taxAmount: 0, serviceChargeAmount: 0, outletId: outletId ?? null, checkNo },
   })
   if (!taxed) return parent
   const svc = Math.round(net * 0.1 * 100) / 100
@@ -218,10 +232,10 @@ async function postSeedCharge(
   // The single global tax codes — WHICH main code produced each tax line is carried by
   // generatedFromLineItemId, not by the tax code's identity.
   await prisma.folioLineItem.create({
-    data: { folioId, chargeCodeId: codeId(TAX_CODES.serviceCharge), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+    data: { folioId, chargeCodeId: codeId(TAX_CODES.serviceCharge), date, description: "Service Charge", amount: 0, serviceChargeAmount: svc, taxAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null, checkNo },
   })
   await prisma.folioLineItem.create({
-    data: { folioId, chargeCodeId: codeId(TAX_CODES.gst), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null },
+    data: { folioId, chargeCodeId: codeId(TAX_CODES.gst), date, description: "GST", amount: 0, taxAmount: gst, serviceChargeAmount: 0, generatedFromLineItemId: parent.id, outletId: outletId ?? null, checkNo },
   })
   return parent
 }
@@ -564,7 +578,7 @@ async function seedGroupBlock(
 
   // One charge already on the master so the block bill isn't empty.
   await prisma.folioLineItem.create({
-    data: { folioId: master.id, chargeCodeId: codeId("6002"), date: BUSINESS_DATE, description: "Conference room hire", amount: 400, taxAmount: 0, serviceChargeAmount: 0 },
+    data: { folioId: master.id, chargeCodeId: codeId("6002"), date: BUSINESS_DATE, description: "Conference room hire", amount: 400, taxAmount: 0, serviceChargeAmount: 0, checkNo: await seedCheckNo(prisma, master.id) },
   })
 }
 

@@ -18,7 +18,7 @@ export const FOLIO_STYLE_LABELS: Record<FolioStyle, string> = {
   compact: "Detailed — taxes merged",
   "by-code": "Summary by charge code",
   "by-date": "Summary by date",
-  "by-check": "Summary by check",
+  "by-check": "Summary by check number",
 };
 
 export const FOLIO_STYLE_DESCRIPTIONS: Record<FolioStyle, string> = {
@@ -31,7 +31,7 @@ export const FOLIO_STYLE_DESCRIPTIONS: Record<FolioStyle, string> = {
   "by-date":
     "One line per date: everything charged on a day collapses into a single figure.",
   "by-check":
-    "Outlet charges grouped by their sales-check number; everything else summarised by charge code.",
+    "One line per check number: a charge and the Service Charge, GST and levies posted with it, or a night's room rate with everything posted for that night.",
 };
 
 export function isFolioStyle(v: unknown): v is FolioStyle {
@@ -51,6 +51,13 @@ export type PresentableLine = {
   generatedFromLineItemId?: string | null;
   chargeCode?: { code?: string | null; description?: string | null } | null;
   outletCheck?: { checkNumber?: string | null } | null;
+  /** The posting's check number — lines posted together share it (FolioLineItem.checkNo). */
+  checkNo?: string | null;
+  /** Set on Night Audit's room-rate / extra-occupancy lines (and the lines they generate). */
+  roomAssignmentId?: string | null;
+  createdAt?: Date | string | null;
+  /** When present, lines of different folios never roll together even with the same check. */
+  folioId?: string | null;
 };
 
 export type PresentedRow = {
@@ -109,24 +116,151 @@ export function buildFolioRows(lines: PresentableLine[], style: FolioStyle): Pre
       });
 
     case "by-check": {
-      const folded = foldGeneratedIntoParent(live);
-      // A line's check number when it has one, else its own description — so outlet sales
-      // roll to their check and room/front-desk charges still summarise sensibly. The
-      // fallback is day-scoped for the same reason as by-code; a real check number is
-      // already single-day, so keying on it alone would be safe, but scoping both keeps
-      // the "a row is one day" invariant true by construction rather than by luck.
-      const checkOf = new Map(live.map((l) => [l.id, l.outletCheck?.checkNumber ?? null]));
-      return group(folded, (r) => `${dayKey(r.date)}|${checkOf.get(r.key) ?? `code:${r.description}`}`, {
-        date: (rows) => rows[0].date,
-        description: (rows) => {
-          const check = checkOf.get(rows[0].key);
-          return check ? `Outlet check ${check}` : rows[0].description;
-        },
-        reference: (rows) => checkOf.get(rows[0].key) ?? null,
+      // One row per check number (FolioLineItem.checkNo) within the folio. A line with no
+      // number of its own rides with the line that generated it; a root with none at all
+      // is its own "check", with its generated lines folded in (the compact reading).
+      // Still day-scoped: a check is one posting, so one day — but staff can edit numbers,
+      // and a guest-facing row must never carry two days' money under one date.
+      const byId = new Map(live.map((l) => [l.id, l]));
+      const checkKeyOf = (l: PresentableLine): string => {
+        let cur: PresentableLine = l;
+        const seen = new Set<string>();
+        for (;;) {
+          if (cur.checkNo) return `chk:${cur.folioId ?? ""}|${cur.checkNo}`;
+          seen.add(cur.id);
+          const parent = cur.generatedFromLineItemId ? byId.get(cur.generatedFromLineItemId) : undefined;
+          if (!parent || seen.has(parent.id)) return `line:${cur.id}`;
+          cur = parent;
+        }
+      };
+      const buckets = new Map<string, PresentableLine[]>();
+      for (const l of live) {
+        const k = `${dayKey(l.date)}|${checkKeyOf(l)}`;
+        const list = buckets.get(k);
+        if (list) list.push(l);
+        else buckets.set(k, [l]);
+      }
+      return [...buckets.entries()].map(([key, members]) => {
+        const main = pickMainLine(members);
+        const check = members.find((m) => m.checkNo)?.checkNo ?? null;
+        const rows = members.map(toRow);
+        return {
+          key,
+          date: earliestDate(members),
+          description: main.description,
+          reference: check ?? toRow(main).reference,
+          base: round2(rows.reduce((s, r) => s + r.base, 0)),
+          serviceCharge: round2(rows.reduce((s, r) => s + r.serviceCharge, 0)),
+          tax: round2(rows.reduce((s, r) => s + r.tax, 0)),
+          total: round2(rows.reduce((s, r) => s + r.total, 0)),
+          count: members.length,
+        };
       });
     }
   }
 }
+
+const timeOf = (d: Date | string | null | undefined) => (d == null ? Number.NaN : new Date(d).getTime());
+
+function earliestDate(lines: PresentableLine[]): Date | string {
+  let best = lines[0].date;
+  for (const l of lines) if (timeOf(l.date) < timeOf(best)) best = l.date;
+  return best;
+}
+
+/**
+ * The line a rolled-up check is named after.
+ *
+ * 1. Only ROOT lines qualify — a line not generated by another member (Service Charge,
+ *    GST, Green Tax and other levies are generated, so they never name the row). If every
+ *    member is generated (the parent was voided or moved), all members qualify.
+ * 2. Among those, a Night Audit room line wins (it carries `roomAssignmentId`) — so a
+ *    stay-night reads as its room charge, not its extra occupancy or an allocation.
+ * 3. Then the earliest posted (`createdAt`) — the room rate posts before extra occupancy.
+ * 4. Then the larger amount, then the order given.
+ */
+export function pickMainLine<T extends PresentableLine>(members: T[]): T {
+  const ids = new Set(members.map((m) => m.id));
+  const roots = members.filter((m) => !m.generatedFromLineItemId || !ids.has(m.generatedFromLineItemId));
+  const pool = roots.length > 0 ? roots : members;
+  const room = pool.filter((m) => m.roomAssignmentId);
+  const candidates = room.length > 0 ? room : pool;
+  const order = new Map(members.map((m, i) => [m.id, i]));
+  return [...candidates].sort((a, b) => {
+    const ta = timeOf(a.createdAt);
+    const tb = timeOf(b.createdAt);
+    if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return ta - tb;
+    const byAmount = Math.abs(b.amount) - Math.abs(a.amount);
+    if (Math.abs(byAmount) > 0.0001) return byAmount;
+    return (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0);
+  })[0];
+}
+
+/** One row of the on-screen folio ledger: a single line, or a rolled-up check. */
+export type LedgerEntry<T extends PresentableLine> =
+  | { kind: "line"; key: string; line: T }
+  | {
+      kind: "check";
+      key: string;
+      checkNo: string;
+      /** The line the row is named after (see pickMainLine). */
+      main: T;
+      /** Every live member, in the order given. */
+      lines: T[];
+      date: Date | string;
+      base: number;
+      serviceCharge: number;
+      tax: number;
+      total: number;
+    };
+
+/**
+ * The folio screen's roll-up: live lines of ONE folio that share a check number collapse
+ * into one entry. A voided line always stands alone (and never counts toward a group); a
+ * number no other live line shares shows as an ordinary line. Entries keep the order of
+ * their first line.
+ */
+export function rollUpByCheck<T extends PresentableLine>(lines: T[]): LedgerEntry<T>[] {
+  const keyOf = (l: T) => (l.checkNo && !l.isVoid ? `${l.folioId ?? ""}|${l.checkNo}` : null);
+  const members = new Map<string, T[]>();
+  for (const l of lines) {
+    const k = keyOf(l);
+    if (!k) continue;
+    const list = members.get(k);
+    if (list) list.push(l);
+    else members.set(k, [l]);
+  }
+
+  const out: LedgerEntry<T>[] = [];
+  const emitted = new Set<string>();
+  for (const l of lines) {
+    const k = keyOf(l);
+    const group = k ? members.get(k)! : null;
+    if (!group || group.length < 2) {
+      out.push({ kind: "line", key: l.id, line: l });
+      continue;
+    }
+    if (emitted.has(k!)) continue;
+    emitted.add(k!);
+    const rows = group.map(toRow);
+    out.push({
+      kind: "check",
+      key: `check:${k}`,
+      checkNo: l.checkNo!,
+      main: pickMainLine(group),
+      lines: group,
+      date: earliestDate(group),
+      base: round2(rows.reduce((s, r) => s + r.base, 0)),
+      serviceCharge: round2(rows.reduce((s, r) => s + r.serviceCharge, 0)),
+      tax: round2(rows.reduce((s, r) => s + r.tax, 0)),
+      total: round2(rows.reduce((s, r) => s + r.total, 0)),
+    });
+  }
+  return out;
+}
+
+/** Mirrors the API's rule for a check number: 1–20 letters, digits or hyphens. */
+export const CHECK_NO_PATTERN = /^[A-Za-z0-9-]{1,20}$/;
 
 function toRow(l: PresentableLine): PresentedRow {
   const base = l.amount;
