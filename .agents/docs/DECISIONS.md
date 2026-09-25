@@ -3276,8 +3276,8 @@ plan left open (MOBILE_PLAN §7 "Left open").
     is charged correctly without anyone re-ticking. The stored `Profile.greenTaxExempt`
     is the manual tick only.
   - Work permit = any identification document flagged "Work permit", the same test the
-    MIRA sheet already used for category 3. The owner said "as primary"; this was left
-    as any flagged document, pending confirmation.
+    MIRA sheet uses for category 3. The owner confirmed on 2026-09-25 that this rule
+    stays, not primary-only.
   - Maldivian nationality is read in any stored form (MV / MDV / Maldives / Maldivian),
     shared with the sheet's category 2 (`isMaldivianNationality` in `countries.ts`).
 - **Posting is per person:** before this, the profile tick was stored but **never used**.
