@@ -178,6 +178,29 @@ describe("Reservation search", () => {
     expect(confs(await call("search=BERGMAN"))).toContain(`S-LIVE-${stamp}`);
   });
 
+  // App owner, 2026-09-25: a specific search looks through every status.
+  it("a search with no status finds checked-out and no-show bookings too", async () => {
+    const found = confs(await call(`search=${stamp}`));
+    expect(found).toContain(`S-LIVE-${stamp}`);
+    expect(found).toContain(`S-OUT-${stamp}`);
+    expect(found).toContain(`S-NOSHOW-${stamp}`);
+    // A named status still narrows the search.
+    expect(confs(await call(`search=${stamp}&status=RESERVED`))).not.toContain(`S-OUT-${stamp}`);
+  });
+
+  it("a search lists the newest stays first", async () => {
+    const rows = await call(`search=${stamp}`);
+    const arrivals = rows.map((r) => new Date((r as unknown as { checkInDate: string }).checkInDate).getTime());
+    expect(arrivals).toEqual([...arrivals].sort((a, b) => b - a));
+  });
+
+  it("ignores a search shorter than 2 characters (no match-everything query)", async () => {
+    const found = confs(await call("search=S"));
+    // Treated as no search: the plain default, finished business hidden.
+    expect(found).toContain(`S-LIVE-${stamp}`);
+    expect(found).not.toContain(`S-OUT-${stamp}`);
+  });
+
   // ---------------------------------------------------------------------------
   // Date modes
   // ---------------------------------------------------------------------------

@@ -215,6 +215,9 @@ export default function ReservationsDashboard() {
   // Server-side filters + load-more pagination
   const PAGE_SIZE = 50
   const [filterSearch, setFilterSearch] = useState("")
+  // What is actually sent: under 2 characters is not a search yet (the API ignores it too),
+  // so the first keystroke doesn't fire a match-everything query across every status.
+  const searchTerm = filterSearch.trim().length >= 2 ? filterSearch.trim() : ""
   const [filterStatus, setFilterStatus] = useState("")
   const [filterDates, setFilterDates] = useState<DateRange | undefined>()
   // Which date the range applies to — the desk thinks in "who arrives", "who is here"
@@ -238,25 +241,25 @@ export default function ReservationsDashboard() {
 
   const buildQuery = (skip: number) => {
     const params = new URLSearchParams({ propertyId, take: String(PAGE_SIZE), skip: String(skip) })
-    if (filterSearch.trim()) params.set("search", filterSearch.trim())
+    if (searchTerm) params.set("search", searchTerm)
     // The default list is business on the books — RESERVED only (app owner, 2026-09-25):
     // no in-house, departures, checked-out, no-shows or cancellations until a status is
-    // picked. A search with no status uses the API's default instead (everything but
-    // CHECKED_OUT/NO_SHOW), so a cancelled booking can still be found by name or number.
+    // picked. A search with no status looks through every status (the API's rule), so a
+    // cancelled or checked-out booking is still found by name, number, room or phone.
     if (filterStatus) params.set("status", filterStatus)
-    else if (!filterSearch.trim()) params.set("status", "RESERVED")
+    else if (!searchTerm) params.set("status", "RESERVED")
     if (filterDates?.from) params.set("from", format(filterDates.from, "yyyy-MM-dd"))
     if (filterDates?.to) params.set("to", format(filterDates.to, "yyyy-MM-dd"))
     if (filterDates?.from || filterDates?.to) params.set("dateMode", dateMode)
     return params
   }
 
-  const fetchData = async () => {
+  const fetchData = async (signal?: AbortSignal) => {
     if (!currentProperty) return
     setLoading(true)
     setLoadError(false)
     try {
-      const res = await fetch(`/api/reservations?${buildQuery(0)}`)
+      const res = await fetch(`/api/reservations?${buildQuery(0)}`, { signal })
       if (!res.ok) throw new Error()
       const resData = await res.json()
       if (Array.isArray(resData)) {
@@ -264,10 +267,11 @@ export default function ReservationsDashboard() {
         setHasMore(resData.length === PAGE_SIZE)
       }
     } catch (e) {
+      if (signal?.aborted) return // superseded — the newer request owns the state
       console.error("Failed to load data", e)
       setLoadError(true)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
@@ -289,9 +293,15 @@ export default function ReservationsDashboard() {
   // Refetch when filters change; text search is debounced.
   useEffect(() => {
     if (!currentProperty) return
-    const t = setTimeout(fetchData, filterSearch ? 350 : 0)
-    return () => clearTimeout(t)
-  }, [currentProperty, filterSearch, filterStatus, filterDates, dateMode])
+    // A newer keystroke or filter cancels the request in flight, so the server isn't left
+    // working on searches nobody will see and a slow answer can't land after a newer one.
+    const controller = new AbortController()
+    const t = setTimeout(() => void fetchData(controller.signal), searchTerm ? 350 : 0)
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [currentProperty, searchTerm, filterStatus, filterDates, dateMode])
 
   useEffect(() => {
     if (!currentProperty) return
@@ -802,7 +812,7 @@ export default function ReservationsDashboard() {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
             ) : loadError ? (
-              <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
+              <ErrorState title="Couldn't load reservations" onRetry={() => void fetchData()} />
             ) : reservations.length === 0 ? (
               <EmptyState icon={CalendarDays} title="No reservations match your filters" />
             ) : (
@@ -918,7 +928,7 @@ export default function ReservationsDashboard() {
                   ))
                 ) : loadError ? (
                   <TableRow><TableCell colSpan={6} className="py-0">
-                    <ErrorState title="Couldn't load reservations" onRetry={fetchData} />
+                    <ErrorState title="Couldn't load reservations" onRetry={() => void fetchData()} />
                   </TableCell></TableRow>
                 ) : reservations.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="py-0">

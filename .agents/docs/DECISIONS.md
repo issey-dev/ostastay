@@ -3264,11 +3264,17 @@ plan left open (MOBILE_PLAN §7 "Left open").
 - The Reservations & Stays list opens on **future active bookings only: status RESERVED**.
   In-house guests, today's departures, checked-out, no-shows and cancellations are not in
   the default list. In the owner's words, "business on the books".
-- **Cancelled bookings appear only when filtered or searched for.** A search with no status
-  picked returns everything except CHECKED_OUT/NO_SHOW (the 2026-08 rule still stands for
-  those), so a cancelled booking can be found by name or number. Picking a status in the
-  filter returns exactly that status.
+- **A specific search looks through every status** (owner, same day): cancelled,
+  checked-out, no-show, in-house. This replaces the 2026-08 rule that hid checked-out and
+  no-show bookings from a search. Picking a status in the filter narrows it to exactly that
+  status. Search results list the newest stays first.
+- **Keeping search cheap** (owner asked for it): trigram (`pg_trgm`) GIN indexes on every
+  searched column (guest first/last/company name, phone/email, confirmation no., channel
+  ref, room number) plus `(propertyId, checkInDate)`. Searches under 2 characters are
+  ignored, and the term is capped at 100. The page waits 350 ms after typing and cancels a
+  stale request when a newer one starts.
 - The status filter's default is labelled "On the books". A separate "Reserved" option would
   duplicate it, so it was dropped.
-- This is the page's choice, not the API's. `GET /api/reservations` with no `status` still
-  returns everything but CHECKED_OUT/NO_SHOW, so other callers are unaffected.
+- The RESERVED default is the page's choice. `GET /api/reservations` with no `status` and
+  no search still returns everything but CHECKED_OUT/NO_SHOW. With a search, it returns
+  every status.
