@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
+import { draftGreenTaxBasis } from "@/lib/green-tax-basis";
 
 // Dry-run pricing for the booking form's summary panel — never writes anything.
 // Accepts the exact in-progress form shape (assignments still being edited, possibly
@@ -31,11 +32,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Every segment needs a room type, rate plan, and a valid date range" }, { status: 400 });
     }
 
+    const adults = Math.max(1, parseInt(body.adults) || 1);
+    const children = Math.max(0, parseInt(body.children) || 0);
+    // Green Tax per person: the guests picked on the form (primary + accompanying) who are
+    // exempt come off the head count — the same rule Night Audit posts with.
+    const guestIds: string[] = [body.primaryGuestId, ...(Array.isArray(body.accompanyingGuestIds) ? body.accompanyingGuestIds : [])]
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+    const greenTaxBasis = guestIds.length
+      ? await draftGreenTaxBasis({
+          propertyId: body.propertyId,
+          adults,
+          children,
+          infants: Math.max(0, parseInt(body.infants) || 0),
+          checkInDate: new Date(Math.min(...assignments.map((a: { startDate: Date }) => a.startDate.getTime()))),
+          guestIds,
+        })
+      : {};
+
     const quote = await computeReservationQuote({
       propertyId: body.propertyId,
       assignments,
-      adults: Math.max(1, parseInt(body.adults) || 1),
-      children: Math.max(0, parseInt(body.children) || 0),
+      adults,
+      children,
+      ...greenTaxBasis,
       mealPlanCode: body.mealPlanCode ?? null,
       manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
     });

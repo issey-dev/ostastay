@@ -32,7 +32,17 @@ const emptyForm = { documentType: "", documentNumber: "", issuingCountry: "", ex
 // Multiple per profile, one may be marked primary — see
 // .agents/docs/PROFILES_REDESIGN_PLAN.md "Identification". Upgraded off the old
 // destructive single-document replace-all onto real per-row CRUD.
-export function IdentificationManager({ upid, onChange }: { upid: string; onChange?: () => void }) {
+export function IdentificationManager({
+  upid,
+  onChange,
+  onDocuments,
+}: {
+  upid: string
+  onChange?: () => void
+  /** The documents as loaded — e.g. so the profile form can tell a work-permit holder
+   *  (Green Tax exempt) without fetching them again. */
+  onDocuments?: (rows: ProfileDocument[]) => void
+}) {
   const confirm = useConfirm()
   const [rows, setRows] = useState<ProfileDocument[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,7 +61,11 @@ export function IdentificationManager({ upid, onChange }: { upid: string; onChan
         if (!r.ok) throw new Error()
         return r.json()
       })
-      .then((data) => { if (Array.isArray(data)) setRows(data) })
+      .then((data) => {
+        if (!Array.isArray(data)) return
+        setRows(data)
+        onDocuments?.(data)
+      })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }

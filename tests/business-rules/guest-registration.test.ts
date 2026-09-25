@@ -97,6 +97,44 @@ describe("Guest Registration No (Green Tax) assignment at EOD", () => {
     expect(seq!.currentValue).toBe(3); // counter is healed
   });
 
+  // Owner, 2026-09-25: every guest gets a number, accompanying/sharing guests too, the
+  // Green Tax-exempt ones included, and a guest added to the stay after the arrival night.
+  it("numbers exempt guests, and a guest added to an in-house stay after arrival", async () => {
+    const ent = await prisma.enterprise.create({ data: { name: "Late", slug: `test-late-${uniq()}`, type: "STANDARD" } });
+    const prop = await prisma.property.create({ data: { enterpriseId: ent.id, name: "Late Prop", code: `LT-${uniq()}`, legalName: "LT LLC", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", businessDate: BIZ } });
+    const rt = (await prisma.roomType.create({ data: { propertyId: prop.id, name: "Std", code: "STD", maxOccupancy: 4, isPseudo: false } })).id;
+    const rp = (await prisma.ratePlan.create({ data: { propertyId: prop.id, code: "BAR", name: "BAR" } })).id;
+    const mk = async (data: { lastName: string; dateOfBirth?: Date; nationality?: string }) =>
+      (await prisma.profile.create({ data: { enterpriseId: ent.id, profileType: "GUEST", firstName: "G", ...data } })).upid;
+    const primary = await mk({ lastName: "Lead" });
+    const infant = await mk({ lastName: "Baby", dateOfBirth: new Date(Date.UTC(2025, 11, 1)) });
+    const local = await mk({ lastName: "Local", nationality: "MV" });
+    const lateJoiner = await mk({ lastName: "Joiner" });
+    const room = await prisma.room.create({ data: { propertyId: prop.id, roomTypeId: rt, roomNumber: `L${uniq().slice(-4)}`, status: "CLEAN" } });
+    const stay = await prisma.reservation.create({
+      data: {
+        propertyId: prop.id, confirmationNo: `LT-${uniq()}`, primaryGuestId: primary,
+        checkInDate: BIZ, checkOutDate: new Date(BIZ.getTime() + 4 * 86_400_000), status: "IN_HOUSE", adults: 2, infants: 1, checkedInAt: BIZ,
+        assignments: { create: { roomTypeId: rt, roomId: room.id, ratePlanId: rp, startDate: BIZ, endDate: new Date(BIZ.getTime() + 4 * 86_400_000) } },
+        accompanyingGuests: { create: [{ profileId: infant }, { profileId: local }] },
+      },
+    });
+
+    // Arrival night: all three named guests get a number, exempt or not.
+    expect((await assignRegistrationNumbers(prop.id, BIZ)).assigned).toBe(3);
+
+    // Next day a sharer is put on the booking: the next EOD numbers them, and only them.
+    await prisma.accompanyingGuest.create({ data: { reservationId: stay.id, profileId: lateJoiner } });
+    expect((await assignRegistrationNumbers(prop.id, new Date(BIZ.getTime() + 86_400_000))).assigned).toBe(1);
+    const joined = await prisma.guestRegistration.findFirstOrThrow({ where: { reservationId: stay.id, profileId: lateJoiner } });
+    expect(joined.registrationNo).toBe(4);
+    expect(joined.isPrimary).toBe(false);
+
+    // Nothing is numbered twice after that.
+    expect((await assignRegistrationNumbers(prop.id, new Date(BIZ.getTime() + 2 * 86_400_000))).assigned).toBe(0);
+    expect(await prisma.guestRegistration.count({ where: { reservationId: stay.id } })).toBe(4);
+  });
+
   it("resets the sequence at the start of a new year", async () => {
     const nextYear = new Date(Date.UTC(2027, 0, 3)); // 2027-01-03
     const room = await prisma.room.create({ data: { propertyId, roomTypeId: rtId, roomNumber: `NY${uniq().slice(-4)}`, status: "CLEAN" } });

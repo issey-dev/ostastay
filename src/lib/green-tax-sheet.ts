@@ -1,3 +1,5 @@
+import { isMaldivianNationality } from "@/lib/countries";
+
 // MIRA Green Tax information sheet (template "GRTInfoSheet25.1") — the rules that turn a
 // GuestRegistration into one row of the government submission. Pure functions, shared by
 // the Green Tax Report and its Excel export (src/lib/reports/render/green-tax-xlsx.ts).
@@ -45,8 +47,7 @@ export function greenTaxCategory(guest: {
   infantAge: number;
 }): number {
   if (guest.dateOfBirth && ageOn(guest.dateOfBirth, guest.checkInDate) < guest.infantAge) return GREEN_TAX_CATEGORY.INFANT;
-  const nat = guest.nationality?.trim().toUpperCase();
-  if (nat === "MV" || nat === "MDV" || nat === "MALDIVES" || nat === "MALDIVIAN") return GREEN_TAX_CATEGORY.MALDIVIAN;
+  if (isMaldivianNationality(guest.nationality)) return GREEN_TAX_CATEGORY.MALDIVIAN;
   if (guest.isWorkPermitHolder) return GREEN_TAX_CATEGORY.PERMIT_HOLDER;
   return GREEN_TAX_CATEGORY.NORMAL;
 }

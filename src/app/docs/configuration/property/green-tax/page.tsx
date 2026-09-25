@@ -22,6 +22,26 @@ export default function GreenTax() {
         Night audit gives each guest who stays 12 hours or more in a real room the next <strong>Reg No</strong>. Numbering restarts
         at 1 every year. The 12-hour rule uses either actual check-in times or your standard times, as chosen on Finance › Tax.
       </p>
+      <p>
+        <strong>Every guest gets a number</strong>: the main guest and every accompanying or sharing guest on the booking, including
+        guests who pay no Green Tax. A guest added to a stay after arrival gets a number at the next night audit.
+      </p>
+
+      <H2>Who pays Green Tax</H2>
+      <p>
+        Green Tax is charged per person, per night. These guests don&apos;t pay it, and the rest of their booking still does:
+      </p>
+      <ul>
+        <li>infants under the exemption age (2 by default, set on Finance › Tax), and anyone booked as an infant</li>
+        <li>Maldivian nationals</li>
+        <li>work permit holders: tick <strong>Work permit</strong> on the guest&apos;s identification document</li>
+        <li>anyone you mark <strong>Green Tax Exempt</strong> on their profile</li>
+      </ul>
+      <p>
+        The first three are worked out from the guest&apos;s profile, so the profile shows <strong>Green Tax Exempt</strong> already
+        ticked, with the reason. Keep the birth date, nationality and identification up to date: Green Tax is charged from what the
+        profile says on the night. For people on a booking who aren&apos;t named, the booking&apos;s adults and children pay.
+      </p>
       <Shot name="prop-green-tax" alt="The Green Tax register: year selector, needs-correction list, monthly filing and correction history." />
 
       <H2>Each month</H2>

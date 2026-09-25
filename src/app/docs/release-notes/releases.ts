@@ -28,6 +28,7 @@ export const RELEASES: Release[] = [
       "Lists of profiles, debtors, groups and the Activity Log can be sorted by column, show how many results there are, and can be exported to CSV.",
       "Long Hub setup pages have jump links to each section, and the Hub menu lists every property setup section.",
       "Company and travel agent profiles have a TIN (Tax Identification Number) field.",
+      "Green Tax is worked out per guest. Guests under 2, Maldivians and work-permit holders are exempt automatically (the profile shows why), and Night Audit charges only the guests who pay.",
       "The GST report is laid out for the MIRA GST return: one line per invoice, dated on departure, with the agent and their TIN, stay dates, amount excluding tax, service charge, GST, Green Tax and the total.",
     ],
     improved: [
@@ -51,6 +52,7 @@ export const RELEASES: Release[] = [
       "In Housekeeping, Select all no longer includes rooms hidden by the status filter.",
       "The profile list no longer stops at 50 without saying so.",
       "Profile titles show as \"Mrs\" instead of \"MRS\".",
+      "A guest added to a stay after the arrival night now gets a Green Tax registration number at the next End of Day.",
     ],
   },
   {

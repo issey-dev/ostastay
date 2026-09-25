@@ -2926,3 +2926,10 @@ numbered list, not a real remaining scope.** Two genuinely open items:
   discrepancy before treating the plan doc as still purely aspirational).
 - **2026-07-18** — Phase 2: core reference/configuration data scoping.
 - Phase 0/1: schema foundation, RBAC, Controls UI redesign, enterprise login.
+
+## Green Tax per guest (2026-09-25, DECISIONS)
+
+- The profile form uses exemption age 2 for its automatic tick. Posting uses the property's
+  `greenTaxExemptAge`. They differ only if a property changes the age.
+- Website Booking API quotes still assume every guest pays Green Tax (no profile before
+  booking). Night Audit posts per person, so the folio can be lower than the quote.

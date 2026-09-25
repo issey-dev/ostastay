@@ -30,6 +30,10 @@ export type ReservationQuoteInput = {
   }>;
   adults: number;
   children: number;
+  /** Who PAYS Green Tax, when some named guests are exempt (greenTaxPax in
+   *  src/lib/green-tax-exemption.ts). Absent → adults/children, as before. */
+  greenTaxAdults?: number;
+  greenTaxChildren?: number;
   mealPlanCode?: string | null;
   manualAllocationIds?: string[];
 };
@@ -268,6 +272,8 @@ export async function computeReservationQuote(
   const greenTaxEnabled = settings?.greenTaxEnabled ?? false;
   const greenTaxAdultAmount = settings?.greenTaxAdultAmount ?? 0;
   const greenTaxChildAmount = settings?.greenTaxChildAmount ?? 0;
+  const gtAdults = Math.max(0, input.greenTaxAdults ?? adults);
+  const gtChildren = Math.max(0, input.greenTaxChildren ?? children);
 
   // Per-night rows for the Daily Details grid — populated as the same loop runs.
   const days: ReservationQuoteDay[] = [];
@@ -375,7 +381,7 @@ export async function computeReservationQuote(
       void chargeCodeId;
     }
 
-    const nGreenTax = greenTaxEnabled ? adults * greenTaxAdultAmount + children * greenTaxChildAmount : 0;
+    const nGreenTax = greenTaxEnabled ? gtAdults * greenTaxAdultAmount + gtChildren * greenTaxChildAmount : 0;
     if (greenTaxEnabled) {
       greenTaxTotal = round2(greenTaxTotal + nGreenTax);
     }
@@ -465,7 +471,8 @@ export async function computeReservationQuote(
     taxLines,
     greenTax: {
       enabled: greenTaxEnabled,
-      adults, children,
+      // The people who pay it — exempt named guests already taken off.
+      adults: gtAdults, children: gtChildren,
       perAdultAmount: greenTaxAdultAmount,
       perChildAmount: greenTaxChildAmount,
       nights,

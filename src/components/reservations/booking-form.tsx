@@ -293,6 +293,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         assignments: form.assignments,
         adults: form.adults,
         children: form.children,
+        // For Green Tax per person — exempt guests on the booking come off the count.
+        infants: form.infants,
+        primaryGuestId: form.primaryGuestId,
+        accompanyingGuestIds: form.accompanyingGuestIds,
         mealPlanCode: form.mealPlan,
         manualAllocationIds: form.manualAllocationIds,
       }),
@@ -303,7 +307,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       .finally(() => { if (!cancelled) setQuoteLoading(false) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, JSON.stringify(form.assignments), form.adults, form.children, form.mealPlan, JSON.stringify(form.manualAllocationIds)])
+  }, [propertyId, JSON.stringify(form.assignments), form.adults, form.children, form.infants, form.primaryGuestId, JSON.stringify(form.accompanyingGuestIds), form.mealPlan, JSON.stringify(form.manualAllocationIds)])
 
   // ── Allocation preview (mirrors src/lib/allocations-server.ts) ────────────
   const selectedRatePlanForAlloc = ratePlans.find(rp => rp.id === form.assignments[0]?.ratePlanId)

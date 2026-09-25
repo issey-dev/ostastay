@@ -26,6 +26,7 @@ import { SubmitButton } from "@/components/ui/submit-button"
 import { CommunicationsManager } from "@/components/profiles/communications-manager"
 import { AddressManager } from "@/components/profiles/address-manager"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
+import { autoExemptReason, EXEMPT_REASON_LABELS } from "@/lib/green-tax-exemption"
 import { AttachmentsManager } from "@/components/profiles/attachments-manager"
 import { NotesPanel } from "@/components/profiles/notes-panel"
 import { PreferencesEditor } from "@/components/profiles/preferences-editor"
@@ -168,6 +169,20 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
 
   const dateOfBirth = form.watch("dateOfBirth")
   const age = dateOfBirth ? differenceInYears(new Date(), dateOfBirth) : null
+
+  // Green Tax exemption that follows from the profile itself (owner, 2026-09-25): under 2,
+  // Maldivian, or a work-permit document. Shown as a locked tick with its reason; it is
+  // worked out again at every posting (src/lib/green-tax-exemption.ts), never stored, so
+  // the box below only records a MANUAL exemption.
+  const nationality = form.watch("nationality")
+  const [hasWorkPermit, setHasWorkPermit] = useState(false)
+  const autoExempt = isIndividual
+    ? autoExemptReason(
+        { dateOfBirth: dateOfBirth ?? null, nationality: nationality || null, documents: hasWorkPermit ? [{ isWorkPermit: true }] : [] },
+        new Date(),
+        2
+      )
+    : null
 
   // "No of Visits to Property" is live-computed (Profile has no propertyId of its own —
   // see stay-history route) and only meaningful once the profile exists and there's an
@@ -542,7 +557,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {isEditMode ? (
-                    <IdentificationManager upid={upid!} />
+                    <IdentificationManager upid={upid!} onDocuments={(docs) => setHasWorkPermit(docs.some((d) => d.isWorkPermit))} />
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Identification documents can be added once the profile is saved.
@@ -935,9 +950,18 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                     render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-2 space-y-0">
                         <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          <Checkbox
+                            checked={field.value || !!autoExempt}
+                            disabled={!!autoExempt}
+                            onCheckedChange={field.onChange}
+                          />
                         </FormControl>
-                        <FormLabel className="cursor-pointer text-sm">Green Tax exempt</FormLabel>
+                        <div className="space-y-0.5">
+                          <FormLabel className="cursor-pointer text-sm">Green Tax exempt</FormLabel>
+                          {autoExempt && (
+                            <p className="text-xs text-muted-foreground">Automatic: {EXEMPT_REASON_LABELS[autoExempt].toLowerCase()}</p>
+                          )}
+                        </div>
                       </FormItem>
                     )}
                   />

@@ -22,6 +22,7 @@ import { CountryFlag, CountryLabel } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { ContactLink } from "@/components/ui/contact-link"
 import { cn } from "@/lib/utils"
+import { greenTaxExemptReason, EXEMPT_REASON_LABELS } from "@/lib/green-tax-exemption"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel agent", STAFF: "Staff",
@@ -260,7 +261,11 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
   // Marketing / compliance switches — only the ones that are ON are worth a line.
   const flags = [
     profile.marketingOptIn && "On the mail list",
-    profile.greenTaxExempt && "Green Tax exempt",
+    // Same rule as posting: under 2, Maldivian, work permit, or ticked by hand.
+    (() => {
+      const reason = greenTaxExemptReason(profile, new Date(), 2)
+      return reason ? `Green Tax exempt (${EXEMPT_REASON_LABELS[reason].toLowerCase()})` : null
+    })(),
     profile.isIncognito && "Incognito",
   ].filter(Boolean) as string[]
 
