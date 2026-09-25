@@ -103,8 +103,11 @@ export function DashboardSettings({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[680px]">
-        <DialogHeader>
+      {/* Header and footer stay put while the lists scroll between them — on a phone the
+          widget list is long, and "Done" must not scroll away with it. dvh, not vh: the
+          mobile browser's toolbar would otherwise cover the footer. */}
+      <DialogContent className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-[680px]">
+        <DialogHeader className="border-b border-border p-4 pr-10">
           <DialogTitle>Customise dashboard</DialogTitle>
           <DialogDescription>
             Choose what you see and how it is arranged. This is your own view — nobody else&apos;s dashboard changes, and
@@ -112,6 +115,7 @@ export function DashboardSettings({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2">
         {/* ── Pages ─────────────────────────────────────────────────────────────── */}
         <section className="space-y-2 py-2">
           <div className="flex items-baseline justify-between">
@@ -121,30 +125,36 @@ export function DashboardSettings({
 
           <ul className="divide-y divide-border rounded-lg border border-border">
             {layout.pages.map((p, i) => (
-              <li key={p.id} className="flex items-center gap-2 p-2">
-                <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <Input
-                  value={p.name}
-                  aria-label={`Name of page ${i + 1}`}
-                  onChange={(e) => onChange(renamePage(layout, p.id, e.target.value))}
-                  // A page with no name is unclickable in the tab bar; fall back rather
-                  // than block typing, so clearing the field to retype is not a trap.
-                  onBlur={(e) => !e.target.value.trim() && onChange(renamePage(layout, p.id, `Page ${i + 1}`))}
-                  className="h-8"
-                />
-                <span className="w-20 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+              <li key={p.id} className="flex items-center gap-1.5 p-2 sm:gap-2">
+                <LayoutDashboard className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
+                {/* On a phone the count sits under the name, so the name keeps the width. */}
+                <div className="min-w-0 flex-1">
+                  <Input
+                    value={p.name}
+                    aria-label={`Name of page ${i + 1}`}
+                    onChange={(e) => onChange(renamePage(layout, p.id, e.target.value))}
+                    // A page with no name is unclickable in the tab bar; fall back rather
+                    // than block typing, so clearing the field to retype is not a trap.
+                    onBlur={(e) => !e.target.value.trim() && onChange(renamePage(layout, p.id, `Page ${i + 1}`))}
+                    className="h-9 sm:h-8"
+                  />
+                  <span className="mt-1 block text-xs text-muted-foreground tabular-nums sm:hidden">
+                    {rows.filter((w) => w.pageId === p.id && !w.hidden).length} shown
+                  </span>
+                </div>
+                <span className="hidden w-20 shrink-0 text-right text-xs text-muted-foreground tabular-nums sm:inline">
                   {rows.filter((w) => w.pageId === p.id && !w.hidden).length} shown
                 </span>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${p.name} earlier`} disabled={i === 0} onClick={() => onChange(movePage(layout, p.id, -1))}>
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" aria-label={`Move ${p.name} earlier`} disabled={i === 0} onClick={() => onChange(movePage(layout, p.id, -1))}>
                   <ChevronUp className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${p.name} later`} disabled={i === layout.pages.length - 1} onClick={() => onChange(movePage(layout, p.id, 1))}>
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" aria-label={`Move ${p.name} later`} disabled={i === layout.pages.length - 1} onClick={() => onChange(movePage(layout, p.id, 1))}>
                   <ChevronDown className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  className="h-9 w-9 shrink-0 text-destructive hover:text-destructive sm:h-8 sm:w-8"
                   aria-label={`Delete ${p.name}`}
                   disabled={layout.pages.length === 1}
                   onClick={() => deletePage(p.id)}
@@ -166,10 +176,10 @@ export function DashboardSettings({
                   addNewPage()
                 }
               }}
-              className="h-9"
+              className="h-9 min-w-0 flex-1"
             />
-            <Button type="button" variant="outline" onClick={addNewPage} disabled={!newPageName.trim()}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add page
+            <Button type="button" variant="outline" className="h-9 shrink-0" onClick={addNewPage} disabled={!newPageName.trim()}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add<span className="hidden sm:inline">&nbsp;page</span>
             </Button>
           </div>
         </section>
@@ -188,22 +198,27 @@ export function DashboardSettings({
               const def = byId.get(w.id)
               if (!def) return null
               return (
-                <li key={w.id} className={cn("flex flex-wrap items-center gap-2 p-2", w.hidden && "opacity-60")}>
-                  <Switch
-                    checked={!w.hidden}
-                    onCheckedChange={(on) => onChange(updateWidget(layout, w.id, { hidden: !on }))}
-                    aria-label={`Show ${def.title}`}
-                  />
-                  {w.hidden ? <EyeOff className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Eye className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{def.title}</span>
-                    <span className="block text-xs text-muted-foreground">{def.group}</span>
-                  </span>
+                // Phone: two lines — the switch and the full name, then the two pickers
+                // side by side at half width each. From sm up: one line, as before. (A
+                // single wrapping flex row squeezed the name to one letter on a phone.)
+                <li key={w.id} className={cn("grid grid-cols-2 gap-2 p-3 sm:flex sm:items-center sm:p-2", w.hidden && "opacity-60")}>
+                  <div className="col-span-2 flex min-w-0 items-center gap-2 sm:flex-1">
+                    <Switch
+                      checked={!w.hidden}
+                      onCheckedChange={(on) => onChange(updateWidget(layout, w.id, { hidden: !on }))}
+                      aria-label={`Show ${def.title}`}
+                    />
+                    {w.hidden ? <EyeOff className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" /> : <Eye className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{def.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{def.group}</span>
+                    </span>
+                  </div>
 
                   <Select value={w.size} onValueChange={(v) => v && onChange(updateWidget(layout, w.id, { size: v as typeof w.size }))}>
                     {/* Select.Value shows the raw VALUE unless it is given a formatter,
                         which would put "sm" and a page id on screen. */}
-                    <SelectTrigger className="h-8 w-[124px]" aria-label={`Width of ${def.title}`}>
+                    <SelectTrigger className="h-9 w-full min-w-0 sm:h-8 sm:w-[124px]" aria-label={`Width of ${def.title}`}>
                       <SelectValue>{(v) => SIZE_LABEL[v as WidgetSize] ?? String(v)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -216,7 +231,7 @@ export function DashboardSettings({
                   </Select>
 
                   <Select value={w.pageId} onValueChange={(v) => v && onChange(updateWidget(layout, w.id, { pageId: v }))}>
-                    <SelectTrigger className="h-8 w-[150px]" aria-label={`Page for ${def.title}`}>
+                    <SelectTrigger className="h-9 w-full min-w-0 sm:h-8 sm:w-[150px]" aria-label={`Page for ${def.title}`}>
                       <SelectValue>{(v) => pageName(String(v))}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -235,8 +250,9 @@ export function DashboardSettings({
             Drag a card by its handle on the dashboard to reorder it, or focus the handle and use the arrow keys.
           </p>
         </section>
+        </div>
 
-        <DialogFooter className="justify-between sm:justify-between">
+        <DialogFooter className="flex-row justify-between border-t border-border p-3 sm:justify-between sm:px-4">
           <Button type="button" variant="ghost" className="text-muted-foreground" onClick={resetAll}>
             <RotateCcw className="mr-1.5 h-4 w-4" /> Reset to default
           </Button>
