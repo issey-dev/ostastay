@@ -25,6 +25,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel } from "@/lib/reservation-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DesktopOnlyNotice, MobileActions } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
@@ -336,29 +337,27 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
         {group.reservations && group.reservations.length > 0 ? (
           <>
           {/* Phones: a card per pickup — name, stay, room, status; tap to open. */}
-          <div className="divide-y divide-border md:hidden">
+          <MobileCardList className="p-4">
             {group.reservations.map((res: any) => {
               const st = deriveReservationState(res.status, res.checkInDate, res.checkOutDate, bd)
               return (
-                <button
+                <MobileCard
                   key={res.id}
-                  type="button"
-                  className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-muted"
+                  title={`${res.primaryGuest?.firstName ?? ""} ${res.primaryGuest?.lastName ?? ""}`.trim()}
+                  subtitle={<span className="font-mono">{res.confirmationNo}</span>}
+                  badge={<StatusBadge label={reservationStateLabel(st)} status={st} />}
+                  meta={[
+                    {
+                      label: "Room",
+                      value: res.assignments?.[0]?.room?.roomNumber || <span className="font-normal text-muted-foreground">Unassigned</span>,
+                    },
+                    { label: "Stay", value: `${format(parseISO(res.checkInDate), "dd MMM")} → ${format(parseISO(res.checkOutDate), "dd MMM yy")}`, wide: true },
+                  ]}
                   onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}`)}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {format(parseISO(res.checkInDate), "dd MMM")} → {format(parseISO(res.checkOutDate), "dd MMM yy")} · Room{" "}
-                      <span className="font-semibold text-foreground">{res.assignments?.[0]?.room?.roomNumber || "unassigned"}</span>
-                    </div>
-                    <div className="text-xs font-mono text-muted-foreground">{res.confirmationNo}</div>
-                  </div>
-                  <StatusBadge label={reservationStateLabel(st)} status={st} className="shrink-0" />
-                </button>
+                />
               )
             })}
-          </div>
+          </MobileCardList>
           <div className="overflow-x-auto max-md:hidden">
             <Table>
               <TableHeader>

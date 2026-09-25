@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -673,29 +674,31 @@ export default function RevenueDashboard() {
             return (
               <>
                 {/* Mobile: card-per-row — a 5-column table is unreadable under ~500px. */}
-                <div className="space-y-3 p-4 md:hidden">
+                <MobileCardList className="p-4">
                   {ratePlans.map((plan) => (
-                    <div key={plan.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 font-mono font-bold text-info">
-                            {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
-                            {plan.code}
-                          </div>
-                          <div className="truncate font-medium text-foreground">{plan.name}</div>
-                        </div>
-                        <span className="shrink-0 font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
-                      </div>
+                    <MobileCard
+                      key={plan.id}
+                      title={plan.name}
+                      subtitle={
+                        <span className="inline-flex items-center gap-1.5 font-mono font-bold text-info">
+                          {plan.isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {plan.code}
+                        </span>
+                      }
+                      badge={<span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">Priority {plan.priority}</span>}
+                      actions={
+                        // Phones: read-only — editing is desktop-only (see the notice above).
+                        <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="block w-full">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <CalendarDays className="mr-2 h-3.5 w-3.5" /> Price calendar
+                          </Button>
+                        </Link>
+                      }
+                    >
                       {typeBadges(plan)}
-                      {/* Phones: read-only — editing is desktop-only (see the notice above). */}
-                      <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="block pt-1">
-                        <Button variant="outline" size="sm" className="h-9 w-full">
-                          <CalendarDays className="mr-2 h-3.5 w-3.5" /> Price calendar
-                        </Button>
-                      </Link>
-                    </div>
+                    </MobileCard>
                   ))}
-                </div>
+                </MobileCardList>
 
                 {/* Tablet/desktop: real table. */}
                 <div className="hidden md:block overflow-x-auto">

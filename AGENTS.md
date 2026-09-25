@@ -62,7 +62,8 @@ read `.agents/docs/`:
 - [`.agents/docs/MOBILE_PLAN.md`](.agents/docs/MOBILE_PLAN.md) — phones: desktop is the source of
   truth, mobile changes live behind `max-sm:`/`max-md:`/`md:hidden` or `pointer-coarse:`. Dialogs are
   bottom sheets on phones (`DialogContent mobile="sheet"|"fullscreen"|"none"`); use the shared
-  `@/components/ui/mobile` (`MobileActions`, `MobileActionBar`, `DesktopOnlyNotice`), `ContactLink`,
+  `@/components/ui/mobile` (`MobileActions`, `MobileActionBar`, `DesktopOnlyNotice`), `MobileCard`/
+  `MobileCardList` (phone version of a table), `NumberStepper`, `ContactLink`,
   `@/lib/input-presets` and `PageHeader`. Check a change with `npm run mobile:audit` (captures at
   phone/tablet/desktop widths + a pixel diff against a baseline — desktop must not change).
 

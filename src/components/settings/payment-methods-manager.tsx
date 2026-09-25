@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Edit2, Trash2, CreditCard } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -135,7 +136,52 @@ export function PaymentMethodsManager({
         </div>
       }
     >
-      <div className="-mx-6 -mb-6 border-t border-border">
+      {/* Phone view — the table below takes over at md. */}
+      <MobileCardList
+        className="-mx-6 -mb-6 border-t border-border p-4"
+        empty={<EmptyState icon={CreditCard} title="No payment methods configured" />}
+      >
+        {loading
+          ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+          : sortedMethods.map(method => (
+              <MobileCard
+                key={method.id}
+                tone={method.isActive ? undefined : "muted"}
+                title={
+                  <span className="flex items-center">
+                    <CreditCard className="w-4 h-4 shrink-0 text-muted-foreground mr-2" />
+                    {method.name}
+                  </span>
+                }
+                badge={<Badge variant="outline" className="bg-muted">{method.type}</Badge>}
+                onClick={() => handleOpenDialog(method)}
+                actions={
+                  <>
+                    <label className="mr-auto flex min-h-11 items-center gap-2 text-sm">
+                      <Switch
+                        checked={method.isActive}
+                        onCheckedChange={() => handleToggleActive(method.id, method.isActive)}
+                      />
+                      {method.isActive ? "Active" : "Inactive"}
+                    </label>
+                    <Button variant="outline" size="sm" className="h-9" onClick={() => handleOpenDialog(method)}>
+                      <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline" size="icon"
+                      className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                      aria-label="Delete payment method"
+                      onClick={() => handleDelete(method.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                }
+              />
+            ))}
+      </MobileCardList>
+
+      <div className="hidden md:block -mx-6 -mb-6 border-t border-border">
         <Table>
           <TableHeader className="bg-muted">
             <TableRow>

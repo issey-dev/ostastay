@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Input } from "@/components/ui/input"
+import { NumberStepper } from "@/components/ui/number-stepper"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import { format, addDays, parseISO } from "date-fns"
@@ -144,7 +145,18 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   // Watched values keep the derived machinery (grid, quote, previews) reactive
   // exactly like the old useState did — `form` reads the same in the JSX below.
   const form = formCtl.watch()
-  const { errors } = formCtl.formState
+  const { errors, isSubmitted } = formCtl.formState
+  // Field errors stay quiet until the user has touched that field (or tried to save):
+  // the form is validated onChange against seeded values (business-date arrival, an
+  // empty segment), so without this gate an untouched form opened already showing
+  // "Pick a departure date" / "Pick a room & rate…". Keys are the displayed fields
+  // ("checkInDate", "seg-0", …) — the value setters are shared with effects, so
+  // touching is marked from the user-facing handlers only.
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const touch = (...keys: string[]) =>
+    setTouched((t) => (keys.every((k) => t[k]) ? t : { ...t, ...Object.fromEntries(keys.map((k) => [k, true])) }))
+  const shownError = (message: string | undefined, ...keys: string[]) =>
+    isSubmitted || keys.some((k) => touched[k]) ? message : undefined
   const setField = <K extends Path<BookingFormValues>>(name: K, value: PathValue<BookingFormValues, K>) =>
     formCtl.setValue(name, value, { shouldValidate: true, shouldDirty: true })
 
@@ -371,6 +383,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
   const selectGridCell = (roomTypeId: string, ratePlanId: string) => {
     const i = Math.min(activeSegmentIndex, formCtl.getValues("assignments").length - 1)
+    touch(`seg-${i}`)
     updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
   }
 
@@ -634,11 +647,11 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       today, and re-saving it must not be blocked. */}
                   <DatePicker
                     value={form.checkInDate}
-                    onChange={v => setStayDate("in", v)}
+                    onChange={v => { touch("checkInDate"); setStayDate("in", v) }}
                     disabled={arrivalLocked}
                     minDate={!isEditMode && businessDateIso ? businessDateIso : undefined}
                   />
-                  <FieldError message={errors.checkInDate?.message} />
+                  <FieldError message={shownError(errors.checkInDate?.message, "checkInDate")} />
                 </div>
                 <div className="grid content-start gap-2 max-md:col-span-3">
                   <Label className="flex items-center gap-2">
@@ -649,21 +662,24 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       </span>
                     )}
                   </Label>
-                  <DatePicker value={form.checkOutDate} onChange={v => setStayDate("out", v)} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
-                  <FieldError message={errors.checkOutDate?.message} />
+                  <DatePicker value={form.checkOutDate} onChange={v => { touch("checkOutDate"); setStayDate("out", v) }} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
+                  <FieldError message={shownError(errors.checkOutDate?.message, "checkOutDate")} />
                 </div>
-                <div className="grid content-start gap-2 max-md:col-span-2">
+                <div className="grid content-start gap-2 max-md:col-span-2 max-sm:col-span-6 max-sm:grid-cols-[1fr_auto] max-sm:items-center">
                   <Label>Adults</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="1" value={form.adults} onChange={e => setField("adults", parseInt(e.target.value) || 1)} />
-                  <FieldError message={errors.adults?.message} />
+                  <Input {...INPUT_INTEGER} type="number" min="1" className="max-md:hidden" value={form.adults} onChange={e => { touch("adults"); setField("adults", parseInt(e.target.value) || 1) }} />
+                  <NumberStepper className="md:hidden" label="Adults" min={1} value={form.adults} onChange={n => { touch("adults"); setField("adults", n) }} />
+                  <FieldError message={shownError(errors.adults?.message, "adults")} />
                 </div>
-                <div className="grid content-start gap-2 max-md:col-span-2">
+                <div className="grid content-start gap-2 max-md:col-span-2 max-sm:col-span-6 max-sm:grid-cols-[1fr_auto] max-sm:items-center">
                   <Label>Children</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="0" value={form.children} onChange={e => setField("children", parseInt(e.target.value) || 0)} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={form.children} onChange={e => { touch("children"); setField("children", parseInt(e.target.value) || 0) }} />
+                  <NumberStepper className="md:hidden" label="Children" min={0} value={form.children} onChange={n => { touch("children"); setField("children", n) }} />
                 </div>
-                <div className="grid content-start gap-2 max-md:col-span-2">
+                <div className="grid content-start gap-2 max-md:col-span-2 max-sm:col-span-6 max-sm:grid-cols-[1fr_auto] max-sm:items-center">
                   <Label>Infants</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="0" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
+                  <NumberStepper className="md:hidden" label="Infants" min={0} value={form.infants} onChange={n => setField("infants", n)} />
                 </div>
               </div>
               <div className="grid content-start gap-2">
@@ -747,7 +763,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 const rt = roomTypes.find(r => r.id === assignment.roomTypeId)
                 const rp = ratePlans.find(r => r.id === assignment.ratePlanId)
                 const isActive = index === Math.min(activeSegmentIndex, form.assignments.length - 1)
-                const segErr = segmentErrors?.[index]
+                const segErr = isSubmitted || touched[`seg-${index}`] ? segmentErrors?.[index] : undefined
                 return (
                   <div
                     key={index}
@@ -797,6 +813,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                             disabled={index > 0 || walkIn}
                             onChange={v => {
                               if (index > 0 || walkIn) return; // locked — segment 0 = arrival (walk-in fixes it to today)
+                              touch(`seg-${index}`);
                               // Same hard rule as the top-level Arrival/Departure: moving
                               // this segment's start past its own end clears the now-invalid end.
                               const current = formCtl.getValues("assignments")[index];
@@ -819,6 +836,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                             value={assignment.endDate}
                             minDate={assignment.startDate ? dayAfter(assignment.startDate) : undefined}
                             onChange={v => {
+                              touch(`seg-${index}`);
                               updateAssignment(index, { endDate: v });
                               if (index === formCtl.getValues("assignments").length - 1) setField("checkOutDate", v);
                             }}
@@ -832,7 +850,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         <Label>Room Assignment</Label>
                         <SearchableSelect
                           value={assignment.roomId}
-                          onChange={(v) => updateAssignment(index, { roomId: v })}
+                          onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { roomId: v }) }}
                           placeholder="Unassigned"
                           options={[
                             { value: "none", label: "Unassigned" },
@@ -855,7 +873,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           step="0.01"
                           placeholder="Optional override"
                           value={assignment.overrideRate}
-                          onChange={e => updateAssignment(index, { overrideRate: e.target.value })}
+                          onChange={e => { touch(`seg-${index}`); updateAssignment(index, { overrideRate: e.target.value }) }}
                         />
                         <FieldError message={segErr?.overrideRate?.message} />
                       </div>
@@ -924,7 +942,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       {form.primaryGuestId ? "Change" : "Select..."}
                     </Button>
                   </div>
-                  <FieldError message={errors.primaryGuestId?.message} />
+                  <FieldError message={shownError(errors.primaryGuestId?.message, "primaryGuestId")} />
                 </div>
                 <div className="grid content-start gap-2 sm:w-2/3">
                   <Label>Meal Plan</Label>
@@ -1023,7 +1041,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     <Plus className="h-4 w-4 mr-2" /> Add an accompanying guest...
                   </Button>
                 )}
-                <FieldError message={errors.accompanyingGuestIds?.message} />
+                <FieldError message={shownError(errors.accompanyingGuestIds?.message, "accompanyingGuestIds", "adults", "children")} />
                 {form.accompanyingGuestIds.length > 0 && (
                   <div className="mt-2 flex flex-col gap-2">
                     {form.accompanyingGuestIds.map(gid => {
@@ -1212,15 +1230,21 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
       <GuestPickerModal
         isOpen={guestPickerOpen !== null}
-        onClose={() => setGuestPickerOpen(null)}
+        onClose={() => {
+          // Closing the primary-guest picker (with or without a pick) counts as touching it.
+          if (guestPickerOpen === "primary") touch("primaryGuestId")
+          setGuestPickerOpen(null)
+        }}
         enterpriseId={enterpriseId}
         title={guestPickerOpen === "primary" ? "Select Primary Guest" : "Add Accompanying Guest"}
         excludeIds={guestPickerOpen === "primary" ? [] : [form.primaryGuestId, ...form.accompanyingGuestIds].filter(Boolean)}
         onSelect={(profile: GuestProfile) => {
           setProfiles(prev => prev.some(p => p.upid === profile.upid) ? prev : [profile, ...prev])
           if (guestPickerOpen === "primary") {
+            touch("primaryGuestId")
             setField("primaryGuestId", profile.upid)
           } else if (guestPickerOpen === "accompanying") {
+            touch("accompanyingGuestIds")
             const current = formCtl.getValues("accompanyingGuestIds")
             if (!current.includes(profile.upid) && current.length < maxAccompanying) {
               setField("accompanyingGuestIds", [...current, profile.upid])

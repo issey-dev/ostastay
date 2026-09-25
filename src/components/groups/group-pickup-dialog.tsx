@@ -1,11 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { useProperty } from "@/components/providers/property-provider"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { DatePicker } from "@/components/ui/date-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Switch } from "@/components/ui/switch"
@@ -26,6 +30,46 @@ type GroupPickupDialogProps = {
   roomTypeOptions?: { id: string; name: string; code: string }[]
 }
 
+// APP STANDARD 001: Zod + React Hook Form, inline real-time errors. The rules are the
+// pickup endpoint's own (POST /api/groups/[id]/pickup): guest first/last name, room type
+// and both dates are required, and check-out must be after check-in. Rate/meal plan are
+// optional (blank = property default / room only). Values are sent untrimmed, as before.
+const requiredText = (message: string) => z.string().refine((v) => v.trim().length > 0, { message })
+
+const pickupSchema = z
+  .object({
+    firstName: requiredText("First name is required"),
+    lastName: requiredText("Last name is required"),
+    roomTypeId: z.string().min(1, "Pick a room type"),
+    ratePlanId: z.string(),
+    mealPlanCode: z.string(),
+    checkInDate: z.string().min(1, "Pick a check-in date"),
+    checkOutDate: z.string().min(1, "Pick a check-out date"),
+    billToMaster: z.boolean(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.checkInDate && v.checkOutDate && v.checkOutDate <= v.checkInDate) {
+      ctx.addIssue({ code: "custom", path: ["checkOutDate"], message: "Check-out must be after check-in" })
+    }
+  })
+
+type PickupValues = z.infer<typeof pickupSchema>
+
+const pickupDefaults: PickupValues = {
+  firstName: "",
+  lastName: "",
+  roomTypeId: "",
+  ratePlanId: "",
+  mealPlanCode: "",
+  checkInDate: "",
+  checkOutDate: "",
+  // Group pickups bill the block's master folio by default; staff can opt a guest out.
+  billToMaster: true,
+}
+
+// Always sent with these values (the dialog has no inputs for them) — same payload as before.
+const FIXED_FIELDS = { email: "", phone: "", adults: "1" }
+
 export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart, blockEnd, roomTypeOptions }: GroupPickupDialogProps) {
   const { currentProperty } = useProperty()
   const confirm = useConfirm()
@@ -34,21 +78,14 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
   const [mealPlans, setMealPlans] = useState<any[]>([])
-  // Group pickups bill the block's master folio by default; staff can opt a guest out.
-  const [billToMaster, setBillToMaster] = useState(true)
 
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    roomTypeId: "",
-    ratePlanId: "",
-    mealPlanCode: "",
-    checkInDate: "",
-    checkOutDate: "",
-    adults: "1"
+  const form = useForm<PickupValues>({
+    resolver: zodResolver(pickupSchema),
+    mode: "onChange",
+    defaultValues: pickupDefaults,
   })
+  const checkInDate = form.watch("checkInDate")
+  const billToMaster = form.watch("billToMaster")
 
   // Room types offered = the block's held types (roomTypeOptions); only fall back to
   // fetching all property types when the block has no per-type holds (legacy).
@@ -78,25 +115,21 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, currentProperty, usesBlockTypes])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
-
   // Pickup dates must fall within the block window: check-in in [start, end-1],
   // check-out in [check-in+1, end].
   const dayAfter = (d: string) => format(addDays(parseISO(d), 1), "yyyy-MM-dd")
   const dayBefore = (d: string) => format(subDays(parseISO(d), 1), "yyyy-MM-dd")
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const onSubmit = async (values: PickupValues) => {
     setLoading(true)
+    const { billToMaster: bill, ...fields } = values
     // Overbooking is allowed with confirmation (409 + requiresOverbookConfirm on the
     // first try, then resend with acknowledgeOverbook).
     const send = async (acknowledgeOverbook: boolean) => {
       const res = await fetch(`/api/groups/${groupId}/pickup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, billToMaster, acknowledgeOverbook })
+        body: JSON.stringify({ ...fields, ...FIXED_FIELDS, billToMaster: bill, acknowledgeOverbook })
       })
       if (res.ok) {
         setOpen(false)
@@ -141,93 +174,164 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
-              <Input id="firstName" name="firstName" required value={formData.firstName} onChange={handleChange} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input id="lastName" name="lastName" required value={formData.lastName} onChange={handleChange} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="checkInDate">Check-in</Label>
-              <DatePicker
-                value={formData.checkInDate}
-                minDate={blockStart || undefined}
-                maxDate={blockEnd ? dayBefore(blockEnd) : undefined}
-                onChange={(v) =>
-                  setFormData((p) => {
-                    // Drop a now-invalid check-out (on/before the new arrival, or past the block).
-                    const keepCo = p.checkOutDate && v && p.checkOutDate > v && (!blockEnd || p.checkOutDate <= blockEnd)
-                    return { ...p, checkInDate: v, checkOutDate: keepCo ? p.checkOutDate : "" }
-                  })
-                }
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+              <FormField
+                control={form.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="given-name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="family-name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="checkOutDate">Check-out</Label>
-              <DatePicker
-                value={formData.checkOutDate}
-                minDate={formData.checkInDate ? dayAfter(formData.checkInDate) : blockStart ? dayAfter(blockStart) : undefined}
-                maxDate={blockEnd || undefined}
-                onChange={(v) => setFormData((p) => ({ ...p, checkOutDate: v }))}
+
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+              <FormField
+                control={form.control}
+                name="checkInDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Check-in</FormLabel>
+                    <FormControl>
+                      <DatePicker
+                        value={field.value}
+                        minDate={blockStart || undefined}
+                        maxDate={blockEnd ? dayBefore(blockEnd) : undefined}
+                        onChange={(v) => {
+                          // Drop a now-invalid check-out (on/before the new arrival, or past the block).
+                          const co = form.getValues("checkOutDate")
+                          const keepCo = co && v && co > v && (!blockEnd || co <= blockEnd)
+                          field.onChange(v)
+                          if (co && !keepCo) form.setValue("checkOutDate", "", { shouldValidate: true })
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="checkOutDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Check-out</FormLabel>
+                    <FormControl>
+                      <DatePicker
+                        value={field.value}
+                        minDate={checkInDate ? dayAfter(checkInDate) : blockStart ? dayAfter(blockStart) : undefined}
+                        maxDate={blockEnd || undefined}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Room Type</Label>
-            <SearchableSelect
-              value={formData.roomTypeId}
-              onChange={(v) => setFormData((p) => ({ ...p, roomTypeId: v ?? "" }))}
-              placeholder="Select room type"
-              options={roomTypeList.map((rt) => ({ label: `${rt.name} (${rt.code})`, value: rt.id }))}
+            <FormField
+              control={form.control}
+              name="roomTypeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Room Type</FormLabel>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={(v) => field.onChange(v ?? "")}
+                      placeholder="Select room type"
+                      options={roomTypeList.map((rt) => ({ label: `${rt.name} (${rt.code})`, value: rt.id }))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Rate Plan</Label>
-              <SearchableSelect
-                value={formData.ratePlanId}
-                onChange={(v) => setFormData((p) => ({ ...p, ratePlanId: v ?? "" }))}
-                placeholder="Property default"
-                options={ratePlans.map((rp) => ({ label: `${rp.code} — ${rp.name}`, value: rp.id }))}
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+              <FormField
+                control={form.control}
+                name="ratePlanId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rate Plan</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="Property default"
+                        options={ratePlans.map((rp) => ({ label: `${rp.code} — ${rp.name}`, value: rp.id }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="mealPlanCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Meal Plan</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="None (Room Only)"
+                        options={mealPlans.map((mp) => ({ label: `${mp.code} — ${mp.name}`, value: mp.code }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Meal Plan</Label>
-              <SearchableSelect
-                value={formData.mealPlanCode}
-                onChange={(v) => setFormData((p) => ({ ...p, mealPlanCode: v ?? "" }))}
-                placeholder="None (Room Only)"
-                options={mealPlans.map((mp) => ({ label: `${mp.code} — ${mp.name}`, value: mp.code }))}
-              />
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between rounded-lg border border-border p-3">
-            <div className="pr-3">
-              <Label className="text-sm">Bill to group master folio</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {billToMaster ? "Charges route to the block's master folio." : "This guest settles their own folio."}
-              </p>
-            </div>
-            <Switch checked={billToMaster} onCheckedChange={setBillToMaster} />
-          </div>
+            <FormField
+              control={form.control}
+              name="billToMaster"
+              render={({ field }) => (
+                <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div className="pr-3">
+                    <Label className="text-sm">Bill to group master folio</Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {billToMaster ? "Charges route to the block's master folio." : "This guest settles their own folio."}
+                    </p>
+                  </div>
+                  <Switch checked={field.value} onCheckedChange={(checked) => field.onChange(!!checked)} />
+                </div>
+              )}
+            />
 
-          <DialogFooter className="pt-4">
-            <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" className="" disabled={loading}>
-              {loading ? "Saving..." : "Create Pickup"}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter className="pt-4">
+              <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" className="" disabled={loading}>
+                {loading ? "Saving..." : "Create Pickup"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )

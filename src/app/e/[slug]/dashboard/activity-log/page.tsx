@@ -16,6 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { INPUT_SEARCH } from "@/lib/input-presets"
 import { InfoHint } from "@/components/ui/info-hint"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 type LogEntry = {
   id: string
@@ -209,9 +210,10 @@ export default function ActivityLogPage() {
 
       {/* Phones: one card per entry — what happened first, then who · where · when. */}
       <div className="space-y-2 md:hidden">
-        <p className="text-xs text-muted-foreground">
-          {total} entr{total === 1 ? "y" : "ies"}
-        </p>
+      <p className="text-xs text-muted-foreground">
+        {total} entr{total === 1 ? "y" : "ies"}
+      </p>
+      <MobileCardList>
         {loading && entries.length === 0 ? (
           Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
         ) : loadError ? (
@@ -220,28 +222,32 @@ export default function ActivityLogPage() {
           <EmptyState icon={History} title="No activity recorded yet" className="py-10" />
         ) : (
           entries.map((e) => (
-            <div key={e.id} className="rounded-xl border border-border bg-card p-3">
-              <p className="text-sm text-foreground break-words">{e.description}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{e.userName ?? e.userEmail ?? "—"}</span>
-                {e.isSupport && (
-                  <Badge variant="outline" className="text-xs border-warning text-warning">
-                    Osta Support
-                  </Badge>
-                )}
-                <span aria-hidden>·</span>
-                <span>{moduleLabel(e.module)}</span>
-                <span aria-hidden>·</span>
+            <MobileCard
+              key={e.id}
+              title={<span className="font-medium">{e.description}</span>}
+              badge={
                 <Badge variant="outline" className={cn("text-[10px]", ACTION_BADGE_CLASS[e.action])}>
                   {e.action}
                 </Badge>
-                {/* Right-aligned rather than after a "·": when it wraps it starts its own line
-                    instead of leaving a dangling separator. */}
-                <span className="ml-auto whitespace-nowrap">{formatWhen(e.createdAt)}</span>
-              </div>
-            </div>
+              }
+              subtitle={
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-medium text-foreground">{e.userName ?? e.userEmail ?? "—"}</span>
+                  {e.isSupport && (
+                    <Badge variant="outline" className="text-xs border-warning text-warning">
+                      Osta Support
+                    </Badge>
+                  )}
+                  <span aria-hidden>·</span>
+                  <span>{moduleLabel(e.module)}</span>
+                  {/* Its own line — a wrapped "·" would dangle. */}
+                  <span className="basis-full whitespace-nowrap">{formatWhen(e.createdAt)}</span>
+                </span>
+              }
+            />
           ))
         )}
+      </MobileCardList>
       </div>
 
       <div className="hidden md:block bg-card rounded-xl border shadow-sm overflow-x-auto">

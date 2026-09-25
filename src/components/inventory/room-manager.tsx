@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Building2, Map, Pencil, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -428,33 +429,27 @@ export function RoomManager({
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
-          <div className="md:hidden">
-            {loading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          <MobileCardList className="p-4" empty={<EmptyState icon={Building2} title="No buildings configured" />}>
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
+              : sortedBuildings.map((building) => (
+                  <MobileCard
+                    key={building.id}
+                    title={building.name}
+                    onClick={() => openBuildingEdit(building)}
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openBuildingEdit(building)}>
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openBuildingDelete(building.id)}>
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                        </Button>
+                      </>
+                    }
+                  />
                 ))}
-              </div>
-            ) : buildings.length === 0 ? (
-              <EmptyState icon={Building2} title="No buildings configured" />
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedBuildings.map((building) => (
-                  <div key={building.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <p className="font-semibold text-foreground">{building.name}</p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openBuildingEdit(building)}>
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openBuildingDelete(building.id)}>
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>
@@ -575,38 +570,28 @@ export function RoomManager({
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
-          <div className="md:hidden">
-            {loading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full rounded-lg" />
+          <MobileCardList className="p-4" empty={<EmptyState icon={Map} title="No floors configured" />}>
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+              : sortedFloors.map((floor) => (
+                  <MobileCard
+                    key={floor.id}
+                    title={floor.name}
+                    subtitle={buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
+                    onClick={() => openFloorEdit(floor)}
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openFloorEdit(floor)}>
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openFloorDelete(floor.id)}>
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                        </Button>
+                      </>
+                    }
+                  />
                 ))}
-              </div>
-            ) : allFloors.length === 0 ? (
-              <EmptyState icon={Map} title="No floors configured" />
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedFloors.map((floor) => (
-                  <div key={floor.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{floor.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openFloorEdit(floor)}>
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openFloorDelete(floor.id)}>
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>
@@ -825,49 +810,46 @@ export function RoomManager({
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
-          <div className="md:hidden">
-            {loading ? (
-              <div className="space-y-3 p-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-24 w-full rounded-lg" />
-                ))}
-              </div>
-            ) : rooms.length === 0 ? (
+          <MobileCardList
+            className="p-4"
+            empty={
               <EmptyState
                 icon={DoorOpen}
                 title="No rooms configured"
                 description="Add a building, a floor, and then create rooms."
               />
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedRooms.map((room) => (
-                  <div key={room.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-bold text-foreground">{room.roomNumber}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {room.roomType?.name}
-                          {room.roomType?.isPseudo && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
-                          )}
-                        </p>
-                      </div>
-                      <StatusBadge label={room.status.replace(/_/g, ' ')} status={room.status} className="shrink-0" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Floor: {room.floor?.name || "—"}</p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openRoomEdit(room)}>
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openRoomDelete(room.id)}>
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-                      </Button>
-                    </div>
-                  </div>
+            }
+          >
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+              : sortedRooms.map((room) => (
+                  <MobileCard
+                    key={room.id}
+                    title={room.roomNumber}
+                    subtitle={room.roomType?.name}
+                    badge={
+                      <>
+                        {room.roomType?.isPseudo && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                        )}
+                        <StatusBadge label={room.status.replace(/_/g, ' ')} status={room.status} />
+                      </>
+                    }
+                    meta={[{ label: "Floor", value: room.floor?.name || "—" }]}
+                    onClick={() => openRoomEdit(room)}
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-primary" onClick={() => openRoomEdit(room)}>
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openRoomDelete(room.id)}>
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                        </Button>
+                      </>
+                    }
+                  />
                 ))}
-              </div>
-            )}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

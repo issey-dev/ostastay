@@ -10,6 +10,7 @@ import { Printer, FileText, ArrowLeft } from "@/components/icons"
 import { InfoHint } from "@/components/ui/info-hint"
 import Link from "next/link"
 import { format } from "date-fns"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 type DateItem = { businessDate: string; generatedAt: string }
 type ReportsPayload = {
@@ -148,7 +149,7 @@ const Td = ({ children, right, bold }: { children?: React.ReactNode; right?: boo
 const Empty = ({ msg }: { msg: string }) => <p className="text-sm text-muted-foreground py-2">{msg}</p>
 
 // Mobile fallback for the report tables below (§4.2 — stacked card-per-row under md,
-// real <table> + horizontal scroll from md up). Each report row becomes one of these.
+// real <table> + horizontal scroll from md up). Each report row becomes one shared MobileCard.
 function MobileFieldCard({
   title,
   subtitle,
@@ -159,20 +160,14 @@ function MobileFieldCard({
   fields: { label: string; value: React.ReactNode; bold?: boolean }[]
 }) {
   return (
-    <div className="rounded-lg border border-border/70 p-3 space-y-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium truncate">{title}</p>
-        {subtitle}
-      </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-        {fields.map((f, i) => (
-          <div key={i} className="flex justify-between gap-2">
-            <span className="text-muted-foreground">{f.label}</span>
-            <span className={`tabular-nums ${f.bold ? "font-semibold text-foreground" : ""}`}>{f.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <MobileCard
+      title={title}
+      subtitle={subtitle}
+      meta={fields.map((f) => ({
+        label: f.label,
+        value: <span className={`tabular-nums ${f.bold ? "font-semibold" : ""}`}>{f.value}</span>,
+      }))}
+    />
   )
 }
 
@@ -187,7 +182,7 @@ function TrialBalance({ d }: { d: any }) {
     <div className="grid gap-6 md:grid-cols-2">
       <div>
         <p className="text-xs font-medium text-muted-foreground mb-1">Debits — charges posted</p>
-        <div className="space-y-2 md:hidden">
+        <MobileCardList>
           {d.charges.byCategory.length === 0 ? (
             <Empty msg="No charges posted." />
           ) : (
@@ -204,7 +199,7 @@ function TrialBalance({ d }: { d: any }) {
             ))
           )}
           <MobileTotalRow label="Total debits" value={n2(d.charges.total)} />
-        </div>
+        </MobileCardList>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead><tr className="border-b border-border"><Th>Category</Th><Th right>Amount</Th><Th right>Tax</Th><Th right>Total</Th></tr></thead>
@@ -222,7 +217,7 @@ function TrialBalance({ d }: { d: any }) {
       </div>
       <div>
         <p className="text-xs font-medium text-muted-foreground mb-1">Credits — payments received</p>
-        <div className="space-y-2 md:hidden">
+        <MobileCardList>
           {d.payments.byMethod.length === 0 ? (
             <Empty msg="No payments received." />
           ) : (
@@ -239,7 +234,7 @@ function TrialBalance({ d }: { d: any }) {
             ))
           )}
           <MobileTotalRow label="Total credits" value={n2(d.payments.total)} />
-        </div>
+        </MobileCardList>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead><tr className="border-b border-border"><Th>Method</Th><Th right>Received</Th><Th right>Refunded</Th><Th right>Net</Th></tr></thead>
@@ -269,12 +264,12 @@ function LedgerTable({ d, kind }: { d: any; kind: "guest" | "ar" }) {
   if (d.rows.length === 0) return <Empty msg={kind === "guest" ? "No open in-house folios." : "No outstanding debtor balances."} />
   return (
     <>
-      <div className="space-y-2 md:hidden">
+      <MobileCardList>
         {d.rows.map((r: any) => (
           <MobileFieldCard
             key={r.folioId}
             title={r.guest}
-            subtitle={<span className="shrink-0 text-xs text-muted-foreground">{r.confirmationNo ?? "—"}</span>}
+            subtitle={r.confirmationNo ?? "—"}
             fields={[
               kind === "ar" ? { label: "Account", value: r.account } : { label: "Room", value: r.room },
               { label: "Charges", value: n2(r.charges) },
@@ -284,7 +279,7 @@ function LedgerTable({ d, kind }: { d: any; kind: "guest" | "ar" }) {
           />
         ))}
         <MobileTotalRow label="Total" value={n2(d.totals.balance)} />
-      </div>
+      </MobileCardList>
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -317,12 +312,12 @@ function DepositLedger({ d }: { d: any }) {
   if (d.rows.length === 0) return <Empty msg="No pre-arrival deposits held." />
   return (
     <>
-      <div className="space-y-2 md:hidden">
+      <MobileCardList>
         {d.rows.map((r: any) => (
           <MobileFieldCard
             key={r.folioId}
             title={r.guest}
-            subtitle={<span className="shrink-0 text-xs text-muted-foreground">{r.confirmationNo ?? "—"}</span>}
+            subtitle={r.confirmationNo ?? "—"}
             fields={[
               { label: "Arrival", value: r.arrivalDate ? format(new Date(r.arrivalDate), "dd MMM yyyy") : "—" },
               { label: "Deposit", value: n2(r.deposit) },
@@ -332,7 +327,7 @@ function DepositLedger({ d }: { d: any }) {
           />
         ))}
         <MobileTotalRow label="Total" value={n2(d.totals.creditHeld)} />
-      </div>
+      </MobileCardList>
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
           <thead>

@@ -32,6 +32,7 @@ import { CountryLabel } from "@/components/ui/country-flag"
 import { useNationalities } from "@/components/ui/nationality-select"
 import { useProperty } from "@/components/providers/property-provider"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { GuestContactMenu } from "@/components/reservations/guest-contact-menu"
 import { INPUT_INTEGER } from "@/lib/input-presets"
 import {
@@ -833,32 +834,28 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </CardHeader>
           <CardContent className="p-0">
             {/* Mobile: stacked cards — a 5-column table is unreadable at phone width. */}
-            <div className="md:hidden divide-y divide-border">
+            <MobileCardList className="px-4 pb-4">
               {(reservation.assignments ?? []).map((a: any) => (
-                <div key={a.id} className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">
-                      {format(new Date(a.startDate), "dd-MMM")} – {format(new Date(a.endDate), "dd-MMM-yy")}
-                    </span>
-                    {a.room ? (
+                <MobileCard
+                  key={a.id}
+                  title={`${format(new Date(a.startDate), "dd-MMM")} – ${format(new Date(a.endDate), "dd-MMM-yy")}`}
+                  badge={
+                    a.room ? (
                       <Badge variant="outline">{a.room.roomNumber}</Badge>
                     ) : (
                       <span className="text-warning text-xs font-medium">Unassigned</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                    <span>{a.roomType?.name}</span>
-                    <span className="text-right">{a.ratePlan?.code} — {a.ratePlan?.name}</span>
-                  </div>
-                  {a.overrideRate != null && (
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
-                      <span className="text-muted-foreground">Override Rate</span>
-                      <span className="font-mono">{money(a.overrideRate)}</span>
-                    </div>
-                  )}
-                </div>
+                    )
+                  }
+                  meta={[
+                    { label: "Room Type", value: a.roomType?.name ?? "—" },
+                    ...(a.overrideRate != null
+                      ? [{ label: "Override Rate", value: <span className="font-mono">{money(a.overrideRate)}</span> }]
+                      : []),
+                    { label: "Rate Plan", value: `${a.ratePlan?.code ?? ""} — ${a.ratePlan?.name ?? ""}`, wide: true },
+                  ]}
+                />
               ))}
-            </div>
+            </MobileCardList>
 
             {/* Tablet/desktop: real table. */}
             <div className="hidden md:block">

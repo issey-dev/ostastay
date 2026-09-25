@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -302,33 +303,40 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
             />
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              <MobileCardList>
                 {rows.map((r) => (
-                  <div key={r.id} className="space-y-2 rounded-md border border-border bg-card p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium">{r.name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">{r.keyPrefix}…</div>
-                      </div>
-                      {statusBadge(r)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">{coverageLabel(r)}</div>
-                    <div className="flex flex-wrap gap-1">
-                      {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Last used {formatDateTime(r.lastUsedAt)} · {r.bookingCount} booking{r.bookingCount === 1 ? "" : "s"}
-                    </div>
-                    {/* Phones: only the urgent action — revoking a leaked key. Edit, rotate and
-                        webhooks are set up on a larger screen (notice above the list). */}
-                    {r.status === "ACTIVE" && canRevoke && (
-                      <Button variant="outline" className="min-h-11 w-full text-destructive hover:text-destructive" disabled={busyId === r.id} onClick={() => revoke(r)}>
-                        <Ban className="mr-1.5 h-4 w-4" /> Revoke key
-                      </Button>
-                    )}
-                  </div>
+                  <MobileCard
+                    key={r.id}
+                    tone={r.status === "ACTIVE" ? undefined : "muted"}
+                    title={r.name}
+                    subtitle={<span className="font-mono">{r.keyPrefix}…</span>}
+                    badge={statusBadge(r)}
+                    meta={[
+                      { label: "Covers", value: coverageLabel(r), wide: true },
+                      {
+                        label: "Scopes",
+                        wide: true,
+                        value: (
+                          <span className="flex flex-wrap gap-1">
+                            {r.scopes.map((s) => <Badge key={s} variant="outline">{scopeLabel(s)}</Badge>)}
+                          </span>
+                        ),
+                      },
+                      { label: "Last used", value: formatDateTime(r.lastUsedAt) },
+                      { label: "Bookings", value: r.bookingCount },
+                    ]}
+                    actions={
+                      // Phones: only the urgent action — revoking a leaked key. Edit, rotate and
+                      // webhooks are set up on a larger screen (notice above the list).
+                      r.status === "ACTIVE" && canRevoke ? (
+                        <Button variant="outline" className="min-h-11 w-full text-destructive hover:text-destructive" disabled={busyId === r.id} onClick={() => revoke(r)}>
+                          <Ban className="mr-1.5 h-4 w-4" /> Revoke key
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ))}
-              </div>
+              </MobileCardList>
 
               <div className="hidden overflow-x-auto md:-mx-6 md:-mb-6 md:block md:border-t md:border-border">
                 <Table>

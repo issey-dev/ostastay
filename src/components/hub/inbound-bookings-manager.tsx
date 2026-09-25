@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { ArrowLeftRight, RefreshCw, ShieldAlert } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -180,65 +181,56 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
         <>
           {/* Phone view — the table is six columns wide (seven with the action column),
               unreadable on a narrow screen. Each booking becomes a card instead. */}
-          <div className="space-y-3 md:hidden">
+          <MobileCardList>
             {bookings.map((b) => (
-              <div
+              <MobileCard
                 key={b.id}
-                className={`space-y-3 rounded-md border p-4 ${
-                  b.isOverbooking && !b.acknowledgedAt ? "border-destructive/30 bg-destructive-muted/40" : "border-border bg-card"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">
-                      {[b.guestFirstName, b.guestLastName].filter(Boolean).join(" ") || "—"}
-                    </div>
-                    <div className="font-mono text-xs text-muted-foreground">{b.externalBookingId}</div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                tone={b.isOverbooking && !b.acknowledgedAt ? "danger" : undefined}
+                title={[b.guestFirstName, b.guestLastName].filter(Boolean).join(" ") || "—"}
+                subtitle={<span className="font-mono">{b.externalBookingId}</span>}
+                badge={
+                  <>
                     {b.isOverbooking && (
                       <Badge variant={b.acknowledgedAt ? "secondary" : "destructive"}>
                         {b.acknowledgedAt ? "Overbooking (seen)" : "Overbooking"}
                       </Badge>
                     )}
                     {b.channelStatus && !b.isOverbooking && <Badge variant="secondary">{b.channelStatus}</Badge>}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  <span className="whitespace-nowrap">{fmtDate(b.arrival)} → {fmtDate(b.departure)}</span>
-                  <span>
-                    {b.roomTypeName ?? (
-                      <span className="text-muted-foreground">
+                  </>
+                }
+                meta={[
+                  { label: "Stay", value: <span className="whitespace-nowrap">{fmtDate(b.arrival)} → {fmtDate(b.departure)}</span> },
+                  {
+                    label: "Room type",
+                    value: b.roomTypeName ?? (
+                      <span className="font-normal text-muted-foreground">
                         unmapped{b.externalRoomId ? ` (${b.externalRoomId})` : ""}
                       </span>
-                    )}
-                  </span>
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  {b.channelName ?? "—"} · {b.source === "WEBHOOK" ? "webhook" : "poll"}
-                </div>
-
+                    ),
+                  },
+                  { label: "Channel", value: <>{b.channelName ?? "—"} · {b.source === "WEBHOOK" ? "webhook" : "poll"}</>, wide: true },
+                ]}
+                actions={
+                  canManage && b.isOverbooking && !b.acknowledgedAt ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 w-full"
+                      disabled={busyId === b.id}
+                      onClick={() => void acknowledge(b)}
+                    >
+                      Acknowledge
+                    </Button>
+                  ) : undefined
+                }
+              >
                 <div className="space-y-1">
                   <p><ConversionStatus b={b} /></p>
                   {b.overbookingNote && <p className="text-xs text-destructive">{b.overbookingNote}</p>}
                 </div>
-
-                {canManage && b.isOverbooking && !b.acknowledgedAt && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 w-full"
-                    disabled={busyId === b.id}
-                    onClick={() => void acknowledge(b)}
-                  >
-                    Acknowledge
-                  </Button>
-                )}
-              </div>
+              </MobileCard>
             ))}
-          </div>
+          </MobileCardList>
 
           <div className="hidden overflow-x-auto rounded-md border border-border md:block">
           <Table>

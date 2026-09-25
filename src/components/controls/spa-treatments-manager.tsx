@@ -7,6 +7,7 @@ import * as z from "zod"
 import { Plus, Pencil, Trash2, X, DoorOpen, Sparkles } from "@/components/icons"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -324,45 +325,53 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
       ) : (
         <>
           {/* Phone view — the table below takes over at md. */}
-          <div className="md:hidden space-y-3">
+          <MobileCardList>
             {treatments.map((t) => (
-              <div key={t.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{t.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">{t.category?.name}</p>
-                  </div>
-                  {t.isActive ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30 shrink-0">Active</Badge>
+              <MobileCard
+                key={t.id}
+                tone={t.isActive ? undefined : "muted"}
+                title={t.name}
+                subtitle={t.category?.name}
+                badge={
+                  t.isActive ? (
+                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground shrink-0">Inactive</Badge>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  <div>
-                    {t.defaultDurationMinutes} min
-                    {(t.preparationBufferMinutes > 0 || t.cleanupBufferMinutes > 0) && (
-                      <span className="text-muted-foreground text-xs"> (+{t.preparationBufferMinutes}/{t.cleanupBufferMinutes} buffer)</span>
-                    )}
-                  </div>
-                  <div>{currentPriceLabel(t)}</div>
-                  <div className="text-muted-foreground">Party {t.maxParticipants > 1 ? `up to ${t.maxParticipants}` : "1"}</div>
-                  <div className="font-mono text-xs text-muted-foreground">{t.chargeCode?.code}</div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openRooms(t)}>
-                    <DoorOpen className="h-3.5 w-3.5 mr-1.5" /> Rooms
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
-                  </Button>
-                </div>
-              </div>
+                    <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
+                  )
+                }
+                meta={[
+                  {
+                    label: "Duration",
+                    value: (
+                      <>
+                        {t.defaultDurationMinutes} min
+                        {(t.preparationBufferMinutes > 0 || t.cleanupBufferMinutes > 0) && (
+                          <span className="font-normal text-muted-foreground text-xs"> (+{t.preparationBufferMinutes}/{t.cleanupBufferMinutes} buffer)</span>
+                        )}
+                      </>
+                    ),
+                  },
+                  { label: "Price", value: currentPriceLabel(t) },
+                  { label: "Party", value: t.maxParticipants > 1 ? `up to ${t.maxParticipants}` : "1" },
+                  { label: "Charge code", value: <span className="font-mono">{t.chargeCode?.code ?? "—"}</span> },
+                ]}
+                onClick={() => openEdit(t)}
+                actions={
+                  <>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openRooms(t)}>
+                      <DoorOpen className="h-3.5 w-3.5 mr-1.5" /> Rooms
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                    </Button>
+                  </>
+                }
+              />
             ))}
-          </div>
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
             <Table>

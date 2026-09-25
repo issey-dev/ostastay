@@ -3,6 +3,7 @@
 import { toDateKey } from "@/lib/date-only"
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -399,7 +400,7 @@ export function LicensingManager() {
               ) : (
                 <>
                   {/* Phone view — the table below takes over at md. */}
-                  <div className="md:hidden space-y-3">
+                  <MobileCardList>
                     {allowances.map((row) => {
                       const edit = allowanceEdits[row.propertyId] ?? { maxRoomTypes: "", maxRooms: "", maxChannels: "" }
                       const field = (label: string, usage: number, cap: string, key: keyof typeof edit) => (
@@ -407,28 +408,28 @@ export function LicensingManager() {
                           <p className="text-xs text-muted-foreground">{label} — {usage} used</p>
                           <Input
                             className="h-8"
-                            type="number" min={0} placeholder="∞"
+                            type="number" min={0} placeholder="∞" inputMode="numeric"
                             value={cap}
                             onChange={(e) => setAllowanceEdits((prev) => ({ ...prev, [row.propertyId]: { ...edit, [key]: e.target.value } }))}
                           />
                         </div>
                       )
                       return (
-                        <div key={row.propertyId} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                          <div>
-                            <div className="font-medium">{row.name}</div>
-                            <div className="text-xs text-muted-foreground">{row.code}</div>
-                          </div>
+                        <MobileCard
+                          key={row.propertyId}
+                          title={row.name}
+                          subtitle={row.code}
+                          actions={<Button size="sm" variant="outline" className="h-9 w-full" onClick={() => handleSaveAllowance(row.propertyId)}>Save</Button>}
+                        >
                           <div className="grid grid-cols-3 gap-2">
                             {field("Room Types", row.usage.roomTypes, edit.maxRoomTypes, "maxRoomTypes")}
                             {field("Rooms", row.usage.rooms, edit.maxRooms, "maxRooms")}
                             {field("Channels", row.usage.channelLinks, edit.maxChannels, "maxChannels")}
                           </div>
-                          <Button size="sm" variant="outline" className="w-full" onClick={() => handleSaveAllowance(row.propertyId)}>Save</Button>
-                        </div>
+                        </MobileCard>
                       )
                     })}
-                  </div>
+                  </MobileCardList>
 
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
@@ -515,38 +516,44 @@ export function LicensingManager() {
               ) : (
                 <>
                   {/* Phone view — the table below takes over at md. */}
-                  <div className="md:hidden space-y-3">
+                  <MobileCardList>
                     {invoices.map((inv) => (
-                      <div key={inv.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-medium tabular-nums">{inv.invoiceNo}</p>
-                            <p className="text-xs text-muted-foreground">Issued {fmtDate(inv.issuedAt)}{inv.dueAt && <> · due {fmtDate(inv.dueAt)}</>}</p>
-                          </div>
+                      <MobileCard
+                        key={inv.id}
+                        title={<span className="tabular-nums">{inv.invoiceNo}</span>}
+                        subtitle={<>Issued {fmtDate(inv.issuedAt)}{inv.dueAt && <> · due {fmtDate(inv.dueAt)}</>}</>}
+                        badge={
                           <Badge variant="secondary" className={
-                            inv.status === "PAID" ? "bg-success-muted text-success shrink-0"
-                              : inv.status === "VOID" ? "bg-muted text-muted-foreground shrink-0"
-                              : "bg-info-muted text-info shrink-0"
+                            inv.status === "PAID" ? "bg-success-muted text-success"
+                              : inv.status === "VOID" ? "bg-muted text-muted-foreground"
+                              : "bg-info-muted text-info"
                           }>
                             {inv.status}
                           </Badge>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                          <div className="text-muted-foreground">{fmtDate(inv.periodStart)} → {fmtDate(inv.periodEnd)}</div>
-                          <div className="tabular-nums font-medium">{inv.currency} {inv.amount.toFixed(2)}</div>
-                          {inv.paidAt && (
-                            <div className="text-muted-foreground">
-                              Paid <span className="tabular-nums text-foreground">{fmtDate(inv.paidAt)}</span>
-                              {inv.receiptNo && <span className="tabular-nums"> · {inv.receiptNo}</span>}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {payingId === inv.id ? (
+                        }
+                        tone={inv.status === "VOID" ? "muted" : undefined}
+                        meta={[
+                          { label: "Amount", value: <span className="tabular-nums">{inv.currency} {inv.amount.toFixed(2)}</span> },
+                          { label: "Period", value: <>{fmtDate(inv.periodStart)} → {fmtDate(inv.periodEnd)}</> },
+                          ...(inv.paidAt
+                            ? [{
+                                label: "Paid",
+                                wide: true,
+                                value: (
+                                  <span className="tabular-nums">
+                                    {fmtDate(inv.paidAt)}
+                                    {inv.receiptNo && <> · {inv.receiptNo}</>}
+                                  </span>
+                                ),
+                              }]
+                            : []),
+                        ]}
+                        actions={
+                          payingId === inv.id ? (
                             <>
                               <Input className="h-9 w-full" placeholder="Payment ref (optional)" value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} />
-                              <Button size="sm" className="h-9" onClick={() => handleMarkPaid(inv.id)}>Confirm</Button>
-                              <Button size="sm" variant="outline" className="h-9" onClick={() => { setPayingId(null); setPaymentRef("") }}>Cancel</Button>
+                              <Button size="sm" className="h-9 flex-1" onClick={() => handleMarkPaid(inv.id)}>Confirm</Button>
+                              <Button size="sm" variant="outline" className="h-9 flex-1" onClick={() => { setPayingId(null); setPaymentRef("") }}>Cancel</Button>
                             </>
                           ) : (
                             <>
@@ -565,11 +572,11 @@ export function LicensingManager() {
                                 </>
                               )}
                             </>
-                          )}
-                        </div>
-                      </div>
+                          )
+                        }
+                      />
                     ))}
-                  </div>
+                  </MobileCardList>
 
                   <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">

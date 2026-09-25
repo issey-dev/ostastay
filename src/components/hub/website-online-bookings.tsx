@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ListChecks } from "@/components/icons"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 // Hub → Booking API → Online bookings: every booking the brand websites made, or tried to
 // make, across rooms, excursions and spa — failed attempts and expired holds included, so
@@ -129,27 +130,29 @@ export function WebsiteOnlineBookings({ propertyId, modules }: { propertyId: str
           <EmptyState icon={ListChecks} title="No online bookings yet" description="Bookings made through your websites will appear here." />
         ) : (
           <>
-            <div className="space-y-3 md:hidden">
+            <MobileCardList>
               {rows.map((r) => (
-                <div key={`${r.module}-${r.id}`} className="space-y-1.5 rounded-md border border-border bg-card p-3 text-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium">{r.guest.name || "—"}</div>
-                      <div className="truncate text-xs text-muted-foreground">{r.summary}</div>
+                <MobileCard
+                  key={`${r.module}-${r.id}`}
+                  tone={r.problem || r.paymentFlagged ? "danger" : undefined}
+                  title={r.guest.name || "—"}
+                  subtitle={r.summary}
+                  badge={statusBadge(r)}
+                  meta={[
+                    { label: MODULE_LABEL[r.module], value: r.reference ? <span className="font-mono">{r.reference}</span> : "—" },
+                    { label: "Total", value: money(r.total, r.currency) },
+                    { label: "Received", value: new Date(r.createdAt).toLocaleString(), wide: true },
+                  ]}
+                >
+                  {(r.problem || r.paymentFlagged) ? (
+                    <div className="space-y-1">
+                      {r.problem && <div className="text-xs text-destructive">{r.problem}</div>}
+                      {r.paymentFlagged && <div className="text-xs text-destructive">Paid amount differs from the total — check the payment.</div>}
                     </div>
-                    {statusBadge(r)}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">{MODULE_LABEL[r.module]}</Badge>
-                    {r.reference && <span className="font-mono">{r.reference}</span>}
-                    <span>{new Date(r.createdAt).toLocaleString()}</span>
-                    <span>{money(r.total, r.currency)}</span>
-                  </div>
-                  {r.problem && <div className="text-xs text-destructive">{r.problem}</div>}
-                  {r.paymentFlagged && <div className="text-xs text-destructive">Paid amount differs from the total — check the payment.</div>}
-                </div>
+                  ) : null}
+                </MobileCard>
               ))}
-            </div>
+            </MobileCardList>
 
             <div className="hidden overflow-x-auto md:-mx-6 md:-mb-6 md:block md:border-t md:border-border">
               <Table>

@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Pencil, Plus, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -201,6 +202,38 @@ export function FacilityAmenitiesManager({ propertyId }: { propertyId: string })
             </form>
           </Form>
 
+          {/* Phone view — the table below takes over at md. */}
+          <MobileCardList
+            empty={<p className="rounded-xl border border-border p-4 text-center text-sm text-muted-foreground">No facilities configured.</p>}
+          >
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+              : sortedFacilities.map((f) => (
+                  <MobileCard
+                    key={f.id}
+                    title={f.name}
+                    subtitle={f.description || undefined}
+                    onClick={() => setEditing(f)}
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setEditing(f)}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline" size="icon"
+                          className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                          aria-label={`Delete ${f.name}`}
+                          onClick={() => handleDelete(f)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    }
+                  />
+                ))}
+          </MobileCardList>
+
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -234,6 +267,7 @@ export function FacilityAmenitiesManager({ propertyId }: { propertyId: string })
               )}
             </TableBody>
           </Table>
+          </div>
 
           {editing && (
             <EditAmenityDialog

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
 import { Users, Plus, Calendar as CalendarIcon, UserCheck } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -13,9 +13,11 @@ import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { InfoHint } from "@/components/ui/info-hint"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 export default function GroupsDashboard() {
   const { slug } = useParams<{ slug: string }>()
+  const router = useRouter()
   const { currentProperty } = useProperty()
   const [groups, setGroups] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +62,7 @@ export default function GroupsDashboard() {
       </div>
 
       {/* Mobile: stacked cards instead of a cramped horizontally-scrolled table */}
-      <div className="md:hidden space-y-3">
+      <MobileCardList>
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
         ) : loadError ? (
@@ -76,29 +78,33 @@ export default function GroupsDashboard() {
           groups.map((group) => {
             const pickedUp = group.reservations?.length || 0;
             return (
-              <Link key={group.id} href={`/e/${slug}/dashboard/groups/${group.id}`} className="block bg-card rounded-xl border border-border p-4 shadow-elevation-1">
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-1 rounded">{group.code}</span>
-                    <p className="font-semibold text-foreground mt-1.5">{group.name}</p>
-                  </div>
-                  <StatusBadge label={group.status} status={group.status} className="shrink-0" />
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                  <CalendarIcon className="w-4 h-4" />
-                  {format(parseISO(group.startDate), "dd-MMM")} - {format(parseISO(group.endDate), "dd-MMM-yy")}
-                </div>
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border text-sm">
-                  <span className="text-muted-foreground">Rooms Held: <span className="font-semibold text-foreground">{group.totalRoomsHeld}</span></span>
-                  <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                    <UserCheck className="w-4 h-4" /> {pickedUp} picked up
-                  </span>
-                </div>
-              </Link>
+              <MobileCard
+                key={group.id}
+                title={group.name}
+                subtitle={<span className="font-mono font-bold">{group.code}</span>}
+                badge={<StatusBadge label={group.status} status={group.status} />}
+                meta={[
+                  {
+                    label: "Dates",
+                    value: `${format(parseISO(group.startDate), "dd-MMM")} - ${format(parseISO(group.endDate), "dd-MMM-yy")}`,
+                    wide: true,
+                  },
+                  { label: "Rooms Held", value: group.totalRoomsHeld },
+                  {
+                    label: "Picked Up",
+                    value: (
+                      <span className="flex items-center gap-1.5">
+                        <UserCheck className="w-4 h-4" /> {pickedUp}
+                      </span>
+                    ),
+                  },
+                ]}
+                onClick={() => router.push(`/e/${slug}/dashboard/groups/${group.id}`)}
+              />
             )
           })
         )}
-      </div>
+      </MobileCardList>
 
       {/* Tablet/desktop: full table */}
       <div className="hidden md:block bg-card rounded-xl shadow-elevation-1 border border-border overflow-hidden">

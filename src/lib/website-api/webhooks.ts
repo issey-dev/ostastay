@@ -143,7 +143,11 @@ export async function emitBookingEvent(
     const ids: string[] = [];
     for (const e of endpoints) {
       const delivery = await prisma.apiWebhookDelivery.create({
-        data: { enterpriseId: record.enterpriseId, endpointId: e.id, event, payload: {} },
+        // nextAttemptAt from THIS clock, not the column's database default: attemptDelivery
+        // claims the row with `nextAttemptAt <= new Date()` on the app's clock, so a database
+        // clock running even slightly ahead (a container VM drifting after sleep) made the
+        // immediate attempt skip the row and leave it to the retry job.
+        data: { enterpriseId: record.enterpriseId, endpointId: e.id, event, payload: {}, nextAttemptAt: new Date() },
       });
       await prisma.apiWebhookDelivery.update({
         where: { id: delivery.id },
@@ -345,7 +349,7 @@ export async function deleteWebhookEndpoint(enterpriseId: string, id: string) {
 /** Queue and send a `ping` so an administrator can check the website receives and verifies it. */
 export async function sendTestWebhook(enterpriseId: string, id: string) {
   const endpoint = await ownEndpoint(enterpriseId, id);
-  const delivery = await prisma.apiWebhookDelivery.create({ data: { enterpriseId, endpointId: endpoint.id, event: "ping", payload: {} } });
+  const delivery = await prisma.apiWebhookDelivery.create({ data: { enterpriseId, endpointId: endpoint.id, event: "ping", payload: {}, nextAttemptAt: new Date() } });
   await prisma.apiWebhookDelivery.update({
     where: { id: delivery.id },
     data: { payload: { id: delivery.id, event: "ping", createdAt: delivery.createdAt.toISOString(), data: { message: "Webhook set up correctly." } } },

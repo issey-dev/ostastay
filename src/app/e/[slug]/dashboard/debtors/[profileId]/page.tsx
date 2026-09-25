@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { INPUT_MONEY } from "@/lib/input-presets"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 const dateStr = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—")
@@ -183,33 +184,28 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             <InfoHint label="Invoices">One row per stay billed to this account — invoices appear here only once the guest has checked out.</InfoHint>
           </h3>
         {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
-        <div className="md:hidden space-y-3">
-          {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No invoices yet.</p>
-          ) : (
-            invoices.map((inv) => (
-              <div key={inv.folioId} className="rounded-md border border-border bg-card p-4 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">{inv.guestName}</p>
-                    <p className="text-xs text-muted-foreground">{inv.confirmationNo || "—"}</p>
-                  </div>
-                  <Badge variant={inv.isOpen ? "destructive" : "outline"} className="shrink-0">{inv.isOpen ? "Open" : "Paid"}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">{dateStr(inv.checkInDate)} – {dateStr(inv.checkOutDate)}</p>
-                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
-                  <span className="text-muted-foreground">Total {money(inv.total)}</span>
-                  <span className={`font-semibold ${inv.isOpen ? "text-destructive" : "text-foreground"}`}>{money(inv.balance)}</span>
-                </div>
-                {inv.isOpen && (
+        <MobileCardList empty={<p className="text-sm text-muted-foreground text-center py-8">No invoices yet.</p>}>
+          {invoices.map((inv) => (
+            <MobileCard
+              key={inv.folioId}
+              title={inv.guestName}
+              subtitle={inv.confirmationNo || "—"}
+              badge={<Badge variant={inv.isOpen ? "destructive" : "outline"}>{inv.isOpen ? "Open" : "Paid"}</Badge>}
+              meta={[
+                { label: "Stay", value: `${dateStr(inv.checkInDate)} – ${dateStr(inv.checkOutDate)}`, wide: true },
+                { label: "Total", value: money(inv.total) },
+                { label: "Balance", value: <span className={inv.isOpen ? "text-destructive" : ""}>{money(inv.balance)}</span> },
+              ]}
+              actions={
+                inv.isOpen ? (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => openPayDialog(inv)}>
                     <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
                   </Button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileCardList>
 
         {/* Tablet/desktop: full table */}
         <div className="hidden md:block overflow-x-auto">

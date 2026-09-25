@@ -12,6 +12,7 @@ import { SalesHistory, type SalesRow } from "@/components/front-office/sales-his
 import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NumberStepper } from "@/components/ui/number-stepper"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -643,8 +644,17 @@ export default function SpaPage() {
               {selectedTreatment && selectedTreatment.maxParticipants > 1 && (
                 <div className="space-y-2">
                   <Label>Party Size</Label>
+                  {/* Phone stepper first, so on desktop the Select stays the last child (space-y). */}
+                  <NumberStepper
+                    className="md:hidden"
+                    label="Guests"
+                    min={1}
+                    max={selectedTreatment.maxParticipants}
+                    value={partySize}
+                    onChange={(n) => handlePartySizeChange(String(n))}
+                  />
                   <Select value={String(partySize)} onValueChange={handlePartySizeChange}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full max-md:hidden"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: selectedTreatment.maxParticipants }, (_, i) => i + 1).map((n) => (
                         <SelectItem key={n} value={String(n)}>{n} {n === 1 ? "guest" : "guests"}</SelectItem>

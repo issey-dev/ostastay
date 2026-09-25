@@ -7,6 +7,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { CalendarClock, CalendarDays, Search, UserRound, Receipt, ClipboardList } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NumberStepper } from "@/components/ui/number-stepper"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -491,18 +492,23 @@ export default function ExcursionsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-2">
+              {/* Phone steppers sit BEFORE the desktop inputs: in these space-y cells the input
+                  must stay the last child, or it picks up a bottom margin on desktop. */}
+              <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Adults</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="0" value={counts.adultCount} onChange={(e) => setCounts((p) => ({ ...p, adultCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Adults" min={0} value={parseInt(counts.adultCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, adultCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.adultCount} onChange={(e) => setCounts((p) => ({ ...p, adultCount: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Children</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="0" value={counts.childCount} onChange={(e) => setCounts((p) => ({ ...p, childCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Children" min={0} value={parseInt(counts.childCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, childCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.childCount} onChange={(e) => setCounts((p) => ({ ...p, childCount: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
                   <Label>Infants</Label>
-                  <Input {...INPUT_INTEGER} type="number" min="0" value={counts.infantCount} onChange={(e) => setCounts((p) => ({ ...p, infantCount: e.target.value }))} />
+                  <NumberStepper className="md:hidden" label="Infants" min={0} value={parseInt(counts.infantCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, infantCount: String(n) }))} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.infantCount} onChange={(e) => setCounts((p) => ({ ...p, infantCount: e.target.value }))} />
                 </div>
               </div>
 

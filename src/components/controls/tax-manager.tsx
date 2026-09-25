@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Percent, ShieldAlert, Save, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -490,49 +491,46 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
           <ControlsSectionBody>
           {/* Phone view — a card per tax profile: name up top, its lines as chips, then
               edit/delete as full-width/icon actions. */}
-          <div className="md:hidden">
-            {taxProfiles.length === 0 ? (
-              <div className="p-4"><EmptyState icon={Percent} title="No custom tax profiles configured" /></div>
-            ) : (
-              <div className="space-y-3 p-4">
-                {sortedTaxProfiles.map(tp => {
-                  const lines = [...(tp.rates || [])].sort((a: any, b: any) => a.order - b.order)
-                  return (
-                    <div key={tp.id} className="rounded-lg border border-border bg-card p-4 space-y-2">
-                      <div>
-                        <p className="font-medium text-foreground">{tp.name}</p>
-                        {tp.description && <p className="text-sm text-muted-foreground">{tp.description}</p>}
-                      </div>
-                      {lines.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {lines.map((r: any) => (
-                            <Badge key={r.id} variant="outline" className="bg-success-muted text-success border-success/30 font-normal">
-                              {r.name} {r.ratePercent.toFixed(2)}%{r.calculateOn === "COMPOUND" ? " (compound)" : ""}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">No lines</span>
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openTaxEdit(tp)}>
-                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                        </Button>
-                        <Button
-                          variant="outline" size="icon"
-                          className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
-                          aria-label="Delete"
-                          onClick={() => { setDeletingTaxId(tp.id); setDeleteTaxError(null); setIsTaxDeleteDialogOpen(true) }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+          <MobileCardList className="p-4" empty={<EmptyState icon={Percent} title="No custom tax profiles configured" />}>
+            {sortedTaxProfiles.map(tp => {
+              const lines = [...(tp.rates || [])].sort((a: any, b: any) => a.order - b.order)
+              return (
+                <MobileCard
+                  key={tp.id}
+                  title={tp.name}
+                  subtitle={tp.description || undefined}
+                  onClick={() => openTaxEdit(tp)}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openTaxEdit(tp)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                      </Button>
+                      <Button
+                        variant="outline" size="icon"
+                        className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
+                        aria-label="Delete"
+                        onClick={() => { setDeletingTaxId(tp.id); setDeleteTaxError(null); setIsTaxDeleteDialogOpen(true) }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  }
+                >
+                  {lines.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {lines.map((r: any) => (
+                        <Badge key={r.id} variant="outline" className="bg-success-muted text-success border-success/30 font-normal">
+                          {r.name} {r.ratePercent.toFixed(2)}%{r.calculateOn === "COMPOUND" ? " (compound)" : ""}
+                        </Badge>
+                      ))}
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">No lines</span>
+                  )}
+                </MobileCard>
+              )
+            })}
+          </MobileCardList>
 
           <div className="hidden md:block overflow-x-auto">
           <Table>

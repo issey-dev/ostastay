@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 
@@ -91,14 +92,47 @@ export function EmailUsageReport() {
           <p className="text-sm text-muted-foreground">Could not load usage.</p>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 max-sm:grid-cols-2 sm:grid-cols-4">
               <Stat label="Billable sent" value={usage.totals.billableSent} emphasis />
               <Stat label="Billable failed" value={usage.totals.billableFailed} />
               <Stat label="Sent via own SMTP" value={usage.totals.ownSmtpSent} />
               <Stat label="Uppsolut's own mail" value={usage.totals.uppsolutOwnMail} />
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Phone view — the table below takes over at md. */}
+            <MobileCardList empty={<p className="text-sm text-muted-foreground">No enterprises in this period.</p>}>
+              {usage.enterprises.map((r) => (
+                <MobileCard
+                  key={r.enterpriseId}
+                  title={r.enterpriseName}
+                  badge={r.onMailService ? <Badge variant="outline" className="bg-success-muted text-success border-success/30">Mail service</Badge> : undefined}
+                  meta={[
+                    { label: "Billable sent", value: <span className="tabular-nums">{r.billableSent}</span> },
+                    {
+                      label: "Failed",
+                      value: <span className={`tabular-nums ${r.billableFailed > 0 ? "text-destructive" : "text-muted-foreground"}`}>{r.billableFailed}</span>,
+                    },
+                    { label: "Own SMTP", value: <span className="tabular-nums text-muted-foreground">{r.ownSmtpSent}</span> },
+                    ...(Object.entries(r.byKind).length > 0
+                      ? [{
+                          label: "Breakdown",
+                          wide: true,
+                          value: (
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {Object.entries(r.byKind)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([kind, n]) => `${kind} ${n}`)
+                                .join(" · ")}
+                            </span>
+                          ),
+                        }]
+                      : []),
+                  ]}
+                />
+              ))}
+            </MobileCardList>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">

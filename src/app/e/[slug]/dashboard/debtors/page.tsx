@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { Plus, Landmark, AlertTriangle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 type DebtorAccount = {
   upid: string
@@ -33,6 +34,7 @@ const money = (n: number) => n.toLocaleString(undefined, { style: "currency", cu
 
 export default function DebtorsPage() {
   const { slug } = useParams<{ slug: string }>()
+  const router = useRouter()
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
 
@@ -87,31 +89,30 @@ export default function DebtorsPage() {
       ) : (
         <>
           {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
-          <div className="md:hidden space-y-3">
+          <MobileCardList>
             {accounts.map((a) => (
-              <Link
+              <MobileCard
                 key={a.upid}
-                href={`/e/${slug}/dashboard/debtors/${a.upid}`}
-                className="block rounded-md border border-border bg-card p-4 space-y-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-foreground">{accountName(a)}</span>
-                  <Badge variant="outline" className="shrink-0">{a.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"}</Badge>
-                </div>
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>AR: {a.arNumber || "—"}</span>
-                  <span>Limit: {a.creditLimit != null ? money(a.creditLimit) : "—"}</span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <span className="text-xs text-muted-foreground">Balance</span>
-                  <span className={`text-sm font-semibold flex items-center gap-1.5 ${a.overLimit ? "text-destructive" : "text-foreground"}`}>
-                    {a.overLimit && <AlertTriangle className="w-3.5 h-3.5" />}
-                    {money(a.balance)}
-                  </span>
-                </div>
-              </Link>
+                title={accountName(a)}
+                badge={<Badge variant="outline">{a.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"}</Badge>}
+                tone={a.overLimit ? "danger" : undefined}
+                meta={[
+                  { label: "AR Number", value: a.arNumber || "—" },
+                  { label: "Credit Limit", value: a.creditLimit != null ? money(a.creditLimit) : "—" },
+                  {
+                    label: "Balance",
+                    value: (
+                      <span className={`flex items-center gap-1.5 ${a.overLimit ? "text-destructive" : ""}`}>
+                        {a.overLimit && <AlertTriangle className="w-3.5 h-3.5" />}
+                        {money(a.balance)}
+                      </span>
+                    ),
+                  },
+                ]}
+                onClick={() => router.push(`/e/${slug}/dashboard/debtors/${a.upid}`)}
+              />
             ))}
-          </div>
+          </MobileCardList>
 
           {/* Tablet/desktop: full table */}
           <div className="hidden md:block overflow-x-auto">

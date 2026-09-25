@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -139,50 +140,48 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
             {/* Phone view — the table is six or seven columns wide, so each session
                 becomes a card: who, then the roles/location/timing facts, then the
                 same end-session action. */}
-            <div className="space-y-3 md:hidden">
+            <MobileCardList>
               {rows.map((r) => (
-                <div key={r.id} className="space-y-2 rounded-md border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium">
-                        {r.name}
-                        {r.id === currentId && (
-                          <Badge variant="outline" className="ml-2 text-[10px]">This is you</Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{r.email}</div>
-                    </div>
-                    {canTerminate && (
+                <MobileCard
+                  key={r.id}
+                  title={r.name}
+                  subtitle={r.email}
+                  badge={r.id === currentId ? <Badge variant="outline" className="text-[10px]">This is you</Badge> : undefined}
+                  meta={[
+                    { label: "Role", value: r.roles.length ? r.roles.join(", ") : "No role" },
+                    { label: "Property", value: r.propertyName ?? "All properties" },
+                    {
+                      label: "Signed in",
+                      value: <span className="tabular-nums" title={new Date(r.signedInAt).toLocaleString()}>{duration(r.uptimeMs)} ago</span>,
+                    },
+                    { label: "Idle", value: <span className="tabular-nums">{duration(r.idleMs)}</span> },
+                    {
+                      label: "Device",
+                      wide: true,
+                      value: (
+                        <span className="font-normal" title={r.userAgent ?? undefined}>
+                          {device(r.userAgent)}
+                          {r.ipAddress && <span className="text-muted-foreground"> · {r.ipAddress}</span>}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  actions={
+                    canTerminate ? (
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-11 shrink-0 px-3 text-destructive"
+                        variant="outline"
+                        className="min-h-11 w-full text-destructive hover:text-destructive"
                         disabled={busyId === r.id}
                         onClick={() => terminate(r)}
                       >
                         <LogOut className="mr-1.5 h-4 w-4" />
-                        {busyId === r.id ? "Ending..." : "End"}
+                        {busyId === r.id ? "Ending..." : "End session"}
                       </Button>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <span>{r.roles.length ? r.roles.join(", ") : "No role"}</span>
-                    <span>{r.propertyName ?? "All properties"}</span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
-                    <span title={new Date(r.signedInAt).toLocaleString()}>{duration(r.uptimeMs)} ago</span>
-                    <span>Idle {duration(r.idleMs)}</span>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground" title={r.userAgent ?? undefined}>
-                    {device(r.userAgent)}
-                    {r.ipAddress && <span> · {r.ipAddress}</span>}
-                  </div>
-                </div>
+                    ) : undefined
+                  }
+                />
               ))}
-            </div>
+            </MobileCardList>
 
             <div className="hidden overflow-x-auto md:-mx-6 md:-mb-6 md:block md:border-t md:border-border">
               <Table>

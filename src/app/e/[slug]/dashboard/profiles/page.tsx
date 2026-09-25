@@ -22,6 +22,7 @@ import { ContactLink } from "@/components/ui/contact-link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { INPUT_SEARCH } from "@/lib/input-presets"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 type Profile = {
   upid: string
@@ -258,11 +259,9 @@ export default function ProfilesDashboard() {
         </CardHeader>
         <CardContent className="p-0">
           {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
-          <div className="md:hidden divide-y divide-border">
+          <MobileCardList className="p-4">
             {loading ? (
-              <div className="p-4 space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
-              </div>
+              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
             ) : loadError ? (
               <ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles(search, activeTab)} />
             ) : profiles.length === 0 ? (
@@ -273,74 +272,75 @@ export default function ProfilesDashboard() {
                 const email = primaryEmail(p.communications)
                 const mobile = primaryMobile(p.communications)
                 return (
-                  <div key={p.upid} className="p-4 flex items-start gap-3">
-                    <button
-                      type="button"
-                      aria-label="Open profile"
-                      className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}
-                      onClick={open}
-                    >
-                      {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          className="min-h-6 min-w-0 font-medium text-foreground text-left hover:underline inline-flex items-center gap-1.5"
-                          onClick={open}
-                        >
-                          <span className="truncate">
-                            {p.profileType === 'GUEST' || p.profileType === 'STAFF'
-                              ? `${p.firstName} ${p.lastName || ''}`.trim()
-                              : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
-                          </span>
-                          {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
-                        </button>
-                        {/* "Regular" is the default for nearly everyone — only flag the exceptions. */}
-                        {p.classification !== "REGULAR" && (
-                          <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                            {label("CLASSIFICATION", p.classification)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 flex flex-col items-start gap-1 text-sm text-muted-foreground">
-                        {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
-                        {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
-                      </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon-sm" className="text-primary" aria-label="Edit profile" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-48">
-                              <DropdownMenuItem onClick={open}>
-                                <Users className="h-4 w-4" /> Open profile
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => {
-                                  setDeletingUpid(p.upid)
-                                  setIsDeleteDialogOpen(true)
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" /> Delete profile
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
+                  <MobileCard
+                    key={p.upid}
+                    onClick={open}
+                    title={
+                      <span className="inline-flex items-center gap-1.5">
+                        {p.profileType === 'GUEST' || p.profileType === 'STAFF'
+                          ? `${p.firstName} ${p.lastName || ''}`.trim()
+                          : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
+                        {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                      </span>
+                    }
+                    subtitle={
+                      p.addresses?.[0]?.country ? (
+                        <span className="inline-flex items-center gap-1">
+                          <CountryFlag value={p.addresses[0].country} />
+                          {country(p.addresses[0].country)}
+                        </span>
+                      ) : undefined
+                    }
+                    badge={
+                      // "Regular" is the default for nearly everyone — only flag the exceptions.
+                      p.classification !== "REGULAR" ? (
+                        <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                          {label("CLASSIFICATION", p.classification)}
+                        </span>
+                      ) : undefined
+                    }
+                    meta={[
+                      { label: "Stays", value: p.totalStays || 0 },
+                      { label: "Revenue", value: `$${(p.totalRevenue || 0).toFixed(2)}` },
+                    ]}
+                    actions={
+                      <>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="More actions" />}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-48">
+                            <DropdownMenuItem onClick={open}>
+                              <Users className="h-4 w-4" /> Open profile
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => {
+                                setDeletingUpid(p.upid)
+                                setIsDeleteDialogOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" /> Delete profile
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    }
+                  >
+                    {/* Tapping a contact link dials / mails — it must not also open the profile. */}
+                    <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                      {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
+                      {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
                     </div>
-                  </div>
+                  </MobileCard>
                 )
               })
             )}
-          </div>
+          </MobileCardList>
 
           {/* Tablet/desktop: full table */}
           <Table className="hidden md:table">

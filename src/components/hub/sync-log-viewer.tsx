@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react"
 import { ArrowLeftRight, RefreshCw, FileText } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -158,36 +159,32 @@ export function SyncLogViewer({ propertyId }: { propertyId: string }) {
         <>
           {/* Phone view — a card per entry, tap to expand the same detail the table row
               expansion shows. The table below takes over at md, where six columns fit. */}
-          <div className="space-y-3 md:hidden">
+          <MobileCardList>
             {logs.map((l) => (
-              <div
+              <MobileCard
                 key={l.id}
-                className="cursor-pointer space-y-2 rounded-md border border-border bg-card p-4"
                 onClick={() => setExpanded(expanded === l.id ? null : l.id)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 text-sm font-medium">
-                      <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      {l.direction === "OUTBOUND" ? "Outbound" : "Inbound"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{new Date(l.createdAt).toLocaleString()}</div>
-                  </div>
-                  {l.ok ? (
+                tone={l.ok ? undefined : "danger"}
+                title={
+                  <span className="flex items-center gap-1.5">
+                    <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    {l.direction === "OUTBOUND" ? "Outbound" : "Inbound"}
+                  </span>
+                }
+                subtitle={new Date(l.createdAt).toLocaleString()}
+                badge={
+                  l.ok ? (
                     <Badge variant="default">{l.httpStatus ?? "OK"}</Badge>
                   ) : (
                     <Badge variant="destructive">{l.httpStatus ?? "Failed"}</Badge>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  <span className="font-mono text-xs">{l.operation}</span>
-                  <span className="text-muted-foreground">{l.connectionName}</span>
-                  <span className="tabular-nums text-xs text-muted-foreground">
-                    {l.latencyMs != null ? `${l.latencyMs} ms` : "—"}
-                  </span>
-                </div>
-
+                  )
+                }
+                meta={[
+                  { label: "Operation", value: <span className="font-mono text-xs">{l.operation}</span> },
+                  { label: "Latency", value: <span className="tabular-nums">{l.latencyMs != null ? `${l.latencyMs} ms` : "—"}</span> },
+                  { label: "Connection", value: l.connectionName, wide: true },
+                ]}
+              >
                 {expanded === l.id && (
                   <dl className="space-y-2 border-t border-border pt-2 text-xs" onClick={(e) => e.stopPropagation()}>
                     <div>
@@ -213,9 +210,9 @@ export function SyncLogViewer({ propertyId }: { propertyId: string }) {
                     </p>
                   </dl>
                 )}
-              </div>
+              </MobileCard>
             ))}
-          </div>
+          </MobileCardList>
 
           {/* Horizontal scroll lives on this wrapper so the page body never scrolls sideways. */}
           <div className="hidden overflow-x-auto rounded-md border border-border md:block">

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Pencil, Trash2, BedDouble } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { ControlsSectionHeader, ControlsSectionBody } from "@/components/controls/controls-section-header"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -375,40 +376,43 @@ export function RoomTypeManager({
         ) : (
           <>
             {/* Mobile card view — the table below takes over at md. */}
-            <div className="md:hidden space-y-3 p-4">
+            <MobileCardList className="p-4">
               {sortedRoomTypes.map((rt) => (
-                <div key={rt.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground">{rt.code}</p>
-                      <p className="text-sm text-muted-foreground">{rt.name}</p>
-                    </div>
-                    <span className="text-sm text-muted-foreground shrink-0">{rt.maxOccupancy} Persons</span>
-                  </div>
-                  {(!rt.isActive || rt.isPseudo || !rt.housekeepingEnabled) && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {!rt.isActive && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
-                      )}
-                      {rt.isPseudo && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
-                      )}
-                      {!rt.housekeepingEnabled && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(rt)}>
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openDelete(rt.id)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
-                    </Button>
-                  </div>
-                </div>
+                <MobileCard
+                  key={rt.id}
+                  tone={rt.isActive ? undefined : "muted"}
+                  title={rt.code}
+                  subtitle={rt.name}
+                  badge={
+                    (!rt.isActive || rt.isPseudo || !rt.housekeepingEnabled) ? (
+                      <>
+                        {!rt.isActive && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
+                        )}
+                        {rt.isPseudo && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
+                        )}
+                        {!rt.housekeepingEnabled && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
+                        )}
+                      </>
+                    ) : undefined
+                  }
+                  meta={[{ label: "Max occupancy", value: `${rt.maxOccupancy} Persons` }]}
+                  onClick={() => openEdit(rt)}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(rt)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => openDelete(rt.id)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                      </Button>
+                    </>
+                  }
+                />
               ))}
-            </div>
+            </MobileCardList>
 
             <div className="hidden md:block overflow-x-auto">
               <Table>

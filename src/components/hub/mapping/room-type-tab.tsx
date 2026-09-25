@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MappingInput } from "@/components/hub/mapping/mapping-input"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 
 export type RoomTypeMap = {
   roomTypeId: string
@@ -30,39 +31,38 @@ export function RoomTypeTab({
     <>
       {/* Phone view — the mapping input and share toggle both need their own row width
           to be usable with a thumb, so each room type becomes a small card. */}
-      <div className="space-y-3 md:hidden">
+      <MobileCardList>
         {roomTypes.map((rt) => (
-          <div key={rt.roomTypeId} className="space-y-3 rounded-md border border-border bg-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <span className="text-sm font-medium">{rt.roomTypeName}</span>
-                <span className="ml-2 font-mono text-xs text-muted-foreground">{rt.roomTypeCode}</span>
-                {!rt.isActive && (
-                  <Badge variant="secondary" className="ml-2">
-                    Inactive
-                  </Badge>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs text-muted-foreground">Share</span>
-                <Switch
-                  checked={rt.shared}
-                  disabled={!canManage || !rt.externalRoomId}
-                  onCheckedChange={(checked) =>
-                    void onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: rt.externalRoomId ?? "", shared: checked })
-                  }
-                />
-              </div>
-            </div>
+          <MobileCard
+            key={rt.roomTypeId}
+            tone={rt.isActive ? undefined : "muted"}
+            title={rt.roomTypeName}
+            subtitle={<span className="font-mono">{rt.roomTypeCode}</span>}
+            badge={
+              <>
+                {!rt.isActive && <Badge variant="secondary">Inactive</Badge>}
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Share</span>
+                  <Switch
+                    checked={rt.shared}
+                    disabled={!canManage || !rt.externalRoomId}
+                    onCheckedChange={(checked) =>
+                      void onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: rt.externalRoomId ?? "", shared: checked })
+                    }
+                  />
+                </span>
+              </>
+            }
+          >
             <MappingInput
               value={rt.externalRoomId ?? ""}
               disabled={!canManage}
               placeholder="Beds24 room ID"
               onSave={(v) => onPatch({ roomTypeId: rt.roomTypeId, externalRoomId: v }, "Mapping saved")}
             />
-          </div>
+          </MobileCard>
         ))}
-      </div>
+      </MobileCardList>
 
       <div className="hidden overflow-x-auto rounded-md border border-border md:block">
         <Table>

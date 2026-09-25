@@ -93,6 +93,7 @@ async function routes(): Promise<{ shots: Shot[]; userId: string; propertyId: st
     { name: "dlg-charge-code", path: `${p}/charge-codes`, open: "Add Charge Code" },
     { name: "dlg-rate-plan", path: `${d}/revenue`, open: "New Rate Plan" },
     { name: "dlg-exchange", path: `${d}/cashiering`, open: "New Exchange" },
+    { name: "dlg-report-issue", path: `${d}/maintenance`, open: "Report issue" },
   ].filter((s) => !s.path.includes("undefined"));
   return { shots, userId: user.id, propertyId: prop.id };
 }

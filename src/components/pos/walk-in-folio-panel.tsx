@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Button } from "@/components/ui/button"
 import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Input } from "@/components/ui/input"
@@ -210,7 +211,23 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {/* Charges */}
             <div>
               <h3 className="mb-2 text-sm font-semibold">Charges</h3>
-              <Table>
+              {/* Phones: one card per charge; the table takes over at md. */}
+              <MobileCardList empty={<p className="py-4 text-center text-sm text-muted-foreground">No charges yet.</p>}>
+                {folio.lineItems.map((item: any) => (
+                  <MobileCard
+                    key={item.id}
+                    tone={item.isVoid ? "muted" : undefined}
+                    title={<span className={item.isVoid ? "line-through text-muted-foreground" : ""}>{item.description}</span>}
+                    badge={
+                      <span className={`font-semibold tabular-nums ${item.isVoid ? "line-through text-muted-foreground" : ""}`}>
+                        ${(item.amount + (item.serviceChargeAmount || 0) + item.taxAmount).toFixed(2)}
+                      </span>
+                    }
+                    subtitle={item.isVoid ? "Void" : undefined}
+                  />
+                ))}
+              </MobileCardList>
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
                 </TableHeader>
@@ -232,7 +249,16 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {folio.payments.length > 0 && (
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Payments</h3>
-                <Table>
+                <MobileCardList>
+                  {folio.payments.map((p: any) => (
+                    <MobileCard
+                      key={p.id}
+                      title={p.paymentMethod?.name}
+                      badge={<span className="font-semibold tabular-nums text-success">${p.amount.toFixed(2)}</span>}
+                    />
+                  ))}
+                </MobileCardList>
+                <Table className="hidden md:table">
                   <TableHeader>
                     <TableRow><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
                   </TableHeader>

@@ -107,11 +107,12 @@ export default async function DashboardLayout({
         <div className="print:hidden">
           <AppSidebar />
         </div>
-        {/* Below md: overflow-x-CLIP instead of hidden. `hidden` silently cut off wide
-            content with no way to reach it, and made <main> a scroll container that never
-            scrolls, so the sticky header below never stuck. Desktop keeps `hidden` for now,
-            so its behaviour is unchanged (see .agents/docs/MOBILE_PLAN.md, Phase 1). */}
-        <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen max-md:min-h-dvh flex flex-col overflow-x-hidden max-md:overflow-x-clip print:overflow-visible outline-none">
+        {/* overflow-x-CLIP, not hidden: `hidden` made <main> a scroll container that never
+            scrolls, so the sticky header below never stuck (on any screen), and it silently
+            cut off wide content. clip still clips, without creating a scroll container.
+            min-w-0: a scroll container may shrink below its content in the flex row beside the
+            sidebar; with clip it must be said explicitly, or tablets overflow by the rail. */}
+        <main id="main-content" tabIndex={-1} className="w-full min-w-0 bg-background min-h-screen max-md:min-h-dvh flex flex-col overflow-x-clip print:overflow-visible outline-none">
 
           <div className="print:hidden sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
             <PropertyBannerBar />

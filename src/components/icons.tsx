@@ -8,6 +8,7 @@ import type { ComponentType, SVGProps } from "react"
 import {
   ActivityOutline,
   AddOutline,
+  MinusOutline,
   ArrowCircleRightOutline,
   ArrowDown2Outline,
   ArrowLeft2Outline,
@@ -210,6 +211,8 @@ export const PanelLeftIcon = outline(SidebarLeftOutline)
 export const Pencil = outline(Edit2Outline)
 export const Percent = outline(PercentageSquareOutline)
 export const Plus = outline(AddOutline)
+// The − of a NumberStepper.
+export const Minus = outline(MinusOutline)
 export const Printer = outline(PrinterOutline)
 export const Receipt = outline(Receipt1Outline)
 export const ReceiptText = outline(Receipt2Outline)

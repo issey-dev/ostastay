@@ -55,12 +55,19 @@ describe("Booking API — Excursions (Phase 2)", () => {
   let browserKey = "";
   let roomsOnlyKey = "";
 
+  // Each departure gets the next minute of the day — a random time (as this used to pick)
+  // could repeat on the same type and day and trip the unique (type, date, time) constraint.
+  let departureSeq = 0
+  const nextDepartureTime = () => {
+    const minutes = 8 * 60 + departureSeq++
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
+  }
   const makeDeparture = (opts: { offset?: number; capacity?: number; min?: number | null; type?: string } = {}) =>
     prisma.excursionDeparture.create({
       data: {
         excursionTypeId: opts.type ?? typeId,
         departureDate: day(opts.offset ?? 5),
-        departureTime: `${String(8 + Math.floor(Math.random() * 10)).padStart(2, "0")}:${String(Math.floor(Math.random() * 60)).padStart(2, "0")}`,
+        departureTime: nextDepartureTime(),
         capacity: opts.capacity ?? 4,
         minCapacity: opts.min === undefined ? 2 : opts.min,
         meetingPoint: "Main Jetty",

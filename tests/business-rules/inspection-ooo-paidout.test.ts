@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import bcrypt from "bcryptjs";
+import { isoDaysFromToday, utcDaysFromToday } from "../helpers/dates";
 
 // Same in-memory cookie-jar fake as tests/scope.test.ts.
 const cookieJar = new Map<string, string>();
@@ -150,17 +151,19 @@ describe("Inspection gate, out-of-order lifecycle, paid-outs", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             propertyId, primaryGuestId: guestId, roomTypeId, ratePlanId, roomId: roomA.id,
-            checkInDate: "2026-11-01", checkOutDate: "2026-11-02", adults: 1,
+            checkInDate: isoDaysFromToday(37), checkOutDate: isoDaysFromToday(38), adults: 1,
           }),
         })
       )
     );
     const idA = (await resA.json()).id;
     // Early check-in is blocked, so the business date is each arrival's own day (a later
-    // one would make it a late arrival with a held night to charge or waive).
-    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 10, 1)) } });
+    // one would make it a late arrival with a held night to charge or waive). Arrivals are
+    // relative to today: they are booked before the business date is set, when the floor is
+    // the server date, so fixed 2026-11-01/05 arrivals would be refused once past.
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: utcDaysFromToday(37) } });
     expect((await checkIn(idA)).status).toBe(200);
-    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: new Date(Date.UTC(2026, 10, 5)) } });
+    await prisma.property.update({ where: { id: propertyId }, data: { businessDate: utcDaysFromToday(41) } });
 
     // Gate on — a CLEAN room now blocks; an INSPECTED one passes.
     await prisma.property.update({ where: { id: propertyId }, data: { requireInspectionOnCheckIn: true } });
@@ -173,7 +176,7 @@ describe("Inspection gate, out-of-order lifecycle, paid-outs", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             propertyId, primaryGuestId: guestId, roomTypeId, ratePlanId, roomId: roomB.id,
-            checkInDate: "2026-11-05", checkOutDate: "2026-11-06", adults: 1,
+            checkInDate: isoDaysFromToday(41), checkOutDate: isoDaysFromToday(42), adults: 1,
           }),
         })
       )

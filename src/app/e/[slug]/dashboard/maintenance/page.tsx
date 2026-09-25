@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/ui/page-header"
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "@/components/icons"
+import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw, Wrench } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/ui/error-state"
 import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
 import { maintenanceStaff } from "@/lib/job-functions"
+import { ReportIssueDialog } from "./report-issue-dialog"
 
 type Ticket = {
   id: string
@@ -35,6 +36,7 @@ export default function MaintenanceDashboard() {
   const [showResolved, setShowResolved] = useState(false)
   // Phones show one column at a time behind a segmented switch (desktop keeps the kanban).
   const [phoneTab, setPhoneTab] = useState<string>("OPEN")
+  const [showReportDialog, setShowReportDialog] = useState(false)
 
   const fetchMaintenanceTeam = async () => {
     if (!currentProperty) return
@@ -182,7 +184,18 @@ export default function MaintenanceDashboard() {
             {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             {showResolved ? "Hide Resolved" : "Show Resolved"}
           </Button>
+          <Button onClick={() => setShowReportDialog(true)} className="flex items-center gap-2">
+            <Wrench className="w-4 h-4" />
+            Report issue
+          </Button>
         </>}
+      />
+
+      <ReportIssueDialog
+        open={showReportDialog}
+        onOpenChange={setShowReportDialog}
+        propertyId={currentProperty?.id}
+        onCreated={() => fetchTickets(true)}
       />
 
       {/* Phones: Open / In progress / Resolved switch, one list below */}

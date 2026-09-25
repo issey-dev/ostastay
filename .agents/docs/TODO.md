@@ -10,11 +10,13 @@ See [MOBILE_PLAN.md](MOBILE_PLAN.md) §7 (what shipped, follow-ups under "Left o
 - [x] Activity Log module filter shows the raw `__all__` value (`activity-log/page.tsx:99`).
 - [x] Permission-matrix page auto-prints ~800ms after load.
 - [x] `DateRangePicker` hard-codes `id="date"` (duplicate ids).
-- [ ] Group pickup dialog is not Zod + RHF (APP STANDARD 001).
+- [x] Group pickup dialog is Zod + RHF (APP STANDARD 001).
 - [x] `tests/business-rules/group-block-edit.test.ts` hard-coded a group cutoff of 2026-09-25 and
   started failing on that day (pickups refuse a past-cutoff block) — now a year from today.
-  [ ] The same file still books fixed 2026-10-01…05 dates; other tests may carry fixed dates too —
-  worth a sweep before they age out.
+  [x] Swept the suite (clock shifted to 2031 and to a year boundary): debtors and
+  inspection-ooo-paidout booked fixed dates on a property whose business date falls back to
+  today — now relative (`tests/helpers/dates.ts`). Flaky excursion departure times fixed; webhook
+  first attempt fixed (nextAttemptAt from the app clock).
 
 ## Configuration guide + docs portal split (2026-09-24) — DONE, follow-ups open
 

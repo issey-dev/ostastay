@@ -3251,4 +3251,10 @@ further questions, so the plan's recommended defaults apply (change any of them 
 - **Housekeeping attendants** are not redirected; the bottom nav puts Housekeeping first for them.
 - One dashboard layout across devices (no separate phone layout for now).
 - The desktop dashboard header is meant to be sticky but isn't (`overflow-x-hidden` on `<main>`);
-  fixed below `md` only, **desktop left as is pending the owner's call**.
+  fixed below `md` first; **owner (2026-09-25): fix it on desktop too** — all three shells use
+  `overflow-x-clip`, so the header stays pinned while scrolling on every screen.
+
+**Owner confirmation (2026-09-25):** bottom nav on phones — yes; native date input on the guest
+eRegistration page — yes; risky actions behind "More" — yes. Also asked to fix every item the
+plan left open (MOBILE_PLAN §7 "Left open").
+

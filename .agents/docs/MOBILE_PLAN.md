@@ -322,12 +322,22 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
   and no longer auto-print on phones. Compact Hub Controls index and property band; /info mobile
   menu; login `min-h-dvh` + 44px password toggle.
 
-### Left open / follow-ups
-- Consolidating the ~36 hand-rolled card lists into a shared `ResponsiveList` (opportunistic).
-- Maintenance has no "Report issue" of its own (issues are raised from Housekeeping).
-- Booking form shows "Pick a departure date" before the field is touched (onChange validation —
-  desktop behaviour, not changed).
-- Spa extended hours still bounded by opening hours (unrelated to mobile; TODO.md).
-- Desktop dashboard header was meant to be sticky (see DECISIONS 2026-09-25) — owner's call.
-- Pax fields got numeric keypads, not ± steppers.
+### Open items — RESOLVED (2026-09-25, owner asked to fix them all)
+- **Shared phone card:** `ui/mobile-card.tsx` (`MobileCardList`, `MobileCard`) — ~40 phone lists
+  across the dashboard, Hub, settings and Osta now use it; tables that had no phone view got one
+  (walk-in bill, payment methods, amenities, email usage). A few purpose-built phone layouts stay
+  bespoke on purpose (front-office guest cards, reservation cards, housekeeping rows, folio
+  ledger, users list, Green Tax lists, nationalities table, grids with a sticky first column).
+- **Maintenance "Report issue"** (all screen sizes) — same API and fields as Housekeeping.
+- **Pax ± steppers** (`ui/number-stepper.tsx`) on phones: booking form, excursions, spa party size.
+- **Booking form** errors show only after a field is touched or on submit.
+- **Group pickup dialog** is Zod + React Hook Form.
+- **Desktop dashboard header** is pinned on every screen (`overflow-x-clip` + `min-w-0` on `<main>`
+  in all three shells).
+- **Tests:** fixed-date time bombs removed (group-block-edit, debtors, inspection-ooo-paidout;
+  helper `tests/helpers/dates.ts`); flaky excursion departure times made unique; webhook first
+  attempt no longer skipped when the database clock runs ahead (real bug —
+  `nextAttemptAt` now set from the app clock in `src/lib/website-api/webhooks.ts`).
 
+### Still open (not part of this work)
+- Spa extended hours are still bounded by opening hours (TODO.md, unrelated to mobile).

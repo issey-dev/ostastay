@@ -18,6 +18,7 @@ import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
 import { InfoHint } from "@/components/ui/info-hint"
 import { MobileActionBar } from "@/components/ui/mobile"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { INPUT_MONEY } from "@/lib/input-presets"
 
@@ -237,6 +238,26 @@ export default function POSDashboard() {
         </div>
       )}
     </>
+  )
+
+  // Phones (the Recent Postings bottom sheet): the same list in the shared MobileCard look.
+  const recentPostingsPhone = (
+    <MobileCardList empty={<EmptyState icon={Coffee} title="No charges posted from this terminal yet today" className="py-10" />}>
+      {recentPostings.map((item, i) => (
+        <MobileCard
+          key={i}
+          title={`Room ${item.roomNumber}`}
+          subtitle={item.chargeCode?.description || "Charge"}
+          badge={<span className="font-bold text-success tabular-nums">${parseFloat(item.amount).toFixed(2)}</span>}
+          meta={[
+            { label: "Time", value: new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+            ...(item.outletCheck?.checkNumber
+              ? [{ label: "Check #", value: <span className="font-mono text-primary">{item.outletCheck.checkNumber}</span> }]
+              : []),
+          ]}
+        />
+      ))}
+    </MobileCardList>
   )
 
   return (
@@ -487,7 +508,7 @@ export default function POSDashboard() {
               Recent Postings
             </SheetTitle>
           </SheetHeader>
-          <div className="px-4 pb-4">{recentPostingsBody}</div>
+          <div className="px-4 pb-4">{recentPostingsPhone}</div>
         </SheetContent>
       </Sheet>
     </div>
