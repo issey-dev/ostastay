@@ -239,7 +239,12 @@ export default function ReservationsDashboard() {
   const buildQuery = (skip: number) => {
     const params = new URLSearchParams({ propertyId, take: String(PAGE_SIZE), skip: String(skip) })
     if (filterSearch.trim()) params.set("search", filterSearch.trim())
+    // The default list is business on the books — RESERVED only (app owner, 2026-09-25):
+    // no in-house, departures, checked-out, no-shows or cancellations until a status is
+    // picked. A search with no status uses the API's default instead (everything but
+    // CHECKED_OUT/NO_SHOW), so a cancelled booking can still be found by name or number.
     if (filterStatus) params.set("status", filterStatus)
+    else if (!filterSearch.trim()) params.set("status", "RESERVED")
     if (filterDates?.from) params.set("from", format(filterDates.from, "yyyy-MM-dd"))
     if (filterDates?.to) params.set("to", format(filterDates.to, "yyyy-MM-dd"))
     if (filterDates?.from || filterDates?.to) params.set("dateMode", dateMode)
@@ -639,12 +644,11 @@ export default function ReservationsDashboard() {
         <SearchableSelect
           value={filterStatus}
           onChange={(v: string) => setFilterStatus(v)}
-          placeholder="Active bookings"
+          placeholder="On the books"
           options={[
-            // "" is not "everything" any more — the API hides finished business unless a
-            // status is named, so the label says what it actually does.
-            { label: "Active bookings", value: "" },
-            { label: "Reserved", value: "RESERVED" },
+            // "" is not "everything": with no search it means RESERVED only (business on
+            // the books); with a search, everything but checked-out and no-shows.
+            { label: "On the books", value: "" },
             { label: "In-House", value: "IN_HOUSE" },
             { label: "Checked Out", value: "CHECKED_OUT" },
             { label: "No-Show", value: "NO_SHOW" },
