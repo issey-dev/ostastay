@@ -50,6 +50,9 @@ async function setupCheckedInReservation(opts: {
   /** Price today's night so an extra-occupancy surcharge posts alongside the room charge. */
   extraAdultPrice?: number;
   baseOccupancy?: number;
+  /** The primary guest's nationality, and named accompanying guests (Green Tax per person). */
+  primaryNationality?: string;
+  accompanying?: Array<{ nationality?: string; dateOfBirth?: Date; greenTaxExempt?: boolean }>;
 }) {
   const osta = await prisma.enterprise.upsert({
     where: { slug: "test-osta" },
@@ -83,8 +86,12 @@ async function setupCheckedInReservation(opts: {
   });
 
   const guest = await prisma.profile.create({
-    data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "Green", lastName: "Tax" },
+    data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: "Green", lastName: "Tax", nationality: opts.primaryNationality },
   });
+  const accompanying = [];
+  for (const [i, a] of (opts.accompanying ?? []).entries()) {
+    accompanying.push(await prisma.profile.create({ data: { enterpriseId: enterprise.id, profileType: "GUEST", firstName: `Acc${i}`, lastName: "Tax", ...a } }));
+  }
 
   const today = new Date();
   const reservation = await prisma.reservation.create({
@@ -109,6 +116,7 @@ async function setupCheckedInReservation(opts: {
         },
       },
       folios: { create: { folioNumber: 1, propertyId: property.id } },
+      accompanyingGuests: accompanying.length ? { create: accompanying.map((p) => ({ profileId: p.upid })) } : undefined,
     },
     include: { folios: true },
   });
@@ -182,6 +190,39 @@ describe("Green Tax nightly posting (night-audit/run)", () => {
     expect(gtxItem!.amount).toBe(25);
     expect(gtxItem!.taxAmount).toBe(0);
     expect(gtxItem!.serviceChargeAmount).toBe(0);
+  });
+
+  // Owner, 2026-09-25: Green Tax is per person. A Maldivian (or permit holder, infant,
+  // ticked) guest on the booking pays none; the others on the same booking still do.
+  it("takes exempt named guests off the Green Tax head count, and only them", async () => {
+    const { propertyId, folioId, adminId } = await setupCheckedInReservation({
+      slug: "test-greentax-per-guest",
+      adults: 3,
+      children: 1,
+      infants: 0,
+      chargeCodes: [{ code: "1000" }, { code: "8500" }],
+      settings: { greenTaxEnabled: true, greenTaxAdultAmount: 10, greenTaxChildAmount: 5 },
+      primaryNationality: "MV", // exempt: Maldivian
+      accompanying: [
+        { nationality: "GB" }, // pays
+        { nationality: "DE", greenTaxExempt: true }, // exempt: ticked by hand
+      ],
+    });
+
+    const res = await asUser(adminId, () =>
+      nightAuditRunRoute.POST(
+        new Request("http://localhost/api/night-audit/run", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ propertyId }),
+        })
+      )
+    );
+    expect(res.status).toBe(200);
+    const items = await prisma.folioLineItem.findMany({ where: { folioId }, include: { chargeCode: true } });
+    const gtx = items.find((i) => i.chargeCode.code === "8500");
+    // 3 adults less 2 exempt = 1 × $10, plus the child (unnamed, pays) 1 × $5 = $15.
+    expect(gtx!.amount).toBe(15);
   });
 
   it("posts no Green Tax line item when disabled, and does not require a GTX charge code", async () => {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
+import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
 
 // Per-property Deposit / Cancellation / No-Show fee rules (Controls > Fee Rules)
 // and the amount computation that drives the Deposit module and the cancellation /
@@ -21,6 +22,9 @@ export const isFeeBasis = (v: unknown): v is FeeBasis =>
 
 type RuleLike = { basis: string; value: number };
 type ReservationLike = {
+  /** When given (a saved booking), Green Tax in the projected stay is per person —
+   *  exempt named guests off the head count, as Night Audit posts it. */
+  id?: string;
   propertyId: string;
   adults: number;
   children: number;
@@ -60,6 +64,7 @@ export async function computeReservationFee(rule: RuleLike, reservation: Reserva
     })),
     adults: reservation.adults,
     children: reservation.children,
+    ...(reservation.id ? await reservationGreenTaxBasis(reservation.id) : {}),
     mealPlanCode: reservation.mealPlan,
   });
 

@@ -4,6 +4,7 @@ import type { GenerateRow } from "@/lib/posting/run-generates"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
 import { nextBusinessDate } from "@/lib/business-date"
+import { GREEN_TAX_GUEST_SELECT, greenTaxPax, reservationGuests } from "@/lib/green-tax-exemption"
 
 // One stay-night's charges for one reservation — the nightly room charge (and through its
 // generates Service Charge, GST, Green Tax), the extra-occupancy surcharge and the night's
@@ -20,6 +21,9 @@ const taxInclude = { taxProfile: { include: { rates: true } } } as const
 /** What a reservation must be loaded with for postStayNight. */
 export const STAY_NIGHT_INCLUDE = {
   folios: { where: { isClosed: false } },
+  // The named guests, for Green Tax per person: exempt ones come off the head count.
+  primaryGuest: { select: GREEN_TAX_GUEST_SELECT },
+  accompanyingGuests: { select: { profile: { select: GREEN_TAX_GUEST_SELECT } } },
   assignments: {
     orderBy: { startDate: "desc" },
     include: {
@@ -54,6 +58,8 @@ export type StayNightContext = {
   baseRatePlan: { id: string } | null
   /** See run.ts — Green Tax on an accommodation code that carries no row of its own. */
   impliedGreenTaxGenerate: GenerateRow[]
+  /** EnterpriseSettings.greenTaxExemptAge — under it at check-in a guest is an infant. */
+  greenTaxExemptAge?: number
   /** Folio a charge on this code lands on (standing routing rules), else the default. */
   routeTo: (reservationId: string, chargeCodeId: string, defaultFolioId: string) => string
 }
@@ -81,6 +87,12 @@ export async function postStayNight(
   const activeAssignment = res.assignments[0]
   if (!activeAssignment) return null
   const { settings, pricesIncludeTaxes, routeTo } = ctx
+  // Green Tax is per person: the named guests who are exempt (infant, Maldivian, permit
+  // holder, ticked) come off the head count. Other per-person charges keep the full count.
+  const greenTaxBasis = () => {
+    const pax = greenTaxPax(res, reservationGuests(res), ctx.greenTaxExemptAge ?? 2)
+    return { greenTaxAdults: pax.adults, greenTaxChildren: pax.children }
+  }
 
   // Derived Rate Plans read PriceCalendar under their PARENT's id — they have no
   // rows of their own (see src/lib/derived-rate.ts) — then the adjustment is
@@ -176,7 +188,7 @@ export async function postStayNight(
     roomAssignmentId: activeAssignment.id,
     // One stay-night. Infants are deliberately absent — exempt, and not counted. With no
     // headcount a per-person levy produces nothing — how a held night skips Green Tax.
-    postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1 } : undefined,
+    postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1, ...greenTaxBasis() } : undefined,
     extraGenerates: levyNightly ? ctx.impliedGreenTaxGenerate : [],
     routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, folioId),
   })
@@ -246,7 +258,7 @@ export async function postStayNight(
       pricesIncludeTaxes,
       date: postDate,
       description: `${alloc.name} (${paxParts.join(", ")})`,
-      postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1 } : undefined,
+      postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1, ...greenTaxBasis() } : undefined,
       routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, folioId),
     })
 

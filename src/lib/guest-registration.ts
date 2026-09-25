@@ -8,7 +8,11 @@ import { lockPropertySequence } from "@/lib/green-tax-registry";
 // primary guest then accompanying guests. Rooms of a pseudo room type (which covers
 // day-use) are excluded, and so is a stay under 12 hours (MIN_STAY_HOURS, measured per
 // EnterpriseSettings.greenTaxStayBasis — at EOD the departure is still the booked one,
-// so a guest who leaves unexpectedly early is corrected in the Hub). The GUEST_REG_NO sequence resets on the first assignment of
+// so a guest who leaves unexpectedly early is corrected in the Hub).
+// EVERY guest gets a number — accompanying/sharing guests too, and Green Tax-exempt ones
+// (infants, Maldivians, permit holders): the sheet lists everyone (owner, 2026-09-25). A
+// guest added to an in-house stay AFTER its arrival night is numbered at the next EOD.
+// The GUEST_REG_NO sequence resets on the first assignment of
 // a new calendar year (every 1st January). Idempotent — a guest already registered
 // for their stay is skipped, so a re-run never double-numbers.
 export async function assignRegistrationNumbers(
@@ -43,6 +47,10 @@ export async function assignRegistrationNumbers(
           checkedInAt: { gte: new Date(bizDate.getTime() - 86_400_000), lt: new Date(nextDay.getTime() + 86_400_000) },
           guestRegistrations: { none: {} },
         },
+        // Already registered in house, but someone was added to the booking since (an
+        // accompanying guest put on after arrival, e.g. through eRegistration) — they
+        // need a number too. Filtered below to stays with an unnumbered guest.
+        { checkInDate: { lt: bizDate }, guestRegistrations: { some: {} } },
       ],
       assignments: { some: { roomType: { isPseudo: false } } },
     },
@@ -52,7 +60,11 @@ export async function assignRegistrationNumbers(
     },
     orderBy: [{ checkedInAt: "asc" }, { createdAt: "asc" }],
   });
-  const arrivals = candidates.filter((r) => meetsMinStay(r, property, basis));
+  const unnumbered = (r: (typeof candidates)[number]) =>
+    [r.primaryGuestId, ...r.accompanyingGuests.map((a) => a.profileId)].some(
+      (id) => !r.guestRegistrations.some((g) => g.profileId === id)
+    );
+  const arrivals = candidates.filter((r) => unnumbered(r) && meetsMinStay(r, property, basis));
 
   let assigned = 0;
   await prisma.$transaction(async (tx) => {

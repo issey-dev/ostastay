@@ -352,3 +352,12 @@ export function nationalityFor(value: string | null | undefined): string | null 
 // Regenerating COUNTRIES: the alpha-2/alpha-3 pairs are ISO 3166-1; each name is
 // new Intl.DisplayNames(["en"], { type: "region" }).of(alpha2) (Unicode CLDR via ICU); the
 // nationality is maintained here by hand. Keep the table sorted by alpha-2.
+
+// Maldivian nationality (Green Tax exemption and MIRA sheet category 2). Reads any form
+// findCountry does; the literals cover values stored before the country list existed.
+export function isMaldivianNationality(value: string | null | undefined): boolean {
+  if (!value) return false;
+  if (findCountry(value)?.alpha2 === "MV") return true;
+  const v = value.trim().toUpperCase();
+  return v === "MV" || v === "MDV" || v === "MALDIVES" || v === "MALDIVIAN";
+}
