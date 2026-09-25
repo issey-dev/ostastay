@@ -339,5 +339,5 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
   attempt no longer skipped when the database clock runs ahead (real bug —
   `nextAttemptAt` now set from the app clock in `src/lib/website-api/webhooks.ts`).
 
-### Still open (not part of this work)
-- Spa extended hours are still bounded by opening hours (TODO.md, unrelated to mobile).
+### Also fixed in 8.2.0
+- Spa extended hours now open bookable slots before opening / after closing (TODO.md).

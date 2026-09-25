@@ -42,6 +42,13 @@ export default function DocsHome() {
         ]}
       />
 
+      <h2 id="release-notes">Release notes</h2>
+      <Cards
+        items={[
+          { href: "/docs/release-notes", title: "What's new in each version", body: "Every release of Uppsolut Stay: what it added, improved and fixed." },
+        ]}
+      />
+
       <h2 id="downloads">Downloads</h2>
       <ul>
         {DOC_AREAS.map((a) => (

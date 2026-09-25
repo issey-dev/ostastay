@@ -265,3 +265,22 @@
   .docs-code, .docs-shot { break-inside: avoid; }
   .docs-article h2 { break-after: avoid; }
 }
+
+/* Release notes: a jump list of versions, then one section per version. */
+.docs-release-index { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.docs-release-index a {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.docs-release-index a:hover { border-color: var(--accent); }
+.docs-release h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.docs-release-date { font-size: 14px; font-weight: 400; color: var(--ink-muted); }
+.docs-lead-sm { color: var(--ink-muted); }
+.docs-article .docs-release-group { margin-top: 18px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); }
+.docs-release ul { list-style: disc; }
+.docs-release li::marker { color: var(--ink-muted); }
+@media print { .docs-release-index { display: none; } .docs-release { break-inside: auto; } }

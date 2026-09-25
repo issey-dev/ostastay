@@ -676,7 +676,7 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
             )} />
             <p className="text-xs text-muted-foreground md:col-span-2">
               {isExtended
-                ? "The therapist can be booked between these times on this date, even outside their weekly schedule (within the spa's opening hours)."
+                ? "The therapist can be booked between these times on this date, even outside their weekly schedule or the spa's usual opening hours."
                 : "Leave the times empty to block the whole day, or give both to block only part of it."}
             </p>
             <FormField control={form.control} name="reason" render={({ field }) => (

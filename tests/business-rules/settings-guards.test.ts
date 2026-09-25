@@ -13,7 +13,7 @@ const { highestIssuedNumber, assertSequenceChangeAllowed, SequenceGuardError } =
 const { amenitySchema } = await import("@/lib/facility-amenity");
 const { amenityNameTaken } = await import("@/lib/facility-amenity-db");
 const { therapistExceptionSchema } = await import("@/lib/spa-exception");
-const { getAvailableTherapists } = await import("@/lib/spa-availability");
+const { getAvailableTherapists, computeSlotsForDay } = await import("@/lib/spa-availability");
 const { updateWebsitePropertySettings } = await import("@/lib/website-api/settings");
 const { chargeCode } = await import("../helpers/charge-codes");
 
@@ -139,6 +139,42 @@ describe("Hub setup guards", () => {
       expect((await at("15:00", "16:00")).map((t) => t.id)).toEqual([therapist.id]);
       // Only within the extended window.
       expect((await at("17:30", "18:30")).map((t) => t.id)).toEqual([]);
+    });
+
+    it("an EXTENDED_HOURS exception past closing time produces bookable evening slots", async () => {
+      const cc = await chargeCode({ propertyId }, "8500").catch(async () => (await prisma.chargeCode.findFirstOrThrow({ where: { propertyId } })));
+      const category = await prisma.spaTreatmentCategory.create({ data: { propertyId, name: `Evening ${uniq()}` } });
+      const treatment = await prisma.spaTreatment.create({
+        data: { propertyId, categoryId: category.id, name: "Evening massage", defaultDurationMinutes: 60, cleanupBufferMinutes: 0, chargeCodeId: cc.id },
+      });
+      const therapist = await prisma.spaTherapist.create({ data: { propertyId, displayName: "Late" } });
+      await prisma.spaTherapistTreatment.create({ data: { therapistId: therapist.id, treatmentId: treatment.id } });
+      await prisma.spaRoom.create({ data: { propertyId, name: `Room ${uniq()}`, capacity: 1 } });
+      const date = new Date(Date.UTC(2030, 2, 5));
+      await prisma.spaTherapistSchedule.create({
+        data: { therapistId: therapist.id, dayOfWeek: date.getUTCDay(), startTime: "09:00", endTime: "18:00", effectiveFrom: new Date(Date.UTC(2020, 0, 1)) },
+      });
+      const settings = { defaultOpeningTime: "09:00", defaultClosingTime: "18:00", slotIntervalMinutes: 60 };
+      const slots = () =>
+        computeSlotsForDay({
+          propertyId,
+          treatmentId: treatment.id,
+          date,
+          treatment: { defaultDurationMinutes: 60, cleanupBufferMinutes: 0, preparationBufferMinutes: 0 },
+          settings,
+          partySize: 1,
+        });
+
+      // Opening hours only: the last start is 17:00.
+      expect((await slots()).map((x) => x.startTime).at(-1)).toBe("17:00");
+
+      // The therapist stays until 21:00 that day → 18:00, 19:00 and 20:00 become bookable.
+      await prisma.spaTherapistAvailabilityException.create({
+        data: { therapistId: therapist.id, date, exceptionType: "EXTENDED_HOURS", startTime: "09:00", endTime: "21:00" },
+      });
+      const evening = (await slots()).filter((x) => x.startTime >= "18:00");
+      expect(evening.map((x) => x.startTime)).toEqual(["18:00", "19:00", "20:00"]);
+      expect(evening.every((x) => x.available)).toBe(true);
     });
   });
 

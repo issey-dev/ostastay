@@ -51,7 +51,7 @@ export default function Spa() {
         rows={[
           ["Skills", "Tick each treatment they are Qualified for, and Preferred where they are your first choice. Only qualified therapists are offered."],
           ["Schedule", "Their working hours per weekday, from an Effective From date. Saving replaces the whole week."],
-          ["Exceptions", "Day off, leave, training, sick or unavailable, for the whole day or between two times. Extended Hours adds working time on a date (within the spa's opening hours)."],
+          ["Exceptions", "Day off, leave, training, sick or unavailable, for the whole day or between two times. Extended Hours adds working time on a date — even before opening or after closing, which opens up those times for that therapist's treatments."],
         ]}
       />
 

@@ -52,7 +52,8 @@ Open:
     night audit and the quote carve out EVERY include-in-rate allocation (meal plan, manual).
     Decide, and how a meal-plan include-in-rate allocation should post in Meal Plan mode.
 - Still open:
-  - Spa extended hours can't go past the spa's closing time (slots stay within opening hours).
+  - ~~Spa extended hours can't go past the spa's closing time~~ — FIXED (8.2.0): the day's slot
+    window widens by that day's EXTENDED_HOURS exceptions (`bookableWindow` in `spa-availability.ts`).
   - Housekeeping status changes don't clear `Room.statusBeforeTypeDeactivation`.
   - Renaming/deleting a meal plan isn't checked against channel defaults / website settings.
   - Deleting a parent rate plan silently turns its derived plans independent.
