@@ -3,7 +3,8 @@
 import { useBusinessToday } from "@/hooks/use-business-today";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { addDays, format, isEqual, parseISO, startOfDay } from "date-fns";
-import { Loader2, Ban, ChevronDown, ChevronRight } from "@/components/icons";
+import { Loader2, Ban, ChevronDown, ChevronRight, ChevronLeft, MoreHorizontal } from "@/components/icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -250,40 +251,49 @@ export function AvailabilityGrid() {
   if (deviceTier === "mobile") {
     return (
       <>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-3 py-2">
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" onClick={() => setStartDate((d) => addDays(d, -days))}>
-              &lt; Prev
+        {/* Phone toolbar: navigation up front; Stop Sale — a restriction that blocks
+            selling — sits in the ⋯ menu instead of a red button one tap away, and still
+            goes through the Stop Sale dialog to confirm. */}
+        <div className="flex flex-col gap-2 border-b border-border bg-card px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" aria-label="Previous period" onClick={() => setStartDate((d) => addDays(d, -days))}>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setStartDate(today)}>
+            <Button variant="outline" className="flex-1" onClick={() => setStartDate(today)}>
               Today
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setStartDate((d) => addDays(d, days))}>
-              Next &gt;
+            <Button variant="outline" size="icon" aria-label="Next period" onClick={() => setStartDate((d) => addDays(d, days))}>
+              <ChevronLeft className="h-4 w-4 rotate-180" />
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="More actions" />}>
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuItem variant="destructive" onClick={() => openStopSale(null)}>
+                  <Ban className="h-4 w-4" /> Stop Sale…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span>Days</span>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="shrink-0">Show</span>
+            <div className="grid flex-1 grid-cols-3 gap-1 rounded-lg bg-muted p-0.5" role="group" aria-label="Days to show">
               {DAY_OPTIONS.map((d) => (
-                <Button
+                <button
                   key={d}
-                  variant={days === d ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 w-9 px-0"
+                  type="button"
+                  aria-pressed={days === d}
                   onClick={() => setDays(d)}
+                  className={cn(
+                    "min-h-9 rounded-md text-sm font-medium pointer-coarse:min-h-10",
+                    days === d ? "bg-card text-foreground shadow-elevation-1" : "text-muted-foreground"
+                  )}
                 >
-                  {d}
-                </Button>
+                  {d} days
+                </button>
               ))}
             </div>
-            <Button
-              size="sm"
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => openStopSale(null)}
-            >
-              <Ban className="mr-2 h-4 w-4" /> Stop Sale
-            </Button>
           </div>
         </div>
 

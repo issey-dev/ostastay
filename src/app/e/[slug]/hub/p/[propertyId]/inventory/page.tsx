@@ -1,6 +1,7 @@
 import { propertyPage } from "@/lib/hub-page"
 import { CopyFromPropertyButton } from "@/components/hub/copy-from-property"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { FacilitiesManager } from "@/components/settings/facilities-manager"
 import { PropertySwitchSetting } from "@/components/hub/night-audit-settings"
@@ -13,6 +14,7 @@ export default async function HubPropertyInventoryPage({ params }: { params: Pro
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
+      <HubSetupNotice title={item.title} />
       <ControlsCard
         title="Property Architecture"
         description="This property's room types, buildings, floors and rooms. Copying brings room types (with their features) — rooms are physical, and each property builds its own."

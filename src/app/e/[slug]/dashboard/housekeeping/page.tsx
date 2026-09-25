@@ -17,6 +17,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
+import { HousekeepingRoomRow, RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
+import { MobileActions } from "@/components/ui/mobile"
 
 export default function HousekeepingDashboard() {
   const { slug } = useParams<{ slug: string }>()
@@ -47,6 +49,13 @@ export default function HousekeepingDashboard() {
   const [housekeepers, setHousekeepers] = useState<any[]>([])
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [selectedAttendantId, setSelectedAttendantId] = useState<string>("UNASSIGNED")
+
+  // Phone-only board state: tapping a room row opens its action sheet, unless "Select"
+  // mode is on (then it toggles the row for the bulk bar). `singleRoomFlow` marks a
+  // dialog opened from the sheet for one room, so cancelling it drops that selection.
+  const [sheetRoomId, setSheetRoomId] = useState<string | null>(null)
+  const [phoneSelectMode, setPhoneSelectMode] = useState(false)
+  const [singleRoomFlow, setSingleRoomFlow] = useState(false)
 
   const fetchRooms = async (silent = false) => {
     if (!currentProperty) return
@@ -308,6 +317,26 @@ export default function HousekeepingDashboard() {
     }
   }
 
+  const closeOOODialog = () => {
+    setShowOOODialog(false)
+    if (singleRoomFlow) {
+      setSingleRoomFlow(false)
+      setSelectedRooms([])
+    }
+  }
+
+  // From the phone room sheet: run the existing bulk dialogs for just this room.
+  const openSingleRoomDialog = (roomId: string, dialog: "ooo" | "issue") => {
+    setSheetRoomId(null)
+    setSelectedRooms([roomId])
+    if (dialog === "ooo") {
+      setSingleRoomFlow(true)
+      setShowOOODialog(true)
+    } else {
+      setShowMaintenanceDialog(true)
+    }
+  }
+
   const handleEditMaintenance = (ticket: any) => {
     setEditingTicket(ticket)
     setMaintenanceType(ticket.issueType)
@@ -359,6 +388,17 @@ export default function HousekeepingDashboard() {
         title="Housekeeping Dashboard"
         hint="Manage room statuses, turnovers, and attendant tasks."
         actions={<>
+          <Button
+            variant={phoneSelectMode ? "default" : "outline"}
+            className="md:hidden"
+            onClick={() => {
+              if (phoneSelectMode) setSelectedRooms([])
+              setPhoneSelectMode(!phoneSelectMode)
+            }}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            {phoneSelectMode ? "Done" : "Select"}
+          </Button>
           {isBulkMode && (
             <Button variant="outline" onClick={() => setSelectedRooms(rooms.map(r => r.id))}>
               Select All
@@ -445,7 +485,21 @@ export default function HousekeepingDashboard() {
               Assign Floor
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {/* Phones: compact rows; tap opens the room's action sheet */}
+          <div className="space-y-2 md:hidden">
+            {roomsByFloor[floorName].map((room: any) => (
+              <HousekeepingRoomRow
+                key={room.id}
+                room={room}
+                businessDate={currentProperty?.businessDate}
+                selectMode={phoneSelectMode}
+                isSelected={selectedRooms.includes(room.id)}
+                onOpen={setSheetRoomId}
+                onToggleSelect={handleToggleSelect}
+              />
+            ))}
+          </div>
+          <div className="hidden md:grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {roomsByFloor[floorName].map((room: any) => (
               <RoomStatusCard
                 key={room.id}
@@ -464,7 +518,7 @@ export default function HousekeepingDashboard() {
 
       {/* Floating Action Bar */}
       {isBulkMode && (
-        <div className="fixed bottom-[calc(1rem+var(--bottom-nav-offset,0px))] inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed bottom-[calc(1rem+var(--bottom-nav-offset,0px))] inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 hidden md:flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex items-center gap-3 border-r pr-3 md:pr-6 border-border shrink-0">
             <div className="bg-primary text-primary-foreground w-8 h-8 rounded-none flex items-center justify-center font-bold text-sm">
               {selectedRooms.length}
@@ -537,6 +591,57 @@ export default function HousekeepingDashboard() {
           </Button>
         </div>
       )}
+
+      {/* Phone bulk bar: pinned above the bottom nav, 2 main actions + More */}
+      {isBulkMode && !showAssignDialog && !showMaintenanceDialog && !showOOODialog && (
+        <div className="fixed inset-x-0 bottom-[var(--bottom-nav-offset,0px)] z-[var(--z-sticky)] space-y-2 border-t border-border bg-card/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden print:hidden">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold">{selectedRooms.length} selected</span>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedRooms([])}>
+              <X className="w-4 h-4" /> Clear
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              disabled={isUpdatingBulk}
+              onClick={() => handleBulkUpdate("CLEAN")}
+              className={`flex-1 border ${toneMutedClasses("success")}`}
+            >
+              <CheckCircle2 className="w-4 h-4" /> Clean
+            </Button>
+            <Button
+              disabled={isUpdatingBulk}
+              onClick={() => handleBulkUpdate("DIRTY")}
+              className={`flex-1 border ${toneMutedClasses("danger")}`}
+            >
+              <Brush className="w-4 h-4" /> Dirty
+            </Button>
+            <MobileActions
+              className="flex-1"
+              more={[
+                { label: "Mark inspected", icon: CheckCircle2, disabled: isUpdatingBulk, onSelect: () => handleBulkUpdate("INSPECTED") },
+                { label: "Assign attendant", icon: Users, disabled: isUpdatingBulk, onSelect: () => setShowAssignDialog(true) },
+                { label: "Report issue", icon: Wrench, disabled: isUpdatingBulk, onSelect: () => setShowMaintenanceDialog(true) },
+                { label: "Mark out of order", icon: AlertTriangle, disabled: isUpdatingBulk, destructive: true, onSelect: () => setShowOOODialog(true) },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      <RoomActionSheet
+        room={sheetRoomId ? rooms.find((r: any) => r.id === sheetRoomId) ?? null : null}
+        businessDate={currentProperty?.businessDate}
+        onClose={() => setSheetRoomId(null)}
+        onStatusChange={handleStatusChange}
+        onCompleteTask={handleCompleteTask}
+        onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
+        onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
+        onEditMaintenance={(ticket) => {
+          setSheetRoomId(null)
+          handleEditMaintenance(ticket)
+        }}
+      />
 
       {/* Maintenance Dialog */}
       <Dialog open={showMaintenanceDialog} onOpenChange={closeMaintenanceDialog}>
@@ -668,7 +773,7 @@ export default function HousekeepingDashboard() {
       </Dialog>
 
       {/* Mark Out-of-Order Dialog */}
-      <Dialog open={showOOODialog} onOpenChange={(open) => !open && setShowOOODialog(false)}>
+      <Dialog open={showOOODialog} onOpenChange={(open) => !open && closeOOODialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Mark Out of Order</DialogTitle>
@@ -695,7 +800,7 @@ export default function HousekeepingDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowOOODialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeOOODialog}>Cancel</Button>
             <Button variant="destructive" onClick={handleMarkOOO} disabled={isUpdatingBulk}>
               {isUpdatingBulk ? "Saving..." : "Mark Out of Order"}
             </Button>

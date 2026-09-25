@@ -1,5 +1,6 @@
 import { propertyPage } from "@/lib/hub-page"
 import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { MappingManager } from "@/components/hub/mapping-manager"
 
 // This property's channel-manager mapping: sharing on/off, room types, rate plans,
@@ -9,6 +10,7 @@ export default async function HubPropertyChannelMappingPage({ params }: { params
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" hint="Map this property's room types and rates to the channel manager's, check and resend availability and prices, and choose the defaults for inbound bookings." />
+      <HubSetupNotice title={item.title} />
       <MappingManager propertyId={property.id} canManage={canEdit("update")} />
     </div>
   )

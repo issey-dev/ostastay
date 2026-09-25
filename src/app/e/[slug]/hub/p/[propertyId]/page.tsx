@@ -3,6 +3,7 @@ import { requireSession, hasPermission } from "@/lib/scope"
 import { PROPERTY_NAV, propertyHref, visibleKeys } from "@/components/hub/hub-nav"
 import { loadHubAddons } from "@/lib/hub-properties"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChevronRight } from "@/components/icons"
 
 // A property's setup landing page: every section of this property the user may open.
 // The band above (from the layout) already names the property.
@@ -31,7 +32,25 @@ export default async function HubPropertyHomePage({
           No setup sections are available to you for this property.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <>
+        {/* Phones: one compact list (icon · title · chevron) instead of 14 tall cards. */}
+        <nav aria-label="Setup sections" className="overflow-hidden rounded-2xl bg-card shadow-elevation-1 ring-1 ring-foreground/5 sm:hidden">
+          <ul className="divide-y divide-border">
+            {sections.map((item) => (
+              <li key={item.key}>
+                <Link
+                  href={propertyHref(slug, propertyId, item)}
+                  className="flex min-h-12 items-center gap-3 px-4 py-3 text-sm font-medium text-foreground outline-hidden focus-visible:bg-muted active:bg-muted"
+                >
+                  <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="grid gap-4 max-sm:hidden sm:grid-cols-2 xl:grid-cols-3">
           {sections.map((item) => (
             <Link
               key={item.key}
@@ -50,6 +69,7 @@ export default async function HubPropertyHomePage({
             </Link>
           ))}
         </div>
+        </>
       )}
     </div>
   )

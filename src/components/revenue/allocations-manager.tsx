@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/form"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 
 export type AllocationDto = {
   id: string
@@ -271,9 +272,14 @@ export function AllocationsManager() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button onClick={openCreate} className="shadow-sm">
+        <Button onClick={openCreate} className="shadow-sm max-md:hidden">
           <Plus className="mr-2 h-4 w-4" /> New Allocation
         </Button>
+        <DesktopOnlyNotice
+          className="w-full"
+          feature="Allocation editing"
+          description="The list below is read-only on a phone. Open this page on a computer to create, edit or delete allocations."
+        />
       </div>
 
       <Card>
@@ -341,14 +347,6 @@ export function AllocationsManager() {
                       <div>Charge code: <span className="font-mono text-xs text-foreground">{a.chargeCode?.code}</span></div>
                       <div>{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</div>
                       <div>{currentPriceLabel(a)}</div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(a)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive" onClick={() => setDeleting(a)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
-                      </Button>
                     </div>
                   </div>
                 ))}

@@ -59,6 +59,13 @@ read `.agents/docs/`:
   (shot list in `scripts/docs-shots.config.ts`; main content only, never app chrome).
   Rebuild the PDFs with `npm run docs:pdf` and run `npm run docs:check`.
 
+- [`.agents/docs/MOBILE_PLAN.md`](.agents/docs/MOBILE_PLAN.md) — phones: desktop is the source of
+  truth, mobile changes live behind `max-sm:`/`max-md:`/`md:hidden` or `pointer-coarse:`. Dialogs are
+  bottom sheets on phones (`DialogContent mobile="sheet"|"fullscreen"|"none"`); use the shared
+  `@/components/ui/mobile` (`MobileActions`, `MobileActionBar`, `DesktopOnlyNotice`), `ContactLink`,
+  `@/lib/input-presets` and `PageHeader`. Check a change with `npm run mobile:audit` (captures at
+  phone/tablet/desktop widths + a pixel diff against a baseline — desktop must not change).
+
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
 it plus a status correction (its own header is stale — treat it as partially-to-mostly

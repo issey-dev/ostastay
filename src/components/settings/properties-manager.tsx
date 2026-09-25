@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Plus, Pencil, Trash2, Building2, RotateCcw } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { MobileActions } from "@/components/ui/mobile"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -216,39 +217,33 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                       <span>Check-out <span className="font-medium text-foreground">{property.checkOutTime}</span></span>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {property.status === "REJECTED" && (
+                    {/* Edit is the action; Resubmit and Delete sit behind More (Delete last, red). */}
+                    <MobileActions
+                      className="pt-1"
+                      primary={
                         <Button
-                          size="sm"
                           variant="outline"
-                          className="h-9 flex-1 text-info"
-                          disabled={resubmitting === property.id}
-                          onClick={() => handleResubmit(property.id)}
+                          className="min-h-11"
+                          onClick={() => {
+                            setSelectedProperty(property)
+                            setIsDialogOpen(true)
+                          }}
                         >
-                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                          {resubmitting === property.id ? "Resubmitting..." : "Resubmit"}
+                          <Pencil className="mr-1.5 h-4 w-4" /> Edit
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 flex-1"
-                        onClick={() => {
-                          setSelectedProperty(property)
-                          setIsDialogOpen(true)
-                        }}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 flex-1 text-destructive"
-                        onClick={() => setPropertyToDelete(property)}
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-                      </Button>
-                    </div>
+                      }
+                      more={[
+                        ...(property.status === "REJECTED"
+                          ? [{
+                              label: resubmitting === property.id ? "Resubmitting..." : "Resubmit for approval",
+                              icon: RotateCcw,
+                              disabled: resubmitting === property.id,
+                              onSelect: () => handleResubmit(property.id),
+                            }]
+                          : []),
+                        { label: "Delete property", icon: Trash2, destructive: true, onSelect: () => setPropertyToDelete(property) },
+                      ]}
+                    />
                   </div>
                 ))}
               </div>

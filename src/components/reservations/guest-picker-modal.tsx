@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Star, Search, UserPlus, Loader2 } from "@/components/icons"
+import { INPUT_EMAIL, INPUT_PHONE, INPUT_SEARCH } from "@/lib/input-presets"
 
 export type GuestProfile = {
   upid: string
@@ -115,6 +116,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
+              {...INPUT_SEARCH}
               autoFocus
               className="pl-8"
               placeholder="Search by first name, last name, email, or address..."
@@ -136,13 +138,13 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                     type="button"
                     key={p.upid}
                     onClick={() => handleSelect(p)}
-                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-2"
+                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0.5 pointer-coarse:min-h-11"
                   >
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       {p.firstName} {p.lastName || ""}
                       {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
                     </span>
-                    {email && <span className="text-xs text-muted-foreground">{email}</span>}
+                    {email && <span className="text-xs text-muted-foreground max-sm:break-all">{email}</span>}
                   </button>
                 )
               })
@@ -150,7 +152,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
           </div>
 
           {!showQuickCreate ? (
-            <Button type="button" variant="outline" className="border-dashed" onClick={() => setShowQuickCreate(true)}>
+            <Button type="button" variant="outline" className="border-dashed max-sm:h-auto max-sm:py-2 max-sm:whitespace-normal" onClick={() => setShowQuickCreate(true)}>
               <UserPlus className="h-4 w-4 mr-2" /> Can&apos;t find them? Quick-create a profile
             </Button>
           ) : (
@@ -168,11 +170,11 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Email</Label>
-                  <Input type="email" value={quickCreate.email} onChange={e => setQuickCreate(p => ({ ...p, email: e.target.value }))} />
+                  <Input {...INPUT_EMAIL} value={quickCreate.email} onChange={e => setQuickCreate(p => ({ ...p, email: e.target.value }))} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Phone</Label>
-                  <Input value={quickCreate.phone} onChange={e => setQuickCreate(p => ({ ...p, phone: e.target.value }))} />
+                  <Input {...INPUT_PHONE} value={quickCreate.phone} onChange={e => setQuickCreate(p => ({ ...p, phone: e.target.value }))} />
                 </div>
               </div>
               <div className="flex justify-end gap-2">

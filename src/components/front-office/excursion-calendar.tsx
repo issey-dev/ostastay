@@ -76,10 +76,14 @@ interface ExcursionCalendarProps {
 
 export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCalendarProps) {
   const isMobile = useIsMobile()
-  const [view, setView] = useState<ViewMode>("week")
+  const [viewState, setView] = useState<ViewMode>("week")
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [departures, setDepartures] = useState<Departure[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Phones always get today's agenda, stepping day by day (the Day/Week/Month toggle is
+  // hidden there — the agenda list is the only layout a phone gets). Desktop: unchanged.
+  const view: ViewMode = isMobile ? "day" : viewState
 
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getRange(view, anchorDate), [view, anchorDate])
 
@@ -179,7 +183,7 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
 
   const headerControls = (
     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-md:flex-wrap">
         <Button type="button" variant="outline" size="icon" onClick={goPrev} aria-label="Previous">
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -191,7 +195,7 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
         </Button>
         <span className="text-sm font-semibold text-foreground ml-2">{headerLabel}</span>
       </div>
-      <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+      <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium max-md:hidden">
         {(["day", "week", "month"] as const).map((v) => (
           <button
             key={v}

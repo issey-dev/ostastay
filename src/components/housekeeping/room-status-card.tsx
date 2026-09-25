@@ -108,7 +108,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
                   if (onEditMaintenance && activeTicket) onEditMaintenance(activeTicket);
                 }}
                 title={`${activeTicket?.status}: ${activeTicket?.description}${activeTicket?.assignedTo ? `\nAssigned to: ${activeTicket.assignedTo.firstName} ${activeTicket.assignedTo.lastName}` : ''}`} 
-                className={`transition-colors p-1 rounded-none flex items-center justify-center cursor-pointer
+                className={`transition-colors p-1 rounded-none flex items-center justify-center cursor-pointer pointer-coarse:min-h-11 pointer-coarse:min-w-11
                   ${activeTicket?.status === 'IN_PROGRESS'
                     ? 'text-warning bg-warning-muted hover:bg-warning/20'
                     : 'text-destructive bg-destructive-muted hover:bg-destructive/20'}
@@ -180,7 +180,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
                 e.stopPropagation()
                 if (onCompleteTask) onCompleteTask(task.id)
               }}
-              className="hover:bg-warning/20 rounded p-0.5 shrink-0 transition-colors"
+              className="hover:bg-warning/20 rounded p-0.5 shrink-0 transition-colors pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:flex pointer-coarse:items-center pointer-coarse:justify-center"
               title="Mark as completed"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -200,7 +200,7 @@ export function RoomStatusCard({ room, onStatusChange, isSelected, onToggleSelec
                   e.stopPropagation()
                   if (onCompleteTask) onCompleteTask(req.id)
                 }}
-                className="bg-background/20 hover:bg-background/30 text-background rounded p-0.5 shrink-0 transition-colors"
+                className="bg-background/20 hover:bg-background/30 text-background rounded p-0.5 shrink-0 transition-colors pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:flex pointer-coarse:items-center pointer-coarse:justify-center"
                 title="Mark as completed"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />

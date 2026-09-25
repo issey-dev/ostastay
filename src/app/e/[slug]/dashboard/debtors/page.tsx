@@ -57,7 +57,7 @@ export default function DebtorsPage() {
   useEffect(() => { fetchAccounts() }, [fetchAccounts])
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6 max-md:p-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">

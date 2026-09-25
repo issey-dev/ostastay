@@ -156,7 +156,7 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="shrink-0 text-destructive"
+                        className="min-h-11 shrink-0 px-3 text-destructive"
                         disabled={busyId === r.id}
                         onClick={() => terminate(r)}
                       >

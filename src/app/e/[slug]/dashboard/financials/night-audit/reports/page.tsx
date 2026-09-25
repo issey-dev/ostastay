@@ -94,7 +94,7 @@ export default function EodReportsPage() {
               options={dateOptions}
             />
           </div>
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => window.print()} disabled={!payload}>
+          <Button variant="outline" className="w-full sm:w-auto max-md:hidden" onClick={() => window.print()} disabled={!payload}>
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
         </div>

@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { MobileActions, type MobileAction } from "@/components/ui/mobile"
 
 // The desk's view of one spa appointment, and its lifecycle: check in → start → complete,
 // or no-show / cancel (SPA_PLAN.md §6/§9; server rules in src/lib/spa-lifecycle.ts). The
@@ -177,6 +178,22 @@ export function SpaAppointmentSheet({
   const status = appt?.appointmentStatus
   const heldOnline = status === "TENTATIVE" && appt?.source === "WEBSITE_API"
 
+  // Phones: a pinned footer with the ONE next lifecycle step as the primary button, the
+  // rest under More — the same handlers (and the same cancel / no-show forms) as desktop.
+  const nextStep =
+    status === "CONFIRMED" ? { label: "Check in", run: () => act("check-in", {}, "Checked in") }
+    : status === "CHECKED_IN" ? { label: "Start treatment", run: () => act("start", {}, "Treatment started") }
+    : status === "IN_TREATMENT" ? { label: "Complete", run: () => act("complete", {}, "Completed") }
+    : null
+  const phoneMore: MobileAction[] = [
+    ...(status === "CHECKED_IN" ? [{ label: "Complete", disabled: busy, onSelect: () => act("complete", {}, "Completed") }] : []),
+    ...(appt?.folioId ? [{ label: "Open bill", onSelect: () => onOpenBill(appt.folioId!) }] : []),
+    ...(status === "CONFIRMED" ? [{ label: "No-show", disabled: busy, destructive: true, onSelect: () => setMode("noshow") }] : []),
+    ...(status === "CONFIRMED" || status === "CHECKED_IN" || status === "IN_TREATMENT"
+      ? [{ label: "Cancel appointment", disabled: busy, destructive: true, onSelect: () => setMode("cancel") }]
+      : []),
+  ]
+
   return (
     <Sheet open={!!appointmentId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
@@ -268,7 +285,7 @@ export function SpaAppointmentSheet({
             )}
 
             {mode === "view" && (
-              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+              <div className="flex flex-wrap gap-2 border-t border-border pt-4 max-md:hidden">
                 {status === "CONFIRMED" && (
                   <Button size="sm" disabled={busy} onClick={() => act("check-in", {}, "Checked in")}>Check in</Button>
                 )}
@@ -362,6 +379,15 @@ export function SpaAppointmentSheet({
                 </form>
               </Form>
             )}
+          </div>
+        )}
+
+        {appt && !loading && mode === "view" && (nextStep || phoneMore.length > 0) && (
+          <div className="sticky bottom-0 mt-auto border-t border-border bg-popover px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+            <MobileActions
+              primary={nextStep ? <Button disabled={busy} onClick={nextStep.run}>{nextStep.label}</Button> : undefined}
+              more={phoneMore}
+            />
           </div>
         )}
       </SheetContent>

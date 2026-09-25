@@ -19,6 +19,8 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { InfoHint } from "@/components/ui/info-hint"
+import { MobileActionBar } from "@/components/ui/mobile"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type GuestResult = {
   reservationId: string
@@ -112,7 +114,12 @@ export default function SpaPage() {
   const { currentProperty } = useProperty()
 
   const { slug } = useParams<{ slug: string }>()
-  const [pageTab, setPageTab] = useState<"book" | "schedule" | "history">("book")
+  // Phones open on today's schedule (the desk's most common look-up); desktop keeps Book.
+  // Derived, not set in an effect: until someone picks a tab, the default follows the
+  // screen — and useIsMobile() is false on the first render, so desktop never changes.
+  const isMobile = useIsMobile()
+  const [pickedTab, setPageTab] = useState<"book" | "schedule" | "history" | null>(null)
+  const pageTab = pickedTab ?? (isMobile ? "schedule" : "book")
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
 
@@ -517,14 +524,14 @@ export default function SpaPage() {
               <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                 <button
                   type="button"
-                  className={`px-3 py-1.5 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "guest" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   onClick={() => handleModeChange("guest")}
                 >
                   Guest
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1.5 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  className={`px-3 py-1.5 max-md:min-h-10 max-md:px-4 pointer-coarse:min-h-10 pointer-coarse:px-4 ${mode === "walkin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   onClick={() => handleModeChange("walkin")}
                 >
                   Walk-in
@@ -545,7 +552,8 @@ export default function SpaPage() {
                 <>
                   <form onSubmit={handleSearch} className="flex gap-3">
                     <Input
-                      placeholder="Search by Room Number or Last Name..."
+                      placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                      enterKeyHint="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="flex-1"
@@ -729,7 +737,7 @@ export default function SpaPage() {
                                   key={g}
                                   type="button"
                                   disabled={!!slot.specificTherapistId}
-                                  className={`px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  className={`px-3 py-1.5 max-md:min-h-10 pointer-coarse:min-h-10 disabled:opacity-50 disabled:cursor-not-allowed ${
                                     slot.genderChoice === g && !slot.specificTherapistId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                                   }`}
                                   onClick={() => setSlotGender(i, g)}
@@ -768,7 +776,8 @@ export default function SpaPage() {
                 <>
                   <form onSubmit={handleSearch} className="flex gap-3">
                     <Input
-                      placeholder="Search by Room Number or Last Name..."
+                      placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                      enterKeyHint="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="flex-1"
@@ -875,7 +884,7 @@ export default function SpaPage() {
 
           {selectedTreatmentId && (
             <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!canBook ? "opacity-60" : "border-primary/30 shadow-md"}`}>
-              <form onSubmit={handleBook} className="space-y-4">
+              <form id="spa-book-form" onSubmit={handleBook} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Notes (optional)</Label>
                   <Input placeholder="e.g. Prefers firm pressure" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -891,7 +900,7 @@ export default function SpaPage() {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" disabled={booking || !canBook}>
+                <Button type="submit" className="w-full max-md:hidden" disabled={booking || !canBook}>
                   {booking ? "Booking..." : "Book Appointment"}
                 </Button>
               </form>
@@ -900,6 +909,15 @@ export default function SpaPage() {
         </div>
 
       </div>
+      {selectedTreatmentId && (
+        <MobileActionBar>
+          <Button type="submit" form="spa-book-form" className="h-11 flex-1 min-w-0 text-base" disabled={booking || !canBook}>
+            <span className="truncate">
+              {booking ? "Booking..." : `Book${selectedStartTime ? ` ${selectedStartTime}` : ""}${price !== null ? ` · ${currency} ${price.toFixed(2)}` : ""}`}
+            </span>
+          </Button>
+        </MobileActionBar>
+      )}
         </TabsContent>
 
         <TabsContent value="schedule" className="m-0">
@@ -912,6 +930,11 @@ export default function SpaPage() {
               />
             </div>
           )}
+          <MobileActionBar>
+            <Button className="h-11 flex-1" onClick={() => setPageTab("book")}>
+              <Sparkles className="w-4 h-4 mr-2" /> Book a treatment
+            </Button>
+          </MobileActionBar>
         </TabsContent>
 
         <TabsContent value="history" className="m-0">

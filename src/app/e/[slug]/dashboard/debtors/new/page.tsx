@@ -12,7 +12,7 @@ function DebtorAccountFormWrapper() {
 
 export default function NewDebtorAccountPage() {
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="container mx-auto p-4 md:p-8 max-md:p-0">
       <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
         <DebtorAccountFormWrapper />
       </Suspense>

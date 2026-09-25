@@ -2,15 +2,19 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Mobile polish (2026-09-25) — Phase 1 DONE, Phase 2 next
+## Mobile polish (2026-09-25) — ALL PHASES DONE
 
-See [MOBILE_PLAN.md](MOBILE_PLAN.md) (§7 tracks progress per phase). Found by the audit, affect desktop too (fixed in Phase 1):
+See [MOBILE_PLAN.md](MOBILE_PLAN.md) §7 (what shipped, follow-ups under "Left open"). Verify changes with `npm run mobile:audit`. Found by the audit, affect desktop too (fixed in Phase 1):
 - [x] Tape chart and availability grid start at the device date, not the business date
   (`tape-chart-grid.tsx:47`, `availability-grid.tsx:53/226`).
 - [x] Activity Log module filter shows the raw `__all__` value (`activity-log/page.tsx:99`).
 - [x] Permission-matrix page auto-prints ~800ms after load.
 - [x] `DateRangePicker` hard-codes `id="date"` (duplicate ids).
 - [ ] Group pickup dialog is not Zod + RHF (APP STANDARD 001).
+- [x] `tests/business-rules/group-block-edit.test.ts` hard-coded a group cutoff of 2026-09-25 and
+  started failing on that day (pickups refuse a past-cutoff block) — now a year from today.
+  [ ] The same file still books fixed 2026-10-01…05 dates; other tests may carry fixed dates too —
+  worth a sweep before they age out.
 
 ## Configuration guide + docs portal split (2026-09-24) — DONE, follow-ups open
 

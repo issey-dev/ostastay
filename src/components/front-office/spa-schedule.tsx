@@ -73,12 +73,16 @@ export function SpaSchedule({
   refreshKey?: number
 }) {
   const isMobile = useIsMobile()
-  const [view, setView] = useState<ViewMode>("week")
+  const [viewState, setView] = useState<ViewMode>("week")
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [therapists, setTherapists] = useState<Therapist[]>([])
   const [therapistId, setTherapistId] = useState<string>("") // "" = all
   const [appts, setAppts] = useState<SpaAppt[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Phones always get today's agenda, stepping day by day (the Day/Week/Month toggle is
+  // hidden there — the agenda list is the only layout a phone gets). Desktop: unchanged.
+  const view: ViewMode = isMobile ? "day" : viewState
 
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getRange(view, anchorDate), [view, anchorDate])
 
@@ -150,15 +154,15 @@ export function SpaSchedule({
 
   const headerControls = (
     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-md:flex-wrap">
         <Button type="button" variant="outline" size="icon" onClick={goPrev} aria-label="Previous"><ChevronLeft className="w-4 h-4" /></Button>
         <Button type="button" variant="outline" size="sm" onClick={goToday}>Today</Button>
         <Button type="button" variant="outline" size="icon" onClick={goNext} aria-label="Next"><ChevronRight className="w-4 h-4" /></Button>
         <span className="text-sm font-semibold text-foreground ml-2">{headerLabel}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-md:w-full">
         <Select value={therapistId || "all"} onValueChange={(v) => setTherapistId(v === "all" ? "" : (v ?? ""))}>
-          <SelectTrigger className="h-8 w-[180px]">
+          <SelectTrigger className="h-8 w-[180px] max-md:w-full">
             <SelectValue>{therapistId ? therapists.find((t) => t.id === therapistId)?.displayName : "All therapists"}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -166,7 +170,7 @@ export function SpaSchedule({
             {therapists.map((t) => <SelectItem key={t.id} value={t.id}>{t.displayName}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+        <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium max-md:hidden">
           {(["day", "week", "month"] as const).map((v) => (
             <button key={v} type="button" className={`px-3 py-1.5 capitalize ${view === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`} onClick={() => setView(v)}>{v}</button>
           ))}

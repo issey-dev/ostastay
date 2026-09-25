@@ -2,6 +2,7 @@
 
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 export type GridData = {
   nights: number
@@ -35,14 +36,16 @@ type LookToBookGridProps = {
   selectedRoomTypeId?: string
   selectedRatePlanId?: string
   onSelect: (roomTypeId: string, ratePlanId: string) => void
+  /** Extra classes on the wrapper — the booking form hides the grid on phones (cards there). */
+  className?: string
 }
 
 // The rate × room-type availability matrix ("Look-to-Book") — a pure display
 // component: what's on offer, what's sold out, what's selected. Selection state
 // and segment bookkeeping live in the parent form.
-export function LookToBookGrid({ gridData, visibleRatePlans, selectedRoomTypeId, selectedRatePlanId, onSelect }: LookToBookGridProps) {
+export function LookToBookGrid({ gridData, visibleRatePlans, selectedRoomTypeId, selectedRatePlanId, onSelect, className }: LookToBookGridProps) {
   return (
-    <div className="overflow-x-auto border rounded-md bg-card">
+    <div className={cn("overflow-x-auto border rounded-md bg-card", className)}>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/40">

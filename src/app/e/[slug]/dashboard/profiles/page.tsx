@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search, UserPlus, Pencil, Trash2, Star } from "@/components/icons"
+import { Search, UserPlus, Pencil, Trash2, Star, MoreHorizontal } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,10 @@ import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { CountryFlag } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { toast } from "@/lib/toast"
+import { ContactLink } from "@/components/ui/contact-link"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { INPUT_SEARCH } from "@/lib/input-presets"
 
 type Profile = {
   upid: string
@@ -73,6 +77,14 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
   TRAVEL_AGENT: "Travel Agent",
   STAFF: "Staff",
 }
+
+// Phone-only directory picker (the four tabs don't fit a phone's width).
+const PHONE_TABS = [
+  { value: "GUEST", label: "Guests", icon: Users },
+  { value: "COMPANY", label: "Corporate Accounts", icon: Building2 },
+  { value: "TRAVEL_AGENT", label: "Travel Agents", icon: Briefcase },
+  { value: "STAFF", label: "Staff", icon: UserCog },
+] as const
 
 export default function ProfilesDashboard() {
   const router = useRouter()
@@ -172,7 +184,31 @@ export default function ProfilesDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col">
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0 bg-transparent mb-6">
+        {/* Phones: the directory is a picker, not four tabs scrolling off the edge. */}
+        <div className="mb-2 md:hidden">
+          <Select value={activeTab} onValueChange={(v) => v && setActiveTab(v as string)}>
+            <SelectTrigger className="w-full" aria-label="Directory">
+              <SelectValue>
+                {(() => {
+                  const t = PHONE_TABS.find((x) => x.value === activeTab) ?? PHONE_TABS[0]
+                  return (
+                    <>
+                      <t.icon className="h-4 w-4" /> {t.label}
+                    </>
+                  )
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {PHONE_TABS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  <t.icon className="h-4 w-4" /> {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0 bg-transparent mb-6 max-md:hidden">
           <TabsTrigger
             value="GUEST"
             className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
@@ -211,7 +247,7 @@ export default function ProfilesDashboard() {
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                type="search"
+                {...INPUT_SEARCH}
                 placeholder="Search profiles..."
                 className="pl-9 bg-card"
                 value={search}
@@ -232,49 +268,77 @@ export default function ProfilesDashboard() {
             ) : profiles.length === 0 ? (
               <EmptyState icon={Users} title="No profiles found" />
             ) : (
-              profiles.map((p) => (
-                <div key={p.upid} className="p-4 flex items-start gap-3">
-                  <div
-                    className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 cursor-pointer ${AVATAR_COLOR}`}
-                    onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}
-                  >
-                    {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <span
-                        className="font-medium text-foreground truncate cursor-pointer hover:underline inline-flex items-center gap-1.5"
-                        onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}
-                      >
-                        {p.profileType === 'GUEST' || p.profileType === 'STAFF'
-                          ? `${p.firstName} ${p.lastName || ''}`.trim()
-                          : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
-                        {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
-                      </span>
-                      <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                        {label("CLASSIFICATION", p.classification)}
-                      </span>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {primaryEmail(p.communications) || "No email"} {primaryMobile(p.communications) ? `· ${primaryMobile(p.communications)}` : ""}
-                    </div>
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                      <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" className="text-primary" aria-label="Edit profile" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" className="text-destructive" aria-label="Delete profile" onClick={() => {
-                          setDeletingUpid(p.upid)
-                          setIsDeleteDialogOpen(true)
-                        }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+              profiles.map((p) => {
+                const open = () => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)
+                const email = primaryEmail(p.communications)
+                const mobile = primaryMobile(p.communications)
+                return (
+                  <div key={p.upid} className="p-4 flex items-start gap-3">
+                    <button
+                      type="button"
+                      aria-label="Open profile"
+                      className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}
+                      onClick={open}
+                    >
+                      {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          className="min-h-6 min-w-0 font-medium text-foreground text-left hover:underline inline-flex items-center gap-1.5"
+                          onClick={open}
+                        >
+                          <span className="truncate">
+                            {p.profileType === 'GUEST' || p.profileType === 'STAFF'
+                              ? `${p.firstName} ${p.lastName || ''}`.trim()
+                              : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
+                          </span>
+                          {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                        </button>
+                        {/* "Regular" is the default for nearly everyone — only flag the exceptions. */}
+                        {p.classification !== "REGULAR" && (
+                          <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border shrink-0 ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                            {label("CLASSIFICATION", p.classification)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-col items-start gap-1 text-sm text-muted-foreground">
+                        {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
+                        {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
+                      </div>
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                        <span className="text-xs text-muted-foreground">{p.totalStays || 0} stays · ${(p.totalRevenue || 0).toFixed(2)}</span>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon-sm" className="text-primary" aria-label="Edit profile" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-48">
+                              <DropdownMenuItem onClick={open}>
+                                <Users className="h-4 w-4" /> Open profile
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => {
+                                  setDeletingUpid(p.upid)
+                                  setIsDeleteDialogOpen(true)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete profile
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
 

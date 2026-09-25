@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 import { Key, Plus, Pencil, RefreshCw, Ban, Check, Bell } from "@/components/icons"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { WebsiteWebhooksDialog } from "@/components/hub/website-webhooks-dialog"
 
 type KeyRow = {
@@ -265,19 +266,26 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle>API keys</CardTitle>
-            <CardDescription>
+            <CardDescription className="max-md:hidden">
               One key per website. A key covers one property or all of them, and rooms, excursions and spa — the site can
               only see and book what its key allows. Only the first characters are kept here; the full key is shown
               once, when created.
             </CardDescription>
           </div>
           {canCreate && (
-            <Button onClick={openCreate} className="shrink-0 shadow-sm">
+            <Button onClick={openCreate} className="shrink-0 shadow-sm max-md:hidden">
               <Plus className="mr-2 h-4 w-4" /> New key
             </Button>
           )}
         </CardHeader>
         <CardContent>
+          {(canCreate || canManage) && (
+            <DesktopOnlyNotice
+              className="mb-4"
+              feature="Key setup"
+              description="Create, edit or rotate keys and manage webhooks on a tablet or computer. Revoking a key works here."
+            />
+          )}
           {loading ? (
             <div className="space-y-2">
               {Array.from({ length: 2 }).map((_, i) => (
@@ -311,27 +319,12 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                     <div className="text-xs text-muted-foreground">
                       Last used {formatDateTime(r.lastUsedAt)} · {r.bookingCount} booking{r.bookingCount === 1 ? "" : "s"}
                     </div>
-                    {r.status === "ACTIVE" && (canManage || canRevoke) && (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {canManage && (
-                          <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(r)}>
-                            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => setWebhooksFor(r)}>
-                          <Bell className="mr-1.5 h-3.5 w-3.5" /> Webhooks
-                        </Button>
-                        {canManage && (
-                          <Button variant="outline" size="sm" className="h-9 flex-1" disabled={busyId === r.id} onClick={() => rotate(r)}>
-                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Rotate
-                          </Button>
-                        )}
-                        {canRevoke && (
-                          <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" disabled={busyId === r.id} onClick={() => revoke(r)}>
-                            <Ban className="mr-1.5 h-3.5 w-3.5" /> Revoke
-                          </Button>
-                        )}
-                      </div>
+                    {/* Phones: only the urgent action — revoking a leaked key. Edit, rotate and
+                        webhooks are set up on a larger screen (notice above the list). */}
+                    {r.status === "ACTIVE" && canRevoke && (
+                      <Button variant="outline" className="min-h-11 w-full text-destructive hover:text-destructive" disabled={busyId === r.id} onClick={() => revoke(r)}>
+                        <Ban className="mr-1.5 h-4 w-4" /> Revoke key
+                      </Button>
                     )}
                   </div>
                 ))}

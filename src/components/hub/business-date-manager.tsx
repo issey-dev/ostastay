@@ -83,11 +83,11 @@ export function BusinessDateManager({ propertyId, current, canChange }: { proper
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-4 py-3">
+      <div className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 max-sm:py-4">
         <CalendarDays className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div>
           <p className="text-xs text-muted-foreground">Current business date</p>
-          <p className="text-base font-semibold">{pretty(current)}</p>
+          <p className="text-base font-semibold max-sm:text-xl">{pretty(current)}</p>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export function BusinessDateManager({ propertyId, current, canChange }: { proper
               </div>
             ) : null}
 
-            <Button type="submit" disabled={!assessment?.allowed || form.formState.isSubmitting}>
+            <Button type="submit" className="max-sm:w-full" disabled={!assessment?.allowed || form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Changing…" : "Change business date"}
             </Button>
           </form>

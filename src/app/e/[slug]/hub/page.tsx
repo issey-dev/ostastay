@@ -56,7 +56,7 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
           <CardContent>
             <ul className="divide-y divide-border">
               {channels.map((c) => (
-                <li key={c.propertyId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <li key={c.propertyId} className="flex items-center justify-between gap-3 py-2 text-sm max-sm:min-h-11">
                   <Link href={c.href} className="font-medium hover:underline">{c.propertyName}</Link>
                   <ChannelBadge status={c.status} />
                 </li>
@@ -92,7 +92,7 @@ function Banner({ banner }: { banner: OverviewBanner }) {
       {banner.href && banner.actionLabel && (
         <Link
           href={banner.href}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted sm:self-center"
+          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted sm:self-center max-sm:min-h-11 max-sm:self-stretch max-sm:justify-center"
         >
           {banner.actionLabel}
           <ArrowRight className="h-3.5 w-3.5" />

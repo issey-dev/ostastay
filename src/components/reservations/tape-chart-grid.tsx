@@ -301,6 +301,8 @@ export function TapeChartGrid() {
           isLoading={isLoading}
           onSelectReservation={setSelectedReservation}
           onNavigate={(direction) => setStartDate(d => addDays(d, direction * 7))}
+          today={business.ready ? business.today : undefined}
+          onJumpTo={(d) => setStartDate(startOfDay(d))}
         />
         {detailsModal}
       </>

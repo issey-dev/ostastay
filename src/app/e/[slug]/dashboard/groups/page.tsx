@@ -44,7 +44,7 @@ export default function GroupsDashboard() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:mb-5">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
             Groups & Allotments
@@ -52,7 +52,7 @@ export default function GroupsDashboard() {
           </h2>
         </div>
         <Link href={`/e/${slug}/dashboard/groups/new`}>
-          <Button className="flex items-center gap-2">
+          <Button className="flex items-center gap-2 max-md:w-full">
             <Plus className="w-4 h-4" />
             New Group Block
           </Button>

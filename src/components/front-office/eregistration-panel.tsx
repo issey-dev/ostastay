@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,8 @@ import { toast } from "@/lib/toast"
 
 type Slot = { id: string; slotIndex: number; isPrimary: boolean; existingProfileId: string | null; status: string; firstName: string | null; lastName: string | null }
 type LinkStatus = { id: string; status: string; expiresAt: string } | null
+
+const noopSubscribe = () => () => {}
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active", EXPIRED: "Expired", REVOKED: "Revoked", COMPLETED: "Completed",
@@ -36,6 +38,13 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
   const [busy, setBusy] = useState<string | null>(null)
   const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false)
   const [reopenSelection, setReopenSelection] = useState<Set<string>>(new Set())
+  // Web Share (phones): hand the link straight to WhatsApp / SMS / mail. False on the
+  // server so SSR and hydration agree; the button itself is md:hidden.
+  const canShare = useSyncExternalStore(
+    noopSubscribe,
+    () => typeof navigator.share === "function",
+    () => false
+  )
 
   const refetch = useCallback(() => {
     setLoading(true)
@@ -146,6 +155,20 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
     toast.success("Link copied")
   }
 
+  const shareLink = async () => {
+    if (!sessionUrl) return
+    try {
+      await navigator.share({
+        title: "Online registration",
+        text: "Please complete your registration details before arrival:",
+        url: sessionUrl,
+      })
+    } catch (e) {
+      // The guest-picker sheet was dismissed — nothing to do. Anything else: copy instead.
+      if ((e as Error)?.name !== "AbortError") await copyLink()
+    }
+  }
+
   const sendEmail = async () => {
     if (!sessionToken) return
     setBusy("email")
@@ -197,6 +220,11 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
               <div className="space-y-2.5 rounded-lg border bg-muted/40 p-3">
                 <code className="block break-all text-xs leading-relaxed text-muted-foreground">{sessionUrl}</code>
                 <div className="flex flex-wrap gap-2">
+                  {canShare && (
+                    <Button size="sm" className="md:hidden max-sm:w-full" onClick={shareLink}>
+                      <Send className="h-3.5 w-3.5 mr-1.5" /> Share link
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy Link</Button>
                   <Button size="sm" variant="outline" onClick={sendEmail} disabled={busy === "email"}>
                     {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send via Email
@@ -213,7 +241,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
             {slots.length > 0 && (
               <div className="space-y-2 border-t pt-3">
                 {slots.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between text-sm">
+                  <div key={s.id} className="flex items-center justify-between text-sm max-sm:flex-wrap max-sm:gap-1.5">
                     <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}{s.isPrimary && <Badge variant="outline" className="ml-2 text-[10px] uppercase">Lead</Badge>}</span>
                     <div className="flex items-center gap-2">
                       {s.status === "APPLIED" ? (

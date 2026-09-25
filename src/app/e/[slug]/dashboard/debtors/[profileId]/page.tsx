@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { INPUT_MONEY } from "@/lib/input-presets"
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 const dateStr = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—")
@@ -113,7 +114,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
   const accountName = profile.companyName || [profile.firstName, profile.lastName].filter(Boolean).join(" ")
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6 max-md:p-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link href={`/e/${slug}/dashboard/debtors`} className="shrink-0">
@@ -135,7 +136,29 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      {/* Phones: balance and aging in one compact card instead of six stacked tiles. */}
+      <Card className="md:hidden">
+        <CardContent className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Outstanding Balance</p>
+            <div className={`text-2xl font-bold flex items-center gap-2 ${overLimit ? "text-destructive" : ""}`}>
+              {overLimit && <AlertTriangle className="w-5 h-5" />}
+              {money(balance)}
+            </div>
+            {overLimit && <p className="text-xs text-destructive mt-1">Over credit limit</p>}
+          </div>
+          <div className="divide-y divide-border border-t border-border">
+            {(["current", "1-30", "31-60", "61-90", "90+"] as const).map((bucket) => (
+              <div key={bucket} className="flex items-center justify-between py-1.5 text-sm">
+                <span className="text-muted-foreground">{bucket === "current" ? "Current" : `${bucket} days`}</span>
+                <span className={`font-mono ${aging[bucket] ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{money(aging[bucket])}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="hidden md:grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="col-span-2 md:col-span-2">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground font-medium">Outstanding Balance</CardTitle></CardHeader>
           <CardContent>
@@ -251,7 +274,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="grid gap-2">
               <Label>Amount</Label>
-              <Input type="number" step="0.01" min="0.01" value={payForm.amount} onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))} />
+              <Input {...INPUT_MONEY} type="number" step="0.01" min="0.01" value={payForm.amount} onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))} />
             </div>
             <div className="grid gap-2">
               <Label>Reference (optional)</Label>

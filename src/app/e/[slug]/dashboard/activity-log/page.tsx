@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
-import { History, Search } from "@/components/icons"
+import { History, Search, Settings2 } from "@/components/icons"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { INPUT_SEARCH } from "@/lib/input-presets"
 import { InfoHint } from "@/components/ui/info-hint"
 import { MODULES, MODULE_LABELS } from "@/lib/modules"
 
@@ -36,6 +38,17 @@ const FILTER_MODULES: { value: string; label: string }[] = [
   ...MODULES.map((m) => ({ value: m, label: MODULE_LABELS[m] })),
 ]
 
+const moduleLabel = (m: string) => (m === "AUTH" ? "Authentication" : (MODULE_LABELS as Record<string, string>)[m] ?? m)
+
+const formatWhen = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
 const ACTION_BADGE_CLASS: Record<string, string> = {
   DELETE: "border-destructive text-destructive",
   VOID: "border-destructive text-destructive",
@@ -55,6 +68,8 @@ export default function ActivityLogPage() {
   const [moduleFilter, setModuleFilter] = useState<string>(ALL)
   const [actionFilter, setActionFilter] = useState("")
   const [search, setSearch] = useState("")
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const activeFilterCount = (moduleFilter !== ALL ? 1 : 0) + (actionFilter.trim() ? 1 : 0)
 
   const fetchEntries = useCallback(
     async (offset: number, replace: boolean) => {
@@ -84,7 +99,7 @@ export default function ActivityLogPage() {
   }, [fetchEntries])
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6 max-md:p-0">
       <div
         className={cn("space-y-1", accentColor && "border-l-4 pl-4")}
         style={accentColor ? { borderLeftColor: accentColor } : undefined}
@@ -95,7 +110,66 @@ export default function ActivityLogPage() {
           </h2>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Phones: search inline, module/action filters in a bottom sheet. */}
+      <div className="flex items-center gap-2 md:hidden">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            {...INPUT_SEARCH}
+            className="w-full pl-8"
+            placeholder="Search descriptions..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger
+            render={
+              <Button variant="outline" className="shrink-0">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            }
+          />
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filter activity</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col gap-4 p-4">
+              <Select value={moduleFilter} onValueChange={(v) => setModuleFilter(v ?? ALL)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All modules">
+                    {(v) => (v === ALL ? "All modules" : FILTER_MODULES.find((m) => m.value === v)?.label ?? String(v))}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All modules</SelectItem>
+                  {FILTER_MODULES.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                className="w-full"
+                placeholder="Action (e.g. DELETE)"
+                autoCapitalize="characters"
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+              />
+              <Button onClick={() => setFiltersOpen(false)}>Show {total} entr{total === 1 ? "y" : "ies"}</Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      <div className="hidden md:flex flex-wrap items-center gap-3">
         <Select value={moduleFilter} onValueChange={(v) => setModuleFilter(v ?? ALL)}>
           <SelectTrigger className="w-48">
             {/* Select.Value shows the raw VALUE unless given a formatter — the "all" option
@@ -133,7 +207,44 @@ export default function ActivityLogPage() {
         </span>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
+      {/* Phones: one card per entry — what happened first, then who · where · when. */}
+      <div className="space-y-2 md:hidden">
+        <p className="text-xs text-muted-foreground">
+          {total} entr{total === 1 ? "y" : "ies"}
+        </p>
+        {loading && entries.length === 0 ? (
+          Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+        ) : loadError ? (
+          <ErrorState title="Couldn't load activity" onRetry={() => fetchEntries(0, true)} />
+        ) : entries.length === 0 ? (
+          <EmptyState icon={History} title="No activity recorded yet" className="py-10" />
+        ) : (
+          entries.map((e) => (
+            <div key={e.id} className="rounded-xl border border-border bg-card p-3">
+              <p className="text-sm text-foreground break-words">{e.description}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{e.userName ?? e.userEmail ?? "—"}</span>
+                {e.isSupport && (
+                  <Badge variant="outline" className="text-xs border-warning text-warning">
+                    Osta Support
+                  </Badge>
+                )}
+                <span aria-hidden>·</span>
+                <span>{moduleLabel(e.module)}</span>
+                <span aria-hidden>·</span>
+                <Badge variant="outline" className={cn("text-[10px]", ACTION_BADGE_CLASS[e.action])}>
+                  {e.action}
+                </Badge>
+                {/* Right-aligned rather than after a "·": when it wraps it starts its own line
+                    instead of leaving a dangling separator. */}
+                <span className="ml-auto whitespace-nowrap">{formatWhen(e.createdAt)}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden md:block bg-card rounded-xl border shadow-sm overflow-x-auto">
         <Table>
           <TableHeader className="bg-muted">
             <TableRow>

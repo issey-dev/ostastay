@@ -18,6 +18,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
 import { EregistrationReviewDialog } from "@/components/front-office/eregistration-review-dialog"
 import { Key, BedDouble, Contact, ReceiptText, CheckCircle2, AlertTriangle, Printer, Send } from "@/components/icons"
+import { INPUT_MONEY } from "@/lib/input-presets"
 
 type WizardProps = {
   reservationId: string | null
@@ -336,8 +337,13 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
           <DialogDescription>{reservation ? profName(reservation.primaryGuest) : ""}</DialogDescription>
         </DialogHeader>
 
-        {/* Stepper */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        {/* Stepper — on a phone just "Step 2 of 4 · Identification". */}
+        {stepIndex >= 0 && (
+          <p className="text-xs font-medium text-muted-foreground sm:hidden">
+            Step {stepIndex + 1} of {stepList.length} · <span className="text-primary">{stepList[stepIndex].label}</span>
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs max-sm:hidden">
           {stepList.map((s, i) => (
             <div key={s.key} className={`flex items-center gap-1.5 px-2 py-1 rounded ${i === stepIndex ? "bg-primary/10 text-primary font-medium" : i < stepIndex ? "text-success" : "text-muted-foreground"}`}>
               <s.icon className="w-3.5 h-3.5" /> {s.label}
@@ -403,7 +409,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   </div>
 
                   {eregSlot && (
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
                       <p className="text-sm flex items-center gap-1.5"><Send className="w-4 h-4" /> This guest completed eRegistration{eregSlot.submittedAt ? ` on ${new Date(eregSlot.submittedAt).toLocaleDateString()}` : ""}.</p>
                       <Button size="sm" onClick={() => setReviewSlot(eregSlot)}>Review &amp; Apply</Button>
                     </div>
@@ -415,7 +421,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                     <p className="text-sm text-warning flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Missing: {status.missing.join(", ")}. You can complete it now or skip (not enforced).</p>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Date of Birth</Label>
                       <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => updateGuestBasics(upid, { dateOfBirth: v ?? null })} />
@@ -517,7 +523,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                 <Form {...paymentForm}>
                   <div className="space-y-2">
                     <Label className="text-xs">Collect a payment now (optional)</Label>
-                    <div className="grid grid-cols-3 gap-2 items-start">
+                    <div className="grid grid-cols-3 gap-2 items-start max-sm:grid-cols-1">
                       <FormField control={paymentForm.control} name="methodId" render={({ field }) => (
                         <FormItem>
                           <FormControl>
@@ -529,7 +535,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                       <FormField control={paymentForm.control} name="amount" render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <Input type="number" min="0" step="0.01" placeholder="Amount" {...field} />
+                            <Input {...INPUT_MONEY} type="number" min="0" step="0.01" placeholder="Amount" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -551,7 +557,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
           </div>
         )}
 
-        <DialogFooter className="flex items-center justify-between sm:justify-between">
+        <DialogFooter className="flex items-center justify-between max-sm:flex-row max-sm:flex-wrap sm:justify-between">
           <div>
             {stepIndex > 0 && step !== "confirm" && guestIdx === 0 && <Button variant="ghost" onClick={goPrevStep}>Back</Button>}
             {(step === "identification" || step === "regcard") && guestIdx > 0 && <Button variant="ghost" onClick={() => setGuestIdx((i) => i - 1)}>Previous guest</Button>}

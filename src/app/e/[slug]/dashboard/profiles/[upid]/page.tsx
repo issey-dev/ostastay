@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSmartBack } from "@/lib/use-smart-back"
-import { ArrowLeft, Pencil, ExternalLink, Star, CalendarDays, History as HistoryIcon, UserX } from "@/components/icons"
+import { ArrowLeft, Pencil, ExternalLink, Star, CalendarDays, History as HistoryIcon, UserX, ChevronLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -16,6 +16,8 @@ import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { CountryFlag, CountryLabel } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
+import { ContactLink } from "@/components/ui/contact-link"
+import { cn } from "@/lib/utils"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel Agent", STAFF: "Staff",
@@ -49,6 +51,25 @@ function Field({ label, value, className }: { label: string; value?: React.React
   )
 }
 
+/** Phones only: the show/hide control for a secondary section (desktop never renders it). */
+function PhoneToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={`${open ? "Hide" : "Show"} ${label}`}
+      className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md text-xs font-medium text-muted-foreground md:hidden"
+    >
+      {open ? "Hide" : "Show"}
+      <ChevronLeft className={cn("h-4 w-4 transition-transform", open ? "-rotate-90" : "rotate-180")} />
+    </button>
+  )
+}
+
+// Secondary sections a phone starts folded (see .agents/docs/MOBILE_PLAN.md §3).
+const PHONE_FOLDED = ["communications", "address", "identification", "negotiated-rates", "attachments", "profile-status", "billing-finance", "marketing-compliance"]
+
 export default function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
   const { upid } = use(params)
   const router = useRouter()
@@ -61,6 +82,8 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   const [loading, setLoading] = useState(true)
   const [stayHistory, setStayHistory] = useState<{ future: StayRecord[]; history: StayRecord[]; visitsToProperty: number | null } | null>(null)
   const [historyLoading, setHistoryLoading] = useState(true)
+  // Phones only: which secondary sections are unfolded. Desktop ignores this entirely.
+  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({})
   const [negotiatedRates, setNegotiatedRates] = useState<{ available: { id: string; name: string; code: string; propertyName: string }[]; links: { ratePlanId: string; commissionRate: number | null }[] } | null>(null)
 
   useEffect(() => {
@@ -105,6 +128,15 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
     ? profile.companyName || `${profile.firstName} ${profile.lastName ?? ""}`.trim()
     : [profile.title, profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ")
 
+  const folded = (id: string) => PHONE_FOLDED.includes(id) && !unfolded[id]
+  const toggle = (id: string) => setUnfolded((u) => ({ ...u, [id]: folded(id) }))
+  /** Classes for a foldable card's content on phones. */
+  const foldClass = (id: string) => (folded(id) ? "max-md:hidden" : undefined)
+  const foldCard = (id: string) => (folded(id) ? "max-md:pb-0" : undefined)
+  const phoneEmail = primaryEmail(profile.communications)
+  const phoneMobile = primaryMobile(profile.communications)
+  const nextStay = stayHistory?.future?.[0]
+
   const dietary = (profile.preferences ?? []).filter((p: any) => p.category === "DIETARY")
   const preferences = (profile.preferences ?? []).filter((p: any) => p.category === "PREFERENCE")
 
@@ -139,14 +171,14 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   return (
     <div className="max-w-7xl w-full mx-auto p-4 flex flex-col gap-4 pb-12">
       {/* Header — mirrors the Edit form's sticky header */}
-      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back" className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold tracking-tight">{displayName || "Unnamed profile"}</h2>
+              <h2 className="text-2xl font-bold tracking-tight max-sm:text-xl max-sm:break-words">{displayName || "Unnamed profile"}</h2>
               <Badge variant="outline">{PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType}</Badge>
               <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[profile.classification] || "bg-muted text-foreground"}`}>
                 {label("CLASSIFICATION", profile.classification)}
@@ -157,7 +189,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                 </span>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground max-md:hidden">
               {primaryEmail(profile.communications) || "No email"} {primaryMobile(profile.communications) ? `· ${primaryMobile(profile.communications)}` : ""}
             </p>
           </div>
@@ -165,6 +197,42 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
         <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${upid}/edit`)}>
           <Pencil className="mr-2 h-4 w-4" /> Edit
         </Button>
+      </div>
+
+      {/* Phones: the reasons someone opens a profile on the go — call, email, and the
+          next stay — first, as big tap targets. */}
+      <div className="md:hidden rounded-2xl bg-card p-2 shadow-elevation-1 ring-1 ring-foreground/5">
+        {phoneMobile || phoneEmail ? (
+          <div className="divide-y divide-border">
+            {phoneMobile && (
+              <ContactLink type="phone" value={phoneMobile} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
+            )}
+            {phoneEmail && (
+              <ContactLink type="email" value={phoneEmail} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
+            )}
+          </div>
+        ) : (
+          <p className="px-2 py-3 text-sm text-muted-foreground italic">No phone or email on file.</p>
+        )}
+        {nextStay && (
+          <button
+            type="button"
+            onClick={() => router.push(`/e/${slug}/dashboard/reservations/${nextStay.id}`)}
+            className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left"
+          >
+            <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs text-muted-foreground">
+                {nextStay.status === "CHECKED_IN" ? "In house" : "Next stay"} · {nextStay.confirmationNo}
+              </span>
+              <span className="block truncate text-sm font-medium">
+                {new Date(nextStay.checkInDate).toLocaleDateString()} – {new Date(nextStay.checkOutDate).toLocaleDateString()}
+                {nextStay.roomTypes.length > 0 && <> · {nextStay.roomTypes.join(", ")}</>}
+              </span>
+            </span>
+            <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground" />
+          </button>
+        )}
       </div>
 
       <Tabs defaultValue="overview">
@@ -191,7 +259,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                   {isB2B ? (
                     <Field label="Company / Agency Name" value={profile.companyName} />
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 max-md:grid-cols-2">
                       <Field className="md:col-span-1" label="Title" value={label("TITLE", profile.title)} />
                       <Field className="md:col-span-2" label="First Name" value={profile.firstName} />
                       <Field className="md:col-span-1" label="Middle" value={profile.middleName} />
@@ -204,20 +272,24 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               </Card>
 
               {/* Section: Communications */}
-              <Card id="communications">
+              <Card id="communications" className={foldCard("communications")}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
             Communications
             <InfoHint label="Communications">Email, mobile, and social contact methods — one may be marked primary.</InfoHint>
+            <PhoneToggle open={!folded("communications")} onToggle={() => toggle("communications")} label="Communications" />
           </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className={cn("space-y-2", foldClass("communications"))}>
                   {(profile.communications ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">None on file.</p>
                   ) : profile.communications.map((c: any) => (
                     <div key={c.id} className="flex items-center gap-2 text-sm rounded-md border px-3 py-2">
                       <Badge variant="outline" className="text-xs">{c.type}</Badge>
-                      <span className="font-medium">{c.value}</span>
+                      <span className={cn("font-medium", (c.type === "EMAIL" || c.type === "MOBILE") && "max-md:hidden")}>{c.value}</span>
+                      {(c.type === "EMAIL" || c.type === "MOBILE") && (
+                        <ContactLink type={c.type === "EMAIL" ? "email" : "phone"} value={c.value} className="min-w-0 font-medium md:hidden" />
+                      )}
                       {c.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
                     </div>
                   ))}
@@ -225,14 +297,15 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               </Card>
 
               {/* Section: Address */}
-              <Card id="address">
+              <Card id="address" className={foldCard("address")}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
             Address
             <InfoHint label="Address">Home, business, or billing addresses — one may be marked primary.</InfoHint>
+            <PhoneToggle open={!folded("address")} onToggle={() => toggle("address")} label="Address" />
           </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className={cn("space-y-2", foldClass("address"))}>
                   {(profile.addresses ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">None on file.</p>
                   ) : profile.addresses.map((a: any) => (
@@ -254,14 +327,15 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               {/* Section: Identification (Guest/Staff only) — Birthdate/Nationality live
                   here too, matching the Edit form's card boundary exactly. */}
               {isIndividual && (
-                <Card id="identification">
+                <Card id="identification" className={foldCard("identification")}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
             Identification
             <InfoHint label="Identification">Passport or National ID documents — one may be marked primary.</InfoHint>
+            <PhoneToggle open={!folded("identification")} onToggle={() => toggle("identification")} label="Identification" />
           </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-6">
+                  <CardContent className={cn("space-y-6", foldClass("identification"))}>
                     <div className="space-y-2">
                       {(profile.documents ?? []).length === 0 ? (
                         <p className="text-sm text-muted-foreground italic">No identification documents on file.</p>
@@ -278,7 +352,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                         </div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border max-md:grid-cols-2">
                       <Field label="Birthdate" value={profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : undefined} />
                       <Field
                         label="Nationality"
@@ -299,7 +373,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
           </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-md:grid-cols-2">
                       <Field label="Anniversary" value={profile.anniversaryDate ? new Date(profile.anniversaryDate).toLocaleDateString() : undefined} />
                       <Field label="VIP Level" value={label("VIP_LEVEL", profile.vipLevel)} />
                     </div>
@@ -344,14 +418,15 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
 
               {/* Section: Negotiated Rates (Company/Travel Agent only) */}
               {isB2B && (
-                <Card id="negotiated-rates">
+                <Card id="negotiated-rates" className={foldCard("negotiated-rates")}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
             Negotiated Rates
             <InfoHint label="Negotiated Rates">Which negotiated Rate Plans this account can book with — restricted to bookings made through this profile.</InfoHint>
+            <PhoneToggle open={!folded("negotiated-rates")} onToggle={() => toggle("negotiated-rates")} label="Negotiated Rates" />
           </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className={foldClass("negotiated-rates")}>
                     {!negotiatedRates || negotiatedRates.links.length === 0 ? (
                       <p className="text-sm text-muted-foreground italic">No negotiated rate plans linked.</p>
                     ) : (
@@ -373,14 +448,15 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               )}
 
               {/* Section: Attachments */}
-              <Card id="attachments">
+              <Card id="attachments" className={foldCard("attachments")}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
             Attachments
             <InfoHint label="Attachments">Linked files (label + URL) — passport scans, signed contracts, etc.</InfoHint>
+            <PhoneToggle open={!folded("attachments")} onToggle={() => toggle("attachments")} label="Attachments" />
           </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1.5">
+                <CardContent className={cn("space-y-1.5", foldClass("attachments"))}>
                   {(profile.attachments ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">No attachments linked yet.</p>
                   ) : profile.attachments.map((a: any) => (
@@ -417,13 +493,18 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
             <div className="flex flex-col gap-6">
 
               {/* Section: Profile Settings */}
-              <Card id="profile-status" className="bg-muted/50">
+              <Card id="profile-status" className={cn("bg-muted/50", foldCard("profile-status"))}>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Profile Settings</CardTitle>
+                  <CardTitle className="text-lg max-md:flex max-md:items-center">
+                    Profile Settings
+                    <PhoneToggle open={!folded("profile-status")} onToggle={() => toggle("profile-status")} label="Profile Settings" />
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={cn("space-y-4", foldClass("profile-status"))}>
+                  <div className="space-y-4 max-md:grid max-md:grid-cols-2 max-md:gap-4 max-md:space-y-0">
                   <Field label="Profile Type" value={PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType} />
                   <Field label="Classification" value={label("CLASSIFICATION", profile.classification)} />
+                  </div>
                   {profile.originProperty && (
                     <p className="text-xs text-muted-foreground pt-2 border-t border-border">
                       Originated at <span className="font-medium text-foreground">{profile.originProperty.name}</span>
@@ -433,11 +514,14 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               </Card>
 
               {/* Section: Finance & Billing (AR) */}
-              <Card id="billing-finance">
+              <Card id="billing-finance" className={foldCard("billing-finance")}>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Finance & Billing</CardTitle>
+                  <CardTitle className="text-lg max-md:flex max-md:items-center">
+                    Finance & Billing
+                    <PhoneToggle open={!folded("billing-finance")} onToggle={() => toggle("billing-finance")} label="Finance and Billing" />
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={cn("space-y-4", foldClass("billing-finance"))}>
                   <Field label="AR Number (Accounts Rec.)" value={profile.arNumber} />
                   <Field label="Credit Limit" value={profile.creditLimit != null ? `$${profile.creditLimit.toFixed(2)}` : undefined} />
                   {isB2B && (
@@ -453,11 +537,14 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
               </Card>
 
               {/* Section: Marketing & Compliance */}
-              <Card id="marketing-compliance">
+              <Card id="marketing-compliance" className={foldCard("marketing-compliance")}>
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Marketing & Compliance</CardTitle>
+                  <CardTitle className="text-lg max-md:flex max-md:items-center">
+                    Marketing & Compliance
+                    <PhoneToggle open={!folded("marketing-compliance")} onToggle={() => toggle("marketing-compliance")} label="Marketing and Compliance" />
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className={cn("space-y-4", foldClass("marketing-compliance"))}>
                   {profile.photoUrl && (
                     <Field label="Photo / Logo URL" value={
                       <a href={profile.photoUrl} target="_blank" rel="noopener noreferrer" className="text-info hover:underline inline-flex items-center gap-1">
@@ -465,7 +552,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                       </a>
                     } />
                   )}
-                  <div className="flex flex-col gap-3 pt-2 border-t border-border">
+                  <div className="flex flex-col gap-3 pt-2 border-t border-border max-md:grid max-md:grid-cols-2">
                     <Field label="Mail List (Marketing)" value={profile.marketingOptIn ? "Yes" : "No"} />
                     <Field label="Green Tax Exempt" value={profile.greenTaxExempt ? "Yes" : "No"} />
                     <Field label="Incognito Mode" value={profile.isIncognito ? "Yes" : "No"} />

@@ -130,7 +130,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   // hole instead of lifting off the surface. --background is below --card in both modes,
   // so the card lifts either way.
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 max-md:min-h-dvh">
       <div className="w-full max-w-md">
         {/* Whose name leads here depends on the door you came through. On a tenant's own
             login (/e/[slug]/login) the enterprise name is the headline and Uppsolut steps
@@ -262,7 +262,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     required
-                    className="pr-10"
+                    className="pr-10 max-md:pr-12 pointer-coarse:pr-12"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -270,7 +270,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute inset-y-0 right-0 flex w-10 cursor-pointer items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute inset-y-0 right-0 flex w-10 max-md:w-11 pointer-coarse:w-11 cursor-pointer items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>

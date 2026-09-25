@@ -90,7 +90,9 @@ export function RollForwardDialog({
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      {/* Phones: a rare supervisor action over a date range — desktop only (the End of Day
+          page says so in its notice). */}
+      <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => setOpen(true)}>
         <CalendarClock className="w-4 h-4 mr-2" /> Roll forward
       </Button>
 

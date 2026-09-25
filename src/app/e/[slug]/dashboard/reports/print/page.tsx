@@ -31,6 +31,11 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
   const orientation = reportIsLandscape(run.result) ? "landscape" : "portrait"
   return (
     <div className="min-h-screen bg-white p-6 print:p-0">
+      {/* Phones only, never in the printed/PDF output. */}
+      <p className="mb-4 rounded-xl border border-dashed border-border bg-muted/40 p-3 text-sm text-[var(--print-muted)] md:hidden print:hidden">
+        <span className="font-medium text-[var(--print-ink)]">Print from a computer.</span> This report is laid out
+        for A4 paper; on a phone, download the PDF from the Reports page instead.
+      </p>
       <div className={`mx-auto ${orientation === "landscape" ? "max-w-[1100px]" : "max-w-[800px]"}`}>
         <ReportDocument result={run.result} branding={run.branding} />
       </div>

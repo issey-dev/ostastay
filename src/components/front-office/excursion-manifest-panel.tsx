@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { MobileActions } from "@/components/ui/mobile"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -222,7 +223,7 @@ export function ExcursionManifestPanel({
                       )}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-col gap-2 shrink-0 max-md:hidden">
                     <Button size="sm" variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
                       <Printer className="w-4 h-4 mr-2" /> Print Manifest
                     </Button>
@@ -295,10 +296,10 @@ export function ExcursionManifestPanel({
                           </span>
                           {b.status === "CONFIRMED" && (
                             <div className="flex gap-1">
-                              <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
+                              <Button size="sm" variant="ghost" className="text-muted-foreground pointer-coarse:min-w-11" aria-label="Mark no-show" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
                                 <UserX className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
+                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive pointer-coarse:min-w-11" aria-label="Cancel booking" onClick={() => setCancelling(b)}>
                                 <XCircle className="w-4 h-4" />
                               </Button>
                             </div>
@@ -355,6 +356,28 @@ export function ExcursionManifestPanel({
               </>
             )}
           </div>
+
+          {/* Phones: the departure's main action pinned at the bottom of the panel —
+              move guests after a cancellation, otherwise the manifest PDF; cancelling the
+              whole departure sits under More (it still asks for a reason). */}
+          {manifest && !loading && (
+            <div className="sticky bottom-0 mt-auto border-t border-border bg-popover px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+              <MobileActions
+                primary={
+                  cascadeResult?.suggestedReplacement && cascadeResult.movableBookingIds.length > 0 ? (
+                    <Button onClick={handleMoveAll} disabled={moving}>
+                      <ArrowRightCircle className="w-4 h-4 mr-2" /> {moving ? "Moving..." : `Move ${cascadeResult.movableBookingIds.length} guest(s)`}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
+                      <Printer className="w-4 h-4 mr-2" /> Manifest PDF
+                    </Button>
+                  )
+                }
+                more={manifest.status === "SCHEDULED" ? [{ label: "Cancel departure", icon: CloudRain, destructive: true, onSelect: () => setCancellingDeparture(true) }] : []}
+              />
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 

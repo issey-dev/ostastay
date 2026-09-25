@@ -1,6 +1,6 @@
 # Mobile polish — audit & phased plan (Phase 0)
 
-> Status: **Approved 2026-09-25. Phase 1 done; Phase 2 in progress** — see §7.
+> Status: **Approved 2026-09-25. All phases (1–5) DONE 2026-09-25** — see §7 for what shipped and what is left.
 > Desktop stays the primary product and the source of truth: every change here lives
 > behind a breakpoint (`max-sm:` / `max-md:` / `md:hidden`), a `pointer-coarse:` variant,
 > or a mobile variant of a shared component. Desktop markup and behaviour must not change.
@@ -278,4 +278,56 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
   clipped / small-target metrics; pixel diff between two captures).
 - Deferred from Phase 1: scrollable `TabsList` variant (one caller), tap-the-header property
   switcher (Phase 2 with the shell's account menu).
+
+### Phase 2 — High-usage screens: DONE (2026-09-25)
+- Shared: `ui/drawer.tsx` (base-ui Drawer); SearchableSelect + DatePicker open in it on phones;
+  `ui/mobile.tsx` (`MobileActions`, `MobileActionBar`, `DesktopOnly(Notice)`), `ContactLink`,
+  `lib/input-presets.ts`; dropdown items 44px on touch.
+- Front Office: counts strip, 4 tight tabs, search above the list, one primary action per guest
+  card + More. Reservations list: inline search, tight cards (status + ⋯ in the header).
+  Reservation detail: one primary + More (reversals last, red, still confirm), summary strip with
+  balance, secondary sections collapsed, phone Contact menu (tel/mailto), Daily Details as rows.
+  Check-in wizard full-screen, stacked payment, "Step 2 of 4". Folio ledger as a list (+ the
+  sub-lg Post-card overlap fixed). eRegistration panel: Share link (Web Share API).
+- Housekeeping: compact room rows → action sheet (Clean / Inspected / Dirty / Report issue / OOO /
+  complete task), explicit Select mode, pinned bulk bar. Task sheet 44px. Maintenance: Open /
+  In progress / Resolved switch. POS: pinned "Post $X to Room N". Walk-in bill: pinned Take
+  payment / Close bill. Spa & Excursions: open on today's schedule, pinned Book, next-step footer
+  in the appointment sheet, manifest pinned action.
+
+### Phase 3 — Guest eRegistration: DONE (2026-09-25)
+- Scan-first step, 4 steps with progress, pinned Next/Submit (safe area), autofill + keyboards on
+  every field, native date inputs (DECISIONS 2026-09-25), stacked children, "You're all done"
+  state, brand header, `min-h-dvh`. Payload/validation unchanged.
+
+### Phase 4 — Second tier: DONE (2026-09-25)
+- Overview: small KPIs 2-up, charts behind "Show more insights", no drag handle on touch.
+- Profiles: Directory select, Delete in ⋯, tap-to-call/email; detail contact card + next stay,
+  2-column fields, collapsible sections; edit: pinned Save, stacked add-contact row.
+- Booking form: pinned total + Book/Save, pax 3-up, room types as cards, secondary sections
+  collapsed. Tape chart: Today + date picker, move-bookings notice. Availability: one-line rows,
+  Stop Sale in a menu.
+- Cashiering summary strip + compact empty states; Debtors compact aging; Activity Log cards +
+  filter sheet; End of Day notice; Reports preview → notice; Revenue opens on Manager Flash,
+  editing → notices, price calendar first with whole-dollar cells; Group detail stats 2×2, pickup
+  cards, setup → notice.
+- Hub quick actions: Overview, Sessions, Support Access, API key revoke, People rows + ⋯,
+  Properties, Night Audit business date, Inbound Bookings, Green Tax filing.
+
+### Phase 5 — Desktop-only notices & the rest: DONE (2026-09-25)
+- "Best on a larger screen" notices: Hub setup pages (Charge Codes, Finance, Inventory, Revenue,
+  Outlets, Spa, Excursions, Online Booking, Sequences, Reservations, Stationery, Channel mapping,
+  Exchange log, Email & SFTP, Guest Lists), role editor, key create/rotate, Green Tax corrections,
+  Osta licensing / controls / channel admin; print pages show a "print from a computer" banner
+  and no longer auto-print on phones. Compact Hub Controls index and property band; /info mobile
+  menu; login `min-h-dvh` + 44px password toggle.
+
+### Left open / follow-ups
+- Consolidating the ~36 hand-rolled card lists into a shared `ResponsiveList` (opportunistic).
+- Maintenance has no "Report issue" of its own (issues are raised from Housekeeping).
+- Booking form shows "Pick a departure date" before the field is touched (onChange validation —
+  desktop behaviour, not changed).
+- Spa extended hours still bounded by opening hours (unrelated to mobile; TODO.md).
+- Desktop dashboard header was meant to be sticky (see DECISIONS 2026-09-25) — owner's call.
+- Pax fields got numeric keypads, not ± steppers.
 

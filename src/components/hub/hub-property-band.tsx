@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { HubProperty } from "@/lib/hub-properties"
+import { cn } from "@/lib/utils"
 
 // The band across the top of every property page in the Hub:
 //   "Configuring · Veyo Lagoon Retreat"  [switch property ▾]
@@ -48,19 +49,21 @@ export function HubPropertyBand({
   return (
     <div
       data-slot="hub-property-band"
-      className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-l-4 bg-card px-4 py-3 shadow-elevation-1"
+      className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-l-4 bg-card px-4 py-3 shadow-elevation-1 max-sm:mb-4 max-sm:flex-nowrap max-sm:gap-x-3 max-sm:py-2"
       style={{ borderLeftColor: accent }}
     >
       <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Configuring</p>
+      {/* Phones: one row — dot · property switcher (which already names the property). With
+          a single property there is no switcher, so the name stays. */}
+      <div className={cn("min-w-0 flex-1", properties.length > 1 && "max-sm:hidden")}>
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground max-sm:hidden">Configuring</p>
         <p className="truncate text-base font-semibold leading-tight text-foreground">
           {property.name}
           <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{property.code}</span>
         </p>
       </div>
       {properties.length > 1 && (
-        <div className="w-full sm:w-64">
+        <div className="w-full sm:w-64 max-sm:min-w-0 max-sm:flex-1">
           <SearchableSelect
             value={property.id}
             onChange={switchTo}

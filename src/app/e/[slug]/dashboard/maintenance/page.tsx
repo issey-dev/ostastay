@@ -33,6 +33,8 @@ export default function MaintenanceDashboard() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
+  // Phones show one column at a time behind a segmented switch (desktop keeps the kanban).
+  const [phoneTab, setPhoneTab] = useState<string>("OPEN")
 
   const fetchMaintenanceTeam = async () => {
     if (!currentProperty) return
@@ -175,7 +177,7 @@ export default function MaintenanceDashboard() {
           <Button
             variant="outline"
             onClick={() => setShowResolved(!showResolved)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 max-md:hidden"
           >
             {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             {showResolved ? "Hide Resolved" : "Show Resolved"}
@@ -183,14 +185,37 @@ export default function MaintenanceDashboard() {
         </>}
       />
 
+      {/* Phones: Open / In progress / Resolved switch, one list below */}
+      <div role="tablist" aria-label="Ticket status" className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-muted/50 p-1 md:hidden">
+        {columns.map(col => {
+          const count = tickets.filter(t => t.status === col.id).length
+          const active = phoneTab === col.id
+          return (
+            <button
+              key={col.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setPhoneTab(col.id)}
+              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold transition-colors ${active ? `border shadow-sm ${toneMutedClasses(col.tone)}` : "text-muted-foreground"}`}
+            >
+              {col.title}
+              <span className="text-xs tabular-nums opacity-80">{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className={`grid grid-cols-1 ${showResolved ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
         {columns.map(col => {
-          if (col.id === "RESOLVED" && !showResolved) return null;
+          // Resolved is always reachable from the phone switch; desktop still needs "Show Resolved".
+          const phoneOnly = col.id === "RESOLVED" && !showResolved
+          if (phoneOnly && phoneTab !== "RESOLVED") return null;
           
           const colTickets = tickets.filter(t => t.status === col.id)
           return (
-            <div key={col.id} className="bg-muted/50 border border-border rounded-2xl p-4 min-h-[500px]">
-              <div className={`flex items-center gap-3 p-3 rounded-xl border mb-4 ${toneMutedClasses(col.tone)}`}>
+            <div key={col.id} className={`bg-muted/50 border border-border rounded-2xl p-4 min-h-[500px] max-md:min-h-0 max-md:border-0 max-md:bg-transparent max-md:p-0${phoneTab !== col.id ? " max-md:hidden" : ""}${phoneOnly ? " md:hidden" : ""}`}>
+              <div className={`flex items-center gap-3 p-3 rounded-xl border mb-4 max-md:hidden ${toneMutedClasses(col.tone)}`}>
                 {col.icon}
                 <h2 className="font-bold text-lg">{col.title}</h2>
                 <div className="ml-auto bg-background/50 px-2 py-0.5 rounded-none text-sm font-semibold">
@@ -201,7 +226,7 @@ export default function MaintenanceDashboard() {
               <div className="space-y-4">
                 {colTickets.map(ticket => (
                   <div key={ticket.id} className="bg-card border border-border rounded-xl p-4 shadow-elevation-1 hover:shadow-elevation-2 transition-shadow">
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start mb-2 max-md:flex-wrap max-md:gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-lg text-foreground">Room {ticket.room?.roomNumber}</span>
                         <StatusBadge label={ticket.priority} tone={priorityTone[ticket.priority] ?? "neutral"} className="font-bold" />
@@ -209,7 +234,7 @@ export default function MaintenanceDashboard() {
                       <OptionSelect
                         size="sm"
                         aria-label="Ticket status"
-                        className="w-32 text-xs"
+                        className="w-32 text-xs max-md:w-full"
                         value={ticket.status}
                         onChange={(v) => handleStatusChange(ticket.id, v)}
                         options={[
@@ -231,7 +256,7 @@ export default function MaintenanceDashboard() {
                         <OptionSelect
                           size="sm"
                           aria-label="Assigned to"
-                          className="w-44 text-xs"
+                          className="w-44 text-xs max-md:w-full"
                           value={(ticket as any).assignedToId || "UNASSIGNED"}
                           onChange={(v) => handleAssignChange(ticket.id, ticket.status, v)}
                           options={[

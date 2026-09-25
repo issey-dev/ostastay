@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Loader2 } from "@/components/icons"
+import { INPUT_MONEY } from "@/lib/input-presets"
 import { toast } from "@/lib/toast"
 import { useProperty } from "@/components/providers/property-provider"
 
@@ -139,7 +140,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
               <FormItem>
                 <FormLabel>Amount</FormLabel>
                 <FormControl>
-                  <Input type="number" min="0.01" step="0.01" placeholder="0.00" {...field} />
+                  <Input {...INPUT_MONEY} type="number" min="0.01" step="0.01" placeholder="0.00" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { MobileActions, type MobileAction } from "@/components/ui/mobile"
 import { Button } from "@/components/ui/button"
 import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Input } from "@/components/ui/input"
@@ -143,6 +144,24 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
     }
   }
 
+  // Phones: the bill's actions live in a pinned footer — one primary (take payment while
+  // money is owed, otherwise close the bill) and the rest under More. Print is desktop-only.
+  const phoneMore: MobileAction[] = closed
+    ? [{ label: "Reopen bill", icon: RotateCcw, disabled: submitting, onSelect: handleReopen }]
+    : [
+        ...(balance > 0.005 ? [{ label: "Close bill", icon: CheckCircle2, disabled: submitting, onSelect: handleClose }] : []),
+        ...(activeCharges.length > 0 ? [{ label: "Void bill", icon: Ban, disabled: submitting, destructive: true, onSelect: handleVoidBill }] : []),
+      ]
+  const phonePrimary = closed ? undefined : balance > 0.005 ? (
+    <Button type="submit" form="walkin-payment-form" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
+      {submitting ? "Posting…" : `Take payment $${balance.toFixed(2)}`}
+    </Button>
+  ) : (
+    <Button onClick={handleClose} disabled={submitting}>
+      <CheckCircle2 className="w-4 h-4 mr-2" /> Close Bill
+    </Button>
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-lg sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -165,7 +184,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   ${balance.toFixed(2)}
                 </p>
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 max-md:hidden">
                 <Button size="sm" variant="outline" onClick={() => setPrintFolioId(folioId)}>
                   <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                 </Button>
@@ -231,7 +250,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
 
             {/* Take payment (open bills only) */}
             {!closed && (
-              <form onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
+              <form id="walkin-payment-form" onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
                 <h3 className="text-sm font-semibold">Take Payment</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
@@ -252,7 +271,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   <Label className="text-xs">Reference No. (optional)</Label>
                   <Input value={paymentForm.referenceNumber} onChange={(e) => setPaymentForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
                 </div>
-                <Button type="submit" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
+                <Button type="submit" className="bg-success hover:bg-success/90 max-md:hidden" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
                   {submitting ? "Posting…" : "Post Payment"}
                 </Button>
               </form>
@@ -264,6 +283,11 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
               </div>
             )}
           </div>
+        )}
+        {folio && !loading && (
+          <DialogFooter className="md:hidden">
+            <MobileActions className="w-full" primary={phonePrimary} more={phoneMore} />
+          </DialogFooter>
         )}
       </DialogContent>
 

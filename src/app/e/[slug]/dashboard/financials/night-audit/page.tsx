@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { RollForwardDialog } from "@/components/front-office/roll-forward-dialog"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -214,6 +215,12 @@ export default function EndOfDayPage() {
         </div>
       </div>
 
+      {/* Phones: informational only — End of Day still runs here. */}
+      <DesktopOnlyNotice
+        feature="End of Day"
+        description="You can run it from your phone, but a computer shows each step and the report archive in full. Rolling the date forward over a closed period is on the computer only."
+      />
+
       {/* Progress bar — fills as steps complete */}
       {!allDone && (
         <div className="space-y-2">
@@ -269,7 +276,7 @@ export default function EndOfDayPage() {
       )}
 
       {/* Progress stepper */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-xl border border-border bg-card p-6 max-md:p-4">
         <div className="flex flex-col gap-0">
           {steps.map((s, i) => {
             const isCurrent = !s.done && nextStep === s.key
@@ -345,12 +352,12 @@ export default function EndOfDayPage() {
               <p className="text-sm text-warning font-medium">{deps.length} guest{deps.length > 1 ? "s" : ""} still due out — resolve each:</p>
               {deps.map((d) => (
                 <div key={d.id} className="rounded-md border border-border p-3">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center justify-between gap-2 flex-wrap max-md:flex-col max-md:items-stretch">
                     <div className="text-sm">
-                      <span className="font-medium">{d.guestName}</span>
-                      <span className="text-muted-foreground"> · {d.confirmationNo} · Room {d.roomNumber ?? "—"} · out {format(new Date(d.checkOutDate), "dd MMM")}</span>
+                      <span className="font-medium max-md:block">{d.guestName}</span>
+                      <span className="text-muted-foreground max-md:text-xs"> · {d.confirmationNo} · Room {d.roomNumber ?? "—"} · out {format(new Date(d.checkOutDate), "dd MMM")}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 max-md:grid max-md:grid-cols-2">
                       <Button size="sm" variant="outline" disabled={busy === `co-${d.id}`} onClick={() => forceCheckout(d.id)}>
                         {busy === `co-${d.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check out"}
                       </Button>
@@ -420,7 +427,7 @@ export default function EndOfDayPage() {
       return (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Freezes the six reports for this date (Trial Balance, Guest / AR / Deposit Ledgers, Cashier Summary, Manager Flash) as an immutable snapshot you can view and print from the archive.</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
             <Button disabled={anyBusy} onClick={() => runStep("reports")}>
               {busy === "reports" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Generate reports

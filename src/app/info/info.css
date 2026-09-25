@@ -288,6 +288,114 @@
   }
 }
 
+/* The compact menu that replaces the inline nav below 1040px (nav.tsx). Hidden at desktop
+   widths, so the top bar there is exactly as before. */
+.info-menu {
+  display: none;
+}
+
+@media (max-width: 1040px) {
+  .info-menu {
+    display: block;
+    margin-left: auto;
+  }
+
+  .info-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .info-menu-btn[aria-expanded="true"] {
+    background: var(--surface);
+    border-color: var(--ink-muted);
+  }
+
+  .info-menu-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Positioned against .info-top (sticky, so it is the containing block): a full-width
+     sheet directly under the bar. */
+  .info-menu-panel {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    padding: 8px clamp(20px, 5vw, 72px) 16px;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 18px 32px -18px rgba(0, 0, 0, 0.45);
+  }
+
+  .info-menu-panel[data-open="true"] {
+    display: block;
+  }
+
+  .info-menu-panel a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .info-menu-panel a:last-child {
+    border-bottom: 0;
+  }
+
+  .info-menu-panel a[aria-current="page"] {
+    color: var(--accent-ink);
+  }
+
+  .info-menu-role {
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+  }
+}
+
+/* Narrow phones: the mark, menu, theme toggle and Sign in share ~350px — tighten the
+   spacing so nothing is pushed off the edge. */
+@media (max-width: 480px) {
+  .info-top-in {
+    gap: 10px;
+  }
+
+  .info-top-actions {
+    gap: 8px;
+  }
+
+  .info-top-actions .info-btn {
+    padding: 0 14px;
+  }
+
+  /* The mono strapline under the wordmark alone is ~230px wide — on a phone it pushed
+     Sign in off the screen. The hero repeats it directly below. */
+  .info-top-mark .info-mark-sub {
+    display: none;
+  }
+}
+
 .info-top-actions {
   display: flex;
   align-items: center;

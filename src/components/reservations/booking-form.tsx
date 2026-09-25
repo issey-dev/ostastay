@@ -26,6 +26,10 @@ import { allocationStayTotal, type AllocationLike } from "@/lib/allocations"
 import { GuestPickerModal, type GuestProfile } from "@/components/reservations/guest-picker-modal"
 import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
 import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
+import { LookToBookCards } from "@/components/reservations/look-to-book-cards"
+import { MobileActionBar } from "@/components/ui/mobile"
+import { INPUT_INTEGER, INPUT_MONEY } from "@/lib/input-presets"
+import { cn } from "@/lib/utils"
 import { BookingSummary, type Quote } from "@/components/reservations/booking-summary"
 import { canEditReservation } from "@/lib/reservation-state"
 
@@ -74,6 +78,21 @@ const money = (n: number) => `$${n.toFixed(2)}`
 
 const FieldError = ({ message }: { message?: string }) =>
   message ? <p className="text-xs text-destructive font-medium">{message}</p> : null
+
+/** Phones only: the one-line stand-in for a folded secondary section ("+ Add remarks").
+ *  `md:hidden` — desktop always shows the section itself. */
+function PhoneReveal({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-11 w-full items-center gap-2 rounded-md border border-dashed px-3 text-left text-sm text-muted-foreground md:hidden"
+    >
+      <Plus className="h-4 w-4 shrink-0" />
+      {label}
+    </button>
+  )
+}
 
 // Rebuilt onto Zod + React Hook Form (APP STANDARD 001): the schema in
 // booking-form-schema.ts owns every form-shape rule with inline, real-time
@@ -518,6 +537,11 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           .map(([label, id]) => `${label}: ${feeRules.find((r) => r.id === id)?.name ?? "set"}`)
           .join(" · ")
   const [feesOpen, setFeesOpen] = useState(false)
+  // Phones only: secondary sections folded behind a PhoneReveal until tapped. A section
+  // that already holds something is never folded. Desktop ignores all of this.
+  const [phoneShown, setPhoneShown] = useState<Record<string, boolean>>({})
+  const phoneFolded = (key: string, hasContent: boolean) => !hasContent && !phoneShown[key]
+  const showOnPhone = (key: string) => setPhoneShown((s) => ({ ...s, [key]: true }))
   // Never leave a section that HAS content collapsed — opening it once the loaded
   // reservation turns out to carry a policy keeps edit mode honest.
   useEffect(() => {
@@ -599,8 +623,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           {/* ── 1 · Stay ──────────────────────────────────────────────── */}
           <section className="flex flex-col gap-4">
             <h3 className="text-base font-semibold">1 · Stay</h3>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="grid content-start gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-md:grid-cols-6 max-md:gap-3">
+                <div className="grid content-start gap-2 max-md:col-span-3">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
                   {/* Arrival can never predate the business date — a booking arriving on a
                       day the property has already closed could never be checked in.
@@ -616,7 +640,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   />
                   <FieldError message={errors.checkInDate?.message} />
                 </div>
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-2 max-md:col-span-3">
                   <Label className="flex items-center gap-2">
                     Departure <span className="text-destructive">*</span>
                     {form.checkInDate && form.checkOutDate && (
@@ -628,18 +652,18 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <DatePicker value={form.checkOutDate} onChange={v => setStayDate("out", v)} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
                   <FieldError message={errors.checkOutDate?.message} />
                 </div>
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-2 max-md:col-span-2">
                   <Label>Adults</Label>
-                  <Input type="number" min="1" value={form.adults} onChange={e => setField("adults", parseInt(e.target.value) || 1)} />
+                  <Input {...INPUT_INTEGER} type="number" min="1" value={form.adults} onChange={e => setField("adults", parseInt(e.target.value) || 1)} />
                   <FieldError message={errors.adults?.message} />
                 </div>
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-2 max-md:col-span-2">
                   <Label>Children</Label>
-                  <Input type="number" min="0" value={form.children} onChange={e => setField("children", parseInt(e.target.value) || 0)} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" value={form.children} onChange={e => setField("children", parseInt(e.target.value) || 0)} />
                 </div>
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-2 max-md:col-span-2">
                   <Label>Infants</Label>
-                  <Input type="number" min="0" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
+                  <Input {...INPUT_INTEGER} type="number" min="0" value={form.infants} onChange={e => setField("infants", parseInt(e.target.value) || 0)} />
                 </div>
               </div>
               <div className="grid content-start gap-2">
@@ -662,7 +686,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   ]}
                 />
               </div>
-              <div className="grid content-start gap-2">
+              {phoneFolded("group", form.groupBlockId !== "none") && (
+                <PhoneReveal label="Part of a group block?" onClick={() => showOnPhone("group")} />
+              )}
+              <div className={cn("grid content-start gap-2", phoneFolded("group", form.groupBlockId !== "none") && "max-md:hidden")}>
                 <Label>Group Block (Optional)</Label>
                 <SearchableSelect
                   value={form.groupBlockId}
@@ -697,13 +724,23 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               ) : gridLoading && !gridData ? (
                 <Skeleton className="h-36 rounded-md" />
               ) : gridData ? (
-                <LookToBookGrid
-                  gridData={gridData}
-                  visibleRatePlans={visibleGridRatePlans}
-                  selectedRoomTypeId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.roomTypeId}
-                  selectedRatePlanId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.ratePlanId}
-                  onSelect={selectGridCell}
-                />
+                <>
+                  <LookToBookGrid
+                    className="max-md:hidden"
+                    gridData={gridData}
+                    visibleRatePlans={visibleGridRatePlans}
+                    selectedRoomTypeId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.roomTypeId}
+                    selectedRatePlanId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.ratePlanId}
+                    onSelect={selectGridCell}
+                  />
+                  <LookToBookCards
+                    gridData={gridData}
+                    visibleRatePlans={visibleGridRatePlans}
+                    selectedRoomTypeId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.roomTypeId}
+                    selectedRatePlanId={form.assignments[Math.min(activeSegmentIndex, form.assignments.length - 1)]?.ratePlanId}
+                    onSelect={selectGridCell}
+                  />
+                </>
               ) : null}
 
               {form.assignments.map((assignment, index) => {
@@ -729,7 +766,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       <span className="flex-1 text-muted-foreground">
                         {rt && rp
                           ? <>{rt.name} ({rt.code}) · {rp.name}</>
-                          : <span className="italic">Pick a room &amp; rate from the grid above</span>}
+                          : <span className="italic"><span className="max-md:hidden">Pick a room &amp; rate from the grid above</span><span className="md:hidden">Pick a room &amp; rate above</span></span>}
                       </span>
                       {form.assignments.length > 1 && (
                         <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive-muted hover:text-destructive" onClick={(e) => {
@@ -790,7 +827,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         </div>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:gap-3">
                       <div className="grid content-start gap-2">
                         <Label>Room Assignment</Label>
                         <SearchableSelect
@@ -806,9 +843,13 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           ]}
                         />
                       </div>
-                      <div className="grid content-start gap-2">
+                      {phoneFolded(`override-${index}`, !!assignment.overrideRate) && (
+                        <PhoneReveal label="Set a flat override rate" onClick={() => showOnPhone(`override-${index}`)} />
+                      )}
+                      <div className={cn("grid content-start gap-2", phoneFolded(`override-${index}`, !!assignment.overrideRate) && "max-md:hidden")}>
                         <Label>Flat Override Rate</Label>
                         <Input
+                          {...INPUT_MONEY}
                           type="number"
                           min="0"
                           step="0.01"
@@ -888,7 +929,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <div className="grid content-start gap-2 sm:w-2/3">
                   <Label>Meal Plan</Label>
                   <Select value={form.mealPlan} onValueChange={(v) => setField("mealPlan", v ?? "NONE")}>
-                    <SelectTrigger>
+                    <SelectTrigger className="max-sm:w-full">
                       <SelectValue>
                         {form.mealPlan === "NONE" ? "Room Only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
                       </SelectValue>
@@ -962,7 +1003,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 </div>
               )}
 
-              <div className="grid gap-2 rounded-md bg-muted/50 p-4">
+              {phoneFolded("accompanying", form.accompanyingGuestIds.length > 0) && (
+                <PhoneReveal label={`Accompanying guests (${form.accompanyingGuestIds.length} / ${maxAccompanying})`} onClick={() => showOnPhone("accompanying")} />
+              )}
+              <div className={cn("grid gap-2 rounded-md bg-muted/50 p-4", phoneFolded("accompanying", form.accompanyingGuestIds.length > 0) && "max-md:hidden")}>
                 <Label className="flex items-center justify-between">
                   <span>Accompanying Guests</span>
                   <span className="text-xs font-normal text-muted-foreground">
@@ -1021,7 +1065,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                             const current = formCtl.getValues("specialRequestCodes")
                             setField("specialRequestCodes", selected ? current.filter(c => c !== opt.code) : [...current, opt.code])
                           }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors pointer-coarse:min-h-10 ${
                             selected
                               ? "border-info text-info bg-info-muted font-medium"
                               : "border-border text-muted-foreground hover:border-foreground/40"
@@ -1035,7 +1079,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 </div>
               )}
 
-              <div className="grid content-start gap-2">
+              {phoneFolded("remarks", !!form.remarks) && <PhoneReveal label="Add remarks" onClick={() => showOnPhone("remarks")} />}
+              <div className={cn("grid content-start gap-2", phoneFolded("remarks", !!form.remarks) && "max-md:hidden")}>
                 <Label>Remarks</Label>
                 <Textarea
                   value={form.remarks}
@@ -1081,16 +1126,20 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 if (addOnOptions.length === 0) return (
                   <p className="text-xs text-muted-foreground italic">No sell-separate add-ons available for this property.</p>
                 )
+                const addOnsFolded = phoneFolded("addons", form.manualAllocationIds.length > 0)
                 return (
-                  <div className="rounded-md bg-muted/30 p-3">
+                  <>
+                  {addOnsFolded && <PhoneReveal label={`Add-ons (${addOnOptions.length} available)`} onClick={() => showOnPhone("addons")} />}
+                  <div className={cn("rounded-md bg-muted/30 p-3", addOnsFolded && "max-md:hidden")}>
                     <p className="text-xs font-medium text-muted-foreground mb-2">Add-ons (sold separately, posted nightly by Night Audit)</p>
                     <div className="flex flex-col gap-1.5">
                       {addOnOptions.map(a => {
                         const total = allocationPreviewTotal(a)
                         return (
-                          <label key={a.id} className="flex items-center justify-between cursor-pointer text-sm">
+                          <label key={a.id} className="flex items-center justify-between cursor-pointer text-sm pointer-coarse:min-h-11">
                             <span className="flex items-center gap-2">
                               <Checkbox
+                                className="pointer-coarse:size-5"
                                 checked={form.manualAllocationIds.includes(a.id)}
                                 onCheckedChange={(checked) => {
                                   const current = formCtl.getValues("manualAllocationIds")
@@ -1107,6 +1156,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       })}
                     </div>
                   </div>
+                  </>
                 )
               })()}
           </section>
@@ -1128,7 +1178,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
             ratePlans={ratePlans}
           />
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 max-md:hidden">
             <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(exitUrl)}>Cancel</Button>
             <Button type="submit" className="flex-1" disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -1137,6 +1187,28 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           </div>
         </div>
       </div>
+
+      {/* Phones: the total and Book/Save always in reach (same submit as the sidebar's). */}
+      <MobileActionBar>
+        <div className="min-w-0 flex-1">
+          {notification ? (
+            <p className="line-clamp-2 text-xs font-medium text-destructive">{notification.message}</p>
+          ) : (
+            <>
+              <p className="text-[11px] text-muted-foreground">
+                {quote ? `Total · ${quote.nights} night${quote.nights === 1 ? "" : "s"}` : "Total"}
+              </p>
+              <p className="truncate text-base font-semibold tabular-nums">
+                {quoteLoading && !quote ? "…" : quote ? money(quote.totals.grandTotal) : "—"}
+              </p>
+            </>
+          )}
+        </div>
+        <Button type="submit" className="shrink-0" disabled={submitting}>
+          {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          {submitting ? "Saving..." : isEditMode ? "Save Changes" : walkIn ? "Book Walk-in" : "Book Now"}
+        </Button>
+      </MobileActionBar>
 
       <GuestPickerModal
         isOpen={guestPickerOpen !== null}

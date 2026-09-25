@@ -26,6 +26,7 @@ import { FlashReport } from "@/components/revenue/flash-report"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import {
   emptyRatePlanForm,
   ratePlanFormSchema,
@@ -103,6 +104,14 @@ export default function RevenueDashboard() {
 
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
+
+  // Desktop opens on Rate Plans, as it always has. A phone opens on Manager Flash — the
+  // one tab that is read on the go — chosen after mount, so the server render (and every
+  // desktop) keeps the Rate Plans default.
+  const [tab, setTab] = useState("rate-plans")
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setTab("flash-report")
+  }, [])
 
   const fetchRatePlans = () => {
     if (!propertyId) return
@@ -235,7 +244,7 @@ export default function RevenueDashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="rate-plans" className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full">
         {/* 2x2 on a phone, one row from md up — four triggers at whitespace-nowrap width
             overflow a 375px screen if forced into a single row (see the same fix on
             front-office's operations tabs). */}
@@ -261,7 +270,7 @@ export default function RevenueDashboard() {
               if (!open) resetForm()
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
+                <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm max-md:hidden">
                   <Plus className="mr-2 h-4 w-4" /> New Rate Plan
                 </Button>
               </DialogTrigger>
@@ -596,6 +605,11 @@ export default function RevenueDashboard() {
             </Form>
           </DialogContent>
         </Dialog>
+        <DesktopOnlyNotice
+          className="w-full"
+          feature="Rate plan editing"
+          description="The list below is read-only on a phone. Open this page on a computer to create, edit or delete rate plans."
+        />
       </div>
 
       <Card>
@@ -673,21 +687,12 @@ export default function RevenueDashboard() {
                         <span className="shrink-0 font-bold text-lg bg-muted rounded-md px-2 py-1">{plan.priority}</span>
                       </div>
                       {typeBadges(plan)}
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="flex-1">
-                          <Button variant="outline" size="sm" className="h-9 w-full">
-                            <CalendarDays className="mr-2 h-3.5 w-3.5" /> Calendar
-                          </Button>
-                        </Link>
-                        <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => handleEdit(plan)}>
-                          <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+                      {/* Phones: read-only — editing is desktop-only (see the notice above). */}
+                      <Link href={`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${plan.id}`} className="block pt-1">
+                        <Button variant="outline" size="sm" className="h-9 w-full">
+                          <CalendarDays className="mr-2 h-3.5 w-3.5" /> Price calendar
                         </Button>
-                        {!plan.isLocked && (
-                          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" aria-label="Delete rate plan" onClick={() => handleDeletePrompt(plan)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                      </Link>
                     </div>
                   ))}
                 </div>

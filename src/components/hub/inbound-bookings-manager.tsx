@@ -154,7 +154,7 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
 
       <div className="flex flex-wrap items-center gap-3">
         <Select value={filter} onValueChange={(v) => setFilter(v ?? ALL)}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[200px] max-sm:w-auto max-sm:min-w-0 max-sm:flex-1">
             <SelectValue>{FILTER_LABELS[filter] ?? FILTER_LABELS[ALL]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -229,7 +229,7 @@ export function InboundBookingsManager({ propertyId, canManage }: { propertyId: 
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 w-full"
+                    className="min-h-11 w-full"
                     disabled={busyId === b.id}
                     onClick={() => void acknowledge(b)}
                   >

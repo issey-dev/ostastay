@@ -8,6 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { ErrorState } from "@/components/ui/error-state"
 import { cn } from "@/lib/utils"
+import { INPUT_EMAIL, INPUT_PHONE } from "@/lib/input-presets"
+
+// The right keyboard for the chosen type (phone keypad / email keyboard). `type` is left
+// off on purpose: this field sits inside the profile <form>, and type="email" would make
+// the browser's own validation block "Save Profile" over a half-typed contact.
+const { type: _emailType, ...EMAIL_KEYBOARD } = INPUT_EMAIL
+const { type: _phoneType, ...PHONE_KEYBOARD } = INPUT_PHONE
+const TYPE_INPUT: Record<string, Record<string, unknown>> = { EMAIL: EMAIL_KEYBOARD, MOBILE: PHONE_KEYBOARD }
 
 type Communication = { id: string; type: string; value: string; isPrimary: boolean }
 
@@ -100,7 +108,7 @@ export function CommunicationsManager({ upid }: { upid: string }) {
                 type="button"
                 title={r.isPrimary ? "Primary" : "Set as primary"}
                 onClick={() => !r.isPrimary && handleSetPrimary(r.id)}
-                className={cn("shrink-0", r.isPrimary ? "text-warning" : "text-muted-foreground hover:text-foreground")}
+                className={cn("shrink-0 pointer-coarse:grid pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:place-items-center", r.isPrimary ? "text-warning" : "text-muted-foreground hover:text-foreground")}
               >
                 <Star className={cn("h-4 w-4", r.isPrimary && "fill-current")} />
               </button>
@@ -112,21 +120,24 @@ export function CommunicationsManager({ upid }: { upid: string }) {
         </div>
       )}
 
-      <div className="flex gap-2 items-start pt-1">
+      <div className="flex gap-2 items-start pt-1 max-sm:flex-col max-sm:items-stretch">
         <Select value={newType} onValueChange={(v) => setNewType(v ?? "EMAIL")}>
-          <SelectTrigger className="w-32 shrink-0"><SelectValue>{TYPE_LABELS[newType]}</SelectValue></SelectTrigger>
+          <SelectTrigger className="w-32 shrink-0 max-sm:w-full" aria-label="Contact type"><SelectValue>{TYPE_LABELS[newType]}</SelectValue></SelectTrigger>
           <SelectContent>
             {Object.entries(TYPE_LABELS).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Input
+          {...TYPE_INPUT[newType]}
+          aria-label={TYPE_LABELS[newType]}
           placeholder={TYPE_PLACEHOLDERS[newType]}
           value={newValue}
           onChange={(e) => setNewValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } }}
         />
-        <Button type="button" variant="outline" onClick={handleAdd} disabled={saving || !newValue.trim()}>
+        <Button type="button" variant="outline" onClick={handleAdd} disabled={saving || !newValue.trim()} aria-label="Add contact">
           <Plus className="h-4 w-4" />
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
