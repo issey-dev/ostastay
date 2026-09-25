@@ -68,15 +68,28 @@ const MOBILE_POPUP: Record<"sheet" | "fullscreen", string> = {
     "max-sm:inset-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-full max-sm:max-w-none max-sm:h-dvh max-sm:max-h-none max-sm:flex max-sm:flex-col max-sm:overflow-hidden max-sm:rounded-none max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
 }
 
+// Desktop widths (DESKTOP_PLAN D10: 120 dialogs used 23 widths). New dialogs pick a size;
+// an explicit `sm:max-w-*` in className still wins (it comes later), so existing callers keep
+// their width until they are moved over.
+const DESKTOP_SIZE: Record<"sm" | "md" | "lg" | "xl", string> = {
+  sm: "sm:max-w-[425px]",
+  md: "sm:max-w-[560px]",
+  lg: "sm:max-w-[720px]",
+  xl: "sm:max-w-[960px]",
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   mobile = "sheet",
+  size,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
   mobile?: "sheet" | "fullscreen" | "none"
+  /** Desktop width: sm 425 · md 560 · lg 720 · xl 960. Anything wider is a page or a Sheet. */
+  size?: "sm" | "md" | "lg" | "xl"
 }) {
   return (
     <DialogPortal>
@@ -86,6 +99,11 @@ function DialogContent({
         data-mobile={mobile}
         className={cn(
           "fixed top-1/2 left-1/2 z-[var(--z-portal)] grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // Desktop: never taller than the window — a long form scrolls inside the dialog
+          // instead of pushing Save below a 768px laptop screen (98 of 120 dialogs set no
+          // max-height). A caller's own max-h-* still wins.
+          "sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto",
+          size && DESKTOP_SIZE[size],
           className,
           mobile !== "none" && MOBILE_POPUP[mobile]
         )}

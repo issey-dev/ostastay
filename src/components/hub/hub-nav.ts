@@ -54,8 +54,9 @@ export type HubNavItem = {
   // Only when the enterprise holds this add-on.
   addon?: HubAddon
   // A property item with its own sidebar entry (the Channel Manager and its pages). Every
-  // other property section is reached from the "Controls" landing page, which is the only
-  // other property entry in the sidebar (owner, 2026-09-23).
+  // other property section is one of "Controls"' sections: a card on the Controls landing
+  // page and a sub-item of the collapsible "Controls" entry in the sidebar (owner,
+  // 2026-09-23; sidebar sub-items DESKTOP_PLAN §2.1).
   ownEntry?: boolean
 }
 
@@ -221,6 +222,12 @@ export function visibleKeys(
   return items
     .filter((i) => i.modules.some(canView) && (!i.addon || addons.has(i.addon)))
     .map((i) => i.key)
+}
+
+// The sections listed under "Controls" — on its landing page and as its sidebar sub-items.
+// Not the landing page itself, not sub-pages, not the Channel Manager (its own entry).
+export function isControlsSection(item: HubNavItem): boolean {
+  return item.path !== "" && !item.child && !item.ownEntry
 }
 
 export function navItem(items: HubNavItem[], key: string): HubNavItem {

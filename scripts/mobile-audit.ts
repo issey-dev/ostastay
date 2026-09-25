@@ -101,9 +101,16 @@ async function routes(): Promise<{ shots: Shot[]; userId: string; propertyId: st
 const CLEANUP_CSS = `*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}nextjs-portal{display:none!important}`;
 
 async function openButton(page: Page, text: string) {
+  // Sections load after the page (skeleton loaders carry no "Loading" text), so wait for the
+  // button to appear rather than trusting the page-level wait.
+  const find = (text: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>("button")).find(
+      (b) => b.offsetParent !== null && (b.innerText || "").trim().toLowerCase().startsWith(text.toLowerCase())
+    );
+  await page.waitForFunction(find, { timeout: 10_000 }, text).catch(() => {});
   const ok = await page.evaluate((text) => {
     const el = Array.from(document.querySelectorAll<HTMLElement>("button")).find(
-      (b) => b.offsetParent !== null && (b.innerText || "").trim().startsWith(text)
+      (b) => b.offsetParent !== null && (b.innerText || "").trim().toLowerCase().startsWith(text.toLowerCase())
     );
     el?.click();
     return !!el;

@@ -15,19 +15,19 @@ export default function Excursions() {
       <H2>Before you start</H2>
       <ul>
         <li>A revenue <strong>charge code</strong> for excursions, e.g. 4001 Excursion Tours, in a group that reports as Other or Transport (<a href="/docs/configuration/property/charge-codes">step 3</a>). A new property has an empty Excursions group ready for it.</li>
-        <li>An <strong>outlet</strong> for excursions (<a href="/docs/configuration/property/outlets">step 4</a>), linked on <strong>Charge Codes › Excursion Outlet</strong>. No excursion can be booked until it is.</li>
+        <li>An <strong>outlet</strong> for excursions (<a href="/docs/configuration/property/outlets">step 4</a>), linked on <strong>Charge Codes › Excursion outlet</strong>. No excursion can be booked until it is.</li>
       </ul>
 
       <H2>1. Add an excursion</H2>
-      <p>Choose <strong>New Excursion</strong>:</p>
+      <p>Choose <strong>Add excursion</strong>, fill in the form and choose <strong>Create</strong>:</p>
       <Table
         head={["Field", "Notes"]}
         rows={[
           ["Code / Name", "e.g. SNORK / Reef Snorkelling. Code 2–10 characters, unique."],
           ["Description", "Shown to guests, including on your website."],
-          ["Charge Code", "Where the revenue posts."],
-          ["Cancellation Cutoff (hours)", "Default 24. Until this many hours before departure a booking can be cancelled freely; after it, cancelling needs a manager."],
-          ["Pricing Mode", "Per adult / child / infant, or a Flat price per booking (e.g. a private charter)."],
+          ["Charge code", "Where the revenue posts."],
+          ["Cancellation cutoff (hours)", "Default 24. Until this many hours before departure a booking can be cancelled freely; after it, cancelling needs a manager."],
+          ["Pricing mode", "Per adult / child / infant, or a Flat price per booking (e.g. a private charter)."],
           ["Pricing", "One or more date ranges with their prices. Leave the last range's end date empty to keep it running. A departure with no price range covering its date can't be booked."],
           ["Active", "Only active excursions can be booked."],
         ]}
@@ -35,7 +35,7 @@ export default function Excursions() {
       <Shot name="prop-excursions" alt="The Excursions list: Reef Snorkelling and Sunset Dolphin Cruise with their charge code, pricing, current price and schedules." />
 
       <H2>2. Add a schedule</H2>
-      <p>Choose <strong>Schedule</strong> on the excursion, then add when it runs:</p>
+      <p>Choose <strong>Schedule</strong> on the excursion, fill in when it runs and choose <strong>Add schedule</strong>:</p>
       <Table
         head={["Field", "Notes"]}
         rows={[
@@ -54,8 +54,8 @@ export default function Excursions() {
 
       <H2>3. Generate departures</H2>
       <p>
-        A schedule is a template. Bookings are made on <strong>departures</strong>, the actual trips on actual dates. Choose a{" "}
-        <strong>Through</strong> date and <strong>Generate</strong>: departures are created from today up to that date. It is safe
+        A schedule is a template. Bookings are made on <strong>departures</strong>, the actual trips on actual dates. Under{" "}
+        <strong>Generate departures</strong>, pick a <strong>Through date</strong> and choose <strong>Generate</strong>: departures are created from today up to that date. It is safe
         to run again later to extend the calendar, and existing departures are never touched.
       </p>
       <Callout tone="warn">

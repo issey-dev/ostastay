@@ -1,34 +1,104 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { useParams } from "next/navigation";
-import { Wallet, Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, History, HandCoins } from "@/components/icons";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, HandCoins, ChevronDown } from "@/components/icons";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { InfoHint } from "@/components/ui/info-hint"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActionBar } from "@/components/ui/action-bar";
+import { MobileActions, type MobileAction } from "@/components/ui/mobile";
 import { INPUT_MONEY } from "@/lib/input-presets";
 import { useProperty } from "@/components/providers/property-provider";
+import { PageHeader } from "@/components/ui/page-header"
+import { useUrlState } from "@/lib/use-url-state";
+import { toast } from "@/lib/toast";
+import { apiError } from "@/lib/api-error";
 
-// Phones: an empty list is one quiet line under its header (the header already carries the
-// "New …" button) instead of a ~350px illustration card per section.
-const COMPACT_EMPTY = "max-md:py-5 max-md:[&>div]:hidden max-md:[&>h3]:text-sm max-md:[&>h3]:font-normal max-md:[&>h3]:text-muted-foreground";
+// DESKTOP_PLAN §2.3 (Phase 3 declutter): one shift summary bar with the shift's actions, then
+// ONE tabbed list (Payments · Exchanges · Paid-outs · History) with one-line empty states —
+// instead of nine stacked cards, three of them ~340px of "nothing yet".
+const TABS = ["payments", "exchanges", "paidouts", "history"] as const;
+type Tab = (typeof TABS)[number];
 
-export default function CashieringPage() {
+const money = (n: number) => `$${n.toFixed(2)}`;
+
+// One figure in the summary bar.
+function Figure({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-mono text-base font-semibold tabular-nums text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+// A tab label with its count ("Payments 3").
+function TabLabel({ label, count }: { label: string; count?: number }) {
+  return (
+    <>
+      {label}
+      {count != null && count > 0 && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
+    </>
+  );
+}
+
+function ShiftHistoryList({ shiftHistory }: { shiftHistory: any[] }) {
+  if (shiftHistory.length === 0) {
+    return <EmptyState size="inline" title="No closed shifts yet" className="px-4 py-3" />;
+  }
+  return (
+    <div className="divide-y divide-border">
+      {shiftHistory.map((shift) => (
+        <div key={shift.id} className="px-4 py-3 hover:bg-muted/50">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium text-foreground tabular-nums">
+                {format(parseISO(shift.openedAt), "MMM d, h:mm a")} → {shift.closedAt ? format(parseISO(shift.closedAt), "h:mm a") : "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                Float {money(shift.openingFloat)} · {shift.paymentCount} payment{shift.paymentCount === 1 ? "" : "s"}
+                {shift.exchangeCount > 0 && ` · ${shift.exchangeCount} exchange${shift.exchangeCount === 1 ? "" : "s"}`}
+                {shift.paidOutTotal > 0 && ` · ${money(shift.paidOutTotal)} paid out`}
+                {(shift.byMethod?.length ?? 0) > 0 && ` · ${shift.byMethod.map((row: any) => `${row.method} ${money(row.net)}`).join(" · ")}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-sm tabular-nums">
+              <span className="text-muted-foreground">Expected <span className="font-mono font-semibold text-foreground">{money(shift.expectedCash)}</span></span>
+              <span className="text-muted-foreground">Drop <span className="font-mono font-semibold text-foreground">{money(shift.closingDrop ?? 0)}</span></span>
+              {shift.discrepancy != null && (
+                Math.abs(shift.discrepancy) < 0.005 ? (
+                  <Badge className="bg-success-muted text-success border-success/30" variant="outline">Balanced</Badge>
+                ) : (
+                  <Badge variant="destructive">
+                    {money(Math.abs(shift.discrepancy))} {shift.discrepancy < 0 ? "Short" : "Over"}
+                  </Badge>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CashieringContent() {
   const { slug } = useParams<{ slug: string }>();
   const { currentProperty } = useProperty();
   const [status, setStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [error, setError] = useState("");
+  const [tab, setTab] = useUrlState<Tab>("tab", "payments", TABS);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Open Shift State — default float and exchange currencies come from
   // EnterpriseSettings (Controls > General > Cashiering Defaults), not hardcodes.
@@ -53,7 +123,6 @@ export default function CashieringPage() {
   const [paidOutForm, setPaidOutForm] = useState({ amount: "", reason: "" });
 
   const handleCreatePaidOut = async () => {
-    setError("");
     const amount = parseFloat(paidOutForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || !paidOutForm.reason.trim()) return;
     setIsPayingOut(true);
@@ -66,15 +135,14 @@ export default function CashieringPage() {
       if (res.ok) {
         setIsPaidOutModalOpen(false);
         setPaidOutForm({ amount: "", reason: "" });
+        toast.success("Paid-out recorded");
+        setTab("paidouts");
         await fetchStatus();
       } else {
-        const json = await res.json();
-        setError(json.error || "Failed to record the paid-out");
-        setIsPaidOutModalOpen(false);
+        toast.error(await apiError(res, "Failed to record the paid-out"));
       }
     } catch {
-      setError("Unexpected error recording the paid-out");
-      setIsPaidOutModalOpen(false);
+      toast.error("Unexpected error recording the paid-out");
     } finally {
       setIsPayingOut(false);
     }
@@ -150,7 +218,6 @@ export default function CashieringPage() {
   }, [currentProperty?.id]);
 
   const handleOpenShift = async () => {
-    setError("");
     setIsOpening(true);
     try {
       const res = await fetch("/api/cashiering/open", {
@@ -159,21 +226,20 @@ export default function CashieringPage() {
         body: JSON.stringify({ openingFloat })
       });
       const json = await res.json();
-      
+
       if (json.success) {
         await fetchStatus();
       } else {
-        setError(json.error || "Failed to open shift");
+        toast.error(json.error || "Failed to open shift");
       }
     } catch {
-      setError("Unexpected error opening shift");
+      toast.error("Unexpected error opening shift");
     } finally {
       setIsOpening(false);
     }
   };
 
   const handleCloseShift = async () => {
-    setError("");
     setIsClosing(true);
     try {
       const res = await fetch("/api/cashiering/close", {
@@ -182,17 +248,18 @@ export default function CashieringPage() {
         body: JSON.stringify({ closingDrop })
       });
       const json = await res.json();
-      
+
       if (json.success) {
         setReconciliation(json.data);
         setIsCloseModalOpen(false);
+        setClosingDrop("");
         await fetchStatus(); // Refresh to show shift is closed
       } else {
-        setError(json.error || "Failed to close shift");
+        toast.error(json.error || "Failed to close shift");
         setIsCloseModalOpen(false);
       }
     } catch {
-      setError("Unexpected error closing shift");
+      toast.error("Unexpected error closing shift");
       setIsCloseModalOpen(false);
     } finally {
       setIsClosing(false);
@@ -200,7 +267,6 @@ export default function CashieringPage() {
   };
 
   const handleCreateExchange = async () => {
-    setError("");
     setIsExchanging(true);
     try {
       const res = await fetch("/api/cashiering/currency-exchange", {
@@ -211,26 +277,28 @@ export default function CashieringPage() {
       if (res.ok) {
         setIsExchangeModalOpen(false);
         setExchangeForm({ guestName: "", fromCurrency: defaults.fromCurrency, toCurrency: defaults.toCurrency, rate: "", amountFrom: "", amountTo: "" });
+        toast.success("Exchange recorded");
+        setTab("exchanges");
         await fetchStatus();
       } else {
-        const json = await res.json();
-        setError(json.error || "Failed to record currency exchange");
+        toast.error(await apiError(res, "Failed to record currency exchange"));
       }
     } catch {
-      setError("Unexpected error recording currency exchange");
+      toast.error("Unexpected error recording currency exchange");
     } finally {
       setIsExchanging(false);
     }
   };
 
+  const openExchangeReceipt = (id: string) =>
+    window.open(`/e/${slug}/dashboard/cashiering/exchange/${id}/receipt`, "_blank");
+
   if (isLoading && !status) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-9 w-96 mb-2" />
-          <Skeleton className="h-5 w-full max-w-xl" />
-        </div>
-        <Skeleton className="h-64 max-w-md mx-auto mt-12 rounded-xl" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -238,236 +306,336 @@ export default function CashieringPage() {
   if (loadError && !status) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Cashiering & Shift Reconciliation
-            <InfoHint label="Cashiering & Shift Reconciliation">Manage your physical cash drawer and track all financial postings during your shift.</InfoHint>
-          </h2>
-        </div>
+        <PageHeader title="Cashiering" hint="Manage your physical cash drawer and track all financial postings during your shift." />
         <ErrorState title="Couldn't load cashiering" onRetry={fetchStatus} />
       </div>
     );
   }
 
+  const shift = status?.shift;
+  const payments: any[] = shift?.payments ?? [];
+  const exchanges: any[] = shift?.currencyExchanges ?? [];
+  const paidOuts: any[] = shift?.paidOuts ?? [];
+  const paidOutTotal = paidOuts.reduce((sum: number, po: any) => sum + po.amount, 0);
+  const chargeRows: any[] = status?.summary?.postingsByChargeCode ?? [];
+  const floatNotSet = shift?.openingFloat === 0;
+
+  // The shift's secondary actions: New exchange is the one visible button; the rest cost a click.
+  const paidOutAction: MobileAction = { label: "New paid-out", icon: HandCoins, onSelect: () => setIsPaidOutModalOpen(true) };
+  const printActions: MobileAction[] = [
+    ...(exchanges.length > 0
+      ? [{ label: "Print last exchange receipt", icon: Printer, onSelect: () => openExchangeReceipt(exchanges[0].id) }]
+      : []),
+  ];
+  const closeShiftButton = (
+    <Button onClick={() => setIsCloseModalOpen(true)}>
+      <Lock className="w-4 h-4 mr-2" /> Close shift
+    </Button>
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Cashiering & Shift Reconciliation
-            <InfoHint label="Cashiering & Shift Reconciliation">Manage your physical cash drawer and track all financial postings during your shift.</InfoHint>
-          </h2>
-      </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <PageHeader title="Cashiering" hint="Manage your physical cash drawer and track all financial postings during your shift." />
 
       {/* RECONCILIATION RESULT VIEW */}
       {reconciliation && (
-        <Card className="border-border shadow-xl overflow-hidden">
-          <div className="bg-primary p-6 text-primary-foreground text-center">
-            <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-80" />
-            <h3 className="text-2xl font-bold">Shift Closed Successfully</h3>
-            <p className="text-primary-foreground/80 mt-1">Blind Drop Reconciliation Report</p>
+        <Card className="border-border overflow-hidden">
+          <div className="bg-primary p-6 text-primary-foreground text-center max-md:p-4">
+            <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-80" />
+            <h3 className="text-xl font-bold">Shift closed</h3>
+            <p className="text-primary-foreground/80 mt-1 text-sm">Blind drop reconciliation</p>
           </div>
-          <CardContent className="p-8 max-md:p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-              <div className="p-4 bg-muted rounded-xl border border-border">
-                <p className="text-sm font-medium text-muted-foreground mb-1">Expected System Cash</p>
-                <p className="text-2xl font-bold text-foreground">${reconciliation.expectedCash.toFixed(2)}</p>
+          <CardContent className="p-6 max-md:p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center tabular-nums">
+              <div className="p-4 bg-muted">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Expected system cash</p>
+                <p className="text-2xl font-bold font-mono text-foreground">{money(reconciliation.expectedCash)}</p>
               </div>
-              <div className="p-4 bg-muted rounded-xl border border-border">
-                <p className="text-sm font-medium text-muted-foreground mb-1">Actual Physical Drop</p>
-                <p className="text-2xl font-bold text-foreground">${reconciliation.actualDrop.toFixed(2)}</p>
+              <div className="p-4 bg-muted">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Actual physical drop</p>
+                <p className="text-2xl font-bold font-mono text-foreground">{money(reconciliation.actualDrop)}</p>
               </div>
-              <div className={`p-4 rounded-xl border ${reconciliation.discrepancy === 0 ? 'bg-success-muted border-success/30' : 'bg-destructive-muted border-destructive/30'}`}>
-                <p className="text-sm font-medium mb-1">Discrepancy (Short/Over)</p>
-                <p className={`text-2xl font-bold ${reconciliation.discrepancy === 0 ? 'text-success' : 'text-destructive'}`}>
-                  {reconciliation.discrepancy === 0 ? "Balanced" : `$${Math.abs(reconciliation.discrepancy).toFixed(2)} ${reconciliation.discrepancy < 0 ? 'Short' : 'Over'}`}
+              <div className={`p-4 ${reconciliation.discrepancy === 0 ? "bg-success-muted" : "bg-destructive-muted"}`}>
+                <p className="text-sm font-medium mb-1">Discrepancy (short/over)</p>
+                <p className={`text-2xl font-bold font-mono ${reconciliation.discrepancy === 0 ? "text-success" : "text-destructive"}`}>
+                  {reconciliation.discrepancy === 0 ? "Balanced" : `${money(Math.abs(reconciliation.discrepancy))} ${reconciliation.discrepancy < 0 ? "Short" : "Over"}`}
                 </p>
               </div>
             </div>
             {(reconciliation.byMethod?.length ?? 0) > 0 && (
-              <div className="mt-8 border-t border-border pt-6">
-                <p className="text-sm font-semibold text-muted-foreground mb-3">Takings by Payment Method</p>
-                <div className="divide-y divide-border border border-border rounded-lg">
+              <div className="mt-6">
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Takings by payment method</p>
+                <div className="divide-y divide-border border-y border-border">
                   {reconciliation.byMethod.map((row: any) => (
-                    <div key={row.method} className="flex items-center justify-between p-3 text-sm">
+                    <div key={row.method} className="flex items-center justify-between py-2.5 text-sm tabular-nums">
                       <span className="font-medium text-foreground">{row.method}</span>
                       <span className="text-muted-foreground">
-                        +${row.received.toFixed(2)}{row.refunded > 0 && <span className="text-destructive"> / −${row.refunded.toFixed(2)}</span>}
+                        +{money(row.received)}{row.refunded > 0 && <span className="text-destructive"> / −{money(row.refunded)}</span>}
                       </span>
-                      <span className="font-mono font-bold text-foreground">${row.net.toFixed(2)}</span>
+                      <span className="font-mono font-semibold text-foreground">{money(row.net)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </CardContent>
-          <CardFooter className="bg-muted p-4 border-t justify-center gap-3">
+          <CardFooter className="p-4 border-t justify-end gap-2">
             <Button variant="outline" className="max-md:hidden" onClick={() => window.print()}>
-              <Printer className="w-4 h-4 mr-2" /> Print Report
+              <Printer className="w-4 h-4 mr-2" /> Print report
             </Button>
-            <Button variant="outline" onClick={() => setReconciliation(null)}>Dismiss Report</Button>
+            <Button onClick={() => setReconciliation(null)}>Done</Button>
           </CardFooter>
         </Card>
       )}
 
-      {/* SHIFT CLOSED (Needs to Open) */}
+      {/* SHIFT CLOSED (needs to open) — one bar: opening float + Open shift. */}
       {!status?.hasActiveShift && !reconciliation && (
-        <Card className="max-w-md mx-auto border-0 shadow-lg ring-1 ring-border mt-12 overflow-hidden">
-          <div className="bg-muted border-b border-border p-8 flex justify-center">
-            <div className="w-20 h-20 bg-card rounded-none flex items-center justify-center shadow-sm border border-border">
-              <Lock className="w-8 h-8 text-muted-foreground" />
+        <div className="flex flex-wrap items-end justify-between gap-4 border border-border bg-card px-4 py-3">
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Lock className="h-4 w-4 text-muted-foreground" /> Your shift is closed
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Open a shift to take payments.</p>
             </div>
-          </div>
-          <CardHeader className="text-center pt-8">
-            <CardTitle className="flex items-center gap-2 text-2xl">
-            Your Shift is Closed
-            <InfoHint label="Your Shift is Closed">You cannot post any payments to guest folios until you open a new cashier shift.</InfoHint>
-          </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Opening Float (Cash in Drawer)</label>
+            <div className="space-y-1">
+              <Label htmlFor="opening-float" className="text-xs text-muted-foreground">Opening float</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input 
+                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
                   {...INPUT_MONEY}
-                  type="number" 
-                  step="0.01" 
-                  className="pl-9 text-lg font-bold"
+                  id="opening-float"
+                  type="number"
+                  step="0.01"
+                  className="w-36 pl-8 font-mono tabular-nums"
                   value={openingFloat}
                   onChange={(e) => setOpeningFloat(e.target.value)}
                 />
               </div>
             </div>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              className="w-full h-12 text-lg " 
-              onClick={handleOpenShift}
-              disabled={isOpening}
-            >
-              {isOpening ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Unlock className="w-5 h-5 mr-2" />}
-              Open Cashier Shift
-            </Button>
-          </CardFooter>
-        </Card>
+          </div>
+          <Button className="max-sm:w-full" onClick={handleOpenShift} disabled={isOpening}>
+            {isOpening ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlock className="w-4 h-4 mr-2" />}
+            Open shift
+          </Button>
+        </div>
       )}
 
-      {/* SHIFT OPEN (Dashboard) */}
+      {/* No open shift: history is the only list left. */}
+      {!status?.hasActiveShift && shiftHistory.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Shift history</h2>
+          <div className="border border-border bg-card">
+            <ShiftHistoryList shiftHistory={shiftHistory} />
+          </div>
+        </section>
+      )}
+
+      {/* SHIFT OPEN */}
       {status?.hasActiveShift && !reconciliation && (
-        <div className="space-y-6">
-          {/* Phones: the three numbers a cashier checks, before any card. */}
+        <div className="space-y-4">
+          {/* Phones: the three numbers a cashier checks, before anything else. */}
           <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card md:hidden">
             {[
               { label: "Expected cash", value: status.summary?.expectedCash ?? 0, negative: false },
               { label: "Payments", value: status.summary?.paymentsNet ?? 0, negative: false },
-              { label: "Paid-outs", value: (status.shift.paidOuts ?? []).reduce((sum: number, po: any) => sum + po.amount, 0), negative: true },
+              { label: "Paid-outs", value: paidOutTotal, negative: true },
             ].map((item) => (
               <div key={item.label} className="min-w-0 px-2 py-3 text-center">
                 <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                <p className={`mt-0.5 truncate font-mono text-base font-bold ${item.negative && item.value > 0 ? "text-destructive" : "text-foreground"}`}>
-                  {item.negative && item.value > 0 ? "−" : ""}${item.value.toFixed(2)}
+                <p className={`mt-0.5 truncate font-mono text-base font-bold tabular-nums ${item.negative && item.value > 0 ? "text-destructive" : "text-foreground"}`}>
+                  {item.negative && item.value > 0 ? "−" : ""}{money(item.value)}
                 </p>
               </div>
             ))}
           </div>
-          <Card className="border-border shadow-md">
-            <CardHeader className="bg-muted/50 border-b border-border flex flex-row items-center justify-between pb-4">
+
+          {/* The shift summary bar: figures on the left, the shift's actions on the right. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border border-border bg-card px-4 py-3">
+            <dl className="flex flex-wrap items-end gap-x-8 gap-y-3">
               <div>
-                <CardTitle className="flex items-center text-success">
-                  <Unlock className="w-5 h-5 mr-2 text-success" /> Active Shift
-                </CardTitle>
-                <CardDescription className="text-success/80 mt-1">
-                  Opened at {format(parseISO(status.shift.openedAt), "h:mm a 'on' MMM d, yyyy")}
-                </CardDescription>
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+                  Shift open
+                  <span className="font-mono text-[11px] text-muted-foreground/70" title={`Shift ID ${shift.id}`}>{shift.id.slice(0, 8)}</span>
+                </dt>
+                <dd className="mt-0.5 text-sm font-medium text-foreground tabular-nums">
+                  {format(parseISO(shift.openedAt), "h:mm a, MMM d")}
+                </dd>
               </div>
-              <Badge className="font-mono text-xs px-3 py-1">
-                ID: {status.shift.id.slice(0, 8)}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-                {status.shift.openingFloat === 0 ? (
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-medium text-muted-foreground">Opening Float</p>
-                    <p className="text-xs text-muted-foreground">Shift was auto-opened. Set your starting cash:</p>
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                        <Input {...INPUT_MONEY} type="number" step="0.01" className="pl-9 w-40 font-bold" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} />
-                      </div>
-                      <Button variant="outline" onClick={handleOpenShift} disabled={isOpening}>
-                        {isOpening ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set float"}
-                      </Button>
+              {floatNotSet ? (
+                // Auto-opened shift: set the starting cash right here, as before.
+                <div>
+                  <dt className="mb-1 text-xs text-muted-foreground">Float — auto-opened, set your starting cash</dt>
+                  <dd className="flex items-center gap-2">
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                      <Input
+                        {...INPUT_MONEY}
+                        type="number"
+                        step="0.01"
+                        aria-label="Opening float"
+                        className="h-8 w-32 pl-8 font-mono tabular-nums"
+                        value={openingFloat}
+                        onChange={(e) => setOpeningFloat(e.target.value)}
+                      />
                     </div>
+                    <Button size="sm" variant="outline" onClick={handleOpenShift} disabled={isOpening}>
+                      {isOpening ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set float"}
+                    </Button>
+                  </dd>
+                </div>
+              ) : (
+                <Figure label="Float">{money(shift.openingFloat)}</Figure>
+              )}
+              {status.summary && <Figure label="Expected cash" className="max-md:hidden">{money(status.summary.expectedCash)}</Figure>}
+              {status.summary && <Figure label="Payments this shift" className="max-md:hidden">{money(status.summary.paymentsNet)}</Figure>}
+              <Figure label="Paid-outs" className="max-md:hidden">
+                <span className={paidOutTotal > 0 ? "text-destructive" : undefined}>{paidOutTotal > 0 ? "−" : ""}{money(paidOutTotal)}</span>
+              </Figure>
+            </dl>
+            <ActionBar
+              className="max-md:hidden"
+              primary={closeShiftButton}
+              secondary={
+                <Button variant="outline" onClick={() => setIsExchangeModalOpen(true)}>
+                  <ArrowRightLeft className="w-4 h-4 mr-2" /> New exchange
+                </Button>
+              }
+              more={[paidOutAction, ...printActions]}
+            />
+            <MobileActions
+              className="w-full md:hidden"
+              primary={closeShiftButton}
+              more={[{ label: "New exchange", icon: ArrowRightLeft, onSelect: () => setIsExchangeModalOpen(true) }, paidOutAction]}
+            />
+          </div>
+
+          {/* ONE tabbed list for everything the shift has recorded. */}
+          <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-0 border border-border bg-card">
+            <div className="overflow-x-auto border-b border-border px-2">
+              <TabsList variant="line" className="h-10 data-horizontal:h-10">
+                <TabsTrigger value="payments"><TabLabel label="Payments" count={payments.length} /></TabsTrigger>
+                <TabsTrigger value="exchanges"><TabLabel label="Exchanges" count={exchanges.length} /></TabsTrigger>
+                <TabsTrigger value="paidouts"><TabLabel label="Paid-outs" count={paidOuts.length} /></TabsTrigger>
+                <TabsTrigger value="history"><TabLabel label="History" /></TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="payments">
+              {payments.length === 0 ? (
+                <EmptyState size="inline" title="No payments posted this shift" className="px-4 py-3" />
+              ) : (
+                <>
+                  <div className="divide-y divide-border">
+                    {payments.map((payment: any) => (
+                      <div key={payment.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/50">
+                        <div>
+                          <p className="font-medium text-foreground flex items-center gap-2">
+                            {payment.paymentMethod.name}
+                            {payment.isRefund && <Badge variant="destructive" className="text-[10px]">Refund</Badge>}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                            Folio {payment.folioId.slice(0, 8)} · {format(parseISO(payment.createdAt), "h:mm a")}
+                          </p>
+                        </div>
+                        <div className={`font-semibold font-mono tabular-nums ${payment.isRefund ? "text-destructive" : "text-foreground"}`}>
+                          {payment.isRefund ? "−" : "+"}{money(payment.amount)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Starting Float</p>
-                    <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
-                  </div>
-                )}
-                {/* Phones: Expected Cash above a full-width Close Shift — side by side they
-                    pushed the button past the right edge. From sm up: one row, as before. */}
-                <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:gap-6">
-                  {status.summary && (
-                    <div className="sm:text-right max-md:hidden">
-                      <p className="text-sm font-medium text-muted-foreground">Expected Cash</p>
-                      <p className="text-2xl font-bold font-mono text-foreground">${status.summary.expectedCash.toFixed(2)}</p>
+                  {/* By method / by charge code: needed at close, not all day — one click away. */}
+                  {(activeByMethod.length > 0 || chargeRows.length > 0) && (
+                    <div className="border-t border-border">
+                      <button
+                        type="button"
+                        onClick={() => setShowBreakdown((v) => !v)}
+                        aria-expanded={showBreakdown}
+                        className="flex w-full items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronDown className={`h-4 w-4 transition-transform ${showBreakdown ? "rotate-180" : ""}`} />
+                        {showBreakdown ? "Hide breakdown" : "Breakdown by method and charge code"}
+                      </button>
+                      {showBreakdown && (
+                        <div className="grid gap-6 px-4 pb-4 md:grid-cols-2">
+                          {activeByMethod.length > 0 && (
+                            <div>
+                              <p className="mb-1 flex justify-between text-xs font-medium text-muted-foreground">
+                                <span>By payment method</span>
+                                {status.summary && <span className="font-mono tabular-nums">{money(status.summary.paymentsNet)}</span>}
+                              </p>
+                              <div className="divide-y divide-border">
+                                {activeByMethod.map((row) => (
+                                  <div key={row.method} className="flex items-center justify-between gap-3 py-2 text-sm tabular-nums">
+                                    <span className="font-medium text-foreground">{row.method}</span>
+                                    <span className="text-muted-foreground">
+                                      +{money(row.received)}{row.refunded > 0 && <span className="text-destructive"> / −{money(row.refunded)}</span>}
+                                    </span>
+                                    <span className="font-mono font-semibold text-foreground">{money(row.net)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {chargeRows.length > 0 && (
+                            <div>
+                              <p className="mb-1 flex justify-between text-xs font-medium text-muted-foreground">
+                                <span>Postings by charge code</span>
+                                <span className="font-mono tabular-nums">{money(status.summary.chargesTotal)}</span>
+                              </p>
+                              <div className="divide-y divide-border">
+                                {chargeRows.map((row: any) => (
+                                  <div key={row.code} className="flex items-center justify-between gap-3 py-2 text-sm tabular-nums">
+                                    <span className="min-w-0">
+                                      <span className="font-medium text-foreground">{row.description}</span>
+                                      <span className="ml-2 text-xs text-muted-foreground">{row.code} · {row.count} posting{row.count === 1 ? "" : "s"}</span>
+                                    </span>
+                                    <span className="font-mono font-semibold text-foreground">{money(row.total)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
-                  <Button
-                    variant="destructive"
-                    size="lg"
-                    className="w-full sm:w-auto"
-                    onClick={() => setIsCloseModalOpen(true)}
-                  >
-                    <Lock className="w-4 h-4 mr-2" /> Close Shift (Blind Drop)
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </>
+              )}
+            </TabsContent>
 
-          <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
-              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-                <ArrowRightLeft className="w-5 h-5 text-muted-foreground" />
-                Currency Exchange
-              </CardTitle>
-              <Button size="sm" onClick={() => setIsExchangeModalOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" /> New Exchange
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {(status.shift.currencyExchanges?.length ?? 0) === 0 ? (
-                <EmptyState icon={ArrowRightLeft} title="No currency exchanges recorded yet" className={COMPACT_EMPTY} />
+            <TabsContent value="exchanges">
+              {exchanges.length === 0 ? (
+                <EmptyState
+                  size="inline"
+                  title="No currency exchanges this shift"
+                  className="px-4 py-3"
+                  action={
+                    <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setIsExchangeModalOpen(true)}>
+                      <Plus className="w-3.5 h-3.5 mr-1" /> New exchange
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="divide-y divide-border">
-                  {status.shift.currencyExchanges.map((exchange: any) => (
-                    <div key={exchange.id} className="p-4 flex items-center justify-between hover:bg-muted">
+                  {exchanges.map((exchange: any) => (
+                    <div key={exchange.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/50">
                       <div>
-                        <p className="font-semibold text-foreground">
+                        <p className="font-medium text-foreground tabular-nums">
                           {exchange.amountFrom.toFixed(2)} {exchange.fromCurrency} → {exchange.amountTo.toFixed(2)} {exchange.toCurrency}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {exchange.guestName || "Walk-in"} • Rate {exchange.rate} • {format(parseISO(exchange.createdAt), "h:mm a")}
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                          {exchange.guestName || "Walk-in"} · Rate {exchange.rate} · {format(parseISO(exchange.createdAt), "h:mm a")}
                         </p>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 max-md:hidden"
-                        title="Print Exchange Receipt"
-                        aria-label="Print Exchange Receipt"
-                        onClick={() => window.open(`/e/${slug}/dashboard/cashiering/exchange/${exchange.id}/receipt`, '_blank')}
+                        title="Print exchange receipt"
+                        aria-label="Print exchange receipt"
+                        onClick={() => openExchangeReceipt(exchange.id)}
                       >
                         <Printer className="w-4 h-4" />
                       </Button>
@@ -475,189 +643,53 @@ export default function CashieringPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </TabsContent>
 
-          <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
-              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-                <HandCoins className="w-5 h-5 text-muted-foreground" />
-                Paid-Outs (Petty Cash)
-              </CardTitle>
-              <Button size="sm" onClick={() => setIsPaidOutModalOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" /> New Paid-Out
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {(status.shift.paidOuts?.length ?? 0) === 0 ? (
-                <EmptyState icon={HandCoins} title="No paid-outs recorded this shift" className={COMPACT_EMPTY} />
+            <TabsContent value="paidouts">
+              {paidOuts.length === 0 ? (
+                <EmptyState
+                  size="inline"
+                  title="No paid-outs this shift"
+                  className="px-4 py-3"
+                  action={
+                    <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setIsPaidOutModalOpen(true)}>
+                      <Plus className="w-3.5 h-3.5 mr-1" /> New paid-out
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="divide-y divide-border">
-                  {status.shift.paidOuts.map((po: any) => (
-                    <div key={po.id} className="p-4 flex items-center justify-between hover:bg-muted">
+                  {paidOuts.map((po: any) => (
+                    <div key={po.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/50">
                       <div>
-                        <p className="font-semibold text-foreground">{po.reason}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{format(parseISO(po.createdAt), "h:mm a")}</p>
+                        <p className="font-medium text-foreground">{po.reason}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{format(parseISO(po.createdAt), "h:mm a")}</p>
                       </div>
-                      <div className="font-bold font-mono text-destructive">−${po.amount.toFixed(2)}</div>
+                      <div className="font-semibold font-mono tabular-nums text-destructive">−{money(po.amount)}</div>
                     </div>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </TabsContent>
 
-          {(status.summary?.postingsByChargeCode?.length ?? 0) > 0 && (
-            <Card className="border-0 shadow-sm ring-1 ring-border">
-              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
-                <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-                  <Wallet className="w-5 h-5 text-muted-foreground" />
-                  Postings by Charge Code
-                </CardTitle>
-                <span className="text-sm font-mono font-semibold text-foreground">${status.summary.chargesTotal.toFixed(2)}</span>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-border">
-                  {status.summary.postingsByChargeCode.map((row: any) => (
-                    <div key={row.code} className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">{row.description}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{row.code} · {row.count} posting{row.count === 1 ? "" : "s"}</p>
-                      </div>
-                      <span className="font-mono font-bold text-foreground">${row.total.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeByMethod.length > 0 && (
-            <Card className="border-0 shadow-sm ring-1 ring-border">
-              <CardHeader className="bg-muted border-b border-border flex flex-row items-center justify-between max-md:flex-wrap max-md:gap-2">
-                <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-                  <DollarSign className="w-5 h-5 text-muted-foreground" />
-                  Payment Summary
-                </CardTitle>
-                {status.summary && <span className="text-sm font-mono font-semibold text-foreground">${status.summary.paymentsNet.toFixed(2)}</span>}
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-border">
-                  {activeByMethod.map((row) => (
-                    <div key={row.method} className="p-4 flex items-center justify-between">
-                      <span className="font-medium text-foreground">{row.method}</span>
-                      <span className="text-sm text-muted-foreground">
-                        +${row.received.toFixed(2)}{row.refunded > 0 && <span className="text-destructive"> / −${row.refunded.toFixed(2)}</span>}
-                      </span>
-                      <span className="font-mono font-bold text-foreground">${row.net.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardHeader className="bg-muted border-b border-border">
-              <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-                <Wallet className="w-5 h-5 text-muted-foreground" />
-                Payments Posted This Shift
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {status.shift.payments.length === 0 ? (
-                <EmptyState icon={Wallet} title="No payments posted yet" className={COMPACT_EMPTY} />
-              ) : (
-                <div className="divide-y divide-border">
-                  {status.shift.payments.map((payment: any) => (
-                    <div key={payment.id} className="p-4 flex items-center justify-between hover:bg-muted">
-                      <div>
-                        <p className="font-semibold text-foreground flex items-center gap-2">
-                          {payment.paymentMethod.name}
-                          {payment.isRefund && <Badge variant="destructive" className="text-[10px]">Refund</Badge>}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Folio: {payment.folioId.slice(0,8)} • {format(parseISO(payment.createdAt), "h:mm a")}
-                        </p>
-                      </div>
-                      <div className={`font-bold font-mono ${payment.isRefund ? 'text-destructive' : 'text-foreground'}`}>
-                        {payment.isRefund ? '-' : '+'}${payment.amount.toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            <TabsContent value="history">
+              <ShiftHistoryList shiftHistory={shiftHistory} />
+            </TabsContent>
+          </Tabs>
         </div>
-      )}
-
-      {/* SHIFT HISTORY */}
-      {shiftHistory.length > 0 && (
-        <Card className="border-0 shadow-sm ring-1 ring-border">
-          <CardHeader className="bg-muted border-b border-border">
-            <CardTitle className="text-lg flex items-center gap-2 max-md:text-base">
-              <History className="w-5 h-5 text-muted-foreground" />
-              Shift History
-              <InfoHint>Your past closed shifts with their reconciliation results.</InfoHint>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {shiftHistory.map((shift) => (
-                <div key={shift.id} className="p-4 hover:bg-muted">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">
-                        {format(parseISO(shift.openedAt), "MMM d, h:mm a")} → {shift.closedAt ? format(parseISO(shift.closedAt), "h:mm a") : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Float ${shift.openingFloat.toFixed(2)} · {shift.paymentCount} payment{shift.paymentCount === 1 ? "" : "s"}
-                        {shift.exchangeCount > 0 && ` · ${shift.exchangeCount} exchange${shift.exchangeCount === 1 ? "" : "s"}`}
-                        {shift.paidOutTotal > 0 && ` · $${shift.paidOutTotal.toFixed(2)} paid out`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-muted-foreground">Expected <span className="font-mono font-semibold text-foreground">${shift.expectedCash.toFixed(2)}</span></span>
-                      <span className="text-muted-foreground">Drop <span className="font-mono font-semibold text-foreground">${(shift.closingDrop ?? 0).toFixed(2)}</span></span>
-                      {shift.discrepancy != null && (
-                        Math.abs(shift.discrepancy) < 0.005 ? (
-                          <Badge className="bg-success-muted text-success border-success/30" variant="outline">Balanced</Badge>
-                        ) : (
-                          <Badge variant="destructive">
-                            ${Math.abs(shift.discrepancy).toFixed(2)} {shift.discrepancy < 0 ? "Short" : "Over"}
-                          </Badge>
-                        )
-                      )}
-                    </div>
-                  </div>
-                  {(shift.byMethod?.length ?? 0) > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {shift.byMethod.map((row: any) => (
-                        <span key={row.method} className="text-[11px] bg-muted border border-border rounded px-1.5 py-0.5 font-mono text-muted-foreground">
-                          {row.method}: ${row.net.toFixed(2)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* BLIND DROP MODAL */}
       <Dialog open={isCloseModalOpen} onOpenChange={setIsCloseModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Close Shift: Blind Drop</DialogTitle>
+            <DialogTitle>Close shift: blind drop</DialogTitle>
             <DialogDescription>
-              Please count the physical cash in your drawer and enter the total amount below. The system will calculate if your drawer is balanced, short, or over.
+              Count the physical cash in your drawer and enter the total amount below. The system will calculate if your drawer is balanced, short, or over.
             </DialogDescription>
           </DialogHeader>
           <div className="py-6">
-            <label className="text-sm font-semibold text-foreground mb-2 block">Actual Physical Cash Count</label>
+            <label className="text-sm font-semibold text-foreground mb-2 block">Actual physical cash count</label>
             <div className="relative">
               <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6" />
               <Input 
@@ -682,7 +714,7 @@ export default function CashieringPage() {
               disabled={isClosing || !closingDrop}
             >
               {isClosing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Submit Drop & Close Shift
+              Submit drop & close shift
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -692,7 +724,7 @@ export default function CashieringPage() {
       <Dialog open={isPaidOutModalOpen} onOpenChange={setIsPaidOutModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Paid-Out</DialogTitle>
+            <DialogTitle>Record paid-out</DialogTitle>
             <DialogDescription>
               Cash disbursed from the drawer (COD deliveries, reimbursements, supplies). Reduces the expected cash at
               shift close.
@@ -731,7 +763,7 @@ export default function CashieringPage() {
               disabled={isPayingOut || !paidOutForm.amount || !paidOutForm.reason.trim()}
             >
               {isPayingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Record Paid-Out
+              Record paid-out
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -741,23 +773,23 @@ export default function CashieringPage() {
       <Dialog open={isExchangeModalOpen} onOpenChange={setIsExchangeModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Currency Exchange</DialogTitle>
+            <DialogTitle>Record currency exchange</DialogTitle>
             <DialogDescription>
               Log a guest currency exchange against this shift. A printable receipt is generated once saved.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label>Guest Name (Optional)</Label>
+              <Label>Guest name (optional)</Label>
               <Input
-                placeholder="Walk-in Customer"
+                placeholder="Walk-in customer"
                 value={exchangeForm.guestName}
                 onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>From Currency</Label>
+                <Label>From currency</Label>
                 <Input
                   placeholder="USD"
                   value={exchangeForm.fromCurrency}
@@ -765,7 +797,7 @@ export default function CashieringPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>To Currency</Label>
+                <Label>To currency</Label>
                 <Input
                   placeholder="MVR"
                   value={exchangeForm.toCurrency}
@@ -774,7 +806,7 @@ export default function CashieringPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Exchange Rate</Label>
+              <Label>Exchange rate</Label>
               <Input
                 {...INPUT_MONEY}
                 type="number"
@@ -795,7 +827,7 @@ export default function CashieringPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Amount Given ({exchangeForm.fromCurrency || "From"})</Label>
+                <Label>Amount given ({exchangeForm.fromCurrency || "From"})</Label>
                 <Input
                   {...INPUT_MONEY}
                   type="number"
@@ -815,7 +847,7 @@ export default function CashieringPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Amount Received ({exchangeForm.toCurrency || "To"})</Label>
+                <Label>Amount received ({exchangeForm.toCurrency || "To"})</Label>
                 <Input
                   {...INPUT_MONEY}
                   type="number"
@@ -834,11 +866,20 @@ export default function CashieringPage() {
               disabled={isExchanging || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
             >
               {isExchanging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Save Exchange
+              Save exchange
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function CashieringPage() {
+  return (
+    <Suspense>
+      <CashieringContent />
+    </Suspense>
   );
 }

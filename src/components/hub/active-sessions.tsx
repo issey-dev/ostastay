@@ -175,7 +175,7 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
                         onClick={() => terminate(r)}
                       >
                         <LogOut className="mr-1.5 h-4 w-4" />
-                        {busyId === r.id ? "Ending..." : "End session"}
+                        {busyId === r.id ? "Ending…" : "End session"}
                       </Button>
                     ) : undefined
                   }
@@ -230,7 +230,7 @@ export function ActiveSessions({ canTerminate }: { canTerminate: boolean }) {
                             onClick={() => terminate(r)}
                           >
                             <LogOut className="mr-1.5 h-4 w-4" />
-                            {busyId === r.id ? "Ending..." : "End"}
+                            {busyId === r.id ? "Ending…" : "End"}
                           </Button>
                         </TableCell>
                       )}

@@ -17,6 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/lib/toast"
 import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type PaymentMethod = {
   id: string
@@ -41,7 +43,7 @@ export function PaymentMethodsManager({
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  
+  const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ name: "", type: "CARD", isActive: true })
 
@@ -74,49 +76,63 @@ export function PaymentMethodsManager({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (saving) return
+    setSaving(true)
     try {
-      if (editingId) {
-        await fetch(`/api/payment-methods/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
-        })
-      } else {
-        await fetch(`/api/payment-methods`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, propertyId })
-        })
+      const res = editingId
+        ? await fetch(`/api/payment-methods/${editingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData)
+          })
+        : await fetch(`/api/payment-methods`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...formData, propertyId })
+          })
+      if (!res.ok) {
+        toast.error(await apiError(res, "Couldn't save the payment method. Try again."))
+        return
       }
       setIsDialogOpen(false)
+      toast.success("Payment method saved")
       fetchMethods()
     } catch (e) {
       console.error("Failed to save", e)
-      toast.error("Failed to save payment method.")
+      toast.error("Couldn't save the payment method. Try again.")
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!(await confirm({ title: "Delete this payment method?", description: "This action cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
     try {
-      await fetch(`/api/payment-methods/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/payment-methods/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        toast.error(await apiError(res, "Couldn't delete the payment method. Try again."))
+        return
+      }
+      toast.success("Payment method deleted")
       fetchMethods()
     } catch (e) {
       console.error(e)
-      toast.error("Failed to delete payment method.")
+      toast.error("Couldn't delete the payment method. Try again.")
     }
   }
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      await fetch(`/api/payment-methods/${id}`, {
+      const res = await fetch(`/api/payment-methods/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus })
       })
+      if (!res.ok) toast.error(await apiError(res, "Couldn't save the payment method. Try again."))
       fetchMethods()
     } catch (e) {
       console.error(e)
+      toast.error("Couldn't save the payment method. Try again.")
     }
   }
 
@@ -131,7 +147,7 @@ export function PaymentMethodsManager({
         <div className="flex flex-wrap gap-2">
           {copyAction}
           <Button onClick={() => handleOpenDialog()}>
-            <Plus className="w-4 h-4 mr-2" /> Add Method
+            <Plus className="w-4 h-4 mr-2" /> Add payment method
           </Button>
         </div>
       }
@@ -234,22 +250,22 @@ export function PaymentMethodsManager({
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Payment Method" : "Add Payment Method"}</DialogTitle>
+            <DialogTitle>{editingId ? "Edit payment method" : "Add payment method"}</DialogTitle>
             <DialogDescription>Configure the details for this payment method.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Method Name <span className="text-destructive">*</span></Label>
+              <Label>Method name <span className="text-destructive">*</span></Label>
               <Input required placeholder="e.g. Visa, Master Card, Cash" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label>Payment Type <span className="text-destructive">*</span></Label>
+              <Label>Payment type <span className="text-destructive">*</span></Label>
               <Select required value={formData.type} onValueChange={v => setFormData(p => ({ ...p, type: v ?? "" }))}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Type">
-                    {formData.type || "Select Type"}
+                  <SelectValue placeholder="Select type">
+                    {formData.type || "Select type"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -263,12 +279,12 @@ export function PaymentMethodsManager({
               </Select>
             </div>
             <div className="flex items-center justify-between pt-2">
-              <Label className="flex-1">Active Status</Label>
+              <Label className="flex-1">Active</Label>
               <Switch checked={formData.isActive} onCheckedChange={v => setFormData(p => ({ ...p, isActive: v }))} />
             </div>
             <DialogFooter className="mt-6">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="">Save</Button>
+              <SubmitButton pending={saving}>{editingId ? "Save" : "Create"}</SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -112,7 +112,7 @@ export function StopSaleDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Stop Sale — Availability Restrictions</DialogTitle>
+          <DialogTitle>Stop Sale — availability restrictions</DialogTitle>
           <DialogDescription>
             Close dates to sale (Stop Sale) or reopen them. Closed dates hard-block new
             reservations for the chosen scope.

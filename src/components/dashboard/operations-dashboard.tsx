@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { PageHeader } from "@/components/ui/page-header"
 import { cn } from "@/lib/utils"
 import {
   AlertTriangle,
@@ -306,7 +307,7 @@ export function OperationsDashboard({
   if (data.visibleSections.length === 0) {
     return (
       <div className="space-y-6">
-        <DashboardHeading data={data} userName={userName} />
+        <DashboardHeading userName={userName} />
         <div className="rounded-2xl bg-card ring-1 ring-foreground/5">
           <EmptyState
             icon={Lock}
@@ -325,7 +326,6 @@ export function OperationsDashboard({
   return (
     <div className={cn("space-y-5 transition-opacity duration-200", refreshing && "opacity-70")}>
       <DashboardHeading
-        data={data}
         userName={userName}
         action={
           <div className="flex items-center gap-2">
@@ -385,22 +385,18 @@ export function OperationsDashboard({
       )}
 
       {onThisPage.length === 0 ? (
-        <div className="rounded-2xl bg-card ring-1 ring-foreground/5">
-          <EmptyState
-            icon={LayoutDashboard}
-            title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Your dashboard is empty"}
-            description={
-              hiddenHere > 0
-                ? `Choose the tiles you want to see — ${hiddenHere} are available in Customise dashboard.`
-                : "Open Customise dashboard to add widgets to this page."
-            }
-            action={
-              <Button size="sm" onClick={() => setSettingsOpen(true)}>
-                <Settings className="h-4 w-4" /> Add tiles
-              </Button>
-            }
-          />
-        </div>
+        // One quiet line, not a big card (DESKTOP_PLAN Phase 3 — clean over convenient).
+        <EmptyState
+          size="inline"
+          icon={LayoutDashboard}
+          title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Nothing on this dashboard yet"}
+          description={hiddenHere > 0 ? `· ${hiddenHere} tile${hiddenHere === 1 ? "" : "s"} available` : undefined}
+          action={
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setSettingsOpen(true)}>
+              Customise
+            </Button>
+          }
+        />
       ) : (
         /* One dense 12-column grid for everything. `dense` is what makes a hidden or
            resized widget close its own gap instead of leaving a hole — the auto-fit the
@@ -504,7 +500,7 @@ function buildWidgetNodes({
         value={pct(data.occupancy.occupancyPct)}
         footnote={`${data.occupancy.roomsSold} of ${data.occupancy.totalRooms} rooms sold`}
         icon={Percent}
-        href={`${dash}/front-office`}
+        href={`${dash}/front-office?tab=inhouse`}
         delta={
           data.occupancy.occupancyPctLastWeek !== null
             ? { value: data.occupancy.occupancyPct - data.occupancy.occupancyPctLastWeek, suffix: "pts", period: "vs last week" }
@@ -519,7 +515,7 @@ function buildWidgetNodes({
         value={String(data.occupancy.adults + data.occupancy.children)}
         footnote={`${data.occupancy.adults} adults · ${data.occupancy.children} children${data.occupancy.infants ? ` · ${data.occupancy.infants} infants` : ""}`}
         icon={UsersRound}
-        href={`${dash}/front-office`}
+        href={`${dash}/front-office?tab=inhouse`}
       />
     )
   }
@@ -919,7 +915,7 @@ function buildWidgetNodes({
       </Panel>
     )
     n.departures = (
-      <Panel title="Departures to settle" description="Due out today" icon={Wallet} action={<PanelLink href={`${dash}/front-office`}>Check out</PanelLink>}>
+      <Panel title="Departures to settle" description="Due out today" icon={Wallet} action={<PanelLink href={`${dash}/front-office?tab=departures`}>Check out</PanelLink>}>
         <WorklistRows rows={w.departures} money={money} empty="Every departure is settled." dash={dash} showBalance />
       </Panel>
     )
@@ -1097,23 +1093,14 @@ function buildWidgetNodes({
 
 // ── Sub-components ────────────────────────────────────────────────────────────────
 
-function DashboardHeading({ data, userName, action }: { data: DashboardOverview; userName: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        {/* The page title is a greeting rather than "Operations Dashboard" (app-owner
-            call, 2026-09-06). Where you are is already answered by the nav; who you are
-            signed in as is not, and on a shared front-desk terminal that is the more
-            useful fact. The name is display text only — it is never read back as an
-            identity, and every gate on this page runs off the session. */}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome, {userName}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {data.property.name} · business date {fullDateLabel(data.property.businessDate)}
-        </p>
-      </div>
-      {action}
-    </div>
-  )
+function DashboardHeading({ userName, action }: { userName: string; action?: React.ReactNode }) {
+  // The page title is a greeting rather than "Operations Dashboard" (app-owner call,
+  // 2026-09-06). Where you are is already answered by the nav; who you are signed in as is
+  // not, and on a shared front-desk terminal that is the more useful fact. The name is
+  // display text only — it is never read back as an identity, and every gate on this page
+  // runs off the session. The browser tab still says "Dashboard" (= the sidebar label).
+  // No subtitle: the header already shows the property and business date.
+  return <PageHeader title={`Welcome, ${userName}`} tabTitle="Dashboard" actions={action} />
 }
 
 /** The thin status line above the widgets: is the day closed, is a drawer open, is the

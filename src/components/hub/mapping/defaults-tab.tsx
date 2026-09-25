@@ -131,7 +131,7 @@ export function DefaultsTab({
 
       {canManage && (
         <Button onClick={() => void handleSave()} disabled={saving}>
-          {saving ? "Saving..." : "Save defaults"}
+          {saving ? "Saving…" : "Save"}
         </Button>
       )}
     </div>

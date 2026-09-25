@@ -11,14 +11,14 @@ export default async function HubPropertyGeneralPage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
-      <ControlsCard title="Property Information" description="This property's own profile — name, code, times, logo and contact details printed on its documents. Which enterprise it belongs to cannot be changed here.">
+      <ControlsCard title="Property information" description="This property's own profile — name, code, times, logo and contact details printed on its documents. Which enterprise it belongs to cannot be changed here.">
         <PropertyProfileManager propertyId={property.id} />
       </ControlsCard>
       <ControlsCard title="Appearance" description="This property's accent colour and document font — used on its dashboard, its band here in the Hub, and every document it prints.">
         <PropertyBannerColorManager property={property} />
         <PropertyStationeryFontManager property={property} />
       </ControlsCard>
-      <ControlsCard title="Idle Sign-out" description="How long a terminal at this property may sit idle before the person using it is signed out.">
+      <ControlsCard title="Idle sign-out" description="How long a terminal at this property may sit idle before the person using it is signed out.">
         <SessionTimeoutManager property={property} />
       </ControlsCard>
     </div>

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { PageHeader } from "@/components/ui/page-header"
 import Link from "next/link"
 import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -11,7 +12,7 @@ import { computeLicenseState } from "@/lib/license"
 
 const LICENSE_STATE_LABELS: Record<string, string> = {
   ACTIVE: "Active",
-  GRACE: "Grace Period",
+  GRACE: "Grace period",
   EXPIRED: "Expired",
   REVOKED: "Revoked",
   UNLICENSED: "Unlicensed",
@@ -42,19 +43,21 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">{enterprise.name}</h2>
-          <p className="text-muted-foreground">/e/{enterprise.slug} · {enterprise._count.users} user{enterprise._count.users === 1 ? "" : "s"}</p>
-        </div>
-        <EnterpriseOnboardingActions
-          enterpriseId={enterprise.id}
-          enterpriseName={enterprise.name}
-          userCount={enterprise._count.users}
-          propertyCount={enterprise._count.properties}
-          maxProperties={enterprise.license?.maxProperties ?? 1}
-        />
-      </div>
+      <PageHeader
+        title={enterprise.name}
+        tabTitle={`${enterprise.name} · Osta`}
+        description={`/e/${enterprise.slug} · ${enterprise._count.users} user${enterprise._count.users === 1 ? "" : "s"}`}
+        align="end"
+        actions={
+          <EnterpriseOnboardingActions
+            enterpriseId={enterprise.id}
+            enterpriseName={enterprise.name}
+            userCount={enterprise._count.users}
+            propertyCount={enterprise._count.properties}
+            maxProperties={enterprise.license?.maxProperties ?? 1}
+          />
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -70,18 +73,18 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
         <CardContent className="space-y-4">
           <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <dt className="text-muted-foreground">Monthly Price</dt>
+              <dt className="text-muted-foreground">Monthly price</dt>
               <dd className="font-medium">
                 {enterprise.license?.monthlyPrice ? fmtMoney(enterprise.license.monthlyPrice, enterprise.license.priceCurrency) : "Not set"}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Valid Until</dt>
+              <dt className="text-muted-foreground">Valid until</dt>
               <dd className="font-medium">{enterprise.license?.expiresAt ? fmtDate(enterprise.license.expiresAt) : "No expiry"}</dd>
             </div>
             {state === "GRACE" && (
               <div>
-                <dt className="text-muted-foreground">Grace Ends</dt>
+                <dt className="text-muted-foreground">Grace ends</dt>
                 <dd className="font-medium text-warning">{fmtDate(graceEndsAt)}</dd>
               </div>
             )}
@@ -90,7 +93,7 @@ export default async function OstaEnterpriseDetailPage({ params }: { params: Pro
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <ReceiptText className="h-3.5 w-3.5" /> Recent Invoices
+                <ReceiptText className="h-3.5 w-3.5" /> Recent invoices
               </h4>
               <a href="/osta/licensing" className="text-xs text-primary hover:underline">View all in Licensing</a>
             </div>

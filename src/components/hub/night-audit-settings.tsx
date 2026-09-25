@@ -7,9 +7,12 @@ import { Switch } from "@/components/ui/switch"
 import { OptionSelect } from "@/components/ui/option-select"
 import { toast } from "@/lib/toast"
 import { PhoneHint } from "@/components/hub/phone-hint"
+import { SavedTick, useSavedFlash } from "@/components/controls/save-status"
 
 // What this property's Night Audit does when it runs. Each change saves as it is made —
-// there is no form to submit, so a switch can never sit half-saved.
+// there is no form to submit, so a switch can never sit half-saved. A save confirms with a
+// brief inline "Saved" tick beside the control (Hub save model: auto-save only single
+// toggles/selects); only a failure raises a toast.
 
 type Levy = "greenTaxEnabled" | "tgstEnabled" | "serviceChargeEnabled"
 
@@ -31,6 +34,8 @@ export function NightlyPostingsManager({
 }) {
   const [values, setValues] = useState(initial)
   const [saving, setSaving] = useState<Levy | null>(null)
+  const [savedField, setSavedField] = useState<Levy | null>(null)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   const toggle = async (field: Levy, on: boolean) => {
     setSaving(field)
@@ -42,7 +47,8 @@ export function NightlyPostingsManager({
         body: JSON.stringify({ [field]: on }),
       })
       if (!res.ok) throw new Error()
-      toast.success(`${LEVIES.find((l) => l.field === field)!.label.replace("Post ", "")} ${on ? "will be posted" : "will not be posted"} at Night Audit`)
+      setSavedField(field)
+      flashSaved()
     } catch {
       setValues((v) => ({ ...v, [field]: !on }))
       toast.error("Couldn't save — nothing was changed")
@@ -59,13 +65,15 @@ export function NightlyPostingsManager({
             <Label htmlFor={l.field}>{l.label}<PhoneHint label={l.label}>{l.hint}</PhoneHint></Label>
             <p className="text-xs text-muted-foreground max-sm:hidden">{l.hint}</p>
           </div>
-          <Switch
-            id={l.field}
-            className="shrink-0"
-            checked={values[l.field]}
-            disabled={!canEdit || saving !== null}
-            onCheckedChange={(on) => void toggle(l.field, !!on)}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <SavedTick show={savedShown && savedField === l.field} />
+            <Switch
+              id={l.field}
+              checked={values[l.field]}
+              disabled={!canEdit || saving !== null}
+              onCheckedChange={(on) => void toggle(l.field, !!on)}
+            />
+          </div>
         </div>
       ))}
     </div>
@@ -86,6 +94,7 @@ export function EodRoomStatusManager({
 }) {
   const [mode, setMode] = useState(initialMode)
   const [target, setTarget] = useState(initialTarget ?? "DIRTY")
+  const [savedShown, flashSaved] = useSavedFlash()
 
   const save = async (nextMode: string, nextTarget: string) => {
     const previous = { mode, target }
@@ -98,7 +107,7 @@ export function EodRoomStatusManager({
         body: JSON.stringify({ eodHousekeepingMode: nextMode, eodHousekeepingTargetStatus: nextMode === "SET_STATUS" ? nextTarget : null }),
       })
       if (!res.ok) throw new Error()
-      toast.success("Night Audit room status rule saved")
+      flashSaved()
     } catch {
       setMode(previous.mode)
       setTarget(previous.target)
@@ -108,10 +117,13 @@ export function EodRoomStatusManager({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Occupied rooms always become Dirty for daily service; this rule applies to <strong>vacant rooms only</strong>.
-        Out-of-Order / Out-of-Service rooms are never changed.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Occupied rooms always become Dirty for daily service; this rule applies to <strong>vacant rooms only</strong>.
+          Out-of-Order / Out-of-Service rooms are never changed.
+        </p>
+        <SavedTick show={savedShown} className="shrink-0" />
+      </div>
       <OptionSelect
         id="eodHousekeepingMode"
         value={mode}
@@ -161,6 +173,7 @@ export function PropertySwitchSetting({
 }) {
   const [on, setOn] = useState(initial)
   const [saving, setSaving] = useState(false)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   const toggle = async (next: boolean) => {
     setSaving(true)
@@ -172,7 +185,7 @@ export function PropertySwitchSetting({
         body: JSON.stringify({ [field]: next }),
       })
       if (!res.ok) throw new Error()
-      toast.success(`${label}: ${next ? "on" : "off"}`)
+      flashSaved()
     } catch {
       setOn(!next)
       toast.error("Couldn't save — nothing was changed")
@@ -187,7 +200,10 @@ export function PropertySwitchSetting({
         <Label htmlFor={field}>{label}<PhoneHint label={label}>{description}</PhoneHint></Label>
         <p className="text-xs text-muted-foreground max-sm:hidden">{description}</p>
       </div>
-      <Switch id={field} className="shrink-0" checked={on} disabled={!canEdit || saving} onCheckedChange={(v) => void toggle(!!v)} />
+      <div className="flex shrink-0 items-center gap-2">
+        <SavedTick show={savedShown} />
+        <Switch id={field} checked={on} disabled={!canEdit || saving} onCheckedChange={(v) => void toggle(!!v)} />
+      </div>
     </div>
   )
 }
@@ -219,8 +235,11 @@ export function NoShowManager({
   const [timing, setTiming] = useState(initialTiming)
   const [postFee, setPostFee] = useState(initialPostFee)
   const [saving, setSaving] = useState(false)
+  const [savedWhat, setSavedWhat] = useState<"timing" | "fee" | null>(null)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   const save = async (patch: { noShowTiming?: string; noShowPostFee?: boolean }, undo: () => void) => {
+    const what = patch.noShowTiming !== undefined ? "timing" : "fee"
     setSaving(true)
     try {
       const res = await fetch(`/api/properties/${propertyId}/settings`, {
@@ -229,7 +248,8 @@ export function NoShowManager({
         body: JSON.stringify(patch),
       })
       if (!res.ok) throw new Error()
-      toast.success("No-show handling saved")
+      setSavedWhat(what)
+      flashSaved()
       // The Scheduled Night Audit card warns about the timing — let it see the change.
       router.refresh()
     } catch {
@@ -243,7 +263,10 @@ export function NoShowManager({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="noShowTiming">Mark a reservation that never arrived as a No-Show</Label>
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="noShowTiming">Mark a reservation that never arrived as a no-show</Label>
+          <SavedTick show={savedShown && savedWhat === "timing"} className="shrink-0" />
+        </div>
         <OptionSelect
           id="noShowTiming"
           value={timing}
@@ -271,16 +294,18 @@ export function NoShowManager({
           </Label>
           <p className="text-xs text-muted-foreground max-sm:hidden">{NO_SHOW_FEE_HINT}</p>
         </div>
-        <Switch
-          id="noShowPostFee"
-          className="shrink-0"
-          checked={postFee}
-          disabled={!canEdit || saving || timing === "MANUAL"}
-          onCheckedChange={(on) => {
-            setPostFee(!!on)
-            void save({ noShowPostFee: !!on }, () => setPostFee(!on))
-          }}
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          <SavedTick show={savedShown && savedWhat === "fee"} />
+          <Switch
+            id="noShowPostFee"
+            checked={postFee}
+            disabled={!canEdit || saving || timing === "MANUAL"}
+            onCheckedChange={(on) => {
+              setPostFee(!!on)
+              void save({ noShowPostFee: !!on }, () => setPostFee(!on))
+            }}
+          />
+        </div>
       </div>
     </div>
   )
@@ -303,6 +328,7 @@ export function DeparturesManager({
 }) {
   const [on, setOn] = useState(initial)
   const [saving, setSaving] = useState(false)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   const toggle = async (next: boolean) => {
     setSaving(true)
@@ -314,7 +340,7 @@ export function DeparturesManager({
         body: JSON.stringify({ autoCheckOutZeroBalance: next }),
       })
       if (!res.ok) throw new Error()
-      toast.success(next ? "Night Audit will check out settled departures" : "Night Audit will wait for the desk to check departures out")
+      flashSaved()
     } catch {
       setOn(!next)
       toast.error("Couldn't save — nothing was changed")
@@ -332,13 +358,15 @@ export function DeparturesManager({
         </Label>
         <p className="text-xs text-muted-foreground max-sm:hidden">{DEPARTURES_HINT}</p>
       </div>
-      <Switch
-        id="autoCheckOutZeroBalance"
-        className="shrink-0"
-        checked={on}
-        disabled={!canEdit || saving}
-        onCheckedChange={(v) => void toggle(!!v)}
-      />
+      <div className="flex shrink-0 items-center gap-2">
+        <SavedTick show={savedShown} />
+        <Switch
+          id="autoCheckOutZeroBalance"
+          checked={on}
+          disabled={!canEdit || saving}
+          onCheckedChange={(v) => void toggle(!!v)}
+        />
+      </div>
     </div>
   )
 }

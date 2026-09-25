@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
@@ -15,7 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
-import { Users, Plus, Edit, Trash2, CheckCircle2, XCircle, Shield, Info, Briefcase, MoreHorizontal } from "@/components/icons"
+import { Users, Plus, Edit, Trash2, Shield, Info, Briefcase, MoreHorizontal } from "@/components/icons"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { OptionSelect } from "@/components/ui/option-select"
@@ -24,6 +25,10 @@ import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
 import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
 import type { StatusTone } from "@/lib/status-tone"
 import { MIN_PASSWORD_LENGTH, normalizeEmail, userIdentitySchema } from "@/lib/user-account-rules"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 type Role = {
   id: string
@@ -76,6 +81,7 @@ export function UsersRolesManager({
   // server enforces this regardless (src/app/api/settings/users/route.ts), but locking
   // it here too means they never fill out a form only to hit a 403 at the end.
   const isPropertyLockedActor = actorScope === "PROPERTY"
+  const confirm = useConfirm()
 
   const [users, setUsers] = useState<UserRow[]>([])
   const [roles, setRoles] = useState<Role[]>([])
@@ -134,8 +140,6 @@ export function UsersRolesManager({
   const selectedRoleGrantsEnterpriseOnly = enterpriseOnlyRoles.length > 0
   const [userErrorMsg, setUserErrorMsg] = useState<string | null>(null)
   const [savingUser, setSavingUser] = useState(false)
-  const [userToDelete, setUserToDelete] = useState<UserRow | null>(null)
-  const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null)
   const openNewUserDialog = () => {
     setEditingUser(null)
     setUserForm({
@@ -161,7 +165,10 @@ export function UsersRolesManager({
     setIsUserDialogOpen(true)
   }
 
-  const handleSaveUser = async () => {
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    // Enter submits the form, so the Save button's own guards are repeated here.
+    if (savingUser || !identityCheck.success || userForm.roleIds.length === 0) return
     setSavingUser(true)
     setUserErrorMsg(null)
 
@@ -185,10 +192,10 @@ export function UsersRolesManager({
       })
       if (res.ok) {
         setIsUserDialogOpen(false)
+        toast.success("Team member saved")
         fetchAll()
       } else {
-        const error = await res.json().catch(() => ({}))
-        setUserErrorMsg(error.error || "Failed to save user")
+        setUserErrorMsg(await apiError(res, "Couldn't save the team member. Try again."))
       }
     } catch (e) {
       console.error(e)
@@ -198,21 +205,29 @@ export function UsersRolesManager({
     }
   }
 
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return
-    setDeleteErrorMsg(null)
+  const handleDeleteUser = async (userToDelete: UserRow) => {
+    const ok = await confirm({
+      title: "Delete this team member?",
+      description: (
+        <>
+          This will permanently delete the user account for <strong>{userToDelete.firstName} {userToDelete.lastName}</strong>.
+        </>
+      ),
+      confirmLabel: "Delete user",
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/settings/users?id=${userToDelete.id}`, { method: "DELETE" })
       if (res.ok) {
-        setUserToDelete(null)
+        toast.success("Team member deleted")
         fetchAll()
       } else {
-        const error = await res.json()
-        setDeleteErrorMsg(error.error || "Failed to delete user")
+        toast.error(await apiError(res, "Couldn't delete the team member. Try again."))
       }
     } catch (e) {
       console.error(e)
-      setDeleteErrorMsg("An unexpected error occurred.")
+      toast.error("Couldn't delete the team member. Try again.")
     }
   }
 
@@ -231,8 +246,6 @@ export function UsersRolesManager({
   const [roleBlockedWidgets, setRoleBlockedWidgets] = useState<string[]>([])
   const [roleErrorMsg, setRoleErrorMsg] = useState<string | null>(null)
   const [savingRole, setSavingRole] = useState(false)
-  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
-  const [roleDeleteErrorMsg, setRoleDeleteErrorMsg] = useState<string | null>(null)
 
   const openNewRoleDialog = () => {
     setEditingRole(null)
@@ -252,7 +265,9 @@ export function UsersRolesManager({
     setIsRoleDialogOpen(true)
   }
 
-  const handleSaveRole = async () => {
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (savingRole || editingRole?.isSystem) return
     if (!roleName.trim()) {
       setRoleErrorMsg("Role name is required")
       return
@@ -271,10 +286,10 @@ export function UsersRolesManager({
       })
       if (res.ok) {
         setIsRoleDialogOpen(false)
+        toast.success("Role saved")
         fetchAll()
       } else {
-        const error = await res.json()
-        setRoleErrorMsg(error.error || "Failed to save role")
+        setRoleErrorMsg(await apiError(res, "Couldn't save the role. Try again."))
       }
     } catch (e) {
       console.error(e)
@@ -284,21 +299,25 @@ export function UsersRolesManager({
     }
   }
 
-  const handleDeleteRole = async () => {
-    if (!roleToDelete) return
-    setRoleDeleteErrorMsg(null)
+  const handleDeleteRole = async (roleToDelete: Role) => {
+    const ok = await confirm({
+      title: `Delete role "${roleToDelete.name}"?`,
+      description: "This cannot be undone. A role with users still assigned cannot be deleted.",
+      confirmLabel: "Delete role",
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/roles/${roleToDelete.id}`, { method: "DELETE" })
       if (res.ok) {
-        setRoleToDelete(null)
+        toast.success("Role deleted")
         fetchAll()
       } else {
-        const error = await res.json()
-        setRoleDeleteErrorMsg(error.error || "Failed to delete role")
+        toast.error(await apiError(res, "Couldn't delete the role. Try again."))
       }
     } catch (e) {
       console.error(e)
-      setRoleDeleteErrorMsg("An unexpected error occurred.")
+      toast.error("Couldn't delete the role. Try again.")
     }
   }
 
@@ -322,11 +341,11 @@ export function UsersRolesManager({
     <div className="space-y-6">
       {/* ---- Users (own card) ---- */}
       <ControlsCard
-        title="Staff Accounts"
+        title="Staff accounts"
         description="Manage user accounts, roles, and work-location assignment."
         action={
           <Button onClick={openNewUserDialog}>
-            <Plus className="w-4 h-4 mr-2" /> Add Team Member
+            <Plus className="w-4 h-4 mr-2" /> Add team member
           </Button>
         }
       >
@@ -351,11 +370,7 @@ export function UsersRolesManager({
                     >
                       <span className="flex w-full min-w-0 items-center gap-2">
                         <span className="truncate font-medium">{user.firstName} {user.lastName}</span>
-                        {user.isActive ? (
-                          <span className="flex shrink-0 items-center text-xs font-medium text-success"><CheckCircle2 className="mr-0.5 h-3.5 w-3.5" /> Active</span>
-                        ) : (
-                          <span className="flex shrink-0 items-center text-xs font-medium text-muted-foreground"><XCircle className="mr-0.5 h-3.5 w-3.5" /> Inactive</span>
-                        )}
+                        <StatusBadge className="shrink-0" status={user.isActive ? "ACTIVE" : "INACTIVE"} label={user.isActive ? "Active" : "Inactive"} />
                       </span>
                       <span className="w-full truncate text-sm text-muted-foreground">
                         {user.roles.length ? user.roles.map((ur) => ur.role.name).join(", ") : "No role"}
@@ -376,7 +391,7 @@ export function UsersRolesManager({
                           <Edit className="h-4 w-4" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setUserToDelete(user)}>
+                        <DropdownMenuItem variant="destructive" onClick={() => handleDeleteUser(user)}>
                           <Trash2 className="h-4 w-4" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -424,17 +439,13 @@ export function UsersRolesManager({
                         : properties.find((p) => p.id === user.propertyId)?.name ?? "Single property"}
                     </TableCell>
                     <TableCell>
-                      {user.isActive ? (
-                        <span className="flex items-center text-success text-sm font-medium"><CheckCircle2 className="w-4 h-4 mr-1" /> Active</span>
-                      ) : (
-                        <span className="flex items-center text-muted-foreground text-sm font-medium"><XCircle className="w-4 h-4 mr-1" /> Inactive</span>
-                      )}
+                      <StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} label={user.isActive ? "Active" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right px-6">
                       <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(user)}>
                         <Edit className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setUserToDelete(user)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(user)}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </TableCell>
@@ -455,11 +466,11 @@ export function UsersRolesManager({
 
       {/* ---- Roles & Permissions (own card) ---- */}
       <ControlsCard
-        title="Roles & Permissions"
+        title="Roles & permissions"
         description="Per-module view / create / update / delete access. System roles are shared and read-only."
         action={
           <Button onClick={openNewRoleDialog} className="max-md:hidden">
-            <Plus className="w-4 h-4 mr-2" /> New Role
+            <Plus className="w-4 h-4 mr-2" /> Add role
           </Button>
         }
       >
@@ -499,7 +510,7 @@ export function UsersRolesManager({
                   <Edit className="w-4 h-4 mr-1" /> {role.isSystem ? "View" : "Edit"}
                 </Button>
                 {!role.isSystem && (
-                  <Button variant="ghost" size="sm" onClick={() => setRoleToDelete(role)}>
+                  <Button variant="ghost" size="sm" onClick={() => handleDeleteRole(role)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 )}
@@ -509,32 +520,12 @@ export function UsersRolesManager({
         </div>
       </ControlsCard>
 
-      {/* ---- User delete confirm ---- */}
-      <Dialog open={!!userToDelete} onOpenChange={(open) => { if (!open) { setUserToDelete(null); setDeleteErrorMsg(null) } }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Are you absolutely sure?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the user account for <strong>{userToDelete?.firstName} {userToDelete?.lastName}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteErrorMsg && (
-            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-start">
-              <Shield className="w-4 h-4 mr-2 mt-0.5 shrink-0" /><span>{deleteErrorMsg}</span>
-            </div>
-          )}
-          <DialogFooter className="mt-4 gap-2">
-            <Button variant="outline" onClick={() => { setUserToDelete(null); setDeleteErrorMsg(null) }}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteUser}>Delete User</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ---- User add/edit ---- */}
       <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-        <DialogContent>
+        <DialogContent size="md">
+          <form onSubmit={handleSaveUser} className="contents">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Edit Team Member" : "Add Team Member"}</DialogTitle>
+            <DialogTitle>{editingUser ? "Edit team member" : "Add team member"}</DialogTitle>
             <DialogDescription>{editingUser ? "Update staff details and access levels." : "Create a new user account for your staff."}</DialogDescription>
           </DialogHeader>
           {userErrorMsg && (
@@ -545,18 +536,18 @@ export function UsersRolesManager({
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium">First Name</label>
+                <label className="text-sm font-medium">First name</label>
                 <Input value={userForm.firstName} onChange={(e) => { touch("firstName"); setUserForm({ ...userForm, firstName: e.target.value }) }} onBlur={() => touch("firstName")} placeholder="John" aria-invalid={!!fieldError("firstName")} />
                 {fieldError("firstName") && <p className="text-xs text-destructive">{fieldError("firstName")}</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Last Name</label>
+                <label className="text-sm font-medium">Last name</label>
                 <Input value={userForm.lastName} onChange={(e) => { touch("lastName"); setUserForm({ ...userForm, lastName: e.target.value }) }} onBlur={() => touch("lastName")} placeholder="Doe" aria-invalid={!!fieldError("lastName")} />
                 {fieldError("lastName") && <p className="text-xs text-destructive">{fieldError("lastName")}</p>}
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Email Address</label>
+              <label className="text-sm font-medium">Email address</label>
               <Input
                 type="email"
                 value={userForm.email}
@@ -573,7 +564,7 @@ export function UsersRolesManager({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Password {editingUser && <span className="text-muted-foreground font-normal">(Leave blank to keep unchanged)</span>}
+                Password {editingUser && <span className="text-muted-foreground font-normal">(leave blank to keep unchanged)</span>}
               </label>
               <Input
                 type="password"
@@ -652,7 +643,7 @@ export function UsersRolesManager({
             {/* The user's POST, separate from the Role above. Roles decide what the app
                 lets them see; this decides where they show up as assignable staff. */}
             <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-1"><Briefcase className="w-4 h-4 text-primary" /> Job Function</label>
+              <label className="text-sm font-medium flex items-center gap-1"><Briefcase className="w-4 h-4 text-primary" /> Job function</label>
               <OptionSelect
                 value={userForm.jobFunction}
                 onChange={(v) => setUserForm({ ...userForm, jobFunction: v })}
@@ -678,10 +669,10 @@ export function UsersRolesManager({
                   onValueChange={(v) => setUserForm({ ...userForm, scope: (v as "ENTERPRISE" | "PROPERTY") ?? "ENTERPRISE" })}
                   disabled={isPropertyLockedActor}
                 >
-                  <SelectTrigger><SelectValue>{userForm.scope === "ENTERPRISE" ? "All Properties" : "Single Property"}</SelectValue></SelectTrigger>
+                  <SelectTrigger><SelectValue>{userForm.scope === "ENTERPRISE" ? "All properties" : "Single property"}</SelectValue></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ENTERPRISE">All Properties (Enterprise-wide)</SelectItem>
-                    <SelectItem value="PROPERTY">Single Property (Work Location)</SelectItem>
+                    <SelectItem value="ENTERPRISE">All properties (enterprise-wide)</SelectItem>
+                    <SelectItem value="PROPERTY">Single property (work location)</SelectItem>
                   </SelectContent>
                 </Select>
                 {isPropertyLockedActor && (
@@ -690,7 +681,7 @@ export function UsersRolesManager({
               </div>
               {userForm.scope === "PROPERTY" && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Work Location</label>
+                  <label className="text-sm font-medium">Work location</label>
                   <Select
                     value={userForm.propertyId}
                     onValueChange={(v) => setUserForm({ ...userForm, propertyId: v ?? "" })}
@@ -720,61 +711,50 @@ export function UsersRolesManager({
                   grants Users &amp; Access, but a user assigned to a single property only reaches
                   their own property&apos;s setup — never the enterprise settings. That permission
                   will have no effect. Set Access to{" "}
-                  <strong className="text-foreground">All Properties</strong> if this user needs
+                  <strong className="text-foreground">All properties</strong> if this user needs
                   to manage people.
                 </p>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>Cancel</Button>
-            <Button
-              className=""
-              onClick={handleSaveUser}
-              disabled={savingUser || !identityCheck.success || userForm.roleIds.length === 0}
+            <Button type="button" variant="outline" onClick={() => setIsUserDialogOpen(false)}>Cancel</Button>
+            <SubmitButton
+              pending={savingUser}
+              disabled={!identityCheck.success || userForm.roleIds.length === 0}
             >
-              {savingUser ? "Saving..." : "Save User"}
-            </Button>
+              {editingUser ? "Save" : "Create"}
+            </SubmitButton>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
-      {/* ---- Role delete confirm ---- */}
-      <Dialog open={!!roleToDelete} onOpenChange={(open) => { if (!open) { setRoleToDelete(null); setRoleDeleteErrorMsg(null) } }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete role &quot;{roleToDelete?.name}&quot;?</DialogTitle>
-            <DialogDescription>This cannot be undone. A role with users still assigned cannot be deleted.</DialogDescription>
-          </DialogHeader>
-          {roleDeleteErrorMsg && (
-            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-start">
-              <Shield className="w-4 h-4 mr-2 mt-0.5 shrink-0" /><span>{roleDeleteErrorMsg}</span>
-            </div>
-          )}
-          <DialogFooter className="mt-4 gap-2">
-            <Button variant="outline" onClick={() => { setRoleToDelete(null); setRoleDeleteErrorMsg(null) }}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteRole}>Delete Role</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---- Role add/edit ---- */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent className="max-w-7xl sm:max-w-7xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingRole ? (editingRole.isSystem ? `View "${editingRole.name}"` : `Edit "${editingRole.name}"`) : "New Role"}</DialogTitle>
-            <DialogDescription>
+      {/* ---- Role add/edit ----
+          A side sheet, not a dialog (DESKTOP_PLAN D10): the permission matrix and the
+          widget list make this a long form, so the role name + description stay pinned at
+          the top and Cancel / Save at the bottom while only the body scrolls. Full width
+          on a phone (ui/sheet.tsx). */}
+      <Sheet open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+        <SheetContent
+          side="right"
+          className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[min(960px,95vw)]"
+        >
+          <form onSubmit={handleSaveRole} className="flex min-h-0 flex-1 flex-col">
+          <SheetHeader className="border-b border-border pr-12">
+            <SheetTitle>{editingRole ? (editingRole.isSystem ? `View "${editingRole.name}"` : `Edit "${editingRole.name}"`) : "Add role"}</SheetTitle>
+            <SheetDescription>
               {editingRole?.isSystem ? "System roles are shared across enterprises and cannot be edited." : "Tick the modules this role can view, create, update, or delete."}
-            </DialogDescription>
-          </DialogHeader>
-          {roleErrorMsg && (
-            <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-center">
-              <Shield className="w-4 h-4 mr-2" />{roleErrorMsg}
-            </div>
-          )}
-          <div className="space-y-4 py-2">
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+            {roleErrorMsg && (
+              <div className="bg-destructive-muted border border-destructive/30 text-destructive text-sm p-3 rounded-md flex items-center">
+                <Shield className="w-4 h-4 mr-2" />{roleErrorMsg}
+              </div>
+            )}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Role Name</label>
+              <label className="text-sm font-medium">Role name</label>
               <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Night Manager" disabled={editingRole?.isSystem} />
             </div>
             <RolePermissionMatrix value={roleMatrix} onChange={setRoleMatrix} disabled={editingRole?.isSystem} />
@@ -784,16 +764,17 @@ export function UsersRolesManager({
               <RoleWidgetAccess value={roleBlockedWidgets} onChange={setRoleBlockedWidgets} disabled={editingRole?.isSystem} />
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>{editingRole?.isSystem ? "Close" : "Cancel"}</Button>
+          <SheetFooter className="mt-0 flex-row justify-end border-t border-border max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <Button type="button" variant="outline" onClick={() => setIsRoleDialogOpen(false)}>{editingRole?.isSystem ? "Close" : "Cancel"}</Button>
             {!editingRole?.isSystem && (
-              <Button className="" onClick={handleSaveRole} disabled={savingRole}>
-                {savingRole ? "Saving..." : "Save Role"}
-              </Button>
+              <SubmitButton pending={savingRole}>
+                {editingRole ? "Save" : "Create"}
+              </SubmitButton>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

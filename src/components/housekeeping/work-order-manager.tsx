@@ -102,13 +102,13 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
       <div className="flex justify-between items-center">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-            Maintenance Tickets
-            <InfoHint label="Maintenance Tickets">Log and track room-specific issues like plumbing, electrical, or general repairs.</InfoHint>
+            Maintenance tickets
+            <InfoHint label="Maintenance tickets">Log and track room-specific issues like plumbing, electrical, or general repairs.</InfoHint>
           </h3>
         </div>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} className="">
-            <Plus className="w-4 h-4 mr-2" /> Raise Ticket
+            <Plus className="w-4 h-4 mr-2" /> Raise ticket
           </Button>
         )}
       </div>
@@ -116,7 +116,7 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
       {isAdding && (
         <div className="bg-card border rounded-xl p-6 shadow-sm mb-6">
           <div className="flex justify-between items-center mb-4 pb-4 border-b">
-            <h4 className="font-semibold text-foreground flex items-center"><Wrench className="w-4 h-4 mr-2 text-primary" /> New Work Order</h4>
+            <h4 className="font-semibold text-foreground flex items-center"><Wrench className="w-4 h-4 mr-2 text-primary" /> New work order</h4>
             <Button variant="ghost" size="sm" onClick={() => setIsAdding(false)}><X className="h-4 w-4" /></Button>
           </div>
           <form onSubmit={handleAddOrder} className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -137,7 +137,7 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
             </div>
             
             <div className="space-y-2">
-              <Label>Issue Type</Label>
+              <Label>Issue type</Label>
               <Select value={form.issueType} onValueChange={v => setForm(p => ({ ...p, issueType: v ?? "" }))}>
                 <SelectTrigger>
                   <SelectValue>
@@ -162,19 +162,19 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
               <Select value={form.priority} onValueChange={v => setForm(p => ({ ...p, priority: v ?? "" }))}>
                 <SelectTrigger>
                   <SelectValue>
-                    {form.priority === 'LOW' ? 'Low Priority' : form.priority === 'MEDIUM' ? 'Medium Priority' : 'High Priority (Urgent)'}
+                    {form.priority === 'LOW' ? 'Low priority' : form.priority === 'MEDIUM' ? 'Medium priority' : 'High priority (urgent)'}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="LOW" label="Low Priority">Low Priority</SelectItem>
-                  <SelectItem value="MEDIUM" label="Medium Priority">Medium Priority</SelectItem>
-                  <SelectItem value="HIGH" label="High Priority (Urgent)">High Priority (Urgent)</SelectItem>
+                  <SelectItem value="LOW" label="Low priority">Low priority</SelectItem>
+                  <SelectItem value="MEDIUM" label="Medium priority">Medium priority</SelectItem>
+                  <SelectItem value="HIGH" label="High priority (urgent)">High priority (urgent)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="flex items-end justify-end">
-              <Button type="submit" className="w-full sm:w-auto">Submit Ticket</Button>
+              <Button type="submit" className="w-full sm:w-auto">Submit ticket</Button>
             </div>
           </form>
         </div>
@@ -183,7 +183,7 @@ export function WorkOrderManager({ propertyId, rooms, refreshMatrix }: { propert
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {orders.length === 0 ? (
           <div className="col-span-full text-center py-12 border-2 border-dashed rounded-xl bg-card text-muted-foreground">
-            No active maintenance tickets! Your property is in perfect shape.
+            No active maintenance tickets. Your property is in perfect shape.
           </div>
         ) : (
           orders.map(order => {

@@ -24,7 +24,7 @@ export default function EditProfilePage({ params }: { params: Promise<{ upid: st
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-4">
+      <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -36,7 +36,7 @@ export default function EditProfilePage({ params }: { params: Promise<{ upid: st
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 pt-6">
+    <div className="space-y-6">
       <ProfileForm initialData={profile} upid={upid} />
     </div>
   )

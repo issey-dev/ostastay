@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useParams } from "next/navigation"
@@ -28,6 +28,8 @@ import { AllocationsManager, type AllocationDto } from "@/components/revenue/all
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { DesktopOnlyNotice } from "@/components/ui/mobile"
+import { toast } from "@/lib/toast"
+import { useUrlState } from "@/lib/use-url-state"
 import {
   emptyRatePlanForm,
   ratePlanFormSchema,
@@ -35,6 +37,7 @@ import {
   readApiError,
   type RatePlanFormValues,
 } from "@/lib/revenue-plan-schemas"
+import { PageHeader } from "@/components/ui/page-header"
 
 const ALLOCATION_TYPE_LABELS: Record<string, string> = {
   FNB: "Food & Beverage",
@@ -72,7 +75,19 @@ type ChargeCodeOption = {
   chargeSubgroup?: { chargeGroup?: { reportBucket?: string } | null } | null
 }
 
-export default function RevenueDashboard() {
+const REVENUE_TABS = ["rate-plans", "flash-report", "allocations", "seasonal-pricing"] as const
+type RevenueTab = (typeof REVENUE_TABS)[number]
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function RevenuePage() {
+  return (
+    <Suspense>
+      <RevenueDashboard />
+    </Suspense>
+  )
+}
+
+function RevenueDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,9 +99,6 @@ export default function RevenueDashboard() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<RatePlan | null>(null)
   
-  // Custom Notification State
-  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
-
   // Form State — Zod + React Hook Form (APP STANDARD 001).
   const form = useForm<RatePlanFormValues>({
     resolver: zodResolver(ratePlanFormSchema),
@@ -108,10 +120,13 @@ export default function RevenueDashboard() {
 
   // Desktop opens on Rate Plans, as it always has. A phone opens on Manager Flash — the
   // one tab that is read on the go — chosen after mount, so the server render (and every
-  // desktop) keeps the Rate Plans default.
-  const [tab, setTab] = useState("rate-plans")
+  // desktop) keeps the Rate Plans default. The tab lives in the URL (?tab=), so Back and
+  // refresh keep it; a phone only switches when the URL didn't name a tab.
+  const [tab, setTab] = useUrlState<RevenueTab>("tab", "rate-plans", REVENUE_TABS)
   useEffect(() => {
-    if (window.matchMedia("(max-width: 767px)").matches) setTab("flash-report")
+    const named = new URLSearchParams(window.location.search).has("tab")
+    if (!named && window.matchMedia("(max-width: 767px)").matches) setTab("flash-report")
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, [])
 
   const fetchRatePlans = () => {
@@ -196,7 +211,7 @@ export default function RevenueDashboard() {
         setIsDialogOpen(false)
         resetForm()
         fetchRatePlans()
-        setNotification({ title: "Success", message: "Rate plan saved successfully." })
+        toast.success(selectedPlan ? "Rate plan updated" : "Rate plan created")
       } else {
         // Shown inside the dialog so the user can fix the field and retry.
         setServerError(await readApiError(res, "Failed to save the rate plan."))
@@ -221,7 +236,7 @@ export default function RevenueDashboard() {
       }
       setIsDeleteModalOpen(false)
       fetchRatePlans()
-      setNotification({ title: "Success", message: "Rate plan deleted successfully." })
+      toast.success("Rate plan deleted")
     } catch {
       setDeleteError("Failed to delete the rate plan.")
     } finally {
@@ -235,25 +250,18 @@ export default function RevenueDashboard() {
   const isLockedPlan = !!selectedPlan?.isLocked
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Revenue Management
-            <InfoHint label="Revenue Management">Configure dynamic rate plans, priorities, and price calendars.</InfoHint>
-          </h2>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Revenue" hint="Configure dynamic rate plans, priorities, and price calendars." />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as RevenueTab)} className="w-full">
         {/* 2x2 on a phone, one row from md up — four triggers at whitespace-nowrap width
             overflow a 375px screen if forced into a single row (see the same fix on
             front-office's operations tabs). */}
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted/50 mb-6 data-horizontal:h-auto md:flex md:h-8 md:w-fit md:gap-0 md:data-horizontal:h-8">
           <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
-          <TabsTrigger value="rate-plans">Rate Plans</TabsTrigger>
+          <TabsTrigger value="rate-plans">Rate plans</TabsTrigger>
           <TabsTrigger value="allocations">Allocations</TabsTrigger>
-          <TabsTrigger value="seasonal-pricing">Rate Seasons</TabsTrigger>
+          <TabsTrigger value="seasonal-pricing">Rate seasons</TabsTrigger>
         </TabsList>
 
         <TabsContent value="flash-report" className="m-0">
@@ -272,7 +280,7 @@ export default function RevenueDashboard() {
             }}>
               <DialogTrigger asChild>
                 <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm max-md:hidden">
-                  <Plus className="mr-2 h-4 w-4" /> New Rate Plan
+                  <Plus className="mr-2 h-4 w-4" /> New rate plan
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
@@ -280,7 +288,7 @@ export default function RevenueDashboard() {
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  {isEditMode ? "Edit Rate Plan" : "Create New Rate Plan"}
+                  {isEditMode ? "Edit rate plan" : "Create new rate plan"}
                   {isLockedPlan && (
                     <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
                       <Lock className="h-3 w-3" /> Locked
@@ -289,7 +297,7 @@ export default function RevenueDashboard() {
                 </DialogTitle>
                 <DialogDescription>
                   {isLockedPlan
-                    ? "This is the property's Base Rate — its code, name, priority, and pricing rules are fixed and it can't be deleted. You can still add Package Allocations."
+                    ? "This is the property's Base Rate — its code, name, priority, and pricing rules are fixed and it can't be deleted. You can still add package allocations."
                     : isEditMode ? "Modify details for this rate plan." : "Enter the configuration for a new rate plan."}
                 </DialogDescription>
               </DialogHeader>
@@ -303,7 +311,7 @@ export default function RevenueDashboard() {
                     name="code"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Rate Code <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel>Rate code <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input
                             placeholder="e.g. BAR"
@@ -337,7 +345,7 @@ export default function RevenueDashboard() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Plan Name <span className="text-destructive">*</span></FormLabel>
+                      <FormLabel>Plan name <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <Input placeholder="Best Available Rate" {...field} disabled={isLockedPlan} />
                       </FormControl>
@@ -370,7 +378,7 @@ export default function RevenueDashboard() {
                   name="chargeCodeId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Accommodation Charge Code</FormLabel>
+                      <FormLabel>Accommodation charge code</FormLabel>
                       <SearchableSelect
                         value={field.value}
                         onChange={(v) => field.onChange(v ?? "")}
@@ -398,7 +406,7 @@ export default function RevenueDashboard() {
                     name="parentRatePlanId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Derive from another Rate Plan <span className="text-muted-foreground font-normal">Optional</span></FormLabel>
+                        <FormLabel>Derive from another rate plan <span className="text-muted-foreground font-normal">Optional</span></FormLabel>
                         <FormDescription className="text-xs mb-1">
                           Instead of its own Price Calendar, this plan&apos;s price is computed live as the parent plan&apos;s price plus an adjustment — e.g. &quot;BAR-BB&quot; derived from &quot;BAR&quot; at +$20 flat.
                         </FormDescription>
@@ -425,16 +433,16 @@ export default function RevenueDashboard() {
                         name="derivedAdjustmentType"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Adjustment Type</FormLabel>
+                            <FormLabel className="text-xs">Adjustment type</FormLabel>
                             <Select value={field.value} onValueChange={(v) => field.onChange(v === "FLAT" ? "FLAT" : "PERCENT")}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue>{field.value === "FLAT" ? "Flat Amount ($)" : "Percent (%)"}</SelectValue>
+                                  <SelectValue>{field.value === "FLAT" ? "Flat amount ($)" : "Percent (%)"}</SelectValue>
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="PERCENT">Percent (%)</SelectItem>
-                                <SelectItem value="FLAT">Flat Amount ($)</SelectItem>
+                                <SelectItem value="FLAT">Flat amount ($)</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -446,7 +454,7 @@ export default function RevenueDashboard() {
                         name="derivedAdjustmentValue"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs">Adjustment Value</FormLabel>
+                            <FormLabel className="text-xs">Adjustment value</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
@@ -479,7 +487,7 @@ export default function RevenueDashboard() {
                           />
                         </FormControl>
                         <FormLabel htmlFor="negotiated" className="font-normal cursor-pointer">
-                          This is a negotiated rate (Corporate/Wholesale)
+                          This is a negotiated rate (corporate/wholesale)
                         </FormLabel>
                       </FormItem>
                     )}
@@ -517,7 +525,7 @@ export default function RevenueDashboard() {
                           />
                         </FormControl>
                         <FormLabel htmlFor="houseUse" className="font-normal cursor-pointer">
-                          House Use
+                          House use
                         </FormLabel>
                       </FormItem>
                     )}
@@ -529,7 +537,7 @@ export default function RevenueDashboard() {
                 {/* Right column — package allocations chip picker */}
                 <div className="flex flex-col gap-2 border rounded-lg p-4 bg-muted/30 min-h-[240px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Package Allocations</span>
+                    <span className="text-sm font-medium">Package allocations</span>
                     <span className="text-xs text-muted-foreground">
                       {selectedAllocationIds.length} selected
                     </span>
@@ -570,7 +578,7 @@ export default function RevenueDashboard() {
                                     }
                                     title={a.mode === "INCLUDE_IN_RATE" ? "Included in rate" : "Added to rate"}
                                     className={cn(
-                                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+                                      "inline-flex items-center gap-1.5 rounded-none border px-3 py-1 text-sm transition-colors",
                                       selected
                                         ? "border-primary text-primary bg-primary/5 font-medium"
                                         : "border-border text-muted-foreground hover:border-foreground/40"
@@ -600,7 +608,7 @@ export default function RevenueDashboard() {
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Rate Plan"}</Button>
+                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save rate plan"}</Button>
               </DialogFooter>
             </form>
             </Form>
@@ -616,8 +624,8 @@ export default function RevenueDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Rate Plan Hierarchy
-            <InfoHint label="Rate Plan Hierarchy">Defines the pricing waterfall. Lower priority numbers always win in a conflict.</InfoHint>
+            Rate plan hierarchy
+            <InfoHint label="Rate plan hierarchy">Defines the pricing waterfall. Lower priority numbers always win in a conflict.</InfoHint>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -638,13 +646,13 @@ export default function RevenueDashboard() {
                     )}
                   </>
                 ) : (
-                  <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public Rate</Badge>
+                  <Badge variant="outline" className="bg-success-muted text-success border-success/30">Public rate</Badge>
                 )}
                 {plan.isComplimentary && (
                   <Badge variant="outline" className="bg-info-muted text-info border-info/30">Complimentary</Badge>
                 )}
                 {plan.isHouseUse && (
-                  <Badge variant="outline" className="text-muted-foreground">House Use</Badge>
+                  <Badge variant="outline" className="text-muted-foreground">House use</Badge>
                 )}
                 {plan.parentRatePlan && (
                   <Badge variant="outline" className="bg-info-muted text-info border-info/30">
@@ -707,7 +715,7 @@ export default function RevenueDashboard() {
                       <TableRow>
                         <TableHead>Priority</TableHead>
                         <TableHead>Code</TableHead>
-                        <TableHead>Plan Name</TableHead>
+                        <TableHead>Plan name</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -756,7 +764,7 @@ export default function RevenueDashboard() {
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Delete Rate Plan</DialogTitle>
+            <DialogTitle>Delete rate plan</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete the rate plan &quot;{selectedPlan?.name}&quot;? This action cannot be undone and will permanently remove all associated price calendars.
             </DialogDescription>
@@ -769,7 +777,7 @@ export default function RevenueDashboard() {
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
-              {deleting ? "Deleting..." : "Delete Rate Plan"}
+              {deleting ? "Deleting..." : "Delete rate plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -780,23 +788,6 @@ export default function RevenueDashboard() {
         <BulkPricingTool propertyId={propertyId} />
       </TabsContent>
     </Tabs>
-
-      {/* Notification Modal */}
-      <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : "text-success"}>
-              {notification?.title}
-            </DialogTitle>
-            <DialogDescription className="text-base text-foreground mt-2">
-              {notification?.message}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setNotification(null)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

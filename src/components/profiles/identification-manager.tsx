@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 import { NationalitySelect } from "@/components/ui/nationality-select"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -41,6 +43,7 @@ export function IdentificationManager({
    *  (Green Tax exempt) without fetching them again. */
   onDocuments?: (rows: ProfileDocument[]) => void
 }) {
+  const confirm = useConfirm()
   const [rows, setRows] = useState<ProfileDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -117,7 +120,9 @@ export function IdentificationManager({
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/profiles/${upid}/documents/${id}`, { method: "DELETE" })
+    if (!(await confirm({ title: "Delete this ID document?", description: "This cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
+    const res = await fetch(`/api/profiles/${upid}/documents/${id}`, { method: "DELETE" }).catch(() => null)
+    if (!res?.ok) toast.error("Couldn't delete it. Try again.")
     fetchRows()
     onChange?.()
   }
@@ -168,21 +173,21 @@ export function IdentificationManager({
         <div className="space-y-3 rounded-md border p-3 bg-muted/30">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label className="text-xs">Document Type</Label>
+              <Label className="text-xs">Document type</Label>
               <SystemCodeSelect category="ID_TYPE" value={form.documentType} onValueChange={(v) => setForm((p) => ({ ...p, documentType: v }))} placeholder="Select type" />
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs">Document Number</Label>
+              <Label className="text-xs">Document number</Label>
               <Input placeholder="e.g. AB123456" value={form.documentNumber} onChange={(e) => setForm((p) => ({ ...p, documentNumber: e.target.value }))} />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label className="text-xs">Issued Country</Label>
+              <Label className="text-xs">Issued country</Label>
               <NationalitySelect mode="country" value={form.issuingCountry} onValueChange={(v) => setForm((p) => ({ ...p, issuingCountry: v }))} />
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs">Expiry Date</Label>
+              <Label className="text-xs">Expiry date</Label>
               <DatePicker value={form.expiryDate} onChange={(v) => setForm((p) => ({ ...p, expiryDate: v }))} />
             </div>
           </div>
@@ -194,12 +199,12 @@ export function IdentificationManager({
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => { setAdding(false); setForm(emptyForm); setError(null) }}>Cancel</Button>
-            <Button type="button" size="sm" onClick={handleAdd} disabled={saving}>{saving ? "Saving..." : "Add Document"}</Button>
+            <Button type="button" size="sm" onClick={handleAdd} disabled={saving}>{saving ? "Saving..." : "Add document"}</Button>
           </div>
         </div>
       ) : (
         <Button type="button" variant="outline" size="sm" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add Document
+          <Plus className="h-4 w-4 mr-1" /> Add document
         </Button>
       )}
     </div>

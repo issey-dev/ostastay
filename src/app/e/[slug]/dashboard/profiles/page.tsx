@@ -1,19 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Search, UserPlus, Pencil, Trash2, Star, MoreHorizontal } from "@/components/icons"
+import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { useUrlState } from "@/lib/use-url-state"
+import { UserPlus, Pencil, Trash2, Star, MoreHorizontal } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useRouter, useParams } from "next/navigation"
 import { Users, Building2, Briefcase, UserCog } from "@/components/icons"
-import { Skeleton } from "@/components/ui/skeleton"
-import { EmptyState } from "@/components/ui/empty-state"
-import { ErrorState } from "@/components/ui/error-state"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { CountryFlag } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
@@ -21,8 +16,9 @@ import { toast } from "@/lib/toast"
 import { ContactLink } from "@/components/ui/contact-link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { INPUT_SEARCH } from "@/lib/input-presets"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { ListTable, type ListColumn } from "@/components/ui/list-table"
+import { FilterBar } from "@/components/ui/filter-bar"
 
 type Profile = {
   upid: string
@@ -75,65 +71,187 @@ const AVATAR_COLOR = "bg-muted text-foreground"
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest",
   COMPANY: "Company",
-  TRAVEL_AGENT: "Travel Agent",
+  TRAVEL_AGENT: "Travel agent",
   STAFF: "Staff",
 }
+
+const displayName = (p: Profile) =>
+  p.profileType === "GUEST" || p.profileType === "STAFF"
+    ? `${p.firstName} ${p.lastName || ""}`.trim()
+    : p.companyName || `${p.firstName} ${p.lastName || ""}`.trim()
 
 // Phone-only directory picker (the four tabs don't fit a phone's width).
 const PHONE_TABS = [
   { value: "GUEST", label: "Guests", icon: Users },
-  { value: "COMPANY", label: "Corporate Accounts", icon: Building2 },
-  { value: "TRAVEL_AGENT", label: "Travel Agents", icon: Briefcase },
+  { value: "COMPANY", label: "Corporate accounts", icon: Building2 },
+  { value: "TRAVEL_AGENT", label: "Travel agents", icon: Briefcase },
   { value: "STAFF", label: "Staff", icon: UserCog },
 ] as const
 
-export default function ProfilesDashboard() {
+function ProfilesDashboard() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const { label, country } = useSystemCodeLabels()
   const [profiles, setProfiles] = useState<Profile[]>([])
+  // Matching profiles on the server — the API returns the 50 most recently updated and
+  // the full count in X-Total-Count, so the footer can say "50 of 312".
+  const [total, setTotal] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [search, setSearch] = useState("")
-  const [activeTab, setActiveTab] = useState("GUEST")
+  const [activeTab, setActiveTab] = useUrlState<string>("tab", "GUEST", ["GUEST", "COMPANY", "TRAVEL_AGENT", "STAFF"])
+
+  // Search lives in the URL (?q=) so Back from a profile keeps it. The box is local state
+  // for instant typing; the URL (and so the fetch) follows 300 ms after the last keystroke,
+  // and a URL change that didn't come from typing (Back/Forward) flows back into the box.
+  const [urlSearch, setUrlSearch] = useUrlState<string>("q", "")
+  const [search, setSearch] = useState(urlSearch)
+  const lastWrittenSearch = useRef(urlSearch)
+  useEffect(() => {
+    if (urlSearch !== lastWrittenSearch.current) {
+      lastWrittenSearch.current = urlSearch
+      setSearch(urlSearch)
+    }
+  }, [urlSearch])
+  useEffect(() => {
+    const next = search.trim()
+    if (next === lastWrittenSearch.current) return
+    const t = setTimeout(() => {
+      lastWrittenSearch.current = next
+      setUrlSearch(next)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, setUrlSearch])
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingUpid, setDeletingUpid] = useState<string | null>(null)
 
-  const fetchProfiles = (searchQuery = "", type = activeTab) => {
+  const fetchProfiles = useCallback((signal?: AbortSignal) => {
     setLoading(true)
     setLoadError(false)
-    fetch(`/api/profiles?search=${searchQuery}&profileType=${type}`)
+    const params = new URLSearchParams({ search: urlSearch, profileType: activeTab })
+    fetch(`/api/profiles?${params}`, { signal })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load profiles")
+        const header = res.headers.get("X-Total-Count")
+        setTotal(header !== null && Number.isFinite(Number(header)) ? Number(header) : undefined)
         return res.json()
       })
       .then((data) => {
         setProfiles(Array.isArray(data) ? data : [])
       })
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (!signal?.aborted) setLoadError(true)
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false)
+      })
+  }, [urlSearch, activeTab])
+
+  // Refetch when the directory tab or the (debounced) search changes; a newer request
+  // cancels the one in flight so a slow answer can't land after a newer one.
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchProfiles(controller.signal)
+    return () => controller.abort()
+  }, [fetchProfiles])
+
+  const clearSearch = () => {
+    lastWrittenSearch.current = ""
+    setSearch("")
+    setUrlSearch("")
   }
 
-  useEffect(() => {
-    // Initial fetch
-    fetchProfiles()
-  }, [])
+  const profileUrl = (p: Profile) => `/e/${slug}/dashboard/profiles/${p.upid}`
+  const editProfile = (p: Profile) => router.push(`${profileUrl(p)}/edit`)
+  const askDelete = (p: Profile) => {
+    setDeletingUpid(p.upid)
+    setIsDeleteDialogOpen(true)
+  }
 
-  // Fetch when tab changes
-  useEffect(() => {
-    fetchProfiles(search, activeTab)
-  }, [activeTab])
-
-  // Debounced Search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchProfiles(search, activeTab)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [search])
-
-
+  const columns: ListColumn<Profile>[] = [
+    {
+      key: "name",
+      header: "Guest",
+      primary: true,
+      sortValue: displayName,
+      cell: (p) => (
+        <span className="inline-flex items-center gap-3">
+          <span className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+            {p.firstName?.charAt(0) || ""}{p.lastName?.charAt(0) || ""}
+          </span>
+          <span className="flex flex-col">
+            <span className="inline-flex items-center gap-1.5">
+              {/* inline-flex blocks the link's own underline — re-apply it on the name. */}
+              <span className="[a:hover_&]:underline">{displayName(p)}</span>
+              {p.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
+            </span>
+            {p.addresses?.[0]?.country && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                <CountryFlag value={p.addresses[0].country} />
+                {country(p.addresses[0].country)}
+              </span>
+            )}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      csv: (p) => [primaryEmail(p.communications), primaryMobile(p.communications)].filter(Boolean).join(" / "),
+      cell: (p) => (
+        <div className="text-sm">
+          {primaryEmail(p.communications) ? <div className="text-foreground">{primaryEmail(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
+          {primaryMobile(p.communications) ? <div className="text-muted-foreground">{primaryMobile(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (p) => label("CLASSIFICATION", p.classification),
+      cell: (p) => (
+        <div className="flex flex-col gap-1 items-start">
+          <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || "bg-muted text-foreground"}`}>
+            {label("CLASSIFICATION", p.classification)}
+          </span>
+          {p.vipLevel && (
+            <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
+              {label("VIP_LEVEL", p.vipLevel)}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "history",
+      header: "History",
+      sortValue: (p) => p.totalStays || 0,
+      csv: (p) => `${p.totalStays || 0} stays / ${(p.totalRevenue || 0).toFixed(2)}`,
+      cell: (p) => (
+        <div className="flex flex-col text-sm">
+          <span className="text-foreground font-medium">{p.totalStays || 0} Stays</span>
+          <span className="text-muted-foreground">${(p.totalRevenue || 0).toFixed(2)}</span>
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      // The row opens the profile — the buttons must not also do that.
+      cell: (p) => (
+        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" className="text-primary" onClick={() => editProfile(p)}>
+            <Pencil className="mr-2 h-4 w-4" /> Edit
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => askDelete(p)}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          </Button>
+        </div>
+      ),
+    },
+  ]
 
   const handleDelete = async () => {
     if (!deletingUpid) return
@@ -142,7 +260,7 @@ export default function ProfilesDashboard() {
       if (res.ok) {
         setIsDeleteDialogOpen(false)
         setDeletingUpid(null)
-        fetchProfiles(search, activeTab)
+        fetchProfiles()
       } else {
         const error = await res.json()
         toast.error(error.error || "Failed to delete profile")
@@ -153,24 +271,23 @@ export default function ProfilesDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Client Relations
-            <InfoHint label="Client Relations">Manage your individual guests, travel agents, and corporate accounts here.</InfoHint>
-          </h2>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Client Relations"
+        hint="Manage your individual guests, travel agents, and corporate accounts here. Search by name, email, or phone."
+        actionsClassName="gap-2 max-sm:w-full"
+        actions={
+          <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
+            <UserPlus className="mr-2 h-4 w-4" /> New {PROFILE_TYPE_LABELS[activeTab] ?? activeTab}
+          </Button>
+        }
+      />
 
-        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/new?type=${activeTab}`)}>
-          <UserPlus className="mr-2 h-4 w-4" /> New {PROFILE_TYPE_LABELS[activeTab] ?? activeTab}
-        </Button>
-        
         {/* Delete Modal */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Delete Profile</DialogTitle>
+              <DialogTitle>Delete profile</DialogTitle>
               <DialogDescription>
                 Are you sure you want to delete this profile? Profiles with active reservations cannot be deleted.
               </DialogDescription>
@@ -182,9 +299,7 @@ export default function ProfilesDashboard() {
           </DialogContent>
         </Dialog>
 
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))} className="w-full flex-col">
         {/* Phones: the directory is a picker, not four tabs scrolling off the edge. */}
         <div className="mb-2 md:hidden">
           <Select value={activeTab} onValueChange={(v) => v && setActiveTab(v as string)}>
@@ -220,13 +335,13 @@ export default function ProfilesDashboard() {
             value="COMPANY"
             className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
-            <Building2 className="w-4 h-4 mr-2" /> Corporate Accounts
+            <Building2 className="w-4 h-4 mr-2" /> Corporate accounts
           </TabsTrigger>
           <TabsTrigger
             value="TRAVEL_AGENT"
             className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
           >
-            <Briefcase className="w-4 h-4 mr-2" /> Travel Agents
+            <Briefcase className="w-4 h-4 mr-2" /> Travel agents
           </TabsTrigger>
           <TabsTrigger
             value="STAFF"
@@ -236,201 +351,105 @@ export default function ProfilesDashboard() {
           </TabsTrigger>
         </TabsList>
 
-      <Card>
-        <CardHeader className="bg-muted/50 border-b border-border">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                {activeTab === "GUEST" ? "Guest Directory" : activeTab === "COMPANY" ? "Corporate Accounts" : activeTab === "STAFF" ? "Staff Directory" : "Travel Agents"}
-              <InfoHint>Search by name, email, or phone.</InfoHint>
-            </CardTitle>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                {...INPUT_SEARCH}
-                placeholder="Search profiles..."
-                className="pl-9 bg-card"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Mobile: stacked cards instead of a horizontally-scrolled table */}
+      {/* The tab already names the directory — no second heading here. */}
+      <FilterBar
+        className="mb-3"
+        search={{ value: search, onChange: setSearch, placeholder: "Name, email, phone…" }}
+        activeCount={urlSearch ? 1 : 0}
+        onClear={clearSearch}
+      />
+      <ListTable
+        rows={profiles}
+        columns={columns}
+        rowKey={(p) => p.upid}
+        rowHref={profileUrl}
+        total={total}
+        loading={loading}
+        error={loadError}
+        onRetry={() => fetchProfiles()}
+        empty={{ icon: Users, title: "No profiles found" }}
+        exportName={`profiles-${activeTab.toLowerCase()}`}
+        // Capped at the 50 most recently updated — say so quietly, next to "50 of 312".
+        toolbar={total !== undefined && total > profiles.length ? <span>Refine the search to see the rest</span> : undefined}
+        mobile={
           <MobileCardList className="p-4">
-            {loading ? (
-              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
-            ) : loadError ? (
-              <ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles(search, activeTab)} />
-            ) : profiles.length === 0 ? (
-              <EmptyState icon={Users} title="No profiles found" />
-            ) : (
-              profiles.map((p) => {
-                const open = () => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)
-                const email = primaryEmail(p.communications)
-                const mobile = primaryMobile(p.communications)
-                return (
-                  <MobileCard
-                    key={p.upid}
-                    onClick={open}
-                    title={
-                      <span className="inline-flex items-center gap-1.5">
-                        {p.profileType === 'GUEST' || p.profileType === 'STAFF'
-                          ? `${p.firstName} ${p.lastName || ''}`.trim()
-                          : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
-                        {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+            {profiles.map((p) => {
+              const open = () => router.push(profileUrl(p))
+              const email = primaryEmail(p.communications)
+              const mobile = primaryMobile(p.communications)
+              return (
+                <MobileCard
+                  key={p.upid}
+                  onClick={open}
+                  title={
+                    <span className="inline-flex items-center gap-1.5">
+                      {displayName(p)}
+                      {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                    </span>
+                  }
+                  subtitle={
+                    p.addresses?.[0]?.country ? (
+                      <span className="inline-flex items-center gap-1">
+                        <CountryFlag value={p.addresses[0].country} />
+                        {country(p.addresses[0].country)}
                       </span>
-                    }
-                    subtitle={
-                      p.addresses?.[0]?.country ? (
-                        <span className="inline-flex items-center gap-1">
-                          <CountryFlag value={p.addresses[0].country} />
-                          {country(p.addresses[0].country)}
-                        </span>
-                      ) : undefined
-                    }
-                    badge={
-                      // "Regular" is the default for nearly everyone — only flag the exceptions.
-                      p.classification !== "REGULAR" ? (
-                        <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                          {label("CLASSIFICATION", p.classification)}
-                        </span>
-                      ) : undefined
-                    }
-                    meta={[
-                      { label: "Stays", value: p.totalStays || 0 },
-                      { label: "Revenue", value: `$${(p.totalRevenue || 0).toFixed(2)}` },
-                    ]}
-                    actions={
-                      <>
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
-                          <Pencil className="mr-2 h-4 w-4" /> Edit
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="More actions" />}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-48">
-                            <DropdownMenuItem onClick={open}>
-                              <Users className="h-4 w-4" /> Open profile
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => {
-                                setDeletingUpid(p.upid)
-                                setIsDeleteDialogOpen(true)
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" /> Delete profile
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
-                    }
-                  >
-                    {/* Tapping a contact link dials / mails — it must not also open the profile. */}
-                    <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-                      {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
-                      {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
-                    </div>
-                  </MobileCard>
-                )
-              })
-            )}
+                    ) : undefined
+                  }
+                  badge={
+                    // "Regular" is the default for nearly everyone — only flag the exceptions.
+                    p.classification !== "REGULAR" ? (
+                      <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
+                        {label("CLASSIFICATION", p.classification)}
+                      </span>
+                    ) : undefined
+                  }
+                  meta={[
+                    { label: "Stays", value: p.totalStays || 0 },
+                    { label: "Revenue", value: `$${(p.totalRevenue || 0).toFixed(2)}` },
+                  ]}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => editProfile(p)}>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="More actions" />}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-48">
+                          <DropdownMenuItem onClick={open}>
+                            <Users className="h-4 w-4" /> Open profile
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => askDelete(p)}>
+                            <Trash2 className="h-4 w-4" /> Delete profile
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  }
+                >
+                  {/* Tapping a contact link dials / mails — it must not also open the profile. */}
+                  <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                    {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
+                    {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
+                  </div>
+                </MobileCard>
+              )
+            })}
           </MobileCardList>
-
-          {/* Tablet/desktop: full table */}
-          <Table className="hidden md:table">
-            <TableHeader className="bg-muted/50">
-              <TableRow className="border-border">
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Guest</TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Contact</TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Status</TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">History</TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                ))
-              ) : loadError ? (
-                <TableRow><TableCell colSpan={5} className="py-0"><ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles(search, activeTab)} /></TableCell></TableRow>
-              ) : profiles.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-0"><EmptyState icon={Users} title="No profiles found" /></TableCell></TableRow>
-              ) : (
-                profiles.map((p) => (
-                  <TableRow key={p.upid} className="hover:bg-muted/40">
-                    <TableCell className="px-6 py-4">
-                      <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}`)}>
-                        <div className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
-                          {p.firstName?.charAt(0) || ''}{p.lastName?.charAt(0) || ''}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground hover:underline inline-flex items-center gap-1.5">
-                            {p.profileType === 'GUEST' || p.profileType === 'STAFF'
-                              ? `${p.firstName} ${p.lastName || ''}`.trim()
-                              : p.companyName || `${p.firstName} ${p.lastName || ''}`.trim()}
-                            {p.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
-                          </span>
-                          {p.addresses?.[0]?.country && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                              <CountryFlag value={p.addresses[0].country} />
-                              {country(p.addresses[0].country)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <div className="text-sm">
-                        {primaryEmail(p.communications) ? <div className="text-foreground">{primaryEmail(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
-                        {primaryMobile(p.communications) ? <div className="text-muted-foreground">{primaryMobile(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <div className="flex flex-col gap-1 items-start">
-                        <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                          {label("CLASSIFICATION", p.classification)}
-                        </span>
-                        {p.vipLevel && (
-                          <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
-                            {label("VIP_LEVEL", p.vipLevel)}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <div className="flex flex-col text-sm">
-                        <span className="text-foreground font-medium">{p.totalStays || 0} Stays</span>
-                        <span className="text-muted-foreground">${(p.totalRevenue || 0).toFixed(2)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 transition-opacity">
-                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${p.upid}/edit`)}>
-                          <Pencil className="mr-2 h-4 w-4" /> Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
-                          setDeletingUpid(p.upid)
-                          setIsDeleteDialogOpen(true)
-                        }}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        }
+      />
       </Tabs>
     </div>
+  )
+}
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function ProfilesPage() {
+  return (
+    <Suspense>
+      <ProfilesDashboard />
+    </Suspense>
   )
 }

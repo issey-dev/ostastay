@@ -1,15 +1,10 @@
 import { PropertyApprovalQueue } from "@/components/osta/property-approval-queue"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 
 export default function OstaPropertiesPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Property Approvals
-            <InfoHint label="Property Approvals">New properties are locked out of real use until approved here.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader title="Property Approvals" tabTitle="Property Approvals · Osta" hint="New properties are locked out of real use until approved here." />
       <PropertyApprovalQueue />
     </div>
   )

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CountryFlag } from "@/components/ui/country-flag"
 import { useNationalities } from "@/components/ui/nationality-select"
-import { Loader2 } from "@/components/icons"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type Slot = {
   id: string
@@ -84,12 +84,12 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error || "Failed to apply.")
+        setError(body.error || "Couldn't apply the details. Try again.")
         return
       }
       onApplied()
     } catch {
-      setError("An unexpected error occurred.")
+      setError("Couldn't apply the details. Try again.")
     } finally {
       setApplying(false)
     }
@@ -97,7 +97,7 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Review eRegistration submission</DialogTitle>
           <DialogDescription>
@@ -109,7 +109,7 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
         <div className="space-y-3 text-sm">
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border p-3">
             <div className="text-muted-foreground">Name</div><div>{fullName || "—"}</div>
-            <div className="text-muted-foreground">Date of Birth</div><div>{slot.dateOfBirth ? new Date(slot.dateOfBirth).toLocaleDateString() : "—"}</div>
+            <div className="text-muted-foreground">Date of birth</div><div>{slot.dateOfBirth ? new Date(slot.dateOfBirth).toLocaleDateString() : "—"}</div>
             <div className="text-muted-foreground">Nationality</div>
             <div className="inline-flex items-center gap-1">{slot.nationality && <CountryFlag value={slot.nationality} />}{nationalities.nationality(slot.nationality) || "—"}</div>
             <div className="text-muted-foreground">Email / Mobile</div><div>{[slot.email, slot.mobile].filter(Boolean).join(" / ") || "—"}</div>
@@ -128,7 +128,7 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
           <div className="grid grid-cols-2 gap-3">
             {slot.idPhotoPath && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">ID Photo</p>
+                <p className="text-xs text-muted-foreground">ID photo</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/reservations/${reservationId}/eregistration-link/slots/${slot.id}/photo`}
@@ -162,11 +162,10 @@ export function EregistrationReviewDialog({ reservationId, slot, onClose, onAppl
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={apply} disabled={applying}>
-            {applying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button variant="outline" onClick={onClose} disabled={applying}>Cancel</Button>
+          <SubmitButton type="button" onClick={apply} pending={applying} pendingLabel="Applying…">
             {isNewGuest ? "Add guest & apply" : "Apply selected"}
-          </Button>
+          </SubmitButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

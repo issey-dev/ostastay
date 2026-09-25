@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/ui/empty-state"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -48,7 +49,7 @@ function AmenityFields({ form }: { form: AmenityForm }) {
         name="name"
         render={({ field }) => (
           <FormItem className="flex-1">
-            <FormLabel>Facility Name</FormLabel>
+            <FormLabel>Facility name</FormLabel>
             <FormControl>
               <Input placeholder="e.g. Infinity Pool" {...field} />
             </FormControl>
@@ -61,7 +62,7 @@ function AmenityFields({ form }: { form: AmenityForm }) {
         name="description"
         render={({ field }) => (
           <FormItem className="flex-1">
-            <FormLabel>Description (Optional)</FormLabel>
+            <FormLabel>Description (optional)</FormLabel>
             <FormControl>
               <Input placeholder="Located on the rooftop" {...field} value={field.value ?? ""} />
             </FormControl>
@@ -104,7 +105,7 @@ function EditAmenityDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>Edit amenity</DialogTitle>
         </DialogHeader>
@@ -204,7 +205,7 @@ export function FacilityAmenitiesManager({ propertyId }: { propertyId: string })
 
           {/* Phone view — the table below takes over at md. */}
           <MobileCardList
-            empty={<p className="rounded-xl border border-border p-4 text-center text-sm text-muted-foreground">No facilities configured.</p>}
+            empty={<EmptyState size="inline" title="No facilities configured." />}
           >
             {loading
               ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)

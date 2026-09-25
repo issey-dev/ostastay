@@ -17,8 +17,9 @@ import Link from "next/link"
 // The Hub's nav — deliberately NOT the permission-filtered AppSidebar. Two areas, kept
 // visibly apart (2026-09-23, .agents/docs/HUB_SETUP_PLAN.md):
 //   "Enterprise" — shared settings; never shown to a single-property user
-//   "Property"   — "Controls" and the Channel Manager; which property is named by the
-//                  property band above each page
+//   "Property"   — "Controls" (a collapsible list of the property's setup sections) and
+//                  the Channel Manager; which property is named by the property band
+//                  above each page
 // The item lists live in src/components/hub/hub-nav.ts; this server half decides which
 // items the user may see, the client half (HubSidebarNav) knows which page is open.
 //

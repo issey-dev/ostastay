@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Send, FileStack, Mail, Ban, Loader2, CheckCircle2, Unlock } from "@/components/icons"
+import { Send, FileStack, Mail, Ban, Loader2, Unlock } from "@/components/icons"
 import { toast } from "@/lib/toast"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import type { StatusTone } from "@/lib/status-tone"
 
 type Slot = { id: string; slotIndex: number; isPrimary: boolean; existingProfileId: string | null; status: string; firstName: string | null; lastName: string | null }
 type LinkStatus = { id: string; status: string; expiresAt: string } | null
@@ -18,8 +23,8 @@ const noopSubscribe = () => () => {}
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active", EXPIRED: "Expired", REVOKED: "Revoked", COMPLETED: "Completed",
 }
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  ACTIVE: "default", EXPIRED: "destructive", REVOKED: "outline", COMPLETED: "secondary",
+const STATUS_TONE: Record<string, StatusTone> = {
+  ACTIVE: "success", EXPIRED: "danger", REVOKED: "neutral", COMPLETED: "info",
 }
 
 // Link generation/monitoring for one reservation, on the reservation detail page — a
@@ -36,6 +41,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [sessionUrl, setSessionUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const confirm = useConfirm()
   const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false)
   const [reopenSelection, setReopenSelection] = useState<Set<string>>(new Set())
   // Web Share (phones): hand the link straight to WhatsApp / SMS / mail. False on the
@@ -62,7 +68,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
     try {
       const res = await fetch(`/api/reservations/${reservationId}/eregistration-link`, { method: "POST" })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to generate link."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't generate the link. Try again."); return }
       setSessionToken(body.token)
       setSessionUrl(body.url)
       if (Array.isArray(body.warnings) && body.warnings.length > 0) {
@@ -79,7 +85,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
     const res = await fetch(`/api/reservations/${reservationId}/eregistration-link/slots/${slotId}/reopen`, { method: "POST" })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      toast.error(body.error || "Failed to reopen that guest's slot.")
+      toast.error(body.error || "Couldn't reopen that guest's details. Try again.")
       return false
     }
     return true
@@ -136,11 +142,18 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
   }
 
   const revoke = async () => {
+    const ok = await confirm({
+      title: "Revoke this link?",
+      description: "The guest's link stops working. Details already submitted are kept.",
+      confirmLabel: "Revoke",
+      destructive: true,
+    })
+    if (!ok) return
     setBusy("revoke")
     try {
       const res = await fetch(`/api/reservations/${reservationId}/eregistration-link/revoke`, { method: "POST" })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to revoke."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't revoke the link. Try again."); return }
       setSessionToken(null); setSessionUrl(null)
       toast.success("Link revoked")
       refetch()
@@ -177,7 +190,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: sessionToken }),
       })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to send email."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't send the email. Try again."); return }
       toast.success(`Sent to ${body.sentTo}`)
     } finally {
       setBusy(null)
@@ -189,14 +202,14 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
   const body = (
     <>
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <InlineLoading lines={2} label="Loading eRegistration" />
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm">
                 {link ? (
                   <>
-                    <Badge variant={STATUS_VARIANT[link.status] ?? "outline"}>{STATUS_LABEL[link.status] ?? link.status}</Badge>
+                    <StatusBadge label={STATUS_LABEL[link.status] ?? link.status} tone={STATUS_TONE[link.status] ?? "neutral"} />
                     {link.status === "ACTIVE" && <span className="text-muted-foreground">expires {format(new Date(link.expiresAt), "dd MMM yyyy, h:mm a")}</span>}
                   </>
                 ) : (
@@ -211,7 +224,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
                 )}
                 <Button size="sm" onClick={onRegenerateClick} disabled={!!busy}>
                   {busy === "generate" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
-                  {link ? "Regenerate" : "Generate Link"}
+                  {link ? "Regenerate" : "Generate link"}
                 </Button>
               </div>
             </div>
@@ -225,9 +238,9 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
                       <Send className="h-3.5 w-3.5 mr-1.5" /> Share link
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy Link</Button>
+                  <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy link</Button>
                   <Button size="sm" variant="outline" onClick={sendEmail} disabled={busy === "email"}>
-                    {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send via Email
+                    {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send via email
                   </Button>
                 </div>
               </div>
@@ -245,11 +258,11 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
                     <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}{s.isPrimary && <Badge variant="outline" className="ml-2 text-[10px] uppercase">Lead</Badge>}</span>
                     <div className="flex items-center gap-2">
                       {s.status === "APPLIED" ? (
-                        <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Applied</Badge>
+                        <StatusBadge label="Applied" tone="success" />
                       ) : s.status === "SUBMITTED" ? (
-                        <Badge>Submitted — review in Check-In</Badge>
+                        <StatusBadge label="Submitted — review in check-in" tone="info" />
                       ) : (
-                        <Badge variant="outline">Pending</Badge>
+                        <StatusBadge label="Pending" tone="neutral" />
                       )}
                       {(s.status === "SUBMITTED" || s.status === "APPLIED") && (
                         <Button
@@ -276,7 +289,7 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
 
   const reopenDialog = (
     <Dialog open={reopenConfirmOpen} onOpenChange={(o) => !o && setReopenConfirmOpen(false)}>
-      <DialogContent>
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Regenerate eRegistration link</DialogTitle>
           <DialogDescription>
@@ -288,13 +301,13 @@ export function ERegistrationPanel({ reservationId, embedded = false }: { reserv
             <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox checked={reopenSelection.has(s.id)} onCheckedChange={() => toggleReopenSelection(s.id)} />
               {[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}
-              {s.status === "APPLIED" && <Badge variant="secondary" className="text-[10px]">Already applied</Badge>}
+              {s.status === "APPLIED" && <StatusBadge label="Already applied" tone="neutral" />}
             </label>
           ))}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setReopenConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={confirmRegenerate}>Regenerate link</Button>
+          <SubmitButton type="button" onClick={confirmRegenerate} pending={busy === "generate"} pendingLabel="Regenerating…">Regenerate link</SubmitButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

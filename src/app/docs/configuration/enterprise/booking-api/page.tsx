@@ -30,7 +30,7 @@ export default function BookingApiKeys() {
         ]}
       />
       <p>
-        Save. <strong>The key is shown once.</strong> Copy it before choosing <strong>I have saved it</strong>, and send it to the
+        Choose <strong>Create</strong>. <strong>The key is shown once.</strong> Copy it before choosing <strong>I have saved it</strong>, and send it to the
         developer through a password manager, never by email or chat.
       </p>
       <Shot name="ent-booking-api" alt="The API keys list with each key's properties, modules, status, last use and bookings." />

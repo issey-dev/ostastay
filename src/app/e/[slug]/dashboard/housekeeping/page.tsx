@@ -19,15 +19,17 @@ import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
 import { HousekeepingRoomRow, RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
 import { MobileActions } from "@/components/ui/mobile"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 
 export default function HousekeepingDashboard() {
   const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const confirm = useConfirm()
   const [selectedRooms, setSelectedRooms] = useState<string[]>([])
   const [isUpdatingBulk, setIsUpdatingBulk] = useState(false)
-  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
 
   // Board filters — client-side over the already-fetched board
   const [filterStatus, setFilterStatus] = useState<string>("")
@@ -50,11 +52,12 @@ export default function HousekeepingDashboard() {
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [selectedAttendantId, setSelectedAttendantId] = useState<string>("UNASSIGNED")
 
-  // Phone-only board state: tapping a room row opens its action sheet, unless "Select"
-  // mode is on (then it toggles the row for the bulk bar). `singleRoomFlow` marks a
-  // dialog opened from the sheet for one room, so cancelling it drops that selection.
+  // Board interaction (phones and desktop alike): tapping a room opens its actions — the
+  // bottom sheet on phones, a status menu on the desktop card — unless "Select" mode is
+  // on, when it toggles the room for the bulk bar. `singleRoomFlow` marks a dialog opened
+  // for one room from the sheet/menu, so cancelling it drops that selection.
   const [sheetRoomId, setSheetRoomId] = useState<string | null>(null)
-  const [phoneSelectMode, setPhoneSelectMode] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
   const [singleRoomFlow, setSingleRoomFlow] = useState(false)
 
   const fetchRooms = async (silent = false) => {
@@ -66,11 +69,11 @@ export default function HousekeepingDashboard() {
         const data = await res.json()
         setRooms(data)
       } else if (!silent) {
-        setNotification({ title: "Error", message: "Failed to load the housekeeping board.", isError: true })
+        toast.error("Failed to load the housekeeping board.")
       }
     } catch (e) {
       console.error(e)
-      if (!silent) setNotification({ title: "Error", message: "Failed to load the housekeeping board.", isError: true })
+      if (!silent) toast.error("Failed to load the housekeeping board.")
     } finally {
       if (!silent) setLoading(false)
     }
@@ -87,10 +90,10 @@ export default function HousekeepingDashboard() {
         fetchRooms(true) // Refresh — the room may also have flipped to CLEAN server-side
       } else {
         const data = await res.json()
-        setNotification({ title: "Task Update Failed", message: data.error || "Failed to complete the task.", isError: true })
+        toast.error(data.error || "Failed to complete the task.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred completing the task.", isError: true })
+      toast.error("An error occurred completing the task.")
     }
   }
 
@@ -135,10 +138,10 @@ export default function HousekeepingDashboard() {
         if (newStatus === "CLEAN" || newStatus === "INSPECTED") fetchRooms(true)
       } else {
         const data = await res.json()
-        setNotification({ title: "Update Failed", message: data.error || "Failed to update the room status.", isError: true })
+        toast.error(data.error || "Failed to update the room status.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred updating the room.", isError: true })
+      toast.error("An error occurred updating the room.")
     }
   }
 
@@ -161,14 +164,15 @@ export default function HousekeepingDashboard() {
       })
       if (res.ok) {
         setRooms(prev => prev.map(r => selectedRooms.includes(r.id) ? { ...r, status: newStatus } : r))
+        toast.success(selectedRooms.length === 1 ? "Room updated" : `${selectedRooms.length} rooms updated`)
         setSelectedRooms([]) // Clear selection after successful update
         if (newStatus === "CLEAN" || newStatus === "INSPECTED") fetchRooms(true)
       } else {
         const data = await res.json()
-        setNotification({ title: "Bulk Update Failed", message: data.error || "Failed to update the selected rooms.", isError: true })
+        toast.error(data.error || "Failed to update the selected rooms.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred during the bulk update.", isError: true })
+      toast.error("An error occurred during the bulk update.")
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -185,12 +189,16 @@ export default function HousekeepingDashboard() {
         body: JSON.stringify({ roomIds: selectedRooms, assignedAttendantId })
       })
       if (res.ok) {
+        toast.success(assignedAttendantId ? "Rooms assigned" : "Assignment cleared")
         setShowAssignDialog(false)
         setSelectedRooms([])
         fetchRooms() // Re-fetch to get attendant data
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Couldn't assign the rooms.")
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
+      toast.error("Couldn't assign the rooms. Try again.")
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -212,14 +220,15 @@ export default function HousekeepingDashboard() {
           })
         })
         if (res.ok) {
+          toast.success("Ticket updated")
           closeMaintenanceDialog()
           fetchRooms() // Re-fetch to get updated Wrench info
         } else {
           const data = await res.json()
-          setNotification({ title: "Update Failed", message: data.error || "Failed to update the ticket.", isError: true })
+          toast.error(data.error || "Failed to update the ticket.")
         }
       } catch {
-        setNotification({ title: "Error", message: "An error occurred updating the ticket.", isError: true })
+        toast.error("An error occurred updating the ticket.")
       } finally {
         setIsUpdatingBulk(false)
       }
@@ -243,14 +252,15 @@ export default function HousekeepingDashboard() {
         })
       })
       if (res.ok) {
+        toast.success("Maintenance reported")
         closeMaintenanceDialog()
         fetchRooms() // Re-fetch to get new Wrench icons
       } else {
         const data = await res.json()
-        setNotification({ title: "Report Failed", message: data.error || "Failed to create the ticket.", isError: true })
+        toast.error(data.error || "Failed to create the ticket.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred creating the ticket.", isError: true })
+      toast.error("An error occurred creating the ticket.")
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -258,20 +268,22 @@ export default function HousekeepingDashboard() {
 
   const handleDeleteTicket = async () => {
     if (!editingTicket) return
+    if (!(await confirm({ title: "Delete this maintenance ticket?", confirmLabel: "Delete", destructive: true }))) return
     setIsUpdatingBulk(true)
     try {
       const res = await fetch(`/api/maintenance/${editingTicket.id}`, {
         method: "DELETE"
       })
       if (res.ok) {
+        toast.success("Ticket deleted")
         closeMaintenanceDialog()
         fetchRooms()
       } else {
         const data = await res.json()
-        setNotification({ title: "Delete Failed", message: data.error || "Failed to delete the ticket.", isError: true })
+        toast.error(data.error || "Failed to delete the ticket.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred deleting the ticket.", isError: true })
+      toast.error("An error occurred deleting the ticket.")
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -301,6 +313,7 @@ export default function HousekeepingDashboard() {
         })
       })
       if (res.ok) {
+        toast.success(selectedRooms.length === 1 ? "Room out of order" : `${selectedRooms.length} rooms out of order`)
         setShowOOODialog(false)
         setOooReason("")
         setOooReturnDate("")
@@ -308,10 +321,10 @@ export default function HousekeepingDashboard() {
         fetchRooms(true)
       } else {
         const data = await res.json()
-        setNotification({ title: "Update Failed", message: data.error || "Failed to mark rooms out of order.", isError: true })
+        toast.error(data.error || "Failed to mark rooms out of order.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred marking rooms out of order.", isError: true })
+      toast.error("An error occurred marking rooms out of order.")
     } finally {
       setIsUpdatingBulk(false)
     }
@@ -325,7 +338,8 @@ export default function HousekeepingDashboard() {
     }
   }
 
-  // From the phone room sheet: run the existing bulk dialogs for just this room.
+  // From the phone room sheet or the desktop card menu: run the existing bulk dialogs
+  // for just this room.
   const openSingleRoomDialog = (roomId: string, dialog: "ooo" | "issue") => {
     setSheetRoomId(null)
     setSelectedRooms([roomId])
@@ -385,29 +399,32 @@ export default function HousekeepingDashboard() {
       <PageHeader
         className="mb-8"
         actionsClassName="gap-3"
-        title="Housekeeping Dashboard"
+        title="Housekeeping"
         hint="Manage room statuses, turnovers, and attendant tasks."
         actions={<>
           <Button
-            variant={phoneSelectMode ? "default" : "outline"}
-            className="md:hidden"
+            variant={selectMode ? "default" : "outline"}
+            aria-pressed={selectMode}
+            title={selectMode ? undefined : "Select several rooms to change them together"}
             onClick={() => {
-              if (phoneSelectMode) setSelectedRooms([])
-              setPhoneSelectMode(!phoneSelectMode)
+              if (selectMode) setSelectedRooms([])
+              setSelectMode(!selectMode)
             }}
           >
             <CheckCircle2 className="w-4 h-4" />
-            {phoneSelectMode ? "Done" : "Select"}
+            {selectMode ? "Done" : "Select"}
           </Button>
           {isBulkMode && (
-            <Button variant="outline" onClick={() => setSelectedRooms(rooms.map(r => r.id))}>
-              Select All
+            // Only the rooms on screen — with a status filter on, a bulk change must never
+            // reach rooms the user can't see.
+            <Button variant="outline" onClick={() => setSelectedRooms(filteredRooms.map((r: any) => r.id))}>
+              {filteredRooms.length === rooms.length ? "Select all" : `Select all ${filteredRooms.length} shown`}
             </Button>
           )}
           <Link href={`/e/${slug}/dashboard/housekeeping/task-sheet`}>
             <Button variant="outline" className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />
-              Task Sheets
+              Task sheets
             </Button>
           </Link>
           <Button onClick={() => fetchRooms()} variant="outline" className="flex items-center gap-2">
@@ -424,8 +441,8 @@ export default function HousekeepingDashboard() {
           { label: "Dirty", value: "DIRTY" },
           { label: "Clean", value: "CLEAN" },
           { label: "Inspected", value: "INSPECTED" },
-          { label: "Out of Order", value: "OUT_OF_ORDER" },
-          { label: "Out of Service", value: "OUT_OF_SERVICE" },
+          { label: "Out of order", value: "OUT_OF_ORDER" },
+          { label: "Out of service", value: "OUT_OF_SERVICE" },
         ].map((opt) => (
           <Button
             key={opt.value}
@@ -482,7 +499,7 @@ export default function HousekeepingDashboard() {
               }}
             >
               <Users className="w-4 h-4 mr-2" />
-              Assign Floor
+              Assign floor
             </Button>
           </div>
           {/* Phones: compact rows; tap opens the room's action sheet */}
@@ -492,23 +509,29 @@ export default function HousekeepingDashboard() {
                 key={room.id}
                 room={room}
                 businessDate={currentProperty?.businessDate}
-                selectMode={phoneSelectMode}
+                selectMode={selectMode}
                 isSelected={selectedRooms.includes(room.id)}
                 onOpen={setSheetRoomId}
                 onToggleSelect={handleToggleSelect}
               />
             ))}
           </div>
-          <div className="hidden md:grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {/* Desktop/tablet: neutral cards; click opens the room's status menu, or toggles
+              the room in Select mode */}
+          <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
             {roomsByFloor[floorName].map((room: any) => (
               <RoomStatusCard
                 key={room.id}
                 room={room}
+                slug={slug}
                 onStatusChange={handleStatusChange}
+                selectMode={selectMode}
                 isSelected={selectedRooms.includes(room.id)}
                 onToggleSelect={handleToggleSelect}
                 onCompleteTask={handleCompleteTask}
                 onEditMaintenance={handleEditMaintenance}
+                onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
+                onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
                 businessDate={currentProperty?.businessDate}
               />
             ))}
@@ -516,8 +539,8 @@ export default function HousekeepingDashboard() {
         </div>
       ))}
 
-      {/* Floating Action Bar */}
-      {isBulkMode && (
+      {/* Floating Action Bar — steps aside while one of its dialogs is open */}
+      {isBulkMode && !showAssignDialog && !showMaintenanceDialog && !showOOODialog && (
         <div className="fixed bottom-[calc(1rem+var(--bottom-nav-offset,0px))] inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 hidden md:flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex items-center gap-3 border-r pr-3 md:pr-6 border-border shrink-0">
             <div className="bg-primary text-primary-foreground w-8 h-8 rounded-none flex items-center justify-center font-bold text-sm">
@@ -533,7 +556,7 @@ export default function HousekeepingDashboard() {
               className={`shadow-sm border shrink-0 ${toneMutedClasses("success")}`}
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Mark Clean
+              Mark clean
             </Button>
             <Button
               disabled={isUpdatingBulk}
@@ -541,7 +564,7 @@ export default function HousekeepingDashboard() {
               className={`shadow-sm border shrink-0 ${toneMutedClasses("info")}`}
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Mark Inspected
+              Mark inspected
             </Button>
             <Button
               disabled={isUpdatingBulk}
@@ -549,7 +572,7 @@ export default function HousekeepingDashboard() {
               className={`shadow-sm border shrink-0 ${toneMutedClasses("danger")}`}
             >
               <Brush className="w-4 h-4 mr-2" />
-              Mark Dirty
+              Mark dirty
             </Button>
             <Button
               disabled={isUpdatingBulk}
@@ -576,7 +599,7 @@ export default function HousekeepingDashboard() {
               className={`shadow-sm border font-semibold shrink-0 ${toneMutedClasses("warning")}`}
             >
               <Wrench className="w-4 h-4 mr-2" />
-              Report Issue
+              Report issue
             </Button>
           </div>
 
@@ -647,7 +670,7 @@ export default function HousekeepingDashboard() {
       <Dialog open={showMaintenanceDialog} onOpenChange={closeMaintenanceDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingTicket ? "Edit Maintenance Issue" : "Report Maintenance Issue"}</DialogTitle>
+            <DialogTitle>{editingTicket ? "Edit maintenance issue" : "Report maintenance issue"}</DialogTitle>
             <DialogDescription>
               {editingTicket 
                 ? "Update or delete this reported issue." 
@@ -656,7 +679,7 @@ export default function HousekeepingDashboard() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Issue Type</label>
+              <label className="text-sm font-medium text-foreground">Issue type</label>
               <OptionSelect
                 aria-label="Issue type"
                 value={maintenanceType}
@@ -720,14 +743,14 @@ export default function HousekeepingDashboard() {
                 onClick={handleDeleteTicket} 
                 disabled={isUpdatingBulk}
               >
-                Delete Ticket
+                Delete ticket
               </Button>
             ) : <div></div>}
             
             <div className="flex gap-2">
               <Button variant="outline" onClick={closeMaintenanceDialog}>Cancel</Button>
               <Button onClick={handleMaintenanceSubmit} disabled={isUpdatingBulk || !maintenanceDesc.trim()}>
-                {isUpdatingBulk ? "Saving..." : (editingTicket ? "Update Ticket" : "Submit Ticket")}
+                {isUpdatingBulk ? "Saving..." : (editingTicket ? "Update ticket" : "Submit ticket")}
               </Button>
             </div>
           </DialogFooter>
@@ -744,20 +767,20 @@ export default function HousekeepingDashboard() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Housekeeping Attendant</DialogTitle>
+            <DialogTitle>Assign housekeeping attendant</DialogTitle>
             <DialogDescription>
               Assign an attendant to {selectedRooms.length} selected room(s). They will see these rooms assigned to them.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Select Attendant</label>
+              <label className="text-sm font-medium text-foreground">Select attendant</label>
               <OptionSelect
                 aria-label="Attendant"
                 value={selectedAttendantId}
                 onChange={setSelectedAttendantId}
                 options={[
-                  { label: "Unassigned (Clear Assignment)", value: "UNASSIGNED" },
+                  { label: "Unassigned (clear assignment)", value: "UNASSIGNED" },
                   ...housekeepers.map(h => ({ label: `${h.firstName} ${h.lastName ?? ""}`.trim(), value: h.id })),
                 ]}
               />
@@ -766,7 +789,7 @@ export default function HousekeepingDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAssignDialog(false)}>Cancel</Button>
             <Button onClick={handleAssignSubmit} disabled={isUpdatingBulk}>
-              {isUpdatingBulk ? "Saving..." : "Save Assignment"}
+              {isUpdatingBulk ? "Saving..." : "Save assignment"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -776,7 +799,7 @@ export default function HousekeepingDashboard() {
       <Dialog open={showOOODialog} onOpenChange={(open) => !open && closeOOODialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark Out of Order</DialogTitle>
+            <DialogTitle>Mark out of order</DialogTitle>
             <DialogDescription>
               Removes {selectedRooms.length} selected room(s) from sale — they won&apos;t be offered for new bookings or
               check-ins until returned to service.
@@ -802,21 +825,8 @@ export default function HousekeepingDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={closeOOODialog}>Cancel</Button>
             <Button variant="destructive" onClick={handleMarkOOO} disabled={isUpdatingBulk}>
-              {isUpdatingBulk ? "Saving..." : "Mark Out of Order"}
+              {isUpdatingBulk ? "Saving..." : "Mark out of order"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Notification Dialog */}
-      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>{notification?.title}</DialogTitle>
-            <DialogDescription>{notification?.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setNotification(null)}>OK</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

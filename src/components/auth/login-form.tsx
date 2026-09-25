@@ -121,7 +121,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
   const handleSeed = async () => {
     const res = await fetch("/api/auth/seed", { method: "POST" })
     if (res.ok) {
-      toast.success("Seed complete! Use admin@hotel.com and password123 (Enterprise Code: demo)")
+      toast.success("Seed complete. Use admin@hotel.com and password123 (Enterprise Code: demo)")
     }
   }
 
@@ -223,7 +223,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
               )}
               {!enterpriseSlug && (
                 <div className="space-y-2">
-                  <Label htmlFor="code">Enterprise Code</Label>
+                  <Label htmlFor="code">Enterprise code</Label>
                   <Input
                     id="code"
                     type="text"
@@ -281,7 +281,7 @@ export function LoginForm({ enterpriseSlug, enterpriseName, showDevSeed }: {
               <Button type="submit" className="w-full h-11 " disabled={isLoading}>
                 {isLoading ? "Signing in..." : (
                   <>
-                    <KeyRound className="mr-2 w-4 h-4" /> Sign In
+                    <KeyRound className="mr-2 w-4 h-4" /> Sign in
                   </>
                 )}
               </Button>

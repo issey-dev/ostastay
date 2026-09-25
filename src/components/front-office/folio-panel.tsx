@@ -10,22 +10,97 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, Ban } from "@/components/icons"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, Ban, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
 import { RoutingInstructionsDialog } from "@/components/front-office/routing-instructions-dialog"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { InlineLoading } from "@/components/ui/inline-loading"
 
 type FolioPanelProps = {
   reservationId: string | null
   propertyId: string
   isOpen: boolean
   onClose: () => void
+  /** Called after a successful check-out from the panel (shown when the stay is settled). */
+  onCheckedOut?: () => void
 }
 
-export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: FolioPanelProps) {
+// The folio as a quick-view dialog. The same body renders full-page at
+// /e/[slug]/dashboard/reservations/[id]/folio (see FolioView) — "Open as page" links there.
+export function FolioPanel({ reservationId, propertyId, isOpen, onClose, onCheckedOut }: FolioPanelProps) {
   const { slug } = useParams<{ slug: string }>()
+  if (!isOpen || !reservationId) return null
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      {/* Already a full-screen layout of its own on phones (h-[100dvh]) — opt out of the
+          shared bottom-sheet treatment. */}
+      <DialogContent mobile="none" className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto max-sm:px-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <FolioView
+          key={reservationId}
+          reservationId={reservationId}
+          propertyId={propertyId}
+          onClose={onClose}
+          onCheckedOut={onCheckedOut}
+          renderHeader={({ actions }) => (
+            <DialogHeader className="border-b pb-4 mb-4 shrink-0">
+              <div className="flex justify-between items-center gap-3 w-full sm:pr-8">
+                <div>
+                  <DialogTitle className="text-2xl flex items-center max-sm:text-xl">
+                    <Receipt className="mr-2" /> Guest folio
+                  </DialogTitle>
+                  <DialogDescription>
+                    Manage billing, charges, and payments for this reservation.
+                  </DialogDescription>
+                </div>
+                <div className="flex items-center gap-2 max-sm:pr-8">
+                  {actions}
+                  <a
+                    href={`/e/${slug}/dashboard/reservations/${reservationId}/folio`}
+                    target="_blank"
+                    rel="noopener"
+                    title="Open as page"
+                    aria-label="Open as page"
+                    className="max-sm:hidden inline-flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+              </div>
+            </DialogHeader>
+          )}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type FolioViewProps = {
+  reservationId: string
+  propertyId: string
+  /** Dialog: close it. Page: usually omitted. Called after a check-out from here. */
+  onClose?: () => void
+  onCheckedOut?: () => void
+  /** The header is the host's (DialogHeader in the dialog, a page header on the page).
+      `actions` is the Check out button when the stay is settled, else null. */
+  renderHeader: (ctx: { actions: React.ReactNode; guestName: string; confirmationNo: string }) => React.ReactNode
+}
+
+export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, renderHeader }: FolioViewProps) {
+  const { slug } = useParams<{ slug: string }>()
+  const confirm = useConfirm()
+  const [checkingOut, setCheckingOut] = useState(false)
   const [folios, setFolios] = useState<any[]>([])
   const [activeFolioId, setActiveFolioId] = useState<string>("")
   const [loading, setLoading] = useState(false)
@@ -57,6 +132,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   const [voidTarget, setVoidTarget] = useState<any | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voidSaving, setVoidSaving] = useState(false)
+  // Which one-shot action is in flight — its button is disabled so it can't be sent twice.
+  const [pending, setPending] = useState<null | "charge" | "payment" | "move" | "payee">(null)
 
   // Settlement Method State (Direct vs City Ledger — see the Debtors module; charges
   // billed to an account finalize automatically at checkout, no mid-stay transfer here)
@@ -70,11 +147,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // Other in-house reservations' folios at this property — cross-room routing/move targets.
   const [inHouseFolios, setInHouseFolios] = useState<{ id: string; label: string }[]>([])
 
-  // Custom Notification State
-  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
-
   useEffect(() => {
-    if (isOpen && reservationId) {
+    if (reservationId) {
       fetchFolios()
       fetchLookupData()
       fetchInHouseFolios()
@@ -83,7 +157,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       // even before anything is posted (front-desk "begin my shift" behavior).
       fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
     }
-  }, [isOpen, reservationId])
+  }, [reservationId])
 
   const fetchRoutingRules = async () => {
     if (!reservationId) return
@@ -150,8 +224,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     }
   }
 
-  const handleVoidCharge = async () => {
-    if (!voidTarget || !activeFolioId || !voidReason.trim()) return
+  const handleVoidCharge = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (!voidTarget || !activeFolioId || !voidReason.trim() || voidSaving) return
     setVoidSaving(true)
     try {
       const res = await fetch(`/api/folios/${activeFolioId}/line-items/${voidTarget.id}/void`, {
@@ -161,15 +237,15 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       })
       const data = await res.json()
       if (res.ok) {
-        setNotification({ title: "Charge Voided", message: `"${voidTarget.description}" was voided.` })
+        toast.success("Charge voided", { description: voidTarget.description })
         setVoidTarget(null)
         setVoidReason("")
         fetchFolios()
       } else {
-        setNotification({ title: "Error", message: data.error || "Failed to void charge.", isError: true })
+        toast.error(data.error || "Couldn't void the charge. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error voiding charge.", isError: true })
+      toast.error("Couldn't void the charge. Try again.")
     } finally {
       setVoidSaving(false)
     }
@@ -186,19 +262,19 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         const newFolio = await res.json()
         setFolios([...folios, newFolio])
         setActiveFolioId(newFolio.id)
-        setNotification({ title: "Folio Created", message: `Folio ${newFolio.folioNumber} created successfully.` })
+        toast.success(`Folio ${newFolio.folioNumber} added`)
       } else {
-        setNotification({ title: "Error", message: "Failed to create folio.", isError: true })
+        toast.error("Couldn't add a folio. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error creating folio.", isError: true })
+      toast.error("Couldn't add a folio. Try again.")
     }
   }
 
   const handlePostCharge = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!activeFolioId) return
-
+    if (!activeFolioId || pending) return
+    setPending("charge")
     try {
       // Nothing posts to a reservation folio before check-in — the form is disabled
       // above, and the API refuses it regardless. Pre-arrival money is a deposit.
@@ -211,19 +287,21 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       if (res.ok) {
         setChargeForm({ chargeCodeId: "", amount: "", description: "", reference: "" })
         fetchFolios()
-        setNotification({ title: "Success", message: data.description ? `Charge "${data.description}" posted.` : "Charge posted successfully." })
+        toast.success("Charge posted", { description: data.description || undefined })
       } else {
-        setNotification({ title: "Error", message: data.error || "Failed to post charge.", isError: true })
+        toast.error(data.error || "Couldn't post the charge. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error posting charge.", isError: true })
+      toast.error("Couldn't post the charge. Try again.")
+    } finally {
+      setPending(null)
     }
   }
 
   const handlePostPayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!activeFolioId) return
-
+    if (!activeFolioId || pending) return
+    setPending("payment")
     try {
       // The server resolves the caller's own open cashier shift — no client shiftId.
       const res = await fetch(`/api/folios/${activeFolioId}/payments`, {
@@ -238,12 +316,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         // shouldn't mean re-picking the method the folio is configured to settle with.
         setPaymentForm({ paymentMethodId: activeFolio?.defaultPaymentMethodId || "", amount: "", referenceNumber: "" })
         fetchFolios()
-        setNotification({ title: "Success", message: "Payment posted successfully." })
+        toast.success("Payment posted")
       } else {
-        setNotification({ title: "Error", message: data.error || "Failed to post payment.", isError: true })
+        toast.error(data.error || "Couldn't post the payment. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error posting payment.", isError: true })
+      toast.error("Couldn't post the payment. Try again.")
+    } finally {
+      setPending(null)
     }
   }
 
@@ -269,22 +349,31 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       if (res.ok) {
         fetchRoutingRules()
         fetchFolios()
-        setNotification({ title: "Routing Saved", message: `Charges will auto-route.${data.movedCount ? ` ${data.movedCount} existing charge(s) moved.` : ""}` })
+        toast.success("Routing saved", { description: data.movedCount ? `${data.movedCount} existing charge(s) moved` : undefined })
       } else {
-        setNotification({ title: "Error", message: data.error || "Failed to save routing.", isError: true })
+        toast.error(data.error || "Couldn't save the routing. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error saving routing.", isError: true })
+      toast.error("Couldn't save the routing. Try again.")
     } finally {
       setRoutingSaving(false)
     }
   }
 
   const handleDeleteRouting = async (ruleId: string) => {
+    if (!(await confirm({ title: "Delete this routing rule?", description: "New charges stop routing. Charges already moved stay where they are.", confirmLabel: "Delete", destructive: true }))) return
     try {
       const res = await fetch(`/api/reservations/${reservationId}/routing-rules?ruleId=${ruleId}`, { method: "DELETE" })
-      if (res.ok) fetchRoutingRules()
-    } catch (e) { console.error(e) }
+      if (res.ok) {
+        fetchRoutingRules()
+        toast.success("Routing rule deleted")
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Couldn't delete the routing rule. Try again.")
+      }
+    } catch {
+      toast.error("Couldn't delete the routing rule. Try again.")
+    }
   }
 
   const profName = (p: any) => p ? (p.companyName || `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "Unnamed") : ""
@@ -324,7 +413,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       body: JSON.stringify({ reservationId, payeeProfileId: upid, settlementMethod: "CITY_LEDGER" }),
     })
     if (!res.ok) {
-      setNotification({ title: "Error", message: "Failed to open the Travel Agent folio.", isError: true })
+      toast.error("Couldn't open the travel agent folio. Try again.")
       return null
     }
     const folio = await res.json()
@@ -332,9 +421,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
     return folio.id
   }
 
-  const handleMoveCharges = async () => {
-    if (!targetFolioId || selectedLineItemIds.length === 0) return
-
+  const handleMoveCharges = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (!targetFolioId || selectedLineItemIds.length === 0 || pending) return
+    setPending("move")
     try {
       const target = await resolveTargetFolioId(targetFolioId)
       if (!target) return
@@ -353,12 +444,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         setSelectedLineItemIds([])
         setTargetFolioId("")
         fetchFolios()
-        setNotification({ title: "Charges Moved", message: "Successfully moved charges to the selected folio." })
+        toast.success("Charges moved")
       } else {
-        setNotification({ title: "Error", message: data.error || "Failed to move charges.", isError: true })
+        toast.error(data.error || "Couldn't move the charges. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error moving charges.", isError: true })
+      toast.error("Couldn't move the charges. Try again.")
+    } finally {
+      setPending(null)
     }
   }
 
@@ -377,10 +470,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
         setPaymentForm(p => ({ ...p, paymentMethodId: paymentMethodId ?? "" }))
         fetchFolios()
       } else {
-        setNotification({ title: "Error", message: "Failed to update the default payment method.", isError: true })
+        toast.error("Couldn't change the default payment method. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error updating the default payment method.", isError: true })
+      toast.error("Couldn't change the default payment method. Try again.")
     } finally {
       setSettlementSaving(false)
     }
@@ -388,24 +481,29 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
   const handleDeleteFolio = async () => {
     if (!activeFolioId) return
+    const f = folios.find((x) => x.id === activeFolioId)
+    if (!(await confirm({ title: `Delete folio ${f?.folioNumber ?? ""}?`, description: "The empty folio window is removed from this reservation.", confirmLabel: "Delete", destructive: true }))) return
     try {
       const res = await fetch(`/api/folios/${activeFolioId}`, { method: "DELETE" })
       if (res.ok) {
         const updatedFolios = folios.filter(f => f.id !== activeFolioId)
         setFolios(updatedFolios)
         setActiveFolioId(updatedFolios[0]?.id || "")
-        setNotification({ title: "Folio Deleted", message: "Folio successfully deleted." })
+        toast.success("Folio deleted")
       } else {
         const data = await res.json()
-        setNotification({ title: "Error", message: data.error || "Failed to delete folio.", isError: true })
+        toast.error(data.error || "Couldn't delete the folio. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error deleting folio.", isError: true })
+      toast.error("Couldn't delete the folio. Try again.")
     }
   }
 
-  const handleAssignPayee = async () => {
-    if (!activeFolioId) return
+  const handleAssignPayee = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (!activeFolioId || pending) return
+    setPending("payee")
     try {
       const res = await fetch(`/api/folios/${activeFolioId}`, {
         method: "PATCH",
@@ -415,12 +513,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       if (res.ok) {
         setIsPayeeDialogOpen(false)
         fetchFolios()
-        setNotification({ title: "Payee Assigned", message: "Folio payee updated successfully." })
+        toast.success("Payee updated")
       } else {
-        setNotification({ title: "Error", message: "Failed to assign payee.", isError: true })
+        toast.error("Couldn't change the payee. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error assigning payee.", isError: true })
+      toast.error("Couldn't change the payee. Try again.")
+    } finally {
+      setPending(null)
     }
   }
 
@@ -429,8 +529,6 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     )
   }
-
-  if (!isOpen) return null
 
   const activeFolio = folios.find(f => f.id === activeFolioId)
 
@@ -461,27 +559,69 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
   // be posted and no fiscal document exists to raise. A walk-in/outlet folio (no
   // reservation) is never pre-arrival. Owner rule, 2026-08-03.
   const preArrival = !!activeFolio?.reservation && activeFolio.reservation.status !== "IN_HOUSE"
+  const canDeleteFolio = !!activeFolio && activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0
+
+  // Settled stay → offer check-out right here (DESKTOP_PLAN D2). Same guest-payable rule
+  // as the check-out API: City-Ledger folios are the account's, not the guest's. The
+  // server re-checks, so a disagreement only costs an error toast.
+  const reservation = folios[0]?.reservation
+  const settlesToLedger = (f: any) =>
+    f.settlementMethod === "CITY_LEDGER" || (f.payments ?? []).some((p: any) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER")
+  let guestBalance = 0
+  for (const f of folios) {
+    if (f.isDebtorAccount || settlesToLedger(f)) continue
+    for (const i of f.lineItems ?? []) if (!i.isVoid) guestBalance += i.amount + i.taxAmount + (i.serviceChargeAmount || 0)
+    for (const p of f.payments ?? []) guestBalance += p.isRefund ? p.amount : -p.amount
+  }
+  const canCheckOut = reservation?.status === "IN_HOUSE" && folios.length > 0 && Math.abs(guestBalance) <= 0.01
+  const guestName = reservation?.primaryGuest ? profName(reservation.primaryGuest) : ""
+
+  const handleCheckOut = async (early = false): Promise<void> => {
+    if (!early && !(await confirm({ title: `Check out ${guestName || "this guest"}?`, description: "The folio is settled. The room is marked dirty.", confirmLabel: "Check out" }))) return
+    setCheckingOut(true)
+    try {
+      const res = await fetch(`/api/reservations/${reservationId}/check-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ early }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        const w = data.creditLimitWarning
+        toast.success(`${guestName || "Guest"} checked out`, {
+          description: w ? `Account over its credit limit ($${w.balance.toFixed(2)} of $${w.creditLimit.toFixed(2)})` : undefined,
+        })
+        onCheckedOut?.()
+        onClose?.()
+      } else if (data.earlyCheckoutRequired && !early) {
+        setCheckingOut(false)
+        if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
+          await handleCheckOut(true)
+        }
+        return
+      } else {
+        toast.error(data.error || "Couldn't check out. Try again.")
+        fetchFolios()
+      }
+    } catch {
+      toast.error("Couldn't check out. Try again.")
+    } finally {
+      setCheckingOut(false)
+    }
+  }
+
+  const headerActions = canCheckOut ? (
+    <Button size="sm" onClick={() => handleCheckOut()} disabled={checkingOut}>
+      <LogOut className="w-4 h-4 mr-2" /> {checkingOut ? "Checking out…" : "Check out"}
+    </Button>
+  ) : null
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      {/* Already a full-screen layout of its own on phones (h-[100dvh]) — opt out of the
-          shared bottom-sheet treatment. */}
-      <DialogContent mobile="none" className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto max-sm:px-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <DialogHeader className="border-b pb-4 mb-4 shrink-0">
-          <div className="flex justify-between items-center w-full">
-            <div>
-              <DialogTitle className="text-2xl flex items-center max-sm:text-xl">
-                <Receipt className="mr-2" /> Guest Folio
-              </DialogTitle>
-              <DialogDescription>
-                Manage billing, charges, and payments for this reservation.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+    <>
+        {renderHeader({ actions: headerActions, guestName, confirmationNo: reservation?.confirmationNo ?? "" })}
 
         {loading && folios.length === 0 ? (
-          <div className="flex-1 flex justify-center items-center text-muted-foreground">Loading Folio...</div>
+          <InlineLoading lines={6} className="flex-1" label="Loading the folio" />
         ) : (
           // Below lg the columns stack, so nothing here may be height-constrained: with
           // h-full/flex-1 the left column was squeezed to the viewport and the Post card
@@ -514,12 +654,12 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 )
               })}
               <Button variant="ghost" size="sm" onClick={handleAddFolio} className="ml-2 h-8 text-muted-foreground">
-                <Plus className="w-4 h-4 mr-1" /> Add Folio
+                <Plus className="w-4 h-4 mr-1" /> Add folio
               </Button>
             </div>
 
             {!activeFolio ? (
-              <div className="flex-1 flex justify-center items-center text-muted-foreground">No folio found for this reservation.</div>
+              <EmptyState title="No folio found for this reservation" className="flex-1" />
             ) : (
               <div className="grid lg:grid-cols-3 gap-6 flex-1 items-start min-h-0 max-lg:flex-none max-lg:grid-cols-1 max-sm:gap-4">
                 
@@ -535,7 +675,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <UserCircle className="w-4 h-4 mr-1 text-muted-foreground" />
                           Payee: {activeFolio.payeeProfile
                                     ? `${activeFolio.payeeProfile.firstName} ${activeFolio.payeeProfile.lastName || ''}`
-                                    : "Primary Guest"}
+                                    : "Primary guest"}
                         </span>
                         <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={() => {
                           setSelectedPayeeId(activeFolio.payeeProfileId || "none")
@@ -598,11 +738,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             <Printer className="w-4 h-4 mr-2" /> Tax Invoice
                           </Button>
                         )}
+                        {/* Desktop keeps the two most-used documents visible and puts the
+                            rest behind More (Delete last, red). Phones keep every button in
+                            the two-column grid — the sm:hidden copies below. */}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setPrintDocType("proforma")}
-                          className="h-9 w-full shadow-sm sm:w-auto border-border"
+                          className={`h-9 w-full shadow-sm sm:w-auto border-border ${preArrival ? "" : "sm:hidden"}`}
                           title={preArrival ? "Quoted charges for the stay — not a tax invoice" : undefined}
                         >
                           <Printer className="w-4 h-4 mr-2" /> Proforma Invoice
@@ -622,27 +765,52 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           size="sm"
                           variant="outline"
                           onClick={openRouting}
-                          className="h-9 w-full shadow-sm sm:w-auto border-border"
+                          className="h-9 w-full shadow-sm sm:hidden border-border"
                         >
                           <ArrowRightLeft className="w-4 h-4 mr-2" /> Routing
                         </Button>
-                        {activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 && (
+                        {canDeleteFolio && (
                           <Button
                             size="sm"
                             variant="destructive"
                             onClick={handleDeleteFolio}
-                            className="h-9 w-full shadow-sm sm:w-auto"
+                            className="h-9 w-full shadow-sm sm:hidden"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </Button>
                         )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={<Button size="sm" variant="outline" className="h-9 shadow-sm border-border max-sm:hidden" aria-label="More folio actions" />}
+                          >
+                            <MoreHorizontal className="w-4 h-4 mr-1.5" /> More
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-48">
+                            {!preArrival && (
+                              <DropdownMenuItem className="cursor-pointer" onClick={() => setPrintDocType("proforma")}>
+                                <Printer className="h-4 w-4 mr-2" /> Proforma Invoice
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="cursor-pointer" onClick={openRouting}>
+                              <ArrowRightLeft className="h-4 w-4 mr-2" /> Routing
+                            </DropdownMenuItem>
+                            {canDeleteFolio && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="cursor-pointer text-destructive" onClick={handleDeleteFolio}>
+                                  <Trash2 className="h-4 w-4 mr-2" /> Delete folio
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                     <div className="text-left lg:text-right text-sm text-muted-foreground space-y-1 shrink-0">
-                      <p>Base Charges: <span className="font-medium text-foreground">${totalBaseCharges.toFixed(2)}</span></p>
+                      <p>Base charges: <span className="font-medium text-foreground">${totalBaseCharges.toFixed(2)}</span></p>
                       <p>Service Charge: <span className="font-medium text-foreground">${totalServiceCharges.toFixed(2)}</span></p>
-                      <p>Total Taxes: <span className="font-medium text-foreground">${totalTaxes.toFixed(2)}</span></p>
-                      <p className="border-t pt-1 mt-1">Total Payments: <span className="font-medium text-foreground">${totalPayments.toFixed(2)}</span></p>
+                      <p>Total taxes: <span className="font-medium text-foreground">${totalTaxes.toFixed(2)}</span></p>
+                      <p className="border-t pt-1 mt-1">Total payments: <span className="font-medium text-foreground">${totalPayments.toFixed(2)}</span></p>
                     </div>
                   </div>
 
@@ -653,7 +821,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                         {selectedLineItemIds.length} charge(s) selected
                       </span>
                       <Button size="sm" onClick={() => setIsMoveDialogOpen(true)}>
-                        <ArrowRightLeft className="w-4 h-4 mr-2" /> Move to Folio
+                        <ArrowRightLeft className="w-4 h-4 mr-2" /> Move to folio
                       </Button>
                     </div>
                   )}
@@ -663,7 +831,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     <div className="overflow-y-auto flex-1">
                       {/* Phone view — the 9-column table below takes over at md. One compact row
                           per posting: date · description · amount. Tapping a charge selects it
-                          (for "Move to Folio"); the base/SC/tax split sits in a small second line. */}
+                          (for "Move to folio"); the base/SC/tax split sits in a small second line. */}
                       <div className="md:hidden divide-y divide-border">
                         {activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0 ? (
                           <EmptyState icon={Receipt} title="No transactions posted yet" />
@@ -705,8 +873,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                       size="icon"
                                       variant="ghost"
                                       className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                                      title="Void Charge"
-                                      aria-label="Void Charge"
+                                      title="Void charge"
+                                      aria-label="Void charge"
                                       onClick={(e) => { e.stopPropagation(); setVoidTarget(item); setVoidReason("") }}
                                     >
                                       <Ban className="w-4 h-4" />
@@ -726,8 +894,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                   size="icon"
                                   variant="ghost"
                                   className="h-8 w-8 shrink-0"
-                                  title="Print Payment Receipt"
-                                  aria-label="Print Payment Receipt"
+                                  title="Print payment receipt"
+                                  aria-label="Print payment receipt"
                                   onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
                                 >
                                   <Printer className="w-4 h-4" />
@@ -759,7 +927,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                             <TableHead className="text-right">Base</TableHead>
                             <TableHead className="text-right">SC</TableHead>
                             <TableHead className="text-right">Tax</TableHead>
-                            <TableHead className="text-right">Total Charge</TableHead>
+                            <TableHead className="text-right">Total charge</TableHead>
                             <TableHead className="text-right">Payment</TableHead>
                             <TableHead className="w-10"></TableHead>
                           </TableRow>
@@ -791,8 +959,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                     size="icon"
                                     variant="ghost"
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    title="Void Charge"
-                                    aria-label="Void Charge"
+                                    title="Void charge"
+                                    aria-label="Void charge"
                                     onClick={() => { setVoidTarget(item); setVoidReason("") }}
                                   >
                                     <Ban className="w-3.5 h-3.5" />
@@ -816,8 +984,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                                   size="icon"
                                   variant="ghost"
                                   className="h-7 w-7"
-                                  title="Print Payment Receipt"
-                                  aria-label="Print Payment Receipt"
+                                  title="Print payment receipt"
+                                  aria-label="Print payment receipt"
                                   onClick={() => window.open(`/e/${slug}/dashboard/payments/${payment.id}/receipt`, '_blank')}
                                 >
                                   <Printer className="w-3.5 h-3.5" />
@@ -843,8 +1011,8 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                 <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-0 shrink-0">
                   <Tabs value={postType} onValueChange={(v: any) => setPostType(v)} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="charge"><Plus className="w-4 h-4 mr-2"/> Post Charge</TabsTrigger>
-                      <TabsTrigger value="payment"><CreditCard className="w-4 h-4 mr-2"/> Post Payment</TabsTrigger>
+                      <TabsTrigger value="charge"><Plus className="w-4 h-4 mr-2"/> Post charge</TabsTrigger>
+                      <TabsTrigger value="payment"><CreditCard className="w-4 h-4 mr-2"/> Post payment</TabsTrigger>
                     </TabsList>
                     
                     <TabsContent value="charge" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
@@ -858,14 +1026,14 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                       <fieldset disabled={preArrival} className="contents">
                       <form onSubmit={handlePostCharge} className="grid gap-5">
                         <div className="space-y-2">
-                          <Label>Charge Code <span className="text-destructive">*</span></Label>
+                          <Label>Charge code <span className="text-destructive">*</span></Label>
                           <Select required value={chargeForm.chargeCodeId} onValueChange={v => {
                             const c = chargeCodes.find(cc => cc.id === v)
                             // Auto-fill the description from the code (operator can still edit).
                             setChargeForm(p => ({ ...p, chargeCodeId: v ?? "", description: c ? c.description : p.description }))
                           }}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select Code">
+                              <SelectValue placeholder="Select code">
                                 {chargeForm.chargeCodeId ? (
                                   (() => {
                                     const c = chargeCodes.find(c => c.id === chargeForm.chargeCodeId);
@@ -894,9 +1062,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           <Label>Reference</Label>
                           <Input placeholder="Prints on the invoice (optional)" value={chargeForm.reference} onChange={e => setChargeForm(p => ({...p, reference: e.target.value}))} />
                         </div>
-                        <Button type="submit" className="w-full mt-2" disabled={loading || preArrival}>
-                          {preArrival ? "Posting unavailable before check-in" : `Post Charge to Folio ${activeFolio.folioNumber}`}
-                        </Button>
+                        <SubmitButton className="w-full mt-2" pending={pending === "charge"} pendingLabel="Posting…" disabled={loading || preArrival || !!pending}>
+                          {preArrival ? "Posting unavailable before check-in" : `Post charge to folio ${activeFolio.folioNumber}`}
+                        </SubmitButton>
                       </form>
                       </fieldset>
                     </TabsContent>
@@ -904,10 +1072,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                     <TabsContent value="payment" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
                       <form onSubmit={handlePostPayment} className="grid gap-5">
                         <div className="space-y-2">
-                          <Label>Payment Method <span className="text-destructive">*</span></Label>
+                          <Label>Payment method <span className="text-destructive">*</span></Label>
                           <Select required value={paymentForm.paymentMethodId} onValueChange={v => setPaymentForm(p => ({...p, paymentMethodId: v ?? ""}))}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select Method">
+                              <SelectValue placeholder="Select method">
                                 {paymentForm.paymentMethodId ? (
                                   (() => {
                                     const m = paymentMethods.find(m => m.id === paymentForm.paymentMethodId);
@@ -929,10 +1097,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Reference No. (Optional)</Label>
+                          <Label>Reference no. (optional)</Label>
                           <Input placeholder="e.g. Receipt # or Check #" value={paymentForm.referenceNumber} onChange={e => setPaymentForm(p => ({...p, referenceNumber: e.target.value}))} />
                         </div>
-                        <Button type="submit" className="w-full bg-success hover:bg-success/90 mt-2" disabled={loading}>Post Payment to Folio {activeFolio.folioNumber}</Button>
+                        <SubmitButton className="w-full bg-success hover:bg-success/90 mt-2" pending={pending === "payment"} pendingLabel="Posting…" disabled={loading || !!pending}>Post payment to folio {activeFolio.folioNumber}</SubmitButton>
                       </form>
                     </TabsContent>
                   </Tabs>
@@ -941,13 +1109,13 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             )}
           </div>
         )}
-      </DialogContent>
 
       {/* Void Charge Dialog */}
       <Dialog open={!!voidTarget} onOpenChange={(open) => { if (!open) setVoidTarget(null) }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
+          <form onSubmit={handleVoidCharge} className="contents">
           <DialogHeader>
-            <DialogTitle>Void Charge</DialogTitle>
+            <DialogTitle>Void charge</DialogTitle>
             <DialogDescription>
               {voidTarget && (
                 <>Void &quot;{voidTarget.description}&quot; (${(voidTarget.amount + (voidTarget.serviceChargeAmount || 0) + voidTarget.taxAmount).toFixed(2)})?
@@ -965,19 +1133,21 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setVoidTarget(null)}>Cancel</Button>
-            <Button variant="destructive" disabled={!voidReason.trim() || voidSaving} onClick={handleVoidCharge}>
-              {voidSaving ? "Voiding..." : "Void Charge"}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setVoidTarget(null)}>Cancel</Button>
+            <SubmitButton variant="destructive" pending={voidSaving} pendingLabel="Voiding…" disabled={!voidReason.trim()}>
+              Void charge
+            </SubmitButton>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
       {/* Move Charges Dialog */}
       <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
+          <form onSubmit={handleMoveCharges} className="contents">
           <DialogHeader>
-            <DialogTitle>Move Charges</DialogTitle>
+            <DialogTitle>Move charges</DialogTitle>
             <DialogDescription>
               Select the destination folio for the {selectedLineItemIds.length} selected charge(s).
             </DialogDescription>
@@ -998,14 +1168,15 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             </Select>
             {targetFolioOptions().length === 0 && (
               <p className="text-sm text-warning mt-2">
-                Add another folio window (Add Folio) or check in another room to move charges.
+                Add another folio window (Add folio) or check in another room to move charges.
               </p>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsMoveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleMoveCharges} disabled={!targetFolioId}>Move Charges</Button>
+            <Button type="button" variant="outline" onClick={() => setIsMoveDialogOpen(false)}>Cancel</Button>
+            <SubmitButton pending={pending === "move"} pendingLabel="Moving…" disabled={!targetFolioId}>Move charges</SubmitButton>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1025,26 +1196,27 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
       {/* Assign Payee Dialog */}
       <Dialog open={isPayeeDialogOpen} onOpenChange={setIsPayeeDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
+          <form onSubmit={handleAssignPayee} className="contents">
           <DialogHeader>
-            <DialogTitle>Assign Folio Payee</DialogTitle>
+            <DialogTitle>Assign folio payee</DialogTitle>
             <DialogDescription>
-              Select who should be billed for Folio {activeFolio?.folioNumber}. This name will appear on the final invoice.
+              Select who should be billed for folio {activeFolio?.folioNumber}. This name will appear on the final invoice.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label>Payee Profile</Label>
+            <Label>Payee profile</Label>
             <Select value={selectedPayeeId} onValueChange={(v) => setSelectedPayeeId(v ?? "")}>
               <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Select a Payee">
+                <SelectValue placeholder="Select a payee">
                   {selectedPayeeId ? (
                     selectedPayeeId === "none" ? (
-                      `Primary Guest (${activeFolio?.reservation?.primaryGuest?.firstName} ${activeFolio?.reservation?.primaryGuest?.lastName})`
+                      `Primary guest (${activeFolio?.reservation?.primaryGuest?.firstName} ${activeFolio?.reservation?.primaryGuest?.lastName})`
                     ) : (
                       (() => {
                         const ta = activeFolio?.reservation?.travelAgent;
                         if (ta && ta.upid === selectedPayeeId) {
-                          return `Travel Agent / Company - ${ta.companyName || `${ta.firstName} ${ta.lastName ?? ""}`.trim()}`;
+                          return `Travel agent / company - ${ta.companyName || `${ta.firstName} ${ta.lastName ?? ""}`.trim()}`;
                         }
                         const sharer = activeFolio?.reservation?.accompanyingGuests?.find((ag: any) => ag.profile.upid === selectedPayeeId);
                         if (sharer) {
@@ -1058,11 +1230,11 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">
-                  Primary Guest ({activeFolio?.reservation?.primaryGuest?.firstName} {activeFolio?.reservation?.primaryGuest?.lastName})
+                  Primary guest ({activeFolio?.reservation?.primaryGuest?.firstName} {activeFolio?.reservation?.primaryGuest?.lastName})
                 </SelectItem>
                 {activeFolio?.reservation?.travelAgent && (
                   <SelectItem value={activeFolio.reservation.travelAgent.upid}>
-                    Travel Agent / Company - {activeFolio.reservation.travelAgent.companyName || `${activeFolio.reservation.travelAgent.firstName} ${activeFolio.reservation.travelAgent.lastName ?? ""}`.trim()}
+                    Travel agent / company - {activeFolio.reservation.travelAgent.companyName || `${activeFolio.reservation.travelAgent.firstName} ${activeFolio.reservation.travelAgent.lastName ?? ""}`.trim()}
                   </SelectItem>
                 )}
                 {activeFolio?.reservation?.accompanyingGuests?.map((ag: any) => (
@@ -1074,26 +1246,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPayeeDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAssignPayee} disabled={!selectedPayeeId}>Save Payee</Button>
+            <Button type="button" variant="outline" onClick={() => setIsPayeeDialogOpen(false)}>Cancel</Button>
+            <SubmitButton pending={pending === "payee"} disabled={!selectedPayeeId}>Save payee</SubmitButton>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Notification Modal */}
-      <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : "text-success"}>
-              {notification?.title}
-            </DialogTitle>
-            <DialogDescription className="text-base text-foreground mt-2">
-              {notification?.message}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setNotification(null)}>OK</Button>
-          </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1107,6 +1263,6 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
           slug={slug}
         />
       )}
-    </Dialog>
+    </>
   )
 }

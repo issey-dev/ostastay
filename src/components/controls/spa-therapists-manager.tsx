@@ -22,6 +22,11 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { therapistExceptionSchema, THERAPIST_EXCEPTION_TYPES } from "@/lib/spa-exception"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 type TreatmentOption = { id: string; name: string }
 
@@ -67,20 +72,20 @@ type ExceptionFormInput = z.input<typeof therapistExceptionSchema>
 type ExceptionFormValues = z.output<typeof therapistExceptionSchema>
 
 export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
-
+  const confirm = useConfirm()
   const [therapists, setTherapists] = useState<SpaTherapistDto[]>([])
   const [treatments, setTreatments] = useState<TreatmentOption[]>([])
   const [users, setUsers] = useState<{ id: string; firstName: string; lastName: string; email: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SpaTherapistDto | null>(null)
-  const [deleting, setDeleting] = useState<SpaTherapistDto | null>(null)
   const [skillsFor, setSkillsFor] = useState<SpaTherapistDto | null>(null)
   const [skillRows, setSkillRows] = useState<Record<string, SkillRow>>({})
   const [scheduleFor, setScheduleFor] = useState<SpaTherapistDto | null>(null)
   const [exceptionsFor, setExceptionsFor] = useState<SpaTherapistDto | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [savingSkills, setSavingSkills] = useState(false)
 
   const form = useForm<TherapistFormValues>({ resolver: zodResolver(therapistSchema), mode: "onChange", defaultValues: emptyValues })
 
@@ -148,26 +153,31 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Therapist saved")
         fetchTherapists()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save therapist")
+        setServerError(await apiError(res, "Couldn't save the therapist. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: SpaTherapistDto) => {
+    const ok = await confirm({
+      title: "Delete therapist?",
+      description: `Delete "${deleting.displayName}"? If they have any appointments assigned this will be blocked — mark inactive instead.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/spa/therapists/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete therapist")
+      toast.error(await apiError(res, "Couldn't delete the therapist. Try again."))
     } else {
       setServerError(null)
+      toast.success("Therapist deleted")
     }
-    setDeleting(null)
     fetchTherapists()
   }
 
@@ -184,17 +194,22 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
   const saveSkills = async () => {
     if (!skillsFor) return
     const skills = Object.values(skillRows).filter((s) => s.qualified || s.preferred)
-    const res = await fetch(`/api/spa/therapists/${skillsFor.id}/skills`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ skills }),
-    })
-    if (res.ok) {
-      setSkillsFor(null)
-      fetchTherapists()
-    } else {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to save skills")
+    setSavingSkills(true)
+    try {
+      const res = await fetch(`/api/spa/therapists/${skillsFor.id}/skills`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skills }),
+      })
+      if (res.ok) {
+        setSkillsFor(null)
+        toast.success("Skills saved")
+        fetchTherapists()
+      } else {
+        setServerError(await apiError(res, "Couldn't save the skills. Try again."))
+      }
+    } finally {
+      setSavingSkills(false)
     }
   }
 
@@ -202,7 +217,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={openCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> New Therapist
+          <Plus className="mr-2 h-4 w-4" /> Add therapist
         </Button>
       </div>
 
@@ -229,11 +244,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                   title={t.displayName}
                   subtitle={t.phone || t.email || "—"}
                   badge={
-                    t.isActive && t.bookable ? (
-                      <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
-                    )
+<StatusBadge tone={t.isActive && t.bookable ? "success" : "neutral"} label={t.isActive && t.bookable ? "Active" : t.isActive ? "Not bookable" : "Inactive"} />
                   }
                   meta={[{ label: "Qualified for", value: `${qualifiedCount} treatment${qualifiedCount === 1 ? "" : "s"}` }]}
                   onClick={() => openEdit(t)}
@@ -249,7 +260,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                         { label: "Skills", icon: ListChecks, onSelect: () => openSkills(t) },
                         { label: "Schedule", icon: Clock, onSelect: () => setScheduleFor(t) },
                         { label: "Exceptions", icon: CalendarOff, onSelect: () => setExceptionsFor(t) },
-                        { label: "Delete", icon: Trash2, destructive: true, onSelect: () => setDeleting(t) },
+                        { label: "Delete", icon: Trash2, destructive: true, onSelect: () => confirmDelete(t) },
                       ]}
                     />
                   }
@@ -264,7 +275,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Qualified For</TableHead>
+                  <TableHead>Qualified for</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -278,11 +289,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                       <Badge variant="outline">{t.skills.filter((s) => s.qualified).length} treatment{t.skills.filter((s) => s.qualified).length === 1 ? "" : "s"}</Badge>
                     </TableCell>
                     <TableCell>
-                      {t.isActive && t.bookable ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">{t.isActive ? "Not bookable" : "Inactive"}</Badge>
-                      )}
+<StatusBadge tone={t.isActive && t.bookable ? "success" : "neutral"} label={t.isActive && t.bookable ? "Active" : t.isActive ? "Not bookable" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => openSkills(t)}>
@@ -297,7 +304,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                       <Button variant="outline" size="icon" aria-label="Edit therapist" onClick={() => openEdit(t)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" aria-label="Delete therapist" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                      <Button variant="outline" size="icon" aria-label="Delete therapist" className="text-destructive hover:text-destructive" onClick={() => confirmDelete(t)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -311,11 +318,11 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent size="md">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Therapist" : "New Therapist"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit therapist" : "Add therapist"}</DialogTitle>
                 <DialogDescription>A therapist is a schedulable resource — a PMS login is optional and not required.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -343,7 +350,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                   )} />
                   <FormField control={form.control} name="userId" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Linked User <span className="text-muted-foreground font-normal">(login)</span></FormLabel>
+                      <FormLabel>Linked user <span className="text-muted-foreground font-normal">(login)</span></FormLabel>
                       <FormControl>
                         <SearchableSelect
                           value={field.value ?? ""}
@@ -390,39 +397,23 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Therapist"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Therapist</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.displayName}&quot;? If they have any appointments assigned this will be blocked — mark inactive instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Skills */}
       <Dialog open={!!skillsFor} onOpenChange={(open) => !open && setSkillsFor(null)}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Treatment Skills — {skillsFor?.displayName}</DialogTitle>
+            <DialogTitle>Treatment skills — {skillsFor?.displayName}</DialogTitle>
             <DialogDescription>Only qualified therapists are offered by the booking engine for a treatment.</DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto space-y-2 py-2">
             {treatments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No treatments configured yet.</p>
+              <EmptyState size="inline" title="No treatments configured yet." />
             ) : (
               treatments.map((t) => {
                 const row = skillRows[t.id] ?? { treatmentId: t.id, qualified: false, preferred: false }
@@ -453,7 +444,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSkillsFor(null)}>Cancel</Button>
-            <Button onClick={saveSkills}>Save</Button>
+            <SubmitButton type="button" pending={savingSkills} onClick={saveSkills}>Save</SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -496,7 +487,8 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const save = async () => {
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!effectiveFrom) {
       setError("Effective-from date is required")
       return
@@ -521,8 +513,7 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
       if (res.ok) {
         onSaved()
       } else {
-        const body = await res.json().catch(() => null)
-        setError(body?.error || "Failed to save schedule")
+        setError(await apiError(res, "Couldn't save the schedule. Try again."))
       }
     } finally {
       setSaving(false)
@@ -531,18 +522,19 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent size="md">
+        <form onSubmit={save} className="contents">
         <DialogHeader>
-          <DialogTitle>Working Hours — {therapist.displayName}</DialogTitle>
+          <DialogTitle>Working hours — {therapist.displayName}</DialogTitle>
           <DialogDescription>Weekly recurring schedule. Day-off/leave exceptions are managed separately.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 py-2 md:grid-cols-2">
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Effective From *</p>
+            <p className="text-xs text-muted-foreground mb-1">Effective from *</p>
             <DatePicker value={effectiveFrom} onChange={setEffectiveFrom} placeholder="Start" />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Effective To</p>
+            <p className="text-xs text-muted-foreground mb-1">Effective to</p>
             <DatePicker value={effectiveTo} onChange={setEffectiveTo} placeholder="Open-ended" />
           </div>
         </div>
@@ -574,15 +566,17 @@ function TherapistScheduleDialog({ therapist, onClose, onSaved }: { therapist: S
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Schedule"}</Button>
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <SubmitButton pending={saving}>Save</SubmitButton>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )
 }
 
 function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapist: SpaTherapistDto; onClose: () => void; onChanged: () => void }) {
+  const confirmRemove = useConfirm()
   const [exceptions, setExceptions] = useState<ExceptionRow[]>(therapist.exceptions)
   const [error, setError] = useState<string | null>(null)
   const empty: ExceptionFormInput = { date: "", exceptionType: "DAY_OFF", startTime: "", endTime: "", reason: "" }
@@ -607,12 +601,12 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
       form.reset({ ...empty, exceptionType: values.exceptionType })
       onChanged()
     } else {
-      const body = await res.json().catch(() => null)
-      setError(body?.error || "Failed to add exception")
+      setError(await apiError(res, "Couldn't add the exception. Try again."))
     }
   }
 
   const remove = async (id: string) => {
+    if (!(await confirmRemove({ title: "Remove this exception?", confirmLabel: "Remove", destructive: true }))) return
     const res = await fetch(`/api/spa/therapists/${therapist.id}/exceptions/${id}`, { method: "DELETE" })
     if (res.ok) {
       setExceptions((prev) => prev.filter((e) => e.id !== id))
@@ -622,9 +616,9 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>Availability Exceptions — {therapist.displayName}</DialogTitle>
+          <DialogTitle>Availability exceptions — {therapist.displayName}</DialogTitle>
           <DialogDescription>Day off, leave, sick day, or a temporary change to normal working hours.</DialogDescription>
         </DialogHeader>
 
@@ -685,16 +679,16 @@ function TherapistExceptionsDialog({ therapist, onClose, onChanged }: { therapis
                 <FormMessage />
               </FormItem>
             )} />
-            <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isValid} className="md:col-span-2">
-              <Plus className="h-4 w-4 mr-1.5" /> Add Exception
-            </Button>
+            <SubmitButton pending={form.formState.isSubmitting} pendingLabel="Adding…" disabled={!form.formState.isValid} className="md:col-span-2">
+              <Plus className="h-4 w-4 mr-1.5" /> Add exception
+            </SubmitButton>
           </form>
         </Form>
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="max-h-[35vh] overflow-y-auto space-y-2">
           {exceptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No exceptions recorded.</p>
+            <EmptyState size="inline" title="No exceptions recorded." />
           ) : (
             exceptions.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm">

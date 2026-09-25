@@ -19,7 +19,7 @@ export default function People() {
         rows={[
           [<strong key="r">Roles</strong>, "What they can do: which modules they can view, create, update or delete in. A person can hold several roles; their access is the combination of all of them."],
           [<strong key="a">Access</strong>, "Where they can do it: All Properties (enterprise-wide), or a Single Property, their work location. There is nothing in between."],
-          [<strong key="j">Job Function</strong>, "Their post at the property. It does not grant anything, but Housekeeping and Maintenance decide who appears in the room-assignment and work-order pickers."],
+          [<strong key="j">Job function</strong>, "Their post at the property. It does not grant anything, but Housekeeping and Maintenance decide who appears in the room-assignment and work-order pickers."],
         ]}
       />
       <p>
@@ -28,7 +28,7 @@ export default function People() {
 
       <H2>Roles</H2>
       <p>
-        The <strong>Roles &amp; Permissions</strong> card lists every role and how many people hold it. Seven built-in roles are
+        The <strong>Roles &amp; permissions</strong> card lists every role and how many people hold it. Seven built-in roles are
         ready to use and cannot be changed:
       </p>
       <Table
@@ -47,10 +47,10 @@ export default function People() {
 
       <H3>Creating a role</H3>
       <p>
-        Choose <strong>New Role</strong>, give it a <strong>Role Name</strong> (unique in your enterprise), and tick what it may do
+        Choose <strong>Add role</strong>, give it a <strong>Role name</strong> (unique in your enterprise), and tick what it may do
         in each module:
       </p>
-      <Shot name="ent-role-dialog" alt="The New Role dialog: a role name field and a permission grid of modules against View, Create, Update, Delete and Full Access." />
+      <Shot name="ent-role-dialog" alt="The Add role dialog: a role name field and a permission grid of modules against View, Create, Update, Delete and Full access." />
       <ul>
         <li>
           <strong>Property modules</strong> are day-to-day work: Front Desk, Reservations, Cashiering, Night Audit, Revenue, Daily
@@ -68,23 +68,24 @@ export default function People() {
         </li>
       </ul>
       <p>
-        Choose <strong>Save Role</strong>. A role that people still hold cannot be deleted. To print who can do what, choose{" "}
+        Choose <strong>Create</strong> (or <strong>Save</strong> when you edit a role). Deleting a role asks you to confirm first,
+        and a role that people still hold cannot be deleted. To print who can do what, choose{" "}
         <strong>Permission matrix report</strong> at the top of the page: an A4 matrix of every role, plus the people who hold each.
       </p>
 
       <H2>Staff accounts</H2>
       <Shot name="ent-people" alt="The Staff Accounts card listing staff with their roles, post, access and status." />
-      <p>Choose <strong>Add Team Member</strong>:</p>
-      <Shot name="ent-person-dialog" alt="The Add Team Member dialog: first and last name, email, password, roles, job function and access." />
+      <p>Choose <strong>Add team member</strong>, fill in the form and choose <strong>Create</strong>:</p>
+      <Shot name="ent-person-dialog" alt="The Add team member dialog: first and last name, email, password, roles, job function and access." />
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["First Name, Last Name", "Both required."],
-          ["Email Address", "The person signs in with it. It must be unique across Uppsolut Stay, and is saved in lower case."],
+          ["First name, Last name", "Both required."],
+          ["Email address", "The person signs in with it. It must be unique across Uppsolut Stay, and is saved in lower case."],
           ["Password", "At least 12 characters. Give it to the person privately. When editing, leave it blank to keep the current one."],
           ["Roles", "At least one."],
-          ["Job Function", "Optional: Management, Front Office, Reservations, Cashier, Housekeeping, Maintenance, Food & Beverage, Spa."],
-          ["Access", "All Properties, or Single Property with a Work Location."],
+          ["Job function", "Optional: Management, Front Office, Reservations, Cashier, Housekeeping, Maintenance, Food & Beverage, Spa."],
+          ["Access", "All properties, or Single property with a Work location."],
           ["Active", "When editing. Switch off to stop the person signing in; their sessions end at once. The onboarding account is always active."],
         ]}
       />
@@ -95,7 +96,7 @@ export default function People() {
       <H3>When someone leaves</H3>
       <p>
         Edit their account and switch <strong>Active</strong> off. They are signed out at once and can&apos;t sign in again, and
-        everything they did stays in the history. An account that has never been used can be deleted; one with history (for
+        everything they did stays in the history. An account that has never been used can be deleted (you are asked to confirm); one with history (for
         example a cashier shift) can only be deactivated.
       </p>
       <p>To reset a forgotten password, edit the person and type a new password.</p>

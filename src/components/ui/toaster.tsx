@@ -34,6 +34,9 @@ function ToastList() {
           {t.description && (
             <Toast.Description className="mt-0.5 text-muted-foreground">{t.description}</Toast.Description>
           )}
+          {t.actionProps && (
+            <Toast.Action className="mt-2 inline-flex h-7 items-center border border-border bg-background px-2.5 text-xs font-medium transition-colors hover:bg-muted pointer-coarse:h-10" />
+          )}
         </div>
         <Toast.Close
           className="absolute top-2 right-2 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"

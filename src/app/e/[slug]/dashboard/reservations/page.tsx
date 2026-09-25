@@ -1,20 +1,22 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Button } from "@/components/ui/button"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useProperty } from "@/components/providers/property-provider"
 import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
+import { useUrlState } from "@/lib/use-url-state"
 import { FolioPanel } from "@/components/front-office/folio-panel"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   DropdownMenu,
@@ -27,7 +29,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
 import { Input } from "@/components/ui/input"
-import { format } from "date-fns"
+import { format, isValid, parse } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import {
   deriveReservationState,
@@ -180,9 +182,40 @@ function FlagStrip({ res, className = "" }: { res: Reservation; className?: stri
   )
 }
 
+// The filters live in the query string (useUrlState → useSearchParams), which needs a
+// Suspense boundary above it.
 export default function ReservationsDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <ReservationsList />
+    </Suspense>
+  )
+}
+
+const STATUS_FILTERS = ["", "IN_HOUSE", "CHECKED_OUT", "NO_SHOW", "CANCELLED"] as const
+const DATE_MODES = ["stay", "arrival", "departure"] as const
+type DateMode = (typeof DATE_MODES)[number]
+
+// A date range in the URL: "2026-09-01~2026-09-10" (either end may be empty).
+const parseDay = (v: string) => {
+  if (!v) return undefined
+  const d = parse(v, "yyyy-MM-dd", new Date())
+  return isValid(d) ? d : undefined
+}
+const rangeFromParam = (v: string): DateRange | undefined => {
+  if (!v) return undefined
+  const [a = "", b = ""] = v.split("~")
+  const from = parseDay(a)
+  const to = parseDay(b)
+  return from || to ? { from, to } : undefined
+}
+const rangeToParam = (r: DateRange | undefined) =>
+  r?.from || r?.to ? `${r.from ? format(r.from, "yyyy-MM-dd") : ""}~${r.to ? format(r.to, "yyyy-MM-dd") : ""}` : ""
+
+function ReservationsList() {
   const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
+  const pathname = usePathname()
   const { currentProperty } = useProperty()
   const confirm = useConfirm()
   const propertyId = currentProperty?.id ?? ""
@@ -209,21 +242,43 @@ export default function ReservationsDashboard() {
   const [isFolioPanelOpen, setIsFolioPanelOpen] = useState(false)
   const [depositRes, setDepositRes] = useState<Reservation | null>(null)
 
-  // Custom Notification State
-  const [notification, setNotification] = useState<{ title: string, message: string, isError?: boolean } | null>(null)
-
   // Server-side filters + load-more pagination
   const PAGE_SIZE = 50
-  const [filterSearch, setFilterSearch] = useState("")
-  // What is actually sent: under 2 characters is not a search yet (the API ignores it too),
-  // so the first keystroke doesn't fire a match-everything query across every status.
-  const searchTerm = filterSearch.trim().length >= 2 ? filterSearch.trim() : ""
-  const [filterStatus, setFilterStatus] = useState("")
-  const [filterDates, setFilterDates] = useState<DateRange | undefined>()
+  // Search, status, date mode and range are kept in the URL (DESKTOP_PLAN D3), so Back
+  // from a reservation, a refresh or a shared link lands on the same list. Defaults stay
+  // out of the URL.
+  const [urlSearch, setUrlSearch] = useUrlState<string>("q", "")
+  const [filterStatus, setFilterStatus] = useUrlState<(typeof STATUS_FILTERS)[number]>("status", "", STATUS_FILTERS)
+  const [datesParam, setDatesParam] = useUrlState<string>("dates", "")
+  const filterDates = useMemo(() => rangeFromParam(datesParam), [datesParam])
+  const setFilterDates = (r: DateRange | undefined) => setDatesParam(rangeToParam(r))
   // Which date the range applies to — the desk thinks in "who arrives", "who is here"
   // and "who leaves", so the range switches between them rather than always meaning
   // "overlapping stay" (app-owner, 2026-08-03).
-  const [dateMode, setDateMode] = useState<"stay" | "arrival" | "departure">("stay")
+  const [dateMode, setDateMode] = useUrlState<DateMode>("mode", "stay", DATE_MODES)
+  // The box is local state for instant typing; the URL (and so the fetch) follows 350 ms
+  // after the last keystroke. A URL change that didn't come from typing (Back/Forward)
+  // flows back into the box.
+  const [filterSearch, setFilterSearch] = useState(urlSearch)
+  const lastWrittenSearch = useRef(urlSearch)
+  useEffect(() => {
+    if (urlSearch !== lastWrittenSearch.current) {
+      lastWrittenSearch.current = urlSearch
+      setFilterSearch(urlSearch)
+    }
+  }, [urlSearch])
+  useEffect(() => {
+    const next = filterSearch.trim()
+    if (next === lastWrittenSearch.current) return
+    const t = setTimeout(() => {
+      lastWrittenSearch.current = next
+      setUrlSearch(next)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [filterSearch, setUrlSearch])
+  // What is actually sent: under 2 characters is not a search yet (the API ignores it too),
+  // so the first keystroke doesn't fire a match-everything query across every status.
+  const searchTerm = urlSearch.trim().length >= 2 ? urlSearch.trim() : ""
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Desktop can switch between the dense table and the same cards the phone gets.
   // Remembered per browser: it is a workspace preference, not a per-visit choice.
@@ -290,18 +345,15 @@ export default function ReservationsDashboard() {
     }
   }
 
-  // Refetch when filters change; text search is debounced.
+  // Refetch when filters change. Text search is already debounced on its way into the URL.
   useEffect(() => {
     if (!currentProperty) return
     // A newer keystroke or filter cancels the request in flight, so the server isn't left
     // working on searches nobody will see and a slow answer can't land after a newer one.
     const controller = new AbortController()
-    const t = setTimeout(() => void fetchData(controller.signal), searchTerm ? 350 : 0)
-    return () => {
-      clearTimeout(t)
-      controller.abort()
-    }
-  }, [currentProperty, searchTerm, filterStatus, filterDates, dateMode])
+    void fetchData(controller.signal)
+    return () => controller.abort()
+  }, [currentProperty, searchTerm, filterStatus, datesParam, dateMode])
 
   useEffect(() => {
     if (!currentProperty) return
@@ -315,7 +367,7 @@ export default function ReservationsDashboard() {
     // Only allow if there's an assigned room on the active segment
     const activeAssignment = res.assignments?.find(a => a.roomId)
     if (!activeAssignment?.roomId) {
-      setNotification({ title: "No Room Assigned", message: "You must assign a room to this reservation before adding a Housekeeping request.", isError: true })
+      toast.error("Assign a room first", { description: "A housekeeping request needs a room on the booking." })
       return
     }
     setRequestingRoomId(activeAssignment.roomId)
@@ -343,13 +395,14 @@ export default function ReservationsDashboard() {
       })
       if (res.ok) {
         setIsRequestModalOpen(false)
-        setNotification({ title: "Request Sent", message: "Special request has been sent to Housekeeping." })
+        toast.success("Request sent to Housekeeping")
         fetchData()
       } else {
-        setNotification({ title: "Error", message: "Failed to send request.", isError: true })
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || "Couldn't send the request. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An unexpected error occurred.", isError: true })
+      toast.error("Couldn't send the request. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -361,13 +414,14 @@ export default function ReservationsDashboard() {
       const res = await fetch(`/api/reservations/auto-assign?propertyId=${propertyId}`, { method: "POST" })
       if (res.ok) {
         const data = await res.json()
-        setNotification({ title: "Rooms Assigned", message: `Successfully assigned ${data.assignedCount} out of ${data.totalUnassigned} unassigned reservations.` })
+        toast.success(`Rooms assigned to ${data.assignedCount} of ${data.totalUnassigned} bookings`)
         fetchData()
       } else {
-        setNotification({ title: "Error", message: "Failed to auto-assign rooms.", isError: true })
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || "Couldn't auto-assign rooms. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "Error occurred during auto-assign.", isError: true })
+      toast.error("Couldn't auto-assign rooms. Try again.")
     } finally {
       setAutoAssigning(false)
     }
@@ -389,19 +443,26 @@ export default function ReservationsDashboard() {
       const data = await resp.json()
       if (resp.ok) {
         const warning = data.creditLimitWarning
-          ? ` Note: this account is now over its credit limit ($${data.creditLimitWarning.balance.toFixed(2)} of $${data.creditLimitWarning.creditLimit.toFixed(2)}).`
-          : ""
-        setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
+          ? `This account is now over its credit limit ($${data.creditLimitWarning.balance.toFixed(2)} of $${data.creditLimitWarning.creditLimit.toFixed(2)}).`
+          : undefined
+        toast.success(`${res.confirmationNo} checked out`, { description: warning })
         fetchData()
       } else if (data.earlyCheckoutRequired && !early) {
         if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
           await handleCheckOut(res, true)
         }
+      } else if (typeof data.balance === "number") {
+        // An outstanding balance needs a decision — the dialog carries the way forward.
+        if (await confirm({
+          title: "Balance outstanding",
+          description: `$${data.balance.toFixed(2)} is still due on this stay. Settle it on the folio, then check out.`,
+          confirmLabel: "Open folio",
+        })) openFolio(res)
       } else {
-        setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
+        toast.error(data.error || "Couldn't check out. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
+      toast.error("Couldn't check out. Try again.")
     }
   }
 
@@ -422,13 +483,13 @@ export default function ReservationsDashboard() {
       })
       const data = await resp.json()
       if (resp.ok) {
-        setNotification({ title: "Reservation Reinstated", message: `${res.confirmationNo} is back to Reserved.` })
+        toast.success(`Booking ${res.confirmationNo} reinstated`, { description: "It is back to Reserved." })
         fetchData()
       } else {
-        setNotification({ title: "Reinstate Failed", message: data.error || "Unknown error", isError: true })
+        toast.error(data.error || "Couldn't reinstate the booking. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred reinstating the reservation.", isError: true })
+      toast.error("Couldn't reinstate the booking. Try again.")
     }
   }
 
@@ -452,13 +513,13 @@ export default function ReservationsDashboard() {
         const extra = data.debtorInvoicesReversed > 0
           ? ` ${data.debtorInvoicesReversed} debtor invoice(s) un-finalized.`
           : ""
-        setNotification({ title: "Check-out Reversed", message: `${res.confirmationNo} is back In-House.${extra}` })
+        toast.success(`Check-out reversed for ${res.confirmationNo}`, { description: `The guest is back In-House.${extra}` })
         fetchData()
       } else {
-        setNotification({ title: "Reverse Failed", message: data.error || "Unknown error", isError: true })
+        toast.error(data.error || "Couldn't reverse the check-out. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred reversing the check-out.", isError: true })
+      toast.error("Couldn't reverse the check-out. Try again.")
     }
   }
 
@@ -533,12 +594,12 @@ export default function ReservationsDashboard() {
       <div className="flex items-center justify-end gap-1.5">
         {canCheckIn(res.status, res.checkInDate, currentProperty?.businessDate) && (
           <Button size="sm" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" variant="outline" onClick={() => handleCheckIn(res)}>
-            <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
+            <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
           </Button>
         )}
         {res.status === "IN_HOUSE" && (
           <Button size="sm" className="h-8" variant="outline" onClick={() => handleCheckOut(res)}>
-            <LogOut className="h-3.5 w-3.5 mr-1.5" /> Check Out
+            <LogOut className="h-3.5 w-3.5 mr-1.5" /> Check out
           </Button>
         )}
         <DropdownMenu>
@@ -622,19 +683,19 @@ export default function ReservationsDashboard() {
     }
     more.push({ label: "Edit", icon: Pencil, onSelect: () => router.push(editUrl) })
     const primary = canCheckIn(res.status, res.checkInDate, businessDate)
-      ? { label: "Check In", icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
+      ? { label: "Check in", icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
       : res.status === "IN_HOUSE"
-        ? { label: "Check Out", icon: LogOut, onSelect: () => handleCheckOut(res) }
+        ? { label: "Check out", icon: LogOut, onSelect: () => handleCheckOut(res) }
         : undefined
     return { primary, more }
   }
 
   const activeFilterCount = [filterSearch.trim(), filterStatus, filterDates?.from ? "d" : ""].filter(Boolean).length
+  // One replace for all four — separate setters would each read the same stale query string.
   const clearFilters = () => {
+    lastWrittenSearch.current = ""
     setFilterSearch("")
-    setFilterStatus("")
-    setFilterDates(undefined)
-    setDateMode("stay")
+    router.replace(pathname, { scroll: false })
   }
 
   // Rendered twice — inline on desktop, inside the mobile drawer — from this single
@@ -653,14 +714,14 @@ export default function ReservationsDashboard() {
       <div className="md:w-44">
         <SearchableSelect
           value={filterStatus}
-          onChange={(v: string) => setFilterStatus(v)}
+          onChange={(v: string) => setFilterStatus(((STATUS_FILTERS as readonly string[]).includes(v) ? v : "") as (typeof STATUS_FILTERS)[number])}
           placeholder="On the books"
           options={[
             // "" is not "everything": with no search it means RESERVED only (business on
             // the books); with a search, everything but checked-out and no-shows.
             { label: "On the books", value: "" },
             { label: "In-House", value: "IN_HOUSE" },
-            { label: "Checked Out", value: "CHECKED_OUT" },
+            { label: "Checked out", value: "CHECKED_OUT" },
             { label: "No-Show", value: "NO_SHOW" },
             { label: "Cancelled", value: "CANCELLED" },
           ]}
@@ -669,7 +730,7 @@ export default function ReservationsDashboard() {
       <div className="md:w-36">
         <SearchableSelect
           value={dateMode}
-          onChange={(v: string) => setDateMode((v || "stay") as "stay" | "arrival" | "departure")}
+          onChange={(v: string) => setDateMode(((DATE_MODES as readonly string[]).includes(v) ? v : "stay") as DateMode)}
           placeholder="By stay"
           options={[
             { label: "By stay", value: "stay" },
@@ -688,33 +749,36 @@ export default function ReservationsDashboard() {
   )
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="space-y-6">
       {/* Auto-Assign and Tape Chart are desk-at-a-desk tools — a room grid and a bulk
           assignment sweep are not phone work, and side by side they pushed the title
           into two lines. Hidden below sm; New Booking stays, since that is the one
           thing you do reach for on a phone. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-          Reservations &amp; Stays
-          <InfoHint label="Reservations &amp; Stays">
-            Manage incoming bookings, in-house guests, and room assignments.
-          </InfoHint>
-        </h2>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="hidden shadow-sm sm:inline-flex" onClick={handleAutoAssign} disabled={autoAssigning}>
-            <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
-          </Button>
-          <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
-            <Button variant="outline" className="shadow-sm">
-              <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
+      <PageHeader
+        title="Reservations"
+        hint={
+          <>
+            Manage incoming bookings, in-house guests, and room assignments. One search box covers guest name,
+            confirmation number, channel reference, room number, phone and email. Checked-out and no-show bookings
+            are hidden unless you pick that status.
+          </>
+        }
+        actions={
+          <>
+            <Button variant="outline" className="hidden shadow-sm sm:inline-flex" onClick={handleAutoAssign} disabled={autoAssigning}>
+              <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
             </Button>
-          </Link>
-          <Link href={`/e/${slug}/dashboard/reservations/new`}>
-            <Button><Plus className="mr-2 h-4 w-4" /> New Booking</Button>
-          </Link>
-        </div>
-      </div>
+            <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
+              <Button variant="outline" className="shadow-sm">
+                <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
+              </Button>
+            </Link>
+            <Link href={`/e/${slug}/dashboard/reservations/new`}>
+              <Button><Plus className="mr-2 h-4 w-4" /> New booking</Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Phone: no card chrome around the list — the reservation cards sit on the page
           instead of a card inside a card. */}
@@ -725,16 +789,24 @@ export default function ReservationsDashboard() {
               the results they filter. `filterControls` is defined once so the two can
               never drift apart. */}
           <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2">
-                Reservations
-                <InfoHint label="Reservations">
-                  One search box covers guest name, confirmation number, channel reference, room number, phone and
-                  email. Checked-out and no-show bookings are hidden unless you pick that status.
-                </InfoHint>
-              </CardTitle>
-
-              <div className="flex items-center gap-2">
+            {/* The page title says what this is — no second "Reservations" heading here.
+                Desktop: filters inline on the left, view toggle on the right. */}
+            <div className="flex items-center gap-2">
+              <div className="hidden flex-1 gap-2 md:flex md:flex-wrap md:items-center">{filterControls}</div>
+              {/* Phone: search beside the Filters button (status/dates live in the sheet).
+                  Same state as the desktop box. */}
+              <div className="relative min-w-0 flex-1 md:hidden">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  {...INPUT_SEARCH}
+                  aria-label="Search reservations"
+                  placeholder="Guest, conf. #, room, phone…"
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <div className="ml-auto flex items-center gap-2">
                 {/* Desktop-only: the phone always gets cards. */}
                 <div className="hidden items-center rounded-md border border-border p-0.5 md:flex">
                   <button
@@ -787,22 +859,6 @@ export default function ReservationsDashboard() {
               </div>
             </div>
 
-            {/* Inline on desktop only. */}
-            <div className="hidden gap-2 md:flex md:flex-wrap md:items-center">{filterControls}</div>
-
-            {/* Phone: the search box stays in view above the list (status/dates live in
-                the Filters sheet). Same state as the desktop box. */}
-            <div className="relative md:hidden">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                {...INPUT_SEARCH}
-                aria-label="Search reservations"
-                placeholder="Guest, conf. #, room, phone..."
-                value={filterSearch}
-                onChange={(e) => setFilterSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
           </div>
         </CardHeader>
         <CardContent className="max-md:px-0">
@@ -954,7 +1010,15 @@ export default function ReservationsDashboard() {
                         {/* Guest + conf# */}
                         <TableCell className="align-middle">
                           <div className="font-medium flex items-center gap-1.5">
-                            <span className="truncate">{guestName}</span>
+                            {/* A real link, so Ctrl/middle-click and "open in new tab" work;
+                                a plain click is left to the row (DESKTOP_PLAN D4). */}
+                            <Link
+                              href={viewUrl(res.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="truncate hover:underline"
+                            >
+                              {guestName}
+                            </Link>
                             {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
                           </div>
                           <div className="text-xs font-mono text-muted-foreground truncate">
@@ -1013,12 +1077,20 @@ export default function ReservationsDashboard() {
             </Table>
           </div>
 
-          {hasMore && !loading && (
-            <div className="flex justify-center pt-4">
-              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Load More
-              </Button>
+          {/* Result count, worded like ListTable's footer. The API pages by 50 and sends no
+              total, so while more exist it is "50 results so far" next to Load more. */}
+          {!loading && !loadError && reservations.length > 0 && (
+            <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                {reservations.length} {reservations.length === 1 ? "result" : "results"}
+                {hasMore && " so far"}
+              </span>
+              {hasMore && (
+                <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Load more
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -1028,7 +1100,7 @@ export default function ReservationsDashboard() {
       <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Housekeeping Request</DialogTitle>
+            <DialogTitle>Housekeeping request</DialogTitle>
             <DialogDescription>
               Manage special requests for {selectedRes?.primaryGuest?.firstName} {selectedRes?.primaryGuest?.lastName}&apos;s room.
             </DialogDescription>
@@ -1037,7 +1109,7 @@ export default function ReservationsDashboard() {
             
             {selectedRes && getActiveTasks(selectedRes).length > 0 && (
               <div className="flex flex-col gap-2 p-3 bg-warning-muted rounded border border-warning/20">
-                <Label className="text-warning font-semibold text-xs uppercase tracking-wider">Active Requests</Label>
+                <Label className="text-warning font-semibold text-xs uppercase tracking-wider">Active requests</Label>
                 {getActiveTasks(selectedRes).map(task => (
                   <div key={task.id} className="flex justify-between items-center text-sm bg-card p-2 rounded shadow-sm border border-border">
                     <span className="font-medium text-foreground">{task.notes}</span>
@@ -1048,7 +1120,7 @@ export default function ReservationsDashboard() {
             )}
 
             <div className="grid gap-2 mt-2">
-              <Label>New Request</Label>
+              <Label>New request</Label>
               <SystemCodeSelect 
                 category="HOUSEKEEPING_REQUEST" 
                 propertyId={propertyId}
@@ -1058,7 +1130,7 @@ export default function ReservationsDashboard() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Additional Notes</Label>
+              <Label>Additional notes</Label>
               <Input 
                 value={requestText}
                 onChange={(e) => setRequestText(e.target.value)}
@@ -1069,7 +1141,7 @@ export default function ReservationsDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRequestModalOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateRequest} disabled={submitting || (!requestText.trim() && !requestCategory)}>
-              {submitting ? "Sending..." : "Send Request"}
+              {submitting ? "Sending..." : "Send request"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1083,6 +1155,7 @@ export default function ReservationsDashboard() {
           setIsFolioPanelOpen(false)
           fetchData() // Refresh in case balances/statuses changed
         }}
+        onCheckedOut={() => fetchData()}
       />
 
       <DepositDialog
@@ -1092,27 +1165,10 @@ export default function ReservationsDashboard() {
         isOpen={!!depositRes}
         onClose={() => setDepositRes(null)}
         onSaved={(message) => {
-          setNotification({ title: "Deposit Collected", message })
+          toast.success(message)
           fetchData()
         }}
       />
-
-      {/* Notification Modal */}
-      <Dialog open={!!notification} onOpenChange={(open) => { if (!open) setNotification(null) }}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : "text-success"}>
-              {notification?.title}
-            </DialogTitle>
-            <DialogDescription className="text-base text-foreground mt-2">
-              {notification?.message}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setNotification(null)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

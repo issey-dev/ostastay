@@ -4,6 +4,10 @@ import { useEffect, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { BarChart3, TrendingUp, Percent, DollarSign, BedDouble, Calendar as CalendarIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { StatTile } from "@/components/ui/stat-tile"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { ErrorState } from "@/components/ui/error-state"
+import { EmptyState } from "@/components/ui/empty-state"
 
 export function FlashReport() {
   const { currentProperty } = useProperty()
@@ -35,11 +39,11 @@ export function FlashReport() {
   }
 
   if (loading) {
-    return <div className="py-20 text-center text-muted-foreground">Calculating Revenue Data...</div>
+    return <InlineLoading lines={6} label="Loading the flash report" />
   }
 
   if (!data) {
-    return <div className="py-20 text-center text-muted-foreground">Failed to load analytics.</div>
+    return <ErrorState title="Couldn't load the flash report" onRetry={fetchAnalytics} />
   }
 
   return (
@@ -55,72 +59,26 @@ export function FlashReport() {
         </div>
         <Button onClick={fetchAnalytics} variant="outline" className="flex items-center gap-2 w-full sm:w-auto">
           <CalendarIcon className="w-4 h-4" />
-          Refresh Today
+          Refresh today
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-md:grid-cols-2 max-md:gap-3">
-        {/* Occupancy */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
-          <div className="flex justify-between items-start mb-4 max-md:mb-1">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">Occupancy</p>
-              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{data.occupancyPercentage.toFixed(1)}%</h3>
-            </div>
-            <div className="max-md:hidden p-3 bg-info-muted rounded-lg">
-              <Percent className="w-6 h-6 text-info" />
-            </div>
-          </div>
-          <div className="text-sm text-muted-foreground max-md:text-xs">
-            <span className="font-semibold text-foreground">{data.occupiedRoomsCount}</span> / {data.totalRooms} Rooms Occupied
-          </div>
-        </div>
-
-        {/* ADR */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
-          <div className="flex justify-between items-start mb-4 max-md:mb-1">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">ADR</p>
-              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.adr)}</h3>
-            </div>
-            <div className="max-md:hidden p-3 bg-success-muted rounded-lg">
-              <DollarSign className="w-6 h-6 text-success" />
-            </div>
-          </div>
-          <div className="text-sm text-muted-foreground max-md:text-xs">Average Daily Rate</div>
-        </div>
-
-        {/* RevPAR */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
-          <div className="flex justify-between items-start mb-4 max-md:mb-1">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">RevPAR</p>
-              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.revpar)}</h3>
-            </div>
-            <div className="max-md:hidden p-3 bg-muted rounded-lg">
-              <TrendingUp className="w-6 h-6 text-primary" />
-            </div>
-          </div>
-          <div className="text-sm text-muted-foreground max-md:text-xs">Revenue Per Available Room</div>
-        </div>
-
-        {/* Total Revenue */}
-        <div className="bg-card rounded-xl shadow-sm border border-border p-6 flex flex-col justify-between max-md:p-3 max-md:min-w-0">
-          <div className="flex justify-between items-start mb-4 max-md:mb-1">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1 max-md:text-[11px]">Total Revenue</p>
-              <h3 className="text-3xl font-bold text-foreground max-md:text-xl max-md:tabular-nums">{formatCurrency(data.totalRevenue)}</h3>
-            </div>
-            <div className="max-md:hidden p-3 bg-warning-muted rounded-lg">
-              <DollarSign className="w-6 h-6 text-warning" />
-            </div>
-          </div>
-          <div className="text-sm text-muted-foreground flex justify-between max-md:flex-col max-md:text-xs">
-            <span>Room: {formatCurrency(data.roomRevenue)}</span>
-            <span>Other: {formatCurrency(data.otherRevenue)}</span>
-          </div>
-        </div>
+      {/* KPI Cards — the shared StatTile (DESKTOP_PLAN D8); 2x2 on a phone */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <StatTile
+          label="Occupancy"
+          value={`${data.occupancyPercentage.toFixed(1)}%`}
+          footnote={`${data.occupiedRoomsCount} / ${data.totalRooms} Rooms Occupied`}
+          icon={Percent}
+        />
+        <StatTile label="ADR" value={formatCurrency(data.adr)} footnote="Average daily rate" icon={DollarSign} />
+        <StatTile label="RevPAR" value={formatCurrency(data.revpar)} footnote="Revenue per available room" icon={TrendingUp} />
+        <StatTile
+          label="Total revenue"
+          value={formatCurrency(data.totalRevenue)}
+          footnote={`Room: ${formatCurrency(data.roomRevenue)} · Other: ${formatCurrency(data.otherRevenue)}`}
+          icon={DollarSign}
+        />
       </div>
 
       {/* Revenue Breakdown & Activity */}
@@ -128,11 +86,9 @@ export function FlashReport() {
         
         {/* Revenue Breakdown */}
         <div className="bg-card rounded-xl shadow-sm border border-border p-6 lg:col-span-2 max-md:p-4">
-          <h3 className="text-lg font-bold text-foreground mb-6">Revenue by Category</h3>
+          <h3 className="text-lg font-bold text-foreground mb-6">Revenue by category</h3>
           {Object.keys(data.revenueByCategory).length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              No revenue posted today.
-            </div>
+            <EmptyState size="inline" title="No revenue posted today" />
           ) : (
             <div className="space-y-4">
               {Object.entries(data.revenueByCategory).map(([category, amount]) => (
@@ -155,19 +111,19 @@ export function FlashReport() {
 
         {/* Quick Stats */}
         <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
-          <h3 className="text-lg font-bold text-foreground mb-6">Daily Snapshot</h3>
+          <h3 className="text-lg font-bold text-foreground mb-6">Daily snapshot</h3>
           <ul className="space-y-4">
             <li className="flex items-center justify-between pb-4 border-b">
               <div className="flex items-center gap-3 text-muted-foreground">
                 <BedDouble className="w-5 h-5 text-muted-foreground" />
-                <span>Physical Rooms</span>
+                <span>Physical rooms</span>
               </div>
               <span className="font-bold">{data.totalRooms}</span>
             </li>
             <li className="flex items-center justify-between pb-4 border-b">
               <div className="flex items-center gap-3 text-muted-foreground">
                 <TrendingUp className="w-5 h-5 text-muted-foreground" />
-                <span>Transactions Posted</span>
+                <span>Transactions posted</span>
               </div>
               <span className="font-bold">{data.recentActivityCount}</span>
             </li>

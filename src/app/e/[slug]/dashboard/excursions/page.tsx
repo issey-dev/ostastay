@@ -1,6 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useUrlState } from "@/lib/use-url-state"
 import { useParams } from "next/navigation"
 import { format } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
@@ -9,6 +12,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NumberStepper } from "@/components/ui/number-stepper"
 import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -19,11 +24,19 @@ import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { ExcursionManifestPanel } from "@/components/front-office/excursion-manifest-panel"
 import { ExcursionCalendar } from "@/components/front-office/excursion-calendar"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
-import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
-import { InfoHint } from "@/components/ui/info-hint"
+import { InHousePaymentChoice } from "@/components/front-office/in-house-payment-choice"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { INPUT_INTEGER } from "@/lib/input-presets"
+import { PageHeader } from "@/components/ui/page-header"
+import {
+  emptyExcursionBooking,
+  emptyWalkInGuest,
+  excursionBookingSchemaFor,
+  walkInGuestSchema,
+  type ExcursionBookingValues,
+  type WalkInGuestValues,
+} from "@/lib/sales-form-schemas"
 
 type GuestResult = {
   reservationId: string
@@ -59,7 +72,7 @@ type OpenWalkInBooking = {
 // handled entirely by reusing WalkInFolioPanel rather than building a second payment UI,
 // same component POS already uses for its own walk-in bills. See
 // .agents/docs/EXCURSIONS_PLAN.md Phase 3.
-export default function ExcursionsPage() {
+function ExcursionsPage() {
   const { currentProperty } = useProperty()
 
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
@@ -69,7 +82,10 @@ export default function ExcursionsPage() {
   const [selectedGuest, setSelectedGuest] = useState<GuestResult | null>(null)
   const [loadingSearch, setLoadingSearch] = useState(false)
 
-  const [walkInForm, setWalkInForm] = useState({ name: "", contact: "" })
+  // APP STANDARD 001: the walk-in mini form and the booking form. The guest picked from the
+  // search results, the loaded departures and the tab stay plain state.
+  const walkInForm = useForm<WalkInGuestValues>({ resolver: zodResolver(walkInGuestSchema), mode: "onChange", defaultValues: emptyWalkInGuest })
+  const walkInName = walkInForm.watch("name")
   const [startingWalkIn, setStartingWalkIn] = useState(false)
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
@@ -79,13 +95,13 @@ export default function ExcursionsPage() {
   const [departures, setDepartures] = useState<Departure[]>([])
   const [loadingDepartures, setLoadingDepartures] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [selectedExcursionTypeId, setSelectedExcursionTypeId] = useState("")
-  const [selectedDate, setSelectedDate] = useState("")
-  const [selectedDepartureId, setSelectedDepartureId] = useState<string>("")
-
-  const [counts, setCounts] = useState({ adultCount: "1", childCount: "0", infantCount: "0" })
-  const [notes, setNotes] = useState("")
-  const [inHousePayment, setInHousePayment] = useState<InHousePayment>({ settleNow: false, paymentMethodId: "" })
+  // The payment choice only applies to an in-house booking, so its rule follows the mode.
+  const form = useForm<ExcursionBookingValues>({
+    resolver: zodResolver(excursionBookingSchemaFor(mode === "guest")),
+    mode: "onChange",
+    defaultValues: emptyExcursionBooking,
+  })
+  const [selectedExcursionTypeId, selectedDate, selectedDepartureId, inHousePayment] = form.watch(["excursionTypeId", "date", "departureId", "payment"])
   const [booking, setBooking] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
@@ -95,8 +111,9 @@ export default function ExcursionsPage() {
   // Derived, not set in an effect: until someone picks a tab, the default follows the
   // screen — and useIsMobile() is false on the first render, so desktop never changes.
   const isMobile = useIsMobile()
-  const [pickedTab, setPageTab] = useState<"book" | "schedule" | "history" | null>(null)
-  const pageTab = pickedTab ?? (isMobile ? "schedule" : "book")
+  // The tab lives in the URL (?tab=); with none named, a phone opens on Schedule, desktop on Book.
+  const [pickedTab, setPageTab] = useUrlState<"book" | "schedule" | "history" | "">("tab", "", ["book", "schedule", "history"])
+  const pageTab = pickedTab || (isMobile ? "schedule" : "book")
   const [historyRefresh, setHistoryRefresh] = useState(0)
 
   const loadHistory = useCallback(async (date: string | null): Promise<SalesRow[]> => {
@@ -158,15 +175,14 @@ export default function ExcursionsPage() {
     }
   }
 
-  const handleStartWalkIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentProperty || !walkInForm.name) return
+  const handleStartWalkIn = async (values: WalkInGuestValues) => {
+    if (!currentProperty) return
     setStartingWalkIn(true)
     try {
       const res = await fetch(`/api/folios/walk-in`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: currentProperty.id, walkInGuestName: walkInForm.name, walkInGuestContact: walkInForm.contact }),
+        body: JSON.stringify({ propertyId: currentProperty.id, walkInGuestName: values.name, walkInGuestContact: values.contact }),
       })
       if (res.ok) {
         const folio = await res.json()
@@ -211,19 +227,21 @@ export default function ExcursionsPage() {
   const canBook = (mode === "guest" ? !!selectedGuest : !!walkInFolioId) &&
     (mode !== "guest" || !inHousePayment.settleNow || !!inHousePayment.paymentMethodId)
 
+  // Picking an excursion clears the date and time below it; picking a date clears the time.
   const handleExcursionTypeChange = (value: string | null) => {
-    setSelectedExcursionTypeId(value ?? "")
-    setSelectedDate("")
-    setSelectedDepartureId("")
+    form.setValue("excursionTypeId", value ?? "", { shouldValidate: true })
+    form.setValue("date", "")
+    form.setValue("departureId", "")
   }
 
   const handleDateChange = (value: string) => {
-    setSelectedDate(value)
-    setSelectedDepartureId("")
+    form.setValue("date", value, { shouldValidate: true })
+    form.setValue("departureId", "")
   }
 
-  const handleBook = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const setSelectedDepartureId = (id: string) => form.setValue("departureId", id)
+
+  const handleBook = async (values: ExcursionBookingValues) => {
     if (!canBook || !selectedDeparture) return
     setBooking(true)
     setFeedback(null)
@@ -234,22 +252,22 @@ export default function ExcursionsPage() {
         body: JSON.stringify({
           departureId: selectedDeparture.id,
           ...(mode === "guest" ? { reservationId: selectedGuest!.reservationId } : { folioId: walkInFolioId }),
-          adultCount: counts.adultCount,
-          childCount: counts.childCount,
-          infantCount: counts.infantCount,
-          notes: notes || undefined,
-          settlement: mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
-            ? { paymentMethodId: inHousePayment.paymentMethodId }
+          adultCount: values.adultCount,
+          childCount: values.childCount,
+          infantCount: values.infantCount,
+          notes: values.notes || undefined,
+          settlement: mode === "guest" && values.payment.settleNow && values.payment.paymentMethodId
+            ? { paymentMethodId: values.payment.paymentMethodId }
             : undefined,
         }),
       })
       if (res.ok) {
-        const label = mode === "guest" ? `Room ${selectedGuest!.roomNumber}` : walkInForm.name
-        const settled = mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
+        const label = mode === "guest" ? `Room ${selectedGuest!.roomNumber}` : walkInName
+        const settled = mode === "guest" && values.payment.settleNow && values.payment.paymentMethodId
         setFeedback({ message: `Booked for ${label} — ${selectedDeparture.excursionType.name}${settled ? " — paid" : ""}.`, type: "success" })
-        setCounts({ adultCount: "1", childCount: "0", infantCount: "0" })
-        setNotes("")
-        setInHousePayment({ settleNow: false, paymentMethodId: "" })
+        // Party, notes and payment go back to their defaults; the excursion/date/time stay.
+        const { excursionTypeId, date, departureId } = form.getValues()
+        form.reset({ ...emptyExcursionBooking, excursionTypeId, date, departureId })
         fetchDepartures()
         setHistoryRefresh((n) => n + 1)
         if (mode === "walkin") {
@@ -270,12 +288,10 @@ export default function ExcursionsPage() {
 
   return (
     <div className="space-y-6 pb-24 md:pb-0">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Excursions
-            <InfoHint label="Excursions">Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader
+        title="Excursions"
+        hint="Search for an in-house guest, or start a walk-in bill, then book them onto an upcoming excursion."
+      />
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
         <TabsList>
@@ -292,7 +308,7 @@ export default function ExcursionsPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 {mode === "guest" ? <Search className="w-5 h-5 text-primary" /> : <UserRound className="w-5 h-5 text-primary" />}
-                {mode === "guest" ? "Find Guest" : "Walk-in Guest"}
+                {mode === "guest" ? "Find guest" : "Walk-in guest"}
               </h3>
               <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                 <button
@@ -316,7 +332,7 @@ export default function ExcursionsPage() {
               <>
                 <form onSubmit={handleSearch} className="flex gap-3">
                   <Input
-                    placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                    placeholder={isMobile ? "Room no. or last name" : "Search by room number or last name..."}
                     enterKeyHint="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -351,30 +367,33 @@ export default function ExcursionsPage() {
             ) : walkInFolioId ? (
               <div className="flex items-center justify-between bg-muted rounded-lg p-4">
                 <div>
-                  <p className="font-bold text-foreground">{walkInForm.name}</p>
+                  <p className="font-bold text-foreground">{walkInName}</p>
                   <p className="text-sm text-muted-foreground">Walk-in bill open</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => setIsWalkInPanelOpen(true)}>
-                  <Receipt className="w-4 h-4 mr-2" /> View / Close Bill
+                  <Receipt className="w-4 h-4 mr-2" /> View / close bill
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleStartWalkIn} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input
-                  placeholder="Guest name"
-                  required
-                  value={walkInForm.name}
-                  onChange={(e) => setWalkInForm((p) => ({ ...p, name: e.target.value }))}
-                />
-                <Input
-                  placeholder="Phone / email (optional)"
-                  value={walkInForm.contact}
-                  onChange={(e) => setWalkInForm((p) => ({ ...p, contact: e.target.value }))}
-                />
-                <Button type="submit" className="md:col-span-2" disabled={startingWalkIn || !walkInForm.name}>
-                  {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
-                </Button>
-              </form>
+              <Form {...walkInForm}>
+                <form onSubmit={walkInForm.handleSubmit(handleStartWalkIn)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormField control={walkInForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormControl><Input placeholder="Guest name" aria-label="Guest name" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <FormField control={walkInForm.control} name="contact" render={({ field }) => (
+                    <FormItem>
+                      <FormControl><Input placeholder="Phone / email (optional)" aria-label="Phone or email" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <SubmitButton className="md:col-span-2" pending={startingWalkIn} pendingLabel="Starting…" disabled={!walkInName}>
+                    Start walk-in bill
+                  </SubmitButton>
+                </form>
+              </Form>
             )}
           </div>
 
@@ -382,9 +401,10 @@ export default function ExcursionsPage() {
           <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!canBook ? "opacity-50 pointer-events-none border-border" : "border-border shadow-md ring-1 ring-border"}`}>
             <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
               <CalendarClock className="w-5 h-5 text-primary" />
-              {mode === "guest" && selectedGuest ? `Book Excursion for Room ${selectedGuest.roomNumber}` : mode === "walkin" && walkInFolioId ? `Book Excursion for ${walkInForm.name}` : "Book Excursion"}
+              {mode === "guest" && selectedGuest ? `Book excursion for room ${selectedGuest.roomNumber}` : mode === "walkin" && walkInFolioId ? `Book excursion for ${walkInName}` : "Book excursion"}
             </h3>
-            <form id="excursion-book-form" onSubmit={handleBook} className="space-y-4">
+            <Form {...form}>
+            <form id="excursion-book-form" onSubmit={form.handleSubmit(handleBook)} className="space-y-4">
               <div className="space-y-3">
                 {loadError ? (
                   <ErrorState title="Couldn't load excursions" onRetry={fetchDepartures} />
@@ -392,9 +412,11 @@ export default function ExcursionsPage() {
                   <p className="text-sm text-muted-foreground">No upcoming departures — set some up in the Hub under this property&apos;s Excursions.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Excursion</Label>
-                      <Select value={selectedExcursionTypeId} onValueChange={handleExcursionTypeChange} disabled={loadingDepartures}>
+                    <FormField control={form.control} name="excursionTypeId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Excursion</FormLabel>
+                      <Select value={field.value} onValueChange={handleExcursionTypeChange} disabled={loadingDepartures}>
+                        <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue>
                             {selectedExcursionTypeId
@@ -404,23 +426,29 @@ export default function ExcursionsPage() {
                                 : "Choose excursion..."}
                           </SelectValue>
                         </SelectTrigger>
+                        </FormControl>
                         <SelectContent>
                           {excursionOptions.map((et) => (
                             <SelectItem key={et.id} value={et.id}>{et.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Date</Label>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
+                    <FormField control={form.control} name="date" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date</FormLabel>
                       <DatePicker
-                        value={selectedDate}
+                        value={field.value}
                         onChange={handleDateChange}
                         availableDates={availableDates}
                         disabled={!selectedExcursionTypeId}
                         placeholder="Choose date..."
                       />
-                    </div>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
                   </div>
                 )}
 
@@ -495,30 +523,53 @@ export default function ExcursionsPage() {
               {/* Phone steppers sit BEFORE the desktop inputs: in these space-y cells the input
                   must stay the last child, or it picks up a bottom margin on desktop. */}
               <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
-                  <Label>Adults</Label>
-                  <NumberStepper className="md:hidden" label="Adults" min={0} value={parseInt(counts.adultCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, adultCount: String(n) }))} />
-                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.adultCount} onChange={(e) => setCounts((p) => ({ ...p, adultCount: e.target.value }))} />
-                </div>
-                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
-                  <Label>Children</Label>
-                  <NumberStepper className="md:hidden" label="Children" min={0} value={parseInt(counts.childCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, childCount: String(n) }))} />
-                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.childCount} onChange={(e) => setCounts((p) => ({ ...p, childCount: e.target.value }))} />
-                </div>
-                <div className="space-y-2 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
-                  <Label>Infants</Label>
-                  <NumberStepper className="md:hidden" label="Infants" min={0} value={parseInt(counts.infantCount) || 0} onChange={(n) => setCounts((p) => ({ ...p, infantCount: String(n) }))} />
-                  <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" value={counts.infantCount} onChange={(e) => setCounts((p) => ({ ...p, infantCount: e.target.value }))} />
-                </div>
+                <FormField control={form.control} name="adultCount" render={({ field }) => (
+                  <FormItem className="max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
+                    <FormLabel>Adults</FormLabel>
+                    <NumberStepper className="md:hidden" label="Adults" min={0} value={parseInt(field.value) || 0} onChange={(n) => field.onChange(String(n))} />
+                    <FormControl>
+                      <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs max-sm:basis-full" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="childCount" rules={{ deps: ["adultCount"] }} render={({ field }) => (
+                  <FormItem className="max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
+                    <FormLabel>Children</FormLabel>
+                    <NumberStepper className="md:hidden" label="Children" min={0} value={parseInt(field.value) || 0} onChange={(n) => field.onChange(String(n))} />
+                    <FormControl>
+                      <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs max-sm:basis-full" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="infantCount" rules={{ deps: ["adultCount"] }} render={({ field }) => (
+                  <FormItem className="max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-3 max-sm:space-y-0">
+                    <FormLabel>Infants</FormLabel>
+                    <NumberStepper className="md:hidden" label="Infants" min={0} value={parseInt(field.value) || 0} onChange={(n) => field.onChange(String(n))} />
+                    <FormControl>
+                      <Input {...INPUT_INTEGER} type="number" min="0" className="max-md:hidden" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs max-sm:basis-full" />
+                  </FormItem>
+                )} />
               </div>
 
-              <div className="space-y-2">
-                <Label>Notes (optional)</Label>
-                <Input placeholder="e.g. Non-swimmer, needs a life vest" value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormControl><Input placeholder="e.g. Non-swimmer, needs a life vest" {...field} /></FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
 
               {mode === "guest" && selectedGuest && (
-                <InHousePaymentChoice value={inHousePayment} onChange={setInHousePayment} />
+                <FormField control={form.control} name="payment" render={({ field }) => (
+                  <FormItem>
+                    <InHousePaymentChoice value={field.value} onChange={field.onChange} />
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
               )}
 
               {feedback && (
@@ -527,17 +578,18 @@ export default function ExcursionsPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full max-md:hidden" disabled={booking || !canBook || !selectedDeparture}>
-                {booking ? "Booking..." : "Book Excursion"}
-              </Button>
+              <SubmitButton className="w-full max-md:hidden" pending={booking} pendingLabel="Booking…" disabled={!canBook || !selectedDeparture}>
+                Book excursion
+              </SubmitButton>
             </form>
+            </Form>
           </div>
         </div>
 
       </div>
       <MobileActionBar>
         <Button type="submit" form="excursion-book-form" className="h-11 flex-1 min-w-0 text-base" disabled={booking || !canBook || !selectedDeparture}>
-          <span className="truncate">{booking ? "Booking..." : "Book Excursion"}</span>
+          <span className="truncate">{booking ? "Booking..." : "Book excursion"}</span>
         </Button>
       </MobileActionBar>
         </TabsContent>
@@ -574,7 +626,7 @@ export default function ExcursionsPage() {
         onClosed={() => {
           setIsWalkInPanelOpen(false)
           setWalkInFolioId(null)
-          setWalkInForm({ name: "", contact: "" })
+          walkInForm.reset(emptyWalkInGuest)
           setMode("guest")
           fetchOpenWalkIns()
           setHistoryRefresh((n) => n + 1)
@@ -587,5 +639,14 @@ export default function ExcursionsPage() {
         onClose={() => { setManifestDepartureId(null); fetchDepartures() }}
       />
     </div>
+  )
+}
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function ExcursionsRoute() {
+  return (
+    <Suspense>
+      <ExcursionsPage />
+    </Suspense>
   )
 }

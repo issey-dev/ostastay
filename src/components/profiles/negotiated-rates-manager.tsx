@@ -73,7 +73,7 @@ export function NegotiatedRatesManager({ upid }: { upid: string }) {
   if (loading) return <p className="text-xs text-muted-foreground">Loading...</p>
   if (loadError) return <ErrorState title="Couldn't load negotiated rates" onRetry={fetchRates} />
   if (available.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">No negotiated rate plans exist yet — mark a Rate Plan as negotiated in Revenue &gt; Rate Plans first.</p>
+    return <p className="text-xs text-muted-foreground italic">No negotiated rate plans exist yet — mark a rate plan as negotiated in Revenue &gt; Rate plans first.</p>
   }
 
   const byProperty = available.reduce<Record<string, AvailableRatePlan[]>>((acc, rp) => {

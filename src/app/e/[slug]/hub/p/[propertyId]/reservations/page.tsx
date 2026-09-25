@@ -20,11 +20,11 @@ export default async function HubPropertyReservationsPage({ params }: { params: 
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <HubSetupNotice title={item.title} />
-      <ControlsCard title="Booking Number Format" description="How this property's confirmation numbers look. The running number itself is this property's Registration No sequence (Sequences).">
+      <ControlsCard title="Booking number format" description="How this property's confirmation numbers look. The running number itself is this property's Registration No sequence (Sequences).">
         <BookingNumberFormatForm propertyId={property.id} propertyCode={property.code} nextNumber={nextNumber} />
       </ControlsCard>
       <ControlsCard
-        title="Reservation & Housekeeping Lists"
+        title="Reservation & housekeeping lists"
         description="The special requests, transport types and housekeeping requests this property offers."
         action={canEdit("create") && (
           <CopyFromPropertyButton

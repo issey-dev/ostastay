@@ -24,10 +24,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { PropertyForm } from "@/components/property-form"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
 
 type Property = {
   id: string
@@ -42,18 +43,12 @@ type Property = {
   checkOutTime: string
 }
 
-// The API's error message, or a fallback — so a failed action says why instead of nothing.
-async function errorFrom(res: Response, fallback: string): Promise<string> {
-  const data = await res.json().catch(() => ({}))
-  return typeof data?.error === "string" && data.error ? data.error : fallback
-}
-
 export function PropertiesManager({ title, description, addons }: { title: string; description?: string; addons?: { spa: boolean; excursions: boolean } }) {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
-  const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null)
+  const confirm = useConfirm()
   const fetchProperties = () => {
     setLoading(true)
     fetch("/api/properties")
@@ -72,32 +67,42 @@ export function PropertiesManager({ title, description, addons }: { title: strin
     try {
       const res = await fetch(`/api/properties/${propertyId}/resubmit`, { method: "POST" })
       if (!res.ok) {
-        toast.error(await errorFrom(res, "Could not resubmit the property."))
+        toast.error(await apiError(res, "Couldn't resubmit the property. Try again."))
         return
       }
       fetchProperties()
     } catch (error) {
       console.error(error)
-      toast.error("Could not reach the server. Try again.")
+      toast.error("Couldn't reach the server. Try again.")
     } finally {
       setResubmitting(null)
     }
   }
 
-  const handleDelete = async () => {
-    if (!propertyToDelete) return
-    
+  const handleDelete = async (propertyToDelete: Property) => {
+    const ok = await confirm({
+      title: "Delete this property?",
+      description: (
+        <>
+          This action cannot be undone. This will permanently delete the property
+          <strong> {propertyToDelete.name} </strong> and remove its data from our servers.
+        </>
+      ),
+      confirmLabel: "Delete property",
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/properties/${propertyToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) {
-        toast.error(await errorFrom(res, "Could not delete the property."))
+        toast.error(await apiError(res, "Couldn't delete the property. Try again."))
         return
       }
-      setPropertyToDelete(null)
+      toast.success("Property deleted")
       fetchProperties()
     } catch (error) {
       console.error(error)
-      toast.error("Could not reach the server. Try again.")
+      toast.error("Couldn't reach the server. Try again.")
     }
   }
 
@@ -118,7 +123,7 @@ export function PropertiesManager({ title, description, addons }: { title: strin
       description={description}
       action={
         <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> Add Property
+          <Plus className="mr-2 h-4 w-4" /> Add property
         </Button>
       }
     >
@@ -126,9 +131,9 @@ export function PropertiesManager({ title, description, addons }: { title: strin
         setIsDialogOpen(open)
         if (!open) setSelectedProperty(null)
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle className="text-xl">{selectedProperty ? 'Edit Property' : 'Create New Property'}</DialogTitle>
+            <DialogTitle className="text-xl">{selectedProperty ? 'Edit property' : 'Add property'}</DialogTitle>
             <DialogDescription>
               {selectedProperty ? 'Update the details for this property.' : 'Add a new hotel or guest house to your tenant portfolio.'}
             </DialogDescription>
@@ -145,32 +150,6 @@ export function PropertiesManager({ title, description, addons }: { title: strin
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!propertyToDelete} onOpenChange={(open) => !open && setPropertyToDelete(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Are you absolutely sure?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. This will permanently delete the property 
-              <strong> {propertyToDelete?.name} </strong> and remove its data from our servers.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4 gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setPropertyToDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleDelete}
-            >
-              Delete Property
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="-mx-6 -mb-6 border-t border-border">
           {/* Phone — card stack. Table below takes over at md. */}
           <MobileCardList
@@ -178,11 +157,11 @@ export function PropertiesManager({ title, description, addons }: { title: strin
             empty={
               <EmptyState
                 icon={Building2}
-                title="No Properties Yet"
+                title="No properties yet"
                 description="You haven't added any properties to your portfolio. Create your first hotel to get started."
                 action={
                   <Button onClick={() => setIsDialogOpen(true)} className="shadow-md">
-                    <Plus className="mr-2 h-4 w-4" /> Create Property
+                    <Plus className="mr-2 h-4 w-4" /> Add property
                   </Button>
                 }
               />
@@ -225,13 +204,13 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                         more={[
                           ...(property.status === "REJECTED"
                             ? [{
-                                label: resubmitting === property.id ? "Resubmitting..." : "Resubmit for approval",
+                                label: resubmitting === property.id ? "Resubmitting…" : "Resubmit for approval",
                                 icon: RotateCcw,
                                 disabled: resubmitting === property.id,
                                 onSelect: () => handleResubmit(property.id),
                               }]
                             : []),
-                          { label: "Delete property", icon: Trash2, destructive: true, onSelect: () => setPropertyToDelete(property) },
+                          { label: "Delete property", icon: Trash2, destructive: true, onSelect: () => handleDelete(property) },
                         ]}
                       />
                     }
@@ -248,7 +227,7 @@ export function PropertiesManager({ title, description, addons }: { title: strin
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border hover:bg-transparent">
                 <SortableTableHead columnKey="code" sort={sort} className="px-6">Code</SortableTableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6">Property Name</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6">Property name</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6">Status</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6">Check-in</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6">Check-out</TableHead>
@@ -272,11 +251,11 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                   <TableCell colSpan={6} className="py-0">
                     <EmptyState
                       icon={Building2}
-                      title="No Properties Yet"
+                      title="No properties yet"
                       description="You haven't added any properties to your portfolio. Create your first hotel to get started."
                       action={
                         <Button onClick={() => setIsDialogOpen(true)} className="shadow-md">
-                          <Plus className="mr-2 h-4 w-4" /> Create Property
+                          <Plus className="mr-2 h-4 w-4" /> Add property
                         </Button>
                       }
                     />
@@ -319,7 +298,7 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                             }}
                           >
                             <RotateCcw className="mr-2 h-4 w-4" />
-                            {resubmitting === property.id ? "Resubmitting..." : "Resubmit"}
+                            {resubmitting === property.id ? "Resubmitting…" : "Resubmit"}
                           </Button>
                         )}
                         <Button
@@ -341,7 +320,7 @@ export function PropertiesManager({ title, description, addons }: { title: strin
                           className="text-destructive"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPropertyToDelete(property);
+                            handleDelete(property);
                           }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />

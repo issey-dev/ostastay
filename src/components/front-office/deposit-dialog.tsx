@@ -9,10 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Loader2 } from "@/components/icons"
 import { INPUT_MONEY } from "@/lib/input-presets"
 import { toast } from "@/lib/toast"
 import { useProperty } from "@/components/providers/property-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type DepositDialogProps = {
   reservationId: string | null
@@ -99,18 +99,18 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
         onClose()
         onSaved(`$${parsedAmount.toFixed(2)} ${(PURPOSE_LABEL[values.purpose] ?? "payment").toLowerCase()} collected${confirmationNo ? ` on ${confirmationNo}` : ""}.`)
       } else {
-        toast.error(data.error || "Failed to collect payment.")
+        toast.error(data.error || "Couldn't collect the payment. Try again.")
       }
     } catch {
-      toast.error("An unexpected error occurred.")
+      toast.error("Couldn't collect the payment. Try again.")
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="sm">
         <DialogHeader>
-          <DialogTitle>Collect Deposit / Fee</DialogTitle>
+          <DialogTitle>Collect deposit / fee</DialogTitle>
           <DialogDescription>
             {guestName ? `${guestName} — ` : ""}{confirmationNo || ""}. Posts to the reservation&apos;s folio and carries onto
             the billing window at check-in. Pre-arrival, cancellation, and no-show fees are collected here — not through billing.
@@ -129,7 +129,7 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
             )} />
             <FormField control={form.control} name="paymentMethodId" render={({ field }) => (
               <FormItem>
-                <FormLabel>Payment Method</FormLabel>
+                <FormLabel>Payment method</FormLabel>
                 <FormControl>
                   <SearchableSelect value={field.value} onChange={field.onChange} placeholder="Select payment method..." options={paymentMethods.map((m) => ({ label: m.name, value: m.id }))} />
                 </FormControl>
@@ -156,10 +156,9 @@ export function DepositDialog({ reservationId, confirmationNo, guestName, isOpen
             )} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <SubmitButton pending={form.formState.isSubmitting} pendingLabel="Collecting…">
                 Collect {PURPOSE_LABEL[purpose] ?? "Payment"}
-              </Button>
+              </SubmitButton>
             </DialogFooter>
           </form>
         </Form>

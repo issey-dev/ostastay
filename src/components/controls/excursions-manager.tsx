@@ -23,6 +23,11 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { ExcursionScheduleManager } from "@/components/controls/excursion-schedule-manager"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 export type ExcursionRateDto = {
   id: string
@@ -132,13 +137,12 @@ const emptyValues: ExcursionTypeFormValues = {
 }
 
 export function ExcursionsManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
-
+  const confirm = useConfirm()
   const [types, setTypes] = useState<ExcursionTypeDto[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ExcursionTypeDto | null>(null)
-  const [deleting, setDeleting] = useState<ExcursionTypeDto | null>(null)
   const [schedulingFor, setSchedulingFor] = useState<ExcursionTypeDto | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -223,26 +227,31 @@ export function ExcursionsManager({ propertyId, title, description }: { property
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Excursion saved")
         fetchTypes()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save excursion type")
+        setServerError(await apiError(res, "Couldn't save the excursion. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: ExcursionTypeDto) => {
+    const ok = await confirm({
+      title: "Delete excursion?",
+      description: `Delete "${deleting.name}" (${deleting.code})? If it has any scheduled departures this will be blocked — deactivate instead to retire it.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/excursions/types/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete excursion type")
+      toast.error(await apiError(res, "Couldn't delete the excursion. Try again."))
     } else {
       setServerError(null)
+      toast.success("Excursion deleted")
     }
-    setDeleting(null)
     fetchTypes()
   }
 
@@ -268,7 +277,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
         description={description}
         action={
           <Button onClick={openCreate} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> New Excursion
+            <Plus className="mr-2 h-4 w-4" /> Add excursion
           </Button>
         }
       >
@@ -302,11 +311,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                     }
                     subtitle={t.chargeCode?.code ? <span className="font-mono">{t.chargeCode.code}</span> : undefined}
                     badge={
-                      t.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                      )
+                      <StatusBadge status={t.isActive ? "ACTIVE" : "INACTIVE"} label={t.isActive ? "Active" : "Inactive"} />
                     }
                     meta={[
                       { label: PRICING_MODE_LABELS[t.pricingMode] ?? t.pricingMode, value: currentPriceLabel(t) },
@@ -325,7 +330,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                           variant="outline"
                           size="sm"
                           className="h-9 flex-1 text-destructive hover:text-destructive"
-                          onClick={() => setDeleting(t)}
+                          onClick={() => confirmDelete(t)}
                         >
                           <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                         </Button>
@@ -341,9 +346,9 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                     <TableRow>
                       <SortableTableHead columnKey="code" sort={sort}>Code</SortableTableHead>
                       <TableHead>Name</TableHead>
-                      <TableHead>Charge Code</TableHead>
+                      <TableHead>Charge code</TableHead>
                       <TableHead>Pricing</TableHead>
-                      <TableHead>Current Price</TableHead>
+                      <TableHead>Current price</TableHead>
                       <TableHead>Schedules</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -361,11 +366,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                           <Badge variant="outline">{t.schedules.length} template{t.schedules.length === 1 ? "" : "s"}</Badge>
                         </TableCell>
                         <TableCell>
-                          {t.isActive ? (
-                            <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                          )}
+                          <StatusBadge status={t.isActive ? "ACTIVE" : "INACTIVE"} label={t.isActive ? "Active" : "Inactive"} />
                         </TableCell>
                         <TableCell className="text-right space-x-2">
                           <Button variant="outline" size="sm" onClick={() => setSchedulingFor(t)}>
@@ -379,7 +380,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                             size="icon"
                             aria-label="Delete excursion"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleting(t)}
+                            onClick={() => confirmDelete(t)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -395,11 +396,11 @@ export function ExcursionsManager({ propertyId, title, description }: { property
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Excursion" : "New Excursion"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit excursion" : "Add excursion"}</DialogTitle>
                 <DialogDescription>
                   {editing ? "Modify this excursion's configuration and pricing." : "e.g. SNORK — Snorkelling Trip, adult $50 / child $25."}
                 </DialogDescription>
@@ -455,7 +456,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                     name="chargeCodeId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Charge Code *</FormLabel>
+                        <FormLabel>Charge code *</FormLabel>
                         <FormControl>
                           <SearchableSelect
                             value={field.value}
@@ -473,7 +474,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                     name="cutoffHours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cancellation Cutoff (hours) *</FormLabel>
+                        <FormLabel>Cancellation cutoff (hours) *</FormLabel>
                         <FormControl>
                           <Input type="number" min="0" {...field} />
                         </FormControl>
@@ -489,7 +490,7 @@ export function ExcursionsManager({ propertyId, title, description }: { property
                   name="pricingMode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Pricing Mode *</FormLabel>
+                      <FormLabel>Pricing mode *</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger><SelectValue>{PRICING_MODE_LABELS[field.value]}</SelectValue></SelectTrigger>
@@ -633,33 +634,16 @@ export function ExcursionsManager({ propertyId, title, description }: { property
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Excursion"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Excursion</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.name}&quot; ({deleting?.code})? If it has any scheduled departures this will be
-              blocked — deactivate instead to retire it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Schedule management */}
       <Dialog open={!!schedulingFor} onOpenChange={(open) => { if (!open) { setSchedulingFor(null); fetchTypes() } }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent size="md">
           {schedulingFor && (
             <ExcursionScheduleManager
               excursionType={schedulingFor}

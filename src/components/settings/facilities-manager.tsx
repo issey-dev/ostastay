@@ -14,10 +14,10 @@ import { BedDouble, Building2, Map, Plus } from "@/components/icons"
 // child watches to open its own Add dialog — the child keeps ownership of its form/state,
 // the parent only owns the row layout and the "add was requested" intent.
 const TABS = [
-  { id: "room-types", label: "Room Types", addLabel: "Room Type", icon: BedDouble },
-  { id: "buildings", label: "Buildings", addLabel: "Building", icon: Building2 },
-  { id: "floors", label: "Floors", addLabel: "Floor", icon: Map },
-  { id: "rooms", label: "Rooms", addLabel: "Room", icon: BedDouble },
+  { id: "room-types", label: "Room types", addLabel: "room type", icon: BedDouble },
+  { id: "buildings", label: "Buildings", addLabel: "building", icon: Building2 },
+  { id: "floors", label: "Floors", addLabel: "floor", icon: Map },
+  { id: "rooms", label: "Rooms", addLabel: "room", icon: BedDouble },
 ] as const
 
 // The property comes from the page (Hub › property › Rooms & Inventory). This used to

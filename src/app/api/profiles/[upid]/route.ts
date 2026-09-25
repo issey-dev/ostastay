@@ -89,6 +89,7 @@ export async function PUT(
         vipLevel: body.vipLevel || null,
         photoUrl: body.photoUrl,
         iataNumber: body.iataNumber,
+        tinNumber: body.tinNumber === undefined ? undefined : body.tinNumber?.trim() || null,
         commissionRate: body.commissionRate ? parseFloat(body.commissionRate) : null,
         // MIRA Booking Method — only the fixed list is accepted; anything else clears it,
         // and an update that doesn't send it leaves it unchanged.

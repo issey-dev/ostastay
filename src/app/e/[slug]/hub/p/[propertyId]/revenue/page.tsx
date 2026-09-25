@@ -20,14 +20,14 @@ export default async function HubPropertyRevenuePage({ params }: { params: Promi
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <HubSetupNotice title={item.title} />
-      <ControlsCard title="Allocation Calculation" description="Which side drives automatic Allocation attachment on this property's reservations — Meal Plan or Rate Plan. Changing this only affects reservations created or edited afterward, not existing bookings.">
+      <ControlsCard title="Allocation calculation" description="Which side drives automatic Allocation attachment on this property's reservations — Meal Plan or Rate Plan. Changing this only affects reservations created or edited afterward, not existing bookings.">
         <AllocationCalculationManager property={property} />
       </ControlsCard>
       <MealPlansManager
         propertyId={property.id}
         copyAction={canEdit("create") && <CopyFromPropertyButton propertyId={property.id} section="meal-plans" title="meal plans" />}
         permissions={mealPlanPermissions}
-        title="Meal Plans"
+        title="Meal plans"
         description="Meal plan codes offered on this property's reservations (Bed & Breakfast, Half Board, etc.). A meal plan is priced per person through the Allocations it includes (Revenue > Allocations, e.g. BB → BF), which post at Night Audit when Allocation Calculation is set to Meal Plan level. A code can't be changed or deleted once reservations use it — deactivate it instead."
       />
     </div>

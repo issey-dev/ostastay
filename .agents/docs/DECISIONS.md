@@ -3315,3 +3315,71 @@ plan left open (MOBILE_PLAN §7 "Left open").
 - The RESERVED default is the page's choice. `GET /api/reservations` with no `status` and
   no search still returns everything but CHECKED_OUT/NO_SHOW. With a search, it returns
   every status.
+
+## 2026-09-25 — Desktop polish: owner approved every recommendation in DESKTOP_PLAN.md (owner)
+
+Owner: "yes to all your recommendations … I also need the UI to be clean, so pay extra
+attention to not making the screens busy — it's fine if the user has to make extra clicks for
+non-important things."
+
+- **Clean over convenient (standing rule).** A screen shows what the job needs *now*; anything
+  secondary goes behind one click (More menu, collapsed section, tab, "Show details"). Extra clicks
+  for rare actions are acceptable; clutter is not. Applies to every future screen, not just this
+  pass. Concretely: one primary action per screen/section; ≤2 visible secondary actions, the rest in
+  More; destructive actions last in More, red, confirmed; empty sections are not rendered as cards
+  (show an "Add …" link instead); no explanatory paragraphs on the page — use `InfoHint`.
+- **Feedback:** success and ordinary errors are toasts (top-right, unchanged). A modal only for an
+  error that needs a decision, and it carries the action (e.g. "Open folio").
+- **Reservation detail two-column layout: APPROVED** after a sketch (same day). Main column = stay,
+  room, guest, requests; sticky right summary rail = status, dates, balance, the one next action
+  by state (Check in / Settle and check out / Open folio); header = 1–2 actions + More; empty
+  sections collapse into one "+ Add transport · deposit · trace" line. Owner: "hope this does not
+  affect mobile view much" → the two columns and rail apply from `lg:` up only; the phone layout
+  from MOBILE_PLAN Phase 2 (summary strip, MobileActions, collapsed sections) stays as it is.
+- **Naming — CORRECTED same day: names stay as they are** (owner: "names stay same"). Sidebar
+  labels are not renamed (Tape Chart, Client Relations, Fast Post, Night Audit … stay). Where a
+  page title differs from its sidebar label, the page title follows the sidebar label
+  (e.g. "Availability Matrix" page → "Tape Chart"), so sidebar = page title = browser tab.
+- **Command palette (Ctrl+K)** with page, action and guest/reservation/room search: yes.
+- **Toasts:** confirmed by the owner in a follow-up message.
+- **Folio:** confirmed — becomes a real page (`/folios/[id]`, linkable, opens in a tab); the dialog stays as a
+  quick view.
+- **Header:** property switcher in the header; "Operations ⇄ Setup" toggle; business date links to
+  Night Audit.
+- **Housekeeping board:** neutral cards with a status stripe + label (no fully tinted cards).
+- **Hub save model:** save-per-section with a "Saved" state everywhere; auto-save only for single
+  toggles.
+- **Order:** Phase 1 (flow & feedback) first, then shell, declutter, consistency, power features.
+- **Orphan `/dashboard/inventory`:** redirect to Housekeeping (took the plan's recommendation).
+
+## GST Report (2026-09-25)
+
+Owner asked for a GST-filing report: one line per invoice — Invoice Date (= departure date),
+Folio/Invoice No, Guest Name, Travel Agent, Agent TIN, Arrival, Departure, Invoice Total excl
+tax, Service Charge, GST, Green Tax, Total incl tax — ordered by invoice date then number,
+filtered on invoice date. Built as `fin-gst` in `src/lib/reports/defs/financial.ts` (replaced the
+earlier version, which missed routed Service Charge/GST lines entirely). Rules chosen while building
+it — **not yet confirmed by the owner**:
+- An invoice = a folio with posted (non-void) charges. A stay's folio is dated on the reservation's
+  departure date and only once CHECKED_OUT; a walk-in / non-stay folio on its `closedBusinessDate`,
+  only once closed. Every non-void line counts, whatever its posting date.
+- Invoice No is `Folio.taxInvoiceNumber`; a folio whose Tax Invoice was never printed has none, so
+  it shows `CONF / F1` and the report's note counts them.
+- Guest Name is the reservation's primary guest (not the folio payee); walk-ins use the payee or
+  walk-in name. Travel Agent/TIN come from the reservation's travel agent.
+- TIN is a new field, `Profile.tinNumber`, on Company/Travel Agent profiles (Finance & Billing).
+
+## 2026-09-25 — UI text standard: sentence case (owner: "have a standard — up to your recommendation")
+
+- **Sentence case for all UI text we write:** buttons, menu items, tabs, dialog and card titles,
+  field labels, table headers, toasts, empty states — "Add room type", "Save", "New rate plan",
+  "Close shift", "Guest details". Capital only on the first word and on proper nouns / codes
+  (Green Tax, MIRA, GST, BAR, Booking API, Hub, Night Audit when naming the module).
+- **Exception — navigation names stay as they are** (owner, same day: "names stay same"): sidebar
+  items and the page titles that equal them keep their current form ("Front Desk", "Tape Chart",
+  "Client Relations", "Fast Post", "Daily Reports"). They are the product's section names.
+- Verbs: "Add ‹noun›" opens a create dialog, "Create" confirms it, "Save" confirms an edit,
+  "Delete"/"Remove" destroy (always confirmed). Pending labels end in "…" ("Saving…").
+- No "successfully", no "!", no "Please" in UI copy.
+- Owner also approved (same day): move the Spa booking participant slots onto the form
+  standard, and turn the very wide dialogs into side sheets or pages.

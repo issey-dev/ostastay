@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -348,7 +349,7 @@ export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId:
 
       {/* Module settings */}
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+        <DialogContent size="md">
           <Form {...settingsForm}>
             <form onSubmit={settingsForm.handleSubmit(saveSettings)}>
               <DialogHeader>
@@ -442,7 +443,7 @@ export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId:
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save settings"}</Button>
+                <SubmitButton pending={submitting}>Save</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
@@ -451,7 +452,7 @@ export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId:
 
       {/* What's sold */}
       <Dialog open={!!catalogue} onOpenChange={(open) => !open && setCatalogue(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>
               {catalogue?.row.property.name} — {catalogue ? MODULE_LABEL[catalogue.module].toLowerCase() : ""} sold online
@@ -512,7 +513,7 @@ export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId:
 
       {/* One item's online details */}
       <Dialog open={!!detail} onOpenChange={(open) => !open && closeDetails()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[560px]">
+        <DialogContent size="md">
           <Form {...detailsForm}>
             <form onSubmit={detailsForm.handleSubmit(saveDetails)}>
               <DialogHeader>
@@ -546,7 +547,7 @@ export function WebsiteActivitySettings({ propertyId, canManage }: { propertyId:
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeDetails}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save details"}</Button>
+                <SubmitButton pending={submitting}>Save</SubmitButton>
               </DialogFooter>
             </form>
           </Form>

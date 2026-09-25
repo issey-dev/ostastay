@@ -107,10 +107,10 @@ export function MappingManager({ propertyId, canManage }: { propertyId: string; 
             <Building2 className="h-4 w-4 mr-2" /> Sharing
           </TabsTrigger>
           <TabsTrigger value="room-type">
-            <Hash className="h-4 w-4 mr-2" /> Room Type
+            <Hash className="h-4 w-4 mr-2" /> Room type
           </TabsTrigger>
           <TabsTrigger value="rate-plan">
-            <DollarSign className="h-4 w-4 mr-2" /> Rate Plan
+            <DollarSign className="h-4 w-4 mr-2" /> Rate plan
           </TabsTrigger>
           <TabsTrigger value="inventory">
             <RefreshCw className="h-4 w-4 mr-2" /> Inventory

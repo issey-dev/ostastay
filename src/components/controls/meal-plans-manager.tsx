@@ -1,10 +1,12 @@
 "use client"
 
+import { StatusBadge } from "@/components/ui/status-badge"
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Plus, Edit2, Trash2, UtensilsCrossed } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -55,7 +57,7 @@ export function MealPlansManager({
   propertyId: string
   title: string
   description?: string
-  /** "Copy from…" another property, shown beside Add Meal Plan. */
+  /** "Copy from…" another property, shown beside Add meal plan. */
   copyAction?: React.ReactNode
   /** The user's REVENUE rights — add / edit / delete are hidden without them. */
   permissions: { create: boolean; update: boolean; delete: boolean }
@@ -128,7 +130,7 @@ export function MealPlansManager({
         fetchMealPlans()
         toast.success(editingId ? "Meal plan updated." : "Meal plan added.")
       } else {
-        setServerError(await readApiError(res, "Failed to save meal plan."))
+        setServerError(await readApiError(res, "Couldn't save the meal plan. Try again."))
       }
     } catch (e) {
       console.error(e)
@@ -141,14 +143,14 @@ export function MealPlansManager({
     try {
       const res = await fetch(`/api/meal-plans/${id}`, { method: "DELETE" })
       if (!res.ok) {
-        toast.error(await readApiError(res, "Failed to delete meal plan."))
+        toast.error(await readApiError(res, "Couldn't delete the meal plan. Try again."))
         return
       }
       toast.success("Meal plan deleted.")
       fetchMealPlans()
     } catch (e) {
       console.error(e)
-      toast.error("Failed to delete meal plan.")
+      toast.error("Couldn't delete the meal plan. Try again.")
     }
   }
 
@@ -165,7 +167,7 @@ export function MealPlansManager({
           {copyAction}
           {permissions.create && (
             <Button size="sm" onClick={() => openDialog()}>
-              <Plus className="w-4 h-4 mr-2" /> Add Meal Plan
+              <Plus className="w-4 h-4 mr-2" /> Add meal plan
             </Button>
           )}
         </div>
@@ -187,9 +189,7 @@ export function MealPlansManager({
                     title={mp.name}
                     subtitle={<span className="font-mono">{mp.code}</span>}
                     badge={
-                      <Badge variant="outline" className={mp.isActive ? "bg-success-muted text-success border-success/30" : "bg-muted text-muted-foreground"}>
-                        {mp.isActive ? "Active" : "Inactive"}
-                      </Badge>
+                      <StatusBadge status={mp.isActive ? "ACTIVE" : "INACTIVE"} label={mp.isActive ? "Active" : "Inactive"} />
                     }
                     meta={
                       (mp.allocationLinks ?? []).length > 0
@@ -270,9 +270,7 @@ export function MealPlansManager({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={mp.isActive ? "bg-success-muted text-success border-success/30" : "bg-muted text-muted-foreground"}>
-                        {mp.isActive ? "Active" : "Inactive"}
-                      </Badge>
+                      <StatusBadge status={mp.isActive ? "ACTIVE" : "INACTIVE"} label={mp.isActive ? "Active" : "Inactive"} />
                     </TableCell>
                     {hasActions && (
                       <TableCell className="text-right">
@@ -297,9 +295,9 @@ export function MealPlansManager({
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Meal Plan" : "Add Meal Plan"}</DialogTitle>
+            <DialogTitle>{editingId ? "Edit meal plan" : "Add meal plan"}</DialogTitle>
             <DialogDescription>Configure the details for this meal plan.</DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -344,13 +342,13 @@ export function MealPlansManager({
                 name="allocationIds"
                 render={({ field }) => (
                   <FormItem className="border rounded-lg p-3 bg-muted/30">
-                    <FormLabel>Included Allocations</FormLabel>
+                    <FormLabel>Included allocations</FormLabel>
                     <FormDescription className="text-xs">
                       Selecting this meal plan on a reservation attaches these allocations (e.g. BB → BF) when
                       Allocation Calculation is set to Meal Plan level. Configure allocations under Revenue &gt; Allocations.
                     </FormDescription>
                     {linkableAllocations.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">No linkable allocations configured yet.</p>
+                      <EmptyState size="inline" title="No linkable allocations configured yet." />
                     ) : (
                       <div className="flex flex-col gap-1.5">
                         {linkableAllocations.map(a => (
@@ -377,7 +375,7 @@ export function MealPlansManager({
                 name="isActive"
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between pt-2">
-                    <FormLabel className="flex-1">Active Status</FormLabel>
+                    <FormLabel className="flex-1">Active status</FormLabel>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
@@ -391,9 +389,7 @@ export function MealPlansManager({
               )}
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Saving..." : "Save"}
-                </Button>
+                <SubmitButton pending={form.formState.isSubmitting}>{editingId ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>

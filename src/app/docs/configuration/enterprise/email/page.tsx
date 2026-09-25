@@ -33,12 +33,12 @@ export default function Email() {
           ["Host", "The mail server, e.g. smtp.example.com."],
           ["Port", "Usually 587 (with TLS). Some providers use 465."],
           ["Username / Password", "The mailbox login. A saved password shows masked, and leaving it untouched keeps it."],
-          ["From Address", "The sender guests see, e.g. reservations@your-hotel.example.com. Use an address your mail server is allowed to send as."],
+          ["From address", "The sender guests see, e.g. reservations@your-hotel.example.com. Use an address your mail server is allowed to send as."],
           ["Use TLS", "Leave on unless your provider says otherwise."],
         ]}
       />
       <ol className="docs-steps">
-        <li>Fill in the fields and choose <strong>Save Configuration</strong>.</li>
+        <li>Fill in the fields and choose <strong>Save</strong> at the bottom of the card. <strong>Saved</strong> appears beside it.</li>
         <li>In <strong>Test these settings</strong>, choose <strong>Test connection</strong>. This checks the server accepts your login.</li>
         <li>
           Enter your own address in the test box and choose <strong>Send test email</strong>. Check that it arrives, and is not in

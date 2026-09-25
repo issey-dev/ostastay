@@ -11,9 +11,9 @@ export default function Reservations() {
         lead="How booking numbers look, where document numbering starts, and the lists the desk picks from on a reservation."
       />
 
-      <H2>Booking Number Format</H2>
+      <H2>Booking number format</H2>
       <Where path="Hub › Controls › Reservations" who="Property Setup" />
-      <Shot name="prop-reservations" alt="The Booking Number Format card with a prefix, number of digits and a preview." />
+      <Shot name="prop-reservations" alt="The Booking number format card with a prefix, number of digits and a preview." />
       <Table
         head={["Field", "Notes"]}
         rows={[
@@ -28,26 +28,26 @@ export default function Reservations() {
         from a group, through the channel manager or on your website.
       </p>
 
-      <H2>Reservation &amp; Housekeeping Lists</H2>
+      <H2>Reservation &amp; housekeeping lists</H2>
       <p>The drop-downs on a reservation and on housekeeping tasks. They start empty:</p>
       <Table
         head={["Tab", "Examples"]}
         rows={[
-          ["Special Requests", "Early check-in, Late check-out, Baby cot, Honeymoon set-up."],
-          ["Transport Type (Pickup / Dropoff)", "Speedboat, Seaplane, Domestic flight, Car."],
-          ["Housekeeping Requests", "Turndown service, Extra towels, Extra bed."],
+          ["Special requests", "Early check-in, Late check-out, Baby cot, Honeymoon set-up."],
+          ["Transport type (pickup / dropoff)", "Speedboat, Seaplane, Domestic flight, Car."],
+          ["Housekeeping requests", "Turndown service, Extra towels, Extra bed."],
         ]}
       />
       <p>
-        Add each with a <strong>Code (Internal)</strong> and a <strong>Display Value</strong>. The arrows set the order in the
+        Add each with a <strong>Code (internal)</strong> and a <strong>Display value</strong>. The arrows set the order in the
         drop-down. The code can&apos;t be changed; a deleted entry comes back with <strong>Show deleted</strong> and{" "}
         <strong>Restore</strong>. Use <strong>Copy from…</strong> to take another property&apos;s lists.
       </p>
       <Callout title="Where are cancellation and deposit policies?">
         <p>
-          Deposit, cancellation and no-show fees are on <a href="/docs/configuration/property/finance">Finance › Deposit &amp; Fee Rules</a>.
+          Deposit, cancellation and no-show fees are on <a href="/docs/configuration/property/finance">Finance › Deposit &amp; fee rules</a>.
           When a no-show is marked is on <a href="/docs/configuration/property/night-audit">Night Audit</a>. eRegistration is on{" "}
-          <a href="/docs/configuration/property/stationery">Stationery › Reg. Card</a>. Travel agents and companies, and their
+          <a href="/docs/configuration/property/stationery">Stationery › Reg. card</a>. Travel agents and companies, and their
           negotiated rates, are profiles, created by the front office rather than in the Hub.
         </p>
       </Callout>
@@ -55,7 +55,7 @@ export default function Reservations() {
       <H2>Sequences</H2>
       <Where path="Hub › Controls › Sequences" who="Property Setup" />
       <p>The running numbers behind your documents. Each shows the <strong>last number issued</strong>; the next document gets the one after.</p>
-      <Shot name="prop-sequences" alt="The Sequence Manager: reservation, proforma folio, tax invoice, receipt and guest registration numbers." />
+      <Shot name="prop-sequences" alt="The Sequence manager: reservation, proforma folio, tax invoice, receipt and guest registration numbers." />
       <Table
         head={["Sequence", "Numbers"]}
         rows={[

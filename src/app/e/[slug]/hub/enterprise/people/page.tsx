@@ -1,6 +1,7 @@
 import { requireSession, requireEnterpriseHub, requirePermission } from "@/lib/scope"
 import { UsersRolesManager } from "@/components/controls/users-roles-manager"
-import { InfoHint } from "@/components/ui/info-hint"
+import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { ENTERPRISE_NAV, navItem } from "@/components/hub/hub-nav"
 import { Button } from "@/components/ui/button"
 import { FileText } from "@/components/icons"
 
@@ -19,29 +20,24 @@ export default async function HubPeoplePage({ params }: { params: Promise<{ slug
   // Re-asserted here rather than relying on the layout, so the page is honest on its own.
   requireEnterpriseHub(ctx)
   requirePermission(ctx, "USERS", "view")
+  const item = navItem(ENTERPRISE_NAV, "people")
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-          People
-          <InfoHint label="People">
-            Everyone who can sign in to this enterprise, the roles that decide what they
-            see, and the work location and post they hold. Access is the combination of
-            every role a person is given.
-          </InfoHint>
-        </h2>
-        <p className="mt-1 text-muted-foreground">
-          Staff accounts, roles and work locations across the enterprise.
-        </p>
-      </div>
-
-      {/* The permission matrix report is a wide landscape print document — desktop only. */}
-      <div className="max-md:hidden">
-        <Button variant="outline" nativeButton={false} render={<a href={`/e/${slug}/hub/enterprise/permission-matrix`} target="_blank" rel="noreferrer" />}>
-          <FileText className="mr-2 h-4 w-4" /> Permission matrix report
-        </Button>
-      </div>
+      <HubPageHeader
+        title={item.title}
+        icon={item.icon}
+        scope="enterprise"
+        hint="Everyone who can sign in to this enterprise, the roles that decide what they see, and the work location and post they hold. Access is the combination of every role a person is given."
+      >
+        {/* The permission matrix report is a wide landscape print document, opened in its
+            own tab to print (a full load on purpose) — desktop only. */}
+        <div className="max-md:hidden">
+          <Button variant="outline" nativeButton={false} render={<a href={`/e/${slug}/hub/enterprise/permission-matrix`} target="_blank" rel="noreferrer" />}>
+            <FileText className="mr-2 h-4 w-4" /> Permission matrix report
+          </Button>
+        </div>
+      </HubPageHeader>
 
       {/* Enterprise-scoped by definition — a property-scoped user can't reach the Hub, so
           the manager's property-lock branch never engages here. */}

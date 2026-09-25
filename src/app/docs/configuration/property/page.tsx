@@ -17,7 +17,26 @@ export default function PropertySetup() {
         property you are configuring; use its switcher to change property. Every setting on these pages applies to that property
         only.
       </p>
+      <p>
+        <strong>Controls</strong> in the sidebar also opens into a list of the property&apos;s sections, so you can go straight from
+        one section to the next. Pages with three or more sections show links under the page title that jump to each one.
+      </p>
       <Shot name="prop-controls" alt="The Controls page for Coral Bay Resort: cards for General, Rooms & Inventory, Reservations, Revenue, Finance, Charge Codes, Outlets, Excursions, Spa, Night Audit, Stationery, Online Booking, Green Tax and Sequences." />
+
+      <H2>How saving works</H2>
+      <ul>
+        <li>
+          A section with several fields has one <strong>Save</strong> at the bottom. It stays greyed out until you change something;
+          beside it you see <strong>Unsaved changes</strong>, then <strong>Saved</strong> once it has gone through.
+        </li>
+        <li>
+          A single switch or drop-down on its own saves as soon as you change it, and shows a brief <strong>Saved</strong> tick.
+        </li>
+        <li>
+          In an add or edit form, choose <strong>Create</strong> for something new, or <strong>Save</strong> for a change.
+        </li>
+        <li>Deleting anything asks you to confirm first.</li>
+      </ul>
 
       <H2>What a new property already has</H2>
       <Table

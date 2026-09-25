@@ -1,6 +1,7 @@
 import { requireSession, requireEnterpriseHub, requirePermission, hasPermission } from "@/lib/scope"
 import { ActiveSessions } from "@/components/hub/active-sessions"
-import { InfoHint } from "@/components/ui/info-hint"
+import { HubPageHeader } from "@/components/hub/hub-page-header"
+import { ENTERPRISE_NAV, navItem } from "@/components/hub/hub-nav"
 
 // Active sessions — who is signed in, for how long, and the ability to sign them out.
 //
@@ -13,22 +14,16 @@ export default async function HubSessionsPage() {
 
   // Viewing who is signed in and ending someone's session are different acts.
   const canTerminate = hasPermission(ctx, "USERS", "update")
+  const item = navItem(ENTERPRISE_NAV, "sessions")
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-          Sessions
-          <InfoHint label="Sessions">
-            A session ends when the person signs out, when an administrator ends it here,
-            after the property&apos;s idle timeout, or when End of Day rolls the business
-            date. Set the idle timeout per property in Controls.
-          </InfoHint>
-        </h2>
-        <p className="mt-1 text-muted-foreground">
-          Everyone currently signed in across the enterprise.
-        </p>
-      </div>
+      <HubPageHeader
+        title={item.title}
+        icon={item.icon}
+        scope="enterprise"
+        hint="A session ends when the person signs out, when an administrator ends it here, after the property's idle timeout, or when End of Day rolls the business date. Set the idle timeout per property in Controls."
+      />
 
       <ActiveSessions canTerminate={canTerminate} />
     </div>

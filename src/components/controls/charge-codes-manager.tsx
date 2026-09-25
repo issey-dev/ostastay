@@ -16,6 +16,10 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
 import {
   POSTING_TYPES,
   POSTING_TYPE_LABELS,
@@ -49,7 +53,7 @@ function taxSummary(cc: ChargeCodeRow): { chips: string[]; note: string | null }
   if (cc.postingType === "TAX") return { chips: [], note: "Face value" }
   if (cc.postingType !== "CHARGE") return { chips: [], note: null }
   const chips = (cc.generatesFrom ?? []).map((g) => g.generatedCode.code)
-  const note = cc.useDefaultTax ? null : cc.taxProfile?.name || "Custom Tax"
+  const note = cc.useDefaultTax ? null : cc.taxProfile?.name || "Custom tax"
   return { chips, note }
 }
 
@@ -69,6 +73,7 @@ const BLANK_FORM = {
 // string: a TAX code posts at face value and stays out of the GST base, exactly as the
 // hardcoded GTX handling did.
 export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
+  const confirm = useConfirm()
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeRow[]>([])
   const [groups, setGroups] = useState<ChargeGroup[]>([])
   const [taxProfiles, setTaxProfiles] = useState<Array<{ id: string; name: string }>>([])
@@ -80,7 +85,6 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
   const [editing, setEditing] = useState<ChargeCodeRow | null>(null)
   const [form, setForm] = useState(BLANK_FORM)
 
-  const [deleting, setDeleting] = useState<ChargeCodeRow | null>(null)
   const [generatesFor, setGeneratesFor] = useState<ChargeCodeRow | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -140,23 +144,35 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
       })
       if (res.ok) {
         setModalOpen(false)
+        toast.success("Charge code saved")
         fetchData()
       } else {
-        toast.error((await res.json().catch(() => null))?.error || "Failed to save charge code")
+        toast.error(await apiError(res, "Couldn't save the charge code. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleting) return
-    const res = await fetch(`/api/charge-codes/${deleting.id}`, { method: "DELETE" })
+  const handleDelete = async (cc: ChargeCodeRow) => {
+    const ok = await confirm({
+      title: "Delete charge code?",
+      description: (
+        <>
+          Delete <strong>{cc.code}</strong>? It can&apos;t be deleted if any folio
+          line item is posted against it — deactivate it instead to retire it.
+        </>
+      ),
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
+    const res = await fetch(`/api/charge-codes/${cc.id}`, { method: "DELETE" })
     if (res.ok) {
-      setDeleting(null)
+      toast.success("Charge code deleted")
       fetchData()
     } else {
-      toast.error((await res.json().catch(() => null))?.error || "Failed to delete Charge Code")
+      toast.error(await apiError(res, "Couldn't delete the charge code. Try again."))
     }
   }
 
@@ -178,15 +194,15 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
     <div className="w-full space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="space-y-2 w-56">
-          <Label className="text-xs text-muted-foreground">Filter by Reporting Bucket</Label>
+          <Label className="text-xs text-muted-foreground">Filter by reporting bucket</Label>
           <Select value={bucketFilter} onValueChange={(v) => setBucketFilter(v ?? "ALL")}>
             <SelectTrigger>
               <SelectValue>
-                {bucketFilter === "ALL" ? "All Buckets" : (REPORT_BUCKET_LABELS[bucketFilter as ReportBucket] ?? bucketFilter)}
+                {bucketFilter === "ALL" ? "All buckets" : (REPORT_BUCKET_LABELS[bucketFilter as ReportBucket] ?? bucketFilter)}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All Buckets</SelectItem>
+              <SelectItem value="ALL">All buckets</SelectItem>
               {bucketFilters.map((b) => (
                 <SelectItem key={b} value={b}>{REPORT_BUCKET_LABELS[b as ReportBucket] ?? b}</SelectItem>
               ))}
@@ -195,7 +211,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
         </div>
 
         <Button size="sm" className="shadow-sm" onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Add Charge Code
+          <Plus className="w-4 h-4 mr-2" /> Add charge code
         </Button>
       </div>
 
@@ -230,7 +246,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                         <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
                       </span>
                     ) : (
-                      <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
+                      <StatusBadge tone="warning" label="Unclassified" />
                     ),
                   },
                   ...(tax.chips.length > 0 || tax.note
@@ -262,7 +278,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                       className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
                       disabled={cc.isSystem}
                       aria-label={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
-                      onClick={() => setDeleting(cc)}
+                      onClick={() => handleDelete(cc)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -303,7 +319,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                         <span className="ml-1.5">{cc.chargeSubgroup.name}</span>
                       </span>
                     ) : (
-                      <Badge variant="outline" className="font-normal text-warning border-warning/40">Unclassified</Badge>
+                      <StatusBadge tone="warning" label="Unclassified" />
                     )}
                   </TableCell>
                   <TableCell className="py-1.5">
@@ -336,7 +352,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                         className="h-7 w-7 p-0 text-destructive hover:bg-destructive-muted disabled:opacity-30"
                         disabled={cc.isSystem}
                         title={cc.isSystem ? "System charge codes can't be deleted — deactivate instead" : "Delete"}
-                        onClick={() => setDeleting(cc)}
+                        onClick={() => handleDelete(cc)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -359,9 +375,9 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
 
       {/* Create / edit */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Charge Code" : "Add Charge Code"}</DialogTitle>
+            <DialogTitle>{editing ? "Edit charge code" : "Add charge code"}</DialogTitle>
             <DialogDescription>
               A posting code, classified by Subgroup — that&apos;s what every revenue and tax
               report groups by.
@@ -370,7 +386,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Code Identifier *</Label>
+                <Label>Code identifier *</Label>
                 <Input
                   required placeholder="e.g. MB, REST" className="uppercase"
                   disabled={!!editing?.isSystem}
@@ -382,7 +398,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Posting Type *</Label>
+                <Label>Posting type *</Label>
                 <Select value={form.postingType} onValueChange={(v) => setForm((p) => ({ ...p, postingType: (v ?? "CHARGE") as PostingType }))}>
                   <SelectTrigger>
                     <SelectValue>{POSTING_TYPE_LABELS[form.postingType]}</SelectValue>
@@ -405,7 +421,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                 required
                 value={form.chargeSubgroupId}
                 onChange={(v) => setForm((p) => ({ ...p, chargeSubgroupId: v ?? "" }))}
-                placeholder="Select Subgroup..."
+                placeholder="Select subgroup..."
                 options={subgroupOptions}
               />
               <p className="text-[11px] text-muted-foreground">
@@ -442,7 +458,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                         checked={!form.useDefaultTax}
                         onChange={() => setForm((p) => ({ ...p, useDefaultTax: false }))}
                       />
-                      Custom Tax
+                      Custom tax
                     </label>
                   </div>
                   {!form.useDefaultTax && (
@@ -450,12 +466,12 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
                       required
                       value={form.taxProfileId}
                       onChange={(v) => setForm((p) => ({ ...p, taxProfileId: v ?? "" }))}
-                      placeholder="Select Custom Tax"
+                      placeholder="Select custom tax"
                       options={taxProfiles.map((tp) => ({ label: tp.name, value: tp.id }))}
                     />
                   )}
                   {taxProfiles.length === 0 && !form.useDefaultTax && (
-                    <p className="text-xs text-muted-foreground">No Custom Tax profiles yet — add one under Finance &gt; Tax &gt; Custom Tax first.</p>
+                    <p className="text-xs text-muted-foreground">No custom tax profiles yet — add one under Finance &gt; Tax &gt; Custom tax first.</p>
                   )}
                 </>
               ) : (
@@ -469,7 +485,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
 
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={submitting}>Save</Button>
+              <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -477,7 +493,7 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
 
       {/* Generates */}
       <Dialog open={!!generatesFor} onOpenChange={(o) => { if (!o) { setGeneratesFor(null); fetchData() } }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>Generates — {generatesFor?.code}</DialogTitle>
             <DialogDescription>
@@ -495,22 +511,6 @@ export function ChargeCodesManager({ propertyId }: { propertyId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Delete */}
-      <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Charge Code</DialogTitle>
-            <DialogDescription>
-              Delete <strong>{deleting?.code}</strong>? It can&apos;t be deleted if any folio
-              line item is posted against it — deactivate it instead to retire it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

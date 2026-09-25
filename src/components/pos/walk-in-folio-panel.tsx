@@ -9,11 +9,17 @@ import { Button } from "@/components/ui/button"
 import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Printer, CheckCircle2, Ban, RotateCcw } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
+import { useReasonPrompt } from "@/components/providers/confirm-provider"
 
 type WalkInFolioPanelProps = {
   folioId: string | null
@@ -28,6 +34,7 @@ type WalkInFolioPanelProps = {
 // out. A closed bill is read-only but can be REOPENED while it's still the same business
 // day (the server enforces that).
 export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInFolioPanelProps) {
+  const askReason = useReasonPrompt()
   // Payment methods are per property — the property this walk-in bill belongs to.
   const { currentProperty } = useProperty()
   const { slug } = useParams<{ slug: string }>()
@@ -38,7 +45,6 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
   // Same rule as the guest folio: the amount is the balance until the cashier edits it.
   const [paymentAmountTouched, setPaymentAmountTouched] = useState(false)
-  const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
   // Folio the print-style picker is open for (null = closed).
   const [printFolioId, setPrintFolioId] = useState<string | null>(null)
 
@@ -54,7 +60,6 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   useEffect(() => {
     if (isOpen && folioId) {
       setFolio(null)
-      setFeedback(null)
       setPaymentAmountTouched(false)
       fetchFolio()
       if (currentProperty) fetch(`/api/payment-methods?propertyId=${currentProperty.id}`)
@@ -72,11 +77,6 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
   const closed = !!folio?.isClosed
   const paymentAmount = paymentAmountTouched ? paymentForm.amount : balance > 0.005 ? balance.toFixed(2) : ""
 
-  const flash = (message: string, type: "success" | "error") => {
-    setFeedback({ message, type })
-    setTimeout(() => setFeedback(null), 4000)
-  }
-
   const handlePostPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!folioId) return
@@ -89,12 +89,12 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
         setPaymentForm({ paymentMethodId: "", amount: "", referenceNumber: "" })
         setPaymentAmountTouched(false)
         fetchFolio()
-        flash("Payment posted.", "success")
+        toast.success("Payment posted")
       } else {
-        flash((await res.json()).error || "Failed to post payment.", "error")
+        toast.error(await apiError(res, "Couldn't post the payment. Try again."))
       }
     } catch {
-      flash("An unexpected error occurred.", "error")
+      toast.error("Couldn't post the payment. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -102,16 +102,23 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
 
   const handleVoidBill = async () => {
     if (!folioId) return
-    const reason = window.prompt("Void the entire bill? This cancels the sale (charges are kept, flagged void).\n\nReason:")
-    if (reason === null) return
-    if (!reason.trim()) { flash("A reason is required to void the bill.", "error"); return }
+    const reason = await askReason({
+      title: "Void this bill?",
+      description: "This cancels the sale. The charges are kept, marked void.",
+      reasonLabel: "Reason",
+      destructive: true,
+      confirmLabel: "Void bill",
+    })
+    if (reason === null || !reason.trim()) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/folios/${folioId}/void-bill`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason.trim() }),
       })
-      if (res.ok) { fetchFolio(); flash("Bill voided.", "success") }
-      else flash((await res.json()).error || "Failed to void the bill.", "error")
+      if (res.ok) { fetchFolio(); toast.success("Bill voided") }
+      else toast.error(await apiError(res, "Couldn't void the bill. Try again."))
+    } catch {
+      toast.error("Couldn't void the bill. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -124,8 +131,10 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
       const res = await fetch(`/api/folios/${folioId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isClosed: true }),
       })
-      if (res.ok) { fetchFolio(); onClosed?.() }
-      else flash((await res.json()).error || "Failed to close the bill.", "error")
+      if (res.ok) { fetchFolio(); toast.success("Bill closed"); onClosed?.() }
+      else toast.error(await apiError(res, "Couldn't close the bill. Try again."))
+    } catch {
+      toast.error("Couldn't close the bill. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -138,8 +147,10 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
       const res = await fetch(`/api/folios/${folioId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isClosed: false }),
       })
-      if (res.ok) { fetchFolio(); flash("Bill reopened for adjustments.", "success") }
-      else flash((await res.json()).error || "This bill can no longer be reopened.", "error")
+      if (res.ok) { fetchFolio(); toast.success("Bill reopened for adjustments") }
+      else toast.error(await apiError(res, "This bill can no longer be reopened."))
+    } catch {
+      toast.error("Couldn't reopen the bill. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -154,33 +165,33 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
         ...(activeCharges.length > 0 ? [{ label: "Void bill", icon: Ban, disabled: submitting, destructive: true, onSelect: handleVoidBill }] : []),
       ]
   const phonePrimary = closed ? undefined : balance > 0.005 ? (
-    <Button type="submit" form="walkin-payment-form" className="bg-success hover:bg-success/90" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
-      {submitting ? "Posting…" : `Take payment $${balance.toFixed(2)}`}
-    </Button>
+    <SubmitButton form="walkin-payment-form" className="bg-success hover:bg-success/90" pending={submitting} pendingLabel="Posting…" disabled={!paymentForm.paymentMethodId || !paymentAmount}>
+      {`Take payment $${balance.toFixed(2)}`}
+    </SubmitButton>
   ) : (
     <Button onClick={handleClose} disabled={submitting}>
-      <CheckCircle2 className="w-4 h-4 mr-2" /> Close Bill
+      <CheckCircle2 className="w-4 h-4 mr-2" /> Close bill
     </Button>
   )
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {folio?.walkInGuestName || "Walk-in Bill"}
-            {closed && <Badge variant="outline" className="text-muted-foreground">Closed</Badge>}
+            {folio?.walkInGuestName || "Walk-in bill"}
+            {closed && <StatusBadge label="Closed" tone="neutral" />}
           </DialogTitle>
         </DialogHeader>
 
         {loading || !folio ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>
+          <InlineLoading lines={5} label="Loading the bill" />
         ) : (
           <div className="space-y-5">
             {/* Balance + primary actions */}
             <div className="rounded-xl border bg-muted/40 p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Balance Due</p>
+                <p className="text-xs font-medium text-muted-foreground">Balance due</p>
                 <p className={`text-3xl font-bold ${balance > 0.005 ? "text-destructive" : balance < -0.005 ? "text-success" : "text-foreground"}`}>
                   ${balance.toFixed(2)}
                 </p>
@@ -197,11 +208,11 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   <>
                     {activeCharges.length > 0 && (
                       <Button size="sm" variant="outline" className="text-destructive border-destructive/40 hover:bg-destructive-muted hover:text-destructive" onClick={handleVoidBill} disabled={submitting}>
-                        <Ban className="w-4 h-4 mr-2" /> Void Bill
+                        <Ban className="w-4 h-4 mr-2" /> Void bill
                       </Button>
                     )}
                     <Button size="sm" onClick={handleClose} disabled={submitting}>
-                      <CheckCircle2 className="w-4 h-4 mr-2" /> Close Bill
+                      <CheckCircle2 className="w-4 h-4 mr-2" /> Close bill
                     </Button>
                   </>
                 )}
@@ -212,7 +223,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             <div>
               <h3 className="mb-2 text-sm font-semibold">Charges</h3>
               {/* Phones: one card per charge; the table takes over at md. */}
-              <MobileCardList empty={<p className="py-4 text-center text-sm text-muted-foreground">No charges yet.</p>}>
+              <MobileCardList empty={<EmptyState size="inline" title="No charges yet" />}>
                 {folio.lineItems.map((item: any) => (
                   <MobileCard
                     key={item.id}
@@ -233,7 +244,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                 </TableHeader>
                 <TableBody>
                   {folio.lineItems.length === 0 && (
-                    <TableRow><TableCell colSpan={2} className="text-center text-sm text-muted-foreground">No charges yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={2}><EmptyState size="inline" className="justify-center" title="No charges yet" /></TableCell></TableRow>
                   )}
                   {folio.lineItems.map((item: any) => (
                     <TableRow key={item.id}>
@@ -277,7 +288,7 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
             {/* Take payment (open bills only) */}
             {!closed && (
               <form id="walkin-payment-form" onSubmit={handlePostPayment} className="grid gap-3 border-t pt-4">
-                <h3 className="text-sm font-semibold">Take Payment</h3>
+                <h3 className="text-sm font-semibold">Take payment</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Method *</Label>
@@ -294,20 +305,15 @@ export function WalkInFolioPanel({ folioId, isOpen, onClose, onClosed }: WalkInF
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Reference No. (optional)</Label>
+                  <Label className="text-xs">Reference no. (optional)</Label>
                   <Input value={paymentForm.referenceNumber} onChange={(e) => setPaymentForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
                 </div>
-                <Button type="submit" className="bg-success hover:bg-success/90 max-md:hidden" disabled={submitting || !paymentForm.paymentMethodId || !paymentAmount}>
-                  {submitting ? "Posting…" : "Post Payment"}
-                </Button>
+                <SubmitButton className="bg-success hover:bg-success/90 max-md:hidden" pending={submitting} pendingLabel="Posting…" disabled={!paymentForm.paymentMethodId || !paymentAmount}>
+                  Post payment
+                </SubmitButton>
               </form>
             )}
 
-            {feedback && (
-              <div className={`rounded-lg p-3 text-sm font-medium ${feedback.type === "success" ? "bg-success-muted text-success" : "bg-destructive-muted text-destructive"}`}>
-                {feedback.message}
-              </div>
-            )}
           </div>
         )}
         {folio && !loading && (

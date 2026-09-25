@@ -52,22 +52,22 @@ export default function ChargeCodes() {
       <H2>Adding your revenue codes</H2>
       <H3>1. Add subgroups</H3>
       <p>
-        In <strong>Charge Groups &amp; Subgroups</strong>, add the subgroups your codes will sit in: choose the <strong>Group</strong>,
-        a <strong>Code</strong> (e.g. <code>20RV</code>) and a <strong>Name</strong> (e.g. Restaurant). Add a group of your own
-        only if none of the existing ones fits.
+        In <strong>Charge groups &amp; subgroups</strong>, add the subgroups your codes will sit in: choose the <strong>+</strong> (<strong>Add subgroup</strong>) on the group&apos;s row,
+        then a <strong>Code</strong> (e.g. <code>20RV</code>) and a <strong>Name</strong> (e.g. Restaurant), and choose{" "}
+        <strong>Create</strong>. Choose <strong>Add group</strong> for a group of your own only if none of the existing ones fits.
       </p>
       <H3>2. Add charge codes</H3>
-      <p>Choose <strong>Add Charge Code</strong>:</p>
-      <Shot name="prop-charge-code-dialog" alt="The Add Charge Code dialog: code, posting type, description, group / subgroup, active and tax." />
+      <p>Choose <strong>Add charge code</strong>, fill in the form and choose <strong>Create</strong>:</p>
+      <Shot name="prop-charge-code-dialog" alt="The Add charge code dialog: code, posting type, description, group / subgroup, active and tax." />
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Code Identifier", "Unique at this property, e.g. 2001. Uppercased."],
-          ["Posting Type", "Charge for anything you sell. Tax, Levy, Credit and Non-Revenue are for special codes; you rarely need them."],
+          ["Code identifier", "Unique at this property, e.g. 2001. Uppercased."],
+          ["Posting type", "Charge for anything you sell. Tax, Levy, Credit and Non-Revenue are for special codes; you rarely need them."],
           ["Description", "What staff and guests see on the bill, e.g. Breakfast."],
           ["Group / Subgroup", "Decides the reporting bucket."],
           ["Active", "Only active codes are offered when posting."],
-          ["Tax", "Default (Maldives Tax) adds service charge and GST. Custom Tax uses a profile from Finance (step 2)."],
+          ["Tax", "Default (Maldives Tax) adds service charge and GST. Custom tax uses a profile from Finance (step 2)."],
         ]}
       />
       <p>
@@ -79,31 +79,31 @@ export default function ChargeCodes() {
         Open a code&apos;s <strong>Generates</strong> to add, change or remove what it posts automatically, for example a code sold
         without service charge. Each line has the code it <strong>Generates</strong>, a <strong>Method</strong> (the service charge,
         GST or Green Tax rates from Finance, a percentage, a flat amount, or an amount per person per night), what it is{" "}
-        <strong>Calculated On</strong>, and the <strong>Order</strong> lines are worked out in.
+        <strong>Calculate on</strong>, and the <strong>Order</strong> lines are worked out in. Choose <strong>Add</strong> to add the line.
       </p>
       <Callout title="Codes in use" tone="warn">
         <p>
-          Once anything has been posted to a code, it can&apos;t be deleted, only made inactive. Getting the list right before go-live
+          Deleting a code asks you to confirm. Once anything has been posted to a code, it can&apos;t be deleted, only made inactive. Getting the list right before go-live
           saves clutter later.
         </p>
       </Callout>
 
-      <H2>Posting Defaults</H2>
-      <Shot name="prop-posting-defaults" alt="The Posting Defaults card: accommodation, Green Tax and commission charge codes." />
+      <H2>Posting defaults</H2>
+      <Shot name="prop-posting-defaults" alt="The Posting defaults card: accommodation, Green Tax and commission charge codes." />
       <Table
         head={["Default", "Pre-set to", "Used for"]}
         rows={[
-          ["Accommodation Charge Code", "1000", "Nightly room charges, unless a rate plan names its own code."],
-          ["Green Tax Charge Code", "8500", "Green Tax postings."],
-          ["Commission Charge Code", "9100", "Travel-agent commission. Choose None to stop posting commission."],
+          ["Accommodation charge code", "1000", "Nightly room charges, unless a rate plan names its own code."],
+          ["Green Tax charge code", "8500", "Green Tax postings."],
+          ["Commission charge code", "9100", "Travel-agent commission. Choose None to stop posting commission."],
         ]}
       />
-      <p>Leave these as they are unless your accountant wants room revenue split differently.</p>
+      <p>Leave these as they are unless your accountant wants room revenue split differently. After a change, choose <strong>Save</strong>.</p>
 
-      <H2>Spa Outlet and Excursion Outlet</H2>
+      <H2>Spa outlet and Excursion outlet</H2>
       <p>
-        If you have the Spa or Excursions add-on, this page also has a <strong>Spa Outlet</strong> and an{" "}
-        <strong>Excursion Outlet</strong> card. Spa and excursion charges can&apos;t post until you pick an outlet for each. Create the
+        If you have the Spa or Excursions add-on, this page also has a <strong>Spa outlet</strong> and an{" "}
+        <strong>Excursion outlet</strong> card. Spa and excursion charges can&apos;t post until you pick an outlet for each. Create the
         outlets in the next step, then come back and link them.
       </p>
       <Pager href="/docs/configuration/property/charge-codes" />

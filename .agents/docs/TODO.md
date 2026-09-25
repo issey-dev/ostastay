@@ -2,6 +2,50 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Desktop polish (2026-09-25) — ALL PHASES (1–5) DONE (uncommitted, `feat/desktop-polish`)
+
+Audit + phased plan in [DESKTOP_PLAN.md](DESKTOP_PLAN.md) (§5 has 10 owner questions).
+Bugs found during the audit (fix in Desktop Phase 1 unless the owner says otherwise):
+- [x] Check-in wizard's optional payment POST is not checked — a failed payment still shows
+      "Checked In" (`src/components/front-office/check-in-wizard.tsx:303-308`).
+- [x] Tape-chart Check In bypasses the wizard (no ID / reg card / held-nights decision)
+      (`src/components/reservations/tape-chart-grid.tsx:67-70`).
+- [x] `dashboard/page.tsx:32` fallback redirect goes to `/dashboard/profile` (404).
+- [x] Orphan `/dashboard/inventory` page (not in nav, overlaps Housekeeping) — delete or redirect (ask).
+- [x] Rounded pill chips break square corners: `booking-form.tsx:1086`, `revenue/page.tsx:573`.
+- [x] Profile detail heading shows the title upper-case ("MRS Jennifer Wilson").
+- [x] `window.prompt()` for Reverse check-out (`reservations/[id]/page.tsx:312`) and Void bill
+      (`pos/walk-in-folio-panel.tsx:105`); ~12 deletes/voids with no confirm (plan D11).
+- [x] Unconfirmed deletes/voids (profile sub-records, licence void/revoke, excursion no-show, spa
+      closures/exceptions, every settings manager's hand-built delete dialog → `useConfirm`).
+- [x] Housekeeping "Delete ticket" confirms.
+- [x] Spa booking participant slots on RHF (`useFieldArray`), payload unchanged.
+- [x] Wide dialogs: role editor + Hub availability preview → right-side Sheets; outlets and
+      check-in wizard → `size="xl"`; folio stays the quick view (page exists). Note: a right
+      Sheet's width needs `data-[side=right]:sm:max-w-*` (the base cap is more specific) —
+      fixed on trace panel and excursion manifest too.
+- [ ] Reservation detail body: remaining hand-rolled empty `<p>`s and tone badges.
+- [ ] List sorting/CSV cover the loaded rows only (profiles top 50, activity log paged).
+- [ ] Pre-existing lint error: `src/components/providers/idle-session-watch.tsx:44`
+      ("Cannot call impure function during render") — not touched by this work.
+- [ ] `src/components/housekeeping/work-order-manager.tsx` unused since the inventory redirect —
+      delete when convenient.
+- [x] Docs screenshot `prop-rate-plan-dialog` shows the old rounded chips — re-shot with all 41
+      shots (2026-09-25); Configuration guide text updated to the polished labels / save model.
+- [x] Button labels the sentence-case pass missed — done 2026-09-25 as an app-wide pass of the
+      UI text standard (DECISIONS 2026-09-25): buttons, tabs, dialog/card titles, field labels,
+      table headers, toasts, placeholders across `src/app/e`, `src/app/osta`, eRegistration,
+      login and `src/components` (~125 files). Kept as they are: nav names and the page titles equal
+      to them, proper nouns/codes (Green Tax, GST, Service Charge, Maldives Tax, MIRA, Base Rate,
+      City Ledger, Stop Sale, End of Day, Night Audit, Reg No), formal document names (Tax Invoice,
+      Proforma Invoice, Interim Bill, report names like Guest Ledger), status names in prose,
+      print/stationery pages. Configuration guide text updated to the new labels;
+      `docs-shots`/`mobile-audit` match case-insensitively so needed no change.
+- [ ] After the sentence-case pass: re-shoot the docs screenshots (`npm run docs:demo` then
+      `npm run docs:shots`) and rebuild the PDFs (`npm run docs:pdf`) — labels in the current
+      shots/PDFs are still Title Case.
+- [ ] Night audit auto no-shows un-arrived bookings showing only a count (no names, no pause).
+
 ## Mobile polish (2026-09-25) — ALL PHASES DONE
 
 See [MOBILE_PLAN.md](MOBILE_PLAN.md) §7 (what shipped, follow-ups under "Left open"). Verify changes with `npm run mobile:audit`. Found by the audit, affect desktop too (fixed in Phase 1):

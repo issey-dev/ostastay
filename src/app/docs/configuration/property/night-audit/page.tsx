@@ -11,23 +11,26 @@ export default function NightAudit() {
         lead="Night audit closes the business day: it posts room charges and taxes, handles no-shows and departures, and moves the business date forward. Here you decide how it behaves."
       />
       <Where path="Hub › Controls › Night Audit" who="Property Setup; Night Audit (update) to change the business date" />
-      <p>Every setting saves as soon as you change it, except the schedule, which has its own <strong>Save schedule</strong> button.</p>
+      <p>
+        Every setting saves as soon as you change it and shows a brief <strong>Saved</strong> tick, except the schedule, which has
+        its own <strong>Save</strong> button, and the business date.
+      </p>
       <Shot name="prop-night-audit" alt="The Night Audit page: business date, nightly tax postings, departures, no-shows, scheduled night audit and room status at night audit." />
 
-      <H2>Business Date</H2>
+      <H2>Business date</H2>
       <p>
         The date the property is trading on. It starts at your go-live date and night audit moves it forward one day at a time. It
         is not the same as the calendar date: after midnight, until the audit runs, the business date is still yesterday.
       </p>
       <p>
         While the property is new (no reservations, bills, cashier shifts or audits yet), you can set <strong>any</strong> date:
-        pick the <strong>New business date</strong> and choose <strong>Change business date</strong>. Set it to your real go-live
+        pick the <strong>New business date</strong>, choose <strong>Change business date</strong> and confirm. Set it to your real go-live
         day before you start. After the first activity it can only move forward, and only when a checklist on the page is all
         green: no guest in house, no earlier arrivals pending, no open cashier shift, and so on. Changing it signs the
         property&apos;s staff out.
       </p>
 
-      <H2>Nightly Tax Postings</H2>
+      <H2>Nightly tax postings</H2>
       <p>
         Switch <strong>Post Green Tax</strong>, <strong>Post GST</strong> and <strong>Post Service Charge</strong> on or off. The
         rates are on <a href="/docs/configuration/property/finance">Finance</a>. A property that doesn&apos;t charge a levy should switch
@@ -42,7 +45,7 @@ export default function NightAudit() {
 
       <H2>No-Shows</H2>
       <Table
-        head={["Mark a reservation that never arrived as a No-Show…", "Use when"]}
+        head={["Mark a reservation that never arrived as a no-show…", "Use when"]}
         rows={[
           ["At the arrival night's audit (default)", "Guests are expected on the day."],
           ["Hold one night for late arrivals, then mark", "Guests often arrive after midnight, e.g. on late international flights."],
@@ -51,13 +54,13 @@ export default function NightAudit() {
       />
       <p>
         <strong>Post the no-show fee</strong> charges the reservation&apos;s no-show rule. It needs an active no-show rule on{" "}
-        <a href="/docs/configuration/property/finance">Finance › Deposit &amp; Fee Rules</a>.
+        <a href="/docs/configuration/property/finance">Finance › Deposit &amp; fee rules</a>.
       </p>
 
       <H2>Scheduled Night Audit</H2>
       <p>
         Switch on <strong>Run Night Audit automatically</strong> and pick a <strong>Time</strong> between 22:00 and 06:00, property
-        time, then <strong>Save schedule</strong>. The audit then runs every night without anyone at the desk.
+        time, then choose <strong>Save</strong>. The audit then runs every night without anyone at the desk.
       </p>
       <Callout tone="warn">
         <p>
@@ -67,7 +70,7 @@ export default function NightAudit() {
         </p>
       </Callout>
 
-      <H2>Room Status at Night Audit</H2>
+      <H2>Room status at Night Audit</H2>
       <Table
         head={["Option", "Effect on vacant rooms"]}
         rows={[

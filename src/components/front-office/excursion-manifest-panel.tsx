@@ -12,6 +12,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Printer, XCircle, UserX, CloudRain, ArrowRightCircle } from "@/components/icons"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { EmptyState } from "@/components/ui/empty-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
 
 type ManifestBooking = {
   id: string
@@ -86,7 +92,8 @@ export function ExcursionManifestPanel({
   const [cancelling, setCancelling] = useState<ManifestBooking | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  const [noShowId, setNoShowId] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const [cancellingDeparture, setCancellingDeparture] = useState(false)
   const [departureCancelReason, setDepartureCancelReason] = useState("")
@@ -124,27 +131,44 @@ export function ExcursionManifestPanel({
       })
       const data = await res.json()
       if (res.ok) {
-        setFeedback({ message: data.chargeNote, type: data.chargeVoided ? "success" : "error" })
+        // The note says what happened to the charge; a charge left for cashiering is a warning.
+        if (data.chargeVoided) toast.success("Booking cancelled", { description: data.chargeNote })
+        else toast.warning("Booking cancelled", { description: data.chargeNote })
         setCancelling(null)
         setCancelReason("")
         fetchManifest()
       } else {
-        setFeedback({ message: data.error || "Failed to cancel booking", type: "error" })
+        toast.error(data.error || "Couldn't cancel the booking. Try again.")
       }
+    } catch {
+      toast.error("Couldn't cancel the booking. Try again.")
     } finally {
       setSubmitting(false)
-      setTimeout(() => setFeedback(null), 6000)
     }
   }
 
-  const handleNoShow = async (bookingId: string) => {
-    const res = await fetch(`/api/excursions/bookings/${bookingId}/no-show`, { method: "POST" })
-    if (res.ok) {
-      fetchManifest()
-    } else {
-      const data = await res.json()
-      setFeedback({ message: data.error || "Failed to mark no-show", type: "error" })
-      setTimeout(() => setFeedback(null), 5000)
+  const handleNoShow = async (b: ManifestBooking) => {
+    if (noShowId) return
+    const ok = await confirm({
+      title: `Mark ${b.guestName} as a no-show?`,
+      description: "The booking stays on the manifest as a no-show.",
+      confirmLabel: "Mark no-show",
+      destructive: true,
+    })
+    if (!ok) return
+    setNoShowId(b.id)
+    try {
+      const res = await fetch(`/api/excursions/bookings/${b.id}/no-show`, { method: "POST" })
+      if (res.ok) {
+        toast.success(`${b.guestName} marked no-show`)
+        fetchManifest()
+      } else {
+        toast.error(await apiError(res, "Couldn't mark the no-show. Try again."))
+      }
+    } catch {
+      toast.error("Couldn't mark the no-show. Try again.")
+    } finally {
+      setNoShowId(null)
     }
   }
 
@@ -165,9 +189,10 @@ export function ExcursionManifestPanel({
         setDepartureCancelReason("")
         fetchManifest()
       } else {
-        setFeedback({ message: data.error || "Failed to cancel departure", type: "error" })
-        setTimeout(() => setFeedback(null), 6000)
+        toast.error(data.error || "Couldn't cancel the departure. Try again.")
       }
+    } catch {
+      toast.error("Couldn't cancel the departure. Try again.")
     } finally {
       setSubmittingDepartureCancel(false)
     }
@@ -184,28 +209,31 @@ export function ExcursionManifestPanel({
       })
       const data = await res.json()
       if (res.ok) {
-        setFeedback({ message: `Moved ${data.moved.length} booking(s) to the replacement departure.${data.failed.length ? ` ${data.failed.length} could not be moved.` : ""}`, type: data.failed.length ? "error" : "success" })
+        const moved = `Moved ${data.moved.length} booking(s) to the replacement departure`
+        if (data.failed.length) toast.warning(moved, { description: `${data.failed.length} could not be moved.` })
+        else toast.success(moved)
         setCascadeResult(null)
       } else {
-        setFeedback({ message: data.error || "Failed to move bookings", type: "error" })
+        toast.error(data.error || "Couldn't move the bookings. Try again.")
       }
+    } catch {
+      toast.error("Couldn't move the bookings. Try again.")
     } finally {
       setMoving(false)
-      setTimeout(() => setFeedback(null), 8000)
     }
   }
 
   return (
     <>
       <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetContent side="right" className="w-full data-[side=right]:sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{manifest?.excursionType.name ?? "Manifest"}</SheetTitle>
           </SheetHeader>
 
           <div className="px-4 pb-6 space-y-6">
             {loading || !manifest ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <InlineLoading lines={5} label="Loading the manifest" />
             ) : (
               <>
                 <div className="bg-card p-4 rounded-xl border shadow-sm flex justify-between items-start gap-3">
@@ -226,21 +254,15 @@ export function ExcursionManifestPanel({
                   </div>
                   <div className="flex flex-col gap-2 shrink-0 max-md:hidden">
                     <Button size="sm" variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
-                      <Printer className="w-4 h-4 mr-2" /> Print Manifest
+                      <Printer className="w-4 h-4 mr-2" /> Print manifest
                     </Button>
                     {manifest.status === "SCHEDULED" && (
                       <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancellingDeparture(true)}>
-                        <CloudRain className="w-4 h-4 mr-2" /> Cancel Departure
+                        <CloudRain className="w-4 h-4 mr-2" /> Cancel departure
                       </Button>
                     )}
                   </div>
                 </div>
-
-                {feedback && (
-                  <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === "success" ? "bg-success-muted text-success" : "bg-warning-muted text-warning"}`}>
-                    {feedback.message}
-                  </div>
-                )}
 
                 {cascadeResult && (
                   <div className="bg-card p-4 rounded-xl border shadow-sm space-y-3">
@@ -262,9 +284,9 @@ export function ExcursionManifestPanel({
                           {new Date(cascadeResult.suggestedReplacement.departureDate).toLocaleDateString([], { dateStyle: "medium" })} at{" "}
                           {cascadeResult.suggestedReplacement.departureTime}?
                         </p>
-                        <Button size="sm" onClick={handleMoveAll} disabled={moving}>
-                          <ArrowRightCircle className="w-4 h-4 mr-2" /> {moving ? "Moving..." : "Move All"}
-                        </Button>
+                        <SubmitButton type="button" size="sm" onClick={handleMoveAll} pending={moving} pendingLabel="Moving…">
+                          <ArrowRightCircle className="w-4 h-4 mr-2" /> Move all
+                        </SubmitButton>
                       </div>
                     ) : cascadeResult.movableBookingIds.length > 0 ? (
                       <p className="text-sm text-muted-foreground">No upcoming departure of this type has room for a replacement — move guests manually once one opens up.</p>
@@ -276,7 +298,7 @@ export function ExcursionManifestPanel({
                     the same four facts in columns; a passenger manifest checked at a
                     boat ramp on a phone shouldn't need a horizontal scroll to see who's
                     confirmed. */}
-                <MobileCardList empty={<p className="text-center text-muted-foreground text-sm py-6">No bookings yet.</p>}>
+                <MobileCardList empty={<EmptyState size="inline" className="justify-center py-6" title="No bookings yet" />}>
                   {manifest.bookings.map((b) => (
                     <MobileCard
                       key={b.id}
@@ -298,7 +320,7 @@ export function ExcursionManifestPanel({
                       actions={
                         b.status === "CONFIRMED" ? (
                           <>
-                            <Button size="sm" variant="outline" className="flex-1" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
+                            <Button size="sm" variant="outline" className="flex-1" disabled={!departed || noShowId === b.id} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b)}>
                               <UserX className="w-4 h-4 mr-1.5" /> No-show
                             </Button>
                             <Button size="sm" variant="outline" className="flex-1 text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
@@ -323,7 +345,7 @@ export function ExcursionManifestPanel({
                     </TableHeader>
                     <TableBody>
                       {manifest.bookings.length === 0 && (
-                        <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground text-sm">No bookings yet.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={4}><EmptyState size="inline" className="justify-center" title="No bookings yet" /></TableCell></TableRow>
                       )}
                       {manifest.bookings.map((b) => (
                         <TableRow key={b.id}>
@@ -340,10 +362,10 @@ export function ExcursionManifestPanel({
                           <TableCell className="text-right">
                             {b.status === "CONFIRMED" && (
                               <div className="flex justify-end gap-1">
-                                <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed} title={departed ? "Mark no-show" : "Only available after departure"} onClick={() => handleNoShow(b.id)}>
+                                <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={!departed || noShowId === b.id} title={departed ? "Mark no-show" : "Only available after departure"} aria-label="Mark no-show" onClick={() => handleNoShow(b)}>
                                   <UserX className="w-4 h-4" />
                                 </Button>
-                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancelling(b)}>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" title="Cancel booking" aria-label="Cancel booking" onClick={() => setCancelling(b)}>
                                   <XCircle className="w-4 h-4" />
                                 </Button>
                               </div>
@@ -366,9 +388,9 @@ export function ExcursionManifestPanel({
               <MobileActions
                 primary={
                   cascadeResult?.suggestedReplacement && cascadeResult.movableBookingIds.length > 0 ? (
-                    <Button onClick={handleMoveAll} disabled={moving}>
-                      <ArrowRightCircle className="w-4 h-4 mr-2" /> {moving ? "Moving..." : `Move ${cascadeResult.movableBookingIds.length} guest(s)`}
-                    </Button>
+                    <SubmitButton type="button" onClick={handleMoveAll} pending={moving} pendingLabel="Moving…">
+                      <ArrowRightCircle className="w-4 h-4 mr-2" /> {`Move ${cascadeResult.movableBookingIds.length} guest(s)`}
+                    </SubmitButton>
                   ) : (
                     <Button variant="outline" onClick={() => window.open(`/api/excursions/departures/${departureId}/manifest-pdf`, "_blank")}>
                       <Printer className="w-4 h-4 mr-2" /> Manifest PDF
@@ -383,10 +405,10 @@ export function ExcursionManifestPanel({
       </Sheet>
 
       <Dialog open={!!cancelling} onOpenChange={(open) => { if (!open) { setCancelling(null); setCancelReason("") } }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
           <form onSubmit={handleCancel}>
             <DialogHeader>
-              <DialogTitle>Cancel Booking</DialogTitle>
+              <DialogTitle>Cancel booking</DialogTitle>
               <DialogDescription>
                 Cancel {cancelling?.guestName}&apos;s booking ({cancelling?.adultCount} adult{cancelling && cancelling.adultCount === 1 ? "" : "s"}
                 {cancelling?.childCount ? `, ${cancelling.childCount} child${cancelling.childCount === 1 ? "" : "ren"}` : ""})? A reason is required.
@@ -398,19 +420,19 @@ export function ExcursionManifestPanel({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setCancelling(null); setCancelReason("") }}>Back</Button>
-              <Button type="submit" variant="destructive" disabled={submitting || !cancelReason.trim()}>
-                {submitting ? "Cancelling..." : "Cancel Booking"}
-              </Button>
+              <SubmitButton variant="destructive" pending={submitting} pendingLabel="Cancelling…" disabled={!cancelReason.trim()}>
+                Cancel booking
+              </SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={cancellingDeparture} onOpenChange={(open) => { if (!open) { setCancellingDeparture(false); setDepartureCancelReason("") } }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
           <form onSubmit={handleCancelDeparture}>
             <DialogHeader>
-              <DialogTitle>Cancel Entire Departure</DialogTitle>
+              <DialogTitle>Cancel entire departure</DialogTitle>
               <DialogDescription>
                 Cancels every booking on this departure (e.g. bad weather). Charges are voided where possible; you&apos;ll be offered a
                 one-click move to the next available departure afterward. A reason is required.
@@ -422,9 +444,9 @@ export function ExcursionManifestPanel({
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setCancellingDeparture(false); setDepartureCancelReason("") }}>Back</Button>
-              <Button type="submit" variant="destructive" disabled={submittingDepartureCancel || !departureCancelReason.trim()}>
-                {submittingDepartureCancel ? "Cancelling..." : "Cancel Departure"}
-              </Button>
+              <SubmitButton variant="destructive" pending={submittingDepartureCancel} pendingLabel="Cancelling…" disabled={!departureCancelReason.trim()}>
+                Cancel departure
+              </SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>

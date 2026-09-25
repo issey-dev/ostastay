@@ -47,6 +47,7 @@ import {
   Edit2Outline,
   EditOutline,
   ExportOutline,
+  ImportOutline,
   EyeSlashOutline,
   EyeOutline,
   Forbidden2Outline,
@@ -167,6 +168,7 @@ export const DollarSign = outline(DollarSquareOutline)
 export const Edit = outline(EditOutline)
 export const Edit2 = outline(Edit2Outline)
 export const ExternalLink = outline(ExportOutline)
+export const Download = outline(ImportOutline)
 export const Eye = outline(EyeOutline)
 export const EyeOff = outline(EyeSlashOutline)
 export const FileBarChart = outline(Chart2Outline)

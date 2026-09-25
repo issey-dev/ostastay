@@ -9,7 +9,6 @@ import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +21,11 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import type { SpaTreatmentCategoryDto } from "@/components/controls/spa-categories-manager"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 export type SpaTreatmentRateDto = {
   id: string
@@ -125,19 +129,19 @@ const emptyValues: TreatmentFormValues = {
 }
 
 export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { propertyId: string; categories: SpaTreatmentCategoryDto[]; refreshKey: number }) {
-
+  const confirm = useConfirm()
   const [treatments, setTreatments] = useState<SpaTreatmentDto[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
   const [rooms, setRooms] = useState<RoomOption[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SpaTreatmentDto | null>(null)
-  const [deleting, setDeleting] = useState<SpaTreatmentDto | null>(null)
   const [roomsFor, setRoomsFor] = useState<SpaTreatmentDto | null>(null)
   const [roomSelection, setRoomSelection] = useState<Record<string, boolean>>({})
   const [preferredSelection, setPreferredSelection] = useState<Record<string, boolean>>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [savingRooms, setSavingRooms] = useState(false)
 
   const form = useForm<TreatmentFormValues>({ resolver: zodResolver(treatmentSchema), mode: "onChange", defaultValues: emptyValues })
   const ratesArray = useFieldArray({ control: form.control, name: "rates" })
@@ -238,26 +242,31 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Treatment saved")
         fetchTreatments()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save treatment")
+        setServerError(await apiError(res, "Couldn't save the treatment. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: SpaTreatmentDto) => {
+    const ok = await confirm({
+      title: "Delete treatment?",
+      description: `Delete "${deleting.name}"? If it has any appointments booked this will be blocked — deactivate instead.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/spa/treatments/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete treatment")
+      toast.error(await apiError(res, "Couldn't delete the treatment. Try again."))
     } else {
       setServerError(null)
+      toast.success("Treatment deleted")
     }
-    setDeleting(null)
     fetchTreatments()
   }
 
@@ -278,17 +287,22 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
     const roomsPayload = Object.entries(roomSelection)
       .filter(([, checked]) => checked)
       .map(([roomId]) => ({ roomId, preferred: !!preferredSelection[roomId] }))
-    const res = await fetch(`/api/spa/treatments/${roomsFor.id}/rooms`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rooms: roomsPayload }),
-    })
-    if (res.ok) {
-      setRoomsFor(null)
-      fetchTreatments()
-    } else {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to save room compatibility")
+    setSavingRooms(true)
+    try {
+      const res = await fetch(`/api/spa/treatments/${roomsFor.id}/rooms`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms: roomsPayload }),
+      })
+      if (res.ok) {
+        setRoomsFor(null)
+        toast.success("Compatible rooms saved")
+        fetchTreatments()
+      } else {
+        setServerError(await apiError(res, "Couldn't save the compatible rooms. Try again."))
+      }
+    } finally {
+      setSavingRooms(false)
     }
   }
 
@@ -307,7 +321,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={openCreate} className="shadow-sm" disabled={categories.length === 0}>
-          <Plus className="mr-2 h-4 w-4" /> New Treatment
+          <Plus className="mr-2 h-4 w-4" /> Add treatment
         </Button>
       </div>
       {categories.length === 0 && (
@@ -333,11 +347,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                 title={t.name}
                 subtitle={t.category?.name}
                 badge={
-                  t.isActive ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                  )
+                  <StatusBadge status={t.isActive ? "ACTIVE" : "INACTIVE"} label={t.isActive ? "Active" : "Inactive"} />
                 }
                 meta={[
                   {
@@ -364,7 +374,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                     <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(t)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => confirmDelete(t)}>
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                     </Button>
                   </>
@@ -380,7 +390,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Duration</TableHead>
-                  <TableHead>Charge Code</TableHead>
+                  <TableHead>Charge code</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Party</TableHead>
                   <TableHead>Status</TableHead>
@@ -402,11 +412,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                     <TableCell>{currentPriceLabel(t)}</TableCell>
                     <TableCell className="text-sm">{t.maxParticipants > 1 ? `up to ${t.maxParticipants}` : "1"}</TableCell>
                     <TableCell>
-                      {t.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                      )}
+                      <StatusBadge status={t.isActive ? "ACTIVE" : "INACTIVE"} label={t.isActive ? "Active" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => openRooms(t)}>
@@ -415,7 +421,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                       <Button variant="outline" size="icon" aria-label="Edit treatment" onClick={() => openEdit(t)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" aria-label="Delete treatment" className="text-destructive hover:text-destructive" onClick={() => setDeleting(t)}>
+                      <Button variant="outline" size="icon" aria-label="Delete treatment" className="text-destructive hover:text-destructive" onClick={() => confirmDelete(t)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -429,11 +435,11 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Treatment" : "New Treatment"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit treatment" : "Add treatment"}</DialogTitle>
                 <DialogDescription>e.g. Swedish Massage, 60 minutes, $80.</DialogDescription>
               </DialogHeader>
 
@@ -480,14 +486,14 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                   )} />
                   <FormField control={form.control} name="preparationBufferMinutes" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Prep Buffer (min)</FormLabel>
+                      <FormLabel>Prep buffer (min)</FormLabel>
                       <FormControl><Input type="number" min="0" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="cleanupBufferMinutes" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Cleanup Buffer (min)</FormLabel>
+                      <FormLabel>Cleanup buffer (min)</FormLabel>
                       <FormControl><Input type="number" min="0" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -497,7 +503,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField control={form.control} name="chargeCodeId" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Charge Code *</FormLabel>
+                      <FormLabel>Charge code *</FormLabel>
                       <FormControl>
                         <SearchableSelect
                           value={field.value}
@@ -511,7 +517,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
                   )} />
                   <FormField control={form.control} name="maxParticipants" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Max Participants *</FormLabel>
+                      <FormLabel>Max participants *</FormLabel>
                       <FormControl><Input type="number" min="1" {...field} /></FormControl>
                       <p className="text-xs text-muted-foreground">1 = individual only. 2+ = bookable as a couple/group session.</p>
                       <FormMessage />
@@ -521,7 +527,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
 
                 <FormField control={form.control} name="pricingMode" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Pricing Mode *</FormLabel>
+                    <FormLabel>Pricing mode *</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger><SelectValue>{PRICING_MODE_LABELS[field.value]}</SelectValue></SelectTrigger>
@@ -620,41 +626,25 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Treatment"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Treatment</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.name}&quot;? If it has any appointments booked this will be blocked — deactivate instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Room compatibility */}
       <Dialog open={!!roomsFor} onOpenChange={(open) => !open && setRoomsFor(null)}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Compatible Rooms — {roomsFor?.name}</DialogTitle>
+            <DialogTitle>Compatible rooms — {roomsFor?.name}</DialogTitle>
             <DialogDescription>
               The booking engine only offers the rooms ticked here. With none ticked, every active, bookable room with enough capacity for the party is offered.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto space-y-2 py-2">
             {rooms.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No rooms configured yet.</p>
+              <EmptyState size="inline" title="No rooms configured yet." />
             ) : (
               rooms.map((r) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
@@ -680,7 +670,7 @@ export function SpaTreatmentsManager({ propertyId, categories, refreshKey }: { p
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoomsFor(null)}>Cancel</Button>
-            <Button onClick={saveRooms}>Save</Button>
+            <SubmitButton type="button" pending={savingRooms} onClick={saveRooms}>Save</SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

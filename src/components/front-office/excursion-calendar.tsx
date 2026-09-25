@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   format,
   addDays,
@@ -231,7 +233,7 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
         {headerControls}
         {legendRow}
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <InlineLoading lines={4} label="Loading departures" />
         ) : (
           <div className="space-y-4">
             {days.map((day) => {
@@ -252,7 +254,7 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
               )
             })}
             {days.every((day) => (departuresByDay.get(format(day, "yyyy-MM-dd")) ?? []).length === 0) && (
-              <p className="text-sm text-muted-foreground">No departures in this range.</p>
+              <EmptyState size="inline" title="No departures in this range" />
             )}
           </div>
         )}
@@ -267,9 +269,9 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
         {headerControls}
         {legendRow}
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <InlineLoading lines={4} label="Loading departures" />
         ) : list.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No departures on this date.</p>
+          <EmptyState size="inline" title="No departures on this date" />
         ) : (
           <div className="space-y-2">
             {list.map((d) => (
@@ -314,7 +316,7 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
       {headerControls}
       {legendRow}
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <InlineLoading lines={4} label="Loading departures" />
       ) : (
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border border-border">
           {WEEKDAY_LABELS.map((label) => (

@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +14,7 @@ import { INPUT_EMAIL, INPUT_PHONE } from "@/lib/input-presets"
 
 // The right keyboard for the chosen type (phone keypad / email keyboard). `type` is left
 // off on purpose: this field sits inside the profile <form>, and type="email" would make
-// the browser's own validation block "Save Profile" over a half-typed contact.
+// the browser's own validation block "Save profile" over a half-typed contact.
 const { type: _emailType, ...EMAIL_KEYBOARD } = INPUT_EMAIL
 const { type: _phoneType, ...PHONE_KEYBOARD } = INPUT_PHONE
 const TYPE_INPUT: Record<string, Record<string, unknown>> = { EMAIL: EMAIL_KEYBOARD, MOBILE: PHONE_KEYBOARD }
@@ -31,6 +33,7 @@ const TYPE_PLACEHOLDERS: Record<string, string> = {
 // via its own endpoint (no batched form submit), matching the real per-row CRUD
 // architecture the redesign moved to.
 export function CommunicationsManager({ upid }: { upid: string }) {
+  const confirm = useConfirm()
   const [rows, setRows] = useState<Communication[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -86,7 +89,9 @@ export function CommunicationsManager({ upid }: { upid: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/profiles/${upid}/communications/${id}`, { method: "DELETE" })
+    if (!(await confirm({ title: "Delete this contact?", description: "This cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
+    const res = await fetch(`/api/profiles/${upid}/communications/${id}`, { method: "DELETE" }).catch(() => null)
+    if (!res?.ok) toast.error("Couldn't delete it. Try again.")
     fetchRows()
   }
 

@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { StatTile } from "@/components/ui/stat-tile"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
@@ -85,27 +88,30 @@ export function EmailUsageReport() {
         </div>
 
         {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-          </div>
+          <InlineLoading lines={4} label="Loading email usage" />
         ) : !usage ? (
-          <p className="text-sm text-muted-foreground">Could not load usage.</p>
+          <ErrorState title="Couldn't load email usage" onRetry={() => void load()} />
         ) : (
           <>
-            <div className="grid gap-3 max-sm:grid-cols-2 sm:grid-cols-4">
-              <Stat label="Billable sent" value={usage.totals.billableSent} emphasis />
-              <Stat label="Billable failed" value={usage.totals.billableFailed} />
-              <Stat label="Sent via own SMTP" value={usage.totals.ownSmtpSent} />
-              <Stat label="Uppsolut's own mail" value={usage.totals.uppsolutOwnMail} />
+            {/* The shared KPI card (DESKTOP_PLAN D8). */}
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+              <StatTile label="Billable sent" value={String(usage.totals.billableSent)} />
+              <StatTile
+                label="Billable failed"
+                value={String(usage.totals.billableFailed)}
+                accent={usage.totals.billableFailed > 0 ? "var(--destructive)" : undefined}
+              />
+              <StatTile label="Sent via own SMTP" value={String(usage.totals.ownSmtpSent)} />
+              <StatTile label="Uppsolut's own mail" value={String(usage.totals.uppsolutOwnMail)} />
             </div>
 
             {/* Phone view — the table below takes over at md. */}
-            <MobileCardList empty={<p className="text-sm text-muted-foreground">No enterprises in this period.</p>}>
+            <MobileCardList empty={<EmptyState size="inline" title="No enterprises in this period" />}>
               {usage.enterprises.map((r) => (
                 <MobileCard
                   key={r.enterpriseId}
                   title={r.enterpriseName}
-                  badge={r.onMailService ? <Badge variant="outline" className="bg-success-muted text-success border-success/30">Mail service</Badge> : undefined}
+                  badge={r.onMailService ? <StatusBadge label="Mail service" tone="success" /> : undefined}
                   meta={[
                     { label: "Billable sent", value: <span className="tabular-nums">{r.billableSent}</span> },
                     {
@@ -150,7 +156,7 @@ export function EmailUsageReport() {
                       <td className="py-2 pr-3">{r.enterpriseName}</td>
                       <td className="py-2 pr-3">
                         {r.onMailService ? (
-                          <Badge variant="outline" className="bg-success-muted text-success border-success/30">On</Badge>
+                          <StatusBadge label="On" tone="success" />
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -185,16 +191,5 @@ export function EmailUsageReport() {
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function Stat({ label, value, emphasis }: { label: string; value: number; emphasis?: boolean }) {
-  return (
-    <div className="rounded-md border border-border p-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${emphasis ? "text-foreground" : "text-muted-foreground"}`}>
-        {value}
-      </div>
-    </div>
   )
 }

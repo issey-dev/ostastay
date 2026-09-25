@@ -5,7 +5,9 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { HubBreadcrumbs } from "@/components/hub/hub-breadcrumbs"
-import { requireSession, hasHubAccess } from "@/lib/scope"
+import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope"
+import { Button } from "@/components/ui/button"
+import { LayoutDashboard } from "@/components/icons"
 import { prisma } from "@/lib/db"
 
 // Reads live tenant data per request — never prerender. `next build` would otherwise
@@ -72,12 +74,21 @@ export default async function HubLayout({
         <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div className="min-w-0">
-            <h1 className="font-bold text-lg text-foreground tracking-tight leading-tight truncate">
+            {/* Not a heading: the page title is the page's only <h1>. */}
+            <p className="font-bold text-lg text-foreground tracking-tight leading-tight truncate">
               {enterprise.name}
-            </h1>
+            </p>
             <p className="text-xs text-muted-foreground leading-tight">Hub · setup &amp; administration</p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-4">
+            {/* The way back to day-to-day work — mirrors "Setup" in the dashboard header. */}
+            {hasAnyPropertyModule(ctx) && (
+              <a href={`/e/${enterprise.slug}/dashboard`} className="max-md:hidden">
+                <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
+                  <LayoutDashboard className="h-4 w-4" /> Operations
+                </Button>
+              </a>
+            )}
             <ThemeToggle />
           </div>
         </header>

@@ -11,12 +11,19 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Bell } from "@/components/icons"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 const TRACE_TYPES = {
-  GUEST_MESSAGE: { icon: MessageSquare, color: "text-info", bg: "bg-info-muted", label: "Guest Message" },
-  WAKE_UP_CALL: { icon: Clock, color: "text-warning", bg: "bg-warning-muted", label: "Wake-up Call" },
+  GUEST_MESSAGE: { icon: MessageSquare, color: "text-info", bg: "bg-info-muted", label: "Guest message" },
+  WAKE_UP_CALL: { icon: Clock, color: "text-warning", bg: "bg-warning-muted", label: "Wake-up call" },
   MAINTENANCE: { icon: Wrench, color: "text-destructive", bg: "bg-destructive-muted", label: "Maintenance" },
-  FRONT_DESK: { icon: ConciergeBell, color: "text-primary", bg: "bg-muted", label: "Front Desk Task" }
+  FRONT_DESK: { icon: ConciergeBell, color: "text-primary", bg: "bg-muted", label: "Front desk task" }
 }
 
 export function TracePanel({ 
@@ -33,6 +40,8 @@ export function TracePanel({
   const [traces, setTraces] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const confirm = useConfirm()
   
   const [form, setForm] = useState({
     traceType: "GUEST_MESSAGE",
@@ -66,6 +75,8 @@ export function TracePanel({
 
   const handleAddTrace = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
     try {
       const res = await fetch(`/api/reservations/${reservationId}/traces`, {
         method: "POST",
@@ -75,10 +86,16 @@ export function TracePanel({
       if (res.ok) {
         setForm({ traceType: "GUEST_MESSAGE", description: "", actionDate: "", alertOnOpen: false })
         setIsAdding(false)
+        toast.success("Trace saved")
         fetchTraces()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Couldn't save the trace. Try again.")
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
+      toast.error("Couldn't save the trace. Try again.")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -98,11 +115,17 @@ export function TracePanel({
   }
 
   const handleDelete = async (id: string) => {
+    if (!(await confirm({ title: "Delete this trace?", confirmLabel: "Delete", destructive: true }))) return
     setTraces(traces.filter(t => t.id !== id))
     try {
-      await fetch(`/api/traces/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/traces/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        toast.error(await apiError(res, "Couldn't delete the trace. Try again."))
+        fetchTraces()
+      }
     } catch (e) {
       console.error(e)
+      toast.error("Couldn't delete the trace. Try again.")
       fetchTraces()
     }
   }
@@ -110,9 +133,9 @@ export function TracePanel({
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       {/* Phone: full width (the fixed 400px was wider than the screen), tighter padding. */}
-      <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col p-0 max-sm:w-full">
+      <SheetContent side="right" className="w-[400px] sm:w-[540px] data-[side=right]:sm:max-w-[540px] flex flex-col p-0 max-sm:w-full">
         <SheetHeader className="p-6 border-b bg-muted/50 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))]">
-          <SheetTitle className="text-xl">Traces & Messages</SheetTitle>
+          <SheetTitle className="text-xl">Traces & messages</SheetTitle>
           <SheetDescription>
             {guestName ? `Managing tasks for ${guestName}` : 'Manage operational tasks for this reservation.'}
           </SheetDescription>
@@ -121,12 +144,12 @@ export function TracePanel({
         <div className="flex-1 overflow-y-auto p-6 bg-muted/30 max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {!isAdding ? (
             <Button onClick={() => setIsAdding(true)} className="w-full mb-6 shadow-sm">
-              <Plus className="w-4 h-4 mr-2" /> New Trace / Message
+              <Plus className="w-4 h-4 mr-2" /> New trace / message
             </Button>
           ) : (
             <div className="bg-card border rounded-lg p-4 mb-6 shadow-sm">
               <div className="flex justify-between items-center mb-4 pb-2 border-b">
-                <h4 className="font-semibold text-foreground">Add New Trace</h4>
+                <h4 className="font-semibold text-foreground">Add new trace</h4>
                 <Button variant="ghost" size="sm" onClick={() => setIsAdding(false)} className="h-8 w-8 p-0"><X className="h-4 w-4" /></Button>
               </div>
               <form onSubmit={handleAddTrace} className="space-y-4">
@@ -148,11 +171,11 @@ export function TracePanel({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Message / Description *</Label>
+                  <Label>Message / description *</Label>
                   <Input required placeholder="E.g., Package at front desk..." value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Action Date (Optional)</Label>
+                  <Label>Action date (optional)</Label>
                   <DatePicker
                     value={form.actionDate}
                     onChange={(date) => setForm(p => ({ ...p, actionDate: date }))}
@@ -170,18 +193,16 @@ export function TracePanel({
                     <span className="text-xs text-muted-foreground">Pop this message up every time the reservation is opened, until it&apos;s marked resolved.</span>
                   </span>
                 </label>
-                <Button type="submit" className="w-full mt-2">Save Trace</Button>
+                <SubmitButton className="w-full mt-2" pending={submitting}>Save trace</SubmitButton>
               </form>
             </div>
           )}
 
           <div className="space-y-3">
             {loading ? (
-              <div className="text-center text-muted-foreground py-8">Loading traces...</div>
+              <InlineLoading lines={3} label="Loading traces" />
             ) : traces.length === 0 ? (
-              <div className="text-center text-muted-foreground py-12 border-2 border-dashed rounded-lg bg-card">
-                No active messages or traces for this reservation.
-              </div>
+              <EmptyState size="inline" className="justify-center py-6" title="No active messages or traces for this reservation" />
             ) : (
               traces.map(trace => {
                 const config = TRACE_TYPES[trace.traceType as keyof typeof TRACE_TYPES] || TRACE_TYPES.FRONT_DESK
@@ -200,12 +221,10 @@ export function TracePanel({
                             <Icon className="w-3 h-3 mr-1 inline-block" /> {config.label}
                           </Badge>
                           {trace.alertOnOpen && !trace.isResolved && (
-                            <Badge variant="outline" className="bg-warning-muted text-warning border-warning/40 text-[10px]">
-                              <Bell className="w-3 h-3 mr-1 inline-block" /> Alerts on open
-                            </Badge>
+                            <StatusBadge label="Alerts on open" tone="warning" />
                           )}
                         </div>
-                        <button onClick={() => handleDelete(trace.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                        <button onClick={() => handleDelete(trace.id)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete trace" aria-label="Delete trace">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>

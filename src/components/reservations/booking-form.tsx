@@ -4,11 +4,16 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus, Trash2, Star, ArrowLeft, Save, Loader2, ChevronDown } from "@/components/icons"
+import { Plus, Trash2, Star, ArrowLeft, Save, ChevronDown } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { useProperty } from "@/components/providers/property-provider"
 import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
+import { useUnsavedGuard } from "@/lib/use-unsaved-guard"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
@@ -123,7 +128,6 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
   const [loading, setLoading] = useState(isEditMode)
   const [submitting, setSubmitting] = useState(false)
-  const [notification, setNotification] = useState<{ title: string; message: string } | null>(null)
   const [existingStatus, setExistingStatus] = useState<string | null>(null)
   const [existingConfirmationNo, setExistingConfirmationNo] = useState<string | null>(null)
 
@@ -145,7 +149,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   // Watched values keep the derived machinery (grid, quote, previews) reactive
   // exactly like the old useState did — `form` reads the same in the JSX below.
   const form = formCtl.watch()
-  const { errors, isSubmitted } = formCtl.formState
+  const { errors, isSubmitted, isDirty } = formCtl.formState
+  // Warn before a reload/tab close throws away an unsaved booking (DESKTOP_PLAN D11).
+  // `submitting` stays true through the success navigation, so a save never warns.
+  useUnsavedGuard(isDirty && !submitting)
   // Field errors stay quiet until the user has touched that field (or tried to save):
   // the form is validated onChange against seeded values (business-date arrival, an
   // empty segment), so without this gate an untouched form opened already showing
@@ -381,6 +388,9 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   useEffect(() => {
     if (!isEditMode && businessDateIso && !formCtl.getValues("checkInDate")) {
       setStayDate("in", businessDateIso)
+      // The seeded arrival is the form's starting point, not an edit — re-baseline so the
+      // unsaved-changes guard only fires once the user has actually changed something.
+      formCtl.reset(formCtl.getValues())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, businessDateIso])
@@ -463,7 +473,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   // room-type lookup data) is checked here before building the payload.
   const onValid = async (values: BookingFormValues) => {
     if (uniqueCapacityIssues.length > 0 && !values.acknowledgeOverCapacity) {
-      setNotification({ title: "Occupancy Exceeds Maximum", message: "Check the override box in Room & Rate to confirm this booking anyway." })
+      toast.error("Occupancy exceeds the maximum", { description: "Check the override box in Room & Rate to book it anyway." })
       return
     }
     setSubmitting(true)
@@ -504,7 +514,23 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           body: JSON.stringify({ ...payload, acknowledgeOverbook }),
         })
         if (res.ok) {
-          router.push(exitUrl)
+          // Land on what was just touched, not back on a list (DESKTOP_PLAN D2).
+          const saved = await res.json().catch(() => null)
+          const warning: string | undefined = saved?.allocationWarning || undefined
+          if (isEditMode) {
+            toast.success("Booking updated", { description: warning })
+            router.push(`/e/${slug}/dashboard/reservations/${reservationId}`)
+          } else if (saved?.id && walkIn) {
+            // Front Desk opens the check-in wizard for ?checkin=<id>.
+            toast.success(`Walk-in ${saved.confirmationNo} booked`, { description: warning })
+            router.push(`/e/${slug}/dashboard/front-office?checkin=${saved.id}`)
+          } else if (saved?.id) {
+            toast.success(`Booking ${saved.confirmationNo} created`, { description: warning })
+            router.push(`/e/${slug}/dashboard/reservations/${saved.id}`)
+          } else {
+            toast.success("Booking created")
+            router.push(exitUrl)
+          }
           router.refresh()
           return
         }
@@ -522,18 +548,18 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           }
           return
         }
-        setNotification({ title: "Error", message: err.error || "Failed to save the booking." })
+        toast.error(err.error || "Couldn't save the booking. Try again.")
         setSubmitting(false)
       }
       await send(false)
     } catch {
-      setNotification({ title: "Error", message: "An unexpected error occurred." })
+      toast.error("Couldn't save the booking. Try again.")
       setSubmitting(false)
     }
   }
 
   const onInvalid = () => {
-    setNotification({ title: "Validation Error", message: "Fix the highlighted fields before saving." })
+    toast.error("Fix the highlighted fields before saving")
   }
 
   const segmentErrors = errors.assignments as
@@ -567,7 +593,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 max-w-6xl mx-auto p-4">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-96 rounded-lg" />
       </div>
@@ -580,7 +606,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   // business day. Reached only by deep link — the Edit entry points are already hidden.
   if (isEditMode && existingStatus && !canEditReservation(existingStatus)) {
     return (
-      <div className="flex flex-col gap-6 max-w-2xl mx-auto p-4">
+      <div className="max-w-2xl space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>This reservation can&apos;t be edited</CardTitle>
@@ -606,32 +632,39 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   }
 
   return (
-    <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 max-w-7xl mx-auto p-4 pb-16">
-      {/* Back sits ABOVE the title on a phone and beside it from sm up — on a narrow
+    <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 pb-16">
+      {/* Back sits ABOVE the title on a phone and beside it on a tablet — on a narrow
           screen a bordered icon button next to a wrapping title pushed the heading into
           a cramped column. Borderless (ghost) and labelled, so it reads as navigation
-          rather than a form control. */}
+          rather than a form control. From md the breadcrumbs ("Reservations › New")
+          replace it. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={() => router.push(exitUrl)}
-          className="-ml-2 w-fit text-muted-foreground hover:text-foreground sm:size-9 sm:p-0"
+          className="-ml-2 w-fit text-muted-foreground hover:text-foreground sm:size-9 sm:p-0 md:hidden"
           aria-label="Back"
         >
           <ArrowLeft className="h-4 w-4 sm:mr-0" />
           <span className="ml-1.5 sm:hidden">Back</span>
         </Button>
-        <div className="flex-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl flex items-center gap-3">
-            {isEditMode ? "Edit Booking" : walkIn ? "Walk-in Booking" : "New Booking"}
-            {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
-          </h2>
-        </div>
-        {notification && (
-          <span className="text-sm text-destructive font-medium">{notification.title}: {notification.message}</span>
-        )}
+        <PageHeader
+          className="flex-1"
+          crumb={isEditMode ? existingConfirmationNo ?? "Edit" : "New"}
+          tabTitle={
+            isEditMode
+              ? `${existingConfirmationNo ? `${existingConfirmationNo} · ` : ""}Edit Booking`
+              : walkIn ? "Walk-in booking" : "New booking"
+          }
+          title={
+            <>
+              {isEditMode ? "Edit booking" : walkIn ? "Walk-in booking" : "New booking"}
+              {isEditMode && existingStatus && <StatusBadge label={existingStatus.replace('_', ' ')} status={existingStatus} />}
+            </>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -688,17 +721,17 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               </div>
               <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
-                  Booking Source / Travel Agent (Optional)
+                  Booking source / travel agent (optional)
                   {ratePlans.some(rp => rp.isNegotiated && form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)) && (
-                    <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30 text-[10px]">unlocks negotiated rates</Badge>
+                    <StatusBadge label="unlocks negotiated rates" tone="warning" />
                   )}
                 </Label>
                 <SearchableSelect
                   value={form.travelAgentId}
                   onChange={(v) => setField("travelAgentId", v)}
-                  placeholder="Select Travel Agent..."
+                  placeholder="Select travel agent..."
                   options={[
-                    { value: "none", label: "Direct Booking (None)" },
+                    { value: "none", label: "Direct booking (none)" },
                     ...profiles.filter(p => p.profileType === 'TRAVEL_AGENT' || p.profileType === 'COMPANY').map(prof => ({
                       value: prof.upid,
                       label: prof.companyName || `${prof.firstName} ${prof.lastName}`
@@ -710,7 +743,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <PhoneReveal label="Part of a group block?" onClick={() => showOnPhone("group")} />
               )}
               <div className={cn("grid content-start gap-2", phoneFolded("group", form.groupBlockId !== "none") && "max-md:hidden")}>
-                <Label>Group Block (Optional)</Label>
+                <Label>Group block (optional)</Label>
                 <SearchableSelect
                   value={form.groupBlockId}
                   onChange={(v) => setField("groupBlockId", v)}
@@ -738,9 +771,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 )}
             </h3>
               {!gridStart || !gridEnd ? (
-                <p className="text-sm text-muted-foreground italic py-6 text-center">
-                  Pick arrival and departure dates to see rates and availability.
-                </p>
+                <EmptyState size="inline" className="justify-center py-6" title="Pick arrival and departure dates to see rates and availability" />
               ) : gridLoading && !gridData ? (
                 <Skeleton className="h-36 rounded-md" />
               ) : gridData ? (
@@ -805,7 +836,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     )}
                     {scheduledRoomMoveAt(index) && (
                       <span className="inline-flex w-max items-center gap-1.5 rounded-md bg-warning-muted px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/20">
-                        Scheduled Room Move — different room than Segment {index}
+                        Scheduled room move — different room than segment {index}
                       </span>
                     )}
                     {form.assignments.length > 1 && (
@@ -851,7 +882,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     )}
                     <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:gap-3">
                       <div className="grid content-start gap-2">
-                        <Label>Room Assignment</Label>
+                        <Label>Room assignment</Label>
                         <SearchableSelect
                           value={assignment.roomId}
                           onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { roomId: v }) }}
@@ -869,7 +900,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         <PhoneReveal label="Set a flat override rate" onClick={() => showOnPhone(`override-${index}`)} />
                       )}
                       <div className={cn("grid content-start gap-2", phoneFolded(`override-${index}`, !!assignment.overrideRate) && "max-md:hidden")}>
-                        <Label>Flat Override Rate</Label>
+                        <Label>Flat override rate</Label>
                         <Input
                           {...INPUT_MONEY}
                           type="number"
@@ -913,7 +944,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 setAssignments([...current, { ...emptySegment(), startDate: lastAssignment.endDate || "" }]);
                 setActiveSegmentIndex(current.length);
               }}>
-                <Plus className="h-4 w-4 mr-2" /> Add Segment (Split Stay)
+                <Plus className="h-4 w-4 mr-2" /> Add segment (split stay)
               </Button>
           </section>
 
@@ -929,7 +960,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   Change button and the meal-plan select collided. */}
               <div className="grid gap-4">
                 <div className="grid content-start gap-2">
-                  <Label>Primary Guest <span className="text-destructive">*</span></Label>
+                  <Label>Primary guest <span className="text-destructive">*</span></Label>
                   <div className="grid grid-cols-[2fr_1fr] items-center gap-2">
                     <div className="border rounded-md px-3 h-9 text-sm bg-background flex items-center overflow-hidden">
                       {(() => {
@@ -949,15 +980,15 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <FieldError message={shownError(errors.primaryGuestId?.message, "primaryGuestId")} />
                 </div>
                 <div className="grid content-start gap-2 sm:w-2/3">
-                  <Label>Meal Plan</Label>
+                  <Label>Meal plan</Label>
                   <Select value={form.mealPlan} onValueChange={(v) => setField("mealPlan", v ?? "NONE")}>
                     <SelectTrigger className="max-sm:w-full">
                       <SelectValue>
-                        {form.mealPlan === "NONE" ? "Room Only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
+                        {form.mealPlan === "NONE" ? "Room only" : (mealPlans.find(mp => mp.code === form.mealPlan)?.name || form.mealPlan)}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="NONE">Room Only</SelectItem>
+                      <SelectItem value="NONE">Room only</SelectItem>
                       {mealPlans.filter(mp => mp.isActive).map(mp => (
                         <SelectItem key={mp.id} value={mp.code}>{mp.name}</SelectItem>
                       ))}
@@ -976,8 +1007,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex items-center gap-2 text-sm font-medium">
-                      Fee Policies
-                      <InfoHint label="Fee Policies">
+                      Fee policies
+                      <InfoHint label="Fee policies">
                         Optional. These drive this booking&apos;s deposit, cancellation and no-show fees.
                       </InfoHint>
                     </span>
@@ -1030,7 +1061,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               )}
               <div className={cn("grid gap-2 rounded-md bg-muted/50 p-4", phoneFolded("accompanying", form.accompanyingGuestIds.length > 0) && "max-md:hidden")}>
                 <Label className="flex items-center justify-between">
-                  <span>Accompanying Guests</span>
+                  <span>Accompanying guests</span>
                   <span className="text-xs font-normal text-muted-foreground">
                     {form.accompanyingGuestIds.length} / {maxAccompanying} pax
                   </span>
@@ -1076,7 +1107,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
               {specialRequestOptions.length > 0 && (
                 <div className="grid content-start gap-2">
-                  <Label>Special Requests</Label>
+                  <Label>Special requests</Label>
                   <div className="flex flex-wrap gap-2">
                     {specialRequestOptions.map(opt => {
                       const selected = form.specialRequestCodes.includes(opt.code)
@@ -1087,7 +1118,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                             const current = formCtl.getValues("specialRequestCodes")
                             setField("specialRequestCodes", selected ? current.filter(c => c !== opt.code) : [...current, opt.code])
                           }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors pointer-coarse:min-h-10 ${
+                          className={`inline-flex items-center gap-1.5 border px-3 py-1 text-sm transition-colors pointer-coarse:min-h-10 ${
                             selected
                               ? "border-info text-info bg-info-muted font-medium"
                               : "border-border text-muted-foreground hover:border-foreground/40"
@@ -1146,7 +1177,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               {(() => {
                 const addOnOptions = allocations.filter(a => a.isActive && a.sellSeparate && !autoAllocationIds.includes(a.id))
                 if (addOnOptions.length === 0) return (
-                  <p className="text-xs text-muted-foreground italic">No sell-separate add-ons available for this property.</p>
+                  <EmptyState size="inline" title="No sell-separate add-ons available for this property" />
                 )
                 const addOnsFolded = phoneFolded("addons", form.manualAllocationIds.length > 0)
                 return (
@@ -1202,10 +1233,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
           <div className="flex gap-2 max-md:hidden">
             <Button type="button" variant="outline" className="flex-1" onClick={() => router.push(exitUrl)}>Cancel</Button>
-            <Button type="submit" className="flex-1" disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              {submitting ? "Saving..." : isEditMode ? "Save Changes" : walkIn ? "Book Walk-in" : "Book Now"}
-            </Button>
+            <SubmitButton className="flex-1" pending={submitting}>
+              <Save className="h-4 w-4 mr-2" />
+              {isEditMode ? "Save changes" : walkIn ? "Book walk-in" : "Book now"}
+            </SubmitButton>
           </div>
         </div>
       </div>
@@ -1213,23 +1244,17 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       {/* Phones: the total and Book/Save always in reach (same submit as the sidebar's). */}
       <MobileActionBar>
         <div className="min-w-0 flex-1">
-          {notification ? (
-            <p className="line-clamp-2 text-xs font-medium text-destructive">{notification.message}</p>
-          ) : (
-            <>
-              <p className="text-[11px] text-muted-foreground">
-                {quote ? `Total · ${quote.nights} night${quote.nights === 1 ? "" : "s"}` : "Total"}
-              </p>
-              <p className="truncate text-base font-semibold tabular-nums">
-                {quoteLoading && !quote ? "…" : quote ? money(quote.totals.grandTotal) : "—"}
-              </p>
-            </>
-          )}
+          <p className="text-[11px] text-muted-foreground">
+            {quote ? `Total · ${quote.nights} night${quote.nights === 1 ? "" : "s"}` : "Total"}
+          </p>
+          <p className="truncate text-base font-semibold tabular-nums">
+            {quoteLoading && !quote ? "…" : quote ? money(quote.totals.grandTotal) : "—"}
+          </p>
         </div>
-        <Button type="submit" className="shrink-0" disabled={submitting}>
-          {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-          {submitting ? "Saving..." : isEditMode ? "Save Changes" : walkIn ? "Book Walk-in" : "Book Now"}
-        </Button>
+        <SubmitButton className="shrink-0" pending={submitting}>
+          <Save className="h-4 w-4 mr-2" />
+          {isEditMode ? "Save changes" : walkIn ? "Book walk-in" : "Book now"}
+        </SubmitButton>
       </MobileActionBar>
 
       <GuestPickerModal
@@ -1240,7 +1265,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           setGuestPickerOpen(null)
         }}
         enterpriseId={enterpriseId}
-        title={guestPickerOpen === "primary" ? "Select Primary Guest" : "Add Accompanying Guest"}
+        title={guestPickerOpen === "primary" ? "Select primary guest" : "Add accompanying guest"}
         excludeIds={guestPickerOpen === "primary" ? [] : [form.primaryGuestId, ...form.accompanyingGuestIds].filter(Boolean)}
         onSelect={(profile: GuestProfile) => {
           setProfiles(prev => prev.some(p => p.upid === profile.upid) ? prev : [profile, ...prev])

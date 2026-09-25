@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Mail, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { InlineLoading } from "@/components/ui/inline-loading"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -113,7 +114,7 @@ export function EmailDocumentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !sending && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-4 w-4" /> Email {documentLabel}
@@ -126,7 +127,7 @@ export function EmailDocumentDialog({
         ) : (
           <div className="space-y-4">
             {loadingOptions ? (
-              <p className="text-sm text-muted-foreground">Loading saved emails...</p>
+              <InlineLoading lines={2} label="Loading saved emails" />
             ) : (
               <div className="space-y-2" role="radiogroup" aria-label="Email address">
                 {options.map((opt) => (
@@ -163,6 +164,7 @@ export function EmailDocumentDialog({
                     placeholder="guest@example.com"
                     value={manualEmail}
                     onChange={(e) => setManualEmail(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !sending && resolvedEmail) { e.preventDefault(); void handleSend() } }}
                     autoFocus
                   />
                 </div>
@@ -186,7 +188,7 @@ export function EmailDocumentDialog({
             </Button>
             <Button onClick={handleSend} disabled={sending || !resolvedEmail}>
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
-              {sending ? "Sending..." : "Send"}
+              {sending ? "Sending…" : "Send"}
             </Button>
           </DialogFooter>
         )}

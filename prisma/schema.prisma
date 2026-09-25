@@ -995,6 +995,9 @@ model Profile {
   vipLevel          String?
   preferredLanguage String     @default("en")
   iataNumber        String?
+  // Tax Identification Number of a COMPANY/TRAVEL_AGENT profile — printed on the GST
+  // Report (the MIRA GST return lists each invoice's agent with their TIN).
+  tinNumber         String?
   commissionRate    Float?
   // MIRA Green Tax "Booking Method" for COMPANY/TRAVEL_AGENT profiles — one of the fixed
   // values in src/lib/green-tax-sheet.ts (BOOKING_METHODS). A reservation takes it from

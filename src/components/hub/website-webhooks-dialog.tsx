@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCallback, useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -202,7 +203,7 @@ export function WebsiteWebhooksDialog({
 
   return (
     <Dialog open={!!keyRow} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Webhooks — {keyRow?.name}</DialogTitle>
           <DialogDescription>
@@ -227,7 +228,7 @@ export function WebsiteWebhooksDialog({
           {loading ? (
             <Skeleton className="h-16 w-full" />
           ) : endpoints.length === 0 && !adding ? (
-            <p className="text-sm text-muted-foreground">No webhooks yet. The website can still check a booking at any time with the lookup endpoint.</p>
+            <EmptyState size="inline" title="No webhooks yet." description="The website can still check a booking at any time with the lookup endpoint." />
           ) : (
             endpoints.map((e) => (
               <div key={e.id} className="space-y-2 rounded-md border border-border p-3 text-sm">
@@ -268,7 +269,7 @@ export function WebsiteWebhooksDialog({
                 {deliveriesFor === e.id && (
                   <div className="space-y-1 border-t border-border pt-2 text-xs">
                     {deliveries.length === 0 ? (
-                      <p className="text-muted-foreground">Nothing sent yet.</p>
+                      <EmptyState size="inline" title="Nothing sent yet." />
                     ) : (
                       deliveries.map((d) => (
                         <div key={d.id} className="flex flex-wrap justify-between gap-2">

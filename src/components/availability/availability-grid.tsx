@@ -357,7 +357,7 @@ export function AvailabilityGrid() {
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={toggleExpandAll}>
-            {allExpanded ? "Collapse All" : "Expand All"}
+            {allExpanded ? "Collapse all" : "Expand all"}
           </Button>
           <div className="flex items-center gap-1 text-sm text-muted-foreground">
             <span>Days</span>
@@ -388,7 +388,7 @@ export function AvailabilityGrid() {
         {/* Date header */}
         <div className="flex border-b border-border bg-muted sticky top-0 z-20">
           <div className="w-52 shrink-0 border-r border-border p-2 flex items-center font-semibold text-foreground bg-muted z-30 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
-            Room Type
+            Room type
           </div>
           <div className="flex-1 grid" style={gridStyle}>
             {columns.map((date) => {

@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 import { NationalitySelect } from "@/components/ui/nationality-select"
 import { Plus, Star, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -30,6 +32,7 @@ const emptyForm = { type: "HOME", fullAddress: "", city: "", stateProvince: "", 
 // .agents/docs/PROFILES_REDESIGN_PLAN.md "Address". fullAddress is one free-text block
 // (not street-line-broken) per the app owner's spec.
 export function AddressManager({ upid }: { upid: string }) {
+  const confirm = useConfirm()
   const [rows, setRows] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -89,7 +92,9 @@ export function AddressManager({ upid }: { upid: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/profiles/${upid}/addresses/${id}`, { method: "DELETE" })
+    if (!(await confirm({ title: "Delete this address?", description: "This cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
+    const res = await fetch(`/api/profiles/${upid}/addresses/${id}`, { method: "DELETE" }).catch(() => null)
+    if (!res?.ok) toast.error("Couldn't delete it. Try again.")
     fetchRows()
   }
 
@@ -146,7 +151,7 @@ export function AddressManager({ upid }: { upid: string }) {
             </div>
           </div>
           <div className="grid gap-1.5">
-            <Label className="text-xs">Full Address</Label>
+            <Label className="text-xs">Full address</Label>
             <Input placeholder="123 Main St, Apt 4B" value={form.fullAddress} onChange={(e) => setForm((p) => ({ ...p, fullAddress: e.target.value }))} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -166,12 +171,12 @@ export function AddressManager({ upid }: { upid: string }) {
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => { setAdding(false); setForm(emptyForm); setError(null) }}>Cancel</Button>
-            <Button type="button" size="sm" onClick={handleAdd} disabled={saving}>{saving ? "Saving..." : "Add Address"}</Button>
+            <Button type="button" size="sm" onClick={handleAdd} disabled={saving}>{saving ? "Saving..." : "Add address"}</Button>
           </div>
         </div>
       ) : (
         <Button type="button" variant="outline" size="sm" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add Address
+          <Plus className="h-4 w-4 mr-1" /> Add address
         </Button>
       )}
     </div>

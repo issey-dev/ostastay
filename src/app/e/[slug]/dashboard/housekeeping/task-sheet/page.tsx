@@ -11,9 +11,9 @@ import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { housekeepingStaff } from "@/lib/job-functions"
+import { toast } from "@/lib/toast"
 
 // Priority buckets, in the order an attendant should work them: rooms needed for
 // an arrival first, departure cleans next, other dirty rooms, then stayover
@@ -56,7 +56,6 @@ export default function TaskSheetPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyRoomId, setBusyRoomId] = useState<string | null>(null)
-  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
 
   const fetchRooms = async (silent = false) => {
     if (!currentProperty) return
@@ -111,10 +110,10 @@ export default function TaskSheetPage() {
         fetchRooms(true)
       } else {
         const data = await res.json()
-        setNotification({ title: "Update Failed", message: data.error || "Failed to update the room.", isError: true })
+        toast.error(data.error || "Failed to update the room.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred updating the room.", isError: true })
+      toast.error("An error occurred updating the room.")
     } finally {
       setBusyRoomId(null)
     }
@@ -132,10 +131,10 @@ export default function TaskSheetPage() {
         fetchRooms(true)
       } else {
         const data = await res.json()
-        setNotification({ title: "Task Failed", message: data.error || "Failed to complete the task.", isError: true })
+        toast.error(data.error || "Failed to complete the task.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred completing the task.", isError: true })
+      toast.error("An error occurred completing the task.")
     } finally {
       setBusyRoomId(null)
     }
@@ -158,22 +157,26 @@ export default function TaskSheetPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-16">
-      <div className="flex items-center gap-3">
-        <Link href={`/e/${slug}/dashboard/housekeeping`}>
+    <div className="space-y-6 pb-16">
+      <div className="flex items-start gap-3">
+        {/* Phones only: the breadcrumb is the way back on desktop. */}
+        <Link href={`/e/${slug}/dashboard/housekeeping`} className="md:hidden">
           <Button variant="outline" size="icon" className="shrink-0" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ClipboardList className="w-6 h-6 text-muted-foreground" /> Task Sheet
-            <InfoHint>Assigned rooms in cleaning order.</InfoHint>
-          </h2>
-        </div>
-        <Button variant="outline" size="icon" onClick={() => fetchRooms()} title="Refresh" aria-label="Refresh">
-          <RefreshCw className="w-4 h-4" />
-        </Button>
+        <PageHeader
+          className="flex-1"
+          crumb="Task sheet"
+          title="Task sheet"
+          tabTitle="Task sheet · Housekeeping"
+          hint="Assigned rooms in cleaning order."
+          actions={
+            <Button variant="outline" size="icon" onClick={() => fetchRooms()} title="Refresh" aria-label="Refresh">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          }
+        />
       </div>
 
       <div className="flex items-center gap-2">
@@ -209,7 +212,7 @@ export default function TaskSheetPage() {
         <EmptyState
           icon={ClipboardList}
           title={`No rooms assigned to ${attendantName(attendantId) || "this attendant"}`}
-          description='Use "Assign" or "Assign Floor" on the Housekeeping board to hand out rooms.'
+          description='Use "Assign" or "Assign floor" on the Housekeeping board to hand out rooms.'
           className="rounded-xl border border-dashed bg-muted"
         />
       ) : (
@@ -270,7 +273,7 @@ export default function TaskSheetPage() {
                             disabled={busy}
                             onClick={() => setRoomStatus(room.id, "CLEAN")}
                           >
-                            <Brush className="w-4 h-4 mr-2" /> Mark Clean
+                            <Brush className="w-4 h-4 mr-2" /> Mark clean
                           </Button>
                         )}
                         {room.status === "CLEAN" && (
@@ -281,7 +284,7 @@ export default function TaskSheetPage() {
                             disabled={busy}
                             onClick={() => setRoomStatus(room.id, "INSPECTED")}
                           >
-                            <CheckCircle2 className="w-4 h-4 mr-2" /> Mark Inspected
+                            <CheckCircle2 className="w-4 h-4 mr-2" /> Mark inspected
                           </Button>
                         )}
                       </div>
@@ -293,18 +296,6 @@ export default function TaskSheetPage() {
           )
         })
       )}
-
-      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>{notification?.title}</DialogTitle>
-            <DialogDescription>{notification?.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setNotification(null)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

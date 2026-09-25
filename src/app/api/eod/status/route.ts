@@ -35,9 +35,23 @@ export async function GET(request: Request) {
     });
 
     // Arrivals due in that never checked in — these auto-become no-shows in the post step.
-    const pendingArrivals = await prisma.reservation.count({
-      where: { propertyId, status: "RESERVED", checkInDate: { lte: businessDate } },
-    });
+    // The names are listed too, so the auditor reviews them before autopilot posts
+    // (DESKTOP_PLAN — a late arrival shouldn't become a no-show unseen).
+    const arrivalWhere = { propertyId, status: "RESERVED", checkInDate: { lte: businessDate } };
+    const [pendingArrivals, pendingArrivalRows] = await Promise.all([
+      prisma.reservation.count({ where: arrivalWhere }),
+      prisma.reservation.findMany({
+        where: arrivalWhere,
+        select: {
+          id: true,
+          confirmationNo: true,
+          checkInDate: true,
+          primaryGuest: { select: { firstName: true, lastName: true, companyName: true, profileType: true } },
+        },
+        orderBy: { checkInDate: "asc" },
+        take: 50,
+      }),
+    ]);
 
     // Open cashier shifts for this property — force-closed in the cashier step.
     const openShifts = await prisma.cashierShift.findMany({
@@ -63,6 +77,15 @@ export async function GET(request: Request) {
         checkOutDate: r.checkOutDate,
       })),
       pendingArrivals,
+      pendingArrivalList: pendingArrivalRows.map((r) => ({
+        id: r.id,
+        confirmationNo: r.confirmationNo,
+        checkInDate: r.checkInDate,
+        guestName:
+          r.primaryGuest.profileType === "COMPANY" || r.primaryGuest.profileType === "TRAVEL_AGENT"
+            ? r.primaryGuest.companyName
+            : `${r.primaryGuest.firstName} ${r.primaryGuest.lastName ?? ""}`.trim(),
+      })),
       openShifts: openShifts.map((s) => ({ id: s.id, userId: s.userId, openedAt: s.openedAt, openingFloat: s.openingFloat })),
     });
   } catch (error) {

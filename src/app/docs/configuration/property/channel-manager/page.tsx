@@ -23,13 +23,13 @@ export default function ChannelManager() {
 
       <H2>2. Mapping</H2>
       <Where path="Hub › Channel Manager › Mapping" />
-      <Shot name="prop-channel-mapping" alt="The channel manager Mapping page with Sharing, Room Type, Rate Plan, Inventory and Defaults tabs." />
+      <Shot name="prop-channel-mapping" alt="The channel manager Mapping page with Sharing, Room type, Rate plan, Inventory and Defaults tabs." />
       <Table
         head={["Tab", "What to do"]}
         rows={[
-          ["Room Type", "Enter the channel manager's room ID next to each room type; it saves when you leave the field. Switch Share off to hold a room type back. Pseudo room types can't be mapped."],
-          ["Rate Plan", "Optionally map rate plans to a price slot (1–16) in the channel manager."],
-          ["Defaults", "Choose the Default rate plan (required) and Default meal plan for incoming bookings, then Save defaults."],
+          ["Room type", "Enter the channel manager's room ID next to each room type; it saves when you leave the field. Switch Share off to hold a room type back. Pseudo room types can't be mapped."],
+          ["Rate plan", "Optionally map rate plans to a price slot (1–16) in the channel manager."],
+          ["Defaults", "Choose the Default rate plan (required) and Default meal plan for incoming bookings, then Save."],
           ["Inventory", "Resync sends availability again, with a preview first."],
           ["Sharing", "The Share switch. It can only be switched on once every active room type is mapped."],
         ]}
@@ -42,7 +42,7 @@ export default function ChannelManager() {
       </Callout>
       <H3>Checking before you share</H3>
       <p>
-        Use <strong>Send prices for a date range</strong> (Rate Plan tab) or <strong>Resync</strong> (Inventory tab) to preview
+        Use <strong>Send prices for a date range</strong> (Rate plan tab) or <strong>Resync</strong> (Inventory tab) to preview
         exactly what would be sent: × for stop-sell, 0 for sold out, — for no price, and a list of room types not published and why.
         When it looks right, switch <strong>Share</strong> on. From then on availability and prices are sent automatically, a year
         ahead.

@@ -3,7 +3,7 @@ import { ShieldAlert } from "@/components/icons"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { HeaderBrand, HeaderBusinessDate } from "@/components/ui/dashboard-header"
+import { HeaderBrand, HeaderBusinessDate, HeaderSetupLink } from "@/components/ui/dashboard-header"
 import { PropertyProvider } from "@/components/providers/property-provider"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { PropertyBannerBar } from "@/components/ui/property-banner-bar"
@@ -13,9 +13,10 @@ import { EodSessionWatch } from "@/components/providers/eod-session-watch"
 import { IdleSessionWatch } from "@/components/providers/idle-session-watch"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { CommandPaletteTrigger } from "@/components/shell/command-palette"
 import { PropertyOnboardingGate } from "@/components/onboarding/property-onboarding-gate"
 import { decidePropertyGate } from "@/lib/properties/onboarding-gate"
-import { requireSession } from "@/lib/scope"
+import { requireSession, hasHubAccess } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
 // Reads live tenant data per request — never prerender. `next build` would otherwise
@@ -138,7 +139,9 @@ export default async function DashboardLayout({
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors max-md:hidden" />
               <HeaderBrand enterpriseName={enterprise.name} />
               <div className="ml-auto flex items-center gap-4">
+                <CommandPaletteTrigger />
                 <HeaderBusinessDate />
+                <HeaderSetupLink href={hasHubAccess(ctx) ? `/e/${enterprise.slug}/hub` : undefined} />
                 <ThemeToggle />
               </div>
             </header>

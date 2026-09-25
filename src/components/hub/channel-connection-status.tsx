@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/error-state"
 import { toast } from "@/lib/toast"
-import { type Connection, StatusBadge, formatDateTime } from "@/components/hub/connection-shared"
+import { type Connection, ConnectionBadge, formatDateTime } from "@/components/hub/connection-shared"
 
 // A property's channel-manager Connection screen — READ-ONLY since 2026-08-03, one
 // connection per property since 2026-09-23 (HUB_SETUP_PLAN.md, Phase 4).
@@ -119,7 +119,7 @@ export function ChannelConnectionStatus({ propertyId, canManage }: { propertyId:
                 <div className="min-w-0">
                   <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                     {c.name}
-                    <StatusBadge status={c.status} />
+                    <ConnectionBadge status={c.status} />
                   </CardTitle>
                   <CardDescription>{c.provider === "BEDS24" ? "Beds24" : c.provider} · managed by Uppsolut</CardDescription>
                 </div>

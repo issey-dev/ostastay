@@ -5,6 +5,10 @@ import { Check, Ban, Loader2 } from "@/components/icons"
 import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 import { THEME_COLOR_NAMES, THEME_COLOR_PRESETS } from "@/lib/themePresets"
 import { cn } from "@/lib/utils"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { SavedTick, useSavedFlash } from "@/components/controls/save-status"
 
 // Sets the CURRENT property's own banner accent — a thin line shown at the top of every
 // page while this property is active (see property-banner-bar.tsx). Deliberately scoped
@@ -50,9 +54,10 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
   const [currentProperty, applySaved] = usePropertyValue(property)
   const [saving, setSaving] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   if (!currentProperty) {
-    return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
+    return <InlineLoading className="py-8" label="Loading property" />
   }
 
   const selected =
@@ -71,7 +76,12 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
       })
       if (res.ok) {
         applySaved({ bannerColor: swatch.hex })
+        flashSaved()
+      } else {
+        toast.error(await apiError(res, "Couldn't save the accent colour. Try again."))
       }
+    } catch {
+      toast.error("Couldn't save the accent colour. Try again.")
     } finally {
       setSaving(null)
     }
@@ -97,15 +107,18 @@ export function PropertyBannerColorManager({ property }: { property: HubProperty
             <div className="h-2 w-44 max-w-full rounded-full bg-muted-foreground/25" />
             <div className="h-2 w-28 max-w-full rounded-full bg-muted-foreground/15" />
           </div>
-          <div
-            className={cn(
-              "shrink-0 text-[11px] font-medium uppercase tracking-wider tabular-nums transition-colors",
-              isPreviewing ? "text-muted-foreground" : "text-foreground"
-            )}
-          >
-            {isPreviewing
-              ? `Previewing ${previewed.name}`
-              : `${selected.name} · Selected`}
+          <div className="flex shrink-0 items-center gap-3">
+            <SavedTick show={savedShown && !isPreviewing} />
+            <div
+              className={cn(
+                "text-[11px] font-medium uppercase tracking-wider tabular-nums transition-colors",
+                isPreviewing ? "text-muted-foreground" : "text-foreground"
+              )}
+            >
+              {isPreviewing
+                ? `Previewing ${previewed.name}`
+                : `${selected.name} · Selected`}
+            </div>
           </div>
         </div>
       </div>

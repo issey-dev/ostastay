@@ -19,7 +19,7 @@ export default function GuestLists() {
       </p>
       <ul>
         <li><strong>Rename</strong> an entry to the wording your guests or authorities expect. The reset icon restores the standard name.</li>
-        <li><strong>Add</strong> your own entry with a 2–3 letter <strong>Code</strong> that is not already a country code, and a <strong>Nationality</strong> label. Only entries you added can be removed.</li>
+        <li>Add your own entry with a 2–3 letter <strong>Code</strong> that is not already a country code and a <strong>Nationality</strong> label, then choose <strong>Add nationality</strong>. Only entries you added can be removed.</li>
       </ul>
 
       <H2>Guest profile lists</H2>
@@ -35,20 +35,20 @@ export default function GuestLists() {
         rows={[
           ["Gender", "Male, Female."],
           ["Title", "Mr, Mrs, Ms, Dr."],
-          ["ID / Document Type", "Passport, National ID card, Driving licence."],
-          ["Profile Classification", "Regular, Repeat guest, Corporate."],
-          ["VIP Level", "Silver, Gold, Platinum."],
-          ["Dietary Requirements", "Vegetarian, Vegan, Gluten-free, Halal."],
+          ["ID / document type", "Passport, National ID card, Driving licence."],
+          ["Profile classification", "Regular, Repeat guest, Corporate."],
+          ["VIP level", "Silver, Gold, Platinum."],
+          ["Dietary requirements", "Vegetarian, Vegan, Gluten-free, Halal."],
           ["Preferences", "Quiet room, High floor, Extra pillows."],
         ]}
       />
-      <p>For each entry, type a <strong>Code (Internal)</strong> and a <strong>Display Value</strong>, then <strong>Add</strong>:</p>
+      <p>For each entry, type a <strong>Code (internal)</strong> and a <strong>Display value</strong>, then <strong>Add</strong>:</p>
       <ul>
         <li>The <strong>code</strong> is stored on profiles and can never be changed, so keep it short and stable, e.g. <code>GOLD</code>. It is uppercased for you.</li>
         <li>The <strong>display value</strong> is what staff see. Edit it any time with the pencil.</li>
         <li>The <strong>arrows</strong> set the order the drop-down shows everywhere.</li>
         <li>
-          <strong>Delete</strong> hides an entry from new choices; profiles that already use it keep it. <strong>Show deleted</strong>{" "}
+          <strong>Delete</strong> (you are asked to confirm) hides an entry from new choices; profiles that already use it keep it. <strong>Show deleted</strong>{" "}
           lists deleted entries so you can <strong>Restore</strong> one, and adding a deleted code again restores it.
         </li>
       </ul>

@@ -8,6 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { RefreshCw, AlertTriangle } from "@/components/icons"
 import { InfoHint } from "@/components/ui/info-hint"
+import { StatTile } from "@/components/ui/stat-tile"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
 
 type TenantOpRow = {
   enterpriseId: string | null
@@ -82,16 +87,10 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tabular-nums max-sm:break-words">{value}</div>
-        {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-      </CardContent>
-    </Card>
-  )
+// The shared KPI card (DESKTOP_PLAN D8). `alert` turns the tile's hairline red — how a
+// non-zero failure count stands out now that the value itself is plain text.
+function StatCard({ label, value, sub, alert }: { label: string; value: string; sub?: React.ReactNode; alert?: boolean }) {
+  return <StatTile label={label} value={value} footnote={sub} accent={alert ? "var(--destructive)" : undefined} />
 }
 
 export function DbHealthDashboard() {
@@ -168,8 +167,8 @@ export function DbHealthDashboard() {
     return data.jobs.filter((r) => !apiEntFilter || r.enterpriseId === apiEntFilter)
   }, [data, apiEntFilter])
 
-  if (loading && !data) return <p className="text-sm text-muted-foreground italic">Loading...</p>
-  if (!data) return <p className="text-sm text-destructive">Failed to load database health.</p>
+  if (loading && !data) return <InlineLoading lines={6} label="Loading database health" />
+  if (!data) return <ErrorState title="Couldn't load database health" onRetry={fetchHealth} />
 
   const entOptions = [
     { label: "All enterprises", value: "" },
@@ -194,7 +193,7 @@ export function DbHealthDashboard() {
         <TabsList>
           <TabsTrigger value="storage">Storage</TabsTrigger>
           <TabsTrigger value="queries">Queries</TabsTrigger>
-          <TabsTrigger value="api">API & Channels</TabsTrigger>
+          <TabsTrigger value="api">API & channels</TabsTrigger>
         </TabsList>
 
         {/* ============================== STORAGE ============================== */}
@@ -203,7 +202,7 @@ export function DbHealthDashboard() {
             {/* Development runs SQLite and production PostgreSQL, so every card below
                 states which engine it is describing rather than implying one. */}
             <StatCard
-              label="Database Size"
+              label="Database size"
               value={
                 data.storage.engine === "sqlite"
                   ? formatBytes(data.dbFileSizeBytes)
@@ -220,7 +219,7 @@ export function DbHealthDashboard() {
               }
             />
             <StatCard
-              label="Allocated Pages"
+              label="Allocated pages"
               value={data.storage.totalBytes !== null ? formatBytes(data.storage.totalBytes) : "N/A"}
               sub={data.storage.pageCount !== null ? `${data.storage.pageCount.toLocaleString()} pages × ${data.storage.pageSize} B` : undefined}
             />
@@ -233,25 +232,22 @@ export function DbHealthDashboard() {
                   : "Freelist pages a VACUUM would release"
               }
             />
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Migrations</CardTitle></CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold flex items-center gap-2 tabular-nums">
-                  {data.migrationStatus.appliedCount} / {data.migrationStatus.onDiskCount}
-                  <Badge variant="secondary" className={data.migrationStatus.inSync ? "bg-success-muted text-success" : "bg-destructive-muted text-destructive"}>
-                    {data.migrationStatus.inSync ? "In sync" : "Out of sync"}
-                  </Badge>
-                </div>
-                {data.migrationStatus.lastApplied && (
-                  <p className="text-xs text-muted-foreground mt-1 truncate">Last: {data.migrationStatus.lastApplied}</p>
-                )}
-              </CardContent>
-            </Card>
+            <StatCard
+              label="Migrations"
+              value={`${data.migrationStatus.appliedCount} / ${data.migrationStatus.onDiskCount}`}
+              alert={!data.migrationStatus.inSync}
+              sub={
+                <>
+                  <StatusBadge label={data.migrationStatus.inSync ? "In sync" : "Out of sync"} tone={data.migrationStatus.inSync ? "success" : "danger"} />
+                  {data.migrationStatus.lastApplied && <span className="ml-2">Last: {data.migrationStatus.lastApplied}</span>}
+                </>
+              }
+            />
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Storage by Table</CardTitle>
+              <CardTitle className="text-lg">Storage by table</CardTitle>
               <CardDescription>
                 {data.storage.engine === "postgresql"
                   ? "Total size per table (heap + indexes + TOAST), with the index-only share broken out."
@@ -260,11 +256,14 @@ export function DbHealthDashboard() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.storage.tables === null ? (
-                <p className="text-sm text-muted-foreground italic">
-                  {data.storage.engine === "sqlite"
-                    ? "Per-table breakdown unavailable — this SQLite build has no dbstat virtual table."
-                    : "Per-table breakdown unavailable — the database role cannot read the catalog."}
-                </p>
+                <EmptyState
+                  size="inline"
+                  title={
+                    data.storage.engine === "sqlite"
+                      ? "Per-table breakdown unavailable — this SQLite build has no dbstat virtual table"
+                      : "Per-table breakdown unavailable — the database role cannot read the catalog"
+                  }
+                />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -303,8 +302,8 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-            Row Counts
-            <InfoHint label="Row Counts">A fixed, hand-picked list of the heaviest tables — not every model.</InfoHint>
+            Row counts
+            <InfoHint label="Row counts">A fixed, hand-picked list of the heaviest tables — not every model.</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent>
@@ -353,13 +352,13 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-            DB Load by Enterprise / Property
-            <InfoHint label="DB Load by Enterprise / Property">Prisma operations attributed to the session that ran them. Unauthenticated work (login, public eRegistration) shows separately.</InfoHint>
+            DB load by enterprise / property
+            <InfoHint label="DB load by enterprise / property">Prisma operations attributed to the session that ran them. Unauthenticated work (login, public eRegistration) shows separately.</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {tenantSummary.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No operations recorded yet{entFilter || propFilter ? " for this filter" : ""}.</p>
+                <EmptyState size="inline" title={`No operations recorded yet${entFilter || propFilter ? " for this filter" : ""}`} />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -367,7 +366,7 @@ export function DbHealthDashboard() {
                       <th className="py-1.5 pr-4">Enterprise</th>
                       <th className="py-1.5 pr-4">Property</th>
                       <th className="py-1.5 pr-4 text-right">Operations</th>
-                      <th className="py-1.5 text-right">Total DB Time (ms)</th>
+                      <th className="py-1.5 text-right">Total DB time (ms)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -393,7 +392,7 @@ export function DbHealthDashboard() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {opBreakdown.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Nothing recorded for this filter.</p>
+                <EmptyState size="inline" title="Nothing recorded for this filter" />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -422,13 +421,13 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-            SQL Statements (by total time)
-            <InfoHint label="SQL Statements (by total time)">Raw engine view — parameterized SQL, all tenants combined (SQL events carry no tenant identity).</InfoHint>
+            SQL statements (by total time)
+            <InfoHint label="SQL statements (by total time)">Raw engine view — parameterized SQL, all tenants combined (SQL events carry no tenant identity).</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {data.queryStats.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No queries recorded yet.</p>
+                <EmptyState size="inline" title="No queries recorded yet" />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -457,10 +456,10 @@ export function DbHealthDashboard() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-lg">Slowest Individual Queries</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Slowest individual queries</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto">
               {data.slowestQueries.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No queries recorded yet.</p>
+                <EmptyState size="inline" title="No queries recorded yet" />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -486,13 +485,11 @@ export function DbHealthDashboard() {
 
           {data.recentEngineEvents.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-lg">Recent Engine Errors / Warnings</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Recent engine errors / warnings</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-2">
                 {data.recentEngineEvents.map((e, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <Badge variant="secondary" className={e.level === "error" ? "bg-destructive-muted text-destructive" : "bg-warning-muted text-warning"}>
-                      {e.level.toUpperCase()}
-                    </Badge>
+                    <StatusBadge label={e.level.toUpperCase()} tone={e.level === "error" ? "danger" : "warning"} />
                     <span className="flex-1">{e.message}</span>
                     <span className="text-xs text-muted-foreground shrink-0">{new Date(e.timestamp).toLocaleTimeString()}</span>
                   </div>
@@ -505,10 +502,10 @@ export function DbHealthDashboard() {
         {/* ============================ API & CHANNELS ============================ */}
         <TabsContent value="api" className="space-y-6 pt-4">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 max-sm:grid-cols-1">
-            <StatCard label={`Channel Calls (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.calls.toLocaleString()} sub={data.channelApi.truncated ? "Truncated at 5,000 — real total is higher" : undefined} />
-            <StatCard label={`Failures (${data.channelApi.windowDays}d)`} value={<span className={data.channelApi.totals.failures > 0 ? "text-destructive" : undefined}>{data.channelApi.totals.failures.toLocaleString()}</span>} />
+            <StatCard label={`Channel calls (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.calls.toLocaleString()} sub={data.channelApi.truncated ? "Truncated at 5,000 — real total is higher" : undefined} />
+            <StatCard label={`Failures (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.failures.toLocaleString()} alert={data.channelApi.totals.failures > 0} />
             <StatCard label="Calls (24h)" value={data.channelApi.totals.calls24h.toLocaleString()} />
-            <StatCard label="Failures (24h)" value={<span className={data.channelApi.totals.failures24h > 0 ? "text-destructive" : undefined}>{data.channelApi.totals.failures24h.toLocaleString()}</span>} />
+            <StatCard label="Failures (24h)" value={data.channelApi.totals.failures24h.toLocaleString()} alert={data.channelApi.totals.failures24h > 0} />
           </div>
 
           <div className="max-w-sm">
@@ -524,13 +521,13 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-            Channel Manager API — by Operation
-            <InfoHint label="Channel Manager API — by Operation">From the persisted sync log (survives restarts). OUTBOUND = we called the channel manager; INBOUND = webhooks.</InfoHint>
+            Channel Manager API — by operation
+            <InfoHint label="Channel Manager API — by operation">From the persisted sync log (survives restarts). OUTBOUND = we called the channel manager; INBOUND = webhooks.</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {filteredChannelOps.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No channel API activity in the window.</p>
+                <EmptyState size="inline" title="No channel API activity in the window" />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
@@ -565,24 +562,24 @@ export function DbHealthDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-            Background Jobs (7d)
-            <InfoHint label="Background Jobs (7d)">Latest run and failure count per job, per enterprise.</InfoHint>
+            Background jobs (7d)
+            <InfoHint label="Background jobs (7d)">Latest run and failure count per job, per enterprise.</InfoHint>
           </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {filteredJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No job runs in the window.</p>
+                <EmptyState size="inline" title="No job runs in the window" />
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="py-1.5 pr-4">Enterprise</th>
                       <th className="py-1.5 pr-4">Job</th>
-                      <th className="py-1.5 pr-4">Last Status</th>
+                      <th className="py-1.5 pr-4">Last status</th>
                       <th className="py-1.5 pr-4 text-right">Runs</th>
                       <th className="py-1.5 pr-4 text-right">Failures</th>
-                      <th className="py-1.5 pr-4 text-right">Last Duration</th>
-                      <th className="py-1.5 text-right">Last Run</th>
+                      <th className="py-1.5 pr-4 text-right">Last duration</th>
+                      <th className="py-1.5 text-right">Last run</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -591,13 +588,10 @@ export function DbHealthDashboard() {
                         <td className="py-1.5 pr-4">{entName(j.enterpriseId)}</td>
                         <td className="py-1.5 pr-4 font-mono text-xs">{j.jobName}</td>
                         <td className="py-1.5 pr-4">
-                          <Badge variant="secondary" className={
-                            j.lastStatus === "SUCCEEDED" ? "bg-success-muted text-success"
-                              : j.lastStatus === "FAILED" ? "bg-destructive-muted text-destructive"
-                              : "bg-info-muted text-info"
-                          }>
-                            {j.lastStatus}
-                          </Badge>
+                          <StatusBadge
+                            label={j.lastStatus}
+                            tone={j.lastStatus === "SUCCEEDED" ? "success" : j.lastStatus === "FAILED" ? "danger" : "info"}
+                          />
                         </td>
                         <td className="py-1.5 pr-4 text-right tabular-nums">{j.runs}</td>
                         <td className={`py-1.5 pr-4 text-right tabular-nums ${j.failures > 0 ? "text-destructive font-medium" : ""}`}>{j.failures}</td>
@@ -613,15 +607,13 @@ export function DbHealthDashboard() {
 
           {data.channelApi.recentFailures.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-lg">Recent Channel Failures</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Recent channel failures</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-2">
                 {data.channelApi.recentFailures
                   .filter((f) => !apiEntFilter || f.enterpriseId === apiEntFilter)
                   .map((f, i) => (
                     <div key={i} className="flex items-start gap-2 text-sm">
-                      <Badge variant="secondary" className="bg-destructive-muted text-destructive shrink-0">
-                        {f.httpStatus ?? "ERR"}
-                      </Badge>
+                      <StatusBadge label={String(f.httpStatus ?? "ERR")} tone="danger" className="shrink-0" />
                       <span className="flex-1">
                         <span className="font-medium">{entName(f.enterpriseId)}</span> · {f.connectionName} · <span className="font-mono text-xs">{f.operation}</span>
                         {f.errorMessage && <span className="text-muted-foreground"> — {f.errorMessage}</span>}

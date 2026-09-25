@@ -21,39 +21,39 @@ export default function Rooms() {
 
       <H2>1. Room features</H2>
       <p>
-        In the <strong>Room Features</strong> card, fill the three tabs: <strong>Bed Type</strong> (King bed, Twin beds),{" "}
+        In the <strong>Room features</strong> card, fill the three tabs: <strong>Bed type</strong> (King bed, Twin beds),{" "}
         <strong>View</strong> (Ocean view, Garden view) and <strong>Amenities</strong> (Private pool, Minibar, Wi-Fi). For each, type a{" "}
-        <strong>Code (Internal)</strong> and a <strong>Display Value</strong> and choose <strong>Add</strong>. The code can&apos;t be
+        <strong>Code (internal)</strong> and a <strong>Display value</strong> and choose <strong>Add</strong>. The code can&apos;t be
         changed later; the display value can. Features appear on room types and are shown to your website.
       </p>
 
       <H2>2. Room types</H2>
       <p>
-        On the <strong>Room Types</strong> tab of <strong>Property Architecture</strong>, choose <strong>Add Room Type</strong>:
+        On the <strong>Room types</strong> tab of <strong>Property architecture</strong>, choose <strong>Add room type</strong>, fill in the form and choose <strong>Create</strong>:
       </p>
-      <Shot name="prop-room-type-dialog" alt="The Create Room Type dialog: name, code, maximum and base occupancy, description, switches for inactive, pseudo and housekeeping, and the room features picker." />
+      <Shot name="prop-room-type-dialog" alt="The Add room type dialog: name, code, maximum and base occupancy, description, switches for inactive, pseudo and housekeeping, and the room features picker." />
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Type Name", "What guests and staff see, e.g. Beach Villa."],
+          ["Type name", "What guests and staff see, e.g. Beach Villa."],
           ["Code", "Short and unique at the property, e.g. BCH. Used on the tape chart, reports and channel mapping."],
-          ["Max Occupancy", "The most guests the room takes. The desk is warned above it; your website can't book above it."],
-          ["Base Occupancy (Adults)", "Adults included in the room price, no more than Max Occupancy. Each adult above it pays the extra-adult price; every child pays the extra-child price."],
+          ["Max occupancy", "The most guests the room takes. The desk is warned above it; your website can't book above it."],
+          ["Base occupancy (adults)", "Adults included in the room price, no more than Max occupancy. Each adult above it pays the extra-adult price; every child pays the extra-child price."],
           ["Description", "Optional."],
           ["Inactive", "Stops new bookings, and takes all rooms of the type out of service. Switching it back on returns those rooms as Dirty, for housekeeping to prepare."],
-          ["Pseudo Room Type", "For things that are not real rooms, like a day-use or 'no room' type. Never in availability, the website or channels."],
-          ["Housekeeping Enabled", "On for normal rooms. Off leaves the rooms off the housekeeping board."],
-          ["Room Features", "Tick the features every room of this type has."],
+          ["Pseudo room type", "For things that are not real rooms, like a day-use or 'no room' type. Never in availability, the website or channels."],
+          ["Housekeeping enabled", "On for normal rooms. Off leaves the rooms off the housekeeping board."],
+          ["Room features", "Tick the features every room of this type has."],
         ]}
       />
       <p>
         There is no price here. A room type&apos;s price comes from the rate plans in{" "}
         <a href="/docs/configuration/property/rates">step 6</a>.
       </p>
-      <Shot name="prop-room-types" alt="The Room Types list: Beach Villa, Garden Villa and Water Villa with Pool with their occupancy." />
+      <Shot name="prop-room-types" alt="The Room types list: Beach Villa, Garden Villa and Water Villa with Pool with their occupancy." />
       <Callout title="Deleting" tone="warn">
         <p>
-          A room type, building, floor or room that has ever been booked can&apos;t be deleted: the message says why. Make a room type{" "}
+          Deleting asks you to confirm first. A room type, building, floor or room that has ever been booked can&apos;t be deleted: the message says why. Make a room type{" "}
           <strong>Inactive</strong> instead. Deleting an unused room type also deletes its rooms. Your licence limits the number of
           room types and rooms; if you reach it, the form says so, so contact Uppsolut.
         </p>
@@ -61,21 +61,21 @@ export default function Rooms() {
 
       <H2>3. Buildings and floors</H2>
       <p>
-        On the <strong>Buildings</strong> tab, add each building or wing (<strong>Building Name</strong>, e.g. Beachfront). A
-        single-building property still needs one, e.g. Main Building. On the <strong>Floors</strong> tab, add its floors: choose
-        the building, then the <strong>Floor Name/Number</strong> (e.g. Ground, 1st Floor). Always pick a building; a floor can&apos;t
+        On the <strong>Buildings</strong> tab, add each building or wing (<strong>Add building</strong>, then a <strong>Building name</strong>, e.g. Beachfront). A
+        single-building property still needs one, e.g. Main Building. On the <strong>Floors</strong> tab, add its floors with <strong>Add floor</strong>: choose
+        the building, then the <strong>Floor name/number</strong> (e.g. Ground, 1st Floor). Always pick a building; a floor can&apos;t
         be saved without one.
       </p>
 
       <H2>4. Rooms</H2>
-      <p>On the <strong>Rooms</strong> tab, choose <strong>Add Room</strong> for each room:</p>
+      <p>On the <strong>Rooms</strong> tab, choose <strong>Add room</strong> for each room:</p>
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Room Number / Name", "Unique at the property, e.g. 201."],
-          ["Room Type", "What the room is sold as."],
+          ["Room number / name", "Unique at the property, e.g. 201."],
+          ["Room type", "What the room is sold as."],
           ["Building, then Floor", "Required for a physical room."],
-          ["Room Features", "The room type's features are shown as fixed. Add any this room has on top, such as a connecting door."],
+          ["Room features", "The room type's features are shown as fixed. Add any this room has on top, such as a connecting door."],
         ]}
       />
       <Shot name="prop-rooms" alt="The Rooms list: room numbers with their floor, room type and status." />
@@ -83,14 +83,14 @@ export default function Rooms() {
 
       <H2>Housekeeping</H2>
       <p>
-        <strong>Require Inspected Room at Check-In</strong> (off by default): when on, a guest can only be checked in to a room a
+        <strong>Require inspected room at check-in</strong> (off by default): when on, a guest can only be checked in to a room a
         supervisor has marked <strong>Inspected</strong>. When off, only out-of-order and out-of-service rooms block check-in, and a
-        dirty room gives a warning.
+        dirty room gives a warning. The switch saves as soon as you change it.
       </p>
 
       <H3>Another property?</H3>
       <p>
-        <strong>Copy from…</strong> on Property Architecture copies room types with their features, and on Room Features the three
+        <strong>Copy from…</strong> on Property architecture copies room types with their features, and on Room features the three
         lists. Buildings, floors and rooms are physical, so each property adds its own.
       </p>
       <Pager href="/docs/configuration/property/rooms" />

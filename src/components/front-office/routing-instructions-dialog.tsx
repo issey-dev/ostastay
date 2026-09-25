@@ -17,6 +17,8 @@ import {
   type TriState,
 } from "@/lib/charge-code-options"
 import { cn } from "@/lib/utils"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { EmptyState } from "@/components/ui/empty-state"
 
 // Routing Instructions — standing rules that auto-route a charge code to another folio.
 //
@@ -135,6 +137,13 @@ export function RoutingInstructionsDialog({
   const summary = describeSelection(groups, selected)
   const canSave = selected.size > 0 && !!targetId && !saving
 
+  // A real <form> so Enter saves once codes and a target are picked (DESKTOP_PLAN D10).
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (canSave) onSave([...selected], targetId)
+  }
+
   const ruleTarget = (r: RoutingRule) => {
     const t = r.targetFolio
     const room = t?.reservation?.assignments?.[0]?.room?.roomNumber
@@ -170,10 +179,11 @@ export function RoutingInstructionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
+      <DialogContent size="lg" className="flex max-h-[90vh] flex-col">
+        <form onSubmit={submit} className="contents">
         <DialogHeader>
           <DialogTitle>
-            Routing Instructions
+            Routing instructions
             {folioNumber != null && <span className="text-muted-foreground"> · Folio #{folioNumber}</span>}
           </DialogTitle>
           <DialogDescription>
@@ -231,6 +241,8 @@ export function RoutingInstructionsDialog({
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                // Enter in the search box filters; it never saves a half-made rule.
+                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault() }}
                 placeholder="Search code or description"
                 className="pl-8"
               />
@@ -238,12 +250,10 @@ export function RoutingInstructionsDialog({
 
             <div className="h-[19rem] overflow-y-auto rounded-md border border-border">
               {codes.length === 0 ? (
-                <p className="p-4 text-center text-sm text-muted-foreground">No routable charge codes.</p>
+                <EmptyState size="inline" className="justify-center p-4" title="No routable charge codes" />
               ) : searching ? (
                 matches.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-muted-foreground">
-                    No code matches &ldquo;{query}&rdquo;.
-                  </p>
+                  <EmptyState size="inline" className="justify-center p-4" title={`No code matches “${query}”`} />
                 ) : (
                   matches.map((c) => <CodeRow key={c.id} c={c} indent={false} />)
                 )
@@ -334,7 +344,7 @@ export function RoutingInstructionsDialog({
             </Select>
             {targetOptions.length === 0 && (
               <p className="text-sm text-warning">
-                Add another folio window (Add Folio) or check in another room to route charges.
+                Add another folio window (Add folio) or check in another room to route charges.
               </p>
             )}
           </div>
@@ -353,12 +363,13 @@ export function RoutingInstructionsDialog({
             )}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={close}>Cancel</Button>
-            <Button disabled={!canSave} onClick={() => onSave([...selected], targetId)}>
-              {saving ? "Saving..." : "Save routing"}
-            </Button>
+            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+            <SubmitButton pending={saving} disabled={selected.size === 0 || !targetId}>
+              Save routing
+            </SubmitButton>
           </div>
         </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

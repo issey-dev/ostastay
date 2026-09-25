@@ -3,6 +3,7 @@ import { requireSession, hasHubAccess, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
 import { AppSidebarNav } from "@/components/app-sidebar-nav"
+import { CommandPalette } from "@/components/shell/command-palette"
 // NAV_MODULES comes from the neutral config module, not from the "use client" nav —
 // a server component reading a value out of a client module gets a reference proxy.
 import { NAV_MODULES } from "@/components/app-sidebar-nav.config"
@@ -99,6 +100,8 @@ export async function AppSidebar() {
     </Sidebar>
     {/* Phones only: the most-used destinations at the thumb, from the same allow-list. */}
     <MobileBottomNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} jobFunction={user?.jobFunction} />
+    {/* Ctrl+K — same allow-list as the menu. */}
+    <CommandPalette allowedModules={allowedModules} prefix={enterprisePrefix} hubHref={showHub ? `${enterprisePrefix}/hub` : undefined} />
     </>
   )
 }

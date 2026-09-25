@@ -1,5 +1,6 @@
 "use client"
 
+import { apiError } from "@/lib/api-error"
 import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -150,8 +151,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
       if (res.ok) {
         setSaved(true)
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save settings")
+        setServerError(await apiError(res, "Couldn't save the spa settings. Try again."))
       }
     } finally {
       setSaving(false)
@@ -167,19 +167,19 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           <FormField control={form.control} name="defaultOpeningTime" render={({ field }) => (
-            <FormItem><FormLabel>Opening Time</FormLabel><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Opening time</FormLabel><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="defaultClosingTime" render={({ field }) => (
-            <FormItem><FormLabel>Closing Time</FormLabel><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Closing time</FormLabel><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="slotIntervalMinutes" render={({ field }) => (
-            <FormItem><FormLabel>Slot Interval (min)</FormLabel><FormControl><Input type="number" min="5" step="5" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Slot interval (min)</FormLabel><FormControl><Input type="number" min="5" step="5" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="defaultPreparationBufferMinutes" render={({ field }) => (
-            <FormItem><FormLabel>Default Prep Buffer (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Default prep buffer (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="defaultCleanupBufferMinutes" render={({ field }) => (
-            <FormItem><FormLabel>Default Cleanup Buffer (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Default cleanup buffer (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </div>
 
@@ -198,7 +198,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormField control={form.control} name="chargeTiming" render={({ field }) => (
             <FormItem>
-              <FormLabel>Charge Timing</FormLabel>
+              <FormLabel>Charge timing</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                 <SelectContent>
@@ -210,7 +210,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
             </FormItem>
           )} />
           <FormField control={form.control} name="cancellationCutoffHours" render={({ field }) => (
-            <FormItem><FormLabel>Cancellation Cutoff (hours)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Cancellation cutoff (hours)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </div>
 
@@ -218,7 +218,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
           <div className="grid grid-cols-2 gap-2">
             <FormField control={form.control} name="lateCancellationChargeType" render={({ field }) => (
               <FormItem>
-                <FormLabel>Late Cancellation Charge</FormLabel>
+                <FormLabel>Late cancellation charge</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>
@@ -235,7 +235,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
           <div className="grid grid-cols-2 gap-2">
             <FormField control={form.control} name="noShowChargeType" render={({ field }) => (
               <FormItem>
-                <FormLabel>No-Show Charge</FormLabel>
+                <FormLabel>No-show charge</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>
@@ -252,7 +252,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
         </div>
 
         <FormField control={form.control} name="noShowGraceMinutes" render={({ field }) => (
-          <FormItem className="max-w-[240px]"><FormLabel>No-Show Grace Period (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
+          <FormItem className="max-w-[240px]"><FormLabel>No-show grace period (min)</FormLabel><FormControl><Input type="number" min="0" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -265,7 +265,7 @@ export function SpaSettingsForm({ propertyId }: { propertyId: string }) {
         {saved && !serverError && <p className="text-sm text-success">Settings saved.</p>}
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Settings"}</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
         </div>
       </form>
     </Form>

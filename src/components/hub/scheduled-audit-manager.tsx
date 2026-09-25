@@ -107,7 +107,7 @@ export function ScheduledAuditManager({
 
         {canEdit && (
           <Button type="submit" disabled={!form.formState.isDirty || form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? "Saving…" : "Save schedule"}
+            {form.formState.isSubmitting ? "Saving…" : "Save"}
           </Button>
         )}
       </form>

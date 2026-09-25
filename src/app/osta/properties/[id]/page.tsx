@@ -3,6 +3,7 @@ import Link from "next/link"
 import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { PageHeader } from "@/components/ui/page-header"
 
 export default async function OstaPropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,11 +19,17 @@ export default async function OstaPropertyDetailPage({ params }: { params: Promi
         <Link href={`/osta/enterprises/${property.enterprise.id}`} className="text-sm text-muted-foreground hover:underline">
           &larr; {property.enterprise.name}
         </Link>
-        <div className="flex items-center gap-3 mt-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">{property.name}</h2>
-          <StatusBadge label={property.status} status={property.status} dot />
-        </div>
-        <p className="text-muted-foreground font-mono text-sm">{property.code}</p>
+        <PageHeader
+          className="mt-1"
+          title={
+            <>
+              {property.name}
+              <StatusBadge label={property.status} status={property.status} dot />
+            </>
+          }
+          tabTitle={`${property.name} · Osta`}
+          description={<span className="font-mono">{property.code}</span>}
+        />
       </div>
 
       <Card>

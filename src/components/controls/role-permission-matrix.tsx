@@ -104,7 +104,7 @@ export function RolePermissionMatrix({
             {ACTIONS.map((a) => (
               <TableHead key={a.key} className="text-center">{a.label}</TableHead>
             ))}
-            <TableHead className="text-center">Full Access</TableHead>
+            <TableHead className="text-center">Full access</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

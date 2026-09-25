@@ -2,11 +2,13 @@
 
 import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { useProperty } from "@/components/providers/property-provider"
 import { useSmartBack } from "@/lib/use-smart-back"
 import { ArrowLeft, Users, CalendarDays, Wallet, UserPlus, Pencil, Loader2, CheckCircle } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/ui/page-header"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
 import { GroupERegistrationPanel } from "@/components/groups/group-eregistration-panel"
@@ -26,6 +28,10 @@ import { deriveReservationState, reservationStateLabel } from "@/lib/reservation
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DesktopOnlyNotice, MobileActions } from "@/components/ui/mobile"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { StatTile } from "@/components/ui/stat-tile"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
 
 export default function GroupManagement({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const unwrappedParams = use(params)
@@ -56,9 +62,14 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
     setCreatingMaster(true)
     try {
       const res = await fetch(`/api/groups/${unwrappedParams.id}/master-folio`, { method: "POST" })
-      if (res.ok) fetchGroup()
-    } catch (e) {
-      console.error(e)
+      if (res.ok) {
+        toast.success("Master folio created")
+        fetchGroup()
+      } else {
+        toast.error(await apiError(res, "Couldn't create the master folio. Try again."))
+      }
+    } catch {
+      toast.error("Couldn't create the master folio. Try again.")
     } finally {
       setCreatingMaster(false)
     }
@@ -76,7 +87,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
     setIsEditOpen(true)
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (saving) return
     setSaving(true)
     setEditError(null)
     try {
@@ -94,12 +107,13 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       const data = await res.json()
       if (res.ok) {
         setIsEditOpen(false)
+        toast.success("Block saved")
         fetchGroup()
       } else {
-        setEditError(data.error || "Failed to update the block.")
+        setEditError(data.error || "Couldn't save the block. Try again.")
       }
     } catch {
-      setEditError("An unexpected error occurred.")
+      setEditError("Couldn't save the block. Try again.")
     } finally {
       setSaving(false)
     }
@@ -157,55 +171,59 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" className="shrink-0" onClick={goBack} title="Back" aria-label="Back">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">{group.name}</h2>
+      {/* Header — breadcrumbs ("Group Blocks › SMITHWED26") replace the back arrow from md up. */}
+      <div className="flex items-start gap-4">
+        <Button variant="outline" size="icon" className="mt-0.5 shrink-0 md:hidden" onClick={goBack} title="Back" aria-label="Back">
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <PageHeader
+          className="min-w-0 flex-1"
+          align="end"
+          crumb={group.code}
+          tabTitle={`${group.code} · ${group.name}`}
+          title={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {group.name}
               <StatusBadge label={group.status} status={group.status} />
-            </div>
-            <p className="text-muted-foreground mt-1 font-mono text-sm flex items-center gap-2 flex-wrap">
-              Code: {group.code}
-              {group.payeeProfile && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-md bg-info-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-info ring-1 ring-inset ring-info/20"
-                  title="Master bill settles to this City-Ledger account"
-                >
-                  <Wallet className="h-3 w-3" /> {group.payeeProfile.companyName || `${group.payeeProfile.firstName} ${group.payeeProfile.lastName ?? ""}`.trim()}
-                </span>
+            </span>
+          }
+          description={
+            group.payeeProfile && (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-info-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-info ring-1 ring-inset ring-info/20"
+                title="Master bill settles to this City-Ledger account"
+              >
+                <Wallet className="h-3 w-3" /> {group.payeeProfile.companyName || `${group.payeeProfile.firstName} ${group.payeeProfile.lastName ?? ""}`.trim()}
+              </span>
+            )
+          }
+          actionsClassName="gap-2 max-md:hidden"
+          actions={
+            <>
+              <Button variant="outline" onClick={openEdit}>
+                <Pencil className="w-4 h-4 mr-2" /> Edit block
+              </Button>
+              {openMaster ? (
+                <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
+                  <Wallet className="w-4 h-4 mr-2" /> Master folio
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={handleCreateMaster} disabled={creatingMaster || group.status === "CANCELLED"}>
+                  {creatingMaster ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
+                  Create master folio
+                </Button>
               )}
-            </p>
-          </div>
-        </div>
-        {/* flex-wrap: on a phone the three actions wrap instead of pushing "Pickup Room"
-            past the right edge. They fit on one line at every desktop width. */}
-        <div className="flex flex-wrap items-center gap-2 max-md:hidden">
-          <Button variant="outline" onClick={openEdit}>
-            <Pencil className="w-4 h-4 mr-2" /> Edit Block
-          </Button>
-          {openMaster ? (
-            <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
-              <Wallet className="w-4 h-4 mr-2" /> Master Folio
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={handleCreateMaster} disabled={creatingMaster || group.status === "CANCELLED"}>
-              {creatingMaster ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
-              Create Master Folio
-            </Button>
-          )}
-          <GroupPickupDialog
-            groupId={group.id}
-            onSaved={fetchGroup}
-            disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
-            blockStart={group.startDate?.split("T")[0]}
-            blockEnd={group.endDate?.split("T")[0]}
-            roomTypeOptions={(group.roomHolds ?? []).map((h: any) => ({ id: h.roomTypeId, name: h.roomType?.name, code: h.roomType?.code }))}
-          />
-        </div>
+              <GroupPickupDialog
+                groupId={group.id}
+                onSaved={fetchGroup}
+                disabledReason={openMaster ? undefined : "Create the block's master folio before picking up rooms"}
+                blockStart={group.startDate?.split("T")[0]}
+                blockEnd={group.endDate?.split("T")[0]}
+                roomTypeOptions={(group.roomHolds ?? []).map((h: any) => ({ id: h.roomTypeId, name: h.roomType?.name, code: h.roomType?.code }))}
+              />
+            </>
+          }
+        />
       </div>
 
       {/* Phones: the block is read here; the master folio opens (it is a phone-ready
@@ -216,7 +234,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             className="md:hidden"
             primary={
               <Button variant="outline" onClick={() => setIsMasterFolioOpen(true)}>
-                <Wallet className="w-4 h-4 mr-2" /> Master Folio
+                <Wallet className="w-4 h-4 mr-2" /> Master folio
               </Button>
             }
           />
@@ -226,47 +244,23 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           description="Editing the block, picking up rooms and setting up the master folio are done on a computer. Everything below is up to date."
         />
 
-      {/* Stats — 2x2 on a phone */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 max-md:grid-cols-2 max-md:gap-3">
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Event Dates</CardTitle>
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold max-md:text-base">
-              {format(parseISO(group.startDate), "dd MMM")} – {format(parseISO(group.endDate), "dd MMM yy")}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Held</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{group.totalRoomsHeld}</div></CardContent>
-        </Card>
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Picked Up</CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{pickedUp}</div></CardContent>
-        </Card>
-        <Card className="shadow-elevation-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Remaining</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold max-md:text-2xl">{remaining}</div></CardContent>
-        </Card>
+      {/* Stats — the shared StatTile (DESKTOP_PLAN D8); 2x2 on a phone */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <StatTile
+          label="Event dates"
+          value={`${format(parseISO(group.startDate), "dd MMM")} – ${format(parseISO(group.endDate), "dd MMM yy")}`}
+          icon={CalendarDays}
+        />
+        <StatTile label="Total held" value={String(group.totalRoomsHeld)} icon={Users} />
+        <StatTile label="Picked up" value={String(pickedUp)} icon={UserPlus} />
+        <StatTile label="Remaining" value={String(remaining)} icon={CheckCircle} />
       </div>
 
       {/* Room Block — per room type held/picked/remaining */}
       {group.roomHolds?.length > 0 && (
         <Card className="shadow-elevation-1 overflow-hidden">
           <CardHeader className="py-4">
-            <CardTitle className="text-lg">Room Block</CardTitle>
+            <CardTitle className="text-lg">Room block</CardTitle>
           </CardHeader>
           {/* Phones: one line per room type instead of a sideways-scrolling table. */}
           <div className="divide-y divide-border border-t border-border md:hidden">
@@ -289,9 +283,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="pl-6">Room Type</TableHead>
+                  <TableHead className="pl-6">Room type</TableHead>
                   <TableHead className="text-right">Held</TableHead>
-                  <TableHead className="text-right">Picked Up</TableHead>
+                  <TableHead className="text-right">Picked up</TableHead>
                   <TableHead className="text-right pr-6">Remaining</TableHead>
                 </TableRow>
               </TableHeader>
@@ -319,7 +313,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       {/* Block Schedule — a wide day grid; phones read the pickups list below instead. */}
       <Card className="shadow-elevation-1 overflow-hidden max-md:hidden">
         <CardHeader className="py-4">
-          <CardTitle className="text-lg">Block Schedule</CardTitle>
+          <CardTitle className="text-lg">Block schedule</CardTitle>
         </CardHeader>
         <div className="-mt-2">
           <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} />
@@ -331,7 +325,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       {/* Pickups */}
       <Card className="shadow-elevation-1 overflow-hidden">
         <CardHeader className="py-4 border-b bg-muted/50">
-          <CardTitle className="text-lg">Group Reservations (Pickups)</CardTitle>
+          <CardTitle className="text-lg">Group reservations (pickups)</CardTitle>
         </CardHeader>
 
         {group.reservations && group.reservations.length > 0 ? (
@@ -379,7 +373,16 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                       onClick={() => router.push(`/e/${slug}/dashboard/reservations/${res.id}`)}
                     >
                       <TableCell className="pl-6 align-middle">
-                        <div className="font-medium">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</div>
+                        <div className="font-medium">
+                          {/* A real link (DESKTOP_PLAN D4); a plain click is the row's. */}
+                          <Link
+                            href={`/e/${slug}/dashboard/reservations/${res.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline"
+                          >
+                            {res.primaryGuest?.firstName} {res.primaryGuest?.lastName}
+                          </Link>
+                        </div>
                         <div className="text-xs font-mono text-muted-foreground">{res.confirmationNo}</div>
                       </TableCell>
                       <TableCell className="align-middle whitespace-nowrap">
@@ -405,7 +408,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <EmptyState
             icon={Users}
             title="No reservations picked up yet"
-            description={'Click "Pickup Room" to add a guest to this group.'}
+            description={'Click "Pickup room" to add a guest to this group.'}
           />
         )}
       </Card>
@@ -419,9 +422,10 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
 
       {/* Edit Block dialog */}
       <Dialog open={isEditOpen} onOpenChange={(open) => !open && setIsEditOpen(false)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent size="lg">
+          <form onSubmit={handleSaveEdit} className="contents">
           <DialogHeader>
-            <DialogTitle>Edit Group Block</DialogTitle>
+            <DialogTitle>Edit group block</DialogTitle>
             <DialogDescription>
               Rooms held cannot go below what&apos;s already picked up; a block with active pickups cannot be cancelled.
             </DialogDescription>
@@ -444,7 +448,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 />
               </div>
               <div className="space-y-2">
-                <Label>Cutoff Date</Label>
+                <Label>Cutoff date</Label>
                 <DatePicker
                   value={editForm.cutoffDate || null}
                   onChange={(d) => setEditForm((p) => ({ ...p, cutoffDate: d }))}
@@ -453,7 +457,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Rooms Held (by type)</Label>
+              <Label>Rooms held (by type)</Label>
               <GroupRoomHoldsEditor
                 propertyId={currentProperty?.id ?? ""}
                 value={editForm.roomHolds}
@@ -464,7 +468,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
               />
             </div>
             <div className="space-y-2">
-              <Label>Bill to Account (City Ledger)</Label>
+              <Label>Bill to account (City Ledger)</Label>
               <SearchableSelect
                 value={editForm.payeeProfileId}
                 onChange={(v) => setEditForm((p) => ({ ...p, payeeProfileId: v ?? "none" }))}
@@ -479,12 +483,10 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             {editError && <p className="text-sm text-destructive">{editError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={saving}>Cancel</Button>
+            <SubmitButton pending={saving}>Save</SubmitButton>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

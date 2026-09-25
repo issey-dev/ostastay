@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { cn } from "@/lib/utils"
-import { Save } from "@/components/icons"
 import { InfoHint } from "@/components/ui/info-hint"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { SectionSaveFooter, type SaveStatus } from "@/components/controls/save-status"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
 
 // Cashiering defaults only. The booking-number format that used to share this form is
 // per property now (BookingNumberFormatForm, Hub › property › Reservations).
@@ -30,7 +31,7 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
   // instead of a blocking alert(). Editing any field clears "saved" and marks dirty; a
   // successful save flips it back. `update` is the single mutation entry point so no
   // field can change state without also flagging the form dirty.
-  const [status, setStatus] = useState<"idle" | "dirty" | "saved">("idle")
+  const [status, setStatus] = useState<SaveStatus>("idle")
 
   const update = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => {
     setFormData((p) => ({ ...p, [key]: value }))
@@ -74,17 +75,19 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
         setStatus("saved")
       } else {
         setStatus("dirty")
+        toast.error(await apiError(res, "Couldn't save the cashiering defaults. Try again."))
       }
     } catch (e) {
       console.error(e)
       setStatus("dirty")
+      toast.error("Couldn't save the cashiering defaults. Try again.")
     } finally {
       setSaving(false)
     }
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading settings...</div>
+    return <InlineLoading className="py-12" label="Loading settings" />
   }
 
   return (
@@ -93,13 +96,13 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
       <div className="space-y-4">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            Cashiering Defaults
-            <InfoHint label="Cashiering Defaults">Pre-filled values on the Cashiering page — staff can always override per shift/transaction.</InfoHint>
+            Cashiering defaults
+            <InfoHint label="Cashiering defaults">Pre-filled values on the Cashiering page — staff can always override per shift/transaction.</InfoHint>
           </h3>
         </div>
         <div className="grid gap-6 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label>Default Opening Float</Label>
+            <Label>Default opening float</Label>
             <Input
               type="number"
               min="0"
@@ -110,7 +113,7 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
             <p className="text-xs text-muted-foreground">Cash in drawer when opening a shift.</p>
           </div>
           <div className="space-y-2">
-            <Label>Exchange: From Currency</Label>
+            <Label>Exchange: from currency</Label>
             <Input
               maxLength={8}
               value={formData.exchangeFromCurrency}
@@ -119,7 +122,7 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
             <p className="text-xs text-muted-foreground">Currency guests usually hand over.</p>
           </div>
           <div className="space-y-2">
-            <Label>Exchange: To Currency</Label>
+            <Label>Exchange: to currency</Label>
             <Input
               maxLength={8}
               value={formData.exchangeToCurrency}
@@ -130,22 +133,7 @@ export function GeneralSettingsManager({ propertyId }: { propertyId: string }) {
         </div>
       </div>
 
-      {/* Save hint (left) / action (right), matching the mockup's form footer. The hint
-          only appears once there's something to report — no permanently-empty column. */}
-      <div className="flex items-center justify-between gap-4 border-t pt-4">
-        <span
-          className={cn(
-            "text-xs font-medium uppercase tracking-wide transition-colors",
-            status === "saved" ? "text-success" : "text-muted-foreground"
-          )}
-        >
-          {status === "saved" ? "Configuration saved" : status === "dirty" ? "Unsaved changes" : ""}
-        </span>
-        <Button type="submit" disabled={saving}>
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? "Saving..." : "Save Configuration"}
-        </Button>
-      </div>
+      <SectionSaveFooter status={status} saving={saving} />
     </form>
   )
 }

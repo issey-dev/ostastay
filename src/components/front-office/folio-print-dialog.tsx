@@ -82,7 +82,11 @@ export function FolioPrintDialog({
     return () => { cancelled = true }
   }, [open, folioId])
 
-  const generate = () => {
+  // A real <form> so Enter generates (DESKTOP_PLAN D10); stopPropagation because this
+  // dialog opens from inside other dialogs and React submit events bubble through portals.
+  const generate = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
     const params = new URLSearchParams({ type: documentType, view: style, header })
     window.open(`/e/${slug}/dashboard/folios/${folioId}/print?${params}`, "_blank")
     onOpenChange(false)
@@ -90,7 +94,8 @@ export function FolioPrintDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent size="md">
+        <form onSubmit={generate} className="contents">
         <DialogHeader>
           <DialogTitle>{DOCUMENT_LABELS[documentType]}</DialogTitle>
           <DialogDescription>
@@ -155,10 +160,11 @@ export function FolioPrintDialog({
 
         <DialogFooter className="mt-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" onClick={generate}>
+          <Button type="submit">
             <Printer className="w-4 h-4 mr-2" /> Generate
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

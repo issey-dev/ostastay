@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 import { Plus, Trash2, ExternalLink } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +13,7 @@ type Attachment = { id: string; label: string; url: string; createdAt: string }
 // A clickable URL-reference list, not a file-upload system (owner-confirmed) — see
 // .agents/docs/PROFILES_REDESIGN_PLAN.md "Attachments".
 export function AttachmentsManager({ upid }: { upid: string }) {
+  const confirm = useConfirm()
   const [rows, setRows] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -61,7 +64,9 @@ export function AttachmentsManager({ upid }: { upid: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/profiles/${upid}/attachments/${id}`, { method: "DELETE" })
+    if (!(await confirm({ title: "Delete this attachment?", description: "This cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
+    const res = await fetch(`/api/profiles/${upid}/attachments/${id}`, { method: "DELETE" }).catch(() => null)
+    if (!res?.ok) toast.error("Couldn't delete it. Try again.")
     fetchRows()
   }
 

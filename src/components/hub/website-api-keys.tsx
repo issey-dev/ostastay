@@ -5,10 +5,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -93,7 +95,7 @@ function RevealKeyDialog({ reveal, onClose }: { reveal: { key: string; title: st
   }
   return (
     <Dialog open={!!reveal} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{reveal?.title}</DialogTitle>
           <DialogDescription>{reveal?.note}</DialogDescription>
@@ -256,9 +258,9 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
   }
 
   const statusBadge = (row: KeyRow) => {
-    if (row.status === "REVOKED") return <Badge variant="destructive">Revoked</Badge>
-    if (row.isExpired) return <Badge variant="secondary">Expired</Badge>
-    return <Badge variant="default">Active</Badge>
+    if (row.status === "REVOKED") return <StatusBadge tone="danger" label="Revoked" />
+    if (row.isExpired) return <StatusBadge status="EXPIRED" label="Expired" />
+    return <StatusBadge status="ACTIVE" label="Active" />
   }
 
   return (
@@ -415,7 +417,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent size="md">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
@@ -529,7 +531,7 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : editing ? "Save changes" : "Create key"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>

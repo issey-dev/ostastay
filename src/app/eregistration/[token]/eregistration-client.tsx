@@ -139,7 +139,7 @@ export function EregistrationClient({ token }: { token: string }) {
         <Alert variant="destructive" className="max-w-md">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>This link isn&apos;t available</AlertTitle>
-          <AlertDescription>{loadError || "Please contact the property for a new link."}</AlertDescription>
+          <AlertDescription>{loadError || "Contact the property for a new link."}</AlertDescription>
         </Alert>
       </div>
     )
@@ -225,7 +225,7 @@ function SlotListView({
         <Card className="hover:translate-y-0 hover:shadow-elevation-1">
           <CardHeader>
             <CardTitle>eRegistration</CardTitle>
-            <CardDescription>{data.message || "Please complete registration details ahead of arrival — it only takes a few minutes."}</CardDescription>
+            <CardDescription>{data.message || "Complete your registration details ahead of arrival — it only takes a few minutes."}</CardDescription>
             {allSlots.length > 1 && (
               <div className="space-y-1.5 pt-2">
                 <p className="text-xs font-medium text-muted-foreground">{doneCount} of {allSlots.length} guests completed</p>
@@ -441,7 +441,7 @@ function SlotFormView({
   const onSubmit = async (values: SlotFormValues) => {
     setSubmitError(null)
     if (!signature) {
-      setSubmitError("Please sign above before submitting — it's required to complete eRegistration.")
+      setSubmitError("Sign above before submitting — it's required to complete eRegistration.")
       return
     }
     setSubmitting(true)
@@ -462,7 +462,7 @@ function SlotFormView({
         setSubmitError(finalizeBody.error || "Couldn't submit — please check the form and try again.")
         return
       }
-      toast.success("eRegistration submitted — thank you!")
+      toast.success("eRegistration submitted — thank you.")
       onSubmitted([values.firstName, values.lastName].filter(Boolean).join(" ") || slot.displayName || "")
     } catch {
       setSubmitError("An unexpected error occurred.")
@@ -606,7 +606,7 @@ function SlotFormView({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FormField control={form.control} name="documentType" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Document Type</FormLabel>
+                        <FormLabel>Document type</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl><SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
                           <SelectContent>
@@ -618,22 +618,22 @@ function SlotFormView({
                       </FormItem>
                     )} />
                     <FormField control={form.control} name="documentNumber" render={({ field }) => (
-                      <FormItem><FormLabel>Document Number</FormLabel><FormControl>
+                      <FormItem><FormLabel>Document number</FormLabel><FormControl>
                         <Input {...field} autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} enterKeyHint="next" />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
                   <FormField control={form.control} name="issuingCountry" render={({ field }) => (
-                    <FormItem><FormLabel>Issuing Country</FormLabel><FormControl><NationalitySelect standardOnly mode="country" value={field.value ?? ""} onValueChange={field.onChange} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Issuing country</FormLabel><FormControl><NationalitySelect standardOnly mode="country" value={field.value ?? ""} onValueChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FormField control={form.control} name="documentIssueDate" render={({ field }) => (
-                      <FormItem><FormLabel>Issue Date</FormLabel><FormControl>
+                      <FormItem><FormLabel>Issue date</FormLabel><FormControl>
                         <Input type="date" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="documentExpiryDate" render={({ field }) => (
-                      <FormItem><FormLabel>Expiry Date</FormLabel><FormControl>
+                      <FormItem><FormLabel>Expiry date</FormLabel><FormControl>
                         <Input type="date" min={MIN_DATE} max={MAX_DOC_DATE} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
                       </FormControl><FormMessage /></FormItem>
                     )} />
@@ -652,24 +652,24 @@ function SlotFormView({
                 )}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="firstName" render={({ field }) => (
-                    <FormItem><FormLabel>First Name</FormLabel><FormControl>
+                    <FormItem><FormLabel>First name</FormLabel><FormControl>
                       <Input {...field} autoComplete="given-name" autoCapitalize="words" enterKeyHint="next" />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="middleName" render={({ field }) => (
-                    <FormItem><FormLabel>Middle Name</FormLabel><FormControl>
+                    <FormItem><FormLabel>Middle name</FormLabel><FormControl>
                       <Input {...field} autoComplete="additional-name" autoCapitalize="words" enterKeyHint="next" />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="lastName" render={({ field }) => (
-                    <FormItem><FormLabel>Last Name</FormLabel><FormControl>
+                    <FormItem><FormLabel>Last name</FormLabel><FormControl>
                       <Input {...field} autoComplete="family-name" autoCapitalize="words" enterKeyHint="next" />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
-                    <FormItem><FormLabel>Date of Birth</FormLabel><FormControl>
+                    <FormItem><FormLabel>Date of birth</FormLabel><FormControl>
                       <Input type="date" autoComplete="bday" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} />
                     </FormControl><FormMessage /></FormItem>
                   )} />

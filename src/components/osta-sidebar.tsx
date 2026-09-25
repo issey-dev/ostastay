@@ -1,4 +1,3 @@
-import { LayoutDashboard, Building2, ClipboardCheck, KeyRound, ShieldCheck, Activity, Settings, ArrowLeftRight } from "@/components/icons"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { LogoutButton } from "@/components/logout-button"
@@ -16,24 +15,11 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
+import { OstaSidebarNav } from "@/components/osta-sidebar-nav"
 import Link from "next/link"
 
-// A small, static nav for the Osta platform-admin console — deliberately NOT
-// module/permission-filtered like AppSidebar (src/components/app-sidebar.tsx), since
-// these pages aren't tenant RBAC modules, they're the console itself. Every Osta user
-// who reaches /osta has already passed the isInternal + CONTROLS-permission gate in
-// src/app/osta/layout.tsx.
-const items = [
-  { title: "Overview", url: "/osta", icon: LayoutDashboard },
-  { title: "Enterprises", url: "/osta/enterprises", icon: Building2 },
-  { title: "Property Approvals", url: "/osta/properties", icon: ClipboardCheck },
-  { title: "Licensing", url: "/osta/licensing", icon: KeyRound },
-  { title: "Support Access", url: "/osta/support-access", icon: ShieldCheck },
-  { title: "Channel Manager", url: "/osta/channel-manager", icon: ArrowLeftRight },
-  { title: "DB Health", url: "/osta/db-health", icon: Activity },
-  { title: "Controls", url: "/osta/controls", icon: Settings },
-]
-
+// The Osta platform-admin console's sidebar. Its item list and active state live in the
+// client half, OstaSidebarNav (src/components/osta-sidebar-nav.tsx).
 export async function OstaSidebar() {
   const ctx = await requireSession().catch(() => null)
   const user = ctx
@@ -62,16 +48,8 @@ export async function OstaSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Osta</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton tooltip={item.title} render={<a href={item.url} />}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            {/* Client half: it needs the pathname for the active item. */}
+            <OstaSidebarNav />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

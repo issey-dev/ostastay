@@ -11,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type RoomMoveModalProps = {
   isOpen: boolean
@@ -18,6 +19,8 @@ type RoomMoveModalProps = {
   reservationId: string | null
   currentRoomNumber?: string
   currentRoomType?: string
+  /** Preselects the new room type (falls back to matching `currentRoomType` by name). */
+  currentRoomTypeId?: string
   checkInDate?: string
   checkOutDate?: string
   propertyId: string
@@ -32,7 +35,7 @@ const roomMoveSchema = z.object({
 })
 type RoomMoveFormValues = z.infer<typeof roomMoveSchema>
 
-export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumber, currentRoomType, checkInDate, checkOutDate, propertyId }: RoomMoveModalProps) {
+export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumber, currentRoomType, currentRoomTypeId, checkInDate, checkOutDate, propertyId }: RoomMoveModalProps) {
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -60,7 +63,12 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
       fetch(`/api/room-types?propertyId=${propertyId}`)
         .then(r => r.json())
         .then(data => {
-          if (Array.isArray(data)) setRoomTypes(data)
+          if (Array.isArray(data)) {
+            setRoomTypes(data)
+            // Most moves stay in the same room type — start there; the desk can change it.
+            const current = data.find((rt: any) => (currentRoomTypeId && rt.id === currentRoomTypeId) || (currentRoomType && rt.name === currentRoomType))
+            if (current) form.setValue("roomTypeId", current.id)
+          }
           setLoading(false)
         })
         .catch(e => {
@@ -114,23 +122,25 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
       })
 
       if (res.ok) {
+        const room = availableRooms.find((r) => r.id === values.roomId)
+        toast.success(room ? `Moved to room ${room.roomNumber}` : "Room moved")
         onClose()
       } else {
         const data = await res.json()
-        toast.error(data.error || "Failed to move room")
+        toast.error(data.error || "Couldn't move the room. Try again.")
       }
     } catch {
-      toast.error("An unexpected error occurred.")
+      toast.error("Couldn't move the room. Try again.")
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent size="md">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Move Room</DialogTitle>
+              <DialogTitle>Move room</DialogTitle>
               <DialogDescription>
                 Move the guest to a different room. The current room ({currentRoomNumber}) will be marked as DIRTY.
               </DialogDescription>
@@ -139,23 +149,23 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4 max-sm:gap-3">
                 <div className="grid gap-2">
-                  <Label>Current Room Type</Label>
+                  <Label>Current room type</Label>
                   <Input disabled value={currentRoomType || ""} className="bg-muted" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Current Room</Label>
+                  <Label>Current room</Label>
                   <Input disabled value={currentRoomNumber || ""} className="bg-muted font-semibold" />
                 </div>
               </div>
 
               <FormField control={form.control} name="roomTypeId" render={({ field }) => (
                 <FormItem className="mt-2">
-                  <FormLabel>New Room Type <span className="text-destructive">*</span></FormLabel>
+                  <FormLabel>New room type <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <SearchableSelect
                       value={field.value}
                       onChange={(v) => { field.onChange(v ?? ""); form.setValue("roomId", "", { shouldValidate: true }) }}
-                      placeholder={loading ? "Loading..." : "Select New Room Type"}
+                      placeholder={loading ? "Loading…" : "Select new room type"}
                       options={roomTypes.map(rt => ({ value: rt.id, label: `${rt.name} (${rt.code})` }))}
                     />
                   </FormControl>
@@ -165,12 +175,12 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
 
               <FormField control={form.control} name="roomId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>New Room <span className="text-destructive">*</span></FormLabel>
+                  <FormLabel>New room <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <SearchableSelect
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder={selectedRoomTypeId ? "Select Room" : "Select Room Type First"}
+                      placeholder={selectedRoomTypeId ? "Select room" : "Select room type first"}
                       options={availableRooms.map(rm => ({
                         value: rm.id,
                         label: `Room ${rm.roomNumber}`
@@ -212,7 +222,7 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
 
               <FormField control={form.control} name="reason" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Reason for Move <span className="text-destructive">*</span></FormLabel>
+                  <FormLabel>Reason for move <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input
                       placeholder="e.g. A/C Broken, Guest Request, Maintenance"
@@ -226,9 +236,9 @@ export function RoomMoveModal({ isOpen, onClose, reservationId, currentRoomNumbe
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Moving..." : "Confirm Move"}
-              </Button>
+              <SubmitButton pending={form.formState.isSubmitting} pendingLabel="Moving…">
+                Confirm move
+              </SubmitButton>
             </DialogFooter>
           </form>
         </Form>

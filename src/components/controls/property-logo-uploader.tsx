@@ -168,7 +168,7 @@ export function PropertyLogoUploader({
       <input ref={fileInput} type="file" accept={ACCEPT} className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
 
       <Dialog open={!!source} onOpenChange={(open) => !open && close()}>
-        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>Crop the logo</DialogTitle>
             <DialogDescription>

@@ -1,5 +1,6 @@
 "use client"
 
+import { apiError } from "@/lib/api-error"
 import { useState } from "react"
 import { CalendarCheck, UtensilsCrossed } from "@/components/icons"
 import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
@@ -29,10 +30,9 @@ export function AllocationCalculationManager({ property }: { property: HubProper
       })
       if (res.ok) {
         applySaved({ allocationCalculationMode: next })
-        setMessage({ text: "Allocation Calculation mode saved. Applies to reservations created or edited from now on — existing bookings are unaffected." })
+        setMessage({ text: "Allocation calculation mode saved. Applies to reservations created or edited from now on — existing bookings are unaffected." })
       } else {
-        const body = await res.json().catch(() => null)
-        setMessage({ text: body?.error || "Failed to save.", error: true })
+        setMessage({ text: await apiError(res, "Couldn't save the calculation mode. Try again."), error: true })
       }
     } finally {
       setSaving(false)
@@ -52,7 +52,7 @@ export function AllocationCalculationManager({ property }: { property: HubProper
         >
           <div className="flex items-center gap-2 mb-1">
             <UtensilsCrossed className="h-4 w-4" />
-            <span className="font-semibold">Meal Plan level</span>
+            <span className="font-semibold">Meal plan level</span>
           </div>
           <p className="text-xs text-muted-foreground">
             The reservation&apos;s selected Meal Plan drives which Allocations attach (see each Meal Plan&apos;s
@@ -69,7 +69,7 @@ export function AllocationCalculationManager({ property }: { property: HubProper
         >
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck className="h-4 w-4" />
-            <span className="font-semibold">Rate Plan level</span>
+            <span className="font-semibold">Rate plan level</span>
           </div>
           <p className="text-xs text-muted-foreground">
             The assigned Rate Plan&apos;s own Package Allocations (Revenue &gt; Rate Plans) drive what attaches.

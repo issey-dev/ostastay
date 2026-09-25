@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { GROUP_START_STATUSES, GROUP_STATUS_LABEL } from "@/lib/group-status"
 import Link from "next/link"
 import { toast } from "@/lib/toast"
@@ -78,26 +78,27 @@ export default function NewGroupBlock() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center gap-4 mb-8">
-        <Link href={`/e/${slug}/dashboard/groups`}>
+    <div className="max-w-3xl space-y-6">
+      {/* Breadcrumbs ("Group Blocks › New") replace the back arrow from md up. */}
+      <div className="flex items-center gap-4">
+        <Link href={`/e/${slug}/dashboard/groups`} className="md:hidden">
           <Button variant="outline" size="icon" aria-label="Back">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            New Group Block
-            <InfoHint label="New Group Block">Reserve inventory for an upcoming event or corporate group.</InfoHint>
-          </h2>
-        </div>
+        <PageHeader
+          className="flex-1"
+          crumb="New"
+          title="New group block"
+          hint="Reserve inventory for an upcoming event or corporate group."
+        />
       </div>
 
       <div className="bg-card rounded-xl shadow-elevation-1 border border-border p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="code">Group Code</Label>
+              <Label htmlFor="code">Group code</Label>
               <Input 
                 id="code" 
                 name="code" 
@@ -109,7 +110,7 @@ export default function NewGroupBlock() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Group Name</Label>
+              <Label htmlFor="name">Group name</Label>
               <Input 
                 id="name" 
                 name="name" 
@@ -123,14 +124,14 @@ export default function NewGroupBlock() {
 
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
+              <Label htmlFor="startDate">Start date</Label>
               <DatePicker
                 value={formData.startDate}
                 onChange={(v) => setFormData({ ...formData, startDate: v })}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="endDate">End Date</Label>
+              <Label htmlFor="endDate">End date</Label>
               <DatePicker
                 value={formData.endDate}
                 onChange={(v) => setFormData({ ...formData, endDate: v })}
@@ -150,7 +151,7 @@ export default function NewGroupBlock() {
               <p className="text-xs text-muted-foreground">A block starts Tentative or Definite.</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cutoffDate">Cutoff Date (Optional)</Label>
+              <Label htmlFor="cutoffDate">Cutoff date (optional)</Label>
               <DatePicker
                 value={formData.cutoffDate}
                 onChange={(v) => setFormData({ ...formData, cutoffDate: v })}
@@ -160,7 +161,7 @@ export default function NewGroupBlock() {
           </div>
 
           <div className="space-y-2">
-            <Label>Bill to Account (City Ledger, Optional)</Label>
+            <Label>Bill to account (City Ledger, optional)</Label>
             <SearchableSelect
               value={formData.payeeProfileId}
               onChange={(v) => setFormData({ ...formData, payeeProfileId: v ?? "none" })}
@@ -174,7 +175,7 @@ export default function NewGroupBlock() {
           </div>
 
           <div className="space-y-2">
-            <Label>Rooms to Hold (by type)</Label>
+            <Label>Rooms to hold (by type)</Label>
             <GroupRoomHoldsEditor
               propertyId={currentProperty?.id ?? ""}
               value={roomHolds}
@@ -191,7 +192,7 @@ export default function NewGroupBlock() {
             </Link>
             <Button type="submit" disabled={loading}>
               <Save className="w-4 h-4 mr-2" />
-              {loading ? "Creating..." : "Create Group Block"}
+              {loading ? "Creating..." : "Create group block"}
             </Button>
           </div>
         </form>

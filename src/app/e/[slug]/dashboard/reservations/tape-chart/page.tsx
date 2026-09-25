@@ -1,26 +1,24 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Suspense } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { TapeChartGrid } from "@/components/reservations/tape-chart-grid";
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 
+// Page title follows the sidebar label ("Tape Chart") — DECISIONS 2026-09-25 "Desktop polish".
 export default function TapeChartPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl text-foreground">
-            Availability Matrix
-            <InfoHint label="Availability Matrix">Drag and drop to manage room inventory across dates.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader
+        title="Tape Chart"
+        hint="Reservations across the chosen window (7, 14 or 30 days). Drag a bar onto another room to move it; click an empty cell to book that room."
+      />
 
-      <Card className="border-0 shadow-lg ring-1 ring-border">
-        <CardHeader className="bg-muted border-b border-border pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-            Tape Chart
-            <InfoHint label="Tape Chart">View and manage all reservations spanning the next 14 days.</InfoHint>
-          </CardTitle>
-        </CardHeader>
+      <Card className="border-0 py-0 shadow-lg ring-1 ring-border">
         <CardContent className="p-0 overflow-hidden">
-          <TapeChartGrid />
+          {/* The grid keeps its day window in the URL (?days=) — useSearchParams needs a
+              Suspense boundary above it. */}
+          <Suspense fallback={null}>
+            <TapeChartGrid />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

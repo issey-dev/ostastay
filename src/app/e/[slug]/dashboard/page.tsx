@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { requireSession, hasHubAccess, hasAnyPropertyModule, hasPermission } from "@/lib/scope";
 import { NAV_GROUPS } from "@/components/app-sidebar-nav.config";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Lock } from "@/components/icons";
 
 export default async function DashboardRoot({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -29,5 +31,20 @@ export default async function DashboardRoot({ params }: { params: Promise<{ slug
   // from the nav config rather than a second hand-written order, so this can never send
   // someone to a page their own sidebar doesn't offer.
   const first = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.module && hasPermission(ctx, i.module, "view"));
-  redirect(`/e/${slug}${first?.url ?? "/dashboard/profile"}`);
+  if (first) redirect(`/e/${slug}${first.url}`);
+
+  // Nothing in the sidebar is open to them. The old fallback (/dashboard/profile) doesn't
+  // exist, and every real page bounces a user without its module back here, so no redirect
+  // is safe — the login page sends a signed-in browser straight back to /dashboard. Hub
+  // access is the one other place they can use; otherwise say so, inside the normal shell
+  // (its account menu can still sign out).
+  if (hasHubAccess(ctx)) redirect(`/e/${slug}/hub`);
+  return (
+    <EmptyState
+      icon={Lock}
+      title="No screens available"
+      description="Your role doesn't include any screens for this property yet. Ask your administrator for access."
+      className="py-24"
+    />
+  );
 }
