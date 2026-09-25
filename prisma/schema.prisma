@@ -728,6 +728,9 @@ model Room {
   @@index([assignedAttendantId])
   @@index([floorId])
   @@index([roomTypeId])
+  // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
+  // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
+  @@index([roomNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "Room_roomNumber_trgm_idx")
 }
 
 model RoomFeature {
@@ -1047,6 +1050,11 @@ model Profile {
 
   @@index([enterpriseId])
   @@index([originPropertyId])
+  // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
+  // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
+  @@index([firstName(ops: raw("gin_trgm_ops"))], type: Gin, map: "Profile_firstName_trgm_idx")
+  @@index([lastName(ops: raw("gin_trgm_ops"))], type: Gin, map: "Profile_lastName_trgm_idx")
+  @@index([companyName(ops: raw("gin_trgm_ops"))], type: Gin, map: "Profile_companyName_trgm_idx")
 }
 
 // Multiple per profile, one may be marked primary — type is a fixed 3-value enum
@@ -1061,6 +1069,9 @@ model ProfileCommunication {
   createdAt DateTime @default(now())
 
   @@index([upid])
+  // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
+  // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
+  @@index([value(ops: raw("gin_trgm_ops"))], type: Gin, map: "ProfileCommunication_value_trgm_idx")
 }
 
 // Multiple per profile, one may be marked primary. fullAddress is one free-text block
@@ -1379,6 +1390,12 @@ model Reservation {
   @@index([primaryGuestId])
   @@index([propertyId])
   @@index([travelAgentId])
+  // The list is always one property ordered by arrival.
+  @@index([propertyId, checkInDate])
+  // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
+  // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
+  @@index([confirmationNo(ops: raw("gin_trgm_ops"))], type: Gin, map: "Reservation_confirmationNo_trgm_idx")
+  @@index([externalRef(ops: raw("gin_trgm_ops"))], type: Gin, map: "Reservation_externalRef_trgm_idx")
 }
 
 // Pickup/Dropoff transport for a reservation — one row per direction (arrival pickup,

@@ -18,7 +18,10 @@ export async function GET(request: Request) {
     // callers; the list page pages through with skip/take (load-more style).
     const statusParam = searchParams.get("status");
     const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : null;
-    const search = searchParams.get("search")?.trim() || null;
+    // Under 2 characters a "contains" matches nearly everything and no index helps — treat
+    // it as no search. Capped so a pasted paragraph can't become a huge ILIKE pattern.
+    const rawSearch = searchParams.get("search")?.trim().slice(0, 100) ?? "";
+    const search = rawSearch.length >= 2 ? rawSearch : null;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     // Which date the range applies to (app-owner, 2026-08-03):
@@ -29,14 +32,16 @@ export async function GET(request: Request) {
     const skip = Math.max(0, parseInt(searchParams.get("skip") ?? "0", 10) || 0);
     const take = Math.min(100, Math.max(1, parseInt(searchParams.get("take") ?? "100", 10) || 100));
 
-    // Finished business is hidden unless it is explicitly asked for: a desk searching
-    // "Smith" wants the live booking, not last season's checked-out ones. Asking for the
-    // status directly (status=CHECKED_OUT) still returns it — the exclusion only applies
-    // when the caller expressed no status preference at all.
+    // No status named: a search looks through EVERY status — a specific search is meant to
+    // find the booking whatever became of it (app owner, 2026-09-25). Without a search,
+    // finished business (checked-out, no-show) stays hidden. A named status always wins.
+    // (The Reservations page itself asks for status=RESERVED when nothing is searched.)
     const FINISHED = ["CHECKED_OUT", "NO_SHOW"];
     const statusWhere = statuses
       ? { status: { in: statuses } }
-      : { status: { notIn: FINISHED } };
+      : search
+        ? {}
+        : { status: { notIn: FINISHED } };
 
     // Date filtering, per mode. `to` is treated as INCLUSIVE — a range ending 30 Sep
     // must include arrivals on 30 Sep, which a bare lte on a UTC-midnight column gives.
@@ -111,7 +116,9 @@ export async function GET(request: Request) {
         },
         specialRequests: true,
       },
-      orderBy: { checkInDate: 'asc' },
+      // A search reaches back through history, so newest stays come first; the plain list
+      // is what's coming up, soonest first. (Both served by the propertyId+checkInDate index.)
+      orderBy: search && !statuses ? { checkInDate: 'desc' } : { checkInDate: 'asc' },
       skip,
       take,
     });

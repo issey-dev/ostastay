@@ -134,7 +134,8 @@ export default async function DashboardLayout({
 
             {/* Glassmorphism Header */}
             <header className="h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
+              {/* Phones open the menu from the bottom nav's "More", so no duplicate toggle here. */}
+              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors max-md:hidden" />
               <HeaderBrand enterpriseName={enterprise.name} />
               <div className="ml-auto flex items-center gap-4">
                 <HeaderBusinessDate />

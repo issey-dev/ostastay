@@ -3295,3 +3295,23 @@ plan left open (MOBILE_PLAN §7 "Left open").
   rules and the booking form's quote, so estimates match what posts. **Not** the website
   Booking API's quote: no profile exists before the booking, so its quoted Green Tax
   assumes everyone pays. Night Audit then posts per person.
+
+## 2026-09-25 — Reservations list defaults to business on the books (owner)
+
+- The Reservations & Stays list opens on **future active bookings only: status RESERVED**.
+  In-house guests, today's departures, checked-out, no-shows and cancellations are not in
+  the default list. In the owner's words, "business on the books".
+- **A specific search looks through every status** (owner, same day): cancelled,
+  checked-out, no-show, in-house. This replaces the 2026-08 rule that hid checked-out and
+  no-show bookings from a search. Picking a status in the filter narrows it to exactly that
+  status. Search results list the newest stays first.
+- **Keeping search cheap** (owner asked for it): trigram (`pg_trgm`) GIN indexes on every
+  searched column (guest first/last/company name, phone/email, confirmation no., channel
+  ref, room number) plus `(propertyId, checkInDate)`. Searches under 2 characters are
+  ignored, and the term is capped at 100. The page waits 350 ms after typing and cancels a
+  stale request when a newer one starts.
+- The status filter's default is labelled "On the books". A separate "Reserved" option would
+  duplicate it, so it was dropped.
+- The RESERVED default is the page's choice. `GET /api/reservations` with no `status` and
+  no search still returns everything but CHECKED_OUT/NO_SHOW. With a search, it returns
+  every status.
