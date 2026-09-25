@@ -7,8 +7,8 @@ import { assertSequenceChangeAllowed, greenTaxNumbersThisYear, highestIssuedNumb
 
 // Just the plain integer counter itself — no prefix/format handling here (that's
 // PropertySettings.resConfirmPrefix's job for confirmation numbers elsewhere). These
-// five are sequential numbers only, never alphanumeric.
-const SEQUENCE_TYPES = ["REGISTRATION_NO", "PROFORMA_FOLIO", "TAX_INVOICE", "RECEIPT_NO", "GUEST_REG_NO"] as const
+// six are sequential numbers only, never alphanumeric.
+const SEQUENCE_TYPES = ["REGISTRATION_NO", "PROFORMA_FOLIO", "TAX_INVOICE", "RECEIPT_NO", "CHECK_NO", "GUEST_REG_NO"] as const
 
 const putSchema = z.object({
   propertyId: z.string().uuid(),

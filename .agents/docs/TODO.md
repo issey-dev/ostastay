@@ -2,6 +2,27 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Folio check numbers and roll-up (2026-09-26, 8.4.0) — DONE
+
+Owner rule: DECISIONS.md "Folio check numbers and roll-up". Done: `FolioLineItem.checkNo`
++ migration `20260926090000_folio_line_check_no` (column, `[folioId, checkNo]` index,
+backfill, CHECK_NO counter), `allocateCheckNo()` (document-sequence.ts), postCharge stamps
+one number per posting (parent + routed SC/GST + levies), Night Audit one per stay-night,
+Advance Bill one per run (it posts the window as one set of lines, not per night),
+`PATCH /api/folios/[id]/line-items/check-no`, CHECK_NO in the Sequence Manager + guard.
+Tests: `tests/business-rules/folio-check-no.test.ts`. Open:
+- [x] `prop-sequences` re-shot, configuration PDF rebuilt.
+- [x] Proforma projected lines carry a check number (`P{n}` per night — room + allocations +
+  Green Tax; `PT…` per transport leg) so "Summary by check number" rolls a proforma up too.
+- [x] Backfill widened: older nights whose room line has no roomAssignmentId (room-bucket
+  code) and whose Green Tax was posted as its own line (postingType TAX) join the night.
+- UI: `folio-ledger.tsx` (roll-up rows, expand, group select/void, "Edit check number"),
+  `folio-check-no-dialog.tsx`, searchable charge-code picker; `pickMainLine`/`rollUpByCheck`
+  in `folio-presentation.ts`. Print "by-check" = check number; print page sorts lines and
+  always shows non-zero SC/GST/Green Tax totals.
+- Note: the CHECK_NO counter row is locked until each posting transaction commits, so
+  postings at one property queue behind a long Night Audit transaction (same as outlet checks).
+
 ## Desktop polish (2026-09-25) — ALL PHASES (1–5) DONE (uncommitted, `feat/desktop-polish`)
 
 Audit + phased plan in [DESKTOP_PLAN.md](DESKTOP_PLAN.md) (§5 has 10 owner questions).

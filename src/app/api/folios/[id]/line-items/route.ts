@@ -95,6 +95,7 @@ export async function POST(
         description,
         reference,
         shiftId: shift.id,
+        propertyId: folio.propertyId,
       })
     );
     const { baseAmount, taxTotal } = posted;

@@ -1576,6 +1576,14 @@ model FolioLineItem {
   generatedFromLineItemId String?
   generatedFrom           FolioLineItem?  @relation("GeneratedLines", fields: [generatedFromLineItemId], references: [id], onDelete: SetNull)
   generatedLines          FolioLineItem[] @relation("GeneratedLines")
+  // The posting's check number (owner, 2026-09-26): one property-wide running number
+  // (PropertySequence "CHECK_NO", Sequence Manager). A charge and every line it generates
+  // (Service Charge, GST, Green Tax, levies) share it, and a Night Audit stay-night's room
+  // rate + extra occupancy + allocations share ONE. The folio screen rolls lines with the
+  // same number IN THE SAME FOLIO up into one. Plain digits when issued by the app
+  // ("1", "2"...); staff may edit it (letters, digits, "-"). Nullable only for rows written
+  // outside postCharge — every posting path stamps it.
+  checkNo                 String?
 
   createdAt DateTime @default(now())
 
@@ -1586,6 +1594,7 @@ model FolioLineItem {
 
   @@index([chargeCodeId])
   @@index([folioId])
+  @@index([folioId, checkNo])
   @@index([generatedFromLineItemId])
   @@index([outletCheckId])
   @@index([outletId])
@@ -2444,7 +2453,7 @@ model PropertySequence {
   id           String   @id @default(uuid())
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  sequenceType String // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO | GUEST_REG_NO
+  sequenceType String // REGISTRATION_NO | PROFORMA_FOLIO | TAX_INVOICE | RECEIPT_NO | GUEST_REG_NO | CHECK_NO
   currentValue Int      @default(0)
   // For year-scoped sequences (GUEST_REG_NO, the Green Tax guest registration
   // number): the calendar year currentValue belongs to. On the first allocation of

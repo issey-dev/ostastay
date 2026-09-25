@@ -3383,3 +3383,21 @@ it — **not yet confirmed by the owner**:
 - No "successfully", no "!", no "Please" in UI copy.
 - Owner also approved (same day): move the Spa booking participant slots onto the form
   standard, and turn the very wide dialogs into side sheets or pages.
+
+## 2026-09-26 — Folio check numbers and roll-up (owner)
+
+- Every posting gets a **check number** (`FolioLineItem.checkNo`): one property-wide running
+  number (Sequence Manager, like invoice numbers). A charge and the Service Charge / GST / levy
+  lines it generates share it. **Night Audit**: a stay-night's room rate + extra occupancy +
+  allocations + all their taxes share ONE check number.
+- The **folio screen rolls up** lines with the same check number **in the same folio** into one
+  line (expand to see the parts). Different folios never roll together, even with the same
+  number. Staff can **edit a line's check number**; lines that no longer share a number stop
+  rolling up.
+- **POS / Fast Post: each item separately** — an item rolls up with its own SC/GST only, not the
+  whole outlet check.
+- **Existing postings are backfilled** so old folios roll up the same way.
+- **Printing:** the print dialog's existing layout options (Detailed, Compact, By code, By date,
+  By check) stay; "By check" uses the new check number. Owner: make sure every option works.
+- Folio "Post charge": the charge code is picked by typing the code or its description
+  (searchable), full width.

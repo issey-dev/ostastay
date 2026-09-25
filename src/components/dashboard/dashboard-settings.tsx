@@ -107,8 +107,8 @@ export function DashboardSettings({
           widget list is long, and "Done" must not scroll away with it. dvh, not vh: the
           mobile browser's toolbar would otherwise cover the footer. This dialog lays out
           its own pinned header/footer on every size, so it opts out of the shared sheet. */}
-      <DialogContent mobile="none" className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-[680px]">
-        <DialogHeader className="border-b border-border p-4 pr-10">
+      <DialogContent mobile="none" className="flex h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[85dvh] sm:max-w-[680px]">
+        <DialogHeader className="shrink-0 border-b border-border p-4 pr-10 max-sm:static">
           <DialogTitle>Customise dashboard</DialogTitle>
           <DialogDescription>
             Choose what you see and how it is arranged. This is your own view — nobody else&apos;s dashboard changes, and
@@ -253,7 +253,7 @@ export function DashboardSettings({
         </section>
         </div>
 
-        <DialogFooter className="flex-row justify-between border-t border-border p-3 sm:justify-between sm:px-4">
+        <DialogFooter className="shrink-0 flex-row justify-between border-t border-border p-3 max-sm:static max-sm:mt-0 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-between sm:px-4">
           <Button type="button" variant="ghost" className="text-muted-foreground" onClick={resetAll}>
             <RotateCcw className="mr-1.5 h-4 w-4" /> Reset to default
           </Button>

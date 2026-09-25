@@ -15,6 +15,26 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.4.0",
+    date: "2026-09-26",
+    highlights: "Cleaner folios: a charge and its Service Charge, GST and Green Tax now show as one line you can expand.",
+    new: [
+      "Every posting has a check number. A charge and the Service Charge, GST and Green Tax lines it creates share one number, and a Night Audit night's room rate, extra occupancy and package items share one too.",
+      "The folio rolls lines with the same check number up into a single line with the total. Click the arrow to see the individual lines. Selecting or voiding a rolled-up line applies to all its lines.",
+      "Edit a line's check number to split it out of a roll-up, or give two lines the same number to roll them together. Lines on different folios never roll together.",
+      "Check numbers are listed in Sequence Manager with the other document numbers.",
+    ],
+    improved: [
+      "Post charge: type a charge code or its description to find it. The list is full width and easy to read.",
+      "The \"Summary by check number\" print layout now uses the check number, including on proforma invoices, where each projected night reads as one line.",
+      "Older folios are numbered too, so they roll up the same way.",
+    ],
+    fixed: [
+      "Customise dashboard on a phone: the Reset and Done buttons no longer sit in the middle of the list.",
+      "Printed folios: the \"By date\" layout no longer shows the number of transactions twice, lines print in posting order, and Service Charge, GST and Green Tax totals always print when the folio carries them.",
+    ],
+  },
+  {
     version: "8.3.0",
     date: "2026-09-25",
     highlights: "The desktop app is calmer and quicker to work in: fewer pop-ups, one clear next step after each action, and the same layout on every screen.",

@@ -6,7 +6,7 @@ import { format, parseISO } from "date-fns"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { resolveStationeryBrand } from "@/lib/stationery-brand"
 import { isLevyLine } from "@/lib/posting/report-bucket"
-import { buildFolioRows, isFolioStyle, FOLIO_STYLE_LABELS, type FolioStyle } from "@/lib/folio-presentation"
+import { buildFolioRows, isFolioStyle, type FolioStyle } from "@/lib/folio-presentation"
 import { PrintDocumentShell, PrintLoading, PrintError } from "@/components/print/print-document-shell"
 import { InvoiceDocument } from "@/components/print/stationery/documents"
 import type { StationeryRow, StationeryTotalLine, MetaItem } from "@/components/print/stationery/blocks"
@@ -128,11 +128,21 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
 
   // Grouped per the chosen style. Every style totals to the same figure — the layout
   // changes, never what is owed. Reference falls back to the outlet sales-check number
-  // then the charge code, as before.
-  const chargeRows: StationeryRow[] = buildFolioRows(folio.lineItems, folioStyle).map((row) => ({
+  // then the charge code, as before (by-check prints the posting's check number).
+  //
+  // Posting order first: the invoice-data API returns lines unordered, and the styles keep
+  // input order (it decides which line names a group and the order rows print in).
+  const orderedLines = [...folio.lineItems].sort((a: any, b: any) => {
+    const byDate = new Date(a.date).getTime() - new Date(b.date).getTime()
+    if (byDate !== 0) return byDate
+    return new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()
+  })
+  const chargeRows: StationeryRow[] = buildFolioRows(orderedLines, folioStyle).map((row) => ({
     date: format(parseISO(String(row.date)), "dd-MMM-yy"),
     sortKey: String(row.date),
-    description: row.count > 1 && folioStyle !== "compact" && folioStyle !== "detailed"
+    // "(3)" says how many same-day charges of one code were merged. Only by-code needs it:
+    // by-date already says "N transactions", and a by-check row is one posting.
+    description: row.count > 1 && folioStyle === "by-code"
       ? `${row.description} (${row.count})`
       : row.description,
     reference: row.reference ?? undefined,
@@ -227,9 +237,11 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
 
   const totals: StationeryTotalLine[] = [
     { label: "Subtotal Charges", amount: totalBaseCharges },
-    ...(settings.serviceChargeEnabled && totalServiceCharges > 0 ? [{ label: `Service Charge (${settings.serviceChargeRate}%)`, amount: totalServiceCharges }] : []),
-    ...(settings.tgstEnabled && totalTaxes > 0 ? [{ label: `TGST (${settings.tgstRate}%)`, amount: totalTaxes }] : []),
-    ...(settings.greenTaxEnabled && totalGreenTax > 0 ? [{ label: "Green Tax", amount: totalGreenTax }] : []),
+    // Shown whenever the folio carries the money, even if the property has since switched
+    // the charge off — otherwise the totals silently stop adding up to the balance.
+    ...(Math.abs(totalServiceCharges) > 0.005 ? [{ label: settings.serviceChargeEnabled ? `Service Charge (${settings.serviceChargeRate}%)` : "Service Charge", amount: totalServiceCharges }] : []),
+    ...(Math.abs(totalTaxes) > 0.005 ? [{ label: settings.tgstEnabled ? `TGST (${settings.tgstRate}%)` : "TGST", amount: totalTaxes }] : []),
+    ...(Math.abs(totalGreenTax) > 0.005 ? [{ label: "Green Tax", amount: totalGreenTax }] : []),
     { label: "Total Paid", amount: totalPayments, emphasis: true },
   ]
 

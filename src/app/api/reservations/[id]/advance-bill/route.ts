@@ -6,6 +6,7 @@ import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
 import { postCharge, chargeCodeInclude, type PostableChargeCode } from "@/lib/posting/post-charge";
+import { allocateCheckNo } from "@/lib/document-sequence";
 import { resolveChargeCode, MissingChargeCodeError } from "@/lib/posting/resolve-charge-code";
 import type { GenerateRow } from "@/lib/posting/run-generates";
 import { logActivity } from "@/lib/activity-log";
@@ -169,6 +170,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       if (claimed.count === 0) throw new AdvanceBillConflict();
 
+      // ONE check number for the advance-billed stay (owner, 2026-09-26): Night Audit
+      // puts a night's room + extra occupancy + allocations + their taxes on one check,
+      // and an advance bill posts those same charges for the whole billed window as one
+      // set of lines (not one per night), so they share one number and roll up together.
+      // Transport legs below are separate postings and take their own numbers. Drawn on
+      // the first line actually posted, so a run that posts nothing leaves no gap.
+      let stayCheckNo: string | null = null;
+
       // Every line below posts through postCharge with `amounts` (not `inputAmount`):
       // the reservation quote is the authority here — these are the exact figures the
       // guest was shown — so the tax engine must NOT re-derive them.
@@ -185,6 +194,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         postingContext?: { adults: number; children: number; nights: number };
         extraGenerates?: GenerateRow[];
       }) => {
+        stayCheckNo ??= await allocateCheckNo(tx, reservation.propertyId);
         const posted = await postCharge(tx, {
           folioId: folio.id,
           chargeCode: args.chargeCode,
@@ -195,6 +205,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           description: args.description,
           postingContext: args.postingContext ?? null,
           extraGenerates: args.extraGenerates,
+          checkNo: stayCheckNo,
         });
         amountPosted += posted.grandTotal;
         linesPosted += 1 + posted.generated.length;

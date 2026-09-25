@@ -3,6 +3,7 @@ import type { FolioLineItem, PropertySettings } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resolveOutletChargeTax } from "@/lib/tax-calc";
 import { addMoney } from "@/lib/money";
+import { allocateCheckNo } from "@/lib/document-sequence";
 import {
   computeGeneratedAmounts,
   isTaxRoutingMethod,
@@ -120,10 +121,24 @@ export type PostChargeInput = {
 
   /** Description for generated lines. Defaults to the generated code's own description. */
   generatedDescription?: (code: { code: string; description: string }) => string;
+
+  /**
+   * The check number to stamp on this posting (FolioLineItem.checkNo — owner, 2026-09-26).
+   * Omit it and postCharge allocates the property's next CHECK_NO inside the same client,
+   * so a charge and every line it generates (Service Charge, GST, Green Tax, levies) share
+   * one number. Pass one to put several postings on ONE check: Night Audit allocates one
+   * per stay-night and hands it to the room, extra-occupancy and allocation postings.
+   */
+  checkNo?: string | null;
+  /** The folio's property, when the caller already has it — saves a lookup when
+   *  postCharge has to allocate the check number itself. */
+  propertyId?: string;
 };
 
 export type PostedLines = {
   parent: FolioLineItem;
+  /** The check number stamped on the parent and every generated line. */
+  checkNo: string;
   /** Every line this call generated — routed tax lines first, then levies. */
   generated: FolioLineItem[];
   /** Pre-tax base of the parent line. */
@@ -203,6 +218,11 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
   const routedServiceCharge = taxRoutes.has("SERVICE_CHARGE") ? serviceChargeAmount : 0;
   const routedGst = taxRoutes.has("GST") ? taxAmount : 0;
 
+  // One check number for the whole posting — the parent, its routed tax lines and its
+  // levies. A routed line landing on another folio keeps it too (it just has nothing to
+  // roll up with there).
+  const checkNo = input.checkNo?.trim() || (await allocateCheckNo(client, input.propertyId ?? (await folioPropertyId(client, folioId))));
+
   const parent = await client.folioLineItem.create({
     data: {
       folioId,
@@ -218,6 +238,7 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
       description: input.description?.trim() || chargeCode.description,
       reference: input.reference?.trim() || null,
       date,
+      checkNo,
     },
   });
 
@@ -248,6 +269,7 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
         serviceChargeAmount: method === "SERVICE_CHARGE" ? amount : 0,
         description: code.description,
         date,
+        checkNo,
       },
     });
     generated.push(line);
@@ -307,6 +329,7 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
             shiftId: input.shiftId ?? null,
             postingContext,
             runGenerates: false,
+            checkNo,
           });
           generated.push(line.parent);
           leviesTotal = addMoney(leviesTotal, line.grandTotal);
@@ -321,12 +344,18 @@ export async function postCharge(client: Client, input: PostChargeInput): Promis
   const taxTotal = addMoney(taxAmount, serviceChargeAmount);
   return {
     parent,
+    checkNo,
     generated,
     baseAmount,
     taxTotal,
     leviesTotal,
     grandTotal: addMoney(baseAmount, taxTotal, leviesTotal),
   };
+}
+
+async function folioPropertyId(client: Client, folioId: string): Promise<string> {
+  const folio = await client.folio.findUniqueOrThrow({ where: { id: folioId }, select: { propertyId: true } });
+  return folio.propertyId;
 }
 
 // A code's stored generate rows plus any implied by the caller. A stored row always wins

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client"
 import { postCharge } from "@/lib/posting/post-charge"
+import { allocateCheckNo } from "@/lib/document-sequence"
 import type { GenerateRow } from "@/lib/posting/run-generates"
 import { applyRateAdjustment } from "@/lib/derived-rate"
 import { allocationAmountForNight } from "@/lib/allocations"
@@ -175,6 +176,11 @@ export async function postStayNight(
   let taxPosted = 0
   let postings = 0
 
+  // ONE check number for the whole stay-night (owner, 2026-09-26): the room rate, the
+  // extra-occupancy surcharge, every allocation and all of their taxes and levies share
+  // it, so the folio rolls the night up into one line.
+  const checkNo = await allocateCheckNo(tx, res.propertyId)
+
   // The nightly room charge — and, through its generate rows, the night's Green Tax
   // and any other levy the property has declared on this code.
   const roomPosting = await postCharge(tx, {
@@ -191,6 +197,7 @@ export async function postStayNight(
     postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1, ...greenTaxBasis() } : undefined,
     extraGenerates: levyNightly ? ctx.impliedGreenTaxGenerate : [],
     routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, folioId),
+    checkNo,
   })
 
   roomRevenue += roomPosting.baseAmount
@@ -230,6 +237,7 @@ export async function postStayNight(
       description: `Extra Occupancy Charge (${parts.join(", ")})`,
       roomAssignmentId: activeAssignment.id,
       routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, folioId),
+      checkNo,
     })
 
     roomRevenue += extraOccupancy.baseAmount
@@ -260,6 +268,7 @@ export async function postStayNight(
       description: `${alloc.name} (${paxParts.join(", ")})`,
       postingContext: levyNightly ? { adults: res.adults, children: res.children, nights: 1, ...greenTaxBasis() } : undefined,
       routeGeneratedTo: (chargeCodeId) => routeTo(res.id, chargeCodeId, folioId),
+      checkNo,
     })
 
     taxPosted += allocPosting.taxTotal + allocPosting.leviesTotal

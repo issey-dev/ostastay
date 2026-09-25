@@ -191,5 +191,12 @@ describe("Advance Bill: generates post all defined taxes", () => {
     // 1 adult x $12 x 3 nights.
     expect(gtx[0].amount).toBe(36);
     expect(gtx[0].taxAmount).toBe(0);
+
+    // The advance-billed stay is one check (owner, 2026-09-26): room, its SC/GST and the
+    // Green Tax all carry the same check number, like a Night Audit night.
+    const all = await prisma.folioLineItem.findMany({ where: { folioId } });
+    expect(all.length).toBeGreaterThan(1);
+    expect(new Set(all.map((l) => l.checkNo)).size).toBe(1);
+    expect(all[0].checkNo).toMatch(/^[0-9]+$/);
   });
 });

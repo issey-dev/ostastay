@@ -192,7 +192,10 @@ export async function GET(
         // Emits the projected charge plus, where the code routes them, its own Service
         // Charge and GST lines — mirroring exactly what postCharge writes, including the
         // generatedFromLineItemId link the folio styles group on.
-        const line = (opts: { description: string; code: string; amount: number; tax?: number; sc?: number; date: Date }) => {
+        // `checkNo`: projected lines carry the check number they will share once posted —
+        // a night's room + allocations + Green Tax together, each transport leg on its own —
+        // so the "By check" style rolls a proforma up the way the posted folio will.
+        const line = (opts: { description: string; code: string; amount: number; tax?: number; sc?: number; date: Date; checkNo: string; isRoom?: boolean }) => {
           const routes = taxRoutesByCode.get(opts.code);
           const tax = opts.tax ?? 0;
           const sc = opts.sc ?? 0;
@@ -210,6 +213,9 @@ export async function GET(
             serviceChargeAmount: sc - routedSc,
             isVoid: false,
             generatedFromLineItemId: null,
+            checkNo: opts.checkNo,
+            // Marks the night's room line so it names the rolled-up row (pickMainLine).
+            roomAssignmentId: opts.isRoom ? "proforma" : null,
             chargeCode: { code: opts.code, description: opts.description },
           });
           if (routedSc) {
@@ -217,7 +223,7 @@ export async function GET(
               id: `proforma-${i++}`, date: opts.date,
               description: routes!.serviceCharge!.description, reference: null,
               amount: 0, taxAmount: 0, serviceChargeAmount: routedSc, isVoid: false,
-              generatedFromLineItemId: parentId,
+              generatedFromLineItemId: parentId, checkNo: opts.checkNo,
               chargeCode: routes!.serviceCharge!,
             });
           }
@@ -226,7 +232,7 @@ export async function GET(
               id: `proforma-${i++}`, date: opts.date,
               description: routes!.gst!.description, reference: null,
               amount: 0, taxAmount: routedGst, serviceChargeAmount: 0, isVoid: false,
-              generatedFromLineItemId: parentId,
+              generatedFromLineItemId: parentId, checkNo: opts.checkNo,
               chargeCode: routes!.gst!,
             });
           }
@@ -259,7 +265,9 @@ export async function GET(
         const allocationName = new Map(quote.allocations.map((al) => [al.allocationId, al.name]));
         const allocationCode = new Map(quote.allocations.map((al) => [al.allocationId, al.code]));
 
+        let nightNo = 0;
         for (const day of quote.days) {
+          const nightCheck = `P${++nightNo}`;
           // The night's calendar date, parsed as UTC midnight to match how every other
           // folio line is dated.
           const nightDate = new Date(`${day.date}T00:00:00.000Z`);
@@ -271,7 +279,7 @@ export async function GET(
               description: `Accommodation${roomTypeLabel ? ` — ${roomTypeLabel}` : ""}`,
               code: roomCodeLabel,
               amount: room.base, tax: room.tax, sc: room.serviceCharge,
-              date: nightDate,
+              date: nightDate, checkNo: nightCheck, isRoom: true,
             });
           }
 
@@ -281,12 +289,12 @@ export async function GET(
               description: allocationName.get(al.allocationId) ?? "Package",
               code: allocationChargeCode.get(al.allocationId) ?? allocationCode.get(al.allocationId) ?? roomCodeLabel,
               amount: al.base, tax: al.tax, sc: al.serviceCharge,
-              date: nightDate,
+              date: nightDate, checkNo: nightCheck,
             });
           }
 
           if (quote.greenTax.enabled && day.parts.greenTax > 0.005) {
-            line({ description: "Green Tax", code: greenTaxCodeLabel, amount: day.parts.greenTax, date: nightDate });
+            line({ description: "Green Tax", code: greenTaxCodeLabel, amount: day.parts.greenTax, date: nightDate, checkNo: nightCheck });
           }
         }
 
@@ -311,6 +319,7 @@ export async function GET(
             line({
               description: `Transport – ${dir}${leg.transportType ? ` (${leg.transportType})` : ""}`,
               code: code.code, amount: t.baseAmount, tax: t.taxAmount, sc: t.serviceChargeAmount, date: realizeDate,
+              checkNo: `PT${leg.id.slice(0, 8)}`,
             });
           }
         }

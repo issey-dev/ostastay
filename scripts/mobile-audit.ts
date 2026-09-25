@@ -47,6 +47,7 @@ async function routes(): Promise<{ shots: Shot[]; userId: string; propertyId: st
     (await prisma.reservation.findFirst({ where: { propertyId: prop.id } }));
   const profile = await prisma.profile.findFirst({ where: { enterpriseId: user.enterpriseId, profileType: "GUEST" } });
   const group = await prisma.groupBlock.findFirst({ where: { propertyId: prop.id } });
+  const folio = res ? await prisma.folio.findFirst({ where: { reservationId: res.id }, orderBy: { folioNumber: "asc" } }) : null;
   const debtor = await prisma.profile.findFirst({ where: { enterpriseId: user.enterpriseId, profileType: { in: ["COMPANY", "TRAVEL_AGENT"] } } });
   const d = `/e/${slug}/dashboard`;
   const h = `/e/${slug}/hub`;
@@ -58,6 +59,12 @@ async function routes(): Promise<{ shots: Shot[]; userId: string; propertyId: st
     { name: "dash-reservation-new", path: `${d}/reservations/new` },
     { name: "dash-reservation-detail", path: `${d}/reservations/${res?.id}` },
     { name: "dash-tape-chart", path: `${d}/reservations/tape-chart` },
+    { name: "dash-folio-page", path: `${d}/reservations/${res?.id}/folio` },
+    // Print layouts, on the interim bill (it allocates no document number).
+    ...(["detailed", "compact", "by-code", "by-date", "by-check"] as const).map((v) => ({
+      name: `print-interim-${v}`,
+      path: `${d}/folios/${folio?.id}/print?type=interim&view=${v}`,
+    })),
     { name: "dash-availability", path: `${d}/availability` },
     { name: "dash-groups", path: `${d}/groups` },
     { name: "dash-group-detail", path: `${d}/groups/${group?.id}` },
@@ -94,6 +101,7 @@ async function routes(): Promise<{ shots: Shot[]; userId: string; propertyId: st
     { name: "dlg-rate-plan", path: `${d}/revenue`, open: "New Rate Plan" },
     { name: "dlg-exchange", path: `${d}/cashiering`, open: "New Exchange" },
     { name: "dlg-report-issue", path: `${d}/maintenance`, open: "Report issue" },
+    { name: "dlg-dashboard-settings", path: `${d}/overview`, open: "Customise dashboard" },
   ].filter((s) => !s.path.includes("undefined"));
   return { shots, userId: user.id, propertyId: prop.id };
 }
@@ -105,17 +113,26 @@ async function openButton(page: Page, text: string) {
   // button to appear rather than trusting the page-level wait.
   const find = (text: string) =>
     Array.from(document.querySelectorAll<HTMLElement>("button")).find(
-      (b) => b.offsetParent !== null && (b.innerText || "").trim().toLowerCase().startsWith(text.toLowerCase())
+      (b) => b.offsetParent !== null && ((b.innerText || "").trim() || b.getAttribute("aria-label") || "").trim().toLowerCase().startsWith(text.toLowerCase())
     );
   await page.waitForFunction(find, { timeout: 10_000 }, text).catch(() => {});
   const ok = await page.evaluate((text) => {
     const el = Array.from(document.querySelectorAll<HTMLElement>("button")).find(
-      (b) => b.offsetParent !== null && (b.innerText || "").trim().toLowerCase().startsWith(text.toLowerCase())
+      (b) => b.offsetParent !== null && ((b.innerText || "").trim() || b.getAttribute("aria-label") || "").trim().toLowerCase().startsWith(text.toLowerCase())
     );
     el?.click();
     return !!el;
   }, text);
-  if (!ok) throw new Error(`no button "${text}"`);
+  if (!ok) {
+    const seen = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("button"))
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => ((b.innerText || "").trim() || b.getAttribute("aria-label") || "?").slice(0, 30))
+        .slice(0, 25)
+        .join(" | ")
+    );
+    throw new Error(`no button "${text}" — visible: ${seen}`);
+  }
   await new Promise((r) => setTimeout(r, 600));
 }
 
