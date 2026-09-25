@@ -13,6 +13,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Drawer, DrawerBody, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface DatePickerProps {
   value?: string | Date | null
@@ -42,48 +44,80 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
   const maxDateValue = parseDateKey(maxDate)
   const availableSet = availableDates ? new Set(availableDates) : null
 
+  // Phones: the calendar opens in a bottom drawer (big day cells, Clear pinned at the
+  // bottom) instead of a popover under the field. Picking a day closes it, as on desktop.
+  const isMobile = useIsMobile()
+  const [open, setOpen] = React.useState(false)
+
   const handleSelect = (date: Date | undefined) => {
     if (date) {
       onChange(toDateKey(date))
     } else {
       onChange("")
     }
+    setOpen(false)
+  }
+
+  const trigger = (
+    <Button
+      variant={"outline"}
+      disabled={disabled}
+      className={cn(
+        "w-full justify-start text-left font-normal",
+        !dateValue && "text-muted-foreground",
+        className
+      )}
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      {dateValue ? format(dateValue, "dd MMM yyyy").toUpperCase() : <span>{placeholder}</span>}
+    </Button>
+  )
+
+  const calendar = (
+    <Calendar
+      mode="single"
+      selected={dateValue}
+      defaultMonth={dateValue}
+      onSelect={handleSelect}
+      disabled={
+        availableSet
+          ? (date: Date) =>
+              (minDateValue ? date < minDateValue : false) ||
+              (maxDateValue ? date > maxDateValue : false) ||
+              !availableSet.has(format(date, "yyyy-MM-dd"))
+          : [
+              ...(minDateValue ? [{ before: minDateValue }] : []),
+              ...(maxDateValue ? [{ after: maxDateValue }] : []),
+            ]
+      }
+      autoFocus
+    />
+  )
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerTrigger render={trigger} />
+        <DrawerContent initialFocus={false}>
+          <DrawerHeader>
+            <DrawerTitle>{placeholder}</DrawerTitle>
+          </DrawerHeader>
+          <DrawerBody className="flex justify-center">{calendar}</DrawerBody>
+          {dateValue && (
+            <DrawerFooter>
+              <Button variant="outline" onClick={() => handleSelect(undefined)}>Clear</Button>
+            </DrawerFooter>
+          )}
+        </DrawerContent>
+      </Drawer>
+    )
   }
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant={"outline"}
-          disabled={disabled}
-          className={cn(
-            "w-full justify-start text-left font-normal",
-            !dateValue && "text-muted-foreground",
-            className
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {dateValue ? format(dateValue, "dd MMM yyyy").toUpperCase() : <span>{placeholder}</span>}
-        </Button>
-      </PopoverTrigger>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={dateValue}
-          onSelect={handleSelect}
-          disabled={
-            availableSet
-              ? (date: Date) =>
-                  (minDateValue ? date < minDateValue : false) ||
-                  (maxDateValue ? date > maxDateValue : false) ||
-                  !availableSet.has(format(date, "yyyy-MM-dd"))
-              : [
-                  ...(minDateValue ? [{ before: minDateValue }] : []),
-                  ...(maxDateValue ? [{ after: maxDateValue }] : []),
-                ]
-          }
-          autoFocus
-        />
+        {calendar}
       </PopoverContent>
     </Popover>
   )

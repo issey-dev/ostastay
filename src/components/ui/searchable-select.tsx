@@ -7,6 +7,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Drawer, DrawerBody, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export interface SearchableSelectOption {
   label: string
@@ -51,6 +53,9 @@ export function SearchableSelect({
   searchable,
 }: SearchableSelectProps) {
   const showSearch = searchable ?? options.length > SEARCHABLE_THRESHOLD
+  // Phones get the same list in a bottom drawer (full-width rows, 16px search, swipe down to
+  // close) instead of a popover squeezed under the field. Desktop is unchanged.
+  const isMobile = useIsMobile()
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
   // Keyboard cursor within the filtered list (ArrowUp/ArrowDown/Enter).
@@ -95,47 +100,142 @@ export function SearchableSelect({
     }
   }
 
-  return (
-    <Popover open={open} onOpenChange={(newOpen) => {
-      setOpen(newOpen)
-      setSearch("")
-      // Opening puts the cursor on the current value, so Enter without moving is a
-      // no-op and the list opens scrolled to where the user already is.
-      if (newOpen) setActive(Math.max(0, options.findIndex((o) => o.value === value)))
-    }}>
-      <div className="relative w-full">
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-controls={listId}
-            disabled={disabled}
-            className={cn(
-              "w-full justify-between font-normal",
-              !selectedOption && "text-muted-foreground",
-              className
-            )}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              {selectedOption?.icon}
-              <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
+  const onOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen)
+    setSearch("")
+    // Opening puts the cursor on the current value, so Enter without moving is a
+    // no-op and the list opens scrolled to where the user already is.
+    if (newOpen) setActive(Math.max(0, options.findIndex((o) => o.value === value)))
+  }
 
-        {/* Hidden input for HTML required validation */}
-        {required && (
-          <input
-            type="text"
-            value={value}
-            onChange={() => {}}
-            required
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 opacity-0 w-1 h-1 pointer-events-none"
-            tabIndex={-1}
-          />
+  const triggerButton = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      aria-controls={listId}
+      disabled={disabled}
+      className={cn(
+        "w-full justify-between font-normal",
+        !selectedOption && "text-muted-foreground",
+        className
+      )}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        {selectedOption?.icon}
+        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+      </span>
+      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+    </Button>
+  )
+
+  // Hidden input for HTML required validation
+  const requiredInput = required && (
+    <input
+      type="text"
+      value={value}
+      onChange={() => {}}
+      required
+      className="absolute bottom-0 left-1/2 -translate-x-1/2 opacity-0 w-1 h-1 pointer-events-none"
+      tabIndex={-1}
+    />
+  )
+
+  const searchBox = showSearch && (
+    <div className={cn("flex items-center gap-2 border-b border-border px-2.5", isMobile && "rounded-lg border px-3")}>
+      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <input
+        ref={searchRef}
+        placeholder={searchPlaceholder}
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value)
+          setActive(0)
+        }}
+        onKeyDown={onKeyDown}
+        role="searchbox"
+        aria-controls={listId}
+        className={cn(
+          "h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground pointer-coarse:h-11 pointer-coarse:text-base",
+          isMobile && "h-11 text-base"
         )}
+      />
+    </div>
+  )
+
+  const list = (
+    /* Without a search box the list itself takes focus, so arrows/Enter still work. */
+    <div
+      ref={listRef}
+      id={listId}
+      role="listbox"
+      tabIndex={showSearch ? undefined : 0}
+      onKeyDown={showSearch ? undefined : onKeyDown}
+      className={cn("outline-none", isMobile ? "py-1" : "max-h-[300px] overflow-y-auto p-1")}
+    >
+      {filteredOptions.length === 0 ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">
+          {emptyText}
+        </div>
+      ) : (
+        filteredOptions.map((option, index) => (
+          <React.Fragment key={option.value}>
+            {option.group && option.group !== filteredOptions[index - 1]?.group && (
+              <div className="sticky top-0 z-10 bg-popover px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {option.group}
+              </div>
+            )}
+            <div
+              role="option"
+              aria-selected={value === option.value}
+              data-index={index}
+              className={cn(
+                "relative flex cursor-pointer select-none items-center gap-2 rounded-md py-1.5 pl-2 pr-8 text-sm outline-none pointer-coarse:min-h-11",
+                isMobile && "min-h-11 text-base",
+                index === active && "bg-accent text-accent-foreground",
+                value === option.value && "font-medium"
+              )}
+              onMouseMove={() => setActive(index)}
+              onClick={() => choose(option)}
+            >
+              {option.icon}
+              <span className="truncate">{option.label}</span>
+              {value === option.value && (
+                <Check className="absolute right-2 h-4 w-4" />
+              )}
+            </div>
+          </React.Fragment>
+        ))
+      )}
+    </div>
+  )
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <div className="relative w-full">
+          <DrawerTrigger render={triggerButton} />
+          {requiredInput}
+        </div>
+        {/* A long, searchable list opens tall so the sheet doesn't jump as results filter;
+            a short pick-list is only as tall as its options. No auto-focus: the keyboard
+            opens when the user taps the search box, not over the list they came to see. */}
+        <DrawerContent initialFocus={false} className={cn(showSearch && "h-[85dvh]")}>
+          <DrawerHeader className="space-y-3">
+            <DrawerTitle>{placeholder.replace(/\.\.\.$|…$/, "")}</DrawerTitle>
+            {searchBox}
+          </DrawerHeader>
+          <DrawerBody className="px-2">{list}</DrawerBody>
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <div className="relative w-full">
+        <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+        {requiredInput}
       </div>
 
       {/* --anchor-width is base-ui's trigger width, so the list is exactly as wide as
@@ -147,67 +247,8 @@ export function SearchableSelect({
         // and Enter work straight away. (The popup manages focus; autoFocus is ignored.)
         initialFocus={showSearch ? searchRef : listRef}
       >
-        {showSearch && (
-        <div className="flex items-center gap-2 border-b border-border px-2.5">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <input
-            ref={searchRef}
-            placeholder={searchPlaceholder}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setActive(0)
-            }}
-            onKeyDown={onKeyDown}
-            role="searchbox"
-            aria-controls={listId}
-            className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        )}
-        {/* Without a search box the list itself takes focus, so arrows/Enter still work. */}
-        <div
-          ref={listRef}
-          id={listId}
-          role="listbox"
-          tabIndex={showSearch ? undefined : 0}
-          onKeyDown={showSearch ? undefined : onKeyDown}
-          className="max-h-[300px] overflow-y-auto p-1 outline-none"
-        >
-          {filteredOptions.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              {emptyText}
-            </div>
-          ) : (
-            filteredOptions.map((option, index) => (
-              <React.Fragment key={option.value}>
-                {option.group && option.group !== filteredOptions[index - 1]?.group && (
-                  <div className="sticky top-0 z-10 bg-popover px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {option.group}
-                  </div>
-                )}
-                <div
-                  role="option"
-                  aria-selected={value === option.value}
-                  data-index={index}
-                  className={cn(
-                    "relative flex cursor-pointer select-none items-center gap-2 rounded-md py-1.5 pl-2 pr-8 text-sm outline-none",
-                    index === active && "bg-accent text-accent-foreground",
-                    value === option.value && "font-medium"
-                  )}
-                  onMouseMove={() => setActive(index)}
-                  onClick={() => choose(option)}
-                >
-                  {option.icon}
-                  <span className="truncate">{option.label}</span>
-                  {value === option.value && (
-                    <Check className="absolute right-2 h-4 w-4" />
-                  )}
-                </div>
-              </React.Fragment>
-            ))
-          )}
-        </div>
+        {searchBox}
+        {list}
       </PopoverContent>
     </Popover>
   )
