@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeader } from "@/components/ui/page-header"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -13,7 +14,6 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
-import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
@@ -353,14 +353,12 @@ export default function HousekeepingDashboard() {
 
   return (
     <div className="pb-32 relative">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Housekeeping Dashboard
-            <InfoHint label="Housekeeping Dashboard">Manage room statuses, turnovers, and attendant tasks.</InfoHint>
-          </h2>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        className="mb-8"
+        actionsClassName="gap-3"
+        title="Housekeeping Dashboard"
+        hint="Manage room statuses, turnovers, and attendant tasks."
+        actions={<>
           {isBulkMode && (
             <Button variant="outline" onClick={() => setSelectedRooms(rooms.map(r => r.id))}>
               Select All
@@ -376,8 +374,8 @@ export default function HousekeepingDashboard() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -466,7 +464,7 @@ export default function HousekeepingDashboard() {
 
       {/* Floating Action Bar */}
       {isBulkMode && (
-        <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed bottom-[calc(1rem+var(--bottom-nav-offset,0px))] inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:bottom-8 max-w-full overflow-x-auto bg-card/90 backdrop-blur-xl border border-border shadow-elevation-4 rounded-2xl p-3 md:p-4 flex items-center gap-3 md:gap-6 z-[var(--z-modal)] animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex items-center gap-3 border-r pr-3 md:pr-6 border-border shrink-0">
             <div className="bg-primary text-primary-foreground w-8 h-8 rounded-none flex items-center justify-center font-bold text-sm">
               {selectedRooms.length}

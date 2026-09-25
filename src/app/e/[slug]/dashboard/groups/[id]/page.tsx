@@ -179,7 +179,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: on a phone the three actions wrap instead of pushing "Pickup Room"
+            past the right edge. They fit on one line at every desktop width. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={openEdit}>
             <Pencil className="w-4 h-4 mr-2" /> Edit Block
           </Button>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useBusinessToday } from "@/hooks/use-business-today";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { addDays, format, isEqual, parseISO, startOfDay } from "date-fns";
 import { Loader2, Ban, ChevronDown, ChevronRight } from "@/components/icons";
@@ -51,6 +52,15 @@ export function AvailabilityGrid() {
   const { currentProperty } = useProperty();
   const deviceTier = useDeviceTier();
   const [startDate, setStartDate] = useState(() => startOfDay(new Date()));
+  // Start at the property's business date, not the device's: before the night audit runs
+  // (or on a property whose date isn't the calendar's) the device date showed the wrong
+  // window. Seeded once per property when it loads — render-time, not an effect.
+  const business = useBusinessToday();
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (business.ready && seededFor !== business.propertyId) {
+    setSeededFor(business.propertyId);
+    setStartDate(business.today);
+  }
   const [days, setDays] = useState(14);
   const [data, setData] = useState<ApiData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,7 +233,7 @@ export function AvailabilityGrid() {
 
   // ---- loading --------------------------------------------------------------
 
-  const today = startOfDay(new Date());
+  const today = business.today;
 
   if (!currentProperty) {
     return (

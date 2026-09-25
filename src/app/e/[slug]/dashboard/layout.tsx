@@ -107,7 +107,11 @@ export default async function DashboardLayout({
         <div className="print:hidden">
           <AppSidebar />
         </div>
-        <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen flex flex-col overflow-x-hidden print:overflow-visible outline-none">
+        {/* Below md: overflow-x-CLIP instead of hidden. `hidden` silently cut off wide
+            content with no way to reach it, and made <main> a scroll container that never
+            scrolls, so the sticky header below never stuck. Desktop keeps `hidden` for now,
+            so its behaviour is unchanged (see .agents/docs/MOBILE_PLAN.md, Phase 1). */}
+        <main id="main-content" tabIndex={-1} className="w-full bg-background min-h-screen max-md:min-h-dvh flex flex-col overflow-x-hidden max-md:overflow-x-clip print:overflow-visible outline-none">
 
           <div className="print:hidden sticky top-0 z-[var(--z-sticky)] flex flex-col w-full">
             <PropertyBannerBar />
@@ -139,7 +143,8 @@ export default async function DashboardLayout({
           </div>
 
           {/* Floating Main Content Area */}
-          <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
+          {/* Phones: room at the bottom for the bottom nav (and the home indicator). */}
+          <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0 max-md:pb-[calc(5rem+env(safe-area-inset-bottom))]">
             <div className="max-w-7xl mx-auto w-full print:max-w-none">
               <ConfirmProvider>{children}</ConfirmProvider>
             </div>

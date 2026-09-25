@@ -1,6 +1,6 @@
 # Mobile polish — audit & phased plan (Phase 0)
 
-> Status: **PLAN — awaiting owner approval (2026-09-25).** No implementation yet.
+> Status: **Approved 2026-09-25. Phase 1 done; Phase 2 in progress** — see §7.
 > Desktop stays the primary product and the source of truth: every change here lives
 > behind a breakpoint (`max-sm:` / `max-md:` / `md:hidden`), a `pointer-coarse:` variant,
 > or a mobile variant of a shared component. Desktop markup and behaviour must not change.
@@ -246,3 +246,36 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
    whose job function is Housekeeping?
 9. The dashboard layout (widgets on/off) is shared across devices. Keep one layout, or allow a
    separate phone layout later?
+
+---
+
+## 7. Progress
+
+### Phase 1 — Foundations: DONE (2026-09-25)
+
+- **Dialogs** (`ui/dialog.tsx`): `DialogContent mobile="sheet" | "fullscreen" | "none"`
+  (default sheet). Below `sm` a dialog is a bottom sheet (≤92dvh, body scrolls, header and
+  footer sticky, safe-area padding); every class is `max-sm:`-prefixed and the scroll wrapper
+  is `sm:contents`, so desktop layout is untouched. Check-in wizard uses `fullscreen`; the
+  folio panel opts out (`none`, it is already full-screen). `AlertDialog` scrolls and stacks
+  its buttons on phones (its inline-style footer became equivalent classes). Right-hand
+  `Sheet`s are full width on phones (covers the trace panel's fixed width).
+- **Touch sizing:** `pointer-coarse:` ≥44px on Button (all sizes; `link` exempt), Input,
+  SelectTrigger/Item, Tabs, calendar days, SearchableSelect rows/search. Unlayered
+  coarse-pointer rule keeps form text ≥16px (no iOS zoom, iPad included).
+- **Shell:** `<main>` is `overflow-x-clip` + `min-h-dvh` below `md` (3 shells); viewport
+  `interactiveWidget: resizes-content`, `viewportFit: cover`, safe-area body padding; phone
+  header shows the business date; toasts bottom-centre on phones; the phone menu closes on
+  navigation; **bottom nav** (`mobile-bottom-nav.tsx`, dashboard only, 4 role-ordered slots +
+  More, `--bottom-nav-offset` lifts other bottom-pinned UI).
+- **`PageHeader`** (`ui/page-header.tsx`): actions wrap instead of clipping — Housekeeping,
+  Maintenance; Cashiering and Group detail headers wrap too.
+- **Pickers:** `DateRangePicker` shows one month on phones and has a unique id.
+- **Bugs:** tape chart / availability start at the business date (`useBusinessToday`);
+  Activity Log `__all__`; permission matrix no longer auto-prints below `md`; Stationery form
+  no longer 800px wide below `lg`.
+- **Tooling:** `npm run mobile:audit` (capture routes at given widths with overflow /
+  clipped / small-target metrics; pixel diff between two captures).
+- Deferred from Phase 1: scrollable `TabsList` variant (one caller), tap-the-header property
+  switcher (Phase 2 with the shell's account menu).
+

@@ -440,7 +440,7 @@ export default function POSDashboard() {
       <Sheet>
         <SheetTrigger
           render={
-            <Button className="md:hidden fixed bottom-4 left-4 right-4 z-[var(--z-sticky)] h-12 shadow-elevation-3" variant="outline">
+            <Button className="md:hidden fixed bottom-[calc(1rem+var(--bottom-nav-offset,0px))] left-4 right-4 z-[var(--z-sticky)] h-12 shadow-elevation-3" variant="outline">
               <ReceiptText className="w-4 h-4 mr-2" />
               Recent Postings {recentPostings.length > 0 && `(${recentPostings.length})`}
             </Button>

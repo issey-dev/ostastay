@@ -329,7 +329,8 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+      {/* A multi-step wizard: the whole screen on a phone, Next / Check In pinned. */}
+      <DialogContent mobile="fullscreen" className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Key className="w-5 h-5" /> Check In — {reservation ? reservation.confirmationNo : ""}</DialogTitle>
           <DialogDescription>{reservation ? profName(reservation.primaryGuest) : ""}</DialogDescription>

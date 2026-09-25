@@ -14,6 +14,7 @@
     "docs:pdf": "vite-node -c vitest.config.ts scripts/docs-pdf.ts",
     "docs:demo": "vite-node -c vitest.config.ts scripts/docs-demo.ts",
     "docs:shots": "vite-node -c vitest.config.ts scripts/docs-shots.ts",
+    "mobile:audit": "vite-node -c vitest.config.ts scripts/mobile-audit.ts",
     "charges:cleanup-demo": "vite-node -c vitest.config.ts scripts/cleanup-demo-charge-codes.ts"
   },
   "dependencies": {

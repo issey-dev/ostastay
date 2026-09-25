@@ -16,7 +16,7 @@ import {
 // Longest-prefix match, so a nested route highlights exactly one entry: on
 // /dashboard/reservations/tape-chart both Reservations and Tape Chart match, and the
 // longer (more specific) href is the one that wins.
-function activeHref(pathname: string, hrefs: string[]) {
+export function activeHref(pathname: string, hrefs: string[]) {
   let best = ""
   for (const href of hrefs) {
     if (pathname === href || pathname.startsWith(`${href}/`)) {

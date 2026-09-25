@@ -393,9 +393,11 @@ export default function CashieringPage() {
                     <p className="text-3xl font-bold font-mono text-foreground">${status.shift.openingFloat.toFixed(2)}</p>
                   </div>
                 )}
-                <div className="flex items-end gap-6">
+                {/* Phones: Expected Cash above a full-width Close Shift — side by side they
+                    pushed the button past the right edge. From sm up: one row, as before. */}
+                <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:gap-6">
                   {status.summary && (
-                    <div className="text-right">
+                    <div className="sm:text-right">
                       <p className="text-sm font-medium text-muted-foreground">Expected Cash</p>
                       <p className="text-2xl font-bold font-mono text-foreground">${status.summary.expectedCash.toFixed(2)}</p>
                     </div>

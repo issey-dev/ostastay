@@ -456,7 +456,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose }: Folio
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto">
+      {/* Already a full-screen layout of its own on phones (h-[100dvh]) — opt out of the
+          shared bottom-sheet treatment. */}
+      <DialogContent mobile="none" className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto">
         <DialogHeader className="border-b pb-4 mb-4 shrink-0">
           <div className="flex justify-between items-center w-full">
             <div>

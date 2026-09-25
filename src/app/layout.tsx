@@ -49,6 +49,11 @@ export const metadata: Metadata = {
 // src/lib/brand.ts because metadata is generated server-side and cannot read a CSS var.
 export const viewport: Viewport = {
   themeColor: CRIMSON_OS,
+  // Phones: the layout shrinks for the on-screen keyboard (Android), so a sheet's sticky
+  // Save stays visible above it; and the page may draw under the notch / home indicator,
+  // which the bottom sheets and the mobile nav pad with env(safe-area-inset-*).
+  interactiveWidget: "resizes-content",
+  viewportFit: "cover",
 };
 
 // Applies the persisted dark/light preference to <html> before first paint, so there's

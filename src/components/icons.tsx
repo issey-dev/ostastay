@@ -62,6 +62,7 @@ import {
   MapOutline,
   Message2Outline,
   MonitorOutline,
+  CallOutline,
   MoonOutline,
   MoreOutline,
   Notification1Outline,
@@ -105,7 +106,7 @@ import {
   UserOutline,
   Wallet2Outline,
 } from "mx-icons"
-import { BedDouble, DoorOpen, Pin, PinOff, Utensils, UtensilsCrossed, Wrench } from "lucide-react"
+import { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench } from "lucide-react"
 
 export type IconProps = Omit<SVGProps<SVGSVGElement>, "color"> & { size?: number | string; color?: string }
 export type IconComponent = ComponentType<IconProps>
@@ -193,6 +194,10 @@ export const Map = outline(MapOutline)
 export const MapPin = outline(LocationOutline)
 export const MessageSquare = outline(Message2Outline)
 export const MonitorPlay = outline(MonitorOutline)
+// "Best on a larger screen" notices on phones.
+export const Monitor = outline(MonitorOutline)
+// Tap-to-call links (ContactLink).
+export const Phone = outline(CallOutline)
 export const Moon = outline(MoonOutline)
 export const MoreHorizontal = outline(MoreOutline)
 // Drag handle on a rearrangeable card (Operations Dashboard widgets). The runtime bundle
@@ -242,6 +247,7 @@ export const X = outline(CloseSquareOutline)
 export const XCircle = outline(CloseCircleOutline)
 export const XIcon = outline(CloseSquareOutline)
 
-// No faithful outline equivalent in the runtime bundle — kept as lucide.
-export { BedDouble, DoorOpen, Pin, PinOff, Utensils, UtensilsCrossed, Wrench }
+// No faithful outline equivalent in the runtime bundle — kept as lucide. (Menu: the phone
+// bottom bar's "More"; mx-icons' HamburgerMenuOutline is in its types but not its bundle.)
+export { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeader } from "@/components/ui/page-header"
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
 import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw } from "@/components/icons"
@@ -161,14 +162,12 @@ export default function MaintenanceDashboard() {
 
   return (
     <div>
-      <div className="flex justify-between items-end mb-8">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Maintenance Dashboard
-            <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        className="mb-8"
+        align="end"
+        title="Maintenance Dashboard"
+        hint="Track, manage, and resolve property maintenance issues."
+        actions={<>
           <Button variant="outline" onClick={() => fetchTickets()} className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -181,8 +180,8 @@ export default function MaintenanceDashboard() {
             {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             {showResolved ? "Hide Resolved" : "Show Resolved"}
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <div className={`grid grid-cols-1 ${showResolved ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
         {columns.map(col => {

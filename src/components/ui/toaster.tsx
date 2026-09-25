@@ -57,7 +57,10 @@ export function Toaster() {
             so it is an early <body> child, and at an equal z-index a dialog portal
             mounted later would paint over the toast confirming the very action taken
             inside it. No fallback value — the token is defined in theme.css. */}
-        <Toast.Viewport className="fixed top-4 right-4 z-[var(--z-toast)] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none">
+        {/* Phones: bottom-centre, full width — top-right sat on the sticky header and on
+            dialog titles and close buttons. It clears the bottom nav when one is showing
+            (--bottom-nav-offset, set in globals.css) and the home indicator. */}
+        <Toast.Viewport className="fixed top-4 right-4 z-[var(--z-toast)] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none max-sm:top-auto max-sm:right-4 max-sm:left-4 max-sm:w-auto max-sm:max-w-none max-sm:bottom-[calc(1rem+var(--bottom-nav-offset,0px)+env(safe-area-inset-bottom))]">
           <ToastList />
         </Toast.Viewport>
       </Toast.Portal>

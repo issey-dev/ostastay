@@ -98,7 +98,11 @@ export default function ActivityLogPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Select value={moduleFilter} onValueChange={(v) => setModuleFilter(v ?? ALL)}>
           <SelectTrigger className="w-48">
-            <SelectValue placeholder="All modules" />
+            {/* Select.Value shows the raw VALUE unless given a formatter — the "all" option
+                rendered as "__all__". */}
+            <SelectValue placeholder="All modules">
+              {(v) => (v === ALL ? "All modules" : FILTER_MODULES.find((m) => m.value === v)?.label ?? String(v))}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>All modules</SelectItem>

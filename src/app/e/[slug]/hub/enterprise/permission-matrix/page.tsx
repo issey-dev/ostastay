@@ -49,7 +49,10 @@ export default function PermissionMatrixPage() {
       })
       .then((d) => {
         setData(d)
-        setTimeout(() => window.print(), 800)
+        // Desktop opens the print dialog for you (the report opens in its own tab to be
+        // printed). On a phone that throws the print sheet over a page you came to read,
+        // so it is skipped below md — the browser's own share/print is still there.
+        if (window.matchMedia("(min-width: 48rem)").matches) setTimeout(() => window.print(), 800)
       })
       .catch((e) => setError(e.message))
   }, [])

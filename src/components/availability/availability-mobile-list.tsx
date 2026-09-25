@@ -1,7 +1,8 @@
 "use client";
 
+import { useBusinessToday } from "@/hooks/use-business-today";
 import { useState } from "react";
-import { format, isEqual, startOfDay } from "date-fns";
+import { format, isEqual } from "date-fns";
 import { Ban, ChevronDown, ChevronRight, Loader2 } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -53,7 +54,8 @@ export function AvailabilityMobileList({
       return next;
     });
 
-  const today = startOfDay(new Date());
+  // Highlight the property's trading day, not the device's date.
+  const today = useBusinessToday().today;
 
   if (isLoading && dates.length === 0) {
     return (
