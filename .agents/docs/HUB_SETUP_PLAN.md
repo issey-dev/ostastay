@@ -1,8 +1,9 @@
 # Hub Setup — Enterprise vs Property separation (plan)
 
 Status: **DONE** (branch `feat/hub-setup-separation`, release 7.0.0) — Phases 0–6 built
-2026-09-23. Open follow-ups: O-1 (richer dropdown fields) and Phase 5b (more copyable
-sections) — see TODO.md and "Decisions taken without asking" below.
+2026-09-23. Phase 5b (Allocations, Spa and Excursion catalogues) done 2026-09-26 in 8.4.2.
+Open follow-up: O-1 (richer dropdown fields) — see TODO.md and "Decisions taken without
+asking" below.
 Owner decisions are recorded in [DECISIONS.md](DECISIONS.md) ("2026-09-23 — Setup moves to
 the Hub, separated by Enterprise and Property"). This file is the build plan.
 
@@ -345,10 +346,28 @@ dashboard's working-property cookie).
   overwritten; the whole copy is one transaction. Target needs Property Setup (CONTROLS
   create); the source must be a property the caller may open, so a single-property admin
   is offered no source. Copies are logged in the activity trail.
-- Not done: Allocations on their own (they live on the dashboard's Revenue page, not in the
-  Hub — a meal plan brings its allocations), fee rules (every property is seeded with its
-  own set, so a copy would always skip), and the Spa / Excursion catalogues (therapists,
-  treatment rooms and schedules make them their own job) — see TODO.
+- Not done: fee rules (every property is seeded with its own set, so a copy would always
+  skip).
+
+**Phase 5b** (8.4.2, 2026-09-26) — three more sections in `property-copy.ts`:
+- `allocations` (code) — stand-alone, with dated rates and charge code (`ensureAllocation`).
+  Allocations are managed on the dashboard's Revenue page, so the button ("Copy allocations
+  from…") sits on the Hub property Revenue page beside "Copy meal plans from…".
+- `spa` — keys `category:NAME` (unique name), `treatment:NAME` (no code — matched by name),
+  `room:NAME` (matched by name or code, like outlets) and `settings`. A treatment brings its
+  dated rates, its category, charge code and its treatment-room links (rooms pulled along).
+  SpaSettings copies as one item, only when the target has never saved its own — every
+  field is operating policy with no links. No outlet mapping is needed: the Spa outlet is
+  enterprise-wide (`EnterpriseSettings.spaOutletId`) and neither model points at one.
+  Never copied: therapists, their schedules, exceptions and treatment skills; room closures.
+- `excursions` (code) — the type with its rates, charge code and recurring schedules; never
+  departures or bookings.
+- Copied treatments / excursions keep their guest-facing copy but arrive with
+  `publishOnline = false` — going online is the target property's own choice.
+- Add-on gated (`SECTION_ADDON`): previewCopy / runCopy refuse `spa` / `excursions` with a
+  403 when the enterprise lacks the add-on; the buttons live on the Hub Spa / Excursions
+  pages, which are already hidden without it.
+- The preview groups items by kind when a section sends `group` (the Spa catalogue).
 - Also fixed here: `GET /api/properties` listed every property of the enterprise to a
   single-property user; it now returns only their own.
 

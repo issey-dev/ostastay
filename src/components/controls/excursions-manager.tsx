@@ -136,7 +136,18 @@ const emptyValues: ExcursionTypeFormValues = {
   rates: [{ adultPrice: "0", childPrice: "0", infantPrice: "0", flatPrice: "", effectiveFrom: "", effectiveTo: "" }],
 }
 
-export function ExcursionsManager({ propertyId, title, description }: { propertyId: string; title: string; description?: string }) {
+export function ExcursionsManager({
+  propertyId,
+  title,
+  description,
+  copyAction,
+}: {
+  propertyId: string
+  title: string
+  description?: string
+  /** "Copy from another property" — the Hub passes it; rendered beside "Add excursion". */
+  copyAction?: React.ReactNode
+}) {
   const confirm = useConfirm()
   const [types, setTypes] = useState<ExcursionTypeDto[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
@@ -276,9 +287,12 @@ export function ExcursionsManager({ propertyId, title, description }: { property
         title={title}
         description={description}
         action={
-          <Button onClick={openCreate} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> Add excursion
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {copyAction}
+            <Button onClick={openCreate} className="shadow-sm">
+              <Plus className="mr-2 h-4 w-4" /> Add excursion
+            </Button>
+          </div>
         }
       >
           {serverError && !isDialogOpen && (

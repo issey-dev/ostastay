@@ -218,9 +218,10 @@ becomes setup/health banners.
   website/online settings + Green Tax into the property area
 - [x] Phase 5 — copy from another property (warn + skip, never overwrite): lists, tax,
   charge codes, payment methods, stationery, meal plans, room types, outlets
-- [ ] Phase 5b — copy the Spa and Excursion catalogues (treatments/categories/rooms,
+- [x] Phase 5b — copy the Spa and Excursion catalogues (treatments/categories/rooms,
   excursion types/schedules) and stand-alone Allocations (these live on the dashboard's
-  Revenue page, not in the Hub)
+  Revenue page, not in the Hub) — done in 8.4.2 (2026-09-26); see HUB_SETUP_PLAN.md
+  "Phase 5b". Therapists, departures and bookings are never copied.
 - [x] Phase 6 — Overview banners (missing setup, Green Tax issues, channel status, failed
   jobs only); link cards and job card removed; single-property users see their own
 

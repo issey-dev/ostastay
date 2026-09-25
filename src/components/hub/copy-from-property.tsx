@@ -30,9 +30,12 @@ export type CopySection =
   | "meal-plans"
   | "room-types"
   | "outlets"
+  | "allocations"
+  | "spa"
+  | "excursions"
 
 type Source = { id: string; name: string; code: string }
-type Item = { key: string; label: string; detail: string | null; exists: boolean }
+type Item = { key: string; label: string; detail: string | null; exists: boolean; group?: string }
 type ReportItem = { key: string; label: string }
 type Report = { copied: ReportItem[]; skipped: ReportItem[]; pulled: ReportItem[] }
 
@@ -47,6 +50,7 @@ export function CopyFromPropertyButton({
   section,
   title,
   keyPrefixes,
+  label = "Copy from…",
 }: {
   propertyId: string
   section: CopySection
@@ -55,6 +59,8 @@ export function CopyFromPropertyButton({
   /** Narrow the items offered to keys starting with one of these (e.g. "BED_TYPE:" — only
    *  the room-feature lists on the Room Features card). */
   keyPrefixes?: string[]
+  /** The button's text — to tell two copy buttons on one card apart ("Copy allocations from…"). */
+  label?: string
 }) {
   const [sources, setSources] = useState<Source[]>([])
   const [open, setOpen] = useState(false)
@@ -106,6 +112,18 @@ export function CopyFromPropertyButton({
 
   const fresh = useMemo(() => items?.filter((i) => !i.exists) ?? [], [items])
   const existing = useMemo(() => items?.filter((i) => i.exists) ?? [], [items])
+  // A section holding several kinds of item (the Spa catalogue) heads each kind, in the
+  // order the server sent them.
+  const groups = useMemo(() => {
+    const out: { name: string | null; items: Item[] }[] = []
+    for (const i of items ?? []) {
+      const name = i.group ?? null
+      const last = out[out.length - 1]
+      if (last && last.name === name) last.items.push(i)
+      else out.push({ name, items: [i] })
+    }
+    return out
+  }, [items])
 
   if (sources.length === 0) return null
 
@@ -135,7 +153,7 @@ export function CopyFromPropertyButton({
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
-        <FileStack className="mr-2 h-4 w-4" /> Copy from…
+        <FileStack className="mr-2 h-4 w-4" /> {label}
       </Button>
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
         <DialogContent size="md">
@@ -224,29 +242,36 @@ export function CopyFromPropertyButton({
                         </p>
                       )}
                       <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                        {items.map((i) => {
-                          const checked = field.value.includes(i.key)
-                          return (
-                            <label
-                              key={i.key}
-                              className={`flex items-start gap-3 rounded px-2 py-1.5 text-sm ${i.exists ? "opacity-60" : "cursor-pointer hover:bg-muted/50"}`}
-                            >
-                              <Checkbox
-                                className="mt-0.5"
-                                checked={checked}
-                                disabled={i.exists}
-                                onCheckedChange={(v) =>
-                                  field.onChange(v ? [...field.value, i.key] : field.value.filter((k) => k !== i.key))
-                                }
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="block">{i.label}</span>
-                                {i.detail && <span className="block truncate text-xs text-muted-foreground">{i.detail}</span>}
-                              </span>
-                              {i.exists && <Badge variant="outline" className="shrink-0">Already here</Badge>}
-                            </label>
-                          )
-                        })}
+                        {groups.map((g) => (
+                          <div key={g.name ?? "items"} className="space-y-1">
+                            {g.name && (
+                              <p className="px-2 pt-1 text-xs font-medium text-muted-foreground">{g.name}</p>
+                            )}
+                            {g.items.map((i) => {
+                              const checked = field.value.includes(i.key)
+                              return (
+                                <label
+                                  key={i.key}
+                                  className={`flex items-start gap-3 rounded px-2 py-1.5 text-sm ${i.exists ? "opacity-60" : "cursor-pointer hover:bg-muted/50"}`}
+                                >
+                                  <Checkbox
+                                    className="mt-0.5"
+                                    checked={checked}
+                                    disabled={i.exists}
+                                    onCheckedChange={(v) =>
+                                      field.onChange(v ? [...field.value, i.key] : field.value.filter((k) => k !== i.key))
+                                    }
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block">{i.label}</span>
+                                    {i.detail && <span className="block truncate text-xs text-muted-foreground">{i.detail}</span>}
+                                  </span>
+                                  {i.exists && <Badge variant="outline" className="shrink-0">Already here</Badge>}
+                                </label>
+                              )
+                            })}
+                          </div>
+                        ))}
                       </div>
                       <FormMessage />
                     </FormItem>

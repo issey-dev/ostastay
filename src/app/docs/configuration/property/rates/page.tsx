@@ -116,6 +116,10 @@ export default function Rates() {
         An allocation posts nothing on nights no price range covers. Once used on a reservation its code can&apos;t be changed and it
         can&apos;t be deleted, only made inactive.
       </p>
+      <p>
+        Setting up another property? In the Hub, <strong>Controls › Revenue</strong> has <strong>Copy allocations from…</strong>: it
+        copies allocations with their prices and charge codes. Anything this property already has is skipped, never overwritten.
+      </p>
 
       <H2>4. Allocation calculation: meal plan or rate plan?</H2>
       <Where path="Hub › Controls › Revenue" who="Property Setup" />
@@ -139,6 +143,9 @@ export default function Rates() {
         Choose <strong>Add meal plan</strong>: a <strong>Code</strong> (e.g. BB, HB, FB, AI), a <strong>Name</strong>, and tick the{" "}
         <strong>Included allocations</strong>, then <strong>Create</strong>. &quot;Room only&quot; needs no meal plan: it is built in. Once a reservation uses a
         meal plan, its code can&apos;t be changed and it can&apos;t be deleted; switch it inactive instead.
+      </p>
+      <p>
+        <strong>Copy meal plans from…</strong> copies meal plans from another property, with the allocations they include.
       </p>
       <Pager href="/docs/configuration/property/rates" />
     </>

@@ -84,6 +84,12 @@ export default function Spa() {
           To sell treatments on your own website, see <a href="/docs/configuration/property/online-booking">Online booking</a>.
         </p>
       </Callout>
+      <H3>Another property?</H3>
+      <p>
+        <strong>Copy from…</strong> on Treatment catalog copies categories, treatments (with their prices, charge code and rooms),
+        treatment rooms and Spa settings from another property. Anything this property already has is skipped, never overwritten.
+        Therapists are each property&apos;s own staff, so they are never copied, and copied treatments start unpublished online.
+      </p>
       <Pager href="/docs/configuration/property/spa" />
     </>
   )

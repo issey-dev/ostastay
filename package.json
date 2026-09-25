@@ -1,6 +1,6 @@
 {
   "name": "guest-house-pms",
-  "version": "8.4.1",
+  "version": "8.4.2",
   "private": true,
   "scripts": {
     "dev": "next dev",

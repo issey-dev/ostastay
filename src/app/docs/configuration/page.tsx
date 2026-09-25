@@ -48,7 +48,7 @@ export default function ConfigurationOverview() {
       <Callout title="Several properties?">
         <p>
           Set up your first property completely, then use <strong>Copy from…</strong> on the property pages (room types, lists,
-          meal plans, charge codes, outlets, tax profiles, payment methods, stationery) to bring its setup into the next one. Copying
+          meal plans, allocations, charge codes, outlets, tax profiles, payment methods, stationery, Spa and Excursions) to bring its setup into the next one. Copying
           only adds what is missing and never overwrites.
         </p>
       </Callout>
